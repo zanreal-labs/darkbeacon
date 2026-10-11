@@ -59,6 +59,13 @@ export const routes = {
 
   accounts: {
     me: route({ method: 'GET', path: '/api/accounts/me', auth: 'account', response: dto.MeDto }),
+    setMainCharacter: route({
+      method: 'PUT',
+      path: '/api/accounts/me/main-character',
+      auth: 'account',
+      body: dto.SetMainCharacterRequest,
+      response: dto.MeDto,
+    }),
     unlinkCharacter: route({
       method: 'DELETE',
       path: '/api/accounts/me/characters/:characterId',
