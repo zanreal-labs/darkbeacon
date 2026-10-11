@@ -14,11 +14,13 @@ import { KyselyEventLog } from '../adapters/events/kysely-event-log.js';
 import type { AppConfig } from '../config/config.js';
 import { ActorGuard, ActorResolverRegistry } from './actor.js';
 import { ApiExceptionFilter } from './http.js';
-import { APP_CONFIG, CLOCK, EVENT_BUS, EVENT_LOG, UNIT_OF_WORK } from './tokens.js';
+import { APP_CONFIG, CLOCK, EVENT_BUS, EVENT_LOG, HTTP_FETCH, UNIT_OF_WORK } from './tokens.js';
 
 export interface PlatformOptions {
   /** Use this database instead of opening one from the config (tests). It is not closed on shutdown. */
   database?: Database;
+  /** Outgoing HTTP for adapters (Discord, EVE SSO, ESI, webhooks); tests pass a fake network. */
+  fetch?: (url: string, init?: RequestInit) => Promise<Response>;
 }
 
 class DatabaseLifecycle implements OnApplicationShutdown {
@@ -63,6 +65,7 @@ export class PlatformModule {
         },
         { provide: UNIT_OF_WORK, useExisting: Database },
         { provide: CLOCK, useValue: systemClock },
+        { provide: HTTP_FETCH, useValue: options.fetch ?? globalThis.fetch.bind(globalThis) },
         {
           provide: EVENT_BUS,
           useFactory: () =>
@@ -79,7 +82,16 @@ export class PlatformModule {
         { provide: APP_GUARD, useClass: ActorGuard },
         { provide: APP_FILTER, useClass: ApiExceptionFilter },
       ],
-      exports: [APP_CONFIG, Database, UNIT_OF_WORK, CLOCK, EVENT_BUS, EVENT_LOG, ActorResolverRegistry],
+      exports: [
+        APP_CONFIG,
+        Database,
+        UNIT_OF_WORK,
+        CLOCK,
+        EVENT_BUS,
+        EVENT_LOG,
+        HTTP_FETCH,
+        ActorResolverRegistry,
+      ],
     };
   }
 }

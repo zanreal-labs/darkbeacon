@@ -8,8 +8,8 @@ import type { DynamicModule, Type } from '@nestjs/common';
  * Keep the blank lines between entries so parallel changes merge cleanly.
  */
 export const featureModules: Array<Type | DynamicModule> = [
-  // identity
-  // access
+  (await import('./identity/identity.module.js')).IdentityModule,
+  (await import('./access/access.module.js')).AccessModule,
   // mapping
   // tracking
   // notifications

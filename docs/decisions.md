@@ -37,3 +37,21 @@ Choices made where `docs/SPEC.md` is silent. One line each; newest at the bottom
 - Import boundaries are enforced by a small local ESLint rule (`tools/eslint/boundaries.js`) instead of a plugin.
 - Feature modules register themselves with one line each in `apps/server/src/modules/index.ts`.
 - The dev compose file has a `dev` service for commands and an `app` service that runs `pnpm dev` on random loopback ports; `DEV_LOGIN=true` there.
+- Sessions: the `ww_session` cookie holds a random 32-byte token and the `session` table only its SHA-256; 30 days, sliding (touched at most hourly), httpOnly, SameSite=Lax, Secure when PUBLIC_URL is https; expired rows are pruned hourly.
+- OAuth state and the PKCE verifier travel in a sealed `ww_oauth` cookie (path `/api/auth`, 10 minutes, single use); Discord login sends PKCE S256 too.
+- OAuth endpoints are browser navigations: failures redirect to the return path with `?auth_error=<message>`; `returnTo` only accepts same-origin absolute paths.
+- Secrets at rest use AES-256-GCM with a per-purpose key derived by HKDF-SHA256 from SECRET_KEY (`eve-tokens`, `discord-tokens`, `oauth-state`).
+- Discord tokens are kept to re-read guild roles for the admin guild and every guild used by a Discord-role rule: at login and in the background when older than 5 minutes; a revoked grant clears the roles.
+- A Discord admin role only raises `user` to `admin`; it never lowers a stored role.
+- Admins and the owner grant or revoke admin on other non-owner accounts (never their own); only the owner transfers ownership and becomes admin.
+- One owner per instance is enforced by a partial unique index; racing first logins retry once and become users.
+- A character linked to another account can only be claimed when its EVE owner hash changed (the character was sold).
+- Linking requests the ESI location, ship and online scopes; corporation and alliance come from ESI affiliation on link and on every token refresh.
+- ESI affiliation is `POST https://esi.evetech.net/characters/affiliation` with `X-Compatibility-Date: 2020-01-01`.
+- Dev-login accounts have no Discord id and are found by name; fake characters get a stable id from 3 900 000 000 up, corporation 1000169 by default and no ESI token.
+- System and plugin actors are admin on existing maps; API tokens hold their fixed role on their one map.
+- One access rule per map and subject (Discord role ids are global, so the guild is not part of the key); a block on a corporation, alliance or Discord role loses against any grant.
+- Instance settings live in `instance_setting` (key -> JSON) with defaults `defaultTheme: default` and no admin guild; edited through `GET/PATCH /api/admin/settings`.
+- Map ownership reaches access through `MapOwnershipRegistry.use()` from the mapping module (a constructor dependency would be a DI cycle); until then access sees no maps.
+- Outgoing HTTP goes through the `HTTP_FETCH` platform token so tests fake Discord, EVE SSO and ESI at the network edge.
+- The signed-in account is served at `/api/accounts/me` as `routes.ts` defines it.

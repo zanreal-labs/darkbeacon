@@ -9,3 +9,5 @@ export const EVENT_BUS = 'EventBus';
 export const UNIT_OF_WORK = 'UnitOfWork';
 /** MapAccess port, provided by the access module. */
 export const MAP_ACCESS = 'MapAccess';
+/** `typeof fetch` used by outgoing HTTP adapters, replaceable in tests. */
+export const HTTP_FETCH = 'HttpFetch';
