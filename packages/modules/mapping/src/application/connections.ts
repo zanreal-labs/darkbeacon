@@ -1,4 +1,4 @@
-import { NotFoundError, ValidationError, newId, type Actor } from '@wormwright/core';
+import { ConflictError, NotFoundError, ValidationError, newId, type Actor } from '@wormwright/core';
 import type { AddConnectionRequest, UpdateConnectionRequest } from '@wormwright/shared';
 import type { Connection } from '../domain/map.js';
 import { changes, defaultShipSize, defined } from '../domain/rules.js';
@@ -43,7 +43,12 @@ export class ConnectionUseCases extends MappingUseCases {
         createdAt: now,
         updatedAt: now,
       };
-      await this.ports.connections.insert(connection);
+      if (!(await this.ports.connections.insert(connection))) {
+        // Another request connected the pair since `findBetween`.
+        const raced = await this.ports.connections.findBetween(mapId, request.source, request.target);
+        if (raced) return raced;
+        throw new ConflictError('The connection changed meanwhile, try again');
+      }
       events.add('connection.added', connection);
       return connection;
     });

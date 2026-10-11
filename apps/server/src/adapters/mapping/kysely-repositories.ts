@@ -53,6 +53,9 @@ export interface MappingTables {
     eol_at: number | null;
     created_at: number;
     updated_at: number;
+    /** min(source, target) and max(source, target): unique per map. */
+    pair_low: number;
+    pair_high: number;
   };
   map_signatures: {
     id: string;
@@ -222,8 +225,15 @@ export class KyselyConnectionRepository extends Repository implements Connection
     return rows.map(connectionFromRow);
   }
 
-  async insert(connection: Connection): Promise<void> {
-    await this.db.insertInto('map_connections').values(connectionToRow(connection)).execute();
+  async insert(connection: Connection): Promise<boolean> {
+    // A concurrent insert of the same pair wins; this one then inserts nothing.
+    const row = await this.db
+      .insertInto('map_connections')
+      .values(connectionToRow(connection))
+      .onConflict((oc) => oc.columns(['map_id', 'pair_low', 'pair_high']).doNothing())
+      .returning('id')
+      .executeTakeFirst();
+    return row !== undefined;
   }
 
   async update(connection: Connection): Promise<void> {
@@ -384,6 +394,8 @@ function connectionToRow(c: Connection): ConnectionRow {
     eol_at: c.eolAt,
     created_at: c.createdAt,
     updated_at: c.updatedAt,
+    pair_low: Math.min(c.source, c.target),
+    pair_high: Math.max(c.source, c.target),
   };
 }
 

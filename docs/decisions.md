@@ -125,3 +125,4 @@ Choices made where `docs/SPEC.md` is silent. One line each; newest at the bottom
 - Installed plugins start disabled; the admin enables them in the Plugins tab, where the server's catalogue can be installed with one click.
 - `.claude/` (local agent worktrees) is ignored by git, Docker, ESLint and Prettier.
 - `/ws` accepts a browser only from the public origin or the host the request was sent to (reverse proxy, dev server); clients without an Origin header are allowed. Frames are capped at 64 KiB and a connection follows at most 50 streams.
+- Connections carry `pair_low`/`pair_high` (min/max system id) under a unique index per map; an insert that loses a race inserts nothing and the use case returns the winner. Migration `mapping/0002` keeps the oldest of any existing duplicates.

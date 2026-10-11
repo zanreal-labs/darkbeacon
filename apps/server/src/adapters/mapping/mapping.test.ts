@@ -291,6 +291,23 @@ describeEachDialect('mapping use cases', (t) => {
     expect((await snapshots.snapshot(bob, map.id)).connections).toEqual([gate]);
   });
 
+  it('keeps one connection per pair when adds race', async () => {
+    await systems.add(bob, map.id, { solarSystemId: SYSTEMS.c1 });
+    await systems.add(bob, map.id, { solarSystemId: SYSTEMS.c2 });
+    const seq = await head();
+    const added = await Promise.all([
+      connections.add(bob, map.id, { source: SYSTEMS.c1, target: SYSTEMS.c2 }),
+      connections.add(alice, map.id, { source: SYSTEMS.c2, target: SYSTEMS.c1 }),
+      connections.add(bob, map.id, { source: SYSTEMS.c1, target: SYSTEMS.c2 }),
+    ]);
+    expect(new Set(added.map((c) => c.id)).size).toBe(1);
+    expect((await eventsSince(seq)).map(([type]) => type)).toEqual(['connection.added']);
+    // The database itself refuses a second row for the pair, in either direction.
+    const reversed = { ...added[0]!, id: 'other', source: SYSTEMS.c2, target: SYSTEMS.c1 };
+    expect(await env.ports.connections.insert(reversed)).toBe(false);
+    expect((await snapshots.snapshot(bob, map.id)).connections).toHaveLength(1);
+  });
+
   it('manages signatures and merges probe scanner pastes', async () => {
     await systems.add(bob, map.id, { solarSystemId: SYSTEMS.c2 });
     const manual = await signatures.add(bob, map.id, SYSTEMS.c2, {
