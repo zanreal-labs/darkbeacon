@@ -9,6 +9,11 @@
       "source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./testing": {
+      "source": "./src/test-support.ts",
+      "types": "./dist/test-support.d.ts",
+      "default": "./dist/test-support.js"
     }
   },
   "scripts": {

@@ -3,6 +3,7 @@ import type { DomainEvent } from '@wormwright/core';
 import type { AccessRuleDto } from './dto/access.js';
 import type { InstanceRole } from './dto/identity.js';
 import type { ConnectionDto, LabelDto, MapDto, MapSystemDto, SignatureDto } from './dto/mapping.js';
+import type { CharacterPresenceDto } from './dto/tracking.js';
 
 export const DomainEventSchema = z.object({
   id: z.string(),
@@ -45,6 +46,9 @@ export interface EventPayloads {
   'character.jumped': { characterId: number; from: number; to: number; shipTypeId: number | null };
   'character.ship_changed': { characterId: number; shipTypeId: number; shipName: string | null };
   'character.online_changed': { characterId: number; online: boolean };
+  /** A character started being tracked on the map. */
+  'character.tracked': CharacterPresenceDto;
+  'character.untracked': { characterId: number };
   'map.settings_changed': MapDto;
   'labels.changed': { labels: LabelDto[] };
   'ping.created': PingDto;
@@ -72,6 +76,8 @@ export const EVENT_TYPES = [
   'character.jumped',
   'character.ship_changed',
   'character.online_changed',
+  'character.tracked',
+  'character.untracked',
   'map.settings_changed',
   'labels.changed',
   'ping.created',
