@@ -324,6 +324,27 @@ export class KyselyCharacterRepository implements CharacterRepository {
       .execute();
   }
 
+  async updateState(
+    characterId: number,
+    accountId: string,
+    state: Partial<Pick<LinkedCharacter, 'corporationId' | 'allianceId' | 'tokenValid'>> & {
+      updatedAt: number;
+    },
+  ): Promise<boolean> {
+    const result = await this.db
+      .updateTable('eve_character')
+      .set({
+        ...(state.corporationId !== undefined ? { corporation_id: state.corporationId } : {}),
+        ...(state.allianceId !== undefined ? { alliance_id: state.allianceId } : {}),
+        ...(state.tokenValid !== undefined ? { token_valid: bool.encode(state.tokenValid) } : {}),
+        updated_at: state.updatedAt,
+      })
+      .where('id', '=', characterId)
+      .where('account_id', '=', accountId)
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows) > 0;
+  }
+
   async delete(characterId: number): Promise<void> {
     await this.db.deleteFrom('eve_character_token').where('character_id', '=', characterId).execute();
     await this.db.deleteFrom('eve_character').where('id', '=', characterId).execute();

@@ -62,6 +62,13 @@ export interface EventPayloads {
   'access.rule_removed': { id: string };
   /** Instance stream: an account's instance role changed. */
   'access.role_changed': { accountId: string; role: InstanceRole };
+  /**
+   * Instance stream: something an account is matched by changed (characters, corporation or
+   * alliance, Discord roles) or its sessions ended. Map access of the account is re-checked.
+   */
+  'access.account_changed': { accountId: string };
+  /** Instance stream: a character left its account (unlinked, or claimed by a new owner). */
+  'character.unlinked': { characterId: number };
   /** Instance stream: a plugin was installed, upgraded, enabled, disabled or failed. */
   'plugin.updated': PluginDto;
   'plugin.removed': { id: string };
@@ -95,6 +102,8 @@ export const EVENT_TYPES = [
   'access.rule_added',
   'access.rule_removed',
   'access.role_changed',
+  'access.account_changed',
+  'character.unlinked',
   'plugin.updated',
   'plugin.removed',
 ] as const satisfies readonly EventType[];

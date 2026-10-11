@@ -94,6 +94,18 @@ export class MemoryCharacters implements CharacterRepository {
     this.rows.set(character.id, character);
     return Promise.resolve();
   }
+  updateState(
+    id: number,
+    accountId: string,
+    state: Partial<Pick<LinkedCharacter, 'corporationId' | 'allianceId' | 'tokenValid'>> & {
+      updatedAt: number;
+    },
+  ) {
+    const row = this.rows.get(id);
+    if (row?.accountId !== accountId) return Promise.resolve(false);
+    this.rows.set(id, { ...row, ...state });
+    return Promise.resolve(true);
+  }
   delete(id: number) {
     this.rows.delete(id);
     this.tokens.delete(id);

@@ -1,13 +1,15 @@
-import type { Clock } from '@wormwright/core';
+import type { Clock, EventLog } from '@wormwright/core';
 import type { Account, Session } from '../domain/account.js';
 import { SESSION_TOUCH_MS, SESSION_TTL_MS } from '../domain/rules.js';
 import type { AccountRepository } from '../ports/account-repository.js';
 import type { SessionRepository } from '../ports/session-repository.js';
 import { randomToken, sha256 } from './crypto.js';
+import { accountChanged } from './events.js';
 
 export interface SessionDeps {
   sessions: SessionRepository;
   accounts: AccountRepository;
+  events: EventLog;
   clock: Clock;
 }
 
@@ -53,13 +55,25 @@ export class SessionService {
     return { session, account };
   }
 
+  /** Ends one session; open sockets of the account re-check theirs (`access.account_changed`). */
   async logout(token: string | null | undefined): Promise<void> {
-    if (token) await this.deps.sessions.delete(await sha256(token));
+    if (!token) return;
+    const session = await this.deps.sessions.findById(await sha256(token));
+    if (!session) return;
+    await this.deps.sessions.delete(session.id);
+    await this.ended(session.accountId);
   }
 
   /** "Log out everywhere": ends every session of the account. */
-  logoutEverywhere(accountId: string): Promise<number> {
-    return this.deps.sessions.deleteForAccount(accountId);
+  async logoutEverywhere(accountId: string): Promise<number> {
+    const ended = await this.deps.sessions.deleteForAccount(accountId);
+    await this.ended(accountId);
+    return ended;
+  }
+
+  private async ended(accountId: string): Promise<void> {
+    const actor = { kind: 'account' as const, id: accountId };
+    await this.deps.events.append([accountChanged(accountId, actor, this.deps.clock.now())]);
   }
 
   pruneExpired(): Promise<number> {

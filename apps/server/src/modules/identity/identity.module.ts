@@ -97,9 +97,13 @@ const callback = (config: AppConfig, provider: 'discord' | 'eve') =>
     },
     {
       provide: SessionService,
-      useFactory: (sessions: KyselySessionRepository, accounts: KyselyAccountRepository, clock: Clock) =>
-        new SessionService({ sessions, accounts, clock }),
-      inject: [SESSIONS, ACCOUNTS, CLOCK],
+      useFactory: (
+        sessions: KyselySessionRepository,
+        accounts: KyselyAccountRepository,
+        events: EventLog,
+        clock: Clock,
+      ) => new SessionService({ sessions, accounts, events, clock }),
+      inject: [SESSIONS, ACCOUNTS, EVENT_LOG, CLOCK],
     },
     {
       provide: GuildRoleSync,
@@ -107,9 +111,10 @@ const callback = (config: AppConfig, provider: 'discord' | 'eve') =>
         discord: IdentityProvider | null,
         discordLinks: DiscordLinkRepository,
         guildPolicy: InstanceSettingsService,
+        events: EventLog,
         clock: Clock,
-      ) => new GuildRoleSync({ discord, discordLinks, guildPolicy, clock }),
-      inject: [DISCORD, DISCORD_LINKS, InstanceSettingsService, CLOCK],
+      ) => new GuildRoleSync({ discord, discordLinks, guildPolicy, events, clock }),
+      inject: [DISCORD, DISCORD_LINKS, InstanceSettingsService, EVENT_LOG, CLOCK],
     },
     {
       provide: DiscordLogin,
@@ -149,6 +154,7 @@ const callback = (config: AppConfig, provider: 'discord' | 'eve') =>
         config: AppConfig,
         characters: CharacterRepository,
         uow: UnitOfWork,
+        events: EventLog,
         clock: Clock,
         fetchFn: FetchLike,
       ) =>
@@ -156,10 +162,11 @@ const callback = (config: AppConfig, provider: 'discord' | 'eve') =>
           eve: config.eve ? new EveSsoHttp(config.eve, clock, fetchFn) : null,
           characters,
           uow,
+          events,
           clock,
           redirectUri: callback(config, 'eve'),
         }),
-      inject: [APP_CONFIG, CHARACTERS, UNIT_OF_WORK, CLOCK, HTTP_FETCH],
+      inject: [APP_CONFIG, CHARACTERS, UNIT_OF_WORK, EVENT_LOG, CLOCK, HTTP_FETCH],
     },
   ],
   exports: [AccountService, CharacterService, SessionService],

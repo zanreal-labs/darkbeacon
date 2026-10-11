@@ -1,11 +1,15 @@
 import {
   ConflictError,
   ForbiddenError,
+  INSTANCE_STREAM,
+  newEvent,
   NotFoundError,
   requireAccount,
   ValidationError,
   type Actor,
+  type ActorRef,
   type Clock,
+  type EventLog,
   type UnitOfWork,
 } from '@wormwright/core';
 import type { CharacterTokens, LinkedCharacter } from '../domain/account.js';
@@ -14,6 +18,7 @@ import type { PendingAuth } from '../domain/pending-auth.js';
 import { EVE_SCOPES, TOKEN_REFRESH_MARGIN_MS } from '../domain/rules.js';
 import type { CharacterRepository } from '../ports/character-repository.js';
 import type { EveSso, EveTokenSet } from '../ports/eve-sso.js';
+import { accountChanged, IDENTITY_ACTOR } from './events.js';
 import { asAuthFailure, beginPendingAuth, checkPendingAuth, requireConfigured } from './pending.js';
 
 export interface CharacterDeps {
@@ -21,6 +26,7 @@ export interface CharacterDeps {
   eve: EveSso | null;
   characters: CharacterRepository;
   uow: UnitOfWork;
+  events: EventLog;
   clock: Clock;
   redirectUri: string;
 }
@@ -85,6 +91,10 @@ export class CharacterService {
         );
       }
       const now = this.deps.clock.now();
+      if (existing && existing.accountId !== account.id) {
+        // Sold: the former owner's maps must stop seeing this character through them.
+        await this.left(existing, { kind: 'account', id: account.id });
+      }
       const character: LinkedCharacter = {
         id: identity.characterId,
         accountId: account.id,
@@ -109,6 +119,7 @@ export class CharacterService {
       const character = await this.deps.characters.findById(characterId);
       if (character?.accountId !== account.id) throw new NotFoundError('Character');
       await this.deps.characters.delete(characterId);
+      await this.left(character, { kind: 'account', id: account.id });
     });
   }
 
@@ -134,6 +145,11 @@ export class CharacterService {
     return work;
   }
 
+  /**
+   * The refresh and affiliation calls take a while, and the character may be unlinked or
+   * claimed by another account meanwhile; the results are only stored while it still belongs
+   * to the account it was read for.
+   */
   private async freshToken(characterId: number): Promise<string | null> {
     const character = await this.deps.characters.findById(characterId);
     if (!character?.tokenValid) return null;
@@ -147,8 +163,7 @@ export class CharacterService {
       refreshed = await this.deps.eve.refresh(tokens.refreshToken);
     } catch (error) {
       if (!(error instanceof ExternalAuthError)) throw error;
-      await this.deps.characters.upsert({
-        ...character,
+      await this.deps.characters.updateState(characterId, character.accountId, {
         tokenValid: false,
         updatedAt: this.deps.clock.now(),
       });
@@ -156,13 +171,39 @@ export class CharacterService {
     }
     // Corporation and alliance feed access rules; keep them current while the character is used.
     const affiliation = await this.deps.eve.affiliation(characterId).catch(() => null);
-    await this.deps.uow.transaction(async () => {
+    return this.deps.uow.transaction(async () => {
+      const kept = await this.deps.characters.updateState(characterId, character.accountId, {
+        ...affiliation,
+        updatedAt: this.deps.clock.now(),
+      });
+      if (!kept) return null;
       await this.deps.characters.saveTokens(characterId, storedTokens(refreshed));
-      if (affiliation) {
-        await this.deps.characters.upsert({ ...character, ...affiliation, updatedAt: this.deps.clock.now() });
+      if (
+        affiliation &&
+        (affiliation.corporationId !== character.corporationId ||
+          affiliation.allianceId !== character.allianceId)
+      ) {
+        await this.deps.events.append([
+          accountChanged(character.accountId, IDENTITY_ACTOR, this.deps.clock.now()),
+        ]);
       }
+      return refreshed.accessToken;
     });
-    return refreshed.accessToken;
+  }
+
+  /** The character no longer belongs to its account: tracking and map access must follow. */
+  private async left(character: LinkedCharacter, actor: ActorRef): Promise<void> {
+    const now = this.deps.clock.now();
+    await this.deps.events.append([
+      newEvent({
+        stream: INSTANCE_STREAM,
+        type: 'character.unlinked',
+        actor,
+        data: { characterId: character.id },
+        occurredAt: now,
+      }),
+      accountChanged(character.accountId, actor, now),
+    ]);
   }
 }
 

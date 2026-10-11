@@ -100,6 +100,14 @@ describeEachDialect('identity repositories', (t) => {
     expect(await repo.findById(pilot.id)).toEqual({ ...pilot, allianceId: null, tokenValid: false });
     expect((await repo.listForAccount('a')).map((c) => c.id)).toEqual([2_112_000_001, 2_112_000_002]);
 
+    // Token use only updates a character that still belongs to the account it was read for.
+    expect(await repo.updateState(pilot.id, 'b', { tokenValid: true, updatedAt: 9 })).toBe(false);
+    expect(await repo.updateState(pilot.id, 'a', { corporationId: 7, allianceId: 8, updatedAt: 9 })).toBe(
+      true,
+    );
+    expect(await repo.findById(pilot.id)).toMatchObject({ accountId: 'a', corporationId: 7, allianceId: 8 });
+    await repo.upsert({ ...pilot, allianceId: null, tokenValid: false });
+
     const tokens = {
       accessToken: 'plain-access',
       refreshToken: 'plain-refresh',

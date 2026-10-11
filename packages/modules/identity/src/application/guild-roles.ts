@@ -1,15 +1,17 @@
-import type { Clock } from '@wormwright/core';
+import type { Clock, EventLog } from '@wormwright/core';
 import type { DiscordLink, GuildRole } from '../domain/account.js';
 import { ExternalAuthError } from '../domain/errors.js';
 import { GUILD_ROLES_TTL_MS, TOKEN_REFRESH_MARGIN_MS } from '../domain/rules.js';
 import type { DiscordGuildPolicy, DiscordLinkRepository } from '../ports/discord-link-repository.js';
 import type { DiscordGrant, IdentityProvider } from '../ports/identity-provider.js';
+import { accountChanged, IDENTITY_ACTOR, sameRoles } from './events.js';
 
 export interface GuildRoleDeps {
   /** Null when Discord login is not configured. */
   discord: IdentityProvider | null;
   discordLinks: DiscordLinkRepository;
   guildPolicy: DiscordGuildPolicy;
+  events: EventLog;
   clock: Clock;
 }
 
@@ -50,12 +52,20 @@ export class GuildRoleSync {
 
   /**
    * Reads the account's roles on every relevant guild. When Discord rejects the grant the roles
-   * are cleared: an account that revoked access must not keep the roles it had.
+   * are cleared: an account that revoked access must not keep the roles it had. A change is
+   * published as `access.account_changed`, so open map streams are re-authorized.
    */
   async refresh(accountId: string): Promise<void> {
     const { discord, discordLinks, guildPolicy, clock } = this.deps;
     let link = await discordLinks.find(accountId);
     if (!link || !discord) return;
+    const before = link.guildRoles;
+    const save = async (current: DiscordLink, roles: GuildRole[]) => {
+      await discordLinks.save({ ...current, guildRoles: roles, rolesCheckedAt: clock.now() });
+      if (!sameRoles(before, roles)) {
+        await this.deps.events.append([accountChanged(accountId, IDENTITY_ACTOR, clock.now())]);
+      }
+    };
     try {
       const guildIds = await guildPolicy.guildIds();
       if (guildIds.length > 0 && link.expiresAt - TOKEN_REFRESH_MARGIN_MS <= clock.now()) {
@@ -68,10 +78,10 @@ export class GuildRoleSync {
           roles.push({ guildId, roleId });
         }
       }
-      await discordLinks.save({ ...link, guildRoles: roles, rolesCheckedAt: clock.now() });
+      await save(link, roles);
     } catch (error) {
       if (!(error instanceof ExternalAuthError)) throw error;
-      await discordLinks.save({ ...link, guildRoles: [], rolesCheckedAt: clock.now() });
+      await save(link, []);
     }
   }
 

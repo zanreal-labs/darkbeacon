@@ -81,8 +81,8 @@ function setup() {
     events,
     clock,
   });
-  const sessions = new SessionService({ sessions: sessionsRepo, accounts, clock });
-  const guildRoles = new GuildRoleSync({ discord, discordLinks, guildPolicy, clock });
+  const sessions = new SessionService({ sessions: sessionsRepo, accounts, events, clock });
+  const guildRoles = new GuildRoleSync({ discord, discordLinks, guildPolicy, events, clock });
   const discordLogin = new DiscordLogin({
     discord,
     accounts: accountService,
@@ -170,6 +170,11 @@ describe('SessionService', () => {
     await t.sessions.create(account.id, null);
     expect(await t.sessions.logoutEverywhere(account.id)).toBe(2);
     expect(await t.sessions.resolve(b.token)).toBeNull();
+    // Open sockets of the account re-check their session.
+    expect(t.events.events.filter((e) => e.type === 'access.account_changed')).toEqual([
+      expect.objectContaining({ stream: 'instance', data: { accountId: account.id } }),
+      expect.objectContaining({ stream: 'instance', data: { accountId: account.id } }),
+    ]);
   });
 });
 
@@ -350,6 +355,12 @@ describe('GuildRoleSync', () => {
     t.discord.rejectTokens = true;
     await t.guildRoles.refresh('acc');
     expect(t.discordLinks.rows.get('acc')?.guildRoles).toEqual([]);
+    await t.guildRoles.refresh('acc');
+    // Two changes (stale -> fresh -> none); the last refresh changed nothing.
+    expect(t.events.events.map((e) => [e.type, e.data])).toEqual([
+      ['access.account_changed', { accountId: 'acc' }],
+      ['access.account_changed', { accountId: 'acc' }],
+    ]);
   });
 });
 
@@ -381,6 +392,8 @@ class FakeEve implements EveSso {
   affiliations = new Map<number, { corporationId: number; allianceId: number | null }>();
   rejectRefresh = false;
   refreshes = 0;
+  /** When set, refreshes wait for it (to change things while one is under way). */
+  hold: Promise<void> | null = null;
 
   authorizationUrl(input: { state: string; scopes: string[] }) {
     return `https://eve.test/authorize?state=${input.state}&scope=${input.scopes.join('+')}`;
@@ -391,7 +404,7 @@ class FakeEve implements EveSso {
   }
   async refresh(refreshToken: string) {
     this.refreshes++;
-    await Promise.resolve();
+    await (this.hold ?? Promise.resolve());
     if (this.rejectRefresh) throw new ExternalAuthError('eve', 'invalid_grant');
     return eveTokens(1001, 'h1', `access-${this.refreshes}`, `${refreshToken}+`, Date.UTC(2027, 0, 1));
   }
@@ -430,6 +443,7 @@ describe('CharacterService', () => {
       eve,
       characters: t.characters,
       uow: immediateUow,
+      events: t.events,
       clock: t.clock,
       redirectUri: 'https://ww.test/api/auth/eve/callback',
     });
@@ -501,5 +515,61 @@ describe('CharacterService', () => {
     await t.service.unlink(actorOf('acc-a'), 1001);
     expect(await t.characters.findById(1001)).toBeNull();
     expect(t.characters.tokens.size).toBe(0);
+    expect(t.events.events.map((e) => [e.type, e.data])).toEqual([
+      ['character.unlinked', { characterId: 1001 }],
+      ['access.account_changed', { accountId: 'acc-a' }],
+    ]);
+  });
+
+  it('tells the former owner when a sold character is claimed', async () => {
+    const t = withEve();
+    t.eve.codes.set('c1', eveTokens(1001, 'h1'));
+    t.eve.codes.set('c2', eveTokens(1001, 'h2'));
+    await link(t, 'acc-a', 'c1');
+    await link(t, 'acc-b', 'c2');
+    expect(t.events.events.map((e) => [e.type, e.data])).toEqual([
+      ['character.unlinked', { characterId: 1001 }],
+      ['access.account_changed', { accountId: 'acc-a' }],
+    ]);
+  });
+
+  it('never brings back or hands back a character that changed hands during a refresh', async () => {
+    const t = withEve();
+    t.eve.codes.set('c1', eveTokens(1001, 'h1', 'a1', 'r1', t.clock.now() + 30_000));
+    t.eve.codes.set('c2', eveTokens(1001, 'h2', 'b1', 'rb', t.clock.now() + 30_000));
+    await link(t, 'acc-a', 'c1');
+    let release = () => {};
+    t.eve.hold = new Promise((resolve) => (release = resolve));
+
+    // Unlinked while the refresh runs: it stays unlinked and keeps no tokens.
+    const unlinked = t.service.accessToken(1001);
+    await t.service.unlink(actorOf('acc-a'), 1001);
+    release();
+    expect(await unlinked).toBeNull();
+    expect(await t.characters.findById(1001)).toBeNull();
+    expect(t.characters.tokens.size).toBe(0);
+
+    // Claimed by a buyer while the seller's refresh runs: the buyer keeps it and their tokens.
+    await link(t, 'acc-a', 'c1');
+    t.eve.hold = new Promise((resolve) => (release = resolve));
+    const claimed = t.service.accessToken(1001);
+    await link(t, 'acc-b', 'c2');
+    release();
+    expect(await claimed).toBeNull();
+    expect((await t.characters.findById(1001))?.accountId).toBe('acc-b');
+    expect(t.characters.tokens.get(1001)?.refreshToken).toBe('rb');
+  });
+
+  it('publishes a corporation or alliance change seen on refresh', async () => {
+    const t = withEve();
+    t.eve.codes.set('c1', eveTokens(1001, 'h1', 'a1', 'r1', t.clock.now() + 30_000));
+    t.eve.affiliations.set(1001, { corporationId: 5, allianceId: null });
+    await link(t, 'acc-a', 'c1');
+    t.eve.affiliations.set(1001, { corporationId: 7, allianceId: 8 });
+    expect(await t.service.accessToken(1001)).toBe('access-1');
+    expect(await t.characters.findById(1001)).toMatchObject({ corporationId: 7, allianceId: 8 });
+    expect(t.events.events.map((e) => [e.type, e.data])).toEqual([
+      ['access.account_changed', { accountId: 'acc-a' }],
+    ]);
   });
 });
