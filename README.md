@@ -18,6 +18,20 @@ Open `http://localhost:3000`. The first account to sign in becomes the instance 
 `/data` volume (SQLite by default; set `DATABASE_URL=postgres://...` to use Postgres). Without `SECRET_KEY`
 the server generates one and keeps it in `/data/secret.key`.
 
+### Local preview without Discord or EVE
+
+```sh
+docker build -t wormwright:dev .
+docker run -d --name wormwright-preview -p 127.0.0.1::3000 -v wormwright-preview:/data \
+  -e DEV_LOGIN=true -e ALLOW_DEV_LOGIN=true -e PUBLIC_URL=http://localhost wormwright:dev
+docker port wormwright-preview 3000      # the random loopback port it landed on
+```
+
+Open that address and use the development login form: any account name signs in (the first one becomes the
+owner), optionally with a fake EVE character. Fake characters have no ESI token, so they can be tracked on a
+map but never move. Plugins and themes shipped with the server are installed from Admin > Plugins and
+Admin > Themes. `docker rm -f wormwright-preview` stops it; the `wormwright-preview` volume keeps the data.
+
 ## Development
 
 Node tooling never runs on the host. Everything runs in the dev container defined by

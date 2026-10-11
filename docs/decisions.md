@@ -51,7 +51,7 @@ Choices made where `docs/SPEC.md` is silent. One line each; newest at the bottom
 - Dev-login accounts have no Discord id and are found by name; fake characters get a stable id from 3 900 000 000 up, corporation 1000169 by default and no ESI token.
 - System and plugin actors are admin on existing maps; API tokens hold their fixed role on their one map.
 - One access rule per map and subject (Discord role ids are global, so the guild is not part of the key); a block on a corporation, alliance or Discord role loses against any grant.
-- Instance settings live in `instance_setting` (key -> JSON) with defaults `defaultTheme: default` and no admin guild; edited through `GET/PATCH /api/admin/settings`.
+- Instance settings live in `instance_setting` (key -> JSON), by default no admin guild; edited through `GET/PATCH /api/admin/settings`. The default theme is not one of them: the themes module owns it (`PUT /api/admin/themes/default`).
 - Map ownership reaches access through `MapOwnershipRegistry.use()` from the mapping module (a constructor dependency would be a DI cycle); until then access sees no maps.
 - Outgoing HTTP goes through the `HTTP_FETCH` platform token so tests fake Discord, EVE SSO and ESI at the network edge.
 - The signed-in account is served at `/api/accounts/me` as `routes.ts` defines it.
@@ -67,13 +67,11 @@ Choices made where `docs/SPEC.md` is silent. One line each; newest at the bottom
 - Setting labels strips removed label ids from systems (published as `system.updated`); label ids and names are unique per map.
 - Event catalogue gains `map.created` (first event of a map stream, carries the MapDto) and `map.removed` (`{ id }`) so plugins, webhooks and other modules can follow the map lifecycle.
 - Deleting a map cascades to its systems, connections and signatures through foreign keys inside the mapping tables.
-- Without an access module (no `MAP_ACCESS` provider) mapping falls back to owner-only access and registers a `map` stream authorizer; the access module replaces both.
-- The universe catalogue is `universe.json` (the `@wormwright/sde` format) loaded at startup from `DATA_DIR`, else from `packages/sde/data/`; without it no system can be added.
-- `packages/sde` builds `data/universe.json` from the JSONL edition of the SDE with a dependency-free zip reader; a system without its own `wormholeClassID` inherits its constellation's, then its region's. The file is not generated in CI; build it once and commit it or drop it into `DATA_DIR`.
+- The universe catalogue is loaded once at startup from `DATA_DIR/universe.json` when an operator puts one there, else from the dataset committed in `packages/sde/data/`.
 - The universe dataset is built from CCP's JSON Lines SDE zip (`pnpm --filter @wormwright/sde universe`) and committed as `packages/sde/data/universe.json` (~1.2 MB): known space (30xxxxxx) and wormhole space (31xxxxxx) only, wormhole class inherited system -> constellation -> region, falling back to 7/8/9 by security (>= 0.45 high, > 0 low) for the few systems without one.
 - The SDE zip is read with a small built-in reader (stored/deflate, no zip64) instead of a dependency.
 - The `UNIVERSE_CATALOG` token is provided by a global `UniverseModule`; the catalog is the SDE dataset in memory. Search: case-insensitive prefix matches (alphabetical) first, then substring matches.
-- Tracking ports owned by tracking: `AutoMapTarget` (implemented with mapping, token `AUTO_MAP_TARGET`) and `UniverseLookup` (satisfied by the catalog); `CharacterTokenSource` is `IdentityCharacterTokens` over identity's `CharacterRepository` + `EveSso` (token `CHARACTER_TOKENS`). Without these providers tracking stays idle and logs a warning.
+- Tracking ports owned by tracking: `AutoMapTarget` (implemented with mapping, token `AUTO_MAP_TARGET`) and `UniverseLookup` (satisfied by the catalog); `CharacterTokenSource` (token `CHARACTER_TOKENS`) is identity's `CharacterService`, which already refreshes EVE tokens once per character at a time.
 - `EsiGateway` never throws: it answers `{ ok: false, retryAt }` when ESI must not be asked (bucket nearly empty, error limit, 420/429/Retry-After, 5xx/network backoff 5 s doubling to 5 min, 401/403 retried after 5 min) and the poller simply waits until then.
 - ESI rate-limit buckets are per route group and character (`X-Ratelimit-*`); below 10 % remaining a bucket rests for a tenth of its window. The global error limit stops all calls with 10 errors left. `X-Compatibility-Date` is pinned to 2026-08-18.
 - The poller ticks every second; location and ship are polled only while the character is online (or not known to be offline), every 5 s or later if `Expires` says so; online every 60 s. It does not run when `NODE_ENV=test`.
@@ -102,7 +100,6 @@ Choices made where `docs/SPEC.md` is silent. One line each; newest at the bottom
 - Webhook retries after 10 s, 1 min, 5 min, 30 min and 2 h (6 attempts); each delivery is one row updated per attempt; finished deliveries are pruned after 30 days. A delivery's first `nextAttemptAt` is a lease, so a crash mid-send is retried.
 - Webhook secrets (`whsec_<64 hex>`) are shown once and stored AES-256-GCM sealed with a key derived (HKDF) from SECRET_KEY; webhook URLs must be http(s), redirects are not followed and response bodies are never shown. Private addresses are not blocked.
 - Webhook config changes are not events (secrets must not reach the stream); only map admins see them.
-- Without an access module, webhook routes answer 404 (a deny-all MapAccess stands in).
 - Accounts get an optional `mainCharacterId` and `PUT /api/accounts/me/main-character` (additive contract; the web app shows it on the account page).
 - The web app reads the caller's map role from `GET /api/maps` (MapDto has no role); the UI hides what the role cannot do, the server still decides.
 - Map permissions in the UI: member edits systems, connections and signatures; manager also locks systems and edits labels; admin also edits map settings and access rules.
@@ -115,7 +112,15 @@ Choices made where `docs/SPEC.md` is silent. One line each; newest at the bottom
 - System notes are shown as plain text; markdown rendering comes later.
 - Label colours are user data and applied inline; every other colour comes from theme tokens.
 - The web app reopens its WebSocket when the signed-in account changes, since the socket authenticates with the cookie at connect time.
-- The login page passes `next` to `/api/auth/discord/login`; the server may use it to return the user after the OAuth round trip.
-- Plugin web modules get the host React from `globalThis.wormwright.react` and must not bundle their own; a crashing slot component renders nothing.
+- The login page passes its `next` path as `returnTo` to `/api/auth/discord/login`; linking a character returns to `/account`. Both pages show `?auth_error=` messages.
+- Plugin web modules get the host React as `api.react` (and on `globalThis.wormwright.react`) and must not bundle their own; a crashing slot component renders nothing, and components of a plugin switched off on a map are hidden there.
 - `vite --mode mock` (`dev:mock`) runs the SPA against an in-memory API that patches fetch and WebSocket in the page (MSW interceptors, no service worker); production builds drop it.
 - Web component tests opt into jsdom per file (`// @vitest-environment jsdom`), so the root Vitest config stays as it is.
+- Feature modules depend on each other's real services; the stand-ins they had for missing modules (owner-only or deny-all map access, idle tracking) are gone and live only in test helpers.
+- Mapping installs its `MapOwnership` into access's `MapOwnershipRegistry` in `onModuleInit`; access registers the only `map` stream authorizer.
+- One universe module serves `/api/universe/*` and the `UNIVERSE_CATALOG` port; mapping, tracking and the plugins' `universe` port all read it.
+- Auto-mapping records a jump as the character's owner: it adds (or restores) the missing system 220 px right of the other one, moving down until it covers no system, then adds the connection; existing items are left as they are.
+- An account's main character is stored on the account (`main_character_id`, `PUT /api/accounts/me/main-character`, own characters only); a main character that was unlinked reads as none.
+- The theme choice is stored on the server per account; the browser keeps a copy to avoid a flash before `/api/themes` answers. Order: the account's choice, the browser's copy, the instance default.
+- Installed plugins start disabled; the admin enables them in the Plugins tab, where the server's catalogue can be installed with one click.
+- `.claude/` (local agent worktrees) is ignored by git, Docker, ESLint and Prettier.
