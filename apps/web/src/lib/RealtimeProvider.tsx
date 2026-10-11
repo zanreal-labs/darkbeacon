@@ -1,10 +1,25 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 import { RealtimeClient, defaultRealtimeUrl, type ConnectionStatus, type StreamListener } from './realtime';
 
 const RealtimeContext = createContext<RealtimeClient | null>(null);
 
-export function RealtimeProvider({ children }: { children: ReactNode }) {
-  const [client] = useState(() => new RealtimeClient({ url: defaultRealtimeUrl(window.location) }));
+/** `client` replaces the default socket, e.g. with a fake one in tests. */
+export function RealtimeProvider({
+  children,
+  client: given,
+}: {
+  children: ReactNode;
+  client?: RealtimeClient;
+}) {
+  const [client] = useState(() => given ?? new RealtimeClient({ url: defaultRealtimeUrl(window.location) }));
   useEffect(() => {
     client.start();
     return () => client.stop();
@@ -33,7 +48,8 @@ export function useStream(stream: string | null, listener: StreamListener): void
 
 export function useConnectionStatus(): ConnectionStatus {
   const client = useRealtime();
-  const [status, setStatus] = useState(client.status);
-  useEffect(() => client.onStatus(setStatus), [client]);
-  return status;
+  return useSyncExternalStore(
+    (notify) => client.onStatus(notify),
+    () => client.status,
+  );
 }

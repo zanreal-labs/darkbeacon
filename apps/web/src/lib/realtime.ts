@@ -57,6 +57,17 @@ export class RealtimeClient {
     this.setStatus('closed');
   }
 
+  /** Opens a fresh socket, e.g. after sign in, so the server sees the new session cookie. */
+  reconnect(): void {
+    if (this.stopped) return;
+    clearTimeout(this.timer);
+    const old = this.socket;
+    this.socket = null;
+    old?.close();
+    this.attempt = 0;
+    this.open();
+  }
+
   /** Listens to a stream; the first listener subscribes, the last one to leave unsubscribes. */
   subscribe(stream: string, listener: StreamListener): () => void {
     let state = this.streams.get(stream);
