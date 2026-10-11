@@ -7,5 +7,6 @@ export interface MapRepository {
   listOwnedBy(accountId: string): Promise<ChainMap[]>;
   insert(map: ChainMap): Promise<void>;
   update(map: ChainMap): Promise<void>;
+  /** Deletes the map and everything on it (systems, connections, signatures). */
   delete(id: string): Promise<void>;
 }

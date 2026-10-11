@@ -37,3 +37,17 @@ Choices made where `docs/SPEC.md` is silent. One line each; newest at the bottom
 - Import boundaries are enforced by a small local ESLint rule (`tools/eslint/boundaries.js`) instead of a plugin.
 - Feature modules register themselves with one line each in `apps/server/src/modules/index.ts`.
 - The dev compose file has a `dev` service for commands and an `app` service that runs `pnpm dev` on random loopback ports; `DEV_LOGIN=true` there.
+- Removing a system hides it (`visible: false`): attributes and signatures stay, its connections are deleted, clients get `system.removed`; adding it again (or `PATCH visible: true`) restores it and publishes `system.added` plus `signature.added` for the kept signatures.
+- Hidden systems are unreachable for every command (404) and are left out of snapshots; nothing is published about them, signature unlinks in a hidden system happen silently.
+- Locked systems cannot be moved or hidden unless the same request unlocks them; any member may lock or unlock. A batch move is all or nothing.
+- Adding a system or connection that already exists returns it unchanged without an event, so auto-mapping can call it blindly; connections are unique per unordered system pair.
+- A system added without a position is placed 220 px right of the right-most visible system.
+- New connections: type `gate` when the SDE has a stargate between the systems, else `wormhole`; ship size `small` if a side is a shattered frigate system (class 13), `medium` if a side is C1, `large` for other wormholes, `xlarge` for gates and bridges. `eolAt` is stamped when first marked EOL and cleared on `normal`.
+- Linking a signature to a connection requires the connection to touch the signature's system and sets its group to `wormhole`; removing a connection unlinks its signatures.
+- Probe scanner paste: only `Cosmic Signature` rows become signatures, anomalies are ignored silently, other lines are reported as skipped; a paste never downgrades a known group or name, wormhole type names ("Unstable Wormhole") are not stored, and `replace` removes nothing when no row was understood. Languages are entries in `SCANNER_LANGUAGES` (EN only for now).
+- Map slugs come from the name (`home-chain`, then `home-chain-2`...); an explicit slug that is taken is a conflict. New maps default to the `wormhole` scope.
+- Setting labels strips removed label ids from systems (published as `system.updated`); label ids and names are unique per map.
+- Event catalogue gains `map.created` (first event of a map stream, carries the MapDto) and `map.removed` (`{ id }`) so plugins, webhooks and other modules can follow the map lifecycle.
+- Deleting a map cascades to its systems, connections and signatures through foreign keys inside the mapping tables.
+- Without an access module (no `MAP_ACCESS` provider) mapping falls back to owner-only access and registers a `map` stream authorizer; the access module replaces both.
+- The universe catalogue is `universe.json` (the `@wormwright/sde` format) loaded at startup from `DATA_DIR`, else from `packages/sde/data/`; without it no system can be added.
