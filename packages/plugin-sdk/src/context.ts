@@ -1,4 +1,5 @@
 import type { Clock, DomainEvent } from '@wormwright/core';
+import type { Kysely } from 'kysely';
 import type { ConnectionDto, MapDto, MapSystemDto, UniverseSystemDto } from '@wormwright/shared';
 import type { PluginPortName } from './manifest.js';
 
@@ -32,12 +33,29 @@ export interface Notifier {
   send(notification: Notification): Promise<void>;
 }
 
+/**
+ * The instance database, for the plugin's own tables (created by its migrations and named
+ * `<plugin_id>_<table>`, dashes as underscores). Core tables are not part of the contract.
+ */
+export interface PluginDatabase {
+  readonly dialect: 'sqlite' | 'postgres';
+  /** Query builder bound to the open transaction inside `transaction()`. Always query through it. */
+  db<T>(): Kysely<T>;
+  transaction<T>(work: () => Promise<T>): Promise<T>;
+}
+
+/** A file in the manifest's `migrations` folder (`0001_create.js`) exports this. */
+export interface PluginMigration {
+  up(db: Kysely<unknown>): Promise<void>;
+}
+
 export interface PluginPorts {
   maps: MapReader;
   universe: UniverseReader;
   events: EventReader;
   notifier: Notifier;
   clock: Clock;
+  db: PluginDatabase;
 }
 
 /** Ports a plugin can implement for the core. */
@@ -90,12 +108,17 @@ export interface PluginContext<P extends PluginPortName = PluginPortName> {
   readonly plugin: { id: string; version: string };
   /** Only the ports declared in the manifest. */
   readonly ports: Pick<PluginPorts, P>;
-  /** Subscribes to committed events (exact type or `prefix.*`). Returns an unsubscribe function. */
+  /**
+   * Subscribes to committed events (exact type or `prefix.*`), which must be covered by the
+   * manifest's `events`. Map events arrive only from maps the plugin is enabled on.
+   * Returns an unsubscribe function.
+   */
   on(eventType: string, handler: (event: DomainEvent) => void | Promise<void>): () => void;
   readonly commands: PluginCommands;
   readonly settings: PluginSettings;
   readonly logger: PluginLogger;
   readonly http: { route(route: PluginRoute): void };
+  /** Offers an adapter to the core, e.g. a Notifier that every `notifier.send` reaches. */
   provide<K extends keyof ProvidablePorts>(port: K, adapter: ProvidablePorts[K]): void;
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { themeToCss, themesToCss } from './css.js';
-import { ThemeManifestSchema, resolveTheme } from './manifest.js';
+import { ThemeManifestSchema, isBuiltInTheme, parseThemeManifest, resolveTheme } from './manifest.js';
 import { builtInThemes, darkTheme } from './themes.js';
 import { TOKEN_NAMES } from './tokens.js';
 
@@ -33,5 +33,19 @@ describe('themes', () => {
     expect(theme.tokens['color-bg']).toBe(darkTheme.tokens['color-bg']);
     expect(ThemeManifestSchema.safeParse({ ...manifest, tokens: { nope: 'x' } }).success).toBe(false);
     expect(ThemeManifestSchema.safeParse({ ...manifest, tokens: { radius: '1px; }' } }).success).toBe(false);
+  });
+
+  it('parses theme package manifests with readable errors', () => {
+    expect(parseThemeManifest({ id: 'x', name: 'X' })).toMatchObject({ ok: false });
+    const result = parseThemeManifest({
+      id: 'sunset',
+      name: 'Sunset',
+      version: '1.0.0',
+      colorScheme: 'light',
+      tokens: {},
+    });
+    expect(result).toMatchObject({ ok: true, manifest: { extends: 'default', tokens: {} } });
+    expect(isBuiltInTheme('dark')).toBe(true);
+    expect(isBuiltInTheme('sunset')).toBe(false);
   });
 });

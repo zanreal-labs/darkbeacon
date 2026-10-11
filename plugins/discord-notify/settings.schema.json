@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "properties": {
+    "webhookUrl": {
+      "type": "string",
+      "description": "Discord webhook URL (channel settings, Integrations, Webhooks). Leave it unset to turn posting off.",
+      "pattern": "^https://(?:(?:ptb|canary)\\.)?discord(?:app)?\\.com/api/webhooks/"
+    },
+    "events": {
+      "type": "array",
+      "description": "Event types to post; `system.*` style prefixes work.",
+      "items": { "type": "string" },
+      "default": ["system.added", "connection.added", "ping.created"]
+    },
+    "username": {
+      "type": "string",
+      "description": "Name the messages are posted under.",
+      "maxLength": 80,
+      "default": "Wormwright"
+    }
+  },
+  "additionalProperties": false
+}

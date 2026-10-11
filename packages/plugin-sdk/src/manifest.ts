@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /** Ports a plugin may ask for in its manifest; it receives only those. */
-export const PLUGIN_PORTS = ['maps', 'universe', 'events', 'notifier', 'clock'] as const;
+export const PLUGIN_PORTS = ['maps', 'universe', 'events', 'notifier', 'clock', 'db'] as const;
 export type PluginPortName = (typeof PLUGIN_PORTS)[number];
 
 export const SDK_VERSION = '1.0.0';
@@ -15,6 +15,7 @@ const relativePath = z
 export const PluginManifestSchema = z.object({
   id: z.string().regex(/^[a-z0-9][a-z0-9-]{1,63}$/, 'lowercase letters, digits and dashes'),
   name: z.string().min(1).max(64),
+  description: z.string().max(500).optional(),
   version: z.string().regex(/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/, 'semver'),
   /** Semver range of the plugin SDK the plugin was built against, e.g. `^1.0`. */
   sdk: z.string().min(1),
@@ -23,7 +24,9 @@ export const PluginManifestSchema = z.object({
   ports: z.array(z.enum(PLUGIN_PORTS)).default([]),
   /** Event types (or `prefix.*`) the plugin subscribes to. */
   events: z.array(z.string().min(1)).default([]),
+  /** JSON Schema file of the plugin's settings. */
   settings: relativePath.optional(),
+  /** Folder of `NNNN_name.js` migrations; tables should be prefixed with the plugin id. */
   migrations: relativePath.optional(),
 });
 export type PluginManifest = z.infer<typeof PluginManifestSchema>;
@@ -51,4 +54,17 @@ export function parseManifest(input: unknown): ManifestResult {
 export function sdkCompatible(range: string): boolean {
   const major = /^[\^~]?(\d+)(?:\.(?:\d+|x))*$/.exec(range.trim())?.[1];
   return major !== undefined && major === SDK_VERSION.split('.')[0];
+}
+
+/**
+ * True when `requested` (exact type or `prefix.*`) is covered by the event types the manifest
+ * declares. `*` covers everything.
+ */
+export function eventAllowed(declared: readonly string[], requested: string): boolean {
+  return declared.some((d) => {
+    if (d === '*' || d === requested) return true;
+    if (!d.endsWith('.*')) return false;
+    const prefix = d.slice(0, -1);
+    return requested.startsWith(prefix);
+  });
 }

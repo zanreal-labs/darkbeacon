@@ -13,7 +13,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store \
 RUN pnpm build
 # Keep only production dependencies for the runtime image.
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store \
-    rm -rf node_modules apps/*/node_modules packages/*/node_modules packages/modules/*/node_modules \
+    rm -rf node_modules apps/*/node_modules packages/*/node_modules packages/modules/*/node_modules plugins/*/node_modules \
     && pnpm install --offline --frozen-lockfile --prod --store-dir /pnpm-store
 
 # ---- runtime: node, production dependencies and build output only
@@ -28,6 +28,8 @@ COPY --from=build /app/apps/server/package.json ./apps/server/package.json
 COPY --from=build /app/apps/server/node_modules ./apps/server/node_modules
 COPY --from=build /app/apps/server/dist ./apps/server/dist
 COPY --from=build /app/apps/web/dist ./apps/web/dist
+# First-party plugins and themes: the catalogue admins install from.
+COPY --from=build /app/plugins ./plugins
 RUN mkdir -p /data && chown node:node /data
 USER node
 VOLUME /data

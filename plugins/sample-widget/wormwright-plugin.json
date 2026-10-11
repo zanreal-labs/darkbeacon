@@ -1,0 +1,11 @@
+{
+  "id": "sample-widget",
+  "name": "Sample widget",
+  "description": "Counts systems and connections added to each map since the server started and shows them in a widget. A starting point for your own plugins.",
+  "version": "1.0.0",
+  "sdk": "^1.0",
+  "server": "dist/server.js",
+  "web": "dist/web.js",
+  "ports": ["clock"],
+  "events": ["system.added", "connection.added"]
+}

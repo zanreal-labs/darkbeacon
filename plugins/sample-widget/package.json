@@ -1,0 +1,18 @@
+{
+  "name": "@wormwright/plugin-sample-widget",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A small map widget showing what was added to the map since the server started",
+  "type": "module",
+  "files": [
+    "dist/server.js",
+    "dist/web.js",
+    "wormwright-plugin.json"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "devDependencies": {
+    "@wormwright/plugin-sdk": "workspace:*"
+  }
+}

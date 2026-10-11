@@ -1,0 +1,26 @@
+{
+  "id": "amarr",
+  "name": "Amarr",
+  "version": "1.0.0",
+  "colorScheme": "dark",
+  "extends": "dark",
+  "tokens": {
+    "color-bg": "#14110c",
+    "color-surface": "#1c1810",
+    "color-surface-raised": "#262015",
+    "color-border": "#3a3020",
+    "color-text": "#ece3cf",
+    "color-text-muted": "#a39478",
+    "color-accent": "#d4a017",
+    "color-accent-contrast": "#1a1205",
+    "color-focus": "#f0c040",
+    "color-canvas": "#100d08",
+    "color-canvas-grid": "#2a2216",
+    "node-bg": "#1c1810",
+    "node-border": "#4a3d24",
+    "node-text": "#ece3cf",
+    "node-selected-border": "#d4a017",
+    "edge-color": "#a39478",
+    "edge-selected": "#f0c040"
+  }
+}
