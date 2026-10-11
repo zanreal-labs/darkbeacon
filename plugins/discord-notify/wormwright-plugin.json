@@ -1,0 +1,11 @@
+{
+  "id": "discord-notify",
+  "name": "Discord notifications",
+  "description": "Posts chosen map events to a Discord channel through a webhook, and delivers notifications other plugins send.",
+  "version": "1.0.0",
+  "sdk": "^1.0",
+  "server": "dist/server.js",
+  "ports": ["maps", "universe"],
+  "events": ["system.*", "connection.*", "signature.*", "ping.*"],
+  "settings": "settings.schema.json"
+}
