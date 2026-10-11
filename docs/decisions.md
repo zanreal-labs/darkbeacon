@@ -37,3 +37,25 @@ Choices made where `docs/SPEC.md` is silent. One line each; newest at the bottom
 - Import boundaries are enforced by a small local ESLint rule (`tools/eslint/boundaries.js`) instead of a plugin.
 - Feature modules register themselves with one line each in `apps/server/src/modules/index.ts`.
 - The dev compose file has a `dev` service for commands and an `app` service that runs `pnpm dev` on random loopback ports; `DEV_LOGIN=true` there.
+- Plugin install sources: `catalog:<folder>` (first-party packages in `plugins/`, shipped in the image), an npm name with an optional exact version or dist-tag (no ranges; fetched from registry.npmjs.org and checked against its sha512 integrity), or a raw `.tgz` body (`application/gzip`, 20 MB max) on the upload routes.
+- Packages are unpacked into `DATA_DIR/plugins/.staging` and validated there; only files and folders are unpacked (no links), 100 MB max; a plugin then moves to `DATA_DIR/plugins/<id>`.
+- A fresh plugin install starts disabled so the admin reviews its ports and events first; an upgrade keeps enablement and settings and clears the failure record.
+- Plugin entries must be self-contained ES modules (no runtime imports): `DATA_DIR/plugins` has no node_modules. First-party plugins import the SDK as types only.
+- A new plugin version is reloaded in place (old one disposed, new module imported with the revision in its URL) instead of restarting the process; the old module stays in memory until the next restart.
+- A plugin is disabled after 5 failures in a row (event handlers, HTTP routes, provided notifiers; a success resets the count) or at once when loading or `register()` fails (30 s limit).
+- `ctx.on()` throws for event types the manifest does not declare; map events reach a plugin only from maps it is not switched off on, and so do notifications for its provided notifiers.
+- Per-map enablement is a list of maps a plugin is switched off on; both switches are instance-admin actions (`PUT /api/admin/plugins/:id/enabled` with an optional `mapId`).
+- Plugin settings: instance values validated against the manifest's JSON Schema (via zod `fromJSONSchema`, defaults applied); per-map overrides are stored separately and validated merged over the instance values.
+- New plugin port `db` (the instance database through a Kysely handle) for plugins with migrations; plugin migrations are recorded as `<id>/<file>` in `plugin_migration` and kept on uninstall, as are the plugin's tables.
+- Plugin HTTP routes under `/api/plugins/<id>/...` are open to anonymous callers (`accountId: null`); `/api/plugins/<id>/assets/<file>` (files next to the web entry, signed-in accounts only) is reserved.
+- Plugins read maps through the realtime snapshot providers (`map` kind), so the mapping module needs no extra wiring; universe data comes from `PluginPortProviders.universe`, which the mapping module sets.
+- Core commands for plugins live in `PluginCommandRegistry` (global); the plugins module registers `notify`, other modules may add theirs. Plugins may provide only a `notifier`.
+- The web plugin API carries the host's React (`api.react`: createElement, useState, useEffect) so web bundles need no React import.
+- Plugin admin changes publish `plugin.updated` (full PluginDto) and `plugin.removed` on the instance stream.
+- Themes live in the plugins module: theme packages (`wormwright-theme.json`) are stored in the `theme` table, no files kept; choices are rows in `theme_choice` keyed `instance` or `account:<id>`. A map default theme is left for later.
+- `GET /api/themes` is public (the sign-in page is themed too) and returns every theme with all tokens resolved over its base.
+- Webhook bodies are the event envelope JSON; signed as `x-wormwright-signature: sha256=<hex HMAC-SHA256 of "<timestamp>.<body>">` with `x-wormwright-timestamp` (epoch ms), plus `x-wormwright-event` and `x-wormwright-delivery`.
+- Webhook retries after 10 s, 1 min, 5 min, 30 min and 2 h (6 attempts); each delivery is one row updated per attempt; finished deliveries are pruned after 30 days. A delivery's first `nextAttemptAt` is a lease, so a crash mid-send is retried.
+- Webhook secrets (`whsec_<64 hex>`) are shown once and stored AES-256-GCM sealed with a key derived (HKDF) from SECRET_KEY; webhook URLs must be http(s), redirects are not followed and response bodies are never shown. Private addresses are not blocked.
+- Webhook config changes are not events (secrets must not reach the stream); only map admins see them.
+- Without an access module, webhook routes answer 404 (a deny-all MapAccess stands in).
