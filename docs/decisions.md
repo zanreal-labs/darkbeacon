@@ -51,3 +51,4 @@ Choices made where `docs/SPEC.md` is silent. One line each; newest at the bottom
 - Deleting a map cascades to its systems, connections and signatures through foreign keys inside the mapping tables.
 - Without an access module (no `MAP_ACCESS` provider) mapping falls back to owner-only access and registers a `map` stream authorizer; the access module replaces both.
 - The universe catalogue is `universe.json` (the `@wormwright/sde` format) loaded at startup from `DATA_DIR`, else from `packages/sde/data/`; without it no system can be added.
+- `packages/sde` builds `data/universe.json` from the JSONL edition of the SDE with a dependency-free zip reader; a system without its own `wormholeClassID` inherits its constellation's, then its region's. The file is not generated in CI; build it once and commit it or drop it into `DATA_DIR`.
