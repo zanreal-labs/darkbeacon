@@ -78,6 +78,8 @@ function MapView({ map, role }: { map: MapDto; role: MapSummaryDto['role'] }) {
     tab: 'system',
     open: typeof window !== 'undefined' && !window.matchMedia?.('(max-width: 760px)').matches,
   }));
+  // Phones get the bottom dock, which covers nothing the view needs to avoid.
+  const wide = typeof window !== 'undefined' && !window.matchMedia?.('(max-width: 760px)').matches;
   const [menu, setMenu] = useState<OpenMenu | null>(null);
   const [addAt, setAddAt] = useState<{ x: number; y: number } | null>(null);
   const [focus, setFocus] = useState({ search: 0, name: 0 });
@@ -256,6 +258,7 @@ function MapView({ map, role }: { map: MapDto; role: MapSummaryDto['role'] }) {
         onSelect={setSelected}
         focus={focusNode}
         onMenu={openMenu}
+        coveredRight={dock.open && wide ? 340 : 0}
       />
 
       <div className={styles.topbar}>

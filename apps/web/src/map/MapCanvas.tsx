@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import {
   Background,
   ConnectionMode,
@@ -46,6 +46,8 @@ interface Props {
   onSelect(solarSystemId: number | null): void;
   focus: FocusRequest | null;
   onMenu(target: MenuTarget, x: number, y: number): void;
+  /** Pixels on the right covered by the widget panel; fitting the view keeps systems out from under it. */
+  coveredRight?: number;
 }
 
 export function MapCanvas({
@@ -59,8 +61,16 @@ export function MapCanvas({
   onSelect,
   focus,
   onMenu,
+  coveredRight = 0,
 }: Props) {
   const { theme } = useTheme();
+  const fitOptions = useMemo(
+    () => ({
+      padding: { top: '72px', left: '48px', bottom: '48px', right: `${coveredRight + 48}px` } as const,
+      maxZoom: 1.25,
+    }),
+    [coveredRight],
+  );
   const rf = useReactFlow<SystemNodeType, ConnectionEdgeType>();
   const [nodes, setNodes, onNodesChange] = useNodesState<SystemNodeType>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<ConnectionEdgeType>([]);
@@ -118,11 +128,11 @@ export function MapCanvas({
   useEffect(() => {
     if (fitted || !loaded || nodes.length === 0) return;
     const timer = setTimeout(() => {
-      void rf.fitView({ padding: 0.2, maxZoom: 1.25 });
+      void rf.fitView(fitOptions);
       setFitted(true);
     }, 50);
     return () => clearTimeout(timer);
-  }, [fitted, loaded, nodes.length, rf]);
+  }, [fitted, loaded, nodes.length, rf, fitOptions]);
 
   useEffect(() => {
     if (!focus || handledFocus.current === focus.n) return;
@@ -231,7 +241,7 @@ export function MapCanvas({
         proOptions={{ hideAttribution: true }}
       >
         <Background gap={24} />
-        <Controls showInteractive={false} position="bottom-left" />
+        <Controls showInteractive={false} position="bottom-left" fitViewOptions={fitOptions} />
       </ReactFlow>
     </div>
   );
