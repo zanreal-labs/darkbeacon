@@ -1,0 +1,51 @@
+.shell {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100dvh;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--ww-space-3);
+  padding: 0 var(--ww-space-3);
+  height: 44px;
+  border-bottom: 1px solid var(--ww-color-border);
+  background: var(--ww-color-surface);
+}
+
+.brand {
+  font-weight: 600;
+  color: var(--ww-color-text);
+  text-decoration: none;
+  margin-right: auto;
+}
+
+.status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ww-color-text-muted);
+}
+
+.status[data-status='open'] {
+  background: var(--ww-color-success);
+}
+
+.status[data-status='connecting'] {
+  background: var(--ww-color-warning);
+}
+
+.select {
+  height: calc(var(--ww-control-height) - 6px);
+  border: 1px solid var(--ww-color-border);
+  border-radius: var(--ww-radius);
+  background: var(--ww-color-surface-raised);
+  color: var(--ww-color-text);
+  font: inherit;
+}
+
+.main {
+  min-height: 0;
+  overflow: auto;
+}

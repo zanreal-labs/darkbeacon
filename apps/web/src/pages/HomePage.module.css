@@ -1,0 +1,25 @@
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--ww-space-4);
+}
+
+.page h1 {
+  font-size: 1.4rem;
+  margin: 0 0 var(--ww-space-3);
+}
+
+.muted {
+  color: var(--ww-color-text-muted);
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: var(--ww-space-2);
+}
+
+.list a {
+  color: var(--ww-color-accent);
+}

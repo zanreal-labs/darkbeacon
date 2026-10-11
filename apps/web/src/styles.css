@@ -1,0 +1,26 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--ww-color-bg);
+  color: var(--ww-color-text);
+  font-family: var(--ww-font-family);
+  font-size: var(--ww-font-size);
+  line-height: var(--ww-line-height);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ww-color-focus);
+  outline-offset: 2px;
+}

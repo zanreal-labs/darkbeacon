@@ -1,0 +1,30 @@
+.page {
+  position: relative;
+  height: 100%;
+  background: var(--ww-color-canvas);
+  --xy-background-color: var(--ww-color-canvas);
+  --xy-background-pattern-dots-color-default: var(--ww-color-canvas-grid);
+  --xy-node-background-color-default: var(--ww-node-bg);
+  --xy-node-border-default: var(--ww-node-border-width) solid var(--ww-node-border);
+  --xy-node-color-default: var(--ww-node-text);
+  --xy-node-border-radius-default: var(--ww-node-radius);
+  --xy-edge-stroke-default: var(--ww-edge-color);
+  --xy-edge-stroke-width-default: var(--ww-edge-width);
+  --xy-controls-button-background-color-default: var(--ww-color-surface);
+  --xy-controls-button-color-default: var(--ww-color-text);
+  --xy-controls-button-border-color-default: var(--ww-color-border);
+}
+
+.notice {
+  position: absolute;
+  z-index: 5;
+  top: var(--ww-space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: var(--ww-space-2) var(--ww-space-3);
+  border: 1px solid var(--ww-color-border);
+  border-radius: var(--ww-radius);
+  background: var(--ww-color-surface);
+  color: var(--ww-color-text-muted);
+}
