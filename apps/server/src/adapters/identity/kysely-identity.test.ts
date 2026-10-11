@@ -42,9 +42,10 @@ describeEachDialect('identity repositories', (t) => {
     await repo.insert(account('a', { discordId: '123', name: 'Alice', instanceRole: 'owner' }));
     await repo.insert(account('b', { name: 'dev-bob', createdAt: 1_800_000_000_000 }));
     expect(await repo.count()).toBe(2);
-    expect(await repo.findById('a')).toEqual(
-      account('a', { discordId: '123', name: 'Alice', instanceRole: 'owner' }),
-    );
+    expect(await repo.findById('a')).toEqual({
+      ...account('a', { discordId: '123', name: 'Alice', instanceRole: 'owner' }),
+      mainCharacterId: null,
+    });
     expect((await repo.findByDiscordId('123'))?.id).toBe('a');
     expect((await repo.findByName('dev-bob'))?.id).toBe('b');
     // Discord accounts are never matched by name.

@@ -21,6 +21,7 @@ export interface IdentityTables {
     name: string;
     avatar_url: string | null;
     instance_role: string;
+    main_character_id: number | null;
     created_at: number;
     updated_at: number;
     last_seen_at: number | null;
@@ -70,6 +71,7 @@ function toAccount(row: AccountRow): Account {
     name: row.name,
     avatarUrl: row.avatar_url,
     instanceRole: row.instance_role as InstanceRole,
+    mainCharacterId: row.main_character_id === null ? null : Number(row.main_character_id),
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
     lastSeenAt: row.last_seen_at === null ? null : Number(row.last_seen_at),
@@ -83,6 +85,7 @@ function fromAccount(a: Account): AccountRow {
     name: a.name,
     avatar_url: a.avatarUrl,
     instance_role: a.instanceRole,
+    main_character_id: a.mainCharacterId ?? null,
     created_at: a.createdAt,
     updated_at: a.updatedAt,
     last_seen_at: a.lastSeenAt,

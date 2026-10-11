@@ -12,6 +12,7 @@ import { HttpAdapterHost } from '@nestjs/core';
 import { ValidationError, type Clock, type EventBus, type EventLog } from '@wormwright/core';
 import { Database } from '@wormwright/db';
 import { NotifierRegistry } from '@wormwright/notifications';
+import type { UniverseCatalog } from '@wormwright/mapping';
 import { PluginAdmin, ThemeAdmin } from '@wormwright/plugins';
 import type { MapSnapshot } from '@wormwright/shared';
 import { builtInThemes } from '@wormwright/theme-sdk';
@@ -26,7 +27,14 @@ import { FilePluginInstaller } from '../../plugins/installer.js';
 import { PluginCommandRegistry } from '../../plugins/plugin-commands.js';
 import { PluginHost, PluginPortProviders } from '../../plugins/plugin-host.js';
 import { FilePluginSettingsSchemas } from '../../plugins/settings-schemas.js';
-import { APP_CONFIG, CLOCK, EVENT_BUS, EVENT_LOG, UNIT_OF_WORK } from '../../platform/tokens.js';
+import {
+  APP_CONFIG,
+  CLOCK,
+  EVENT_BUS,
+  EVENT_LOG,
+  UNIT_OF_WORK,
+  UNIVERSE_CATALOG,
+} from '../../platform/tokens.js';
 import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
 import { PluginRuntimeController, PluginsAdminController } from './plugins.controller.js';
 import { ThemesController } from './themes.controller.js';
@@ -52,6 +60,7 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
     @Inject(RealtimeRegistry) private readonly realtime: RealtimeRegistry,
     @Inject(Database) private readonly database: Database,
     @Inject(HttpAdapterHost) private readonly http: HttpAdapterHost,
+    @Inject(UNIVERSE_CATALOG) private readonly universe: UniverseCatalog,
   ) {}
 
   onModuleInit(): void {
@@ -74,6 +83,10 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
 
     // Plugins read maps through the same providers that build realtime snapshots.
     this.providers.mapSnapshot = (mapId) => this.mapSnapshot(mapId);
+    this.providers.universe = {
+      getSystem: (id) => this.universe.getSystem(id),
+      searchSystems: (query, limit = 20) => this.universe.searchSystems(query, limit),
+    };
   }
 
   async onApplicationBootstrap(): Promise<void> {

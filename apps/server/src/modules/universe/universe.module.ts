@@ -1,4 +1,4 @@
-import { Controller, Get, Global, Inject, Module, Param, Query } from '@nestjs/common';
+import { Controller, Get, Global, Inject, Logger, Module, Param, Query } from '@nestjs/common';
 import { NotFoundError, requireAccount, type Actor } from '@wormwright/core';
 import type { UniverseCatalog } from '@wormwright/mapping';
 import { EveId, nestPath, routes, UniverseSearchQuery, type UniverseSystemDto } from '@wormwright/shared';
@@ -6,7 +6,8 @@ import { z } from 'zod';
 import { StaticUniverseCatalog } from '../../adapters/universe/static-universe-catalog.js';
 import { CurrentActor } from '../../platform/actor.js';
 import { ZodPipe } from '../../platform/http.js';
-import { UNIVERSE_CATALOG } from '../../platform/tokens.js';
+import type { AppConfig } from '../../config/config.js';
+import { APP_CONFIG, UNIVERSE_CATALOG } from '../../platform/tokens.js';
 
 @Controller()
 export class UniverseController {
@@ -37,7 +38,17 @@ export class UniverseController {
 @Global()
 @Module({
   controllers: [UniverseController],
-  providers: [{ provide: UNIVERSE_CATALOG, useFactory: () => StaticUniverseCatalog.shared() }],
+  providers: [
+    {
+      provide: UNIVERSE_CATALOG,
+      useFactory: (config: AppConfig) => {
+        const catalog = StaticUniverseCatalog.load(config.dataDir);
+        new Logger('Universe').log(`universe catalog: ${catalog.size} systems`);
+        return catalog;
+      },
+      inject: [APP_CONFIG],
+    },
+  ],
   exports: [UNIVERSE_CATALOG],
 })
 export class UniverseModule {}

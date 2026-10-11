@@ -3,3 +3,4 @@ dist
 coverage
 docs/SPEC.md
 packages/sde/data
+.claude

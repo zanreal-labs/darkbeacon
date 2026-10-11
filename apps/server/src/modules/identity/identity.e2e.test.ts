@@ -6,6 +6,7 @@ import type {
   AccessRuleDto,
   AdminAccountDto,
   InstanceSettingsDto,
+  MapDto,
   MeDto,
   ServerMessage,
 } from '@wormwright/shared';
@@ -18,7 +19,6 @@ import {
 } from '../../adapters/identity/fake-network.js';
 import { createApp } from '../../app.js';
 import { parseEnv } from '../../config/config.js';
-import { MapOwnershipRegistry } from '../access/map-ownership.registry.js';
 
 /** A browser: keeps cookies per name and never follows redirects. */
 class Browser {
@@ -160,10 +160,18 @@ describeEachDialect('identity and access over HTTP', (t) => {
     expect(new URL(refused, 'http://x').searchParams.get('auth_error')).toMatch(/already linked/);
     expect((await bob.json<MeDto>('/api/accounts/me')).account.instanceRole).toBe('user');
 
+    // Only an own character can be the main one.
+    const main = { method: 'PUT', json: { characterId: pilot.id } };
+    expect((await bob.request('/api/accounts/me/main-character', main)).status).toBe(404);
+    expect((await alice.json<MeDto>('/api/accounts/me/main-character', main)).account.mainCharacterId).toBe(
+      pilot.id,
+    );
+
     expect(
       (await alice.request(`/api/accounts/me/characters/${pilot.id}`, { method: 'DELETE' })).status,
     ).toBe(204);
     expect((await alice.json<MeDto>('/api/accounts/me')).characters).toEqual([]);
+    expect((await alice.json<MeDto>('/api/accounts/me')).account.mainCharacterId).toBeNull();
 
     expect((await alice.request('/api/auth/logout', { method: 'POST' })).status).toBe(204);
     expect(alice.cookies.has('ww_session')).toBe(false);
@@ -215,9 +223,9 @@ describeEachDialect('identity and access over HTTP', (t) => {
 
     const settings = await bob.json<InstanceSettingsDto>('/api/admin/settings', {
       method: 'PATCH',
-      json: { adminGuildId: '123', adminRoleIds: ['456'], defaultTheme: 'dark' },
+      json: { adminGuildId: '123', adminRoleIds: ['456'] },
     });
-    expect(settings).toEqual({ adminGuildId: '123', adminRoleIds: ['456'], defaultTheme: 'dark' });
+    expect(settings).toEqual({ adminGuildId: '123', adminRoleIds: ['456'] });
     expect(
       (await bob.request('/api/admin/settings', { method: 'PATCH', json: { adminGuildId: 'x' } })).status,
     ).toBe(400);
@@ -255,28 +263,25 @@ describeEachDialect('identity and access over HTTP', (t) => {
 
   it('authorizes maps through access rules, over REST and the map stream', async () => {
     const owner = browser();
-    const ownerMe = await owner.json<MeDto>('/api/auth/dev', { method: 'POST', json: { name: 'owner' } });
+    await owner.json<MeDto>('/api/auth/dev', { method: 'POST', json: { name: 'owner' } });
     const pilot = browser();
     const pilotMe = await pilot.json<MeDto>('/api/auth/dev', {
       method: 'POST',
       json: { name: 'pilot', character: { name: 'Corp Pilot', corporationId: 98000077 } },
     });
-    app.get(MapOwnershipRegistry).use({
-      ownerOf: (mapId) => Promise.resolve(mapId === 'm1' ? ownerMe.account.id : null),
-      mapsOwnedBy: (accountId) => Promise.resolve(accountId === ownerMe.account.id ? ['m1'] : []),
-    });
+    const { id: mapId } = await owner.json<MapDto>('/api/maps', { method: 'POST', json: { name: 'Chain' } });
 
-    expect((await pilot.request('/api/maps/m1/access-rules')).status).toBe(404);
-    const rule = await owner.json<AccessRuleDto>('/api/maps/m1/access-rules', {
+    expect((await pilot.request(`/api/maps/${mapId}/access-rules`)).status).toBe(404);
+    const rule = await owner.json<AccessRuleDto>(`/api/maps/${mapId}/access-rules`, {
       method: 'POST',
       json: { subjectKind: 'corporation', subjectId: '98000077', role: 'member' },
     });
-    expect(rule).toMatchObject({ mapId: 'm1', subjectKind: 'corporation', role: 'member' });
-    expect((await pilot.request('/api/maps/m1/access-rules')).status).toBe(403);
-    expect((await owner.json<AccessRuleDto[]>('/api/maps/m1/access-rules')).map((r) => r.id)).toEqual([
+    expect(rule).toMatchObject({ mapId, subjectKind: 'corporation', role: 'member' });
+    expect((await pilot.request(`/api/maps/${mapId}/access-rules`)).status).toBe(403);
+    expect((await owner.json<AccessRuleDto[]>(`/api/maps/${mapId}/access-rules`)).map((r) => r.id)).toEqual([
       rule.id,
     ]);
-    const invalid = await owner.request('/api/maps/m1/access-rules', {
+    const invalid = await owner.request(`/api/maps/${mapId}/access-rules`, {
       method: 'POST',
       json: { subjectKind: 'character', subjectId: 'abc', role: 'viewer' },
     });
@@ -286,16 +291,16 @@ describeEachDialect('identity and access over HTTP', (t) => {
     const messages: ServerMessage[] = [];
     socket.on('message', (data) => messages.push(JSON.parse(String(data)) as ServerMessage));
     await new Promise((resolve, reject) => socket.once('open', resolve).once('error', reject));
-    socket.send(JSON.stringify({ op: 'subscribe', stream: 'map:m1' }));
+    socket.send(JSON.stringify({ op: 'subscribe', stream: `map:${mapId}` }));
     await vi.waitFor(() => expect(messages.some((m) => m.op === 'subscribed')).toBe(true));
 
     // Removing the rule drops the subscription.
-    expect((await owner.request(`/api/maps/m1/access-rules/${rule.id}`, { method: 'DELETE' })).status).toBe(
-      204,
-    );
+    expect(
+      (await owner.request(`/api/maps/${mapId}/access-rules/${rule.id}`, { method: 'DELETE' })).status,
+    ).toBe(204);
     await vi.waitFor(() =>
       expect(messages).toContainEqual(
-        expect.objectContaining({ op: 'error', stream: 'map:m1', code: 'forbidden' }),
+        expect.objectContaining({ op: 'error', stream: `map:${mapId}`, code: 'forbidden' }),
       ),
     );
     socket.close();

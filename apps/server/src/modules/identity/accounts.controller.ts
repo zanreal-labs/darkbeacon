@@ -5,6 +5,7 @@ import {
   EveId,
   nestPath,
   routes,
+  SetMainCharacterRequest,
   TransferOwnershipRequest,
   UpdateInstanceRoleRequest,
   type AdminAccountDto,
@@ -24,6 +25,14 @@ export class AccountsController {
   @Get(nestPath(routes.accounts.me.path))
   me(@CurrentActor() actor: Actor | null): Promise<MeDto> {
     return this.accounts.me(actor);
+  }
+
+  @Put(nestPath(routes.accounts.setMainCharacter.path))
+  setMainCharacter(
+    @CurrentActor() actor: Actor | null,
+    @Body(new ZodPipe(SetMainCharacterRequest)) body: SetMainCharacterRequest,
+  ): Promise<MeDto> {
+    return this.accounts.setMainCharacter(actor, body.characterId);
   }
 
   @Delete(nestPath(routes.accounts.unlinkCharacter.path))

@@ -10,6 +10,7 @@ import {
   type SignatureDto,
   type SignatureGroup,
 } from '@wormwright/shared';
+import { builtInThemes } from '@wormwright/theme-sdk';
 import { createMockDb, UNIVERSE, type MockDb } from './data';
 
 /**
@@ -68,6 +69,14 @@ export function createMockApi(db: MockDb = createMockDb()) {
       HttpResponse.json({ status: 'ok', version: 'mock', database: 'sqlite' }),
     ),
     http.get(routes.auth.providers.path, () => HttpResponse.json({ discord: true, eve: true, dev: true })),
+    http.get(routes.themes.list.path, () =>
+      HttpResponse.json({
+        themes: builtInThemes.map((t) => ({ ...t, version: null, builtIn: true })),
+        defaultThemeId: 'default',
+        selectedThemeId: null,
+      }),
+    ),
+    http.put(routes.themes.select.path, () => new HttpResponse(null, { status: 204 })),
     http.post(routes.auth.dev.path, async ({ request }) => {
       const body = (await request.json()) as { name: string; character?: { name: string } };
       const base = createMockDb().me!;

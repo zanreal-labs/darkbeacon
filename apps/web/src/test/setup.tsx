@@ -1,7 +1,9 @@
 import { afterAll, afterEach, beforeAll } from 'vitest';
 import { cleanup, render, type RenderOptions } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { http, HttpResponse } from 'msw/http';
 import { setupServer } from 'msw/node';
+import { routes } from '@wormwright/shared';
 import type { ReactElement, ReactNode } from 'react';
 import { RealtimeClient } from '../lib/realtime';
 import { RealtimeProvider } from '../lib/RealtimeProvider';
@@ -50,7 +52,9 @@ export function installFlowMocks(size = { width: 160, height: 60 }) {
 
 /** An MSW server for the test file, started before and closed after its tests. */
 export function setupMockServer(...handlers: Parameters<typeof setupServer>) {
-  const server = setupServer(...handlers);
+  // ThemeProvider asks for installed themes; without them it keeps the built-in ones.
+  const themes = http.get(routes.themes.list.path, () => new HttpResponse(null, { status: 404 }));
+  const server = setupServer(...handlers, themes);
   beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
   afterEach(() => server.resetHandlers());
   afterAll(() => server.close());

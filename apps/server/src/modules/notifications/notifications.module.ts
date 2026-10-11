@@ -21,12 +21,6 @@ const RETRY_EVERY_MS = 5_000;
 const PRUNE_EVERY_MS = 60 * 60_000;
 const KEEP_DELIVERIES_MS = 30 * 24 * 60 * 60_000;
 
-/** Without the access module nobody can see a map, so every webhook route answers 404. */
-const noMapAccess: MapAccess = {
-  roleOf: () => Promise.resolve(null),
-  mapsFor: () => Promise.resolve([]),
-};
-
 /** Subscribes the dispatcher to the bus and resends failed deliveries on a timer. */
 @Injectable()
 export class WebhookWorker implements OnModuleInit, OnApplicationShutdown {
@@ -105,9 +99,9 @@ function every(ms: number, work: () => Promise<unknown>, logger: Logger): () => 
         webhooks: KyselyWebhookRepository,
         dispatcher: WebhookDispatcher,
         clock: Clock,
-        access: MapAccess | undefined,
-      ) => new WebhookAdmin({ webhooks, dispatcher, clock, access: access ?? noMapAccess }),
-      inject: [KyselyWebhookRepository, WebhookDispatcher, CLOCK, { token: MAP_ACCESS, optional: true }],
+        access: MapAccess,
+      ) => new WebhookAdmin({ webhooks, dispatcher, clock, access }),
+      inject: [KyselyWebhookRepository, WebhookDispatcher, CLOCK, MAP_ACCESS],
     },
     WebhookWorker,
   ],

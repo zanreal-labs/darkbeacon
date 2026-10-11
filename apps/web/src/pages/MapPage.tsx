@@ -82,9 +82,9 @@ function MapView({ map, role }: { map: MapDto; role: MapSummaryDto['role'] }) {
   const [addAt, setAddAt] = useState<{ x: number; y: number } | null>(null);
   const [focus, setFocus] = useState({ search: 0, name: 0 });
   const [focusNode, setFocusNode] = useState<FocusRequest | null>(null);
-  const systemPlugins = useSlot('systemContextMenu');
-  const connectionPlugins = useSlot('connectionContextMenu');
-  const widgetPlugins = useSlot('widget');
+  const systemPlugins = useSlot('systemContextMenu', map.id);
+  const connectionPlugins = useSlot('connectionContextMenu', map.id);
+  const widgetPlugins = useSlot('widget', map.id);
 
   const labels = (state.map ?? map).labels;
   const ids = useMemo(() => [...state.systems.keys()], [state.systems]);

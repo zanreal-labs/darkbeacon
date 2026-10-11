@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { routes, type DevLoginRequest, type MeDto } from '@wormwright/shared';
 import { api, ApiError } from '../lib/api';
 import { meKey, useMe, useProviders } from '../lib/session';
+import { useTheme } from '../theme/ThemeProvider';
 import styles from './pages.module.css';
 
 /** Only same-site paths, so a crafted link cannot send people elsewhere after login. */
@@ -16,6 +17,7 @@ export function LoginPage() {
   const providers = useProviders();
   const [params] = useSearchParams();
   const next = safeNext(params.get('next'));
+  const authError = params.get('auth_error');
 
   if (me.data) return <Navigate to={next} replace />;
 
@@ -25,12 +27,13 @@ export function LoginPage() {
         <h1>Sign in to Wormwright</h1>
         <p className="muted">Your Discord account is your login. EVE characters are linked afterwards.</p>
       </div>
+      {authError && <p className="error">{authError}</p>}
       {providers.isPending && <p className="muted">Loading…</p>}
       {providers.isError && <p className="error">The server cannot be reached right now.</p>}
       {providers.data?.discord && (
         <a
           className="btn btn-primary"
-          href={`${routes.auth.discordLogin.path}?${new URLSearchParams({ next })}`}
+          href={`${routes.auth.discordLogin.path}?${new URLSearchParams({ returnTo: next })}`}
         >
           Continue with Discord
         </a>
@@ -53,11 +56,13 @@ function DevLoginForm({ next }: { next: string }) {
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [character, setCharacter] = useState('');
+  const { refresh: refreshTheme } = useTheme();
   const login = useMutation({
     mutationFn: (body: DevLoginRequest) => api<MeDto>(routes.auth.dev.path, { method: 'POST', json: body }),
     onSuccess: (me) => {
       queryClient.clear();
       queryClient.setQueryData(meKey, me);
+      refreshTheme();
       void navigate(next, { replace: true });
     },
   });

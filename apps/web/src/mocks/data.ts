@@ -304,7 +304,20 @@ export function createMockDb(): MockDb {
       },
     ],
     plugins: [
-      { id: 'kill-feed', name: 'Kill feed', version: '0.1.0', enabled: true, error: null, hasWeb: false },
+      {
+        id: 'kill-feed',
+        name: 'Kill feed',
+        version: '0.1.0',
+        enabled: true,
+        error: null,
+        hasWeb: false,
+        description: null,
+        ports: [],
+        events: [],
+        disabledMapIds: [],
+        hasSettings: false,
+        installedAt: now,
+      },
     ],
   };
 }

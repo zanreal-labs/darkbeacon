@@ -227,16 +227,14 @@ describe('InstanceSettingsService', () => {
 
     await expect(service.get(account('u'))).rejects.toMatchObject({ code: 'forbidden' });
     expect(await service.get(admin)).toEqual({
-      defaultTheme: 'default',
       adminGuildId: null,
       adminRoleIds: [],
     });
     expect(await service.update(admin, { adminGuildId: 'g1', adminRoleIds: ['r1', 'r1'] })).toEqual({
-      defaultTheme: 'default',
       adminGuildId: 'g1',
       adminRoleIds: ['r1'],
     });
-    expect((await service.update(admin, { defaultTheme: 'dark' })).adminGuildId).toBe('g1');
+    expect((await service.update(admin, {})).adminGuildId).toBe('g1');
 
     await rules.insert({
       id: 'x',

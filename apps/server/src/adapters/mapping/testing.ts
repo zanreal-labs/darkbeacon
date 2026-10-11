@@ -17,8 +17,8 @@ import {
   KyselySignatureRepository,
   KyselySystemRepository,
 } from './kysely-repositories.js';
-import { MappingMapOwnership, OwnerOnlyMapAccess } from './map-ownership.js';
-import { InMemoryUniverseCatalog } from './universe-catalog.js';
+import { StaticUniverseCatalog } from '../universe/static-universe-catalog.js';
+import { MappingMapOwnership } from './map-ownership.js';
 
 /** A tiny universe. Jita and Perimeter are real and gate-linked; the J-systems are made up. */
 export const SYSTEMS = {
@@ -30,8 +30,9 @@ export const SYSTEMS = {
   c5: 31000104,
 } as const;
 
-export function fixtureUniverse(): InMemoryUniverseCatalog {
-  return new InMemoryUniverseCatalog({
+export function fixtureUniverse(): StaticUniverseCatalog {
+  return new StaticUniverseCatalog({
+    source: 'fixture',
     regions: [
       { id: 10000002, name: 'The Forge' },
       { id: 11000001, name: 'A-R00001' },
@@ -99,14 +100,11 @@ export function fixtureUniverse(): InMemoryUniverseCatalog {
   });
 }
 
-/** MapAccess with explicit grants on top of the owner-is-admin rule. */
+/** MapAccess where the owner is admin of their maps, plus explicit grants. */
 export class FakeMapAccess implements MapAccess {
   private readonly grants = new Map<string, Map<string, MapRole>>();
-  private readonly owners: OwnerOnlyMapAccess;
 
-  constructor(ownership: MapOwnership) {
-    this.owners = new OwnerOnlyMapAccess(ownership);
-  }
+  constructor(private readonly ownership: MapOwnership) {}
 
   grant(actorId: string, mapId: string, role: MapRole): void {
     if (!this.grants.has(actorId)) this.grants.set(actorId, new Map());
@@ -114,11 +112,15 @@ export class FakeMapAccess implements MapAccess {
   }
 
   async roleOf(actor: Actor, mapId: string): Promise<MapRole | null> {
-    return (await this.owners.roleOf(actor, mapId)) ?? this.grants.get(actor.id)?.get(mapId) ?? null;
+    if (actor.kind === 'account' && (await this.ownership.ownerOf(mapId)) === actor.id) return 'admin';
+    return this.grants.get(actor.id)?.get(mapId) ?? null;
   }
 
   async mapsFor(actor: Actor): Promise<Array<{ mapId: string; role: GrantingMapRole }>> {
-    const result = await this.owners.mapsFor(actor);
+    const result: Array<{ mapId: string; role: GrantingMapRole }> =
+      actor.kind === 'account'
+        ? (await this.ownership.mapsOwnedBy(actor.id)).map((mapId) => ({ mapId, role: 'admin' }))
+        : [];
     for (const [mapId, role] of this.grants.get(actor.id) ?? []) {
       if (role !== 'blocked') result.push({ mapId, role });
     }

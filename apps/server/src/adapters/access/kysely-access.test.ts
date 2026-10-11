@@ -56,7 +56,7 @@ describeEachDialect('access repositories', (t) => {
     const repo = new KyselyInstanceSettingsRepository(t.db);
     expect(await repo.load()).toEqual({});
     await repo.save({ adminGuildId: '1', adminRoleIds: ['2', '3'] });
-    await repo.save({ adminGuildId: null, defaultTheme: 'dark' });
-    expect(await repo.load()).toEqual({ adminGuildId: null, adminRoleIds: ['2', '3'], defaultTheme: 'dark' });
+    await repo.save({ adminGuildId: null });
+    expect(await repo.load()).toEqual({ adminGuildId: null, adminRoleIds: ['2', '3'] });
   });
 });

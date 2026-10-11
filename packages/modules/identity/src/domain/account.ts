@@ -7,6 +7,8 @@ export interface Account {
   name: string;
   avatarUrl: string | null;
   instanceRole: InstanceRole;
+  /** Character the account acts as by default; may point at a character unlinked since. */
+  mainCharacterId?: number | null;
   createdAt: number;
   updatedAt: number;
   lastSeenAt: number | null;

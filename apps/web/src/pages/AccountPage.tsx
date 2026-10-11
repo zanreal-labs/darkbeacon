@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { buildPath, routes, type MeDto } from '@wormwright/shared';
 import { api, ApiError } from '../lib/api';
 import { meKey, useLogout, useMe } from '../lib/session';
@@ -14,6 +14,9 @@ export function AccountPage() {
   const navigate = useNavigate();
   const logout = useLogout();
   const logoutEverywhere = useLogout(true);
+  // EVE SSO failures come back as ?auth_error=<message>.
+  const [params] = useSearchParams();
+  const authError = params.get('auth_error');
 
   const setMain = useMutation({
     mutationFn: (characterId: number) =>
@@ -56,7 +59,10 @@ export function AccountPage() {
       <div className={styles.section}>
         <div className={styles.header}>
           <h2>EVE characters</h2>
-          <a className="btn btn-primary btn-small" href={routes.auth.eveLogin.path}>
+          <a
+            className="btn btn-primary btn-small"
+            href={`${routes.auth.eveLogin.path}?${new URLSearchParams({ returnTo: '/account' })}`}
+          >
             Link a character
           </a>
         </div>
@@ -101,6 +107,7 @@ export function AccountPage() {
             })}
           </ul>
         )}
+        {authError && <p className="error">{authError}</p>}
         {error && (
           <p className="error">{error instanceof ApiError ? error.message : 'Something went wrong.'}</p>
         )}

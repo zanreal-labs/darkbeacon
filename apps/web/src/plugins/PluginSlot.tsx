@@ -5,6 +5,7 @@ import {
   createElement,
   useContext,
   useEffect,
+  useMemo,
   useState,
   useSyncExternalStore,
   type ComponentType,
@@ -13,7 +14,7 @@ import {
 } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { WebSlot, WebSlotProps } from '@wormwright/plugin-sdk';
-import { routes } from '@wormwright/shared';
+import { routes, type PluginWebDto } from '@wormwright/shared';
 import { api } from '../lib/api';
 import { loadWebPlugins, PluginRegistry, type SlotEntry } from './registry';
 
@@ -37,7 +38,7 @@ export function PluginsProvider({
   const [registry] = useState(() => given ?? new PluginRegistry());
   const list = useQuery({
     queryKey: ['web-plugins'],
-    queryFn: () => api<{ id: string; url: string }[]>(routes.plugins.web.path),
+    queryFn: () => api<PluginWebDto[]>(routes.plugins.web.path),
     enabled,
     retry: false,
     staleTime: Infinity,
@@ -52,9 +53,14 @@ export function PluginsProvider({
   return <RegistryContext.Provider value={registry}>{children}</RegistryContext.Provider>;
 }
 
-export function useSlot<S extends WebSlot>(slot: S): readonly SlotEntry<S>[] {
+/** Components registered for `slot`, without plugins switched off on `mapId`. */
+export function useSlot<S extends WebSlot>(slot: S, mapId?: string | null): readonly SlotEntry<S>[] {
   const registry = useContext(RegistryContext);
-  return useSyncExternalStore(registry.subscribe, () => registry.get(slot));
+  const entries = useSyncExternalStore(registry.subscribe, () => registry.get(slot));
+  return useMemo(
+    () => entries.filter((e) => registry.enabledOn(e.pluginId, mapId)),
+    [entries, registry, mapId],
+  );
 }
 
 class PluginBoundary extends Component<{ pluginId: string; children: ReactNode }, { failed: boolean }> {
@@ -87,7 +93,7 @@ export function SlotItem<S extends WebSlot>({
 
 /** Every component registered for `slot`, in order. */
 export function PluginSlot<S extends WebSlot>({ slot, props }: { slot: S; props: WebSlotProps[S] }) {
-  const entries = useSlot(slot);
+  const entries = useSlot(slot, props.mapId);
   return (
     <>
       {entries.map((entry) => (

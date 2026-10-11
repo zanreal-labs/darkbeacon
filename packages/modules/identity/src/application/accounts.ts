@@ -85,7 +85,29 @@ export class AccountService {
     const account = await this.deps.accounts.findById(id);
     if (!account) throw new NotFoundError('Account');
     const characters = await this.deps.characters.listForAccount(id);
-    return { account: toAccountDto(account, instanceRole), characters: characters.map(toCharacterDto) };
+    // A main character that was unlinked since no longer counts.
+    const main = characters.some((c) => c.id === account.mainCharacterId) ? account.mainCharacterId : null;
+    return {
+      account: { ...toAccountDto(account, instanceRole), mainCharacterId: main ?? null },
+      characters: characters.map(toCharacterDto),
+    };
+  }
+
+  /** Picks which of the account's own characters it acts as by default. */
+  async setMainCharacter(actor: Actor | null, characterId: number): Promise<MeDto> {
+    const { id } = requireAccount(actor);
+    await this.deps.uow.transaction(async () => {
+      const character = await this.deps.characters.findById(characterId);
+      if (character?.accountId !== id) throw new NotFoundError('Character');
+      const account = await this.deps.accounts.findById(id);
+      if (!account) throw new NotFoundError('Account');
+      await this.deps.accounts.update({
+        ...account,
+        mainCharacterId: characterId,
+        updatedAt: this.deps.clock.now(),
+      });
+    });
+    return this.me(actor);
   }
 
   async list(actor: Actor | null): Promise<AdminAccountDto[]> {

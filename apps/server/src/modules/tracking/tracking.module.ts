@@ -13,7 +13,10 @@ import {
   type TrackingRepository,
   type UniverseLookup,
 } from '@wormwright/tracking';
+import { ConnectionUseCases, SystemUseCases, type MappingPorts } from '@wormwright/mapping';
+import { CharacterService } from '@wormwright/identity';
 import { HttpEsiGateway } from '../../adapters/tracking/http-esi-gateway.js';
+import { MappingAutoMapTarget } from '../../adapters/tracking/mapping-auto-map-target.js';
 import { KyselyTrackingRepository } from '../../adapters/tracking/kysely-tracking-repository.js';
 import type { AppConfig } from '../../config/config.js';
 import {
@@ -26,6 +29,8 @@ import {
   UNIT_OF_WORK,
   UNIVERSE_CATALOG,
 } from '../../platform/tokens.js';
+import { MappingModule } from '../mapping/mapping.module.js';
+import { MAPPING_PORTS } from '../mapping/mapping.tokens.js';
 import { TrackingController } from './tracking.controller.js';
 import { TrackingRuntime } from './tracking.runtime.js';
 
@@ -36,21 +41,21 @@ const { version } = JSON.parse(readFileSync(new URL('../../../package.json', imp
   version: string;
 };
 
-// Stand-ins while a port's provider is not installed: nothing is linked, nobody has access.
-const noCharacters: CharacterTokenSource = {
-  accessToken: () => Promise.resolve(null),
-  character: () => Promise.resolve(null),
-};
-const noAccess: MapAccess = { roleOf: () => Promise.resolve(null), mapsFor: () => Promise.resolve([]) };
-const optional = (token: string) => ({ token, optional: true });
-
 /**
- * Character tracking. Needs CHARACTER_TOKENS (from identity), AUTO_MAP_TARGET (from mapping)
- * and MAP_ACCESS (from access) from global providers; without them it stays idle.
+ * Character tracking: identity supplies character tokens (CharacterService), access answers
+ * map roles and mapping records auto-mapped jumps.
  */
 @Module({
+  imports: [MappingModule],
   controllers: [TrackingController],
   providers: [
+    { provide: CHARACTER_TOKENS, useExisting: CharacterService },
+    {
+      provide: AUTO_MAP_TARGET,
+      useFactory: (ports: MappingPorts, systems: SystemUseCases, connections: ConnectionUseCases) =>
+        new MappingAutoMapTarget(ports, systems, connections),
+      inject: [MAPPING_PORTS, SystemUseCases, ConnectionUseCases],
+    },
     {
       provide: TRACKING_REPOSITORY,
       useFactory: (database: Database) => new KyselyTrackingRepository(database),
@@ -66,40 +71,25 @@ const optional = (token: string) => ({ token, optional: true });
       provide: SetTracking,
       useFactory: (
         tracking: TrackingRepository,
-        characters: CharacterTokenSource | undefined,
-        access: MapAccess | undefined,
+        characters: CharacterTokenSource,
+        access: MapAccess,
         events: EventLog,
         uow: UnitOfWork,
         clock: Clock,
-      ) =>
-        new SetTracking({
-          tracking,
-          characters: characters ?? noCharacters,
-          access: access ?? noAccess,
-          events,
-          uow,
-          clock,
-        }),
-      inject: [
-        TRACKING_REPOSITORY,
-        optional(CHARACTER_TOKENS),
-        optional(MAP_ACCESS),
-        EVENT_LOG,
-        UNIT_OF_WORK,
-        CLOCK,
-      ],
+      ) => new SetTracking({ tracking, characters, access, events, uow, clock }),
+      inject: [TRACKING_REPOSITORY, CHARACTER_TOKENS, MAP_ACCESS, EVENT_LOG, UNIT_OF_WORK, CLOCK],
     },
     {
       provide: ListMapCharacters,
-      useFactory: (tracking: TrackingRepository, access: MapAccess | undefined) =>
-        new ListMapCharacters({ tracking, access: access ?? noAccess }),
-      inject: [TRACKING_REPOSITORY, optional(MAP_ACCESS)],
+      useFactory: (tracking: TrackingRepository, access: MapAccess) =>
+        new ListMapCharacters({ tracking, access }),
+      inject: [TRACKING_REPOSITORY, MAP_ACCESS],
     },
     {
       provide: TrackingPoller,
       useFactory: (
         tracking: TrackingRepository,
-        characters: CharacterTokenSource | undefined,
+        characters: CharacterTokenSource,
         esi: EsiGateway,
         events: EventLog,
         uow: UnitOfWork,
@@ -108,7 +98,7 @@ const optional = (token: string) => ({ token, optional: true });
         const logger = new Logger('TrackingPoller');
         return new TrackingPoller({
           tracking,
-          characters: characters ?? noCharacters,
+          characters,
           esi,
           events,
           uow,
@@ -117,17 +107,17 @@ const optional = (token: string) => ({ token, optional: true });
             logger.error(`polling character ${characterId} failed: ${String(error)}`),
         });
       },
-      inject: [TRACKING_REPOSITORY, optional(CHARACTER_TOKENS), ESI_GATEWAY, EVENT_LOG, UNIT_OF_WORK, CLOCK],
+      inject: [TRACKING_REPOSITORY, CHARACTER_TOKENS, ESI_GATEWAY, EVENT_LOG, UNIT_OF_WORK, CLOCK],
     },
     {
       provide: AutoMapper,
       useFactory: (
         tracking: TrackingRepository,
-        access: MapAccess | undefined,
-        target: AutoMapTarget | undefined,
+        access: MapAccess,
+        target: AutoMapTarget,
         universe: UniverseLookup,
-      ) => (target ? new AutoMapper({ tracking, access: access ?? noAccess, target, universe }) : null),
-      inject: [TRACKING_REPOSITORY, optional(MAP_ACCESS), optional(AUTO_MAP_TARGET), UNIVERSE_CATALOG],
+      ) => new AutoMapper({ tracking, access, target, universe }),
+      inject: [TRACKING_REPOSITORY, MAP_ACCESS, AUTO_MAP_TARGET, UNIVERSE_CATALOG],
     },
     TrackingRuntime,
   ],

@@ -4,13 +4,18 @@ import {
   buildPath,
   routes,
   type AdminAccountDto,
+  type CatalogEntryDto,
+  type InstanceSettingsDto,
   type PluginDto,
+  type ThemeDto,
+  type ThemesDto,
   type UpdateInstanceRoleRequest,
 } from '@wormwright/shared';
 import { api, ApiError } from '../lib/api';
 import { meKey, useMe } from '../lib/session';
 import { PluginSlot } from '../plugins/PluginSlot';
 import { ThemePicker } from '../theme/ThemePicker';
+import { useTheme } from '../theme/ThemeProvider';
 import styles from './pages.module.css';
 
 const TABS = [
@@ -61,10 +66,6 @@ function InstanceTab() {
     <>
       <div className={styles.section}>
         <h2>Instance</h2>
-        <p className="muted">
-          Settings that are not needed before the first login will be edited here: the admin Discord role,
-          event retention and the default theme.
-        </p>
         {health.data && (
           <ul className={styles.rows}>
             <li className={styles.row}>
@@ -78,7 +79,118 @@ function InstanceTab() {
           </ul>
         )}
       </div>
+      <DiscordAdminSettings />
       <PluginSlot slot="settingsPage" props={{ mapId: null }} />
+    </>
+  );
+}
+
+/** Ids as typed in a text field: comma or space separated. */
+const idList = (text: string) => text.split(/[\s,]+/).filter(Boolean);
+
+function DiscordAdminSettings() {
+  const queryClient = useQueryClient();
+  const settings = useQuery({
+    queryKey: ['admin-settings'],
+    queryFn: () => api<InstanceSettingsDto>(routes.admin.settings.path),
+  });
+  const [draft, setDraft] = useState<{ guild: string; roles: string } | null>(null);
+  const save = useMutation({
+    mutationFn: (body: { adminGuildId: string | null; adminRoleIds: string[] }) =>
+      api<InstanceSettingsDto>(routes.admin.updateSettings.path, { method: 'PATCH', json: body }),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['admin-settings'], data);
+      setDraft(null);
+    },
+  });
+  if (!settings.data) return null;
+  const value = draft ?? {
+    guild: settings.data.adminGuildId ?? '',
+    roles: settings.data.adminRoleIds.join(', '),
+  };
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    save.mutate({ adminGuildId: value.guild.trim() || null, adminRoleIds: idList(value.roles) });
+  };
+  return (
+    <form className={styles.section} onSubmit={submit} aria-label="Discord admin roles">
+      <h2>Admins from Discord</h2>
+      <p className="muted">
+        Members holding one of these roles on this Discord server become instance admins at their next login.
+      </p>
+      <div className={styles.inline}>
+        <label className={`field ${styles.field}`}>
+          <span>Discord server id</span>
+          <input
+            className="input"
+            inputMode="numeric"
+            value={value.guild}
+            onChange={(e) => setDraft({ ...value, guild: e.target.value })}
+          />
+        </label>
+        <label className={`field ${styles.field}`}>
+          <span>Role ids</span>
+          <input
+            className="input"
+            value={value.roles}
+            onChange={(e) => setDraft({ ...value, roles: e.target.value })}
+          />
+        </label>
+        <button type="submit" className="btn btn-primary" disabled={save.isPending || !draft}>
+          Save
+        </button>
+      </div>
+      {save.error && <p className="error">{errorText(save.error, 'Could not save the settings.')}</p>}
+    </form>
+  );
+}
+
+/** Packages shipped with the server, installable with one click. */
+function Catalogue({ kind, onInstalled }: { kind: CatalogEntryDto['kind']; onInstalled: () => void }) {
+  const queryClient = useQueryClient();
+  const catalog = useQuery({
+    queryKey: ['admin-catalog'],
+    queryFn: () => api<CatalogEntryDto[]>(routes.plugins.catalog.path),
+  });
+  const install = useMutation({
+    mutationFn: (source: string) =>
+      api<unknown>(kind === 'plugin' ? routes.plugins.install.path : routes.themes.install.path, {
+        method: 'POST',
+        json: { source },
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-catalog'] });
+      onInstalled();
+    },
+  });
+  const entries = catalog.data?.filter((e) => e.kind === kind) ?? [];
+  if (entries.length === 0) return null;
+  return (
+    <>
+      <h3>Shipped with this server</h3>
+      <ul className={styles.rows}>
+        {entries.map((e) => (
+          <li key={e.source} className={styles.row}>
+            <span className={styles.grow}>
+              <strong>{e.name}</strong> <span className="muted">{e.version}</span>
+              {e.description && <div className="muted">{e.description}</div>}
+            </span>
+            <button
+              type="button"
+              className="btn btn-small"
+              disabled={install.isPending || e.installedVersion === e.version}
+              onClick={() => install.mutate(e.source)}
+            >
+              {e.installedVersion === null
+                ? 'Install'
+                : e.installedVersion === e.version
+                  ? 'Installed'
+                  : 'Update'}
+            </button>
+          </li>
+        ))}
+      </ul>
+      {install.error && <p className="error">{errorText(install.error, 'Could not install.')}</p>}
     </>
   );
 }
@@ -171,7 +283,11 @@ function PluginsTab() {
   const key = ['admin-plugins'];
   const plugins = useQuery({ queryKey: key, queryFn: () => api<PluginDto[]>(routes.plugins.list.path) });
   const [source, setSource] = useState('');
-  const refresh = () => queryClient.invalidateQueries({ queryKey: key });
+  const refresh = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: key }),
+      queryClient.invalidateQueries({ queryKey: ['web-plugins'] }),
+    ]);
   const install = useMutation({
     mutationFn: (src: string) =>
       api<PluginDto>(routes.plugins.install.path, { method: 'POST', json: { source: src } }),
@@ -255,19 +371,78 @@ function PluginsTab() {
           Install
         </button>
       </form>
+      <Catalogue kind="plugin" onInstalled={() => void refresh()} />
       {error && <p className="error">{errorText(error, 'Something went wrong.')}</p>}
     </div>
   );
 }
 
 function ThemesTab() {
+  const queryClient = useQueryClient();
+  const { refresh: refreshThemes } = useTheme();
+  const themes = useQuery({
+    queryKey: ['admin-themes'],
+    queryFn: () => api<ThemesDto>(routes.themes.list.path),
+  });
+  const changed = () => {
+    void queryClient.invalidateQueries({ queryKey: ['admin-themes'] });
+    refreshThemes();
+  };
+  const setDefault = useMutation({
+    mutationFn: (themeId: string) =>
+      api<ThemesDto>(routes.themes.setDefault.path, { method: 'PUT', json: { themeId } }),
+    onSuccess: changed,
+  });
+  const uninstall = useMutation({
+    mutationFn: (t: ThemeDto) =>
+      api<void>(buildPath(routes.themes.uninstall.path, { themeId: t.id }), { method: 'DELETE' }),
+    onSuccess: changed,
+  });
+  const error = setDefault.error ?? uninstall.error;
   return (
     <div className={styles.section}>
       <h2>Themes</h2>
-      <p className="muted">
-        Built-in themes are below. Installing theme packages and choosing the default for this instance and
-        per map come later; for now each person picks a theme for their browser.
-      </p>
+      {themes.data && (
+        <label className="field">
+          <span>Default for everyone who has not picked a theme</span>
+          <select
+            className="input"
+            value={themes.data.defaultThemeId}
+            disabled={setDefault.isPending}
+            onChange={(e) => setDefault.mutate(e.target.value)}
+          >
+            {themes.data.themes.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <ul className={styles.rows}>
+        {themes.data?.themes
+          .filter((t) => !t.builtIn)
+          .map((t) => (
+            <li key={t.id} className={styles.row}>
+              <span className={styles.grow}>
+                <strong>{t.name}</strong> <span className="muted">{t.version}</span>
+              </span>
+              <button
+                type="button"
+                className="btn btn-small btn-danger"
+                disabled={uninstall.isPending}
+                onClick={() => {
+                  if (window.confirm(`Uninstall ${t.name}?`)) uninstall.mutate(t);
+                }}
+              >
+                Uninstall
+              </button>
+            </li>
+          ))}
+      </ul>
+      <Catalogue kind="theme" onInstalled={changed} />
+      {error && <p className="error">{errorText(error, 'Something went wrong.')}</p>}
+      <h3>Your theme</h3>
       <ThemePicker />
     </div>
   );

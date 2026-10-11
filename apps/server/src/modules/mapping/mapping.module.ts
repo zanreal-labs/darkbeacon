@@ -1,5 +1,5 @@
-import { Inject, Logger, Module, type OnModuleInit } from '@nestjs/common';
-import { hasMapRole, type Clock, type EventLog, type MapAccess, type UnitOfWork } from '@wormwright/core';
+import { Inject, Module, type OnModuleInit } from '@nestjs/common';
+import type { Clock, EventLog, MapAccess, UnitOfWork } from '@wormwright/core';
 import { Database } from '@wormwright/db';
 import {
   ConnectionUseCases,
@@ -7,7 +7,6 @@ import {
   MapUseCases,
   SignatureUseCases,
   SystemUseCases,
-  UniverseQueries,
   type MapRepository,
   type MappingPorts,
   type UniverseCatalog,
@@ -18,21 +17,17 @@ import {
   KyselySignatureRepository,
   KyselySystemRepository,
 } from '../../adapters/mapping/kysely-repositories.js';
-import { MappingMapOwnership, OwnerOnlyMapAccess } from '../../adapters/mapping/map-ownership.js';
-import { loadUniverseCatalog } from '../../adapters/mapping/universe-catalog.js';
-import type { AppConfig } from '../../config/config.js';
-import { APP_CONFIG, CLOCK, EVENT_LOG, MAP_ACCESS, UNIT_OF_WORK } from '../../platform/tokens.js';
+import { MappingMapOwnership } from '../../adapters/mapping/map-ownership.js';
+import { CLOCK, EVENT_LOG, MAP_ACCESS, UNIT_OF_WORK, UNIVERSE_CATALOG } from '../../platform/tokens.js';
+import { MapOwnershipRegistry } from '../access/map-ownership.registry.js';
 import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
 import {
   ConnectionsController,
   MapsController,
   SignaturesController,
   SystemsController,
-  UniverseController,
 } from './mapping.controllers.js';
-import { MAP_OWNERSHIP, MAP_REPOSITORY, MAPPING_PORTS, UNIVERSE_CATALOG } from './mapping.tokens.js';
-
-const logger = new Logger('Mapping');
+import { MAP_OWNERSHIP, MAP_REPOSITORY, MAPPING_PORTS } from './mapping.tokens.js';
 
 const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
   provide: type,
@@ -41,17 +36,11 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
 });
 
 /**
- * Maps, systems, connections, signatures and labels: REST under /api/maps, the universe
- * lookups, and the mapping part of the `map:<id>` snapshot.
+ * Maps, systems, connections, signatures and labels: REST under /api/maps and the mapping part
+ * of the `map:<id>` snapshot.
  */
 @Module({
-  controllers: [
-    MapsController,
-    SystemsController,
-    ConnectionsController,
-    SignaturesController,
-    UniverseController,
-  ],
+  controllers: [MapsController, SystemsController, ConnectionsController, SignaturesController],
   providers: [
     {
       provide: MAP_REPOSITORY,
@@ -64,76 +53,47 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
       inject: [MAP_REPOSITORY],
     },
     {
-      provide: UNIVERSE_CATALOG,
-      useFactory: (config: AppConfig) => {
-        const catalog = loadUniverseCatalog(config.dataDir, (m) => logger.warn(m));
-        logger.log(`universe catalog: ${catalog.size} systems`);
-        return catalog;
-      },
-      inject: [APP_CONFIG],
-    },
-    {
       provide: MAPPING_PORTS,
       useFactory: (
         database: Database,
         maps: MapRepository,
-        ownership: MappingMapOwnership,
         universe: UniverseCatalog,
         events: EventLog,
         uow: UnitOfWork,
         clock: Clock,
-        access: MapAccess | undefined,
+        access: MapAccess,
       ): MappingPorts => ({
         maps,
         systems: new KyselySystemRepository(database),
         connections: new KyselyConnectionRepository(database),
         signatures: new KyselySignatureRepository(database),
         universe,
-        // Until the access module provides MAP_ACCESS, owners are the only members of their maps.
-        access: access ?? new OwnerOnlyMapAccess(ownership),
+        access,
         events,
         uow,
         clock,
       }),
-      inject: [
-        Database,
-        MAP_REPOSITORY,
-        MAP_OWNERSHIP,
-        UNIVERSE_CATALOG,
-        EVENT_LOG,
-        UNIT_OF_WORK,
-        CLOCK,
-        { token: MAP_ACCESS, optional: true },
-      ],
+      inject: [Database, MAP_REPOSITORY, UNIVERSE_CATALOG, EVENT_LOG, UNIT_OF_WORK, CLOCK, MAP_ACCESS],
     },
     useCase(MapUseCases),
     useCase(SystemUseCases),
     useCase(ConnectionUseCases),
     useCase(SignatureUseCases),
     useCase(MapSnapshotQuery),
-    {
-      provide: UniverseQueries,
-      useFactory: (universe: UniverseCatalog) => new UniverseQueries(universe),
-      inject: [UNIVERSE_CATALOG],
-    },
   ],
-  exports: [MAP_REPOSITORY, MAP_OWNERSHIP, UNIVERSE_CATALOG, MAPPING_PORTS],
+  exports: [MAP_REPOSITORY, MAP_OWNERSHIP, MAPPING_PORTS, SystemUseCases, ConnectionUseCases],
 })
 export class MappingModule implements OnModuleInit {
   constructor(
     @Inject(RealtimeRegistry) private readonly registry: RealtimeRegistry,
     @Inject(MapSnapshotQuery) private readonly snapshots: MapSnapshotQuery,
-    @Inject(MAPPING_PORTS) private readonly ports: MappingPorts,
+    @Inject(MapOwnershipRegistry) private readonly ownershipRegistry: MapOwnershipRegistry,
+    @Inject(MAP_OWNERSHIP) private readonly ownership: MappingMapOwnership,
   ) {}
 
   onModuleInit(): void {
     this.registry.registerSnapshot('map', (mapId, actor) => this.snapshots.snapshot(actor, mapId));
-    // The access module owns `map` stream authorization; this only covers a server without it.
-    if (!this.registry.stream('map')) {
-      const { access } = this.ports;
-      this.registry.registerStream('map', {
-        authorize: async (actor, mapId) => !!actor && hasMapRole(await access.roleOf(actor, mapId), 'viewer'),
-      });
-    }
+    // Access answers map roles from map ownership; it cannot inject mapping directly (DI cycle).
+    this.ownershipRegistry.use(this.ownership);
   }
 }

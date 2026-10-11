@@ -125,7 +125,10 @@ export function useMapStore(mapId: string) {
 
   const commands = useMemo(() => {
     const isSystemEvent = (types: string[], ids: number[]) => (e: TypedEvent) =>
-      types.includes(e.type) && 'solarSystemId' in e.data && ids.includes(e.data.solarSystemId);
+      types.includes(e.type) &&
+      'solarSystemId' in e.data &&
+      typeof e.data.solarSystemId === 'number' &&
+      ids.includes(e.data.solarSystemId);
 
     return {
       addSystem(solarSystemId: number, position: Position) {

@@ -1,4 +1,8 @@
-import type { SlotComponent, WebPlugin, WebPluginApi, WebSlot } from '@wormwright/plugin-sdk';
+import { createElement, useEffect, useState } from 'react';
+import type { HostReact, SlotComponent, WebPlugin, WebPluginApi, WebSlot } from '@wormwright/plugin-sdk';
+
+/** The host React handed to plugins; they must not bundle a copy of their own. */
+const hostReact = { createElement, useState, useEffect } as unknown as HostReact;
 
 export interface SlotEntry<S extends WebSlot = WebSlot> {
   key: string;
@@ -12,7 +16,18 @@ export interface SlotEntry<S extends WebSlot = WebSlot> {
 export class PluginRegistry {
   private readonly slots = new Map<WebSlot, SlotEntry[]>();
   private readonly listeners = new Set<() => void>();
+  private readonly disabled = new Map<string, ReadonlySet<string>>();
   private counter = 0;
+
+  /** Maps on which a plugin is switched off; its components are hidden there. */
+  setDisabledMaps(pluginId: string, mapIds: readonly string[]): void {
+    this.disabled.set(pluginId, new Set(mapIds));
+    this.listeners.forEach((l) => l());
+  }
+
+  enabledOn(pluginId: string, mapId: string | null | undefined): boolean {
+    return !mapId || !this.disabled.get(pluginId)?.has(mapId);
+  }
 
   register<S extends WebSlot>(
     pluginId: string,
@@ -46,6 +61,7 @@ export class PluginRegistry {
   apiFor(pluginId: string): WebPluginApi {
     return {
       pluginId,
+      react: hostReact,
       register: (slot, component, options) => this.register(pluginId, slot, component, options),
       fetch: (path, init) =>
         fetch(`/api/plugins/${encodeURIComponent(pluginId)}/${path.replace(/^\//, '')}`, {
@@ -65,13 +81,14 @@ const nativeImport: ModuleImporter = (url) => import(/* @vite-ignore */ url);
 /** Loads each plugin's web module and lets it register; one broken plugin does not stop the rest. */
 export async function loadWebPlugins(
   registry: PluginRegistry,
-  plugins: readonly { id: string; url: string }[],
+  plugins: readonly { id: string; url: string; disabledMapIds?: readonly string[] }[],
   importer: ModuleImporter = nativeImport,
 ): Promise<{ id: string; error: string }[]> {
   const failures: { id: string; error: string }[] = [];
   await Promise.all(
-    plugins.map(async ({ id, url }) => {
+    plugins.map(async ({ id, url, disabledMapIds }) => {
       try {
+        registry.setDisabledMaps(id, disabledMapIds ?? []);
         const mod = await importer(url);
         if (!mod.default || typeof mod.default.register !== 'function') {
           throw new Error('the module has no default export from defineWebPlugin()');

@@ -1,5 +1,7 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import type { UniverseCatalog, UniverseSystem } from '@wormwright/mapping';
-import { loadUniverseData, type UniverseData } from '@wormwright/sde';
+import { loadUniverseData, UNIVERSE_DATA_FILE, type UniverseData } from '@wormwright/sde';
 
 /** UniverseCatalog over the dataset built from the SDE, held in memory. */
 export class StaticUniverseCatalog implements UniverseCatalog {
@@ -27,10 +29,24 @@ export class StaticUniverseCatalog implements UniverseCatalog {
       .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
   }
 
-  /** The dataset committed in `@wormwright/sde`, parsed once per process. */
-  static shared(): StaticUniverseCatalog {
-    sharedCatalog ??= new StaticUniverseCatalog(loadUniverseData());
-    return sharedCatalog;
+  /**
+   * `universe.json` from the data directory when an operator put one there, else the dataset
+   * committed in `@wormwright/sde`. Each file is parsed once per process.
+   */
+  static load(dataDir: string): StaticUniverseCatalog {
+    const custom = join(dataDir, 'universe.json');
+    const file = existsSync(custom) ? custom : UNIVERSE_DATA_FILE;
+    let catalog = loaded.get(file);
+    if (!catalog) {
+      catalog = new StaticUniverseCatalog(loadUniverseData(file));
+      // Only the committed dataset is cached; a custom file may change between test apps.
+      if (file === UNIVERSE_DATA_FILE) loaded.set(file, catalog);
+    }
+    return catalog;
+  }
+
+  get size(): number {
+    return this.byId.size;
   }
 
   getSystem(solarSystemId: number): UniverseSystem | null {
@@ -55,4 +71,4 @@ export class StaticUniverseCatalog implements UniverseCatalog {
   }
 }
 
-let sharedCatalog: StaticUniverseCatalog | undefined;
+const loaded = new Map<string, StaticUniverseCatalog>();

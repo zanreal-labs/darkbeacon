@@ -1,24 +1,6 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  HttpCode,
-  Inject,
-  Param,
-  Patch,
-  Post,
-  Put,
-  Query,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post, Put } from '@nestjs/common';
 import type { Actor } from '@wormwright/core';
-import {
-  ConnectionUseCases,
-  MapUseCases,
-  SignatureUseCases,
-  SystemUseCases,
-  UniverseQueries,
-} from '@wormwright/mapping';
+import { ConnectionUseCases, MapUseCases, SignatureUseCases, SystemUseCases } from '@wormwright/mapping';
 import {
   AddConnectionRequest,
   AddSignatureRequest,
@@ -30,7 +12,6 @@ import {
   PasteSignaturesRequest,
   routes,
   SetLabelsRequest,
-  UniverseSearchQuery,
   UpdateConnectionRequest,
   UpdateMapRequest,
   UpdateSignatureRequest,
@@ -222,23 +203,5 @@ export class SignaturesController {
     @Param('signatureId') signatureId: string,
   ): Promise<void> {
     await this.signatures.remove(actor, mapId, signatureId);
-  }
-}
-
-@Controller()
-export class UniverseController {
-  constructor(@Inject(UniverseQueries) private readonly universe: UniverseQueries) {}
-
-  @Get(nestPath(routes.universe.searchSystems.path))
-  search(
-    @CurrentActor() actor: Actor | null,
-    @Query(new ZodPipe(UniverseSearchQuery)) query: UniverseSearchQuery,
-  ) {
-    return this.universe.search(actor, query.q, query.limit);
-  }
-
-  @Get(nestPath(routes.universe.getSystem.path))
-  get(@CurrentActor() actor: Actor | null, @Param('solarSystemId', systemId) solarSystemId: number) {
-    return this.universe.get(actor, solarSystemId);
   }
 }

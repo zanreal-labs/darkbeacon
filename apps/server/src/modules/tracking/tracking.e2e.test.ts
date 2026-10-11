@@ -1,22 +1,14 @@
-import { Global, Module } from '@nestjs/common';
-import { NestFactory } from '@nestjs/core';
-import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
-import { WsAdapter } from '@nestjs/platform-ws';
-import { ManualClock, type EventLog, type MapRole } from '@wormwright/core';
+import type { NestFastifyApplication } from '@nestjs/platform-fastify';
+import { ManualClock, type EventLog } from '@wormwright/core';
 import { describeEachDialect } from '@wormwright/db/testing';
-import type { MapScope } from '@wormwright/shared';
-import {
-  TrackingPoller,
-  type AutoMapTarget,
-  type RecordedJump,
-  type TrackingRepository,
-} from '@wormwright/tracking';
-import { fakeAccess, fakeCharacters, FakeEsi } from '@wormwright/tracking/testing';
+import type { CharacterService } from '@wormwright/identity';
+import type { ConnectionDto, MapDto, MapSnapshot, MapSystemDto, MeDto } from '@wormwright/shared';
+import { TrackingPoller, type TrackingRepository } from '@wormwright/tracking';
+import { FakeEsi } from '@wormwright/tracking/testing';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { AppModule } from '../../app.module.js';
+import { createApp } from '../../app.js';
 import { parseEnv } from '../../config/config.js';
-import { ActorResolverRegistry } from '../../platform/actor.js';
-import { AUTO_MAP_TARGET, CHARACTER_TOKENS, EVENT_LOG, MAP_ACCESS } from '../../platform/tokens.js';
+import { CHARACTER_TOKENS, EVENT_LOG } from '../../platform/tokens.js';
 import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
 import { TRACKING_REPOSITORY } from './tracking.module.js';
 
@@ -26,82 +18,67 @@ const JITA = 30000142;
 const PERIMETER = 30000144;
 const J_SPACE = 31000007; // J105443, C1
 
+/** Tracking, universe and auto-mapping wired to the real identity, access and mapping modules. */
 describeEachDialect('tracking and universe over HTTP', (t) => {
   let app: NestFastifyApplication;
-  let recorded: RecordedJump[];
-  let scopes: MapScope[];
-  let roles: Record<string, Record<string, MapRole>>;
+  /** Session cookie per dev-login name. */
+  const cookies = new Map<string, string>();
+  const accounts = new Map<string, string>();
+  let mapId: string;
 
-  const request = async (method: 'GET' | 'PUT', url: string, as?: string, body?: unknown) => {
+  const request = async (
+    method: 'GET' | 'PUT' | 'POST' | 'PATCH',
+    url: string,
+    as?: string,
+    body?: unknown,
+  ) => {
     const response = await app
       .getHttpAdapter()
       .getInstance()
       .inject({
         method,
         url,
-        headers: as ? { authorization: `Bearer ${as}` } : {},
+        headers: as ? { cookie: cookies.get(as)! } : {},
         ...(body === undefined ? {} : { payload: body as object }),
       });
     return {
       status: response.statusCode,
       body: response.body ? (JSON.parse(response.body) as unknown) : null,
+      cookie: response.headers['set-cookie'],
     };
   };
 
+  const signIn = async (name: string, character: { id: number; name: string }) => {
+    const response = await request('POST', '/api/auth/dev', undefined, { name, character });
+    const setCookie = [response.cookie].flat()[0]!;
+    cookies.set(name, setCookie.split(';')[0]!);
+    accounts.set(name, (response.body as MeDto).account.id);
+  };
+
   beforeEach(async () => {
-    recorded = [];
-    scopes = ['wormhole'];
-    roles = { m1: { alice: 'member', bob: 'viewer' } };
-    const target: AutoMapTarget = {
-      scopes: (mapId) => Promise.resolve(mapId === 'm1' ? scopes : null),
-      recordJump: (jump) => {
-        recorded.push(jump);
-        return Promise.resolve();
-      },
+    const config = {
+      ...parseEnv({ NODE_ENV: 'test', DEV_LOGIN: 'true' }),
+      secretKey: 'x'.repeat(32),
+      dataDir: '/nonexistent',
     };
-
-    // Stand-ins for the identity, access and mapping modules.
-    @Global()
-    @Module({
-      providers: [
-        {
-          provide: CHARACTER_TOKENS,
-          useValue: fakeCharacters({
-            [PILOT]: { name: 'Pilot', accountId: 'alice' },
-            [ALT]: { name: 'Alt', accountId: 'bob' },
-          }),
-        },
-        { provide: MAP_ACCESS, useValue: fakeAccess(roles) },
-        { provide: AUTO_MAP_TARGET, useValue: target },
-      ],
-      exports: [CHARACTER_TOKENS, MAP_ACCESS, AUTO_MAP_TARGET],
-    })
-    class FakePorts {}
-
-    @Module({})
-    class TestRoot {}
-
-    const config = { ...parseEnv({ NODE_ENV: 'test' }), secretKey: 'x'.repeat(32) };
-    app = await NestFactory.create<NestFastifyApplication>(
-      { module: TestRoot, imports: [AppModule.forRoot(config, { database: t.db }), FakePorts] },
-      new FastifyAdapter(),
-      { logger: false },
-    );
-    app.setGlobalPrefix('api');
-    app.useWebSocketAdapter(new WsAdapter(app));
-    await app.init();
+    app = await createApp(config, { database: t.db, logger: false, webDist: '/nonexistent' });
     await app.getHttpAdapter().getInstance().ready();
-    app
-      .get(ActorResolverRegistry)
-      .use(async (req) =>
-        typeof req.headers.authorization === 'string'
-          ? { kind: 'account', id: req.headers.authorization.slice(7), instanceRole: 'user' }
-          : null,
-      );
+    await signIn('alice', { id: PILOT, name: 'Pilot' });
+    await signIn('bob', { id: ALT, name: 'Alt' });
+    mapId = ((await request('POST', '/api/maps', 'alice', { name: 'Chain' })).body as MapDto).id;
+    await request('POST', `/api/maps/${mapId}/access-rules`, 'alice', {
+      subjectKind: 'account',
+      subjectId: accounts.get('bob'),
+      role: 'viewer',
+    });
   });
 
   afterEach(async () => {
     await app.close();
+  });
+
+  it('takes character tokens from identity', () => {
+    expect(app.get<CharacterService>(CHARACTER_TOKENS).constructor.name).toBe('CharacterService');
   });
 
   it('searches and reads solar systems', async () => {
@@ -142,18 +119,20 @@ describeEachDialect('tracking and universe over HTTP', (t) => {
 
   it('tracks a character, polls ESI and auto-maps its jumps', async () => {
     const track = (as: string, characterId: number, tracked: boolean) =>
-      request('PUT', '/api/maps/m1/tracking', as, { characterId, tracked });
+      request('PUT', `/api/maps/${mapId}/tracking`, as, { characterId, tracked });
 
     expect((await track('alice', PILOT, true)).status).toBe(204);
     expect((await track('bob', ALT, true)).status).toBe(403);
     expect((await track('alice', ALT, true)).status).toBe(404);
-    expect((await request('PUT', '/api/maps/m1/tracking', 'alice', { characterId: 'x' })).status).toBe(400);
+    expect((await request('PUT', `/api/maps/${mapId}/tracking`, 'alice', { characterId: 'x' })).status).toBe(
+      400,
+    );
 
-    const listed = await request('GET', '/api/maps/m1/characters', 'bob');
+    const listed = await request('GET', `/api/maps/${mapId}/characters`, 'bob');
     expect(listed.body).toEqual([
       expect.objectContaining({ characterId: PILOT, name: 'Pilot', online: false }),
     ]);
-    expect((await request('GET', '/api/maps/m2/characters', 'bob')).status).toBe(404);
+    expect((await request('GET', '/api/maps/nope/characters', 'bob')).status).toBe(404);
 
     // Drive a poller over the app's repository and event log with a fake ESI and a manual clock.
     const clock = new ManualClock();
@@ -161,7 +140,10 @@ describeEachDialect('tracking and universe over HTTP', (t) => {
     const log = app.get<EventLog>(EVENT_LOG);
     const poller = new TrackingPoller({
       tracking: app.get<TrackingRepository>(TRACKING_REPOSITORY),
-      characters: fakeCharacters({ [PILOT]: { name: 'Pilot', accountId: 'alice' } }),
+      characters: {
+        character: (id) => app.get<CharacterService>(CHARACTER_TOKENS).character(id),
+        accessToken: () => Promise.resolve('token'),
+      },
       esi,
       events: log,
       uow: t.db,
@@ -173,7 +155,9 @@ describeEachDialect('tracking and universe over HTTP', (t) => {
     clock.advance(5_000);
     await poller.tick();
 
-    expect((await log.readSince('map:m1', 0)).map((e) => e.type)).toEqual([
+    expect((await log.readSince(`map:${mapId}`, 0)).map((e) => e.type)).toEqual([
+      'map.created',
+      'access.rule_added',
       'character.tracked',
       'character.online_changed',
       'character.ship_changed',
@@ -181,35 +165,34 @@ describeEachDialect('tracking and universe over HTTP', (t) => {
       'character.moved',
       'character.jumped',
     ]);
-    await vi.waitFor(() =>
-      expect(recorded).toEqual([
-        {
-          mapId: 'm1',
-          from: J_SPACE,
-          to: JITA,
-          type: 'wormhole',
-          characterId: PILOT,
-          shipTypeId: 11132,
-          accountId: 'alice',
-        },
-      ]),
-    );
+    // Auto-mapping puts both systems and a wormhole connection on the real map.
+    const snapshotOf = async () => {
+      const parts = app.get(RealtimeRegistry).snapshotProviders('map');
+      const merged = {};
+      for (const part of parts) Object.assign(merged, await part(mapId, { kind: 'plugin', id: 'test' }));
+      return merged as Required<MapSnapshot>;
+    };
+    await vi.waitFor(async () => {
+      const { systems, connections } = await snapshotOf();
+      expect(systems.map((s: MapSystemDto) => s.solarSystemId).sort()).toEqual([JITA, J_SPACE].sort());
+      expect(connections).toEqual([expect.objectContaining({ type: 'wormhole' }) as ConnectionDto]);
+    });
 
     // With high-sec in scope a gate jump is mapped as a gate.
-    scopes = ['wormhole', 'high'];
+    await request('PATCH', `/api/maps/${mapId}`, 'alice', { settings: { scopes: ['wormhole', 'high'] } });
     esi.set(PILOT, { location: PERIMETER });
     clock.advance(5_000);
     await poller.tick();
-    await vi.waitFor(() =>
-      expect(recorded.at(-1)).toMatchObject({ from: JITA, to: PERIMETER, type: 'gate' }),
+    await vi.waitFor(async () =>
+      expect((await snapshotOf()).connections).toContainEqual(
+        expect.objectContaining({ type: 'gate' }) as ConnectionDto,
+      ),
     );
-
-    const [snapshot] = app.get(RealtimeRegistry).snapshotProviders('map');
-    expect(await snapshot!('m1', null)).toEqual({
-      characters: [expect.objectContaining({ characterId: PILOT, solarSystemId: PERIMETER, online: true })],
-    });
+    expect((await snapshotOf()).characters).toEqual([
+      expect.objectContaining({ characterId: PILOT, solarSystemId: PERIMETER, online: true }),
+    ]);
 
     expect((await track('alice', PILOT, false)).status).toBe(204);
-    expect((await request('GET', '/api/maps/m1/characters', 'alice')).body).toEqual([]);
+    expect((await request('GET', `/api/maps/${mapId}/characters`, 'alice')).body).toEqual([]);
   });
 });

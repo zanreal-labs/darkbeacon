@@ -110,6 +110,11 @@ export function applyMapEvent(state: MapState, event: TypedEvent): MapState {
       );
     case 'character.online_changed':
       return patchCharacter(state, event.data.characterId, { online: event.data.online }, event.occurredAt);
+    case 'character.tracked':
+      return { ...state, characters: upsert(state.characters, event.data.characterId, event.data) };
+    case 'character.untracked':
+      return { ...state, characters: without(state.characters, event.data.characterId) };
+    case 'map.created':
     case 'map.settings_changed':
       return { ...state, map: event.data };
     case 'labels.changed':

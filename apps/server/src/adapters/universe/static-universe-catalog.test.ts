@@ -41,8 +41,8 @@ describe('StaticUniverseCatalog', () => {
   });
 
   it('loads the committed SDE dataset once', () => {
-    const catalog = StaticUniverseCatalog.shared();
-    expect(StaticUniverseCatalog.shared()).toBe(catalog);
+    const catalog = StaticUniverseCatalog.load('/nonexistent');
+    expect(StaticUniverseCatalog.load('/nonexistent')).toBe(catalog);
     expect(catalog.searchSystems('thera', 5)[0]).toMatchObject({ id: 31000005, whClass: 12 });
     expect(catalog.getSystem(30000142)).toMatchObject({ name: 'Jita', regionName: 'The Forge' });
     expect(catalog.gateLinked(30000142, 30000144)).toBe(true);

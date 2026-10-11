@@ -3,7 +3,6 @@ import type { InstanceSettingsDto } from '@wormwright/shared';
 export type InstanceSettings = InstanceSettingsDto;
 
 export const DEFAULT_INSTANCE_SETTINGS: InstanceSettings = {
-  defaultTheme: 'default',
   adminGuildId: null,
   adminRoleIds: [],
 };
