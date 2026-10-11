@@ -5,17 +5,19 @@ import {
   type OnModuleDestroy,
   type OnModuleInit,
 } from '@nestjs/common';
-import type { EventBus } from '@wormwright/core';
 import { AutoMapper, ListMapCharacters, TrackingPoller } from '@wormwright/tracking';
 import type { AppConfig } from '../../config/config.js';
-import { APP_CONFIG, EVENT_BUS } from '../../platform/tokens.js';
+import { EventConsumers } from '../../platform/event-consumers.js';
+import { APP_CONFIG } from '../../platform/tokens.js';
 import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
 
-/** Starts the ESI poller, subscribes auto-mapping and contributes `characters` to map snapshots. */
+/**
+ * Starts the ESI poller, runs auto-mapping as a durable event-log consumer (a restart does not
+ * lose jumps) and contributes `characters` to map snapshots.
+ */
 @Injectable()
 export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
   private timer: NodeJS.Timeout | undefined;
-  private unsubscribe: (() => void) | undefined;
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
@@ -23,15 +25,18 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
     @Inject(AutoMapper) private readonly autoMapper: AutoMapper,
     @Inject(ListMapCharacters) private readonly listCharacters: ListMapCharacters,
     @Inject(RealtimeRegistry) private readonly registry: RealtimeRegistry,
-    @Inject(EVENT_BUS) private readonly bus: EventBus,
+    @Inject(EventConsumers) private readonly consumers: EventConsumers,
   ) {}
 
   onModuleInit(): void {
     this.registry.registerSnapshot('map', async (mapId) => ({
       characters: await this.listCharacters.forMap(mapId),
     }));
-    this.unsubscribe = this.bus.subscribe((event) => this.autoMapper.handle(event), {
+    this.consumers.register({
+      name: 'auto-mapping',
+      streams: ['map'],
       types: ['character.jumped'],
+      handle: (event) => this.autoMapper.handle(event),
     });
   }
 
@@ -44,6 +49,5 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
 
   onModuleDestroy(): void {
     clearInterval(this.timer);
-    this.unsubscribe?.();
   }
 }

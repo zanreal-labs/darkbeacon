@@ -18,8 +18,9 @@ export interface WebhookDispatcherDeps {
 }
 
 /**
- * Turns committed map events into webhook deliveries. A core subscriber of the EventBus:
- * `handle` queues and sends at once; `retryDue` (on a timer) resends failed ones with backoff.
+ * Turns committed map events into webhook deliveries. `queue` stores the deliveries of an event
+ * (the server calls it from a durable event-log consumer, in the transaction that moves its
+ * cursor) and `send` makes the first attempts; `retryDue` (on a timer) resends failed ones.
  */
 export class WebhookDispatcher {
   /** Deliveries being sent right now, so a retry tick never sends one twice. */
@@ -27,17 +28,28 @@ export class WebhookDispatcher {
 
   constructor(private readonly deps: WebhookDispatcherDeps) {}
 
+  /** Queues and sends at once. */
   async handle(event: DomainEvent): Promise<void> {
+    await this.send(await this.queue(event));
+  }
+
+  /** Stores one pending delivery per webhook that wants the event. */
+  async queue(event: DomainEvent): Promise<Array<{ delivery: WebhookDelivery; webhook: Webhook }>> {
     const stream = parseStream(event.stream);
-    if (stream?.kind !== 'map') return;
+    if (stream?.kind !== 'map') return [];
     const webhooks = (await this.deps.webhooks.listForMap(stream.id)).filter((w) => webhookWants(w, event));
-    await Promise.all(
-      webhooks.map(async (webhook) => {
-        const delivery = this.newDelivery(webhook, event);
-        await this.deps.webhooks.saveDelivery(delivery);
-        await this.attempt(delivery, webhook);
-      }),
-    );
+    const queued = [];
+    for (const webhook of webhooks) {
+      const delivery = this.newDelivery(webhook, event);
+      await this.deps.webhooks.saveDelivery(delivery);
+      queued.push({ delivery, webhook });
+    }
+    return queued;
+  }
+
+  /** First attempts of queued deliveries. */
+  async send(queued: ReadonlyArray<{ delivery: WebhookDelivery; webhook: Webhook }>): Promise<void> {
+    await Promise.all(queued.map(({ delivery, webhook }) => this.attempt(delivery, webhook)));
   }
 
   /** Sends a synthetic `webhook.test` event once, without retries. */

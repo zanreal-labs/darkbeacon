@@ -8,21 +8,25 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import { InstanceSettingsService } from '@wormwright/access';
-import type { Clock, EventBus, MapAccess } from '@wormwright/core';
+import type { Clock, MapAccess } from '@wormwright/core';
 import { Database } from '@wormwright/db';
 import { NotifierRegistry, WebhookAdmin, WebhookDispatcher } from '@wormwright/notifications';
 import { HttpWebhookSender } from '../../adapters/notifications/http-webhook-sender.js';
 import { KyselyWebhookRepository } from '../../adapters/notifications/kysely-webhook-repository.js';
 import { SecretBox } from '../../adapters/notifications/secret-box.js';
 import type { AppConfig } from '../../config/config.js';
-import { APP_CONFIG, CLOCK, EVENT_BUS, MAP_ACCESS } from '../../platform/tokens.js';
+import { EventConsumers } from '../../platform/event-consumers.js';
+import { APP_CONFIG, CLOCK, MAP_ACCESS } from '../../platform/tokens.js';
 import { WebhooksController } from './webhooks.controller.js';
 
 const RETRY_EVERY_MS = 5_000;
 const PRUNE_EVERY_MS = 60 * 60_000;
 const KEEP_DELIVERIES_MS = 30 * 24 * 60 * 60_000;
 
-/** Subscribes the dispatcher to the bus and resends failed deliveries on a timer. */
+/**
+ * Queues deliveries from a durable event-log consumer, so a crash or restart between a commit
+ * and its deliveries loses nothing, and resends failed deliveries on a timer.
+ */
 @Injectable()
 export class WebhookWorker implements OnModuleInit, OnApplicationShutdown {
   private readonly logger = new Logger('Webhooks');
@@ -31,13 +35,20 @@ export class WebhookWorker implements OnModuleInit, OnApplicationShutdown {
   constructor(
     @Inject(WebhookDispatcher) private readonly dispatcher: WebhookDispatcher,
     @Inject(KyselyWebhookRepository) private readonly webhooks: KyselyWebhookRepository,
-    @Inject(EVENT_BUS) private readonly bus: EventBus,
+    @Inject(EventConsumers) private readonly consumers: EventConsumers,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
   onModuleInit(): void {
+    this.consumers.register({
+      name: 'webhooks',
+      streams: ['map'],
+      handle: async (event) => {
+        const queued = await this.dispatcher.queue(event);
+        return queued.length > 0 ? () => this.dispatcher.send(queued) : undefined;
+      },
+    });
     this.cleanups.push(
-      this.bus.subscribe((event) => this.dispatcher.handle(event)),
       every(RETRY_EVERY_MS, () => this.dispatcher.retryDue(), this.logger),
       every(
         PRUNE_EVERY_MS,
@@ -66,8 +77,8 @@ function every(ms: number, work: () => Promise<unknown>, logger: Logger): () => 
 }
 
 /**
- * The Notifier registry (global, plugins add channels to it) and per-map webhooks: a core
- * subscriber of the EventBus that signs, sends and retries deliveries.
+ * The Notifier registry (global, plugins add channels to it) and per-map webhooks: a durable
+ * consumer of the event log that signs, sends and retries deliveries.
  */
 @Global()
 @Module({
