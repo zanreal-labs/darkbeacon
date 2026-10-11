@@ -5,6 +5,7 @@ import {
   CharacterService,
   DevLogin,
   DiscordLogin,
+  safeReturnTo,
   SESSION_TTL_MS,
   SessionService,
   type PendingAuth,
@@ -198,7 +199,7 @@ function userAgent(request: FastifyRequest): string | null {
 }
 
 function withError(path: string, message: string): string {
-  const url = new URL(path, 'http://app');
+  const url = new URL(safeReturnTo(path), 'http://app');
   url.searchParams.set('auth_error', message);
   return `${url.pathname}${url.search}${url.hash}`;
 }

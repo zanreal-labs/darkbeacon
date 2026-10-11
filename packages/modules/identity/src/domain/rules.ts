@@ -27,11 +27,24 @@ export function effectiveInstanceRole(stored: InstanceRole, adminByDiscord: bool
   return stored === 'user' && adminByDiscord ? 'admin' : stored;
 }
 
-/** Only same-origin absolute paths are allowed as post-login destinations. */
+const RETURN_BASE = 'http://return.invalid';
+
+/**
+ * Only same-origin absolute paths are allowed as post-login destinations. Browsers drop tabs and
+ * newlines from URLs and read `\` as `/`, so any of those (or other control characters) is refused,
+ * and the result is the path as a URL parser sees it.
+ */
 export function safeReturnTo(value: unknown): string {
   if (typeof value !== 'string' || value.length > 512) return '/';
-  if (!value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return '/';
-  return value;
+  // eslint-disable-next-line no-control-regex
+  if (!value.startsWith('/') || /[\x00-\x20\x7f\\]/.test(value)) return '/';
+  try {
+    const url = new URL(value, RETURN_BASE);
+    if (url.origin !== RETURN_BASE) return '/';
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return '/';
+  }
 }
 
 /** A stable fake EVE id for dev-login characters, above the ids real characters use today. */

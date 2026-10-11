@@ -128,6 +128,11 @@ describe('rules', () => {
     expect(safeReturnTo('//evil.test')).toBe('/');
     expect(safeReturnTo('https://evil.test')).toBe('/');
     expect(safeReturnTo('/\\evil.test')).toBe('/');
+    // Browsers drop tabs and newlines, which would turn these into `//evil.test`.
+    expect(safeReturnTo('/\t/evil.test')).toBe('/');
+    expect(safeReturnTo('/\n/evil.test')).toBe('/');
+    expect(safeReturnTo('/ /evil.test')).toBe('/');
+    expect(safeReturnTo('/a/../b#top')).toBe('/b#top');
     expect(safeReturnTo(undefined)).toBe('/');
   });
 });
