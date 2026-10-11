@@ -1,0 +1,32 @@
+{
+  "name": "@wormwright/db",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Kysely factory, dialect switch, migrations",
+  "type": "module",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    },
+    "./testing": {
+      "source": "./src/testing.ts",
+      "types": "./dist/src/testing.d.ts",
+      "default": "./dist/src/testing.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@wormwright/core": "workspace:*",
+    "kysely": "^0.29.6",
+    "better-sqlite3": "^13.0.3",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/pg": "^8.23.1"
+  }
+}
