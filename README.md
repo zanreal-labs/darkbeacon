@@ -52,7 +52,7 @@ packages/shared        zod DTOs, REST routes (routes.ts), WebSocket protocol, ev
 packages/modules/*     identity, access, mapping, tracking, notifications, plugins (domain/application/ports)
 packages/plugin-sdk    plugin manifest, PluginContext, web slots
 packages/theme-sdk     theme tokens, built-in themes, CSS generator
-packages/sde           static universe data format
+packages/sde           SDE builder and the committed universe dataset (systems, regions, gates)
 plugins/*              first-party plugins (plugin-sdk only)
 ```
 

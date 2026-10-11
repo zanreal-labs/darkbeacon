@@ -12,6 +12,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "universe": "tsc -b && node dist/cli.js"
   }
 }
