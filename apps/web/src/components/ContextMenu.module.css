@@ -1,0 +1,134 @@
+.backdrop {
+  display: none;
+}
+
+.menu {
+  position: fixed;
+  z-index: 50;
+  min-width: 200px;
+  max-width: min(320px, calc(100vw - 16px));
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
+  padding: var(--ww-space-1);
+  border: 1px solid var(--ww-color-border);
+  border-radius: var(--ww-radius);
+  background: var(--ww-color-surface-raised);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+}
+
+.title {
+  padding: var(--ww-space-1) var(--ww-space-2);
+  font-size: var(--ww-font-size-small);
+  font-weight: 600;
+  color: var(--ww-color-text-muted);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--ww-space-2);
+  width: 100%;
+  min-height: 30px;
+  padding: 0 var(--ww-space-2);
+  border: 0;
+  border-radius: calc(var(--ww-radius) - 2px);
+  background: none;
+  color: var(--ww-color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.item:hover,
+.item:focus-visible {
+  background: var(--ww-color-bg);
+  outline: none;
+}
+
+.item[data-danger] {
+  color: var(--ww-color-danger);
+}
+
+.check {
+  width: 1em;
+  color: var(--ww-color-accent);
+}
+
+.separator {
+  margin: var(--ww-space-1) 0;
+  border: 0;
+  border-top: 1px solid var(--ww-color-border);
+}
+
+.choice {
+  display: grid;
+  gap: var(--ww-space-1);
+  padding: var(--ww-space-1) var(--ww-space-2);
+}
+
+.choiceLabel {
+  font-size: var(--ww-font-size-small);
+  color: var(--ww-color-text-muted);
+}
+
+.options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ww-space-1);
+}
+
+.option {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 var(--ww-space-2);
+  border: 1px solid var(--ww-color-border);
+  border-radius: 999px;
+  background: var(--ww-color-surface);
+  color: var(--ww-color-text);
+  font: inherit;
+  font-size: var(--ww-font-size-small);
+  cursor: pointer;
+}
+
+.option[aria-checked='true'] {
+  border-color: var(--ww-color-accent);
+  box-shadow: inset 0 0 0 1px var(--ww-color-accent);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--option-color);
+}
+
+@media (max-width: 760px) {
+  .backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 49;
+    background: rgb(0 0 0 / 0.3);
+  }
+
+  .menu {
+    left: 0 !important;
+    right: 0;
+    top: auto !important;
+    bottom: 0;
+    max-width: none;
+    max-height: 70dvh;
+    border-radius: calc(var(--ww-radius) * 2) calc(var(--ww-radius) * 2) 0 0;
+    padding: var(--ww-space-2) var(--ww-space-2) calc(var(--ww-space-3) + env(safe-area-inset-bottom));
+  }
+
+  .item {
+    min-height: 40px;
+  }
+
+  .option {
+    height: 32px;
+  }
+}

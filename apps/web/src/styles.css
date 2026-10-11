@@ -24,3 +24,112 @@ body {
   outline: 2px solid var(--ww-color-focus);
   outline-offset: 2px;
 }
+
+a {
+  color: var(--ww-color-accent);
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.2;
+  font-weight: 600;
+}
+
+/* Shared primitives. Components use CSS modules; these few classes keep controls consistent. */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ww-space-2);
+  height: var(--ww-control-height);
+  padding: 0 var(--ww-space-3);
+  border: 1px solid var(--ww-color-border);
+  border-radius: var(--ww-radius);
+  background: var(--ww-color-surface-raised);
+  color: var(--ww-color-text);
+  font: inherit;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--ww-color-text-muted);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.btn-primary {
+  background: var(--ww-color-accent);
+  border-color: var(--ww-color-accent);
+  color: var(--ww-color-accent-contrast);
+}
+
+.btn-primary:hover:not(:disabled) {
+  border-color: var(--ww-color-accent);
+  filter: brightness(1.08);
+}
+
+.btn-danger {
+  color: var(--ww-color-danger);
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+}
+
+.btn-small {
+  height: calc(var(--ww-control-height) - 8px);
+  padding: 0 var(--ww-space-2);
+  font-size: var(--ww-font-size-small);
+}
+
+.input {
+  height: var(--ww-control-height);
+  min-width: 0;
+  padding: 0 var(--ww-space-2);
+  border: 1px solid var(--ww-color-border);
+  border-radius: var(--ww-radius);
+  background: var(--ww-color-surface);
+  color: var(--ww-color-text);
+  font: inherit;
+}
+
+textarea.input {
+  height: auto;
+  padding: var(--ww-space-2);
+  resize: vertical;
+}
+
+.field {
+  display: grid;
+  gap: var(--ww-space-1);
+}
+
+.field > span {
+  font-size: var(--ww-font-size-small);
+  color: var(--ww-color-text-muted);
+}
+
+.muted {
+  color: var(--ww-color-text-muted);
+}
+
+.error {
+  color: var(--ww-color-danger);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
