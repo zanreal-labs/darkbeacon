@@ -10,6 +10,8 @@ export const AccountDto = z.object({
   name: z.string(),
   avatarUrl: z.string().nullable(),
   instanceRole: InstanceRole,
+  /** The character the account acts as by default (presence, pings); null until chosen. */
+  mainCharacterId: EveId.nullable().optional(),
   createdAt: Timestamp,
 });
 export type AccountDto = z.infer<typeof AccountDto>;
@@ -31,6 +33,10 @@ export const MeDto = z.object({
   characters: z.array(CharacterDto),
 });
 export type MeDto = z.infer<typeof MeDto>;
+
+/** PUT /api/accounts/me/main-character */
+export const SetMainCharacterRequest = z.object({ characterId: EveId });
+export type SetMainCharacterRequest = z.infer<typeof SetMainCharacterRequest>;
 
 /** POST /api/auth/dev (only with DEV_LOGIN=true). */
 export const DevLoginRequest = z.object({

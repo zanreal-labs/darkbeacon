@@ -103,3 +103,19 @@ Choices made where `docs/SPEC.md` is silent. One line each; newest at the bottom
 - Webhook secrets (`whsec_<64 hex>`) are shown once and stored AES-256-GCM sealed with a key derived (HKDF) from SECRET_KEY; webhook URLs must be http(s), redirects are not followed and response bodies are never shown. Private addresses are not blocked.
 - Webhook config changes are not events (secrets must not reach the stream); only map admins see them.
 - Without an access module, webhook routes answer 404 (a deny-all MapAccess stands in).
+- Accounts get an optional `mainCharacterId` and `PUT /api/accounts/me/main-character` (additive contract; the web app shows it on the account page).
+- The web app reads the caller's map role from `GET /api/maps` (MapDto has no role); the UI hides what the role cannot do, the server still decides.
+- Map permissions in the UI: member edits systems, connections and signatures; manager also locks systems and edits labels; admin also edits map settings and access rules.
+- Locked systems cannot be dragged or removed; hidden systems stay on the canvas, dimmed with a dashed border, so they can be shown again.
+- Optimistic changes stay as an overlay until the request succeeded and the matching event arrived (or 5 s after success); a rejected request drops the overlay (rollback) and shows the server's message.
+- When the map snapshot lacks signatures or characters, the web app loads them over REST; presence is polled every 30 s because newly tracked characters only reach the stream with the next snapshot.
+- Connections are straight lines between node borders; node handles only start new connections. EOL is dashed with a thin core in the EOL colour, the stroke colour is the type (gate, bridge) or else the mass left.
+- New systems from the search land next to the selected system (or the middle of the visible canvas) and move down until they cover nothing.
+- No keyboard delete on the canvas for now; removing goes through the context menu.
+- System notes are shown as plain text; markdown rendering comes later.
+- Label colours are user data and applied inline; every other colour comes from theme tokens.
+- The web app reopens its WebSocket when the signed-in account changes, since the socket authenticates with the cookie at connect time.
+- The login page passes `next` to `/api/auth/discord/login`; the server may use it to return the user after the OAuth round trip.
+- Plugin web modules get the host React from `globalThis.wormwright.react` and must not bundle their own; a crashing slot component renders nothing.
+- `vite --mode mock` (`dev:mock`) runs the SPA against an in-memory API that patches fetch and WebSocket in the page (MSW interceptors, no service worker); production builds drop it.
+- Web component tests opt into jsdom per file (`// @vitest-environment jsdom`), so the root Vitest config stays as it is.

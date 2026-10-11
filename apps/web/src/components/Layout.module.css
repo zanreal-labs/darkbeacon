@@ -18,14 +18,34 @@
   font-weight: 600;
   color: var(--ww-color-text);
   text-decoration: none;
-  margin-right: auto;
+}
+
+.nav {
+  display: flex;
+  gap: var(--ww-space-1);
+}
+
+.link {
+  padding: 4px var(--ww-space-2);
+  border-radius: var(--ww-radius);
+  color: var(--ww-color-text-muted);
+  text-decoration: none;
+}
+
+.link:global(.active) {
+  color: var(--ww-color-text);
+  background: var(--ww-color-bg);
+}
+
+.spacer {
+  flex: 1;
 }
 
 .status {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--ww-color-text-muted);
+  background: var(--ww-color-danger);
 }
 
 .status[data-status='open'] {
@@ -45,7 +65,39 @@
   font: inherit;
 }
 
+.account {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ww-space-2);
+  color: var(--ww-color-text);
+  text-decoration: none;
+}
+
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--ww-color-bg);
+  color: var(--ww-color-text-muted);
+  font-size: var(--ww-font-size-small);
+  font-weight: 600;
+}
+
 .main {
   min-height: 0;
   overflow: auto;
+}
+
+@media (max-width: 560px) {
+  .accountName,
+  .select {
+    display: none;
+  }
+
+  .header {
+    gap: var(--ww-space-2);
+  }
 }

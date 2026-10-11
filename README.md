@@ -38,6 +38,9 @@ dc run --rm dev pnpm --filter @wormwright/sde universe   # rebuild universe.json
 
 dc up app                          # API (watch mode) + Vite, DEV_LOGIN=true
 dc port app 5173                   # the random loopback port of the web app
+
+# The web app alone, against an in-browser mock of the API and WebSocket:
+dc run --rm -p 127.0.0.1::5173 dev pnpm --filter @wormwright/web dev:mock
 ```
 
 No fixed host ports are published; `dc port` prints where the app landed.

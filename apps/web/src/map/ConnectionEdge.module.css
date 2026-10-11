@@ -1,0 +1,58 @@
+.edge[data-pending] {
+  opacity: 0.6;
+}
+
+.danger {
+  fill: none;
+  stroke: var(--ww-edge-dangerous);
+  stroke-width: calc(var(--ww-edge-width) * 5);
+  stroke-linecap: round;
+}
+
+/* A thin solid core in the EOL colour inside the dashed line, so EOL reads at any mass colour. */
+.eol {
+  fill: none;
+  stroke: var(--ww-edge-time-eol);
+  stroke-width: calc(var(--ww-edge-width) / 2);
+  pointer-events: none;
+}
+
+.bubble {
+  fill: var(--ww-edge-bubble);
+  stroke: var(--ww-color-canvas);
+  stroke-width: 1.5;
+}
+
+.label {
+  position: absolute;
+  display: flex;
+  gap: 3px;
+  pointer-events: none;
+}
+
+.chip {
+  padding: 0 4px;
+  border: 1px solid var(--ww-color-border);
+  border-radius: 3px;
+  background: var(--ww-color-surface);
+  color: var(--ww-color-text-muted);
+  font-size: 10px;
+  line-height: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.chip[data-kind='eol'] {
+  color: var(--ww-edge-time-eol);
+  border-color: var(--ww-edge-time-eol);
+}
+
+.chip[data-kind='reduced'] {
+  color: var(--ww-edge-mass-reduced);
+  border-color: var(--ww-edge-mass-reduced);
+}
+
+.chip[data-kind='critical'] {
+  color: var(--ww-edge-mass-critical);
+  border-color: var(--ww-edge-mass-critical);
+}
