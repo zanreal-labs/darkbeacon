@@ -83,6 +83,9 @@ importers:
       '@wormwright/plugins':
         specifier: workspace:*
         version: link:../../packages/modules/plugins
+      '@wormwright/sde':
+        specifier: workspace:*
+        version: link:../../packages/sde
       '@wormwright/shared':
         specifier: workspace:*
         version: link:../../packages/shared

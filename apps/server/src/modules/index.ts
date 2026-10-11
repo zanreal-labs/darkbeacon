@@ -11,7 +11,8 @@ export const featureModules: Array<Type | DynamicModule> = [
   (await import('./identity/identity.module.js')).IdentityModule,
   (await import('./access/access.module.js')).AccessModule,
   (await import('./mapping/mapping.module.js')).MappingModule,
-  // tracking
+  (await import('./universe/universe.module.js')).UniverseModule,
+  (await import('./tracking/tracking.module.js')).TrackingModule,
   // notifications
   // plugins
 ];

@@ -34,7 +34,7 @@ dc run --rm dev pnpm test          # vitest; DB tests run on SQLite and Postgres
 dc run --rm dev pnpm test:pg       # Postgres only
 dc run --rm dev pnpm build         # server/packages to dist, web app to apps/web/dist
 dc run --rm dev pnpm format        # prettier --write
-dc run --rm dev pnpm --filter @wormwright/sde build:universe   # universe.json from CCP's SDE (~100 MB download)
+dc run --rm dev pnpm --filter @wormwright/sde universe   # rebuild universe.json from CCP's SDE (~100 MB download)
 
 dc up app                          # API (watch mode) + Vite, DEV_LOGIN=true
 dc port app 5173                   # the random loopback port of the web app
@@ -53,7 +53,7 @@ packages/shared        zod DTOs, REST routes (routes.ts), WebSocket protocol, ev
 packages/modules/*     identity, access, mapping, tracking, notifications, plugins (domain/application/ports)
 packages/plugin-sdk    plugin manifest, PluginContext, web slots
 packages/theme-sdk     theme tokens, built-in themes, CSS generator
-packages/sde           static universe data format
+packages/sde           SDE builder and the committed universe dataset (systems, regions, gates)
 plugins/*              first-party plugins (plugin-sdk only)
 ```
 
