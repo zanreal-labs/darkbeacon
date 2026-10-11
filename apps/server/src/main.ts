@@ -1,0 +1,17 @@
+import 'reflect-metadata';
+import { Logger } from '@nestjs/common';
+import { createApp } from './app.js';
+import { ConfigError, loadConfig } from './config/config.js';
+
+try {
+  const config = await loadConfig();
+  const app = await createApp(config);
+  await app.listen({ port: config.port, host: '0.0.0.0' });
+  new Logger('Wormwright').log(`listening on :${config.port} (${config.publicUrl})`);
+} catch (error) {
+  if (error instanceof ConfigError) {
+    console.error(error.message);
+    process.exit(1);
+  }
+  throw error;
+}

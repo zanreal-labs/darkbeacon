@@ -1,0 +1,24 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "tsBuildInfoFile": "dist/.tsbuildinfo",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/shared" },
+    { "path": "../../packages/db" },
+    { "path": "../../packages/plugin-sdk" },
+    { "path": "../../packages/theme-sdk" },
+    { "path": "../../packages/modules/identity" },
+    { "path": "../../packages/modules/access" },
+    { "path": "../../packages/modules/mapping" },
+    { "path": "../../packages/modules/tracking" },
+    { "path": "../../packages/modules/notifications" },
+    { "path": "../../packages/modules/plugins" }
+  ]
+}

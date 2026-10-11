@@ -1,0 +1,41 @@
+{
+  "name": "@wormwright/server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NestJS composition root: REST under /api, WebSocket at /ws, the web app as static files",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -b",
+    "start": "node --enable-source-maps dist/main.js",
+    "dev": "tsc -b && concurrently -k -n tsc,node \"tsc -b -w --preserveWatchOutput\" \"node --watch --enable-source-maps dist/main.js\""
+  },
+  "dependencies": {
+    "@fastify/static": "^10.1.6",
+    "@nestjs/common": "^12.1.2",
+    "@nestjs/core": "^12.1.2",
+    "@nestjs/platform-fastify": "^12.1.2",
+    "@nestjs/platform-ws": "^12.1.2",
+    "@nestjs/websockets": "^12.1.2",
+    "@wormwright/access": "workspace:*",
+    "@wormwright/core": "workspace:*",
+    "@wormwright/db": "workspace:*",
+    "@wormwright/identity": "workspace:*",
+    "@wormwright/mapping": "workspace:*",
+    "@wormwright/notifications": "workspace:*",
+    "@wormwright/plugin-sdk": "workspace:*",
+    "@wormwright/plugins": "workspace:*",
+    "@wormwright/shared": "workspace:*",
+    "@wormwright/theme-sdk": "workspace:*",
+    "@wormwright/tracking": "workspace:*",
+    "fastify": "^5.12.5",
+    "kysely": "^0.29.6",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "ws": "^8.22.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.2"
+  }
+}
