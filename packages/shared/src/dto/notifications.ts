@@ -26,6 +26,7 @@ export const WebhookDeliveryDto = z.object({
   id: Id,
   webhookId: Id,
   eventId: Id,
+  eventType: z.string(),
   attempt: z.number().int(),
   status: z.enum(['pending', 'delivered', 'failed']),
   responseCode: z.number().int().nullable(),

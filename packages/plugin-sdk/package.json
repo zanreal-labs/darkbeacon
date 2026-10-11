@@ -15,8 +15,9 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "zod": "^4.6.5",
     "@wormwright/core": "workspace:*",
-    "@wormwright/shared": "workspace:*"
+    "@wormwright/shared": "workspace:*",
+    "kysely": "^0.29.6",
+    "zod": "^4.6.5"
   }
 }

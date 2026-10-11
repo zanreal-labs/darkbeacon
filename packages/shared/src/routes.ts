@@ -321,6 +321,14 @@ export const routes = {
       mapRole: 'admin',
       response: z.array(dto.WebhookDeliveryDto),
     }),
+    /** Sends a `webhook.test` event once, without retries, and returns the delivery. */
+    test: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/webhooks/:webhookId/test',
+      auth: 'account',
+      mapRole: 'admin',
+      response: dto.WebhookDeliveryDto,
+    }),
   },
 
   plugins: {
@@ -345,13 +353,76 @@ export const routes = {
       response: dto.PluginDto,
     }),
     uninstall: route({ method: 'DELETE', path: '/api/admin/plugins/:pluginId', auth: 'admin' }),
+    /** Body: the raw .tgz with `content-type: application/gzip` (or application/octet-stream). */
+    upload: route({
+      method: 'POST',
+      path: '/api/admin/plugins/upload',
+      auth: 'admin',
+      response: dto.PluginDto,
+    }),
+    /** First-party plugins and themes shipped with the server. */
+    catalog: route({
+      method: 'GET',
+      path: '/api/admin/plugins/catalog',
+      auth: 'admin',
+      response: z.array(dto.CatalogEntryDto),
+    }),
+    settings: route({
+      method: 'GET',
+      path: '/api/admin/plugins/:pluginId/settings',
+      auth: 'admin',
+      query: dto.PluginSettingsQuery,
+      response: dto.PluginSettingsDto,
+    }),
+    updateSettings: route({
+      method: 'PUT',
+      path: '/api/admin/plugins/:pluginId/settings',
+      auth: 'admin',
+      body: dto.UpdatePluginSettingsRequest,
+      response: dto.PluginSettingsDto,
+    }),
     /** Enabled plugins with a web part, for the SPA to load. */
     web: route({
       method: 'GET',
       path: '/api/plugins/web',
       auth: 'account',
-      response: z.array(z.object({ id: z.string(), url: z.string() })),
+      response: z.array(dto.PluginWebDto),
     }),
+    /** Files of a plugin's web part (the folder of its web entry). `url` in `web` points here. */
+    asset: route({ method: 'GET', path: '/api/plugins/:pluginId/assets/:file', auth: 'account' }),
+  },
+
+  themes: {
+    list: route({ method: 'GET', path: '/api/themes', auth: 'public', response: dto.ThemesDto }),
+    select: route({
+      method: 'PUT',
+      path: '/api/accounts/me/theme',
+      auth: 'account',
+      body: dto.SelectThemeRequest,
+      response: dto.ThemesDto,
+    }),
+    setDefault: route({
+      method: 'PUT',
+      path: '/api/admin/themes/default',
+      auth: 'admin',
+      body: dto.SetDefaultThemeRequest,
+      response: dto.ThemesDto,
+    }),
+    install: route({
+      method: 'POST',
+      path: '/api/admin/themes',
+      auth: 'admin',
+      body: dto.InstallPluginRequest,
+      response: dto.ThemeDto,
+    }),
+    /** Body: the raw .tgz, as for plugins. */
+    upload: route({
+      method: 'POST',
+      path: '/api/admin/themes/upload',
+      auth: 'admin',
+      response: dto.ThemeDto,
+    }),
+    uninstall: route({ method: 'DELETE', path: '/api/admin/themes/:themeId', auth: 'admin' }),
   },
 } as const;
 

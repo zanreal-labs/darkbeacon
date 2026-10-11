@@ -25,8 +25,19 @@ export interface WebSlotProps {
  */
 export type SlotComponent<S extends WebSlot> = (props: WebSlotProps[S]) => unknown;
 
+/**
+ * The host's React, so web bundles need no React import of their own (a second copy of React
+ * would break hooks). Typed loosely for the same reason as SlotComponent.
+ */
+export interface HostReact {
+  createElement(type: unknown, props?: Record<string, unknown> | null, ...children: unknown[]): unknown;
+  useState<T>(initial: T | (() => T)): [T, (next: T | ((previous: T) => T)) => void];
+  useEffect(effect: () => void | (() => void), deps?: readonly unknown[]): void;
+}
+
 export interface WebPluginApi {
   readonly pluginId: string;
+  readonly react: HostReact;
   register<S extends WebSlot>(
     slot: S,
     component: SlotComponent<S>,

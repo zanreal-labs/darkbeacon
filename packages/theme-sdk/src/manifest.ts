@@ -19,6 +19,24 @@ export const ThemeManifestSchema = z.object({
 });
 export type ThemeManifest = z.infer<typeof ThemeManifestSchema>;
 
+/** File name of the manifest at the root of a theme package. */
+export const THEME_MANIFEST_FILE = 'wormwright-theme.json';
+
+export type ThemeManifestResult = { ok: true; manifest: ThemeManifest } | { ok: false; errors: string[] };
+
+export function parseThemeManifest(input: unknown): ThemeManifestResult {
+  const parsed = ThemeManifestSchema.safeParse(input);
+  if (parsed.success) return { ok: true, manifest: parsed.data };
+  return {
+    ok: false,
+    errors: parsed.error.issues.map((i) => `${i.path.join('.') || 'manifest'}: ${i.message}`),
+  };
+}
+
+export function isBuiltInTheme(id: string): boolean {
+  return builtInThemes.some((t) => t.id === id);
+}
+
 export function resolveTheme(manifest: ThemeManifest): Theme {
   const base = builtInThemes.find((t) => t.id === manifest.extends);
   if (!base) throw new Error(`unknown base theme ${manifest.extends}`);

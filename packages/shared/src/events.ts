@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { DomainEvent } from '@wormwright/core';
 import type { AccessRuleDto } from './dto/access.js';
 import type { InstanceRole } from './dto/identity.js';
+import type { PluginDto } from './dto/plugins.js';
 import type { ConnectionDto, LabelDto, MapDto, MapSystemDto, SignatureDto } from './dto/mapping.js';
 
 export const DomainEventSchema = z.object({
@@ -53,6 +54,9 @@ export interface EventPayloads {
   'access.rule_removed': { id: string };
   /** Instance stream: an account's instance role changed. */
   'access.role_changed': { accountId: string; role: InstanceRole };
+  /** Instance stream: a plugin was installed, upgraded, enabled, disabled or failed. */
+  'plugin.updated': PluginDto;
+  'plugin.removed': { id: string };
 }
 
 export type EventType = keyof EventPayloads;
@@ -79,6 +83,8 @@ export const EVENT_TYPES = [
   'access.rule_added',
   'access.rule_removed',
   'access.role_changed',
+  'plugin.updated',
+  'plugin.removed',
 ] as const satisfies readonly EventType[];
 
 export type TypedEvent<K extends EventType = EventType> = {
