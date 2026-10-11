@@ -46,6 +46,10 @@ export interface EventPayloads {
   'character.ship_changed': { characterId: number; shipTypeId: number; shipName: string | null };
   'character.online_changed': { characterId: number; online: boolean };
   'map.settings_changed': MapDto;
+  /** First event of a map stream. */
+  'map.created': MapDto;
+  /** Last event of a map stream: the map and everything on it is gone. */
+  'map.removed': { id: string };
   'labels.changed': { labels: LabelDto[] };
   'ping.created': PingDto;
   'ping.removed': { id: string };
@@ -73,6 +77,8 @@ export const EVENT_TYPES = [
   'character.ship_changed',
   'character.online_changed',
   'map.settings_changed',
+  'map.created',
+  'map.removed',
   'labels.changed',
   'ping.created',
   'ping.removed',

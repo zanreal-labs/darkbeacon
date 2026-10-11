@@ -10,7 +10,7 @@ import type { DynamicModule, Type } from '@nestjs/common';
 export const featureModules: Array<Type | DynamicModule> = [
   (await import('./identity/identity.module.js')).IdentityModule,
   (await import('./access/access.module.js')).AccessModule,
-  // mapping
+  (await import('./mapping/mapping.module.js')).MappingModule,
   // tracking
   // notifications
   // plugins

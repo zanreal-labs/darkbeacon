@@ -34,6 +34,7 @@ dc run --rm dev pnpm test          # vitest; DB tests run on SQLite and Postgres
 dc run --rm dev pnpm test:pg       # Postgres only
 dc run --rm dev pnpm build         # server/packages to dist, web app to apps/web/dist
 dc run --rm dev pnpm format        # prettier --write
+dc run --rm dev pnpm --filter @wormwright/sde build:universe   # universe.json from CCP's SDE (~100 MB download)
 
 dc up app                          # API (watch mode) + Vite, DEV_LOGIN=true
 dc port app 5173                   # the random loopback port of the web app

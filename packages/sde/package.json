@@ -12,6 +12,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "build:universe": "node src/build-universe.ts"
   }
 }
