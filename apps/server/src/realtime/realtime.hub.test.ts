@@ -38,20 +38,32 @@ function setup(database: Database, maxReplay = 1000, maxSubscriptions = 50) {
 
   const connect = (actor: Actor | null = alice) => {
     const messages: ServerMessage[] = [];
+    const who = { actor, ended: false };
     const conn = hub.connect(
-      async () => actor,
+      async () => who.actor,
       (m) => messages.push(m),
+      () => (who.ended = true),
     );
     const send = (m: unknown) => conn.receive(JSON.stringify(m));
     const until = (predicate: (m: ServerMessage[]) => boolean) =>
       vi.waitFor(() => expect(predicate(messages)).toBe(true), { timeout: 2000, interval: 5 });
-    return { messages, send, until, close: () => conn.close() };
+    return { messages, send, until, who, close: () => conn.close() };
   };
   const append = (stream: string, type = 'system.added') =>
     log.append([newEvent({ stream, type, actor: system, data: { type }, occurredAt: Date.now() })]);
   const seqs = (messages: ServerMessage[]) =>
     messages.flatMap((m) => (m.op === 'event' ? [m.event.seq] : []));
-  return { log, connect, append, seqs, allowed };
+  const accountChanged = (accountId: string) =>
+    log.append([
+      newEvent({
+        stream: 'instance',
+        type: 'access.account_changed',
+        actor: system,
+        data: { accountId },
+        occurredAt: Date.now(),
+      }),
+    ]);
+  return { hub, log, connect, append, seqs, allowed, accountChanged };
 }
 
 describeEachDialect('RealtimeHub', (t) => {
@@ -161,5 +173,45 @@ describeEachDialect('RealtimeHub', (t) => {
       code: 'bad_request',
       message: 'Too many subscriptions',
     });
+  });
+
+  it('re-checks only the connections of an account whose access changed', async () => {
+    const { connect, allowed, accountChanged, seqs, append } = setup(t.db);
+    const c = connect();
+    c.send({ op: 'subscribe', stream: 'map:m1', sinceSeq: 0 });
+    await c.until((m) => m.some((x) => x.op === 'subscribed'));
+    allowed.value = false;
+    await accountChanged('bob');
+    await append('map:m1');
+    await c.until((m) => seqs(m).length === 1);
+    expect(c.messages.some((m) => m.op === 'error')).toBe(false);
+
+    await accountChanged('alice');
+    await c.until((m) => m.some((x) => x.op === 'error'));
+    expect(c.messages.at(-1)).toMatchObject({ op: 'error', stream: 'map:m1', code: 'forbidden' });
+  });
+
+  it('closes a connection whose session ended', async () => {
+    const { connect, accountChanged, append, seqs } = setup(t.db);
+    const c = connect();
+    c.send({ op: 'subscribe', stream: 'map:m1', sinceSeq: 0 });
+    await c.until((m) => m.some((x) => x.op === 'subscribed'));
+    c.who.actor = null;
+    await accountChanged('alice');
+    await vi.waitFor(() => expect(c.who.ended).toBe(true));
+    await append('map:m1');
+    await new Promise((r) => setTimeout(r, 20));
+    expect(seqs(c.messages)).toEqual([]);
+  });
+
+  it('re-checks every connection on the timer, also without an event', async () => {
+    const { hub, connect, allowed } = setup(t.db);
+    const c = connect();
+    c.send({ op: 'subscribe', stream: 'map:m1', sinceSeq: 0 });
+    await c.until((m) => m.some((x) => x.op === 'subscribed'));
+    allowed.value = false;
+    hub.recheckAll();
+    await c.until((m) => m.some((x) => x.op === 'error'));
+    expect(c.messages.at(-1)).toMatchObject({ code: 'forbidden' });
   });
 });

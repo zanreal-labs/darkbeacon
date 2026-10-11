@@ -10,7 +10,7 @@ import { RealtimeHub, type HubConnection } from './realtime.hub.js';
 const HEARTBEAT_MS = 30_000;
 /** Client frames are small JSON commands; anything bigger is refused by `ws` (close 1009). */
 export const MAX_FRAME_BYTES = 64 * 1024;
-/** Close code for a refused origin (policy violation). */
+/** Close code for a refused origin or an ended session (policy violation). */
 const POLICY_VIOLATION = 1008;
 
 /** The `/ws` transport: one hub connection per socket, plus ping/pong liveness checks. */
@@ -40,6 +40,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       (message) => {
         if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(message));
       },
+      () => socket.close(POLICY_VIOLATION, 'Signed out'),
     );
     const entry = { hub, alive: true };
     this.sockets.set(socket, entry);

@@ -310,4 +310,19 @@ describeEachDialect('identity and access over HTTP', (t) => {
     socket.close();
     expect(pilotMe.account.instanceRole).toBe('user');
   });
+
+  it('closes the sockets of a session that logged out', async () => {
+    const pilot = browser();
+    await pilot.json<MeDto>('/api/auth/dev', { method: 'POST', json: { name: 'pilot' } });
+    const socket = new WebSocket(`ws://${base}/ws`, { headers: { cookie: pilot.cookieHeader } });
+    const messages: ServerMessage[] = [];
+    socket.on('message', (data) => messages.push(JSON.parse(String(data)) as ServerMessage));
+    const closed = new Promise<number>((resolve) => socket.once('close', resolve));
+    await new Promise((resolve, reject) => socket.once('open', resolve).once('error', reject));
+    socket.send(JSON.stringify({ op: 'subscribe', stream: 'instance' }));
+    await vi.waitFor(() => expect(messages.some((m) => m.op === 'subscribed')).toBe(true));
+
+    expect((await pilot.request('/api/auth/logout', { method: 'POST' })).status).toBe(204);
+    expect(await closed).toBe(1008);
+  });
 });

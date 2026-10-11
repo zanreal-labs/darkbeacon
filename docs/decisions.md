@@ -14,7 +14,7 @@ Choices made where `docs/SPEC.md` is silent. One line each; newest at the bottom
 - `*.updated` events carry the full DTO and `*.removed` events carry the id, so client reducers are simple upserts/deletes.
 - A WS subscribe without `sinceSeq`, with a gap above 1000 events, with pruned history or with a seq ahead of the head gets a snapshot; otherwise the missing events are replayed.
 - Snapshots are merged from every provider registered for the stream kind, read in one repeatable-read transaction.
-- Subscriptions are authorized on subscribe and re-checked (with a re-resolved actor) after any `access.*` event on that stream or the instance stream.
+- Subscriptions are authorized on subscribe and re-checked (with a re-resolved actor) after any `access.*` event on that stream or the instance stream, after `access.account_changed` for the connections of that account, and every 60 s for all connections; a signed-in socket whose session no longer resolves is closed (1008).
 - The `instance` stream is open to any signed-in account by default; modules may replace that authorizer.
 - Use cases throw `DomainError` subclasses (`@wormwright/core`); `Result` is for pure functions such as parsers. The HTTP edge maps error codes to 400/401/403/404/409.
 - Every non-2xx JSON body is `{ error: { code, message, details? } }` (`ApiErrorBody` in shared).

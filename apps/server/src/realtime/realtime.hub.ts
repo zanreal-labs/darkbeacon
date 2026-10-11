@@ -7,7 +7,7 @@ import {
   type EventLog,
 } from '@wormwright/core';
 import type { Database } from '@wormwright/db';
-import { ClientMessage, type ServerMessage, type WsErrorCode } from '@wormwright/shared';
+import { ClientMessage, isEventOfType, type ServerMessage, type WsErrorCode } from '@wormwright/shared';
 import type { RealtimeRegistry } from './realtime.registry.js';
 
 export interface HubOptions {
@@ -19,6 +19,11 @@ export interface HubOptions {
   maxReplay?: number;
   /** Streams one connection may follow at once. */
   maxSubscriptions?: number;
+  /**
+   * How often every connection's actor and subscriptions are checked again, besides the
+   * `access.*` events (catches expired sessions and anything that changed without an event).
+   */
+  recheckMs?: number;
   onError?: (error: unknown) => void;
 }
 
@@ -49,6 +54,8 @@ class Connection {
   constructor(
     readonly resolveActor: () => Promise<Actor | null>,
     readonly send: (message: ServerMessage) => void,
+    /** Closes the transport: the session behind the connection ended. */
+    readonly end: () => void,
   ) {
     this.queue = resolveActor().then((actor) => {
       this.actor = actor;
@@ -72,6 +79,7 @@ export class RealtimeHub {
   private readonly connections = new Set<Connection>();
   private readonly byStream = new Map<string, Set<Subscription>>();
   private readonly unsubscribeBus: () => void;
+  private readonly recheckTimer: NodeJS.Timeout;
   private readonly maxReplay: number;
   private readonly maxSubscriptions: number;
   private readonly onError: (error: unknown) => void;
@@ -81,11 +89,19 @@ export class RealtimeHub {
     this.maxSubscriptions = options.maxSubscriptions ?? 50;
     this.onError = options.onError ?? ((error) => console.error('realtime error', error));
     this.unsubscribeBus = options.bus.subscribe((event) => this.dispatch(event));
+    this.recheckTimer = setInterval(() => this.recheckAll(), options.recheckMs ?? 60_000).unref();
   }
 
-  /** `resolveActor` is called on connect and again when access may have changed. */
-  connect(resolveActor: () => Promise<Actor | null>, send: (message: ServerMessage) => void): HubConnection {
-    const connection = new Connection(resolveActor, send);
+  /**
+   * `resolveActor` is called on connect and again when access may have changed; `end` closes
+   * the transport once a signed-in connection's session no longer resolves.
+   */
+  connect(
+    resolveActor: () => Promise<Actor | null>,
+    send: (message: ServerMessage) => void,
+    end: () => void = () => {},
+  ): HubConnection {
+    const connection = new Connection(resolveActor, send, end);
     this.connections.add(connection);
     return {
       receive: (raw) => this.serialize(connection, () => this.receive(connection, raw)),
@@ -94,6 +110,7 @@ export class RealtimeHub {
   }
 
   close(): void {
+    clearInterval(this.recheckTimer);
     this.unsubscribeBus();
     for (const connection of this.connections) this.disconnect(connection);
   }
@@ -222,28 +239,54 @@ export class RealtimeHub {
         (error) => this.fail(sub, error),
       );
     }
-    if (event.type.startsWith('access.')) this.reauthorize(event.stream);
+    if (isEventOfType(event, 'access.account_changed')) {
+      // One account's subjects or sessions changed: only its connections are checked.
+      const { accountId } = event.data;
+      for (const connection of this.connections) {
+        if (connection.actor?.kind === 'account' && connection.actor.id === accountId)
+          this.reauthorize(connection);
+      }
+    } else if (event.type.startsWith('access.')) {
+      for (const connection of this.connections) {
+        if (
+          [...connection.subscriptions.keys()].some(
+            (s) => event.stream === INSTANCE_STREAM || s === event.stream,
+          )
+        ) {
+          this.reauthorize(connection);
+        }
+      }
+    }
   }
 
-  /** Access changed: re-resolve actors and drop subscriptions that are no longer allowed. */
-  private reauthorize(stream: string): void {
-    for (const connection of this.connections) {
-      const affected = [...connection.subscriptions.values()].filter(
-        (s) => stream === INSTANCE_STREAM || s.stream === stream,
-      );
-      if (affected.length === 0) continue;
-      this.serialize(connection, async () => {
-        connection.actor = await connection.resolveActor();
-        for (const sub of affected) {
-          if (!sub.active) continue;
-          const denied = await this.denial(connection, sub.stream);
-          if (denied) {
-            this.drop(connection, sub.stream);
-            connection.send({ op: 'error', stream: sub.stream, ...denied });
-          }
+  /** Checks every connection again (on a timer). */
+  recheckAll(): void {
+    for (const connection of this.connections) this.reauthorize(connection);
+  }
+
+  /**
+   * Re-resolves the actor and drops subscriptions that are no longer allowed. A connection
+   * that was signed in and no longer is (logout, expired session) is closed.
+   */
+  private reauthorize(connection: Connection): void {
+    this.serialize(connection, async () => {
+      if (!this.connections.has(connection)) return;
+      const before = connection.actor;
+      connection.actor = await connection.resolveActor();
+      if (before !== null && connection.actor === null) {
+        this.disconnect(connection);
+        connection.end();
+        return;
+      }
+      for (const sub of [...connection.subscriptions.values()]) {
+        if (!sub.active) continue;
+        const denied = await this.denial(connection, sub.stream);
+        if (denied) {
+          this.drop(connection, sub.stream);
+          connection.send({ op: 'error', stream: sub.stream, ...denied });
         }
-      });
-    }
+      }
+    });
   }
 
   private fail(sub: Subscription, error: unknown): void {
