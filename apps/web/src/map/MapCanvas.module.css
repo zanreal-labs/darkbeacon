@@ -1,0 +1,46 @@
+.canvas {
+  position: absolute;
+  inset: 0;
+  background: var(--ww-color-canvas);
+  /* React Flow reads these; without the -default suffix they win over its built-in light/dark values. */
+  --xy-background-color: var(--ww-color-canvas);
+  --xy-background-pattern-color: var(--ww-color-canvas-grid);
+  --xy-edge-stroke: var(--ww-edge-color);
+  --xy-edge-stroke-width: var(--ww-edge-width);
+  --xy-edge-stroke-selected: var(--ww-edge-selected);
+  --xy-connectionline-stroke: var(--ww-edge-selected);
+  --xy-connectionline-stroke-width: var(--ww-edge-width);
+  --xy-controls-button-background-color: var(--ww-color-surface);
+  --xy-controls-button-background-color-hover: var(--ww-color-surface-raised);
+  --xy-controls-button-color: var(--ww-color-text);
+  --xy-controls-button-color-hover: var(--ww-color-text);
+  --xy-controls-button-border-color: var(--ww-color-border);
+  --xy-controls-box-shadow: none;
+  --xy-selection-background-color: color-mix(in srgb, var(--ww-color-accent) 12%, transparent);
+  --xy-selection-border: 1px dashed var(--ww-color-accent);
+}
+
+/* The node component draws its own box. */
+.canvas :global(.react-flow__node-system) {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.canvas :global(.react-flow__controls) {
+  border: 1px solid var(--ww-color-border);
+  border-radius: var(--ww-radius);
+  overflow: hidden;
+}
+
+.canvas :global(.react-flow__controls-button) {
+  border-bottom-color: var(--ww-color-border);
+}
+
+@media (max-width: 760px) {
+  .canvas :global(.react-flow__controls) {
+    display: none;
+  }
+}

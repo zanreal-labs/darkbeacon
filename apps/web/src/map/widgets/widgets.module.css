@@ -1,0 +1,181 @@
+.widget {
+  display: grid;
+  gap: var(--ww-space-2);
+  align-content: start;
+}
+
+.widget p {
+  margin: 0;
+}
+
+.headline {
+  display: flex;
+  gap: var(--ww-space-2);
+  align-items: baseline;
+  font-size: 1.05rem;
+}
+
+.meta {
+  color: var(--ww-color-text-muted);
+  font-size: var(--ww-font-size-small);
+}
+
+.notes {
+  white-space: pre-wrap;
+}
+
+.form {
+  display: grid;
+  gap: var(--ww-space-2);
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: 1fr 88px;
+  gap: var(--ww-space-2);
+}
+
+.labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ww-space-1) var(--ww-space-3);
+  margin: 0;
+  padding: var(--ww-space-2);
+  border: 1px solid var(--ww-color-border);
+  border-radius: var(--ww-radius);
+}
+
+.labels legend {
+  padding: 0 var(--ww-space-1);
+  font-size: var(--ww-font-size-small);
+  color: var(--ww-color-text-muted);
+}
+
+.labelToggle,
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--ww-font-size-small);
+}
+
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.actions {
+  display: flex;
+  gap: var(--ww-space-2);
+}
+
+.paste {
+  display: grid;
+  gap: var(--ww-space-2);
+}
+
+.pasteArea {
+  font-size: var(--ww-font-size-small);
+}
+
+.pasteRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ww-space-3);
+}
+
+.result {
+  font-size: var(--ww-font-size-small);
+  color: var(--ww-color-success);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--ww-font-size-small);
+  table-layout: fixed;
+}
+
+.table th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--ww-color-text-muted);
+  padding: 2px 4px;
+}
+
+.table th:nth-child(1) {
+  width: 64px;
+}
+.table th:nth-child(2) {
+  width: 84px;
+}
+.table th:nth-child(4) {
+  width: 36px;
+}
+.table th:nth-child(5) {
+  width: 30px;
+}
+
+.table td {
+  padding: 2px 4px;
+  border-top: 1px solid var(--ww-color-border);
+  vertical-align: middle;
+}
+
+.table tr[data-group='wormhole'] td:first-child {
+  color: var(--ww-color-accent);
+}
+
+.mono {
+  font-family: var(--ww-font-family-mono);
+}
+
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inlineSelect {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.subhead {
+  margin: var(--ww-space-2) 0 0;
+  font-size: var(--ww-font-size-small);
+  font-weight: 600;
+  color: var(--ww-color-text-muted);
+}
+
+.list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.character {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--ww-space-2);
+  font-size: var(--ww-font-size-small);
+}
+
+.onlineDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ww-color-text-muted);
+}
+
+.character[data-online='true'] .onlineDot {
+  background: var(--ww-color-success);
+}
