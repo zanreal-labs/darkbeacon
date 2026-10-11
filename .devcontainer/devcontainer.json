@@ -1,0 +1,15 @@
+{
+  "name": "Wormwright",
+  "dockerComposeFile": ["../docker-compose.dev.yml"],
+  "service": "dev",
+  "runServices": ["dev", "postgres"],
+  "workspaceFolder": "/workspace",
+  "overrideCommand": true,
+  "forwardPorts": [3000, 5173],
+  "postCreateCommand": "corepack enable pnpm && pnpm install",
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode", "vitest.explorer"]
+    }
+  }
+}

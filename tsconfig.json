@@ -1,0 +1,18 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/core" },
+    { "path": "packages/shared" },
+    { "path": "packages/db" },
+    { "path": "packages/plugin-sdk" },
+    { "path": "packages/theme-sdk" },
+    { "path": "packages/sde" },
+    { "path": "packages/modules/identity" },
+    { "path": "packages/modules/access" },
+    { "path": "packages/modules/mapping" },
+    { "path": "packages/modules/tracking" },
+    { "path": "packages/modules/notifications" },
+    { "path": "packages/modules/plugins" },
+    { "path": "apps/server" }
+  ]
+}

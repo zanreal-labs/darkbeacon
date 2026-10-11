@@ -1,0 +1,56 @@
+# Development environment. Every Node command runs inside `dev`:
+#   docker compose -f docker-compose.dev.yml run --rm dev pnpm test
+# `app` runs the dev servers (API + Vite) on random loopback ports:
+#   docker compose -f docker-compose.dev.yml up app
+#   docker compose -f docker-compose.dev.yml port app 5173
+x-node: &node
+  image: node:24-bookworm
+  working_dir: /workspace
+  init: true
+  volumes:
+    - .:/workspace
+    - node_modules:/workspace/node_modules
+    - pnpm_store:/pnpm-store
+    - data:/data
+  environment:
+    COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+    npm_config_store_dir: /pnpm-store
+    DATA_DIR: /data
+    TEST_DATABASE_URL: postgres://wormwright:wormwright@postgres:5432/wormwright
+    DEV_LOGIN: 'true'
+  entrypoint: ['sh', '-c', 'corepack enable pnpm >/dev/null 2>&1; exec "$$@"', '--']
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+services:
+  dev:
+    <<: *node
+    command: ['bash']
+
+  app:
+    <<: *node
+    command: ['pnpm', 'dev']
+    ports:
+      - '127.0.0.1::5173'
+      - '127.0.0.1::3000'
+
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: wormwright
+      POSTGRES_PASSWORD: wormwright
+      POSTGRES_DB: wormwright
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U wormwright -d wormwright']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - postgres:/var/lib/postgresql/data
+
+volumes:
+  node_modules:
+  pnpm_store:
+  data:
+  postgres:

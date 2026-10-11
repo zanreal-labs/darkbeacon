@@ -1,0 +1,31 @@
+{
+  "name": "wormwright",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.34.6",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -b && pnpm --filter @wormwright/web build",
+    "typecheck": "tsc -b && pnpm --filter @wormwright/web typecheck",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "test": "vitest run",
+    "test:pg": "TEST_DIALECTS=postgres vitest run",
+    "test:watch": "vitest",
+    "dev": "concurrently -k -n server,web -c blue,magenta \"pnpm --filter @wormwright/server dev\" \"pnpm --filter @wormwright/web dev\""
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.19.2",
+    "concurrently": "^10.0.6",
+    "eslint": "^10.12.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.1",
+    "vitest": "^5.0.3"
+  }
+}
