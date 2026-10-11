@@ -12,7 +12,7 @@ export const featureModules: Array<Type | DynamicModule> = [
   // access
   // mapping
   (await import('./universe/universe.module.js')).UniverseModule,
-  // tracking
+  (await import('./tracking/tracking.module.js')).TrackingModule,
   // notifications
   // plugins
 ];

@@ -11,3 +11,7 @@ export const UNIT_OF_WORK = 'UnitOfWork';
 export const MAP_ACCESS = 'MapAccess';
 /** UniverseCatalog (static game data), provided globally by the universe module. */
 export const UNIVERSE_CATALOG = 'UniverseCatalog';
+/** CharacterTokenSource for tracking, composed from identity (`IdentityCharacterTokens`). */
+export const CHARACTER_TOKENS = 'CharacterTokenSource';
+/** AutoMapTarget for tracking's auto-mapping, composed from mapping. */
+export const AUTO_MAP_TARGET = 'AutoMapTarget';
