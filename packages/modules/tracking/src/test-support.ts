@@ -40,6 +40,11 @@ export class MemoryTrackingRepository implements TrackingRepository {
     this.presence.set(p.characterId, { ...p });
     return Promise.resolve();
   }
+
+  deletePresence(characterId: number): Promise<void> {
+    this.presence.delete(characterId);
+    return Promise.resolve();
+  }
 }
 
 export class MemoryEventLog implements EventLog {

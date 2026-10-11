@@ -1,5 +1,5 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { ManualClock, type EventLog } from '@wormwright/core';
+import { ManualClock, type EventLog, type MapAccess } from '@wormwright/core';
 import { describeEachDialect } from '@wormwright/db/testing';
 import type { CharacterService } from '@wormwright/identity';
 import type { ConnectionDto, MapDto, MapSnapshot, MapSystemDto, MeDto } from '@wormwright/shared';
@@ -8,7 +8,7 @@ import { FakeEsi } from '@wormwright/tracking/testing';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createApp } from '../../app.js';
 import { parseEnv } from '../../config/config.js';
-import { CHARACTER_TOKENS, EVENT_LOG } from '../../platform/tokens.js';
+import { CHARACTER_TOKENS, EVENT_LOG, MAP_ACCESS } from '../../platform/tokens.js';
 import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
 import { TRACKING_REPOSITORY } from './tracking.module.js';
 
@@ -144,6 +144,7 @@ describeEachDialect('tracking and universe over HTTP', (t) => {
         character: (id) => app.get<CharacterService>(CHARACTER_TOKENS).character(id),
         accessToken: () => Promise.resolve('token'),
       },
+      access: app.get<MapAccess>(MAP_ACCESS),
       esi,
       events: log,
       uow: t.db,
@@ -225,5 +226,18 @@ describeEachDialect('tracking and universe over HTTP', (t) => {
         0, 0, 0,
       ]),
     );
+  });
+
+  it('stops tracking a character once it is unlinked', async () => {
+    await request('PUT', `/api/maps/${mapId}/tracking`, 'alice', { characterId: PILOT, tracked: true });
+    expect((await request('DELETE', `/api/accounts/me/characters/${PILOT}`, 'alice')).status).toBe(204);
+    await vi.waitFor(async () =>
+      expect((await request('GET', `/api/maps/${mapId}/characters`, 'alice')).body).toEqual([]),
+    );
+    const log = app.get<EventLog>(EVENT_LOG);
+    expect((await log.readSince(`map:${mapId}`, 0)).at(-1)).toMatchObject({
+      type: 'character.untracked',
+      data: { characterId: PILOT },
+    });
   });
 });

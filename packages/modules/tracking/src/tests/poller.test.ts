@@ -1,6 +1,7 @@
-import { ManualClock } from '@wormwright/core';
+import { ManualClock, type MapRole } from '@wormwright/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  fakeAccess,
   fakeCharacters,
   FakeEsi,
   MemoryEventLog,
@@ -22,6 +23,8 @@ describe('TrackingPoller', () => {
   let esi: FakeEsi;
   let poller: TrackingPoller;
   let errors: unknown[];
+  let roles: Record<string, Record<string, MapRole>>;
+  let owners: Record<number, { name: string; accountId: string; token?: string | null }>;
 
   beforeEach(() => {
     clock = new ManualClock();
@@ -29,12 +32,15 @@ describe('TrackingPoller', () => {
     events = new MemoryEventLog();
     esi = new FakeEsi(5_000, () => clock.now());
     errors = [];
+    roles = { m1: { 'acc-1': 'member', 'acc-2': 'member' }, m2: { 'acc-1': 'admin' } };
+    owners = {
+      [PILOT]: { name: 'Pilot', accountId: 'acc-1' },
+      [OTHER]: { name: 'Other', accountId: 'acc-2', token: null },
+    };
     poller = new TrackingPoller({
       tracking,
-      characters: fakeCharacters({
-        [PILOT]: { name: 'Pilot', accountId: 'acc-1' },
-        [OTHER]: { name: 'Other', accountId: 'acc-2', token: null },
-      }),
+      characters: fakeCharacters(owners),
+      access: fakeAccess(roles),
       esi,
       events,
       uow: passThroughUow,
@@ -92,6 +98,7 @@ describe('TrackingPoller', () => {
     poller = new TrackingPoller({
       tracking,
       characters: fakeCharacters({ [PILOT]: { name: 'Pilot', accountId: 'acc-1' } }),
+      access: fakeAccess(roles),
       esi,
       events,
       uow: passThroughUow,
@@ -163,9 +170,10 @@ describe('TrackingPoller', () => {
     poller = new TrackingPoller({
       tracking,
       characters: {
-        character: () => Promise.resolve(null),
+        character: (id) => Promise.resolve({ name: 'x', accountId: id === OTHER ? 'acc-2' : 'acc-1' }),
         accessToken: (id) => (id === OTHER ? Promise.reject(new Error('boom')) : Promise.resolve('t')),
       },
+      access: fakeAccess(roles),
       esi,
       events,
       uow: passThroughUow,
@@ -176,6 +184,32 @@ describe('TrackingPoller', () => {
     await poller.tick();
     expect(errors).toHaveLength(1);
     expect(events.summary('map:m1')).toHaveLength(3);
+  });
+
+  it('untracks a character that belongs to another account now, without asking ESI', async () => {
+    owners[PILOT] = { name: 'Pilot', accountId: 'acc-2' };
+    esi.set(PILOT, { online: true, location: JITA, ship: 587 });
+    await poller.tick();
+    expect(esi.calls).toEqual([]);
+    expect(tracking.tracked).toEqual([]);
+    for (const map of ['map:m1', 'map:m2']) {
+      expect(events.summary(map)).toEqual([{ type: 'character.untracked', data: { characterId: PILOT } }]);
+    }
+  });
+
+  it('untracks where the account lost member rights, at once after an access change', async () => {
+    roles.m2 = { 'acc-1': 'viewer' };
+    esi.set(PILOT, { online: true, location: JITA, ship: 587 });
+    await poller.tick();
+    expect(tracking.tracked.map((t) => t.mapId)).toEqual(['m1']);
+    expect(events.summary('map:m2')).toEqual([{ type: 'character.untracked', data: { characterId: PILOT } }]);
+
+    roles.m1 = {};
+    await after(5_000);
+    expect(tracking.tracked.map((t) => t.mapId)).toEqual(['m1']); // checked once a minute
+    poller.recheckAccess();
+    await after(5_000);
+    expect(tracking.tracked).toEqual([]);
   });
 
   it('exposes its intervals', () => {

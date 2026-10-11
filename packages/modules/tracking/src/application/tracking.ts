@@ -18,7 +18,10 @@ import type {
   UnitOfWork,
 } from '../ports/index.js';
 
-/** Starts or stops tracking one of the caller's own characters on a map (member+). */
+/**
+ * Starts (member+) or stops tracking one of the caller's own characters on a map. Stopping
+ * needs no map role, so an account that lost access can still take its character off a map.
+ */
 export class SetTracking {
   constructor(
     private readonly deps: {
@@ -34,7 +37,7 @@ export class SetTracking {
   async execute(actor: Actor | null, mapId: string, input: SetTrackingRequest): Promise<void> {
     const { tracking, characters, access, events, uow, clock } = this.deps;
     const account = requireAccount(actor);
-    await requireMapRole(access, account, mapId, 'member');
+    if (input.tracked) await requireMapRole(access, account, mapId, 'member');
     const owner = await characters.character(input.characterId);
     // Someone else's character is reported like a missing one.
     if (!owner || owner.accountId !== account.id) throw new NotFoundError('Character');

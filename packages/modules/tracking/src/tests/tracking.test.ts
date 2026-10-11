@@ -1,6 +1,7 @@
 import { ManualClock, type Actor } from '@wormwright/core';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { ListMapCharacters, SetTracking } from '../application/tracking.js';
+import { TrackingCleanup } from '../application/cleanup.js';
+import { blankPresence, ListMapCharacters, SetTracking } from '../application/tracking.js';
 import {
   fakeAccess,
   fakeCharacters,
@@ -103,5 +104,54 @@ describe('SetTracking and ListMapCharacters', () => {
     });
     await expect(list.execute(alice, 'm2')).rejects.toMatchObject({ code: 'not_found' });
     expect(events.events).toEqual([]);
+  });
+
+  it('lets an account take its own character off a map it lost access to', async () => {
+    tracking.tracked = [{ mapId: 'm2', characterId: PILOT, accountId: 'alice', since: 0 }];
+    await expect(
+      setTracking.execute(bob, 'm2', { characterId: PILOT, tracked: false }),
+    ).rejects.toMatchObject({
+      code: 'not_found',
+    });
+    await setTracking.execute(alice, 'm2', { characterId: PILOT, tracked: false });
+    expect(tracking.tracked).toEqual([]);
+    expect(events.summary('map:m2')).toEqual([{ type: 'character.untracked', data: { characterId: PILOT } }]);
+  });
+});
+
+describe('TrackingCleanup', () => {
+  it('drops a character from the maps of the account it left, and its presence', async () => {
+    const tracking = new MemoryTrackingRepository();
+    const events = new MemoryEventLog();
+    const owners: Record<number, { name: string; accountId: string }> = {
+      [PILOT]: { name: 'Pilot', accountId: 'bob' },
+    };
+    const cleanup = new TrackingCleanup({
+      tracking,
+      characters: fakeCharacters(owners),
+      events,
+      uow: passThroughUow,
+      clock: new ManualClock(5),
+    });
+    tracking.tracked = [
+      { mapId: 'm1', characterId: PILOT, accountId: 'alice', since: 0 },
+      { mapId: 'm2', characterId: PILOT, accountId: 'bob', since: 0 },
+      { mapId: 'm1', characterId: ALT, accountId: 'alice', since: 0 },
+    ];
+    await tracking.savePresence({ ...blankPresence(PILOT, 0), accountId: 'alice', name: 'Pilot' });
+
+    // Claimed by bob: alice's map stops showing it, bob's own tracking stays.
+    await cleanup.forgetCharacter(PILOT);
+    expect(tracking.tracked.map((t) => [t.mapId, t.characterId])).toEqual([
+      ['m2', PILOT],
+      ['m1', ALT],
+    ]);
+    expect(events.summary('map:m1')).toEqual([{ type: 'character.untracked', data: { characterId: PILOT } }]);
+    expect(await tracking.getPresence(PILOT)).toBeNull();
+
+    // Unlinked: gone everywhere.
+    delete owners[PILOT];
+    await cleanup.forgetCharacter(PILOT);
+    expect(tracking.tracked.map((t) => t.characterId)).toEqual([ALT]);
   });
 });

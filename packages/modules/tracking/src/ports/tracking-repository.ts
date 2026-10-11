@@ -9,4 +9,5 @@ export interface TrackingRepository {
   getPresence(characterId: number): Promise<CharacterPresence | null>;
   listPresence(characterIds: readonly number[]): Promise<CharacterPresence[]>;
   savePresence(presence: CharacterPresence): Promise<void>;
+  deletePresence(characterId: number): Promise<void>;
 }

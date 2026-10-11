@@ -5,20 +5,23 @@ import {
   type OnModuleDestroy,
   type OnModuleInit,
 } from '@nestjs/common';
+import type { EventBus } from '@wormwright/core';
 import { isEventOfType } from '@wormwright/shared';
 import { AutoMapper, ListMapCharacters, TrackingCleanup, TrackingPoller } from '@wormwright/tracking';
 import type { AppConfig } from '../../config/config.js';
 import { EventConsumers } from '../../platform/event-consumers.js';
-import { APP_CONFIG } from '../../platform/tokens.js';
+import { APP_CONFIG, EVENT_BUS } from '../../platform/tokens.js';
 import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
 
 /**
- * Starts the ESI poller, runs auto-mapping as a durable event-log consumer (a restart does not
- * lose jumps) and contributes `characters` to map snapshots.
+ * Starts the ESI poller, runs auto-mapping and the cleanups after deleted maps and characters
+ * that changed hands as durable event-log consumers, and contributes `characters` to map
+ * snapshots. Access changes make the poller check the tracking accounts' roles again.
  */
 @Injectable()
 export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
   private timer: NodeJS.Timeout | undefined;
+  private unsubscribe: (() => void) | undefined;
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
@@ -28,6 +31,7 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
     @Inject(RealtimeRegistry) private readonly registry: RealtimeRegistry,
     @Inject(TrackingCleanup) private readonly cleanup: TrackingCleanup,
     @Inject(EventConsumers) private readonly consumers: EventConsumers,
+    @Inject(EVENT_BUS) private readonly bus: EventBus,
   ) {}
 
   onModuleInit(): void {
@@ -48,6 +52,16 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
         if (isEventOfType(event, 'map.removed')) await this.cleanup.forgetMap(event.data.id);
       },
     });
+    this.consumers.register({
+      name: 'tracking.unlinked-characters',
+      streams: ['instance'],
+      types: ['character.unlinked'],
+      handle: async (event) => {
+        if (isEventOfType(event, 'character.unlinked'))
+          await this.cleanup.forgetCharacter(event.data.characterId);
+      },
+    });
+    this.unsubscribe = this.bus.subscribe(() => this.poller.recheckAccess(), { types: ['access.*'] });
   }
 
   onApplicationBootstrap(): void {
@@ -59,5 +73,6 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
 
   onModuleDestroy(): void {
     clearInterval(this.timer);
+    this.unsubscribe?.();
   }
 }

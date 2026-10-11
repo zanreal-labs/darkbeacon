@@ -91,6 +91,7 @@ const { version } = JSON.parse(readFileSync(new URL('../../../package.json', imp
       useFactory: (
         tracking: TrackingRepository,
         characters: CharacterTokenSource,
+        access: MapAccess,
         esi: EsiGateway,
         events: EventLog,
         uow: UnitOfWork,
@@ -100,6 +101,7 @@ const { version } = JSON.parse(readFileSync(new URL('../../../package.json', imp
         return new TrackingPoller({
           tracking,
           characters,
+          access,
           esi,
           events,
           uow,
@@ -108,7 +110,15 @@ const { version } = JSON.parse(readFileSync(new URL('../../../package.json', imp
             logger.error(`polling character ${characterId} failed: ${String(error)}`),
         });
       },
-      inject: [TRACKING_REPOSITORY, CHARACTER_TOKENS, ESI_GATEWAY, EVENT_LOG, UNIT_OF_WORK, CLOCK],
+      inject: [
+        TRACKING_REPOSITORY,
+        CHARACTER_TOKENS,
+        MAP_ACCESS,
+        ESI_GATEWAY,
+        EVENT_LOG,
+        UNIT_OF_WORK,
+        CLOCK,
+      ],
     },
     {
       provide: AutoMapper,
@@ -122,8 +132,14 @@ const { version } = JSON.parse(readFileSync(new URL('../../../package.json', imp
     },
     {
       provide: TrackingCleanup,
-      useFactory: (tracking: TrackingRepository) => new TrackingCleanup({ tracking }),
-      inject: [TRACKING_REPOSITORY],
+      useFactory: (
+        tracking: TrackingRepository,
+        characters: CharacterTokenSource,
+        events: EventLog,
+        uow: UnitOfWork,
+        clock: Clock,
+      ) => new TrackingCleanup({ tracking, characters, events, uow, clock }),
+      inject: [TRACKING_REPOSITORY, CHARACTER_TOKENS, EVENT_LOG, UNIT_OF_WORK, CLOCK],
     },
     TrackingRuntime,
   ],

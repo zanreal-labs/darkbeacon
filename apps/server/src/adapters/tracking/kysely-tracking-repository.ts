@@ -102,6 +102,10 @@ export class KyselyTrackingRepository implements TrackingRepository {
       .onConflict((oc) => oc.column('character_id').doUpdateSet(changes))
       .execute();
   }
+
+  async deletePresence(characterId: number): Promise<void> {
+    await this.db.deleteFrom('character_presence').where('character_id', '=', characterId).execute();
+  }
 }
 
 function toTracked(row: TrackedRow): TrackedCharacter {

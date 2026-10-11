@@ -1,13 +1,15 @@
-import { mapStream, newEvent, type ActorRef } from '@wormwright/core';
-import { observe, type Observation } from '../domain/presence.js';
+import { hasMapRole, mapStream, newEvent, type ActorRef } from '@wormwright/core';
+import { observe, type Observation, type TrackedCharacter } from '../domain/presence.js';
 import type {
   CharacterTokenSource,
   Clock,
   EsiGateway,
   EventLog,
+  MapAccess,
   TrackingRepository,
   UnitOfWork,
 } from '../ports/index.js';
+import { untrack } from './cleanup.js';
 import { blankPresence } from './tracking.js';
 
 export const POLL_INTERVALS = {
@@ -18,6 +20,8 @@ export const POLL_INTERVALS = {
   noToken: 60_000,
   /** Two location observations further apart than this may hide several jumps. */
   jumpWindow: 20_000,
+  /** How often the tracking account's member role on each map is checked again. */
+  access: 60_000,
 };
 
 const CONCURRENCY = 8;
@@ -30,12 +34,17 @@ interface PollState {
   online: boolean | null;
   /** When this process last got a location answer; jumps are only detected between close answers. */
   locationSeenAt: number | null;
+  /** When the map roles of the tracking accounts were last checked. */
+  accessCheckedAt: number;
 }
 
 /**
  * Polls ESI for characters tracked on at least one map and turns changes into `character.*`
  * events on every map that tracks the character. Location and ship are polled only while the
  * character is online (or not known to be offline). Call `tick()` about once a second.
+ *
+ * A character is only polled for the account that tracked it: when it belongs to another
+ * account now, or that account lost member rights on a map, it is untracked there instead.
  */
 export class TrackingPoller {
   private readonly states = new Map<number, PollState>();
@@ -45,6 +54,7 @@ export class TrackingPoller {
     private readonly deps: {
       tracking: TrackingRepository;
       characters: CharacterTokenSource;
+      access: MapAccess;
       esi: EsiGateway;
       events: EventLog;
       uow: UnitOfWork;
@@ -60,11 +70,9 @@ export class TrackingPoller {
     this.running = true;
     try {
       const now = this.deps.clock.now();
-      const characters = new Map<number, { accountId: string; mapIds: string[] }>();
+      const characters = new Map<number, TrackedCharacter[]>();
       for (const t of await this.deps.tracking.listTracked()) {
-        const entry = characters.get(t.characterId) ?? { accountId: t.accountId, mapIds: [] };
-        entry.mapIds.push(t.mapId);
-        characters.set(t.characterId, entry);
+        characters.set(t.characterId, [...(characters.get(t.characterId) ?? []), t]);
       }
       for (const id of this.states.keys()) if (!characters.has(id)) this.states.delete(id);
 
@@ -72,9 +80,9 @@ export class TrackingPoller {
         const state = this.stateOf(id, now);
         return state.nextLocationAt <= now || state.nextOnlineAt <= now;
       });
-      await eachLimited(due, CONCURRENCY, async ([id, { accountId, mapIds }]) => {
+      await eachLimited(due, CONCURRENCY, async ([id, entries]) => {
         try {
-          await this.poll(id, accountId, mapIds, now);
+          await this.poll(id, entries, now);
         } catch (error) {
           const state = this.stateOf(id, now);
           state.nextLocationAt = state.nextOnlineAt = now + POLL_INTERVALS.noToken;
@@ -86,18 +94,56 @@ export class TrackingPoller {
     }
   }
 
+  /** Map access changed somewhere: check the tracking accounts' roles again on the next tick. */
+  recheckAccess(): void {
+    for (const state of this.states.values()) state.accessCheckedAt = -Infinity;
+  }
+
   private stateOf(characterId: number, now: number): PollState {
     let state = this.states.get(characterId);
     if (!state) {
-      state = { nextLocationAt: now, nextOnlineAt: now, etags: {}, online: null, locationSeenAt: null };
+      state = {
+        nextLocationAt: now,
+        nextOnlineAt: now,
+        etags: {},
+        online: null,
+        locationSeenAt: null,
+        accessCheckedAt: -Infinity,
+      };
       this.states.set(characterId, state);
     }
     return state;
   }
 
-  private async poll(id: number, accountId: string, mapIds: string[], now: number): Promise<void> {
+  /** The entries that may still be polled; the others are untracked. */
+  private async allowed(id: number, entries: TrackedCharacter[], now: number): Promise<TrackedCharacter[]> {
+    const { characters, access } = this.deps;
+    const state = this.stateOf(id, now);
+    const owner = await characters.character(id);
+    let kept = entries.filter((e) => e.accountId === owner?.accountId);
+    if (kept.length > 0 && state.accessCheckedAt + POLL_INTERVALS.access <= now) {
+      state.accessCheckedAt = now;
+      const roles = await Promise.all(
+        kept.map((e) => access.roleOf({ kind: 'account', id: e.accountId, instanceRole: 'user' }, e.mapId)),
+      );
+      kept = kept.filter((_, i) => hasMapRole(roles[i] ?? null, 'member'));
+    }
+    await untrack(
+      this.deps,
+      entries.filter((e) => !kept.includes(e)),
+      this.actor,
+      now,
+    );
+    return kept;
+  }
+
+  private async poll(id: number, entries: TrackedCharacter[], now: number): Promise<void> {
     const { esi, characters, tracking } = this.deps;
     const state = this.stateOf(id, now);
+    const kept = await this.allowed(id, entries, now);
+    if (kept.length === 0) return;
+    const accountId = kept[0]!.accountId;
+    const mapIds = kept.map((e) => e.mapId);
     const token = await characters.accessToken(id);
     if (!token) {
       state.nextLocationAt = state.nextOnlineAt = now + POLL_INTERVALS.noToken;
