@@ -9,3 +9,5 @@ export const EVENT_BUS = 'EventBus';
 export const UNIT_OF_WORK = 'UnitOfWork';
 /** MapAccess port, provided by the access module. */
 export const MAP_ACCESS = 'MapAccess';
+/** UniverseCatalog (static game data), provided globally by the universe module. */
+export const UNIVERSE_CATALOG = 'UniverseCatalog';

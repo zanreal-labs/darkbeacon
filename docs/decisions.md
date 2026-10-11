@@ -39,3 +39,4 @@ Choices made where `docs/SPEC.md` is silent. One line each; newest at the bottom
 - The dev compose file has a `dev` service for commands and an `app` service that runs `pnpm dev` on random loopback ports; `DEV_LOGIN=true` there.
 - The universe dataset is built from CCP's JSON Lines SDE zip (`pnpm --filter @wormwright/sde universe`) and committed as `packages/sde/data/universe.json` (~1.2 MB): known space (30xxxxxx) and wormhole space (31xxxxxx) only, wormhole class inherited system -> constellation -> region, falling back to 7/8/9 by security (>= 0.45 high, > 0 low) for the few systems without one.
 - The SDE zip is read with a small built-in reader (stored/deflate, no zip64) instead of a dependency.
+- The `UNIVERSE_CATALOG` token is provided by a global `UniverseModule`; the catalog is the SDE dataset in memory. Search: case-insensitive prefix matches (alphabetical) first, then substring matches.

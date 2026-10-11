@@ -11,6 +11,7 @@ export const featureModules: Array<Type | DynamicModule> = [
   // identity
   // access
   // mapping
+  (await import('./universe/universe.module.js')).UniverseModule,
   // tracking
   // notifications
   // plugins

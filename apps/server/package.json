@@ -25,6 +25,7 @@
     "@wormwright/notifications": "workspace:*",
     "@wormwright/plugin-sdk": "workspace:*",
     "@wormwright/plugins": "workspace:*",
+    "@wormwright/sde": "workspace:*",
     "@wormwright/shared": "workspace:*",
     "@wormwright/theme-sdk": "workspace:*",
     "@wormwright/tracking": "workspace:*",
