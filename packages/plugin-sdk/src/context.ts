@@ -1,0 +1,113 @@
+import type { Clock, DomainEvent } from '@wormwright/core';
+import type { ConnectionDto, MapDto, MapSystemDto, UniverseSystemDto } from '@wormwright/shared';
+import type { PluginPortName } from './manifest.js';
+
+/** Read access to maps the plugin is enabled on. */
+export interface MapReader {
+  getMap(mapId: string): Promise<MapDto | null>;
+  listSystems(mapId: string): Promise<MapSystemDto[]>;
+  listConnections(mapId: string): Promise<ConnectionDto[]>;
+}
+
+export interface UniverseReader {
+  getSystem(solarSystemId: number): UniverseSystemDto | null;
+  searchSystems(query: string, limit?: number): UniverseSystemDto[];
+}
+
+export interface EventReader {
+  readSince(stream: string, sinceSeq: number, limit?: number): Promise<DomainEvent[]>;
+}
+
+export interface Notification {
+  mapId: string | null;
+  title: string;
+  body: string;
+  url?: string;
+  event?: DomainEvent;
+}
+
+/** A delivery channel (Discord, Slack...). Plugins may also provide one. */
+export interface Notifier {
+  readonly id: string;
+  send(notification: Notification): Promise<void>;
+}
+
+export interface PluginPorts {
+  maps: MapReader;
+  universe: UniverseReader;
+  events: EventReader;
+  notifier: Notifier;
+  clock: Clock;
+}
+
+/** Ports a plugin can implement for the core. */
+export interface ProvidablePorts {
+  notifier: Notifier;
+}
+
+export interface PluginLogger {
+  debug(message: string, data?: unknown): void;
+  info(message: string, data?: unknown): void;
+  warn(message: string, data?: unknown): void;
+  error(message: string, data?: unknown): void;
+}
+
+export interface PluginSettings {
+  /** Instance-level settings, validated against the manifest's settings schema. */
+  get<T = Record<string, unknown>>(): Promise<T>;
+  /** Settings for one map (falls back to instance settings). */
+  forMap<T = Record<string, unknown>>(mapId: string): Promise<T>;
+}
+
+export interface PluginHttpRequest {
+  method: string;
+  params: Record<string, string>;
+  query: Record<string, string>;
+  body: unknown;
+  /** Null when the caller is not signed in. */
+  accountId: string | null;
+}
+
+export interface PluginHttpResponse {
+  status?: number;
+  body?: unknown;
+  headers?: Record<string, string>;
+}
+
+export interface PluginRoute {
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  /** Relative to `/api/plugins/<id>`, e.g. `/status`. */
+  path: string;
+  handler(request: PluginHttpRequest): Promise<PluginHttpResponse> | PluginHttpResponse;
+}
+
+/** Core commands a plugin may run; the core authorizes them as the plugin actor. */
+export interface PluginCommands {
+  run(name: string, input: unknown): Promise<unknown>;
+}
+
+export interface PluginContext<P extends PluginPortName = PluginPortName> {
+  readonly plugin: { id: string; version: string };
+  /** Only the ports declared in the manifest. */
+  readonly ports: Pick<PluginPorts, P>;
+  /** Subscribes to committed events (exact type or `prefix.*`). Returns an unsubscribe function. */
+  on(eventType: string, handler: (event: DomainEvent) => void | Promise<void>): () => void;
+  readonly commands: PluginCommands;
+  readonly settings: PluginSettings;
+  readonly logger: PluginLogger;
+  readonly http: { route(route: PluginRoute): void };
+  provide<K extends keyof ProvidablePorts>(port: K, adapter: ProvidablePorts[K]): void;
+}
+
+export interface ServerPlugin<P extends PluginPortName = PluginPortName> {
+  register(ctx: PluginContext<P>): void | Promise<void>;
+  /** Called on disable/unload; release timers and connections here. */
+  dispose?(): void | Promise<void>;
+}
+
+/** Default export of a plugin's server entry. */
+export function definePlugin<P extends PluginPortName = PluginPortName>(
+  plugin: ServerPlugin<P>,
+): ServerPlugin<P> {
+  return plugin;
+}

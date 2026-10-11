@@ -1,0 +1,20 @@
+{
+  "name": "@wormwright/core",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shared kernel: ids, Result, clock, event envelope, authorization primitives, errors",
+  "type": "module",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "uuid": "^14.0.3"
+  }
+}

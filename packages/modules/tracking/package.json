@@ -1,0 +1,22 @@
+{
+  "name": "@wormwright/tracking",
+  "version": "0.0.0",
+  "private": true,
+  "description": "ESI polling, character events, auto-mapping",
+  "type": "module",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@wormwright/core": "workspace:*",
+    "@wormwright/shared": "workspace:*",
+    "zod": "^4.6.5"
+  }
+}

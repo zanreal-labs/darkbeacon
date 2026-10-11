@@ -1,0 +1,20 @@
+{
+  "name": "@wormwright/theme-sdk",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Theme token catalogue, built-in themes and CSS generator",
+  "type": "module",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  }
+}
