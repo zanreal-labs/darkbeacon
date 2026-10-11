@@ -17,7 +17,7 @@ afterEach(() => {
   hubs = [];
 });
 
-function setup(database: Database, maxReplay = 1000) {
+function setup(database: Database, maxReplay = 1000, maxSubscriptions = 50) {
   const bus = new InProcessEventBus();
   const log = new KyselyEventLog(database, bus);
   const registry = new RealtimeRegistry();
@@ -25,7 +25,15 @@ function setup(database: Database, maxReplay = 1000) {
   registry.registerStream('map', { authorize: (actor) => allowed.value && actor?.id === 'alice' });
   registry.registerSnapshot('map', async (mapId) => ({ map: { id: mapId } }));
   registry.registerSnapshot('map', async () => ({ systems: [1, 2] }));
-  const hub = new RealtimeHub({ log, bus, registry, database, maxReplay, onError: () => {} });
+  const hub = new RealtimeHub({
+    log,
+    bus,
+    registry,
+    database,
+    maxReplay,
+    maxSubscriptions,
+    onError: () => {},
+  });
   hubs.push(hub);
 
   const connect = (actor: Actor | null = alice) => {
@@ -137,5 +145,19 @@ describeEachDialect('RealtimeHub', (t) => {
     await append('map:m1');
     await new Promise((r) => setTimeout(r, 20));
     expect(seqs(c.messages)).toEqual([]);
+  });
+
+  it('limits how many streams one connection follows', async () => {
+    const { connect } = setup(t.db, 1000, 2);
+    const c = connect();
+    for (const stream of ['map:m1', 'map:m2', 'map:m1', 'map:m3'])
+      c.send({ op: 'subscribe', stream, sinceSeq: 0 });
+    // Subscribing to a followed stream again does not count twice.
+    await c.until((m) => m.filter((x) => x.op === 'subscribed').length === 2 && m.some((x) => x.op === 'error'));
+    expect(c.messages.find((m) => m.op === 'error')).toMatchObject({
+      stream: 'map:m3',
+      code: 'bad_request',
+      message: 'Too many subscriptions',
+    });
   });
 });

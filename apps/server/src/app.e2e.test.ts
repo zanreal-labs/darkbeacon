@@ -9,6 +9,7 @@ import { createApp } from './app.js';
 import { parseEnv } from './config/config.js';
 import { ActorResolverRegistry } from './platform/actor.js';
 import { EVENT_LOG } from './platform/tokens.js';
+import { MAX_FRAME_BYTES } from './realtime/realtime.gateway.js';
 
 describeEachDialect('server', (t) => {
   let app: NestFastifyApplication;
@@ -76,5 +77,31 @@ describeEachDialect('server', (t) => {
     socket.send(JSON.stringify({ op: 'subscribe', stream: 'instance' }));
     await vi.waitFor(() => expect(messages).toEqual([expect.objectContaining({ code: 'unauthenticated' })]));
     socket.close();
+  });
+
+  it('refuses sockets from other origins and oversized frames', async () => {
+    const opened = (socket: WebSocket) =>
+      new Promise<number | null>((resolve) => {
+        socket.once('close', (code) => resolve(code));
+        socket.once('open', () => resolve(null));
+      });
+    const closed = (socket: WebSocket) => new Promise<number>((resolve) => socket.once('close', resolve));
+
+    const foreign = new WebSocket(`ws://${base}/ws`, { headers: { origin: 'https://evil.example' } });
+    const foreignClosed = closed(foreign);
+    await opened(foreign);
+    expect(await foreignClosed).toBe(1008);
+
+    for (const origin of ['http://localhost:3000', `http://${base}`]) {
+      const socket = new WebSocket(`ws://${base}/ws`, { headers: { origin } });
+      expect(await opened(socket)).toBeNull();
+      socket.close();
+    }
+
+    const big = new WebSocket(`ws://${base}/ws`);
+    await opened(big);
+    const bigClosed = closed(big);
+    big.send('x'.repeat(MAX_FRAME_BYTES + 1));
+    expect(await bigClosed).toBe(1009);
   });
 });

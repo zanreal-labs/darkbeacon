@@ -124,3 +124,4 @@ Choices made where `docs/SPEC.md` is silent. One line each; newest at the bottom
 - The theme choice is stored on the server per account; the browser keeps a copy to avoid a flash before `/api/themes` answers. Order: the account's choice, the browser's copy, the instance default.
 - Installed plugins start disabled; the admin enables them in the Plugins tab, where the server's catalogue can be installed with one click.
 - `.claude/` (local agent worktrees) is ignored by git, Docker, ESLint and Prettier.
+- `/ws` accepts a browser only from the public origin or the host the request was sent to (reverse proxy, dev server); clients without an Origin header are allowed. Frames are capped at 64 KiB and a connection follows at most 50 streams.

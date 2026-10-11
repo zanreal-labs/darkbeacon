@@ -17,6 +17,8 @@ export interface HubOptions {
   database: Database;
   /** Larger gaps are answered with a snapshot instead of a replay. */
   maxReplay?: number;
+  /** Streams one connection may follow at once. */
+  maxSubscriptions?: number;
   onError?: (error: unknown) => void;
 }
 
@@ -71,10 +73,12 @@ export class RealtimeHub {
   private readonly byStream = new Map<string, Set<Subscription>>();
   private readonly unsubscribeBus: () => void;
   private readonly maxReplay: number;
+  private readonly maxSubscriptions: number;
   private readonly onError: (error: unknown) => void;
 
   constructor(private readonly options: HubOptions) {
     this.maxReplay = options.maxReplay ?? 1000;
+    this.maxSubscriptions = options.maxSubscriptions ?? 50;
     this.onError = options.onError ?? ((error) => console.error('realtime error', error));
     this.unsubscribeBus = options.bus.subscribe((event) => this.dispatch(event));
   }
@@ -121,6 +125,10 @@ export class RealtimeHub {
     stream: string,
     sinceSeq: number | undefined,
   ): Promise<void> {
+    if (!connection.subscriptions.has(stream) && connection.subscriptions.size >= this.maxSubscriptions) {
+      connection.send({ op: 'error', stream, code: 'bad_request', message: 'Too many subscriptions' });
+      return;
+    }
     const denied = await this.denial(connection, stream);
     if (denied) {
       connection.send({ op: 'error', stream, ...denied });
