@@ -36,6 +36,24 @@ export interface LinkedCharacter {
   updatedAt: number;
 }
 
+/** A role an account holds on a Discord guild. */
+export interface GuildRole {
+  guildId: string;
+  roleId: string;
+}
+
+/** The Discord grant of an account, kept to re-read guild roles. Tokens are encrypted at rest. */
+export interface DiscordLink {
+  accountId: string;
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number;
+  /** Last known roles on the guilds the instance cares about. */
+  guildRoles: GuildRole[];
+  /** When `guildRoles` was last read from Discord, null when never. */
+  rolesCheckedAt: number | null;
+}
+
 /** Plain tokens; the repository adapter encrypts them at rest. */
 export interface CharacterTokens {
   accessToken: string;

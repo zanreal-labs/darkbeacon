@@ -13,7 +13,10 @@ export interface EveTokenSet {
   identity: EveIdentity;
 }
 
-/** EVE SSO v2: authorization code + PKCE (S256). */
+/**
+ * EVE SSO v2: authorization code + PKCE (S256). Adapters throw `ExternalAuthError` when EVE
+ * rejects a code or refresh token, or the access token fails verification.
+ */
 export interface EveSso {
   authorizationUrl(input: {
     state: string;
