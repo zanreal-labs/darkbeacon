@@ -10,6 +10,7 @@ import {
   type DomainEvent,
   type EventBus,
   type EventLog,
+  type MapAccess,
 } from '@wormwright/core';
 import type { Database } from '@wormwright/db';
 import type { NotifierRegistry } from '@wormwright/notifications';
@@ -59,6 +60,8 @@ export interface PluginHostDeps {
   plugins: PluginRepository;
   schemas: PluginSettingsSchemas;
   database: Database;
+  /** Answers the caller's role for plugin routes with a `:mapId` parameter. */
+  access: MapAccess;
   bus: EventBus;
   log: EventLog;
   clock: Clock;
@@ -148,12 +151,17 @@ export class PluginHost {
     return this.loaded.has(id);
   }
 
-  /** Runs a plugin's route for `<method> /api/plugins/<id><path>`; null when none matches. */
+  /**
+   * Runs a plugin's route for `<method> /api/plugins/<id><path>`; null when none matches. A route
+   * with a `:mapId` parameter does not match on maps the plugin is switched off on, and gets the
+   * caller's role on the map.
+   */
   async handleHttp(
     id: string,
     method: string,
     path: string,
-    request: Omit<PluginHttpRequest, 'params' | 'method'>,
+    caller: Actor | null,
+    request: Pick<PluginHttpRequest, 'query' | 'body'>,
   ): Promise<PluginHttpResponse | null> {
     const loaded = this.loaded.get(id);
     if (!loaded) return null;
@@ -162,8 +170,12 @@ export class PluginHost {
       const match = compiled.pattern.exec(path);
       if (!match) continue;
       const params = Object.fromEntries(compiled.params.map((name, i) => [name, decode(match[i + 1]!)]));
+      const mapId = params.mapId;
+      if (mapId !== undefined && !isActiveOn(loaded.plugin, mapId)) return null;
       try {
-        const response = await compiled.route.handler({ ...request, method, params });
+        const mapRole = mapId !== undefined && caller ? await this.deps.access.roleOf(caller, mapId) : null;
+        const accountId = caller?.kind === 'account' ? caller.id : null;
+        const response = await compiled.route.handler({ ...request, method, params, accountId, mapRole });
         loaded.failures = 0;
         return response;
       } catch (error) {
@@ -201,8 +213,9 @@ export class PluginHost {
     };
     this.loaded.set(plugin.id, loaded);
     try {
-      const { migrations, server } = parsed.manifest;
-      if (migrations) {
+      const { migrations, server, ports } = parsed.manifest;
+      // parseManifest refuses migrations without the db port; checked again as it hands out the database.
+      if (migrations && ports.includes('db')) {
         const applied = await runPluginMigrations(this.deps.database, plugin.id, join(dir, migrations), () =>
           this.deps.clock.now(),
         );

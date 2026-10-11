@@ -52,6 +52,7 @@ export default {
       log.events.push(event.type + '@' + event.stream);
     });
     ctx.http.route({ method: 'GET', path: '/hello/:name', handler: (r) => ({ body: { hello: r.params.name, account: r.accountId, q: r.query.q } }) });
+    ctx.http.route({ method: 'GET', path: '/maps/:mapId', handler: (r) => ({ body: { role: r.mapRole } }) });
     ctx.http.route({ method: 'POST', path: '/boom', handler: () => { throw new Error('route broke'); } });
     ctx.provide('notifier', { id: 'memo', send: async (n) => { log.notified.push(n.title); } });
     if (ctx.ports.db) {

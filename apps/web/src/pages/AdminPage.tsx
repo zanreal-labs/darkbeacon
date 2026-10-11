@@ -365,6 +365,15 @@ function PluginsTab() {
           <li key={p.id} className={styles.row}>
             <span className={styles.grow}>
               <strong>{p.name}</strong> <span className="muted">{p.version}</span>
+              <div className="muted">
+                Ports: {p.ports.join(', ') || 'none'}. Events: {p.events.join(', ') || 'none'}.
+              </div>
+              {p.ports.includes('db') && (
+                <div className="error">
+                  Full database access: this plugin can read and change every table, including sessions and
+                  tokens. Enable it only if you trust its author.
+                </div>
+              )}
               {p.error && <div className="error">{p.error}</div>}
             </span>
             <label className="field" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>

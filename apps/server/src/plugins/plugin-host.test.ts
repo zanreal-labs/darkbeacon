@@ -66,6 +66,11 @@ describeEachDialect('PluginHost', (t) => {
       plugins,
       schemas,
       database: t.db,
+      // Alice views m1; nobody else sees anything.
+      access: {
+        roleOf: async (actor, mapId) => (actor.id === 'alice' && mapId === 'm1' ? 'viewer' : null),
+        mapsFor: async () => [],
+      },
       bus,
       log,
       clock,
@@ -180,14 +185,33 @@ describeEachDialect('PluginHost', (t) => {
   it('routes HTTP requests to the plugin and contains route errors', async () => {
     await put('fx');
     await host.start();
-    const request = { query: { q: '1' }, body: null, accountId: 'alice' };
-    expect(await host.handleHttp('fx', 'GET', '/hello/bob%20b', request)).toEqual({
+    const alice: Actor = { kind: 'account', id: 'alice', instanceRole: 'user' };
+    const request = { query: { q: '1' }, body: null };
+    expect(await host.handleHttp('fx', 'GET', '/hello/bob%20b', alice, request)).toEqual({
       body: { hello: 'bob b', account: 'alice', q: '1' },
     });
-    expect(await host.handleHttp('fx', 'GET', '/nope', request)).toBeNull();
-    expect(await host.handleHttp('fx', 'POST', '/hello/bob', request)).toBeNull();
-    expect(await host.handleHttp('other', 'GET', '/hello/bob', request)).toBeNull();
-    expect(await host.handleHttp('fx', 'POST', '/boom', request)).toMatchObject({ status: 500 });
+    expect(await host.handleHttp('fx', 'GET', '/hello/bob', null, request)).toMatchObject({
+      body: { account: null },
+    });
+    expect(await host.handleHttp('fx', 'GET', '/nope', alice, request)).toBeNull();
+    expect(await host.handleHttp('fx', 'POST', '/hello/bob', alice, request)).toBeNull();
+    expect(await host.handleHttp('other', 'GET', '/hello/bob', alice, request)).toBeNull();
+    expect(await host.handleHttp('fx', 'POST', '/boom', alice, request)).toMatchObject({ status: 500 });
+  });
+
+  it('gives map routes the role of the caller and hides them on maps the plugin is off on', async () => {
+    await put('fx');
+    await host.start();
+    const alice: Actor = { kind: 'account', id: 'alice', instanceRole: 'user' };
+    const request = { query: {}, body: null };
+    expect(await host.handleHttp('fx', 'GET', '/maps/m1', alice, request)).toEqual({
+      body: { role: 'viewer' },
+    });
+    expect(await host.handleHttp('fx', 'GET', '/maps/m2', alice, request)).toEqual({ body: { role: null } });
+    expect(await host.handleHttp('fx', 'GET', '/maps/m1', null, request)).toEqual({ body: { role: null } });
+    await uc.setEnabled(admin, 'fx', false, 'm1');
+    await host.sync('fx');
+    expect(await host.handleHttp('fx', 'GET', '/maps/m1', alice, request)).toBeNull();
   });
 
   it('runs plugin migrations once and lets the plugin use its tables', async () => {

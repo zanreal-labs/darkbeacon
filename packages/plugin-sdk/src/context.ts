@@ -1,4 +1,4 @@
-import type { Clock, DomainEvent } from '@wormwright/core';
+import type { Clock, DomainEvent, MapRole } from '@wormwright/core';
 import type { Kysely } from 'kysely';
 import type { ConnectionDto, MapDto, MapSystemDto, UniverseSystemDto } from '@wormwright/shared';
 import type { PluginPortName } from './manifest.js';
@@ -36,6 +36,9 @@ export interface Notifier {
 /**
  * The instance database, for the plugin's own tables (created by its migrations and named
  * `<plugin_id>_<table>`, dashes as underscores). Core tables are not part of the contract.
+ *
+ * This is a trusted port: the handle reaches every table, and writes to core tables bypass
+ * authorization and events. The admin panel says so before a plugin asking for it is enabled.
  */
 export interface PluginDatabase {
   readonly dialect: 'sqlite' | 'postgres';
@@ -84,6 +87,12 @@ export interface PluginHttpRequest {
   body: unknown;
   /** Null when the caller is not signed in. */
   accountId: string | null;
+  /**
+   * For routes with a `:mapId` parameter: the caller's role on that map, null when the caller
+   * has none or is not signed in. Check it before serving map data (at least `viewer`).
+   * Such routes are not reached at all on maps the plugin is switched off on.
+   */
+  mapRole: MapRole | null;
 }
 
 export interface PluginHttpResponse {

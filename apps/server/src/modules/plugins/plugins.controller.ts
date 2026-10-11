@@ -174,13 +174,12 @@ export class PluginRuntimeController {
     @Req() request: FastifyRequest,
     @Res() reply: FastifyReply,
   ): Promise<void> {
-    // Open to anonymous callers: the plugin sees `accountId: null` and decides.
+    // Open to anonymous callers: the plugin sees `accountId: null` (and its map role) and decides.
     const prefix = `/api/plugins/${pluginId}`;
     const path = (request.url.split('?')[0] ?? '').slice(prefix.length) || '/';
-    const response = await this.host.handleHttp(pluginId, request.method, path, {
+    const response = await this.host.handleHttp(pluginId, request.method, path, actor, {
       query: request.query as Record<string, string>,
       body: request.body,
-      accountId: actor?.kind === 'account' ? actor.id : null,
     });
     if (!response) throw new NotFoundError('Route');
     await reply

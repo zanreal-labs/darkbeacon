@@ -27,6 +27,10 @@ const plugin: ServerPlugin<'clock'> & { stats: Map<string, MapStats> } = {
       path: '/stats/:mapId',
       handler: (request) => {
         if (!request.accountId) return { status: 401, body: { error: 'sign in first' } };
+        // Maps the caller cannot view are reported as missing, like the core API does.
+        if (request.mapRole === null || request.mapRole === 'blocked') {
+          return { status: 404, body: { error: 'no such map' } };
+        }
         const mapId = request.params.mapId!;
         return { body: this.stats.get(mapId) ?? { systems: 0, connections: 0, since } };
       },

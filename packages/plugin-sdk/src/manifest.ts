@@ -26,7 +26,7 @@ export const PluginManifestSchema = z.object({
   events: z.array(z.string().min(1)).default([]),
   /** JSON Schema file of the plugin's settings. */
   settings: relativePath.optional(),
-  /** Folder of `NNNN_name.js` migrations; tables should be prefixed with the plugin id. */
+  /** Folder of `NNNN_name.js` migrations (needs the `db` port); tables are prefixed with the plugin id. */
   migrations: relativePath.optional(),
 });
 export type PluginManifest = z.infer<typeof PluginManifestSchema>;
@@ -43,6 +43,9 @@ export function parseManifest(input: unknown): ManifestResult {
   }
   if (!parsed.data.server && !parsed.data.web) {
     return { ok: false, errors: ['manifest: needs a server or a web entry'] };
+  }
+  if (parsed.data.migrations && !parsed.data.ports.includes('db')) {
+    return { ok: false, errors: ['migrations: a plugin with migrations needs the db port'] };
   }
   if (!sdkCompatible(parsed.data.sdk)) {
     return { ok: false, errors: [`sdk: ${parsed.data.sdk} is not compatible with ${SDK_VERSION}`] };

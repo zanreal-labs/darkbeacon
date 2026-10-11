@@ -4,7 +4,7 @@ import plugin from './server.js';
 import webPlugin from './web.js';
 
 describe('sample-widget', () => {
-  it('counts additions per map and serves them to signed-in users', async () => {
+  it('counts additions per map and serves them to accounts that can view the map', async () => {
     const handlers = new Map<string, (event: DomainEvent) => void>();
     const routes: PluginRoute[] = [];
     const ctx = {
@@ -24,12 +24,23 @@ describe('sample-widget', () => {
     emit('system.added', 'map:m2');
 
     const stats = routes[0]!;
-    const request = { method: 'GET', query: {}, body: null, params: { mapId: 'm1' }, accountId: 'alice' };
+    const request = {
+      method: 'GET',
+      query: {},
+      body: null,
+      params: { mapId: 'm1' },
+      accountId: 'alice',
+      mapRole: 'viewer' as const,
+    };
     expect(await stats.handler(request)).toEqual({ body: { systems: 2, connections: 1, since: 1000 } });
     expect(await stats.handler({ ...request, params: { mapId: 'm9' } })).toEqual({
       body: { systems: 0, connections: 0, since: 1000 },
     });
-    expect(await stats.handler({ ...request, accountId: null })).toMatchObject({ status: 401 });
+    expect(await stats.handler({ ...request, accountId: null, mapRole: null })).toMatchObject({
+      status: 401,
+    });
+    expect(await stats.handler({ ...request, mapRole: null })).toMatchObject({ status: 404 });
+    expect(await stats.handler({ ...request, mapRole: 'blocked' })).toMatchObject({ status: 404 });
 
     await plugin.dispose?.();
     expect(await stats.handler(request)).toMatchObject({ body: { systems: 0 } });

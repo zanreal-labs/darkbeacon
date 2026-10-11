@@ -9,7 +9,7 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
-import { ValidationError, type Clock, type EventBus, type EventLog } from '@wormwright/core';
+import { ValidationError, type Clock, type EventBus, type EventLog, type MapAccess } from '@wormwright/core';
 import { Database } from '@wormwright/db';
 import { NotifierRegistry } from '@wormwright/notifications';
 import type { UniverseCatalog } from '@wormwright/mapping';
@@ -32,6 +32,7 @@ import {
   CLOCK,
   EVENT_BUS,
   EVENT_LOG,
+  MAP_ACCESS,
   UNIT_OF_WORK,
   UNIVERSE_CATALOG,
 } from '../../platform/tokens.js';
@@ -187,6 +188,7 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
         schemas: FilePluginSettingsSchemas,
         installer: FilePluginInstaller,
         database: Database,
+        access: MapAccess,
         bus: EventBus,
         log: EventLog,
         clock: Clock,
@@ -199,6 +201,7 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
           plugins,
           schemas,
           database,
+          access,
           bus,
           log,
           clock,
@@ -213,6 +216,7 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
         FilePluginSettingsSchemas,
         FilePluginInstaller,
         Database,
+        MAP_ACCESS,
         EVENT_BUS,
         EVENT_LOG,
         CLOCK,

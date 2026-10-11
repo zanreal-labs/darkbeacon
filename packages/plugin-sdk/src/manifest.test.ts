@@ -29,4 +29,12 @@ describe('plugin manifest', () => {
     expect(parseManifest({ ...base, sdk: '^2.0' }).ok).toBe(false);
     expect(sdkCompatible('1.x')).toBe(true);
   });
+
+  it('only runs migrations for plugins that ask for the database', () => {
+    expect(parseManifest({ ...base, migrations: 'migrations' })).toEqual({
+      ok: false,
+      errors: ['migrations: a plugin with migrations needs the db port'],
+    });
+    expect(parseManifest({ ...base, ports: ['db'], migrations: 'migrations' }).ok).toBe(true);
+  });
 });
