@@ -153,7 +153,9 @@ describeEachDialect('RealtimeHub', (t) => {
     for (const stream of ['map:m1', 'map:m2', 'map:m1', 'map:m3'])
       c.send({ op: 'subscribe', stream, sinceSeq: 0 });
     // Subscribing to a followed stream again does not count twice.
-    await c.until((m) => m.filter((x) => x.op === 'subscribed').length === 2 && m.some((x) => x.op === 'error'));
+    await c.until(
+      (m) => m.filter((x) => x.op === 'subscribed').length === 2 && m.some((x) => x.op === 'error'),
+    );
     expect(c.messages.find((m) => m.op === 'error')).toMatchObject({
       stream: 'map:m3',
       code: 'bad_request',
