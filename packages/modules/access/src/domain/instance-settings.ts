@@ -5,6 +5,7 @@ export type InstanceSettings = InstanceSettingsDto;
 export const DEFAULT_INSTANCE_SETTINGS: InstanceSettings = {
   adminGuildId: null,
   adminRoleIds: [],
+  webhooksToPrivateNetworks: false,
 };
 
 /** True when one of the account's guild roles is an admin role on the configured admin guild. */

@@ -80,6 +80,7 @@ function InstanceTab() {
         )}
       </div>
       <DiscordAdminSettings />
+      <WebhookSettings />
       <PluginSlot slot="settingsPage" props={{ mapId: null }} />
     </>
   );
@@ -142,6 +143,42 @@ function DiscordAdminSettings() {
       </div>
       {save.error && <p className="error">{errorText(save.error, 'Could not save the settings.')}</p>}
     </form>
+  );
+}
+
+function WebhookSettings() {
+  const queryClient = useQueryClient();
+  const settings = useQuery({
+    queryKey: ['admin-settings'],
+    queryFn: () => api<InstanceSettingsDto>(routes.admin.settings.path),
+  });
+  const save = useMutation({
+    mutationFn: (webhooksToPrivateNetworks: boolean) =>
+      api<InstanceSettingsDto>(routes.admin.updateSettings.path, {
+        method: 'PATCH',
+        json: { webhooksToPrivateNetworks },
+      }),
+    onSuccess: (data) => queryClient.setQueryData(['admin-settings'], data),
+  });
+  if (!settings.data) return null;
+  return (
+    <div className={styles.section}>
+      <h2>Webhooks</h2>
+      <label className="field" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <input
+          type="checkbox"
+          checked={settings.data.webhooksToPrivateNetworks}
+          disabled={save.isPending}
+          onChange={(e) => save.mutate(e.target.checked)}
+        />
+        Allow webhooks to private networks
+      </label>
+      <p className="muted">
+        Off by default: webhooks cannot reach this server, its local network or cloud metadata addresses. Turn
+        it on only if every map admin may send requests into your network.
+      </p>
+      {save.error && <p className="error">{errorText(save.error, 'Could not save the settings.')}</p>}
+    </div>
   );
 }
 

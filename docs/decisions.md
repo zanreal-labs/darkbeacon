@@ -98,7 +98,7 @@ Choices made where `docs/SPEC.md` is silent. One line each; newest at the bottom
 - `GET /api/themes` is public (the sign-in page is themed too) and returns every theme with all tokens resolved over its base.
 - Webhook bodies are the event envelope JSON; signed as `x-wormwright-signature: sha256=<hex HMAC-SHA256 of "<timestamp>.<body>">` with `x-wormwright-timestamp` (epoch ms), plus `x-wormwright-event` and `x-wormwright-delivery`.
 - Webhook retries after 10 s, 1 min, 5 min, 30 min and 2 h (6 attempts); each delivery is one row updated per attempt; finished deliveries are pruned after 30 days. A delivery's first `nextAttemptAt` is a lease, so a crash mid-send is retried.
-- Webhook secrets (`whsec_<64 hex>`) are shown once and stored AES-256-GCM sealed with a key derived (HKDF) from SECRET_KEY; webhook URLs must be http(s), redirects are not followed and response bodies are never shown. Private addresses are not blocked.
+- Webhook secrets (`whsec_<64 hex>`) are shown once and stored AES-256-GCM sealed with a key derived (HKDF) from SECRET_KEY; webhook URLs must be http(s), redirects are not followed and response bodies are never shown.
 - Webhook config changes are not events (secrets must not reach the stream); only map admins see them.
 - Accounts get an optional `mainCharacterId` and `PUT /api/accounts/me/main-character` (additive contract; the web app shows it on the account page).
 - The web app reads the caller's map role from `GET /api/maps` (MapDto has no role); the UI hides what the role cannot do, the server still decides.
@@ -126,3 +126,4 @@ Choices made where `docs/SPEC.md` is silent. One line each; newest at the bottom
 - `.claude/` (local agent worktrees) is ignored by git, Docker, ESLint and Prettier.
 - `/ws` accepts a browser only from the public origin or the host the request was sent to (reverse proxy, dev server); clients without an Origin header are allowed. Frames are capped at 64 KiB and a connection follows at most 50 streams.
 - Connections carry `pair_low`/`pair_high` (min/max system id) under a unique index per map; an insert that loses a race inserts nothing and the use case returns the winner. Migration `mapping/0002` keeps the oldest of any existing duplicates.
+- Webhooks refuse loopback, private, link-local, CGNAT, multicast and reserved addresses (IPv4 and IPv6, including IPv4-mapped, NAT64, 6to4 and Teredo); the check runs in the DNS lookup of the connection itself, one connection per delivery, so DNS rebinding cannot slip past it. The admin setting `webhooksToPrivateNetworks` lifts it.

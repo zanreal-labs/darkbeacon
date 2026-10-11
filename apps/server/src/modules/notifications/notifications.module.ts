@@ -7,10 +7,11 @@ import {
   type OnApplicationShutdown,
   type OnModuleInit,
 } from '@nestjs/common';
+import { InstanceSettingsService } from '@wormwright/access';
 import type { Clock, EventBus, MapAccess } from '@wormwright/core';
 import { Database } from '@wormwright/db';
 import { NotifierRegistry, WebhookAdmin, WebhookDispatcher } from '@wormwright/notifications';
-import { FetchWebhookSender } from '../../adapters/notifications/fetch-webhook-sender.js';
+import { HttpWebhookSender } from '../../adapters/notifications/http-webhook-sender.js';
 import { KyselyWebhookRepository } from '../../adapters/notifications/kysely-webhook-repository.js';
 import { SecretBox } from '../../adapters/notifications/secret-box.js';
 import type { AppConfig } from '../../config/config.js';
@@ -89,9 +90,13 @@ function every(ms: number, work: () => Promise<unknown>, logger: Logger): () => 
     },
     {
       provide: WebhookDispatcher,
-      useFactory: (webhooks: KyselyWebhookRepository, clock: Clock) =>
-        new WebhookDispatcher({ webhooks, sender: new FetchWebhookSender(), clock }),
-      inject: [KyselyWebhookRepository, CLOCK],
+      useFactory: (webhooks: KyselyWebhookRepository, clock: Clock, settings: InstanceSettingsService) => {
+        const sender = new HttpWebhookSender({
+          allowPrivate: async () => (await settings.current()).webhooksToPrivateNetworks,
+        });
+        return new WebhookDispatcher({ webhooks, sender, clock });
+      },
+      inject: [KyselyWebhookRepository, CLOCK, InstanceSettingsService],
     },
     {
       provide: WebhookAdmin,

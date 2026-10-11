@@ -229,10 +229,12 @@ describe('InstanceSettingsService', () => {
     expect(await service.get(admin)).toEqual({
       adminGuildId: null,
       adminRoleIds: [],
+      webhooksToPrivateNetworks: false,
     });
     expect(await service.update(admin, { adminGuildId: 'g1', adminRoleIds: ['r1', 'r1'] })).toEqual({
       adminGuildId: 'g1',
       adminRoleIds: ['r1'],
+      webhooksToPrivateNetworks: false,
     });
     expect((await service.update(admin, {})).adminGuildId).toBe('g1');
 

@@ -225,7 +225,11 @@ describeEachDialect('identity and access over HTTP', (t) => {
       method: 'PATCH',
       json: { adminGuildId: '123', adminRoleIds: ['456'] },
     });
-    expect(settings).toEqual({ adminGuildId: '123', adminRoleIds: ['456'] });
+    expect(settings).toEqual({
+      adminGuildId: '123',
+      adminRoleIds: ['456'],
+      webhooksToPrivateNetworks: false,
+    });
     expect(
       (await bob.request('/api/admin/settings', { method: 'PATCH', json: { adminGuildId: 'x' } })).status,
     ).toBe(400);

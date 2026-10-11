@@ -11,7 +11,7 @@ import {
   WebhookDispatcher,
   type WebhookSender,
 } from '@wormwright/notifications';
-import { FetchWebhookSender } from './fetch-webhook-sender.js';
+import { HttpWebhookSender, isPublicAddress } from './http-webhook-sender.js';
 import { KyselyWebhookRepository, type WebhookTables } from './kysely-webhook-repository.js';
 import { SecretBox } from './secret-box.js';
 
@@ -179,7 +179,7 @@ describeEachDialect('webhooks', (t) => {
   });
 });
 
-describe('FetchWebhookSender', () => {
+describe('HttpWebhookSender', () => {
   it('posts the body with headers and reports the status', async () => {
     const received: Array<{ body: string; signature: string | undefined }> = [];
     const server = createServer((req, res) => {
@@ -193,7 +193,7 @@ describe('FetchWebhookSender', () => {
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
     try {
-      const sender = new FetchWebhookSender();
+      const sender = new HttpWebhookSender({ allowPrivate: async () => true });
       expect(
         await sender.post(`${base}/ok`, '{"x":1}', { [WEBHOOK_HEADERS.signature]: 'sha256=ab' }),
       ).toEqual({
@@ -204,6 +204,45 @@ describe('FetchWebhookSender', () => {
       await expect(sender.post('http://127.0.0.1:1/', '{}', {})).rejects.toThrow();
     } finally {
       server.close();
+    }
+  });
+
+  it('refuses private and local targets unless the admin allows them', async () => {
+    const sender = new HttpWebhookSender();
+    for (const url of [
+      'http://127.0.0.1:1/',
+      'http://localhost:1/',
+      'http://[::1]:1/',
+      'http://[::ffff:127.0.0.1]:1/',
+      'http://169.254.169.254/latest/meta-data',
+      'http://10.1.2.3/',
+      'http://0.0.0.0/',
+    ]) {
+      await expect(sender.post(url, '{}', {}), url).rejects.toThrow(/private or local address/);
+    }
+  });
+
+  it('tells public addresses from private ones', () => {
+    for (const ip of ['1.1.1.1', '8.8.8.8', '2606:4700:4700::1111'])
+      expect(isPublicAddress(ip), ip).toBe(true);
+    for (const ip of [
+      '127.0.0.1',
+      '10.0.0.1',
+      '172.16.5.4',
+      '192.168.1.1',
+      '100.64.0.1',
+      '169.254.169.254',
+      '224.0.0.1',
+      '255.255.255.255',
+      '::',
+      '::1',
+      '::ffff:10.0.0.1',
+      'fd00::1',
+      'fe80::1',
+      'ff02::1',
+      'not-an-ip',
+    ]) {
+      expect(isPublicAddress(ip), ip).toBe(false);
     }
   });
 });

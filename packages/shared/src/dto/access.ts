@@ -39,6 +39,8 @@ export const InstanceSettingsDto = z.object({
   adminGuildId: z.string().nullable(),
   /** Roles on `adminGuildId` that grant instance admin. */
   adminRoleIds: z.array(z.string()),
+  /** Whether webhooks may target loopback, private and link-local addresses (off by default). */
+  webhooksToPrivateNetworks: z.boolean(),
 });
 export type InstanceSettingsDto = z.infer<typeof InstanceSettingsDto>;
 
@@ -47,5 +49,6 @@ const Snowflake = z.string().regex(/^\d{1,20}$/, 'must be a Discord id');
 export const UpdateInstanceSettingsRequest = z.object({
   adminGuildId: Snowflake.nullable().optional(),
   adminRoleIds: z.array(Snowflake).max(50).optional(),
+  webhooksToPrivateNetworks: z.boolean().optional(),
 });
 export type UpdateInstanceSettingsRequest = z.infer<typeof UpdateInstanceSettingsRequest>;
