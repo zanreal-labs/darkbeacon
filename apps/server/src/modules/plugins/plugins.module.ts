@@ -14,7 +14,7 @@ import { Database } from '@wormwright/db';
 import { NotifierRegistry } from '@wormwright/notifications';
 import type { UniverseCatalog } from '@wormwright/mapping';
 import { PluginAdmin, ThemeAdmin } from '@wormwright/plugins';
-import type { MapSnapshot } from '@wormwright/shared';
+import { isEventOfType, type MapSnapshot } from '@wormwright/shared';
 import { builtInThemes } from '@wormwright/theme-sdk';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -26,6 +26,7 @@ import type { AppConfig } from '../../config/config.js';
 import { FilePluginInstaller } from '../../plugins/installer.js';
 import { PluginCommandRegistry } from '../../plugins/plugin-commands.js';
 import { PluginHost, PluginPortProviders } from '../../plugins/plugin-host.js';
+import { EventConsumers } from '../../platform/event-consumers.js';
 import { FilePluginSettingsSchemas } from '../../plugins/settings-schemas.js';
 import {
   APP_CONFIG,
@@ -62,6 +63,8 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
     @Inject(Database) private readonly database: Database,
     @Inject(HttpAdapterHost) private readonly http: HttpAdapterHost,
     @Inject(UNIVERSE_CATALOG) private readonly universe: UniverseCatalog,
+    @Inject(PluginAdmin) private readonly admin: PluginAdmin,
+    @Inject(EventConsumers) private readonly consumers: EventConsumers,
   ) {}
 
   onModuleInit(): void {
@@ -80,6 +83,15 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
       const { url, ...rest } = parsed.data;
       await this.notifiers.send(url === undefined ? rest : { ...rest, url });
       return null;
+    });
+
+    this.consumers.register({
+      name: 'plugins.removed-maps',
+      streams: ['map'],
+      types: ['map.removed'],
+      handle: async (event) => {
+        if (isEventOfType(event, 'map.removed')) await this.admin.forgetMap(event.data.id);
+      },
     });
 
     // Plugins read maps through the same providers that build realtime snapshots.

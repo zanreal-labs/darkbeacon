@@ -69,6 +69,13 @@ export function setPluginEnabled(plugin: InstalledPlugin, enabled: boolean, mapI
   return { ...plugin, disabledMapIds: enabled ? others : [...others, mapId] };
 }
 
+/** Drops a deleted map from the per-map switches and settings; null when nothing refers to it. */
+export function withoutMap(plugin: InstalledPlugin, mapId: string): InstalledPlugin | null {
+  if (!plugin.disabledMapIds.includes(mapId) && !(mapId in plugin.mapSettings)) return null;
+  const { [mapId]: _, ...mapSettings } = plugin.mapSettings;
+  return { ...plugin, disabledMapIds: plugin.disabledMapIds.filter((id) => id !== mapId), mapSettings };
+}
+
 export function disableAfterFailures(
   plugin: InstalledPlugin,
   reason: string,

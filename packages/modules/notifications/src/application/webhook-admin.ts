@@ -84,6 +84,12 @@ export class WebhookAdmin {
     await this.deps.webhooks.delete(webhookId);
   }
 
+  /** Drops the webhooks (and delivery logs) of a deleted map; a reaction to `map.removed`. */
+  async forgetMap(mapId: string): Promise<void> {
+    for (const webhook of await this.deps.webhooks.listForMap(mapId))
+      await this.deps.webhooks.delete(webhook.id);
+  }
+
   async deliveries(actor: Actor | null, mapId: string, webhookId: string): Promise<WebhookDeliveryDto[]> {
     await this.require(actor, mapId, webhookId);
     return (await this.deps.webhooks.listDeliveries(webhookId, DELIVERY_LOG_LIMIT)).map(toDeliveryDto);

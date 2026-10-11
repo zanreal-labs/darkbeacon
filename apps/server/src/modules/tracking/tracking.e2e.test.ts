@@ -27,7 +27,7 @@ describeEachDialect('tracking and universe over HTTP', (t) => {
   let mapId: string;
 
   const request = async (
-    method: 'GET' | 'PUT' | 'POST' | 'PATCH',
+    method: 'GET' | 'PUT' | 'POST' | 'PATCH' | 'DELETE',
     url: string,
     as?: string,
     body?: unknown,
@@ -194,5 +194,36 @@ describeEachDialect('tracking and universe over HTTP', (t) => {
 
     expect((await track('alice', PILOT, false)).status).toBe(204);
     expect((await request('GET', `/api/maps/${mapId}/characters`, 'alice')).body).toEqual([]);
+  });
+
+  it('forgets everything about a deleted map in the other modules', async () => {
+    expect(
+      (await request('PUT', `/api/maps/${mapId}/tracking`, 'alice', { characterId: PILOT, tracked: true }))
+        .status,
+    ).toBe(204);
+    const hook = await request('POST', `/api/maps/${mapId}/webhooks`, 'alice', {
+      url: 'https://example.com/hook',
+      events: ['system.*'],
+    });
+    expect(hook.status).toBe(201);
+    const count = async (table: string) => {
+      const rows = await t.db
+        .db<Record<string, { map_id: string }>>()
+        .selectFrom(table)
+        .select('map_id')
+        .where('map_id', '=', mapId)
+        .execute();
+      return rows.length;
+    };
+    expect([await count('access_rule'), await count('tracked_character'), await count('webhook')]).toEqual([
+      1, 1, 1,
+    ]);
+
+    expect((await request('DELETE', `/api/maps/${mapId}`, 'alice')).status).toBe(204);
+    await vi.waitFor(async () =>
+      expect([await count('access_rule'), await count('tracked_character'), await count('webhook')]).toEqual([
+        0, 0, 0,
+      ]),
+    );
   });
 });

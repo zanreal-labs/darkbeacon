@@ -11,6 +11,7 @@ import { InstanceSettingsService } from '@wormwright/access';
 import type { Clock, MapAccess } from '@wormwright/core';
 import { Database } from '@wormwright/db';
 import { NotifierRegistry, WebhookAdmin, WebhookDispatcher } from '@wormwright/notifications';
+import { isEventOfType } from '@wormwright/shared';
 import { HttpWebhookSender } from '../../adapters/notifications/http-webhook-sender.js';
 import { KyselyWebhookRepository } from '../../adapters/notifications/kysely-webhook-repository.js';
 import { SecretBox } from '../../adapters/notifications/secret-box.js';
@@ -34,6 +35,7 @@ export class WebhookWorker implements OnModuleInit, OnApplicationShutdown {
 
   constructor(
     @Inject(WebhookDispatcher) private readonly dispatcher: WebhookDispatcher,
+    @Inject(WebhookAdmin) private readonly admin: WebhookAdmin,
     @Inject(KyselyWebhookRepository) private readonly webhooks: KyselyWebhookRepository,
     @Inject(EventConsumers) private readonly consumers: EventConsumers,
     @Inject(CLOCK) private readonly clock: Clock,
@@ -44,6 +46,8 @@ export class WebhookWorker implements OnModuleInit, OnApplicationShutdown {
       name: 'webhooks',
       streams: ['map'],
       handle: async (event) => {
+        // No webhook outlives its map, and none is told about the deletion.
+        if (isEventOfType(event, 'map.removed')) return this.admin.forgetMap(event.data.id);
         const queued = await this.dispatcher.queue(event);
         return queued.length > 0 ? () => this.dispatcher.send(queued) : undefined;
       },

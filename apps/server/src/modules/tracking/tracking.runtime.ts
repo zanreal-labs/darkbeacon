@@ -5,7 +5,8 @@ import {
   type OnModuleDestroy,
   type OnModuleInit,
 } from '@nestjs/common';
-import { AutoMapper, ListMapCharacters, TrackingPoller } from '@wormwright/tracking';
+import { isEventOfType } from '@wormwright/shared';
+import { AutoMapper, ListMapCharacters, TrackingCleanup, TrackingPoller } from '@wormwright/tracking';
 import type { AppConfig } from '../../config/config.js';
 import { EventConsumers } from '../../platform/event-consumers.js';
 import { APP_CONFIG } from '../../platform/tokens.js';
@@ -25,6 +26,7 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
     @Inject(AutoMapper) private readonly autoMapper: AutoMapper,
     @Inject(ListMapCharacters) private readonly listCharacters: ListMapCharacters,
     @Inject(RealtimeRegistry) private readonly registry: RealtimeRegistry,
+    @Inject(TrackingCleanup) private readonly cleanup: TrackingCleanup,
     @Inject(EventConsumers) private readonly consumers: EventConsumers,
   ) {}
 
@@ -37,6 +39,14 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
       streams: ['map'],
       types: ['character.jumped'],
       handle: (event) => this.autoMapper.handle(event),
+    });
+    this.consumers.register({
+      name: 'tracking.removed-maps',
+      streams: ['map'],
+      types: ['map.removed'],
+      handle: async (event) => {
+        if (isEventOfType(event, 'map.removed')) await this.cleanup.forgetMap(event.data.id);
+      },
     });
   }
 

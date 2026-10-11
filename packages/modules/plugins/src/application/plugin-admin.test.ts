@@ -142,6 +142,19 @@ describe('PluginAdmin', () => {
     expect(await uc.getSettings(admin, 'pinger')).toMatchObject({ values: { url: 'a' }, mapId: null });
   });
 
+  it('forgets the switches and settings of a deleted map', async () => {
+    await install();
+    await uc.setEnabled(admin, 'pinger', false, 'map-1');
+    await uc.setEnabled(admin, 'pinger', false, 'map-2');
+    await uc.updateSettings(admin, 'pinger', { url: 'b' }, 'map-1');
+    const published = log.events.length;
+    await uc.forgetMap('map-1');
+    expect(plugins.rows.get('pinger')).toMatchObject({ disabledMapIds: ['map-2'], mapSettings: {} });
+    expect(log.events.slice(published)).toEqual([expect.objectContaining({ type: 'plugin.updated' })]);
+    await uc.forgetMap('map-1');
+    expect(log.events).toHaveLength(published + 1);
+  });
+
   it('uninstalls: removes the row and the files and publishes plugin.removed', async () => {
     await install();
     await uc.uninstall(admin, 'pinger');

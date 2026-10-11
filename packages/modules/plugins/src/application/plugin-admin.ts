@@ -17,6 +17,7 @@ import {
   setPluginEnabled,
   toPluginDto,
   upgradePlugin,
+  withoutMap,
   type InstalledPlugin,
   type PluginSettingsValues,
 } from '../domain/plugin.js';
@@ -42,6 +43,8 @@ export interface PluginAdminDeps {
 
 /** The core itself, when it disables a failing plugin. */
 const LOADER: ActorRef = { kind: 'system', id: 'plugin-loader' };
+/** The core itself, when it cleans up after a deleted map. */
+const CLEANUP: ActorRef = { kind: 'system', id: 'plugins' };
 
 /** Admin use cases of the plugin registry. Changes are published as `plugin.*` instance events. */
 export class PluginAdmin {
@@ -146,6 +149,13 @@ export class PluginAdmin {
   async webPlugins(actor: Actor | null): Promise<InstalledPlugin[]> {
     requireAccount(actor);
     return (await this.deps.plugins.list()).filter((p) => isActiveOn(p, null) && p.manifest.web !== null);
+  }
+
+  /** Drops a deleted map's per-map switches and settings; a reaction to `map.removed`. */
+  async forgetMap(mapId: string): Promise<void> {
+    for (const plugin of await this.deps.plugins.list()) {
+      if (withoutMap(plugin, mapId)) await this.change(plugin.id, CLEANUP, (p) => withoutMap(p, mapId) ?? p);
+    }
   }
 
   /** Called by the loader when a plugin keeps failing. */

@@ -74,6 +74,13 @@ export class AccessRules {
     });
   }
 
+  /** Drops the rules of a deleted map (a reaction to `map.removed`, no authorization). */
+  async forgetMap(mapId: string): Promise<void> {
+    await this.deps.uow.transaction(async () => {
+      for (const rule of await this.deps.rules.listForMap(mapId)) await this.deps.rules.delete(rule.id);
+    });
+  }
+
   private async append<K extends 'access.rule_added' | 'access.rule_removed'>(
     actor: Actor,
     mapId: string,

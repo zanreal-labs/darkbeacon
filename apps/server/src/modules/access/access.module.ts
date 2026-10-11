@@ -9,10 +9,12 @@ import {
 import { hasMapRole, type Clock, type EventLog, type UnitOfWork } from '@wormwright/core';
 import { Database } from '@wormwright/db';
 import { AccountService } from '@wormwright/identity';
+import { isEventOfType } from '@wormwright/shared';
 import {
   KyselyAccessRuleRepository,
   KyselyInstanceSettingsRepository,
 } from '../../adapters/access/kysely-access.js';
+import { EventConsumers } from '../../platform/event-consumers.js';
 import { CLOCK, EVENT_LOG, MAP_ACCESS, UNIT_OF_WORK } from '../../platform/tokens.js';
 import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
 import { AccessRulesController, InstanceSettingsController } from './access.controller.js';
@@ -66,12 +68,22 @@ export class AccessModule implements OnModuleInit {
   constructor(
     @Inject(RealtimeRegistry) private readonly realtime: RealtimeRegistry,
     @Inject(AccessService) private readonly access: AccessService,
+    @Inject(AccessRules) private readonly rules: AccessRules,
+    @Inject(EventConsumers) private readonly consumers: EventConsumers,
   ) {}
 
   onModuleInit(): void {
     this.realtime.registerStream('map', {
       authorize: async (actor, mapId) =>
         actor !== null && hasMapRole(await this.access.roleOf(actor, mapId), 'viewer'),
+    });
+    this.consumers.register({
+      name: 'access.removed-maps',
+      streams: ['map'],
+      types: ['map.removed'],
+      handle: async (event) => {
+        if (isEventOfType(event, 'map.removed')) await this.rules.forgetMap(event.data.id);
+      },
     });
   }
 }
