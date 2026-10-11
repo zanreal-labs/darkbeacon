@@ -32,3 +32,23 @@ export const CreateAccessRuleRequest = z
     path: ['guildId'],
   });
 export type CreateAccessRuleRequest = z.infer<typeof CreateAccessRuleRequest>;
+
+/** Instance-wide settings kept in the database and edited in the admin tab. */
+export const InstanceSettingsDto = z.object({
+  /** Theme used when neither the user nor the map picks one. */
+  defaultTheme: z.string().min(1).max(64),
+  /** Discord guild whose roles can make an account an instance admin. */
+  adminGuildId: z.string().nullable(),
+  /** Roles on `adminGuildId` that grant instance admin. */
+  adminRoleIds: z.array(z.string()),
+});
+export type InstanceSettingsDto = z.infer<typeof InstanceSettingsDto>;
+
+const Snowflake = z.string().regex(/^\d{1,20}$/, 'must be a Discord id');
+
+export const UpdateInstanceSettingsRequest = z.object({
+  defaultTheme: z.string().trim().min(1).max(64).optional(),
+  adminGuildId: Snowflake.nullable().optional(),
+  adminRoleIds: z.array(Snowflake).max(50).optional(),
+});
+export type UpdateInstanceSettingsRequest = z.infer<typeof UpdateInstanceSettingsRequest>;

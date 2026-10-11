@@ -86,6 +86,19 @@ export const routes = {
       auth: 'admin',
       body: dto.TransferOwnershipRequest,
     }),
+    settings: route({
+      method: 'GET',
+      path: '/api/admin/settings',
+      auth: 'admin',
+      response: dto.InstanceSettingsDto,
+    }),
+    updateSettings: route({
+      method: 'PATCH',
+      path: '/api/admin/settings',
+      auth: 'admin',
+      body: dto.UpdateInstanceSettingsRequest,
+      response: dto.InstanceSettingsDto,
+    }),
   },
 
   universe: {
