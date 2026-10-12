@@ -6,7 +6,7 @@ import {
   type AccessRuleRepository,
   type AccessSubjectsSource,
 } from '@darkbeacon/access';
-import { hasMapRole, type Clock, type EventLog, type UnitOfWork } from '@darkbeacon/core';
+import { hasMapRole, type Clock, type EventBus, type EventLog, type UnitOfWork } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
 import { AccountService, DiscordBotService, EveDirectoryService } from '@darkbeacon/identity';
 import { isEventOfType } from '@darkbeacon/shared';
@@ -14,10 +14,11 @@ import {
   KyselyAccessRuleRepository,
   KyselyInstanceSettingsRepository,
 } from '../../adapters/access/kysely-access.js';
+import { AccessCache } from '../../adapters/access/cached-access.js';
 import { IdentitySubjectDirectory } from '../../adapters/access/subject-directory.js';
 import type { AppConfig } from '../../config/config.js';
 import { EventConsumers } from '../../platform/event-consumers.js';
-import { APP_CONFIG, CLOCK, EVENT_LOG, MAP_ACCESS, UNIT_OF_WORK } from '../../platform/tokens.js';
+import { APP_CONFIG, CLOCK, EVENT_BUS, EVENT_LOG, MAP_ACCESS, UNIT_OF_WORK } from '../../platform/tokens.js';
 import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
 import { AccessRulesController, InstanceSettingsController } from './access.controller.js';
 import { MapOwnershipRegistry } from './map-ownership.registry.js';
@@ -33,17 +34,39 @@ const RULES = 'access.AccessRuleRepository';
 @Module({
   controllers: [AccessRulesController, InstanceSettingsController],
   providers: [
-    { provide: RULES, useFactory: (db: Database) => new KyselyAccessRuleRepository(db), inject: [Database] },
+    {
+      provide: AccessCache,
+      useFactory: (db: Database, clock: Clock, bus: EventBus) => {
+        const cache = new AccessCache({ clock, inTransaction: () => db.inTransaction });
+        // Every process hears every change through the bus, its own and (clustered) the others'.
+        bus.subscribe((event) => cache.onEvent(event));
+        return cache;
+      },
+      inject: [Database, CLOCK, EVENT_BUS],
+    },
+    {
+      provide: RULES,
+      useFactory: (db: Database, cache: AccessCache) =>
+        cache.ruleRepository(new KyselyAccessRuleRepository(db)),
+      inject: [Database, AccessCache],
+    },
     MapOwnershipRegistry,
     {
       provide: AccessService,
-      // Identity's AccountService is this module's AccessSubjectsSource.
+      // Identity's AccountService is this module's AccessSubjectsSource. Rules, subjects and
+      // owners are read through the cache: every request and socket re-check authorizes.
       useFactory: (
         rules: AccessRuleRepository,
         subjects: AccessSubjectsSource,
         ownership: MapOwnershipRegistry,
-      ) => new AccessService({ rules, subjects, ownership }),
-      inject: [RULES, AccountService, MapOwnershipRegistry],
+        cache: AccessCache,
+      ) =>
+        new AccessService({
+          rules,
+          subjects: cache.subjectsSource(subjects),
+          ownership: cache.ownership(ownership),
+        }),
+      inject: [RULES, AccountService, MapOwnershipRegistry, AccessCache],
     },
     { provide: MAP_ACCESS, useExisting: AccessService },
     {
