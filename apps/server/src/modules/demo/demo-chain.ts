@@ -3,6 +3,7 @@ import type {
   CommentUseCases,
   ConnectionUseCases,
   MapUseCases,
+  PassageUseCases,
   SignatureUseCases,
   StructureUseCases,
   SystemUseCases,
@@ -10,6 +11,7 @@ import type {
 import type {
   AddSignatureRequest,
   LabelDto,
+  LogPassagesRequest,
   UpdateConnectionRequest,
   UpdateSystemRequest,
 } from '@darkbeacon/shared';
@@ -34,7 +36,13 @@ export interface DemoMapping {
   /** Comments and structures of the home system; left out when absent. */
   comments?: CommentUseCases;
   structures?: StructureUseCases;
+  /** Jumps logged by hand on the demo chain; absent: none (the corp maps). */
+  passages?: PassageUseCases;
 }
+
+const MEGATHRON = 641;
+const ORCA = 28606;
+const MINUTE = 60_000;
 
 type SystemSeed = { id: number; x: number; y: number } & UpdateSystemRequest;
 type ConnectionSeed = { key: string; source: number; target: number; gate?: true } & UpdateConnectionRequest;
@@ -43,7 +51,8 @@ type SignatureSeed = { system: number; connection?: string } & AddSignatureReque
 /**
  * Seeds "Demo chain" as `actor`: a home C3 with both statics open, a few systems in wormhole and
  * known space, and connections in every state the map can show (EOL, reduced and critical mass,
- * frigate-only, dangerous, bubbled, a stargate), plus labels and signatures. Goes through the
+ * frigate-only, dangerous, bubbled, a stargate), plus Tags, Labels on the three holes out of home
+ * (WH1 to WH3, the map's default Labels), a custom label and signatures. Goes through the
  * mapping use cases, so it is authorized and evented like any user's edits.
  */
 export async function seedDemoChain(actor: Actor, mapping: DemoMapping): Promise<string> {
@@ -60,6 +69,8 @@ export async function seedDemoChain(actor: Actor, mapping: DemoMapping): Promise
   const hostile = label('Hostile', '#f05252', 'Hostiles seen in the last hour. Scout before you jump.');
   const exit = label('Exit', '#eba23b', 'Known-space exit for logistics runs.');
   await mapping.maps.setLabels(actor, map.id, [staging, ratting, hostile, exit]);
+  // The map's default Labels; ids are looked up so a changed default still seeds.
+  const wh = (name: string) => map.systemLabels.filter((l) => l.name === name).map((l) => l.id);
 
   const systems: SystemSeed[] = [
     {
@@ -67,7 +78,6 @@ export async function seedDemoChain(actor: Actor, mapping: DemoMapping): Promise
       x: 676,
       y: 240,
       status: 'home',
-      tag: 'HOME',
       labelIds: [staging.id],
       locked: true,
       description: 'Home hole: citadel, fleet hangar and the POCOs. Both statics rolled at downtime.',
@@ -78,6 +88,7 @@ export async function seedDemoChain(actor: Actor, mapping: DemoMapping): Promise
       y: 240,
       status: 'empty',
       labelIds: [ratting.id],
+      systemLabelIds: wh('WH3'),
       description: 'Two unrun relic sites, nobody home.',
     },
     {
@@ -95,10 +106,12 @@ export async function seedDemoChain(actor: Actor, mapping: DemoMapping): Promise
       x: 1066,
       y: 90,
       labelIds: [exit.id],
+      systemLabelIds: wh('WH1'),
+      customLabel: 'bait',
       description: 'High-sec exit for hauling.',
     },
     { id: TAMA, x: 1430, y: 90, description: 'Faction warfare camp at the gate.' },
-    { id: AMAMAKE, x: 1066, y: 420, labelIds: [exit.id] },
+    { id: AMAMAKE, x: 1066, y: 420, labelIds: [exit.id], systemLabelIds: wh('WH2') },
     {
       id: BLACK_HOLE,
       x: 1430,
@@ -192,6 +205,30 @@ export async function seedDemoChain(actor: Actor, mapping: DemoMapping): Promise
       name: 'Home Sweet Home',
       owner: { id: 98000001, name: 'Darkbeacon Demo Corp', ticker: 'DBK' },
     });
+  }
+  // A rolling crew at work: a Megathron hot and an Orca cold through the high-sec static, and on
+  // the low-sec static two jumps from before it was marked reduced (kept, no longer counted).
+  if (mapping.passages) {
+    const now = Date.now();
+    const log = (key: string, request: LogPassagesRequest, minutesAgo: number) =>
+      mapping.passages!.log(actor, map.id, ids.get(key)!, {
+        ...request,
+        occurredAt: now - minutesAgo * MINUTE,
+      });
+    await log('u210', { shipTypeId: MEGATHRON, direction: 'sourceToTarget', massMode: 'hot' }, 95);
+    await log('u210', { shipTypeId: MEGATHRON, direction: 'targetToSource', massMode: 'cold' }, 92);
+    await log(
+      'd845',
+      { shipTypeId: MEGATHRON, direction: 'sourceToTarget', massMode: 'cold', note: 'Roller 1' },
+      18,
+    );
+    await log(
+      'd845',
+      { shipTypeId: MEGATHRON, direction: 'targetToSource', massMode: 'hot', note: 'Roller 1' },
+      16,
+    );
+    await log('d845', { shipTypeId: ORCA, direction: 'sourceToTarget', massMode: 'cold' }, 9);
+    await log('d845', { shipTypeId: ORCA, direction: 'targetToSource', massMode: 'hot', higgs: true }, 7);
   }
   return map.id;
 }

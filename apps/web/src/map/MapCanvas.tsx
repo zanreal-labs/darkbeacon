@@ -25,14 +25,15 @@ import {
   bookmarkLabel,
   DEFAULT_BOOKMARK_TEMPLATE,
   type LabelDto,
+  type SystemLabelDto,
   type UniverseSystemDto,
 } from '@darkbeacon/shared';
 import type { MapPermissions } from '../lib/roles';
-import { useMe } from '../lib/session';
+import { useMe, useProviders } from '../lib/session';
 import { track } from '../lib/telemetry';
 import { useTheme } from '../theme/ThemeProvider';
 import { useToast } from '../ui';
-import { ConnectionEdge, type ConnectionEdgeType } from './ConnectionEdge';
+import { ConnectionEdge, type ConnectionEdgeType, type ConnectionTraffic } from './ConnectionEdge';
 import { boundsOf, fitViewport, type Point, type Rect } from './geometry';
 import { MapControls } from './MapControls';
 import { DEFAULT_ZOOM, FIT_MIN_ZOOM, mapTypeVars } from './mapType';
@@ -50,6 +51,8 @@ const LONG_PRESS_MS = 500;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2;
 const FIT_MAX_ZOOM = 1;
+/** A map never opens closer than this, whatever view was saved: the chain comes first. */
+const OPEN_MAX_ZOOM = 1.1;
 /** How long the view rests before it is saved for this account. */
 const SAVE_VIEW_AFTER_MS = 800;
 
@@ -103,17 +106,29 @@ interface Props {
   mapId: string;
   state: MapState;
   loaded: boolean;
+  /** The map's Tags (`labels` in the data). */
   labels: LabelDto[];
+  /** The map's Labels (WH1...). */
+  systemLabels: SystemLabelDto[];
   universe: Map<number, UniverseSystemDto>;
   can: MapPermissions;
   store: Pick<MapStore, 'moveSystems' | 'addConnection'>;
   onSelect(solarSystemId: number | null): void;
+  /** A connection was clicked (selected) or let go. */
+  onSelectConnection?(connectionId: string | null): void;
+  /** Passages and mass used per connection, for the hover card. */
+  traffic?: ReadonlyMap<string, ConnectionTraffic>;
   focus: FocusRequest | null;
   onMenu(target: MenuTarget, x: number, y: number): void;
   /** Pixels on the right covered by the widget panel; views keep systems out from under it. */
   coveredRight?: number;
   /** Pixels at the bottom covered by the widget sheet (phones). */
   coveredBottom?: number;
+  /**
+   * A view without an account (public links): nothing moves, connects or opens a menu, no
+   * preferences are read or saved, and the opening view does not look for the viewer's character.
+   */
+  readOnly?: boolean;
 }
 
 /**
@@ -138,19 +153,29 @@ export function MapCanvas({
   state,
   loaded,
   labels,
+  systemLabels,
   universe,
   can,
   store,
   onSelect,
+  onSelectConnection,
+  traffic,
   focus,
   onMenu,
   coveredRight = 0,
   coveredBottom = 0,
+  readOnly = false,
 }: Props) {
   const { theme } = useTheme();
+  const demo = useProviders({ enabled: !readOnly }).data?.demo ?? false;
   const toast = useToast();
-  const me = useMe();
-  const { preferences, settled, update: updatePreferences } = useMapPreferences(mapId);
+  const me = useMe({ enabled: !readOnly });
+  const {
+    preferences,
+    settled,
+    update: updatePreferences,
+  } = useMapPreferences(mapId, { enabled: !readOnly });
+  const editable = can.edit && !readOnly;
   const rf = useReactFlow<SystemNodeType, ConnectionEdgeType>();
   const [nodes, setNodes, onNodesChange] = useNodesState<SystemNodeType>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<ConnectionEdgeType>([]);
@@ -192,6 +217,7 @@ export function MapCanvas({
       connections: [...state.connections.values()],
       signatures: [...state.signatures.values()],
       classOf: (id) => bookmarkClassLabel(universe.get(id)),
+      systemLabels,
       // Stored numbers are the sources' own on a merged map: it counts in its order here.
       order: ownOrder ?? (state.sources ? mapOrder : undefined),
     });
@@ -201,6 +227,7 @@ export function MapCanvas({
     state.connections,
     state.signatures,
     state.sources,
+    systemLabels,
     universe,
     template,
     ownOrder,
@@ -215,7 +242,7 @@ export function MapCanvas({
         here.set(c.solarSystemId, (here.get(c.solarSystemId) ?? 0) + 1);
     }
     const hubs = exitHubs(state.exits);
-    const labelById = new Map(labels.map((l) => [l.id, l]));
+    const tagById = new Map(labels.map((l) => [l.id, l]));
     setNodes((prev) => {
       const previous = new Map(prev.map((n) => [n.id, n]));
       return [...state.systems.values()].map((system): SystemNodeType => {
@@ -227,12 +254,14 @@ export function MapCanvas({
           id,
           type: 'system',
           position: old?.dragging ? old.position : system.position,
-          draggable: can.edit && !system.locked,
+          draggable: editable && !system.locked,
           data: {
             mapId,
             system,
             info,
-            labels: system.labelIds.flatMap((l) => labelById.get(l) ?? []),
+            // Labels in the map's order; Tags in the order they were set.
+            systemLabels: systemLabels.filter((l) => system.systemLabelIds.includes(l.id)),
+            tags: system.labelIds.flatMap((l) => tagById.get(l) ?? []),
             characters: here.get(system.solarSystemId) ?? 0,
             bookmark: bookmarks.get(system.solarSystemId) ?? null,
             hub: hubs.get(system.solarSystemId) ?? null,
@@ -246,8 +275,9 @@ export function MapCanvas({
     state.characters,
     state.exits,
     labels,
+    systemLabels,
     universe,
-    can.edit,
+    editable,
     mapId,
     setNodes,
     bookmarks,
@@ -269,10 +299,16 @@ export function MapCanvas({
           source: String(c.source),
           target: String(c.target),
           selected: selected.has(c.id),
-          data: { mapId, connection: c, sourceName: name(c.source), targetName: name(c.target) },
+          data: {
+            mapId,
+            connection: c,
+            sourceName: name(c.source),
+            targetName: name(c.target),
+            traffic: traffic?.get(c.id),
+          },
         }));
     });
-  }, [state.connections, state.systems, universe, mapId, setEdges]);
+  }, [state.connections, state.systems, universe, mapId, setEdges, traffic]);
 
   /** Rectangles of the given nodes (all when omitted), as React Flow measured them. */
   const rectsOf = useCallback(
@@ -319,13 +355,13 @@ export function MapCanvas({
 
   // First view, once systems are measured and the saved view is known.
   useEffect(() => {
-    if (opened.current || !loaded || !settled || nodes.length === 0) return;
+    if (readOnly || opened.current || !loaded || !settled || nodes.length === 0) return;
     if (!nodes.every((n) => n.measured?.width)) return; // runs again once React Flow measured them
     opened.current = true;
     if (isViewport(preferences.viewport)) {
       // Saved as the point in the middle of the view, so it fits a phone and a desktop alike.
       const { x, y, zoom } = preferences.viewport;
-      centerOn({ x, y }, zoom, false);
+      centerOn({ x, y }, Math.min(zoom, OPEN_MAX_ZOOM), false);
       return;
     }
     // A chain that fits on screen at the readable zoom opens centred as a whole.
@@ -362,6 +398,7 @@ export function MapCanvas({
     myLocation,
     centerOfSystem,
     centerOn,
+    readOnly,
     rectsOf,
     visibleBox,
   ]);
@@ -381,6 +418,14 @@ export function MapCanvas({
     );
     void rf.setViewport(viewport, { duration: 250 });
   }, [rf, rectsOf, coveredRight, coveredBottom]);
+
+  // A public view has no saved view and no "me": visitors see the whole shared chain first.
+  useEffect(() => {
+    if (!readOnly || opened.current || !loaded || nodes.length === 0) return;
+    if (!nodes.every((n) => n.measured?.width)) return;
+    opened.current = true;
+    fitChain();
+  }, [readOnly, loaded, nodes, fitChain]);
 
   const centerOnMe = useCallback(() => {
     const at = myLocation ? centerOfSystem(myLocation.solarSystemId) : null;
@@ -410,6 +455,26 @@ export function MapCanvas({
     if (dx > 0 || dy > 0) void rf.setViewport({ x: x - dx, y: y - dy, zoom }, { duration: 250 });
   }, [coveredRight, coveredBottom, selectedId, rf]);
 
+  // The same for a selected connection: its middle stays out from under the panel.
+  const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
+  useEffect(() => {
+    const box = canvasRef.current?.getBoundingClientRect();
+    const edge = selectedEdge === null ? undefined : rf.getEdge(selectedEdge);
+    const a = edge ? rf.getNode(edge.source) : undefined;
+    const b = edge ? rf.getNode(edge.target) : undefined;
+    if (!box || !a || !b || (coveredRight === 0 && coveredBottom === 0)) return;
+    const { x, y, zoom } = rf.getViewport();
+    const mid = (n: typeof a) => ({
+      x: n.position.x + (n.measured?.width ?? 230) / 2,
+      y: n.position.y + (n.measured?.height ?? 90) / 2,
+    });
+    const px = x + ((mid(a).x + mid(b).x) / 2) * zoom;
+    const py = y + ((mid(a).y + mid(b).y) / 2) * zoom;
+    const dx = Math.max(0, px - (box.width - coveredRight - 80));
+    const dy = Math.max(0, py - (box.height - coveredBottom - 80));
+    if (dx > 0 || dy > 0) void rf.setViewport({ x: x - dx, y: y - dy, zoom }, { duration: 250 });
+  }, [coveredRight, coveredBottom, selectedEdge, rf]);
+
   const [legend, setLegendState] = useState(false);
   useEffect(() => {
     // After hydration: the server cannot know this browser's choice.
@@ -427,7 +492,7 @@ export function MapCanvas({
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
       const key = e.key.toLowerCase();
       if (key === 'f') fitChain();
-      else if (key === 'c') centerOnMe();
+      else if (key === 'c' && !readOnly) centerOnMe();
       else if (key === 'l') setLegend(!legend);
       else return;
       e.preventDefault();
@@ -437,7 +502,7 @@ export function MapCanvas({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [fitChain, centerOnMe, setLegend, legend]);
+  }, [fitChain, centerOnMe, setLegend, legend, readOnly]);
 
   useEffect(
     () => () => {
@@ -447,7 +512,8 @@ export function MapCanvas({
   );
 
   const saveViewport = (viewport: Viewport) => {
-    if (!opened.current) return;
+    // The demo account is shared by every visitor: one person's view must not become everyone's.
+    if (readOnly || !opened.current || demo) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       const box = visibleBox();
@@ -468,6 +534,7 @@ export function MapCanvas({
     if (focus.id === null) {
       handledFocus.current = focus.n;
       setNodes((ns) => ns.map((n) => (n.selected ? { ...n, selected: false } : n)));
+      setEdges((es) => es.map((e) => (e.selected ? { ...e, selected: false } : e)));
       return;
     }
     const id = String(focus.id);
@@ -475,6 +542,7 @@ export function MapCanvas({
     if (!node) return; // not rendered yet; runs again when the nodes change
     handledFocus.current = focus.n;
     setNodes((ns) => ns.map((n) => (!!n.selected === (n.id === id) ? n : { ...n, selected: n.id === id })));
+    setEdges((es) => es.map((e) => (e.selected ? { ...e, selected: false } : e)));
     if (focus.center) {
       void rf.setCenter(
         node.position.x + (node.measured?.width ?? 230) / 2,
@@ -482,7 +550,7 @@ export function MapCanvas({
         { duration: 300, zoom: rf.getZoom() },
       );
     }
-  }, [focus, nodes, rf, setNodes]);
+  }, [focus, nodes, rf, setNodes, setEdges]);
 
   const cancelPress = () => {
     if (press.current) clearTimeout(press.current.timer);
@@ -491,7 +559,7 @@ export function MapCanvas({
 
   // Touch has no right click: a long press opens the same context menu.
   const onPointerDown = (e: ReactPointerEvent) => {
-    if (e.pointerType === 'mouse') return;
+    if (readOnly || e.pointerType === 'mouse') return;
     cancelPress();
     const target = e.target as Element;
     const { clientX: x, clientY: y } = e;
@@ -520,8 +588,16 @@ export function MapCanvas({
     }
   };
 
-  const onSelectionChange = ({ nodes: selected }: OnSelectionChangeParams) => {
+  const onSelectionChange = ({ nodes: selected, edges: edgesSelected }: OnSelectionChangeParams) => {
     setSelectedId(selected.length === 1 ? selected[0]!.id : null);
+    // A click on a connection selects it alone; the sidebar then shows the connection.
+    const edge = selected.length === 0 && edgesSelected.length === 1 ? edgesSelected[0]!.id : null;
+    setSelectedEdge(edge);
+    if (edge && !edge.startsWith('pending:')) {
+      onSelectConnection?.(edge);
+      return;
+    }
+    onSelectConnection?.(null);
     onSelect(selected.length === 1 ? Number(selected[0]!.id) : null);
   };
 
@@ -556,22 +632,34 @@ export function MapCanvas({
         onConnect={({ source, target }) => {
           if (source !== target) void store.addConnection(Number(source), Number(target));
         }}
-        onNodeContextMenu={(e, node) => {
-          e.preventDefault();
-          onMenu({ kind: 'system', solarSystemId: Number(node.id) }, e.clientX, e.clientY);
-        }}
-        onEdgeContextMenu={(e, edge) => {
-          e.preventDefault();
-          onMenu({ kind: 'connection', connectionId: edge.id }, e.clientX, e.clientY);
-        }}
-        onPaneContextMenu={(e) => {
-          e.preventDefault();
-          const flow = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY });
-          onMenu({ kind: 'pane', flow, fitChain, centerOnMe }, e.clientX, e.clientY);
-        }}
+        onNodeContextMenu={
+          readOnly
+            ? undefined
+            : (e, node) => {
+                e.preventDefault();
+                onMenu({ kind: 'system', solarSystemId: Number(node.id) }, e.clientX, e.clientY);
+              }
+        }
+        onEdgeContextMenu={
+          readOnly
+            ? undefined
+            : (e, edge) => {
+                e.preventDefault();
+                onMenu({ kind: 'connection', connectionId: edge.id }, e.clientX, e.clientY);
+              }
+        }
+        onPaneContextMenu={
+          readOnly
+            ? undefined
+            : (e) => {
+                e.preventDefault();
+                const flow = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY });
+                onMenu({ kind: 'pane', flow, fitChain, centerOnMe }, e.clientX, e.clientY);
+              }
+        }
         connectionMode={ConnectionMode.Loose}
-        nodesConnectable={can.edit}
-        nodesDraggable={can.edit}
+        nodesConnectable={editable}
+        nodesDraggable={editable}
         nodeDragThreshold={4}
         // Dragging moves a system without selecting it: the panel opening mid-drag shifted the
         // view under the pointer and threw the system across the map.
@@ -594,6 +682,7 @@ export function MapCanvas({
           located={myLocation !== null}
           legend={legend}
           onLegend={setLegend}
+          readOnly={readOnly}
         />
       </ReactFlow>
     </div>

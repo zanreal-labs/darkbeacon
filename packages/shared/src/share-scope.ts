@@ -7,9 +7,11 @@ import { z } from 'zod';
  * - `topology`: systems and the connections between them (always part of a share).
  * - `connectionStatus`: mass, time (EOL), size, bubbles and danger of connections.
  * - `signatures`: the signatures scanned in each system.
- * - `intel`: what a map knows about its systems: status, tag, custom name, notes.
+ * - `intel`: what a map knows about its systems: status, custom name, notes (and the old free-text
+ *   tag).
  * - `characters`: where the map's tracked characters are, their ships, whether they are online.
- * - `labels`: bookmark labels of systems.
+ * - `labels`: the Labels of systems (WH1, WH2... matched by name on the other side), their custom
+ *   label and their temporary name (the bookmark label). A map's Tags never leave it.
  */
 export const shareScope = z.enum([
   'topology',

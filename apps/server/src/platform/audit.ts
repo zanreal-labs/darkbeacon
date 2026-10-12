@@ -7,7 +7,7 @@ import {
   type NestInterceptor,
 } from '@nestjs/common';
 import type { AuditDirectory } from '@darkbeacon/audit';
-import type { Actor, AuditContext, AuditOrigin, AuditScope } from '@darkbeacon/core';
+import { grantOf, type Actor, type AuditContext, type AuditOrigin, type AuditScope } from '@darkbeacon/core';
 import { Observable } from 'rxjs';
 import type { RequestLike } from './actor.js';
 
@@ -89,7 +89,9 @@ export function requestOrigin(request: RequestLike): AuditOrigin {
 /** The audit facts of an HTTP request made by `actor`. */
 export function requestContext(request: RequestLike, actor: Actor | null): AuditContext {
   const origin = requestOrigin(request);
-  if (actor?.kind === 'apiToken') return { channel: { kind: 'api', id: actor.id }, origin };
+  const grant = grantOf(actor);
+  // "via key <name>": the key and its name as they were, over the REST API or the MCP endpoint.
+  if (grant) return { channel: { kind: grant.channel, id: grant.credentialId, name: grant.name }, origin };
   if (actor?.kind === 'plugin') return { channel: { kind: 'plugin', id: actor.id }, origin };
   return { channel: { kind: 'web' }, origin };
 }

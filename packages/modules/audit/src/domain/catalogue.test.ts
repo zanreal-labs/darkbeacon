@@ -20,6 +20,8 @@ const system = {
   status: 'unknown',
   description: '',
   labelIds: [],
+  systemLabelIds: [],
+  customLabel: null,
   locked: false,
   visible: true,
   createdAt: 1,
@@ -87,6 +89,7 @@ const map = {
   ownerAccountId: 'a',
   settings: { scopes: ['wormhole'] },
   labels: [],
+  systemLabels: [],
   createdAt: 1,
   updatedAt: 1,
 };
@@ -158,6 +161,29 @@ const structure = {
   createdAt: 1,
   updatedAt: 1,
 };
+const apiKey = {
+  id: 'k1',
+  kind: 'pat',
+  name: 'Bot',
+  scopes: ['maps:read'],
+  readOnly: true,
+  expiresAt: null,
+  allowedIps: [],
+  rateLimitPerMinute: null,
+  ownerAccountId: 'a',
+  instanceRole: null,
+  mapGrants: [],
+  allMapsRole: null,
+};
+const sharing = {
+  mapId: 'm',
+  enabled: false,
+  slug: null,
+  scopes: ['topology', 'connectionStatus'],
+  noindex: true,
+  mcpMode: 'authenticated',
+  regenerated: false,
+};
 const BACKUP = 'darkbeacon-20261012T101500Z-v0.1.0-s20.db.gz';
 
 const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
@@ -168,6 +194,36 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
   'connection.updated': { data: { ...connection, massStatus: 'critical' }, before: connection },
   'connection.removed': { data: { id: 'c1' }, before: connection },
   'connection.passage': { data: { connectionId: 'c1', characterId: 9, shipTypeId: 670, mass: 1_200_000 } },
+  'connection.passage_updated': {
+    data: {
+      passageId: 'p1',
+      connectionId: 'c1',
+      characterId: null,
+      shipTypeId: 641,
+      mass: 148_400_000,
+      massMode: 'hot',
+    },
+    before: {
+      passageId: 'p1',
+      connectionId: 'c1',
+      characterId: null,
+      shipTypeId: 641,
+      mass: 98_400_000,
+      massMode: 'cold',
+    },
+  },
+  'connection.passage_removed': {
+    data: { passageId: 'p1', connectionId: 'c1' },
+    before: {
+      passageId: 'p1',
+      connectionId: 'c1',
+      characterId: null,
+      shipTypeId: 641,
+      mass: 98_400_000,
+      from: 31000005,
+      to: 30000142,
+    },
+  },
   'signature.added': { data: signature },
   'signature.updated': { data: { ...signature, group: 'gas' }, before: signature },
   'signature.removed': { data: { id: 's1', solarSystemId: signature.solarSystemId }, before: signature },
@@ -186,6 +242,10 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
   'labels.changed': {
     data: { labels: [{ id: 'l', name: 'Home', color: '#22aa66', description: '' }] },
     before: { labels: [] },
+  },
+  'system_labels.changed': {
+    data: { systemLabels: [{ id: 'wh1', name: 'WH1', description: '' }] },
+    before: { systemLabels: [] },
   },
   'map.share.offered': { data: share },
   'map.share.accepted': { data: { ...share, status: 'active', acceptedAt: 2 }, before: share },
@@ -218,6 +278,7 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
   'ping.removed': { data: { id: 'p1' }, before: { id: 'p1', solarSystemId: 31000005, message: 'Help' } },
   'access.rule_added': { data: rule },
   'access.rule_removed': { data: { id: 'r1' }, before: rule },
+  'access.public_link_changed': { data: { ...sharing, enabled: true }, before: sharing },
   'access.role_changed': {
     data: { accountId: 'b', role: 'admin' },
     before: { accountId: 'b', role: 'user' },
@@ -262,6 +323,38 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
   'structure.added': { data: structure },
   'structure.updated': { data: { ...structure, status: 'reinforced', endsAt: 5_000 }, before: structure },
   'structure.removed': { data: { id: 'st1', solarSystemId: structure.solarSystemId }, before: structure },
+  'api_key.created': { data: apiKey },
+  'api_key.updated': { data: { ...apiKey, name: 'Bot 2' }, before: apiKey },
+  'api_key.rotated': { data: { id: 'k1', name: 'Bot', kind: 'pat', ownerAccountId: 'a' } },
+  'api_key.revoked': { data: { id: 'k1', name: 'Bot', kind: 'pat', ownerAccountId: 'a' }, before: apiKey },
+  'oauth.grant_created': {
+    data: {
+      id: 'g1',
+      accountId: 'a',
+      clientId: 'https://client.example/meta',
+      clientName: 'Claude',
+      scopes: ['*:read'],
+      readOnly: true,
+    },
+  },
+  'oauth.grant_revoked': {
+    data: {
+      id: 'g1',
+      accountId: 'a',
+      clientId: 'c',
+      clientName: 'Claude',
+      scopes: ['*:read'],
+      readOnly: true,
+    },
+    before: {
+      id: 'g1',
+      accountId: 'a',
+      clientId: 'c',
+      clientName: 'Claude',
+      scopes: ['*:read'],
+      readOnly: true,
+    },
+  },
 };
 
 const facts = { accountId: 'a', accountName: 'Alice', characterId: 9, characterName: 'Alice Main' };

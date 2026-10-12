@@ -17,6 +17,7 @@ import type {
   SystemStatus,
   TimeStatus,
 } from '@darkbeacon/shared';
+import { labelIdsByName } from './commands.js';
 import { mergedId, parsePair, parseRefId, parseSignatureKey, refId } from './keys.js';
 import type { ChainMerge, MergedObject } from './merge.js';
 
@@ -76,8 +77,10 @@ export interface ViewContext {
   sources: ReadonlyMap<string, SourceInfo>;
   /** The map's own positions of systems. */
   layout: ReadonlyMap<number, Position>;
-  /** A composite's own notes, label assignments and locks, over the merged ones. */
+  /** A composite's own notes, Tags and locks, over the merged ones. */
   local?: ReadonlyMap<number, { notes: string | null; labelIds: string[]; locked: boolean }>;
+  /** The map's own Labels: merged label names show as the ones of the same name (any case). */
+  systemLabels?: ReadonlyArray<{ id: string; name: string }>;
 }
 
 const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
@@ -121,6 +124,10 @@ export function systemDto(object: MergedObject, ctx: ViewContext): MapSystemDto 
     labelIds:
       local?.labelIds ??
       (Array.isArray(f.labelIds) ? f.labelIds.filter((x): x is string => typeof x === 'string') : []),
+    systemLabelIds: Array.isArray(f.systemLabels)
+      ? labelIdsByName(f.systemLabels, ctx.systemLabels ?? [])
+      : [],
+    customLabel: str(f.customLabel),
     locked: local?.locked ?? f.locked === true,
     visible: true,
     createdAt: object.born,

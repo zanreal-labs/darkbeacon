@@ -1,4 +1,6 @@
-import type { AuditChannelDto, AuditEntryDto } from '@darkbeacon/shared';
+import type { AuditChannelDto, AuditEntryDto, ShareScope } from '@darkbeacon/shared';
+import { describeScopes } from './scope-builder';
+import { SHARE_SCOPE_TEXT } from './share-scopes';
 
 /**
  * Plain-language readings of audit entries, shared by the admin Audit tab and the map's history
@@ -9,6 +11,8 @@ export interface AuditNames {
   map?(mapId: string): string | undefined;
   account?(accountId: string): string | undefined;
   theme?(themeId: string): string | undefined;
+  /** A Label (WH1...) of a map by its id. */
+  systemLabel?(mapId: string, labelId: string): string | undefined;
 }
 
 export type AuditCategory = 'access' | 'map' | 'intel' | 'tracking' | 'instance' | 'plugins' | 'signIn';
@@ -44,6 +48,7 @@ const SYSTEM_PROCESSES: Record<string, string> = {
   mapping: 'Mapping',
   passages: 'Passage log',
   'signature-sweep': 'Old signature sweep',
+  sweeper: 'Connection cleanup',
 };
 
 export function channelLabel(channel: AuditChannelDto): string {
@@ -51,7 +56,9 @@ export function channelLabel(channel: AuditChannelDto): string {
     case 'web':
       return 'Web';
     case 'api':
-      return 'API token';
+      return 'API key';
+    case 'mcp':
+      return 'MCP';
     case 'plugin':
       return channel.id ? `Plugin ${channel.id}` : 'Plugin';
     default:
@@ -65,8 +72,11 @@ const FIELD_LABELS: Record<string, string> = {
   temporaryName: 'Temporary name',
   tag: 'Tag',
   description: 'Notes',
-  labelIds: 'Labels',
-  labels: 'Labels',
+  labelIds: 'Tags',
+  labels: 'Tags',
+  systemLabelIds: 'Labels',
+  systemLabels: 'Labels',
+  customLabel: 'Custom label',
   locked: 'Locked',
   position: 'Position',
   visible: 'On the map',
@@ -105,6 +115,13 @@ const FIELD_LABELS: Record<string, string> = {
   webhooksToPrivateNetworks: 'Webhooks to private networks',
   loginMethod: 'Sign-in',
   defaultMapId: 'Map that opens first',
+  expiredConnectionMinutes: 'Delete expired wormholes',
+  autoEol: 'Mark EOL when lifetime runs out',
+  staleSystemMinutes: 'Hide idle systems after',
+  massMode: 'Mass counted',
+  higgs: 'Higgs Anchor',
+  entangler: 'Mass entangler',
+  note: 'Note',
   configured: 'Connected',
   discord: 'Discord',
   channel: 'Channel',
@@ -121,6 +138,18 @@ const FIELD_LABELS: Record<string, string> = {
   subjectKind: 'Who',
   subjectId: 'Subject',
   reason: 'Reason',
+  scopes: 'Permissions',
+  readOnly: 'Read only',
+  expiresAt: 'Expires',
+  allowedIps: 'Allowed addresses',
+  rateLimitPerMinute: 'Requests a minute',
+  instanceRole: 'Instance role',
+  mapGrants: 'Map roles',
+  allMapsRole: 'Role on every map',
+  noindex: 'Hidden from search engines',
+  mcpMode: 'AI agents',
+  secret: 'Token',
+  clientName: 'App',
 };
 
 /** Fields that hold ids or internals: shown as "set" / "changed", never as the raw value. */
@@ -131,6 +160,7 @@ const OPAQUE = new Set([
   'subjectId',
   'disabledMapIds',
   'labelIds',
+  'mapGrants',
 ]);
 /** Fields that are noise in a change list. */
 const HIDDEN = new Set([
@@ -150,11 +180,59 @@ const HIDDEN = new Set([
   'updatedBy',
   'author',
   'typeId',
+  'passageId',
+  'kind',
+  'regenerated',
 ]);
+
+/** Mass in tonnes as the game shows it: "148 400 t". */
+export function formatTonnes(kg: number): string {
+  return `${Math.round(kg / 1000)
+    .toLocaleString('en-US')
+    .replace(/,/g, ' ')} t`;
+}
 
 const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-function value(field: string, v: unknown, names: AuditNames): string {
+const API_KEY_VERBS: Record<string, string> = {
+  'api_key.created': 'made',
+  'api_key.updated': 'changed',
+  'api_key.rotated': 'rotated',
+  'api_key.revoked': 'revoked',
+};
+
+const MCP_MODES: Record<string, string> = {
+  off: 'Off',
+  authenticated: 'API keys only',
+  public: 'Public too',
+};
+
+/** API key scopes in words (maps by name), or what a public link shows. */
+function scopesValue(v: unknown[], names: AuditNames): string {
+  const list = v.map(String);
+  if (list.length === 0) return 'none';
+  if (!list.some((s) => s.includes(':')))
+    return list.map((s) => SHARE_SCOPE_TEXT[s as ShareScope]?.label ?? titleCase(s)).join(', ');
+  const ids = [...new Set(list.flatMap((s) => /^map:([^:]+):/.exec(s)?.[1] ?? []))];
+  const maps = ids.map((id) => ({ id, name: names.map?.(id) ?? 'a map' }));
+  const text = describeScopes(list, maps, { everyMap: 'every map' }).join('; ');
+  return text.length > 120 ? `${text.slice(0, 117)}…` : text;
+}
+
+/** How a change came in when it was not the web app: "via key Spreadsheet", "via MCP (Client)". */
+function viaSuffix(channel: AuditChannelDto): string {
+  if (channel.kind === 'api') return channel.name ? ` via key ${channel.name}` : ' via an API key';
+  if (channel.kind === 'mcp') return channel.name ? ` via MCP (${channel.name})` : ' via MCP';
+  return '';
+}
+
+/** Names of a map's Labels by id, as far as they are known ("a label" for the others). */
+function labelNames(ids: unknown, mapId: string | null, names: AuditNames): string[] {
+  if (!Array.isArray(ids)) return [];
+  return ids.map((id) => (mapId && names.systemLabel?.(mapId, String(id))) || 'a label');
+}
+
+function value(field: string, v: unknown, names: AuditNames, mapId: string | null = null): string {
   if (field === 'eventRetentionDays') return typeof v === 'number' ? `${v} days` : 'Forever';
   if (field === 'endsAt' && typeof v === 'number')
     return `${new Date(v).toISOString().slice(0, 16).replace('T', ' ')} EVE`;
@@ -162,6 +240,14 @@ function value(field: string, v: unknown, names: AuditNames): string {
     const o = v as { name?: string; ticker?: string | null };
     return o.ticker ? `[${o.ticker}] ${o.name ?? ''}`.trim() : (o.name ?? 'set');
   }
+  if (field === 'expiredConnectionMinutes')
+    return typeof v === 'number' ? (v === 0 ? 'At once' : `${v} min later`) : 'Never';
+  if (field === 'staleSystemMinutes') return typeof v === 'number' ? `${v} min` : 'Never';
+  if (field === 'mass' && typeof v === 'number') return formatTonnes(v);
+  if (field === 'expiresAt') return typeof v === 'number' ? new Date(v).toLocaleDateString() : 'Never';
+  if (field === 'rateLimitPerMinute' && v === null) return 'Default';
+  if (field === 'mcpMode' && typeof v === 'string') return MCP_MODES[v] ?? v;
+  if (field === 'scopes' && Array.isArray(v)) return scopesValue(v, names);
   if (v === null || v === undefined || v === '') return '—';
   if (typeof v === 'boolean') return v ? 'Yes' : 'No';
   if ((field === 'location' || field === 'bookmarkParent') && typeof v === 'number')
@@ -175,8 +261,10 @@ function value(field: string, v: unknown, names: AuditNames): string {
     const scopes = (v as { scopes?: string[] }).scopes;
     return scopes?.length ? scopes.map(titleCase).join(', ') : '—';
   }
-  if (field === 'labels' && Array.isArray(v))
+  if ((field === 'labels' || field === 'systemLabels') && Array.isArray(v))
     return v.length ? v.map((l) => (l as { name?: string }).name ?? '').join(', ') : 'none';
+  if (field === 'systemLabelIds' && Array.isArray(v))
+    return v.length ? labelNames(v, mapId, names).join(', ') : 'none';
   if (OPAQUE.has(field)) return Array.isArray(v) ? (v.length ? `${v.length} set` : 'none') : 'set';
   if (Array.isArray(v)) return v.length ? v.map(String).join(', ') : 'none';
   if (typeof v === 'object') return 'changed';
@@ -187,10 +275,13 @@ function value(field: string, v: unknown, names: AuditNames): string {
 export function changeLines(entry: AuditEntryDto, names: AuditNames = {}): AuditChangeLine[] {
   const lines: AuditChangeLine[] = [];
   for (const [field, change] of Object.entries(entry.diff)) {
-    const label = FIELD_LABELS[field];
+    const label =
+      entry.type === 'access.public_link_changed' && field === 'scopes'
+        ? 'What the link shows'
+        : FIELD_LABELS[field];
     if (HIDDEN.has(field) || label === undefined) continue;
-    const before = value(field, change.before, names);
-    const after = value(field, change.after, names);
+    const before = value(field, change.before, names, entry.mapId);
+    const after = value(field, change.after, names, entry.mapId);
     // Opaque values (ids) that changed but read the same ("set" -> "set") still say so.
     lines.push(before === after ? { label, before: 'changed', after: '' } : { label, before, after });
   }
@@ -224,6 +315,34 @@ function ruleSubject(rule: Record<string, unknown>, names: AuditNames): string {
   }
 }
 
+/**
+ * A change of a system's Labels or custom label alone, in words: "added label WH1 to J123456",
+ * "set the custom label of J123456 to bait". Null for anything else.
+ */
+function labelChange(entry: AuditEntryDto, system: string, names: AuditNames): string | null {
+  const fields = Object.keys(entry.diff).filter((f) => f !== 'updatedAt');
+  if (fields.length !== 1) return null;
+  const custom = entry.diff.customLabel;
+  if (custom) {
+    const after = typeof custom.after === 'string' ? custom.after : '';
+    return after ? `set the custom label of ${system} to ${after}` : `removed the custom label of ${system}`;
+  }
+  const change = entry.diff.systemLabelIds;
+  if (!change) return null;
+  const before = Array.isArray(change.before) ? change.before.map(String) : [];
+  const after = Array.isArray(change.after) ? change.after.map(String) : [];
+  const added = after.filter((id) => !before.includes(id));
+  const removed = before.filter((id) => !after.includes(id));
+  const words = (ids: string[]) => {
+    const known = ids.flatMap((id) => (entry.mapId && names.systemLabel?.(entry.mapId, id)) || []);
+    if (known.length < ids.length) return ids.length === 1 ? 'a label' : `${ids.length} labels`;
+    return `${known.length === 1 ? 'label' : 'labels'} ${known.join(', ')}`;
+  };
+  if (added.length > 0 && removed.length === 0) return `added ${words(added)} to ${system}`;
+  if (removed.length > 0 && added.length === 0) return `removed ${words(removed)} from ${system}`;
+  return `changed the labels of ${system}`;
+}
+
 const PROVIDERS: Record<string, string> = {
   discord: 'Discord',
   eve: 'EVE Online',
@@ -255,7 +374,7 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
   const mapName = entry.mapId ? (names.map?.(entry.mapId) ?? 'a map') : 'a map';
   const read = (what: string, category: AuditCategory): AuditReading => ({
     who,
-    what,
+    what: what + viaSuffix(entry.channel),
     category,
     changes: changeLines(entry, names),
     via,
@@ -357,6 +476,30 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
       return read('changed the backup settings', 'instance');
     case 'character.unlinked':
       return read('unlinked a character', 'access');
+    case 'api_key.created':
+    case 'api_key.updated':
+    case 'api_key.rotated':
+    case 'api_key.revoked': {
+      const noun = data.kind === 'svc' ? 'service key' : 'API key';
+      const name = typeof data.name === 'string' ? data.name : null;
+      const verb = API_KEY_VERBS[entry.type] ?? 'changed';
+      return read(name ? `${verb} the ${noun} ${name}` : `${verb} an ${noun}`, 'access');
+    }
+    case 'access.public_link_changed':
+      return read(
+        entry.diff.regenerated?.after === true
+          ? `made a new public link for ${mapName}`
+          : entry.diff.enabled?.after === true
+            ? `made ${mapName} public`
+            : entry.diff.enabled?.after === false
+              ? `switched off the public link of ${mapName}`
+              : `changed the public link of ${mapName}`,
+        'access',
+      );
+    case 'oauth.grant_created':
+      return read(`let ${String(data.clientName ?? 'an app')} use Darkbeacon as them`, 'access');
+    case 'oauth.grant_revoked':
+      return read(`disconnected ${String(data.clientName ?? 'an app')}`, 'access');
     case 'map.created':
       return read(`created ${mapName}`, 'map');
     case 'map.settings_changed':
@@ -364,7 +507,9 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
     case 'map.removed':
       return read(`deleted ${mapName}`, 'map');
     case 'labels.changed':
-      return read('changed the labels', 'map');
+      return read(`changed the tags of ${mapName}`, 'map');
+    case 'system_labels.changed':
+      return read(`changed the labels of ${mapName}`, 'map');
     case 'routes.exits_changed':
       return read("updated the chain's exits", 'map');
     case 'routes.hubs_changed':
@@ -373,7 +518,10 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
       return read(entry.diff.visible ? `put ${system} back on the map` : `added ${system}`, 'map');
     case 'system.updated':
       return read(
-        Object.keys(entry.diff).length === 1 && entry.diff.position ? `moved ${system}` : `changed ${system}`,
+        labelChange(entry, system, names) ??
+          (Object.keys(entry.diff).length === 1 && entry.diff.position
+            ? `moved ${system}`
+            : `changed ${system}`),
         'map',
       );
     case 'system.removed':
@@ -385,7 +533,13 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
     case 'connection.removed':
       return read('removed a connection', 'map');
     case 'connection.passage':
-      return read('went through a connection', 'tracking');
+      return data.source === 'manual'
+        ? read('logged a jump through a connection', 'map')
+        : read('went through a connection', 'tracking');
+    case 'connection.passage_updated':
+      return read('changed how a jump’s mass counts', 'map');
+    case 'connection.passage_removed':
+      return read('deleted a jump from the passage log', 'map');
     case 'signature.added':
       return read(`added signature ${String(data.eveId ?? '')}`.trim(), 'intel');
     case 'signature.updated':
@@ -425,7 +579,7 @@ export const INSTANCE_AUDIT_KINDS = [
   {
     value: 'access',
     label: 'Roles and access',
-    types: ['access.*', 'character.unlinked', 'account.*'],
+    types: ['access.*', 'character.unlinked', 'account.*', 'api_key.*', 'oauth.*'],
   },
   { value: 'plugins', label: 'Plugins', types: ['plugin.*'] },
   { value: 'instance', label: 'Settings and themes', types: ['settings.*', 'theme.*', 'discord_bot.*'] },

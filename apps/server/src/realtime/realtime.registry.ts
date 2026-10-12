@@ -1,9 +1,24 @@
 import { Injectable } from '@nestjs/common';
-import { INSTANCE_STREAM, type Actor } from '@darkbeacon/core';
+import { INSTANCE_STREAM, type Actor, type DomainEvent } from '@darkbeacon/core';
+
+/**
+ * A stream that shows another stream through a filter (public maps: `public:<token>` shows
+ * `map:<id>` cut down to what the link shares). Its seq is the source stream's seq; events the
+ * filter drops still advance it, so subscribers resume without gaps.
+ */
+export interface StreamView {
+  /** The stream the events come from (`map:<id>`), or null when the id does not resolve. */
+  source(id: string): Promise<string | null>;
+  /** The event as subscribers of `stream` receive it, or null when they do not. */
+  project(id: string, event: DomainEvent, stream: string): Promise<DomainEvent | null>;
+}
 
 export interface StreamKind {
   /** May `actor` subscribe to `<kind>:<id>`? Called on subscribe and again after `access.*` events. */
   authorize(actor: Actor | null, id: string): boolean | Promise<boolean>;
+  /** Only on subscribe (not on re-checks): e.g. a rate limit per client address. */
+  admit?(id: string, client: { ip: string | null }): boolean;
+  view?: StreamView;
 }
 
 /**

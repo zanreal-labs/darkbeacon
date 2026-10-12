@@ -1,10 +1,12 @@
 /** Where a change came from, recorded with every event (see the audit trail). */
-export type AuditChannelKind = 'web' | 'api' | 'plugin' | 'system';
+export type AuditChannelKind = 'web' | 'api' | 'mcp' | 'plugin' | 'system';
 
 export interface AuditChannel {
   kind: AuditChannelKind;
-  /** API token id, plugin id, or the system process (`auto-mapping`, `esi`, `identity`...). */
+  /** API key id, plugin id, or the system process (`auto-mapping`, `esi`, `identity`...). */
   id?: string;
+  /** The API key's name (`api`, `mcp`), recorded as it was then. */
+  name?: string;
 }
 
 /** What the request looked like, when the change came over HTTP. */

@@ -1,6 +1,6 @@
 import { newId } from './ids.js';
 
-export type ActorKind = 'account' | 'apiToken' | 'system' | 'plugin';
+export type ActorKind = 'account' | 'apiToken' | 'public' | 'system' | 'plugin';
 
 /** Who caused an event, as recorded in the envelope. */
 export interface ActorRef {

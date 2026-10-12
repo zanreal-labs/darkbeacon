@@ -110,8 +110,30 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
     activity: (d) => ({
       shipTypeId: change(null, d.shipTypeId ?? null),
       ...(typeof d.mass === 'number' ? { mass: change(null, d.mass) } : {}),
+      ...(typeof d.massMode === 'string' ? { massMode: change(null, d.massMode) } : {}),
+      ...(typeof d.note === 'string' && d.note ? { note: change(null, d.note) } : {}),
     }),
     subjectCharacter: subject,
+  },
+  'connection.passage_updated': {
+    op: 'update',
+    entity: byId('passage', 'passageId'),
+    refs: (d, b) => [
+      ...ref('connection', either(d, b, 'connectionId')),
+      ...characterRefs(d),
+      ...ref('system', either(d, b, 'from')),
+      ...ref('system', either(d, b, 'to')),
+    ],
+    ignore: ['passageId', 'connectionId', 'characterId', 'from', 'to', 'source', 'shipTypeId'],
+  },
+  'connection.passage_removed': {
+    op: 'delete',
+    entity: byId('passage', 'passageId'),
+    refs: (d, b) => [
+      ...ref('connection', either(d, b, 'connectionId')),
+      ...ref('system', b?.from),
+      ...ref('system', b?.to),
+    ],
   },
   'signature.added': { op: 'create', entity: byId('signature'), refs: signatureRefs, ignore: AUTHORED },
   'signature.updated': { op: 'update', entity: byId('signature'), refs: signatureRefs, ignore: AUTHORED },
@@ -176,6 +198,11 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
     entity: () => ({ kind: 'labels', id: 'map' }),
     state: (d) => ({ labels: d.labels }),
   },
+  'system_labels.changed': {
+    op: 'update',
+    entity: () => ({ kind: 'systemLabels', id: 'map' }),
+    state: (d) => ({ systemLabels: d.systemLabels }),
+  },
   'map.share.offered': { ...SHARE, op: 'create' },
   'map.share.accepted': { ...SHARE, op: 'update' },
   'map.share.changed': { ...SHARE, op: 'update' },
@@ -216,6 +243,12 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
   'ping.removed': { op: 'delete', entity: byId('ping'), refs: (d, b) => ref('system', b?.solarSystemId) },
   'access.rule_added': { op: 'create', entity: byId('accessRule'), ignore: ['createdAt', 'mapId'] },
   'access.rule_removed': { op: 'delete', entity: byId('accessRule'), ignore: ['createdAt', 'mapId'] },
+  'access.public_link_changed': {
+    op: 'update',
+    entity: byId('publicLink', 'mapId'),
+    refs: (d) => ref('map', d.mapId),
+    ignore: ['mapId'],
+  },
   'access.role_changed': {
     op: 'update',
     entity: byId('account', 'accountId'),
@@ -341,6 +374,37 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
     entity: byId('structure'),
     refs: inSystem('structure'),
     ignore: AUTHORED,
+  },
+  'api_key.created': {
+    op: 'create',
+    entity: byId('apiKey'),
+    refs: (d) => ref('account', d.ownerAccountId),
+  },
+  'api_key.updated': {
+    op: 'update',
+    entity: byId('apiKey'),
+    refs: (d) => ref('account', d.ownerAccountId),
+  },
+  'api_key.rotated': {
+    op: 'activity',
+    entity: byId('apiKey'),
+    refs: (d) => ref('account', d.ownerAccountId),
+    activity: (d) => ({ secret: change('old', 'new'), name: change(null, d.name) }),
+  },
+  'api_key.revoked': {
+    op: 'delete',
+    entity: byId('apiKey'),
+    refs: (d) => ref('account', d.ownerAccountId),
+  },
+  'oauth.grant_created': {
+    op: 'create',
+    entity: byId('oauthGrant'),
+    refs: (d) => ref('account', d.accountId),
+  },
+  'oauth.grant_revoked': {
+    op: 'delete',
+    entity: byId('oauthGrant'),
+    refs: (d) => ref('account', d.accountId),
   },
 };
 

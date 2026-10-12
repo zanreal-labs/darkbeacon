@@ -36,6 +36,19 @@ const READERS: ReadonlyArray<[RouteDef, Reader]> = [
     }),
   ],
   [
+    routes.jumps.plan,
+    ({ response }) => {
+      const legs = field(field(response, 'route'), 'legs');
+      return {
+        event: 'jump_planned',
+        props: {
+          hull: field(field(response, 'ship'), 'hull'),
+          legs: count(Array.isArray(legs) ? legs.length : 0),
+        },
+      };
+    },
+  ],
+  [
     routes.routing.waypoint,
     ({ body }) => ({ event: 'waypoint_set', props: { mode: field(body, 'mode') ?? 'destination' } }),
   ],
@@ -58,6 +71,10 @@ const READERS: ReadonlyArray<[RouteDef, Reader]> = [
     }),
   ],
   [routes.maps.setBookmarkTemplate, () => ({ event: 'bookmark_template_changed', props: { scope: 'map' } })],
+  [
+    routes.connections.rollPlan,
+    ({ response }) => ({ event: 'roll_planned', props: { result: field(response, 'result') } }),
+  ],
   [
     routes.maps.updatePreferences,
     ({ body }) =>

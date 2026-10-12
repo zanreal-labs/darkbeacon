@@ -22,6 +22,7 @@ import type {
   ConnectionRepository,
   MapRepository,
   PassageRepository,
+  PilotDirectory,
   SignatureRepository,
   SystemRepository,
   UniverseCatalog,
@@ -34,6 +35,8 @@ export interface MappingPorts {
   connections: ConnectionRepository;
   signatures: SignatureRepository;
   passages: PassageRepository;
+  /** Names of the pilots of tracked jumps; absent: passages show no names. */
+  pilots?: PilotDirectory;
   /** Field change times and deletions, for maps that merge this one. */
   stamps: ChangeStamps;
   /** Merged chains of maps that merge others (sharing); absent: every map shows its own rows. */

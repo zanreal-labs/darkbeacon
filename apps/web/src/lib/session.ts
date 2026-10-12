@@ -9,10 +9,11 @@ export { isInstanceAdmin, meKey, providersKey } from './session-keys';
 /**
  * The signed-in account, or null when signed out; other errors stay errors. Pages rendered on the
  * server start with it filled in. In demo mode the server signs a visit in before the page renders
- * (the web app's proxy), so there is nothing to do here.
+ * (the web app's proxy), so there is nothing to do here. `enabled: false` never asks (public views).
  */
-export function useMe() {
+export function useMe({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
+    enabled,
     queryKey: meKey,
     queryFn: async (): Promise<MeDto | null> => {
       try {
@@ -27,12 +28,13 @@ export function useMe() {
   });
 }
 
-export function useProviders() {
+export function useProviders({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: providersKey,
     queryFn: () => api<AuthProvidersDto>(routes.auth.providers.path),
     retry: 1,
     staleTime: Infinity,
+    enabled,
   });
 }
 

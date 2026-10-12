@@ -17,6 +17,7 @@ import {
   MapPreferenceUseCases,
   MapSnapshotQuery,
   PassageRecorder,
+  PassageUseCases,
   MapUseCases,
   SignatureUseCases,
   StructureUseCases,
@@ -37,6 +38,7 @@ import { KyselyMapPreferenceRepository } from '../../adapters/mapping/kysely-pre
 import { DirectoryAuthors } from '../../adapters/mapping/author-directory.js';
 import { KyselyCommentRepository, KyselyStructureRepository } from '../../adapters/mapping/kysely-intel.js';
 import { AuditDirectoryRegistry } from '../../platform/audit.js';
+import { KyselyPilotDirectory } from '../../adapters/mapping/pilot-directory.js';
 import { MappingMapOwnership } from '../../adapters/mapping/map-ownership.js';
 import { isEventOfType } from '@darkbeacon/shared';
 import { AsyncAuditScope } from '../../platform/audit.js';
@@ -55,6 +57,7 @@ import {
 import { CommentsController, StructuresController } from './intel.controllers.js';
 import { SignatureSweep } from './signature-sweep.js';
 import { MergedWriteRouter } from './merged-writes.js';
+import { SweeperRuntime } from './sweeper.runtime.js';
 import { CHAIN_OVERLAY, MAP_OWNERSHIP, MAP_REPOSITORY, MAPPING_PORTS } from './mapping.tokens.js';
 
 const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
@@ -108,6 +111,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
         connections: new KyselyConnectionRepository(database),
         signatures: new KyselySignatureRepository(database),
         passages: new KyselyPassageRepository(database),
+        pilots: new KyselyPilotDirectory(database),
         stamps: new KyselyChangeStamps(database),
         overlay,
         universe,
@@ -130,6 +134,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
       ],
     },
     MergedWriteRouter,
+    SweeperRuntime,
     useCase(MapUseCases),
     useCase(SystemUseCases),
     useCase(ConnectionUseCases),
@@ -138,6 +143,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
     useCase(MapSnapshotQuery),
     useCase(ConnectionIntelQuery),
     useCase(PassageRecorder),
+    useCase(PassageUseCases),
     {
       provide: CommentUseCases,
       useFactory: (ports: MappingPorts, database: Database) =>
@@ -174,6 +180,10 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
     BookmarkNumberUseCases,
     CommentUseCases,
     StructureUseCases,
+    PassageUseCases,
+    SweeperRuntime,
+    ConnectionIntelQuery,
+    MergedWriteRouter,
   ],
 })
 export class MappingModule implements OnModuleInit, OnApplicationBootstrap {

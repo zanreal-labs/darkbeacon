@@ -4,6 +4,7 @@ import {
   CommentUseCases,
   ConnectionUseCases,
   MapUseCases,
+  PassageUseCases,
   SignatureUseCases,
   StructureUseCases,
   SystemUseCases,
@@ -30,6 +31,7 @@ export class DemoService {
     @Inject(SystemUseCases) private readonly systems: SystemUseCases,
     @Inject(ConnectionUseCases) private readonly connections: ConnectionUseCases,
     @Inject(SignatureUseCases) private readonly signatures: SignatureUseCases,
+    @Inject(PassageUseCases) private readonly passages: PassageUseCases,
     @Inject(AsyncAuditScope) private readonly audit: AsyncAuditScope,
     @Inject(SharingUseCases) private readonly sharing: SharingUseCases,
     @Inject(CommentUseCases) private readonly comments: CommentUseCases,
@@ -57,7 +59,7 @@ export class DemoService {
       const demoMapId = await this.audit.run(
         { channel: { kind: 'system', id: 'demo' }, origin: undefined },
         async () => {
-          const id = await seedDemoChain(actor, mapping);
+          const id = await seedDemoChain(actor, { ...mapping, passages: this.passages });
           // Two corporations' maps and the alliance chain merging them (shares between maps).
           await seedDemoAlliance(actor, mapping, this.sharing);
           return id;

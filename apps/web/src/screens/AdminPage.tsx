@@ -6,6 +6,7 @@ import {
   ArrowUpRight,
   Crown,
   DatabaseBackup,
+  KeyRound,
   MessageSquare,
   MoreHorizontal,
   Package,
@@ -80,8 +81,10 @@ import {
   TabsTrigger,
   useToast,
 } from '../ui';
+import { AdminApiAccess } from './AdminApiAccess';
 import { AuditTab } from './AuditTab';
 import { TelemetryCard } from './TelemetryCard';
+import { ChainCleanupCard } from './ChainCleanupCard';
 import { BackupsTab, useBackupStatus } from './BackupsTab';
 import styles from './settings.module.css';
 
@@ -91,6 +94,7 @@ const TABS = [
   { id: 'plugins', title: 'Plugins', icon: <Puzzle /> },
   { id: 'themes', title: 'Themes', icon: <Palette /> },
   { id: 'backups', title: 'Backups', icon: <DatabaseBackup /> },
+  { id: 'api', title: 'API access', icon: <KeyRound /> },
   { id: 'audit', title: 'Audit', icon: <ScrollText /> },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
@@ -99,7 +103,7 @@ const errorText = (e: unknown, fallback: string) => (e instanceof ApiError ? e.m
 
 const TITLE = 'Admin';
 const DESCRIPTION =
-  'Settings for this instance, the people on it, plugins, themes, backups and what changed.';
+  'Settings for this instance, the people on it, plugins, themes, backups, API access and what changed.';
 
 /** Query keys of the data the server renders the first tab with. */
 export const adminKeys = {
@@ -171,6 +175,9 @@ export function AdminPage() {
         </TabsContent>
         <TabsContent value="backups">
           <BackupsTab />
+        </TabsContent>
+        <TabsContent value="api">
+          <AdminApiAccess settingsKey={adminKeys.settings} />
         </TabsContent>
         <TabsContent value="audit">
           <AuditTab settingsKey={adminKeys.settings} />
@@ -252,6 +259,7 @@ function InstanceTab() {
       <DiscordBotSettings />
       {providers.data?.loginMethod === 'discord' && <DiscordAdminSettings />}
       <WebhookSettings />
+      <ChainCleanup />
       <TelemetryCard />
       <PluginSlot slot="settingsPage" props={{ mapId: null }} />
     </Stack>
@@ -617,6 +625,18 @@ function DiscordAdminSettings() {
         </Button>
       </CardFooter>
     </Card>
+  );
+}
+
+function ChainCleanup() {
+  const settings = useInstanceSettings();
+  const save = useSaveSettings('Cleanup saved');
+  return (
+    <ChainCleanupCard
+      settings={settings.data}
+      saving={save.isPending}
+      onSave={(patch) => save.mutate(patch)}
+    />
   );
 }
 

@@ -13,9 +13,18 @@ export interface WebUpstream {
   readonly origin: string;
 }
 
-/** `/api` and everything below it belongs to Nest. */
+/** OAuth metadata documents served by Nest (RFC 8414, RFC 9728). */
+export const WELL_KNOWN_PATHS = [
+  '/.well-known/oauth-protected-resource',
+  '/.well-known/oauth-protected-resource/mcp',
+  '/.well-known/oauth-authorization-server',
+  '/.well-known/openid-configuration',
+];
+
+/** `/api` and everything below it belongs to Nest, and so do the MCP endpoint and the OAuth metadata. */
 export function isApiPath(url: string): boolean {
-  return url === '/api' || url.startsWith('/api/') || url.startsWith('/api?');
+  const path = url.split('?')[0]!;
+  return path === '/api' || path.startsWith('/api/') || path === '/mcp' || WELL_KNOWN_PATHS.includes(path);
 }
 
 /** The realtime socket, handled by the Nest gateway. */

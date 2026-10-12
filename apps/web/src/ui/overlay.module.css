@@ -193,8 +193,8 @@
   }
 }
 
-/* Scoped to the dialog so it wins over the button's own position whatever order the CSS loads in. */
-.dialog > .close {
+/* Two classes: the button's own `position: relative` must not win, whichever stylesheet loads last. */
+.dialog .close {
   position: absolute;
   top: var(--dbk-space-3);
   right: var(--dbk-space-3);

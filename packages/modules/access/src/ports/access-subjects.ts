@@ -10,6 +10,8 @@ export interface AccessSubjectsSource {
 export interface MapOwnership {
   ownerOf(mapId: string): Promise<string | null>;
   mapsOwnedBy(accountId: string): Promise<string[]>;
+  /** Every map of the instance (service keys with a role on all maps). */
+  allMaps?(): Promise<string[]>;
 }
 
 export interface SubjectDescription {

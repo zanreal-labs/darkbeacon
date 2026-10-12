@@ -8,6 +8,7 @@ export const featureModules: Array<Type | DynamicModule> = [
   (await import('./universe/universe.module.js')).UniverseModule,
   (await import('./tracking/tracking.module.js')).TrackingModule,
   (await import('./routing/routing.module.js')).RoutingModule,
+  (await import('./jumps/jumps.module.js')).JumpsModule,
   (await import('./sharing/sharing.module.js')).SharingModule,
   (await import('./notifications/notifications.module.js')).NotificationsModule,
   (await import('./plugins/plugins.module.js')).PluginsModule,
@@ -17,4 +18,9 @@ export const featureModules: Array<Type | DynamicModule> = [
   (await import('./landing/landing.module.js')).LandingModule,
   (await import('./telemetry/telemetry.module.js')).TelemetryModule,
   (await import('./observability/observability.module.js')).ObservabilityModule,
+  (await import('./api-keys/api-keys.module.js')).ApiKeysModule,
+  (await import('./publishing/publishing.module.js')).PublishingModule,
+  (await import('./docs/docs.module.js')).DocsModule,
+  (await import('./oauth/oauth.module.js')).OAuthModule,
+  (await import('../mcp/mcp.module.js')).McpModule,
 ];

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'r
 import { useReactFlow } from '@xyflow/react';
 import {
   SYSTEM_PLACEMENT,
+  type ConnectionDto,
   type MapDto,
   type MapSummaryDto,
   type StreamSnapshotDto,
@@ -21,6 +22,11 @@ import { AddSystemSearch } from '../map/AddSystemSearch';
 import { MapCanvas, type FocusRequest, type MenuTarget } from '../map/MapCanvas';
 import { freeSpot } from '../map/geometry';
 import { connectionMenu, paneMenu, systemMenu } from '../map/menus';
+import { ConnectionSidebar } from '../map/connection/ConnectionSidebar';
+import { useConnectionIntel, useLivePassages, useMapIntel } from '../map/connection/data';
+import { LogJumpDialog } from '../map/connection/LogJumpDialog';
+import { RollingCalculator } from '../map/connection/RollingCalculator';
+import type { ConnectionTraffic } from '../map/ConnectionEdge';
 import { systemDisplayName } from '../map/SystemNode';
 import { useMapStore } from '../map/useMapStore';
 import { SystemSidebar } from '../map/sidebar/SystemSidebar';
@@ -36,6 +42,58 @@ interface OpenMenu {
   target: MenuTarget;
   x: number;
   y: number;
+}
+
+type ConnectionDialog = { kind: 'log' | 'roll'; connectionId: string };
+
+/** The rolling planner with the connection's intel (fetched, or shared with the open sidebar). */
+function RollDialog({
+  mapId,
+  connectionId,
+  merged,
+  onClose,
+}: {
+  mapId: string;
+  connectionId: string;
+  merged: boolean;
+  onClose(): void;
+}) {
+  const intel = useConnectionIntel(mapId, connectionId, merged);
+  return (
+    <RollingCalculator
+      open
+      onOpenChange={(open) => !open && onClose()}
+      mapId={mapId}
+      connectionId={connectionId}
+      intel={intel.data}
+    />
+  );
+}
+
+function LogDialog({
+  mapId,
+  connection,
+  names,
+  merged,
+  onClose,
+}: {
+  mapId: string;
+  connection: ConnectionDto;
+  names: { source: string; target: string };
+  merged: boolean;
+  onClose(): void;
+}) {
+  const intel = useConnectionIntel(mapId, connection.id, merged);
+  return (
+    <LogJumpDialog
+      open
+      onOpenChange={(open) => !open && onClose()}
+      mapId={mapId}
+      connection={connection}
+      names={names}
+      maxJumpMass={intel.data?.maxJumpMass ?? null}
+    />
+  );
 }
 
 /** The live map: canvas, search, the selected system's sidebar, context menus. Browser only (React Flow). */
@@ -61,6 +119,19 @@ export function MapView({
   const toast = useToast();
   const can = mapPermissions(role);
   const [selected, setSelected] = useState<number | null>(null);
+  // A clicked connection takes the sidebar instead of a system.
+  const [selectedConnection, setSelectedConnection] = useState<string | null>(null);
+  const [connectionDialog, setConnectionDialog] = useState<ConnectionDialog | null>(null);
+  const merged = !!state.sources;
+  useLivePassages(map.id);
+  const intel = useMapIntel(map.id);
+  const traffic = useMemo(
+    () =>
+      new Map<string, ConnectionTraffic>(
+        (intel.data ?? []).map((c) => [c.connectionId, { passages: c.mass.passages, passed: c.mass.passed }]),
+      ),
+    [intel.data],
+  );
   // The sidebar belongs to the selection: hidden with nothing selected, shown with each newly
   // selected system; the top bar's toggle hides it while the selection stays.
   const [panel, setPanel] = useState(true);
@@ -74,6 +145,9 @@ export function MapView({
   useEffect(() => {
     if (panel && selected !== null) track('panel_opened', { panel: 'system' });
   }, [panel, selected]);
+  useEffect(() => {
+    if (panel && selectedConnection !== null) track('panel_opened', { panel: 'connections' });
+  }, [panel, selectedConnection]);
   const [menu, setMenu] = useState<OpenMenu | null>(null);
   const [addAt, setAddAt] = useState<{ x: number; y: number } | null>(null);
   const [focus, setFocus] = useState({ search: 0, name: 0 });
@@ -82,22 +156,33 @@ export function MapView({
   const connectionPlugins = useSlot('connectionContextMenu', map.id);
   const widgetPlugins = useSlot('widget', map.id);
 
+  // Tags (`labels` in the data) and Labels (WH1...) of the map.
   const labels = (state.map ?? map).labels;
+  const systemLabels = (state.map ?? map).systemLabels ?? [];
   const ids = useMemo(() => [...state.systems.keys()], [state.systems]);
   const universe = useUniverseSystems(ids);
   const onMap = useMemo(() => new Set(ids), [ids]);
   const system = selected !== null ? state.systems.get(selected) : undefined;
+  const connection = selectedConnection !== null ? state.connections.get(selectedConnection) : undefined;
+  const endName = (id: number) => {
+    const sys = state.systems.get(id);
+    return sys ? systemDisplayName(sys, universe.get(id)) : (universe.get(id)?.name ?? 'Unknown system');
+  };
 
   const closeMenu = useCallback(() => setMenu(null), []);
-  const covered = system && panel ? cover : { right: 0, bottom: 0 };
+  const covered = (system || connection) && panel ? cover : { right: 0, bottom: 0 };
 
   const select = (solarSystemId: number, center = false) => {
+    setSelectedConnection(null);
     setSelected(solarSystemId);
     setPanel(true);
     setFocusNode((f) => ({ id: solarSystemId, center, n: (f?.n ?? 0) + 1 }));
   };
 
-  const deselect = () => setFocusNode((f) => ({ id: null, center: false, n: (f?.n ?? 0) + 1 }));
+  const deselect = () => {
+    setSelectedConnection(null);
+    setFocusNode((f) => ({ id: null, center: false, n: (f?.n ?? 0) + 1 }));
+  };
 
   // A right click only opens the menu: it does not select the system or open the panel.
   const openMenu = (target: MenuTarget, x: number, y: number) => setMenu({ target, x, y });
@@ -117,12 +202,14 @@ export function MapView({
           system: sys,
           name,
           labels,
+          systemLabels,
           can: permissionsFor(can, sys.provenance, map.kind === 'composite'),
           store,
           plugins: systemPlugins,
           characters: me.data?.characters,
           notify: toast,
           onManageLabels: () => settings.show('labels'),
+          onManageTags: () => settings.show('tags'),
         }),
       };
     }
@@ -146,6 +233,8 @@ export function MapView({
           can: permissionsFor(can, connection.provenance),
           store,
           plugins: connectionPlugins,
+          onLogJump: () => setConnectionDialog({ kind: 'log', connectionId: connection.id }),
+          onPlanRoll: () => setConnectionDialog({ kind: 'roll', connectionId: connection.id }),
         }),
       };
     }
@@ -203,13 +292,22 @@ export function MapView({
         state={state}
         loaded={store.loaded}
         labels={labels}
+        systemLabels={systemLabels}
         universe={universe}
         can={can}
         store={store}
         onSelect={(id) => {
           if (id !== null && id !== selected) setPanel(true);
+          if (id !== null) setSelectedConnection(null);
           setSelected(id);
         }}
+        onSelectConnection={(id) => {
+          if (id === null) return setSelectedConnection(null);
+          if (id !== selectedConnection) setPanel(true);
+          setSelected(null);
+          setSelectedConnection(id);
+        }}
+        traffic={traffic}
         focus={focusNode}
         onMenu={openMenu}
         coveredRight={covered.right}
@@ -238,11 +336,19 @@ export function MapView({
           onToggle={sourceFilter.toggle}
           className={styles.toolButton}
         />
-        {system && (
+        {(system || connection) && (
           <IconButton
             variant="secondary"
             className={styles.toolButton}
-            label={panel ? 'Hide system panel' : 'Show system panel'}
+            label={
+              connection
+                ? panel
+                  ? 'Hide connection panel'
+                  : 'Show connection panel'
+                : panel
+                  ? 'Hide system panel'
+                  : 'Show system panel'
+            }
             aria-pressed={panel}
             icon={<PanelRight />}
             onClick={() => setPanel((p) => !p)}
@@ -302,6 +408,7 @@ export function MapView({
           info={universe.get(system.solarSystemId)}
           universe={universe}
           labels={labels}
+          systemLabels={systemLabels}
           state={state}
           can={permissionsFor(can, system.provenance, map.kind === 'composite')}
           store={store}
@@ -317,6 +424,45 @@ export function MapView({
       )}
 
       <SignatureLayer mapId={map.id} state={state} universe={universe} store={store} canEdit={can.edit} />
+      {connection && !system && (
+        <ConnectionSidebar
+          mapId={map.id}
+          connection={connection}
+          names={{ source: endName(connection.source), target: endName(connection.target) }}
+          universe={universe}
+          can={permissionsFor(can, connection.provenance)}
+          store={store}
+          merged={merged}
+          open={panel}
+          onClose={deselect}
+          onSelectSystem={(id) => select(id, true)}
+          onCover={onCover}
+          onLogJump={() => setConnectionDialog({ kind: 'log', connectionId: connection.id })}
+          onPlanRoll={() => setConnectionDialog({ kind: 'roll', connectionId: connection.id })}
+          note={<ProvenanceLine provenance={connection.provenance} sources={state.sources} />}
+        />
+      )}
+
+      {connectionDialog?.kind === 'roll' && (
+        <RollDialog
+          mapId={map.id}
+          connectionId={connectionDialog.connectionId}
+          merged={merged}
+          onClose={() => setConnectionDialog(null)}
+        />
+      )}
+      {connectionDialog?.kind === 'log' && state.connections.get(connectionDialog.connectionId) && (
+        <LogDialog
+          mapId={map.id}
+          connection={state.connections.get(connectionDialog.connectionId)!}
+          names={{
+            source: endName(state.connections.get(connectionDialog.connectionId)!.source),
+            target: endName(state.connections.get(connectionDialog.connectionId)!.target),
+          }}
+          merged={merged}
+          onClose={() => setConnectionDialog(null)}
+        />
+      )}
 
       <ul className={styles.notices} aria-live="polite">
         {store.notices.map((n) => (

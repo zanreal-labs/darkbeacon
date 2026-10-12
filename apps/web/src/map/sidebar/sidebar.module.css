@@ -119,17 +119,6 @@
   white-space: nowrap;
 }
 
-.tag {
-  flex: none;
-  padding: 0 5px;
-  border: 1px solid var(--dbk-color-border-strong);
-  border-radius: var(--dbk-radius-small);
-  color: var(--dbk-color-text-muted);
-  font-family: var(--dbk-font-family-mono);
-  font-size: var(--dbk-font-size-xs);
-  line-height: 18px;
-}
-
 .identityActions {
   display: inline-flex;
   flex: none;
@@ -458,6 +447,46 @@
 
 .labelChip:disabled {
   cursor: default;
+}
+
+/* Labels (WH1...) are plain text markers: neutral, bold, filled when on. */
+.systemLabelChip {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius-small);
+  background: none;
+  color: var(--dbk-color-text-muted);
+  font: inherit;
+  font-size: var(--dbk-font-size-small);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.systemLabelChip:hover:not(:disabled, [aria-pressed='true']) {
+  border-color: var(--dbk-color-border-strong);
+  color: var(--dbk-color-text);
+}
+
+/* On: filled with the text colour, so on and off read apart without any hue. */
+.systemLabelChip[aria-pressed='true'],
+.systemLabelChip[data-custom] {
+  border-color: var(--dbk-color-text);
+  background: var(--dbk-color-text);
+  color: var(--dbk-color-surface);
+}
+
+.systemLabelChip:disabled {
+  cursor: default;
+}
+
+/* The custom label field after the chips: room for a word, the rest of the row when there is. */
+.customLabel {
+  flex: 1 1 96px;
+  min-width: 96px;
+  padding-left: 7px;
 }
 
 .labelSwatch {

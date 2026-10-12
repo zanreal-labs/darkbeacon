@@ -12,7 +12,7 @@ import {
 import type { ConnectionDto } from '@darkbeacon/shared';
 import { connectionFixture, MAP_ID } from '../test/fixtures';
 import { installFlowMocks, renderWithProviders } from '../test/setup';
-import { ConnectionEdge, type ConnectionEdgeType } from './ConnectionEdge';
+import { ConnectionEdge, trafficLine, type ConnectionEdgeType } from './ConnectionEdge';
 
 installFlowMocks();
 
@@ -69,7 +69,7 @@ describe('ConnectionEdge', () => {
     expect(line(container).style.strokeWidth).toBe('var(--dbk-edge-width)');
     expect(core(container)?.style.stroke).toBe('var(--dbk-edge-mass-fresh)');
     // The line runs between the node borders, not their centres.
-    expect(line(container).getAttribute('d')).toBe('M 160,30 L 400,30');
+    expect(line(container).getAttribute('d')).toBe('M 80,30 L 480,30');
     expect(label(container).textContent).toBe('');
   });
 
@@ -85,7 +85,7 @@ describe('ConnectionEdge', () => {
       }),
     );
     const halo = container.querySelector('[data-underlay="dangerous"]')!;
-    expect(halo.getAttribute('d')).toBe('M 160,30 L 400,30');
+    expect(halo.getAttribute('d')).toBe('M 80,30 L 480,30');
     // The halo is drawn first, so it sits beneath the line.
     expect(halo.compareDocumentPosition(line(container))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
 
@@ -129,5 +129,14 @@ describe('ConnectionEdge', () => {
     const bridge = await renderEdge(connectionFixture('b', 1, 2, { type: 'bridge', shipSize: 'capital' }));
     expect(line(bridge.container).style.stroke).toBe('var(--dbk-edge-bridge)');
     expect(line(bridge.container).style.strokeDasharray).toMatch(/^0\.01 /);
+  });
+});
+
+describe('the hover card traffic line', () => {
+  it('counts the jumps and their mass, and says nothing without any', () => {
+    expect(trafficLine({ passages: 3, passed: 445_200_000 })).toBe('3 jumps counted, 445 200 t');
+    expect(trafficLine({ passages: 1, passed: 98_400_000 })).toBe('1 jump counted, 98 400 t');
+    expect(trafficLine({ passages: 0, passed: 0 })).toBeNull();
+    expect(trafficLine(undefined)).toBeNull();
   });
 });
