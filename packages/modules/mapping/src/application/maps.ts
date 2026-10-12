@@ -89,6 +89,9 @@ export class MapUseCases extends MappingUseCases {
           ...(request.settings?.bookmarkNumbering
             ? { bookmarkNumbering: request.settings.bookmarkNumbering }
             : {}),
+          ...(request.settings?.signatureRetentionDays !== undefined
+            ? { signatureRetentionDays: request.settings.signatureRetentionDays }
+            : {}),
         },
       };
       if (!changes(current, next)) return current;

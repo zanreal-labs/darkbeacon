@@ -19,7 +19,9 @@ describe('Markdown', () => {
 
   it('renders emphasis, code and safe links that open in a new tab', () => {
     const { container } = render(
-      <Markdown text={'**Keepstar** in *range*, `code`, [zkill](https://zkillboard.com) and https://eve.example/x.'} />,
+      <Markdown
+        text={'**Keepstar** in *range*, `code`, [zkill](https://zkillboard.com) and https://eve.example/x.'}
+      />,
     );
     expect(container.querySelector('strong')?.textContent).toBe('Keepstar');
     expect(container.querySelector('em')?.textContent).toBe('range');

@@ -11,6 +11,7 @@ import { Database } from '@darkbeacon/db';
 import {
   ChainOverlaySlot,
   BookmarkNumberUseCases,
+  CommentUseCases,
   ConnectionIntelQuery,
   ConnectionUseCases,
   MapPreferenceUseCases,
@@ -18,6 +19,7 @@ import {
   PassageRecorder,
   MapUseCases,
   SignatureUseCases,
+  StructureUseCases,
   SystemUseCases,
   type MapRepository,
   type MappingPorts,
@@ -32,6 +34,9 @@ import {
   KyselySystemRepository,
 } from '../../adapters/mapping/kysely-repositories.js';
 import { KyselyMapPreferenceRepository } from '../../adapters/mapping/kysely-preferences.js';
+import { DirectoryAuthors } from '../../adapters/mapping/author-directory.js';
+import { KyselyCommentRepository, KyselyStructureRepository } from '../../adapters/mapping/kysely-intel.js';
+import { AuditDirectoryRegistry } from '../../platform/audit.js';
 import { MappingMapOwnership } from '../../adapters/mapping/map-ownership.js';
 import { isEventOfType } from '@darkbeacon/shared';
 import { AsyncAuditScope } from '../../platform/audit.js';
@@ -47,6 +52,8 @@ import {
   SignaturesController,
   SystemsController,
 } from './mapping.controllers.js';
+import { CommentsController, StructuresController } from './intel.controllers.js';
+import { SignatureSweep } from './signature-sweep.js';
 import { MergedWriteRouter } from './merged-writes.js';
 import { CHAIN_OVERLAY, MAP_OWNERSHIP, MAP_REPOSITORY, MAPPING_PORTS } from './mapping.tokens.js';
 
@@ -68,6 +75,8 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
     ConnectionsController,
     BookmarkNumbersController,
     SignaturesController,
+    CommentsController,
+    StructuresController,
   ],
   providers: [
     {
@@ -92,6 +101,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
         clock: Clock,
         access: MapAccess,
         overlay: ChainOverlaySlot,
+        directory: AuditDirectoryRegistry,
       ): MappingPorts => ({
         maps,
         systems: new KyselySystemRepository(database),
@@ -101,6 +111,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
         stamps: new KyselyChangeStamps(database),
         overlay,
         universe,
+        authors: new DirectoryAuthors(directory),
         access,
         events,
         uow,
@@ -115,6 +126,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
         CLOCK,
         MAP_ACCESS,
         CHAIN_OVERLAY,
+        AuditDirectoryRegistry,
       ],
     },
     MergedWriteRouter,
@@ -126,6 +138,19 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
     useCase(MapSnapshotQuery),
     useCase(ConnectionIntelQuery),
     useCase(PassageRecorder),
+    {
+      provide: CommentUseCases,
+      useFactory: (ports: MappingPorts, database: Database) =>
+        new CommentUseCases({ ...ports, comments: new KyselyCommentRepository(database) }),
+      inject: [MAPPING_PORTS, Database],
+    },
+    {
+      provide: StructureUseCases,
+      useFactory: (ports: MappingPorts, database: Database) =>
+        new StructureUseCases({ ...ports, structures: new KyselyStructureRepository(database) }),
+      inject: [MAPPING_PORTS, Database],
+    },
+    SignatureSweep,
     {
       provide: MapPreferenceUseCases,
       useFactory: (database: Database, access: MapAccess, clock: Clock) =>
@@ -147,6 +172,8 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
     ConnectionUseCases,
     SignatureUseCases,
     BookmarkNumberUseCases,
+    CommentUseCases,
+    StructureUseCases,
   ],
 })
 export class MappingModule implements OnModuleInit, OnApplicationBootstrap {

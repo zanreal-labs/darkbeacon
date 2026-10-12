@@ -16,6 +16,7 @@ import {
 import type { EventPayloads, EventType } from '@darkbeacon/shared';
 import type { MapSystem } from '../domain/map.js';
 import type {
+  AuthorDirectory,
   ChainOverlay,
   ChangeStamps,
   ConnectionRepository,
@@ -38,6 +39,8 @@ export interface MappingPorts {
   /** Merged chains of maps that merge others (sharing); absent: every map shows its own rows. */
   overlay?: ChainOverlay;
   universe: UniverseCatalog;
+  /** Names written on signatures, comments and structures; absent: nobody is named. */
+  authors?: AuthorDirectory;
   access: MapAccess;
   events: EventLog;
   uow: UnitOfWork;

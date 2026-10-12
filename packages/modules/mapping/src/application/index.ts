@@ -2,6 +2,8 @@
 // changes state through ports and appends events inside one UnitOfWork transaction.
 export { EventBatch, MappingUseCases, type MappingPorts } from './base.js';
 export * from './bookmark-numbers.js';
+export * from './comments.js';
+export * from './structures.js';
 export * from './connections.js';
 export * from './intel.js';
 export * from './maps.js';

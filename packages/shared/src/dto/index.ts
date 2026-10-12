@@ -17,3 +17,7 @@ export * from './presence.js';
 export * from './sharing.js';
 export * from './observability.js';
 export * from './backups.js';
+export * from './authors.js';
+export * from './comments.js';
+export * from './wormhole-spawns.js';
+export * from './structures.js';

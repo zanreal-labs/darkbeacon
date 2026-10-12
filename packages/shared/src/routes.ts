@@ -620,6 +620,24 @@ export const routes = {
       auth: 'account',
       mapRole: 'member',
     }),
+    /** Several at once, with the cascades; returns what was removed, for an undo. */
+    removeMany: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/systems/:solarSystemId/signatures/remove',
+      auth: 'account',
+      mapRole: 'member',
+      body: dto.RemoveSignaturesRequest,
+      response: dto.RemovedSignaturesDto,
+    }),
+    /** Puts removed signatures back (the undo of a removal or of a paste that removed some). */
+    restore: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/signatures/restore',
+      auth: 'account',
+      mapRole: 'member',
+      body: dto.RestoreSignaturesRequest,
+      response: z.array(dto.SignatureDto),
+    }),
   },
 
   /** Shares between maps: a source map's admins offer, the target map's admins accept. */
@@ -974,6 +992,88 @@ export const routes = {
       response: dto.ThemeDto,
     }),
     uninstall: route({ method: 'DELETE', path: '/api/admin/themes/:themeId', auth: 'admin' }),
+  },
+
+  /** Comment threads on the systems of a map (newest first). */
+  comments: {
+    list: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/systems/:solarSystemId/comments',
+      auth: 'account',
+      mapRole: 'viewer',
+      response: z.array(dto.CommentDto),
+    }),
+    add: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/systems/:solarSystemId/comments',
+      auth: 'account',
+      mapRole: 'member',
+      body: dto.AddCommentRequest,
+      response: dto.CommentDto,
+    }),
+    remove: route({
+      method: 'DELETE',
+      path: '/api/maps/:mapId/comments/:commentId',
+      auth: 'account',
+      mapRole: 'member',
+    }),
+  },
+
+  /** Structures in the systems of a map, with owners and timers. */
+  structures: {
+    list: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/systems/:solarSystemId/structures',
+      auth: 'account',
+      mapRole: 'viewer',
+      response: z.array(dto.StructureDto),
+    }),
+    /** Every structure of the map, soonest timer first (timer boards and bots). */
+    listMap: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/structures',
+      auth: 'account',
+      mapRole: 'viewer',
+      response: z.array(dto.StructureDto),
+    }),
+    add: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/systems/:solarSystemId/structures',
+      auth: 'account',
+      mapRole: 'member',
+      body: dto.AddStructureRequest,
+      response: dto.StructureDto,
+    }),
+    paste: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/systems/:solarSystemId/structures/paste',
+      auth: 'account',
+      mapRole: 'member',
+      body: dto.PasteStructuresRequest,
+      response: dto.PasteStructuresResult,
+    }),
+    setOwners: route({
+      method: 'PUT',
+      path: '/api/maps/:mapId/systems/:solarSystemId/structures/owner',
+      auth: 'account',
+      mapRole: 'member',
+      body: dto.SetStructureOwnersRequest,
+      response: z.array(dto.StructureDto),
+    }),
+    update: route({
+      method: 'PATCH',
+      path: '/api/maps/:mapId/structures/:structureId',
+      auth: 'account',
+      mapRole: 'member',
+      body: dto.UpdateStructureRequest,
+      response: dto.StructureDto,
+    }),
+    remove: route({
+      method: 'DELETE',
+      path: '/api/maps/:mapId/structures/:structureId',
+      auth: 'account',
+      mapRole: 'member',
+    }),
   },
 } as const;
 

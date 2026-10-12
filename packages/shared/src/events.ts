@@ -7,6 +7,8 @@ import type { ConnectionDto, LabelDto, MapDto, MapSystemDto, SignatureDto } from
 import type { HubDto, MapExitDto } from './dto/routing.js';
 import type { CharacterPresenceDto } from './dto/tracking.js';
 import type { MapShareDto, MapSourceDto } from './dto/sharing.js';
+import type { CommentDto } from './dto/comments.js';
+import type { StructureDto } from './dto/structures.js';
 
 export const DomainEventSchema = z.object({
   id: z.string(),
@@ -103,6 +105,12 @@ export interface EventPayloads {
   /** Instance stream: a plugin was installed, upgraded, enabled, disabled or failed. */
   'plugin.updated': PluginDto;
   'plugin.removed': { id: string };
+  /** A comment was added to a system of the map. */
+  'comment.added': CommentDto;
+  'comment.removed': { id: string; solarSystemId: number };
+  'structure.added': StructureDto;
+  'structure.updated': StructureDto;
+  'structure.removed': { id: string; solarSystemId: number };
 }
 
 export type EventType = keyof EventPayloads;
@@ -144,6 +152,11 @@ export const EVENT_TYPES = [
   'character.unlinked',
   'plugin.updated',
   'plugin.removed',
+  'comment.added',
+  'comment.removed',
+  'structure.added',
+  'structure.updated',
+  'structure.removed',
 ] as const satisfies readonly EventType[];
 
 export type TypedEvent<K extends EventType = EventType> = {

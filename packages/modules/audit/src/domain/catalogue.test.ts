@@ -133,6 +133,31 @@ const webhook = {
  * updates and removals, what it passes as `before`. A new event type does not compile until it
  * has a sample here, and the test below fails unless its audit record is complete.
  */
+const author = { accountId: 'a', characterId: 9, name: 'Alice Main' };
+const comment = {
+  id: 'cm1',
+  mapId: 'm',
+  solarSystemId: 31000005,
+  text: 'Keepstar here',
+  author,
+  createdAt: 1,
+};
+const structure = {
+  id: 'st1',
+  mapId: 'm',
+  solarSystemId: 31000005,
+  typeId: 35832,
+  typeName: 'Astrahus',
+  name: 'Home',
+  owner: { id: 98000001, name: 'Some Corp', ticker: 'SOME' },
+  status: 'powered',
+  endsAt: null,
+  notes: '',
+  createdBy: author,
+  updatedBy: author,
+  createdAt: 1,
+  updatedAt: 1,
+};
 const BACKUP = 'darkbeacon-20261012T101500Z-v0.1.0-s20.db.gz';
 
 const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
@@ -232,6 +257,11 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
     data: { intervalMinutes: 360, keep: 14, maxAgeDays: null, notifyHost: null, notifySuccess: false },
     before: { intervalMinutes: 1440, keep: 14, maxAgeDays: null, notifyHost: null, notifySuccess: false },
   },
+  'comment.added': { data: comment },
+  'comment.removed': { data: { id: 'cm1', solarSystemId: comment.solarSystemId }, before: comment },
+  'structure.added': { data: structure },
+  'structure.updated': { data: { ...structure, status: 'reinforced', endsAt: 5_000 }, before: structure },
+  'structure.removed': { data: { id: 'st1', solarSystemId: structure.solarSystemId }, before: structure },
 };
 
 const facts = { accountId: 'a', accountName: 'Alice', characterId: 9, characterName: 'Alice Main' };
