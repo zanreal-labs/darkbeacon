@@ -31,13 +31,13 @@ export interface ConnectionEdgeData extends Record<string, unknown> {
   traffic?: ConnectionTraffic;
 }
 
-/** "3 jumps, 445 200 t since marked". */
+/** "3 jumps counted, 445 200 t". */
 export function trafficLine(traffic: ConnectionTraffic | undefined): string | null {
   if (!traffic || traffic.passages === 0) return null;
   const tonnes = Math.round(traffic.passed / 1000)
     .toLocaleString('en-US')
     .replace(/,/g, ' ');
-  return `${traffic.passages} jump${traffic.passages === 1 ? '' : 's'}, ${tonnes} t since marked`;
+  return `${traffic.passages} jump${traffic.passages === 1 ? '' : 's'} counted, ${tonnes} t`;
 }
 
 export type ConnectionEdgeType = Edge<ConnectionEdgeData, 'connection'>;
