@@ -213,6 +213,11 @@ export class ChainWrites {
       type: request.type,
       name: request.name,
       description: request.description,
+      tempName: request.tempName,
+      destination: request.destination,
+      bubbled: request.bubbled,
+      timeStatus: request.timeStatus,
+      massStatus: request.massStatus,
     });
     const holders = this.systemWriters(map, solarSystemId);
     if (holders.length === 0) throw new ForbiddenError(this.refusal(map, 'signature'));

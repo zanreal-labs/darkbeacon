@@ -45,6 +45,13 @@ export const FIELD_SCOPES: Record<ChainObjectKind, Record<string, FieldScope>> =
     notes: 'signatures',
     /** The pair key of the connection it leads through, or null. */
     link: 'signatures',
+    /** A wormhole's temporary name, where a K162 leads, whether it is bubbled. */
+    tempName: 'signatures',
+    destination: 'signatures',
+    bubbled: 'signatures',
+    /** Lifetime and mass the scanning pilot saw on the hole. */
+    time: 'signatures',
+    mass: 'signatures',
   },
   character: {
     name: 'characters',
