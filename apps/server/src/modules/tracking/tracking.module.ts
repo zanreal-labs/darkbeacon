@@ -16,7 +16,9 @@ import {
 } from '@darkbeacon/tracking';
 import { ConnectionUseCases, SystemUseCases, type MappingPorts } from '@darkbeacon/mapping';
 import { CharacterService } from '@darkbeacon/identity';
+import { TokenBucket } from '../../adapters/rate-limit/token-bucket.js';
 import { HttpEsiGateway } from '../../adapters/tracking/http-esi-gateway.js';
+import { RealtimeMapViewers } from '../../adapters/tracking/realtime-map-viewers.js';
 import { MappingAutoMapTarget } from '../../adapters/tracking/mapping-auto-map-target.js';
 import { KyselyTrackingRepository } from '../../adapters/tracking/kysely-tracking-repository.js';
 import type { AppConfig } from '../../config/config.js';
@@ -31,6 +33,7 @@ import {
   UNIT_OF_WORK,
   UNIVERSE_CATALOG,
 } from '../../platform/tokens.js';
+import { RealtimeHub } from '../../realtime/realtime.hub.js';
 import { MappingModule } from '../mapping/mapping.module.js';
 import { MAPPING_PORTS } from '../mapping/mapping.tokens.js';
 import { TrackingController } from './tracking.controller.js';
@@ -38,6 +41,12 @@ import { TrackingRuntime } from './tracking.runtime.js';
 
 export const TRACKING_REPOSITORY = 'TrackingRepository';
 export const ESI_GATEWAY = 'EsiGateway';
+/**
+ * ESI requests per second the poller may send, over all characters: about 700 online characters
+ * at 0.42 requests a second each (location and ship every 5 s, online every 60 s). See
+ * docs/scaling.md for the arithmetic.
+ */
+export const ESI_REQUESTS_PER_SECOND = 300;
 
 const { version } = JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')) as {
   version: string;
@@ -105,6 +114,7 @@ const { version } = JSON.parse(readFileSync(new URL('../../../package.json', imp
         events: EventLog,
         uow: UnitOfWork,
         clock: Clock,
+        hub: RealtimeHub,
       ) => {
         const logger = new Logger('TrackingPoller');
         return new TrackingPoller({
@@ -115,6 +125,8 @@ const { version } = JSON.parse(readFileSync(new URL('../../../package.json', imp
           events,
           uow,
           clock,
+          budget: new TokenBucket(clock, ESI_REQUESTS_PER_SECOND),
+          viewers: new RealtimeMapViewers(hub),
           onError: (error, characterId) =>
             logger.error(`polling character ${characterId} failed: ${String(error)}`),
         });
@@ -127,6 +139,7 @@ const { version } = JSON.parse(readFileSync(new URL('../../../package.json', imp
         EVENT_LOG,
         UNIT_OF_WORK,
         CLOCK,
+        RealtimeHub,
       ],
     },
     {

@@ -20,6 +20,8 @@ export class MemoryTrackingRepository implements TrackingRepository {
 
   listTracked = () => Promise.resolve([...this.tracked]);
   listTrackedOnMap = (mapId: string) => Promise.resolve(this.tracked.filter((t) => t.mapId === mapId));
+  findTracked = (mapId: string, characterId: number) =>
+    Promise.resolve(this.tracked.find((t) => t.mapId === mapId && t.characterId === characterId) ?? null);
 
   setTracked(entry: TrackedCharacter, tracked: boolean): Promise<void> {
     this.tracked = this.tracked.filter((t) => t.mapId !== entry.mapId || t.characterId !== entry.characterId);

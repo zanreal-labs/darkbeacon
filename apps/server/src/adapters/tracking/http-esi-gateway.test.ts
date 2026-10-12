@@ -155,6 +155,49 @@ describe('HttpEsiGateway', () => {
     expect(await esi.location(PILOT, 't')).toMatchObject({ retryAt: clock.now() + 5_000 });
   });
 
+  it('prefers Cache-Control over Expires', async () => {
+    answers.push(
+      reply(
+        200,
+        { online: true },
+        { 'cache-control': 'private, max-age=60', expires: new Date(clock.now()).toUTCString() },
+      ),
+    );
+    expect(await esi.online(PILOT, 't')).toMatchObject({ expiresAt: clock.now() + 60_000 });
+  });
+
+  it('counts its own errors and stops for the minute at half of the error limit', async () => {
+    // Rate-limited routes carry no X-ESI-Error-Limit-* headers; 404s from many characters.
+    for (let i = 0; i < 50; i++) answers.push(reply(404, { error: 'not found' }, limits(1000)));
+    for (let i = 0; i < 50; i++) await esi.location(PILOT + i, 't');
+    expect(sent).toHaveLength(50);
+    clock.advance(10_000);
+    expect(await esi.location(PILOT + 99, 't')).toMatchObject({ ok: false, retryAt: clock.now() + 50_000 });
+    expect(sent).toHaveLength(50);
+    // 429s do not count against it.
+    clock.advance(50_000);
+    for (let i = 0; i < 60; i++) answers.push(reply(429, {}, { 'retry-after': '1' }));
+    for (let i = 0; i < 60; i++) await esi.location(PILOT + 100 + i, 't');
+    expect(sent).toHaveLength(110);
+  });
+
+  it('pauses every character when ESI is down, longer each time, until it answers again', async () => {
+    for (let i = 0; i < 5; i++) answers.push(reply(503, {}));
+    for (let i = 0; i < 5; i++) await esi.location(PILOT + i, 't');
+    expect(await esi.location(PILOT + 10, 't')).toMatchObject({ ok: false, retryAt: clock.now() + 5_000 });
+    expect(sent).toHaveLength(5);
+    clock.advance(5_000);
+    for (let i = 0; i < 5; i++) answers.push(new TypeError('fetch failed'));
+    for (let i = 0; i < 5; i++) await esi.location(PILOT + 20 + i, 't');
+    expect(await esi.location(PILOT + 30, 't')).toMatchObject({ retryAt: clock.now() + 10_000 });
+    clock.advance(10_000);
+    answers.push(reply(200, { solar_system_id: 1 }));
+    expect(await esi.location(PILOT + 40, 't')).toMatchObject({ ok: true });
+    for (let i = 0; i < 5; i++) answers.push(reply(502, {}));
+    for (let i = 0; i < 5; i++) await esi.location(PILOT + 50 + i, 't');
+    expect(await esi.location(PILOT + 60, 't')).toMatchObject({ retryAt: clock.now() + 5_000 });
+  });
+
   it('waits long after authorization errors', async () => {
     answers.push(reply(403, { error: 'token is not valid for scope(s)' }));
     expect(await esi.location(PILOT, 't')).toMatchObject({

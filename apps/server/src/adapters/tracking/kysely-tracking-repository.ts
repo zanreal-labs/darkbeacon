@@ -40,6 +40,16 @@ export class KyselyTrackingRepository implements TrackingRepository {
     return rows.map(toTracked);
   }
 
+  async findTracked(mapId: string, characterId: number): Promise<TrackedCharacter | null> {
+    const row = await this.db
+      .selectFrom('tracked_character')
+      .selectAll()
+      .where('map_id', '=', mapId)
+      .where('character_id', '=', characterId)
+      .executeTakeFirst();
+    return row ? toTracked(row) : null;
+  }
+
   async setTracked(entry: TrackedCharacter, tracked: boolean): Promise<void> {
     if (!tracked) {
       await this.db

@@ -142,18 +142,22 @@ describeEachDialect('tracking and universe over HTTP', (t) => {
     const clock = new ManualClock();
     const esi = new FakeEsi(5_000, () => clock.now());
     const log = app.get<EventLog>(EVENT_LOG);
-    const poller = new TrackingPoller({
-      tracking: app.get<TrackingRepository>(TRACKING_REPOSITORY),
-      characters: {
-        character: (id) => app.get<CharacterService>(CHARACTER_TOKENS).character(id),
-        accessToken: () => Promise.resolve('token'),
+    const poller = new TrackingPoller(
+      {
+        tracking: app.get<TrackingRepository>(TRACKING_REPOSITORY),
+        characters: {
+          character: (id) => app.get<CharacterService>(CHARACTER_TOKENS).character(id),
+          accessToken: () => Promise.resolve('token'),
+        },
+        access: app.get<MapAccess>(MAP_ACCESS),
+        esi,
+        events: log,
+        uow: t.db,
+        clock,
       },
-      access: app.get<MapAccess>(MAP_ACCESS),
-      esi,
-      events: log,
-      uow: t.db,
-      clock,
-    });
+      undefined,
+      { random: () => 0 }, // no startup spread or jitter: the test steps the clock itself
+    );
     esi.set(PILOT, { online: true, location: J_SPACE, ship: 11132, shipName: 'Probe' });
     await poller.tick();
     esi.set(PILOT, { location: JITA });

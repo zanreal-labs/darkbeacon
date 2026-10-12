@@ -207,18 +207,22 @@ describeEachDialect('routing and connections over HTTP', (t) => {
     ).toBe(204);
     const clock = new ManualClock();
     const esi = new FakeEsi(5_000, () => clock.now());
-    const poller = new TrackingPoller({
-      tracking: app.get<TrackingRepository>(TRACKING_REPOSITORY),
-      characters: {
-        character: (id) => app.get<CharacterService>(CHARACTER_TOKENS).character(id),
-        accessToken: () => Promise.resolve('token'),
+    const poller = new TrackingPoller(
+      {
+        tracking: app.get<TrackingRepository>(TRACKING_REPOSITORY),
+        characters: {
+          character: (id) => app.get<CharacterService>(CHARACTER_TOKENS).character(id),
+          accessToken: () => Promise.resolve('token'),
+        },
+        access: app.get<MapAccess>(MAP_ACCESS),
+        esi,
+        events: app.get<EventLog>(EVENT_LOG),
+        uow: t.db,
+        clock,
       },
-      access: app.get<MapAccess>(MAP_ACCESS),
-      esi,
-      events: app.get<EventLog>(EVENT_LOG),
-      uow: t.db,
-      clock,
-    });
+      undefined,
+      { random: () => 0 }, // no startup spread or jitter: the test steps the clock itself
+    );
     esi.set(PILOT, { online: true, location: HOME, ship: RIFTER, shipName: 'Rifter' });
     await poller.tick();
     esi.set(PILOT, { location: TAMA });

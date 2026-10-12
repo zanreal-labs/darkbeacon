@@ -61,7 +61,15 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
           await this.cleanup.forgetCharacter(event.data.characterId);
       },
     });
-    this.unsubscribe = this.bus.subscribe(() => this.poller.recheckAccess(), { types: ['access.*'] });
+    const unsubscribeAccess = this.bus.subscribe(() => this.poller.recheckAccess(), { types: ['access.*'] });
+    // Someone started or stopped tracking a character: the poller reads the list again.
+    const unsubscribeTracking = this.bus.subscribe(() => this.poller.trackingChanged(), {
+      types: ['character.tracked', 'character.untracked', 'map.removed', 'character.unlinked'],
+    });
+    this.unsubscribe = () => {
+      unsubscribeAccess();
+      unsubscribeTracking();
+    };
   }
 
   onApplicationBootstrap(): void {

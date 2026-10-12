@@ -47,6 +47,8 @@ export class MappingAutoMapTarget implements AutoMapTarget {
 
   /** Adds (or restores) `solarSystemId` next to `near` unless it is already on the map. */
   private async place(actor: Actor, mapId: string, solarSystemId: number, near: number): Promise<void> {
+    // Most jumps are between systems already on the map: one row, not the whole chain.
+    if ((await this.ports.systems.find(mapId, solarSystemId))?.visible) return;
     const all = await this.ports.systems.list(mapId);
     const existing = all.find((s) => s.solarSystemId === solarSystemId);
     if (existing?.visible) return;

@@ -38,7 +38,7 @@ export class AutoMapper {
     jump: { characterId: number; from: number; to: number; shipTypeId: number | null },
   ): Promise<void> {
     const { tracking, access, target, universe } = this.deps;
-    const entry = (await tracking.listTrackedOnMap(mapId)).find((t) => t.characterId === jump.characterId);
+    const entry = await tracking.findTracked(mapId, jump.characterId);
     if (!entry) return;
     const scopes = await target.scopes(mapId);
     if (!scopes) {

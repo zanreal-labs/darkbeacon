@@ -11,6 +11,20 @@ const ERROR_LIMIT_RESERVE = 10;
 /** Share of a rate-limit bucket kept in reserve; below it the bucket is left alone for a while. */
 const BUCKET_RESERVE = 0.1;
 const MAX_BACKOFF = 5 * MINUTE;
+/**
+ * ESI allows 100 error responses a minute per application before answering 420 to everything
+ * (https://developers.eveonline.com/docs/services/esi/rate-limiting/). Routes in a rate-limit
+ * group do not send the X-ESI-Error-Limit-* headers, so errors are also counted here, and every
+ * request stops for the rest of the minute once half of that budget is used.
+ */
+const OWN_ERROR_BUDGET = 50;
+const ERROR_WINDOW = MINUTE;
+/** This many server errors or timeouts within FAILURE_WINDOW across all characters: ESI is down. */
+const OUTAGE_FAILURES = 5;
+const FAILURE_WINDOW = 10 * SECOND;
+/** Pause of every request during an outage: 5 s, doubling up to a minute, reset by a success. */
+const OUTAGE_PAUSE = 5 * SECOND;
+const MAX_OUTAGE_PAUSE = MINUTE;
 /** 401/403: the token or its scopes are wrong; asking again soon will not help. */
 const AUTH_RETRY = 5 * MINUTE;
 
@@ -44,6 +58,11 @@ export class HttpEsiGateway implements EsiGateway {
     ['online', 'char-location'],
   ]);
   private readonly failures = new Map<number, number>();
+  /** Error responses (not 429s) in the current minute. */
+  private errorWindow = { since: 0, count: 0 };
+  /** Recent server errors and timeouts (any character), for outage detection. */
+  private serverFailures: number[] = [];
+  private outagePause = OUTAGE_PAUSE;
 
   constructor(private readonly options: HttpEsiGatewayOptions) {
     this.baseUrl = (options.baseUrl ?? 'https://esi.evetech.net').replace(/\/+$/, '');
@@ -97,6 +116,7 @@ export class HttpEsiGateway implements EsiGateway {
         signal: AbortSignal.timeout(10 * SECOND),
       });
     } catch (error) {
+      this.serverFailed(now);
       return this.failed(characterId, now, null, `request failed: ${String(error)}`);
     }
 
@@ -107,6 +127,7 @@ export class HttpEsiGateway implements EsiGateway {
     if (response.status === 304 || response.ok) {
       const data = response.status === 304 ? null : parse((await response.json()) as Record<string, unknown>);
       this.failures.delete(characterId);
+      this.outagePause = OUTAGE_PAUSE;
       return {
         ok: true,
         data,
@@ -115,6 +136,7 @@ export class HttpEsiGateway implements EsiGateway {
       };
     }
     await response.body?.cancel();
+    if (response.status !== 429) this.countError(now);
 
     if (response.status === 420) {
       this.blockedUntil = Math.max(this.blockedUntil, now + (retryAfter ?? 60) * SECOND);
@@ -129,7 +151,26 @@ export class HttpEsiGateway implements EsiGateway {
     if (response.status === 401 || response.status === 403) {
       return { ok: false, retryAt: now + AUTH_RETRY, reason: `HTTP ${response.status}` };
     }
+    if (response.status >= 500) this.serverFailed(now);
     return this.failed(characterId, now, retryAfter, `HTTP ${response.status}`);
+  }
+
+  /** Counts an error response against ESI's error limit; stops everything at half of it. */
+  private countError(now: number): void {
+    if (now - this.errorWindow.since >= ERROR_WINDOW) this.errorWindow = { since: now, count: 0 };
+    this.errorWindow.count++;
+    if (this.errorWindow.count >= OWN_ERROR_BUDGET) {
+      this.blockedUntil = Math.max(this.blockedUntil, this.errorWindow.since + ERROR_WINDOW);
+    }
+  }
+
+  /** Several characters failing on server errors at once: ESI is down, everyone pauses. */
+  private serverFailed(now: number): void {
+    this.serverFailures = [...this.serverFailures.filter((at) => now - at < FAILURE_WINDOW), now];
+    if (this.serverFailures.length < OUTAGE_FAILURES) return;
+    this.serverFailures = [];
+    this.blockedUntil = Math.max(this.blockedUntil, now + this.outagePause);
+    this.outagePause = Math.min(this.outagePause * 2, MAX_OUTAGE_PAUSE);
   }
 
   /** Exponential backoff per character: 5 s, 10 s, 20 s ... up to 5 minutes. */
@@ -174,13 +215,19 @@ function seconds(value: string | null): number | null {
   return Number(value);
 }
 
-/** `Expires` relative to the server's `Date` (so clock skew does not matter), else `max-age`. */
+/**
+ * When the answer may be asked for again: `Cache-Control: max-age`, else `Expires` relative to
+ * the server's `Date` (so clock skew does not matter). ESI says to prefer Cache-Control: on
+ * event-based routes Expires is kept only for old clients
+ * (https://developers.eveonline.com/blog/smarter-caching-when-events-drive-invalidation).
+ */
 function expiresAt(headers: Headers, now: number): number {
+  const maxAge = /max-age=(\d+)/.exec(headers.get('cache-control') ?? '');
+  if (maxAge) return now + Number(maxAge[1]) * SECOND;
   const expires = Date.parse(headers.get('expires') ?? '');
   if (!Number.isNaN(expires)) {
     const date = Date.parse(headers.get('date') ?? '');
     return Number.isNaN(date) ? expires : now + Math.max(0, expires - date);
   }
-  const maxAge = /max-age=(\d+)/.exec(headers.get('cache-control') ?? '');
-  return maxAge ? now + Number(maxAge[1]) * SECOND : now;
+  return now;
 }

@@ -21,6 +21,13 @@ describeEachDialect('KyselyTrackingRepository', (t) => {
       { mapId: 'm1', characterId: 7, accountId: 'bob', since: NOW + 2 },
     ]);
     expect(await repo.listTracked()).toHaveLength(3);
+    expect(await repo.findTracked('m1', 7)).toEqual({
+      mapId: 'm1',
+      characterId: 7,
+      accountId: 'bob',
+      since: NOW + 2,
+    });
+    expect(await repo.findTracked('m2', 7)).toBeNull();
 
     await repo.setTracked({ mapId: 'm1', characterId: PILOT, accountId: 'alice', since: 0 }, false);
     expect((await repo.listTrackedOnMap('m1')).map((c) => c.characterId)).toEqual([7]);

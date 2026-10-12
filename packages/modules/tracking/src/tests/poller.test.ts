@@ -1,5 +1,5 @@
 import { ManualClock, type MapRole } from '@darkbeacon/core';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   fakeAccess,
   fakeCharacters,
@@ -15,6 +15,8 @@ const PERIMETER = 30000144;
 const J_SPACE = 31000001;
 const PILOT = 90000001;
 const OTHER = 90000002;
+/** First polls at once, no jitter: the tests count exact calls. */
+const NO_JITTER = { random: () => 0 };
 
 describe('TrackingPoller', () => {
   let clock: ManualClock;
@@ -37,16 +39,20 @@ describe('TrackingPoller', () => {
       [PILOT]: { name: 'Pilot', accountId: 'acc-1' },
       [OTHER]: { name: 'Other', accountId: 'acc-2', token: null },
     };
-    poller = new TrackingPoller({
-      tracking,
-      characters: fakeCharacters(owners),
-      access: fakeAccess(roles),
-      esi,
-      events,
-      uow: passThroughUow,
-      clock,
-      onError: (error) => errors.push(error),
-    });
+    poller = new TrackingPoller(
+      {
+        tracking,
+        characters: fakeCharacters(owners),
+        access: fakeAccess(roles),
+        esi,
+        events,
+        uow: passThroughUow,
+        clock,
+        onError: (error) => errors.push(error),
+      },
+      undefined,
+      NO_JITTER,
+    );
     tracking.tracked = [
       { mapId: 'm1', characterId: PILOT, accountId: 'acc-1', since: 0 },
       { mapId: 'm2', characterId: PILOT, accountId: 'acc-1', since: 0 },
@@ -95,15 +101,19 @@ describe('TrackingPoller', () => {
 
   it('honours Expires when it is later than the poll interval', async () => {
     esi = new FakeEsi(30_000, () => clock.now());
-    poller = new TrackingPoller({
-      tracking,
-      characters: fakeCharacters({ [PILOT]: { name: 'Pilot', accountId: 'acc-1' } }),
-      access: fakeAccess(roles),
-      esi,
-      events,
-      uow: passThroughUow,
-      clock,
-    });
+    poller = new TrackingPoller(
+      {
+        tracking,
+        characters: fakeCharacters({ [PILOT]: { name: 'Pilot', accountId: 'acc-1' } }),
+        access: fakeAccess(roles),
+        esi,
+        events,
+        uow: passThroughUow,
+        clock,
+      },
+      undefined,
+      NO_JITTER,
+    );
     esi.set(PILOT, { online: true, location: JITA, ship: 587 });
     await poller.tick();
     await after(10_000);
@@ -167,19 +177,23 @@ describe('TrackingPoller', () => {
 
   it('keeps going when one character fails', async () => {
     tracking.tracked.push({ mapId: 'm1', characterId: OTHER, accountId: 'acc-2', since: 0 });
-    poller = new TrackingPoller({
-      tracking,
-      characters: {
-        character: (id) => Promise.resolve({ name: 'x', accountId: id === OTHER ? 'acc-2' : 'acc-1' }),
-        accessToken: (id) => (id === OTHER ? Promise.reject(new Error('boom')) : Promise.resolve('t')),
+    poller = new TrackingPoller(
+      {
+        tracking,
+        characters: {
+          character: (id) => Promise.resolve({ name: 'x', accountId: id === OTHER ? 'acc-2' : 'acc-1' }),
+          accessToken: (id) => (id === OTHER ? Promise.reject(new Error('boom')) : Promise.resolve('t')),
+        },
+        access: fakeAccess(roles),
+        esi,
+        events,
+        uow: passThroughUow,
+        clock,
+        onError: (error) => errors.push(error),
       },
-      access: fakeAccess(roles),
-      esi,
-      events,
-      uow: passThroughUow,
-      clock,
-      onError: (error) => errors.push(error),
-    });
+      undefined,
+      NO_JITTER,
+    );
     esi.set(PILOT, { online: true, location: JITA, ship: 587 });
     await poller.tick();
     expect(errors).toHaveLength(1);
@@ -210,6 +224,99 @@ describe('TrackingPoller', () => {
     poller.recheckAccess();
     await after(5_000);
     expect(tracking.tracked).toEqual([]);
+  });
+
+  describe('at scale', () => {
+    const THIRD = 90000003;
+    const make = (extra: Partial<ConstructorParameters<typeof TrackingPoller>[0]>, options = {}) =>
+      new TrackingPoller(
+        {
+          tracking,
+          characters: fakeCharacters({ ...owners, [THIRD]: { name: 'Third', accountId: 'acc-3' } }),
+          access: fakeAccess({ ...roles, m3: { 'acc-3': 'member' } }),
+          esi,
+          events,
+          uow: passThroughUow,
+          clock,
+          ...extra,
+        },
+        undefined,
+        { ...NO_JITTER, ...options },
+      );
+
+    beforeEach(() => {
+      tracking.tracked.push({ mapId: 'm3', characterId: THIRD, accountId: 'acc-3', since: 0 });
+      esi.set(PILOT, { online: true, location: JITA, ship: 587 });
+      esi.set(THIRD, { online: true, location: JITA, ship: 587 });
+    });
+
+    it('spreads the first polls after a start over the startup window', async () => {
+      poller = make({}, { random: () => 0.5, startupSpreadMs: 10_000 });
+      await poller.tick();
+      expect(esi.calls).toEqual([]);
+      await after(5_000);
+      expect(esi.count('online')).toBe(2);
+    });
+
+    it('stays within the global budget, characters on viewed maps first', async () => {
+      let tokens = 3;
+      const budget = {
+        tryTake: (cost: number) => (cost <= tokens ? ((tokens -= cost), true) : false),
+      };
+      poller = make({ budget, viewers: { isViewed: (mapId) => mapId === 'm3' } });
+      // Three requests: one character's online, location and ship; the viewed one goes first.
+      await poller.tick();
+      expect(new Set(esi.calls.map((c) => c.characterId))).toEqual(new Set([THIRD]));
+      expect(esi.calls).toHaveLength(3);
+      tokens = 3;
+      await after(1_000);
+      expect(esi.count('online', PILOT)).toBe(1);
+    });
+
+    it('never polls one character twice at once, and caps how many are polled together', async () => {
+      const release: Array<() => void> = [];
+      const slow = { ...esi } as FakeEsi;
+      const hold =
+        <T>(answer: () => Promise<T>) =>
+        () =>
+          new Promise<T>((resolve) => release.push(() => void answer().then(resolve)));
+      slow.online = (id, token, etag) => hold(() => esi.online(id, token, etag))();
+      slow.location = (id, token, etag) => esi.location(id, token, etag);
+      slow.ship = (id, token, etag) => esi.ship(id, token, etag);
+      poller = make({ esi: slow }, { concurrency: 1 });
+      const first = poller.tick();
+      await vi.waitFor(() => expect(release).toHaveLength(1));
+      // A second tick while the first character still waits on ESI: it is not asked again,
+      // and the other one waits for a free slot.
+      await poller.tick();
+      expect(poller.polling).toBe(1);
+      expect(release).toHaveLength(1);
+      release.shift()!();
+      await first;
+      const second = poller.tick();
+      await vi.waitFor(() => expect(release).toHaveLength(1));
+      release.shift()!();
+      await second;
+      expect(poller.polling).toBe(0);
+      expect(esi.count('online')).toBe(2);
+    });
+
+    it('does not touch the database when ESI says nothing changed', async () => {
+      poller = make({});
+      await poller.tick();
+      let reads = 0;
+      const getPresence = tracking.getPresence;
+      tracking.getPresence = (id) => {
+        reads++;
+        return getPresence(id);
+      };
+      for (let i = 0; i < 5; i++) await after(5_000); // all 304s
+      expect(esi.count('location')).toBe(12);
+      expect(reads).toBe(0);
+      esi.set(THIRD, { location: PERIMETER });
+      await after(5_000);
+      expect(reads).toBe(1);
+    });
   });
 
   it('exposes its intervals', () => {
