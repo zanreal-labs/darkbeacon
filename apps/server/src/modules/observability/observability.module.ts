@@ -10,7 +10,7 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
-import type { Actor, EventBus } from '@darkbeacon/core';
+import type { Actor } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
 import {
   DomainTelemetry,
@@ -25,7 +25,8 @@ import { KyselyGaugeSources } from '../../adapters/observability/kysely-gauge-so
 import { telemetryRuntime, type TelemetryRuntime } from '../../adapters/observability/runtime.js';
 import { CurrentActor } from '../../platform/actor.js';
 import { EventConsumers } from '../../platform/event-consumers.js';
-import { EVENT_BUS, OBSERVABILITY } from '../../platform/tokens.js';
+import { EventLogTaps } from '../../platform/event-taps.js';
+import { OBSERVABILITY } from '../../platform/tokens.js';
 import { RealtimeHub } from '../../realtime/realtime.hub.js';
 
 const TELEMETRY_RUNTIME = 'TelemetryRuntime';
@@ -41,8 +42,8 @@ export class ObservabilityController {
 }
 
 /**
- * Feeds the instance's measurements to the telemetry SDK while it runs: committed events (from
- * the bus), ESI exchanges (from undici's diagnostics channels), the gauges, and the Prometheus
+ * Feeds the instance's measurements to the telemetry SDK while it runs: events this process
+ * committed (each counted by one replica only), ESI exchanges (from undici's diagnostics channels), the gauges, and the Prometheus
  * scrape endpoint on the API's own port.
  */
 @Injectable()
@@ -52,7 +53,7 @@ export class ObservabilityRuntime implements OnModuleInit, OnApplicationShutdown
   constructor(
     @Inject(TELEMETRY_RUNTIME) private readonly runtime: TelemetryRuntime,
     @Inject(HttpAdapterHost) private readonly http: HttpAdapterHost,
-    @Inject(EVENT_BUS) private readonly bus: EventBus,
+    @Inject(EventLogTaps) private readonly taps: EventLogTaps,
     @Inject(Database) private readonly database: Database,
     @Inject(EventConsumers) private readonly consumers: EventConsumers,
     @Inject(RealtimeHub) private readonly hub: RealtimeHub,
@@ -83,7 +84,7 @@ export class ObservabilityRuntime implements OnModuleInit, OnApplicationShutdown
     const telemetry = this.telemetry;
     if (!telemetry) return;
     this.stops.push(
-      this.bus.subscribe((event) => telemetry.eventsCommitted([event])),
+      this.taps.add((events) => telemetry.eventsCommitted(events)),
       listenToEsi((exchange) => telemetry.esiExchange(exchange)),
       telemetry.observe(new KyselyGaugeSources(this.database, this.consumers, this.hub)),
     );
