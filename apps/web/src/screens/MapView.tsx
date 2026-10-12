@@ -19,6 +19,7 @@ import { useUniverseSystems } from '../lib/universe';
 import { useMapSettings } from '../lib/useMapSettings';
 import { usePageView } from '../lib/useTelemetry';
 import { AddSystemSearch } from '../map/AddSystemSearch';
+import { OnlyTrackedGate, untrackedOf } from '../map/OnlyTrackedGate';
 import { MapCanvas, type FocusRequest, type MenuTarget } from '../map/MapCanvas';
 import { freeSpot } from '../map/geometry';
 import { connectionMenu, paneMenu, systemMenu } from '../map/menus';
@@ -117,6 +118,8 @@ export function MapView({
   const settings = useMapSettings();
   const toast = useToast();
   const can = mapPermissions(role);
+  // The map's "only tracked characters" option: it opens once all of mine are tracked here.
+  const untracked = untrackedOf(map, can, me.data?.characters ?? [], new Set(store.state.characters.keys()));
   const [selected, setSelected] = useState<number | null>(null);
   // A clicked connection takes the sidebar instead of a system.
   const [selectedConnection, setSelectedConnection] = useState<string | null>(null);
@@ -392,6 +395,9 @@ export function MapView({
           <Spinner label="Loading systems" />
           <span>Loading systems…</span>
         </div>
+      )}
+      {store.loaded && store.state.has.characters && untracked.length > 0 && (
+        <OnlyTrackedGate map={map} can={can} untracked={untracked} />
       )}
       {store.streamError && (
         <div className={styles.streamError} role="alert">

@@ -84,6 +84,9 @@ export const TelemetryPage = z.enum([
 export const TelemetrySection = z.enum([
   'instance',
   'people',
+  'maps',
+  'characters',
+  'transfer',
   'plugins',
   'themes',
   'audit',

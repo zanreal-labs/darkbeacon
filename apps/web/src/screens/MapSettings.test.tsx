@@ -172,8 +172,9 @@ describe('map settings dialog', () => {
     open('/m/home-chain?settings=general', 'manager');
     await screen.findByRole('dialog', { name: 'Map settings' });
     const tabs = screen.getAllByRole('tab').map((t) => t.textContent);
-    expect(tabs).toEqual(['Labels', 'Tags', 'Bookmark labels']);
-    expect(screen.getByRole('tab', { name: 'Labels', selected: true })).toBeTruthy();
+    // Managers handle viewers, members and blocks too (as in Wanderer), and see who tracks what.
+    expect(tabs).toEqual(['Access', 'Characters', 'Labels', 'Tags', 'Bookmark labels', 'Copy and hand over']);
+    expect(screen.getByRole('tab', { name: 'Access', selected: true })).toBeTruthy();
   });
 
   it('has no rail button for members, nor off a map', async () => {

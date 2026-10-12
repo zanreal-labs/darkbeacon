@@ -73,15 +73,19 @@ export function LoginActions({
   providers,
   next,
   authError,
+  invite = null,
 }: {
   providers: AuthProvidersDto;
   next: string;
   authError: string | null;
+  /** An invite link's token (`?invite=`), carried through the sign-in. */
+  invite?: string | null;
 }) {
   const router = useRouter();
   const enterDemo = useEnterDemo();
-  const discordHref = `${routes.auth.discordLogin.path}?${new URLSearchParams({ returnTo: next })}`;
-  const eveHref = `${routes.auth.eveSignIn.path}?${new URLSearchParams({ returnTo: next })}`;
+  const params = new URLSearchParams({ returnTo: next, ...(invite ? { invite } : {}) });
+  const discordHref = `${routes.auth.discordLogin.path}?${params}`;
+  const eveHref = `${routes.auth.eveSignIn.path}?${params}`;
   const eveMode = providers.loginMethod === 'eve';
   const primary = eveMode ? providers.eve : providers.discord;
 
@@ -90,6 +94,11 @@ export function LoginActions({
       {authError && (
         <Callout tone="danger" title="Sign-in didn't work">
           {authError}
+        </Callout>
+      )}
+      {invite && !authError && (
+        <Callout tone="accent" title="You have an invite">
+          Sign in to make your account here.
         </Callout>
       )}
 

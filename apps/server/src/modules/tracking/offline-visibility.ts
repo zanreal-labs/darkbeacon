@@ -4,6 +4,9 @@ import type { CharacterPresenceDto } from '@darkbeacon/shared';
 import type { TrackingRepository } from '@darkbeacon/tracking';
 
 const SETTING_TTL_MS = 5_000;
+
+const own = (actor: Actor | null, accountId: string | undefined) =>
+  !!accountId && actor?.kind === 'account' && actor.id === accountId;
 const ROLE_TTL_MS = 30_000;
 
 /**
@@ -30,28 +33,27 @@ export class OfflineVisibility {
     characters: CharacterPresenceDto[],
   ): Promise<CharacterPresenceDto[]> {
     if (!(await this.hides(actor, mapId))) return characters;
-    return characters.filter((c) => c.online);
+    // Everyone keeps seeing their own characters.
+    return characters.filter((c) => c.online || own(actor, c.accountId));
   }
 
   /** A `map:<id>` event as `actor` may see it (a realtime event filter). */
   async filterEvent(actor: Actor | null, mapId: string, event: DomainEvent): Promise<DomainEvent | null> {
     if (!event.type.startsWith('character.') || event.type === 'character.untracked') return event;
     if (!(await this.hides(actor, mapId))) return event;
-    const data = event.data as { characterId: number; online?: boolean };
+    const data = event.data as { characterId: number; online?: boolean; accountId?: string };
+    if (event.type === 'character.tracked') return data.online || own(actor, data.accountId) ? event : null;
+    const presence = await this.tracking.getPresence(data.characterId);
+    if (own(actor, presence?.accountId)) return event;
     switch (event.type) {
-      case 'character.tracked':
-        return data.online ? event : null;
       case 'character.online_changed': {
         if (!data.online)
           return { ...event, type: 'character.untracked', data: { characterId: data.characterId } };
-        const presence = await this.tracking.getPresence(data.characterId);
         return presence ? { ...event, type: 'character.tracked', data: { ...presence, online: true } } : null;
       }
-      default: {
+      default:
         // Moves, jumps and ship changes of a character they cannot see are not for them.
-        const presence = await this.tracking.getPresence(data.characterId);
         return presence?.online ? event : null;
-      }
     }
   }
 

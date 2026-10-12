@@ -101,11 +101,18 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto) {
     [later],
   );
 
+  const trashed = useRef(false);
   useStream(
     `map:${mapId}`,
     (message) => {
       if (message.op === 'error') {
-        setStreamError(message.message);
+        // After a deletion the server drops the stream; the deletion says it better.
+        if (!trashed.current) setStreamError(message.message);
+        return;
+      }
+      if (message.op === 'event' && message.event.type === 'map.trashed') {
+        trashed.current = true;
+        setStreamError('This map was deleted. An instance admin can restore it.');
         return;
       }
       setStreamError(null);
