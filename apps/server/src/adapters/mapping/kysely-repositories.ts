@@ -143,6 +143,11 @@ export class KyselyMapRepository extends Repository implements MapRepository {
     return rows.map(mapFromRow);
   }
 
+  async allIds(): Promise<string[]> {
+    const rows = await this.db.selectFrom('maps').select('id').orderBy('created_at').orderBy('id').execute();
+    return rows.map((r) => r.id);
+  }
+
   async insert(map: ChainMap): Promise<void> {
     await this.db.insertInto('maps').values(mapToRow(map)).execute().catch(slugConflict(map.slug));
   }

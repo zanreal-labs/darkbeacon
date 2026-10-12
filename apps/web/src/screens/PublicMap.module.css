@@ -1,0 +1,100 @@
+/* The public, read-only map at /p/<token>: a slim bar and the canvas, no app shell. */
+
+.page {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100dvh;
+  overflow: clip;
+  background: var(--dbk-color-canvas);
+}
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dbk-space-1) var(--dbk-space-3);
+  min-width: 0;
+  padding: var(--dbk-space-2) var(--dbk-space-4);
+  border-bottom: 1px solid var(--dbk-color-border);
+  background: var(--dbk-color-surface);
+}
+
+.brand {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  color: var(--dbk-color-text);
+}
+
+.name {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--dbk-font-size-large);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.note {
+  flex-basis: 100%;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+}
+
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+}
+
+.canvasArea {
+  position: relative;
+  min-height: 0;
+}
+
+.center {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--dbk-space-2);
+  padding: var(--dbk-space-4);
+  color: var(--dbk-color-text-muted);
+}
+
+.overlay {
+  position: absolute;
+  z-index: 5;
+  top: 50%;
+  left: 50%;
+  width: min(calc(100% - 32px), 420px);
+  padding: var(--dbk-space-4);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius-large);
+  background: var(--dbk-color-surface-raised);
+  box-shadow: var(--dbk-shadow-medium);
+  transform: translate(-50%, -50%);
+}
+
+.standalone {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: var(--dbk-space-4);
+  background: var(--dbk-color-bg);
+}
+
+@media (min-width: 761px) {
+  .note {
+    flex-basis: auto;
+    order: 0;
+  }
+}

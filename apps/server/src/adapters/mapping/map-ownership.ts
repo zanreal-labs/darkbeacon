@@ -12,4 +12,8 @@ export class MappingMapOwnership implements MapOwnership {
   async mapsOwnedBy(accountId: string): Promise<string[]> {
     return (await this.maps.listOwnedBy(accountId)).map((m) => m.id);
   }
+
+  allMaps(): Promise<string[]> {
+    return this.maps.allIds();
+  }
 }

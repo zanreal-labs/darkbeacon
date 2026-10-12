@@ -23,6 +23,8 @@ interface Props {
   located: boolean;
   legend: boolean;
   onLegend(open: boolean): void;
+  /** Public views: no bookmark labels (they need an account) and no "center on me". */
+  readOnly?: boolean;
 }
 
 function BookmarkDialog({ mapId, can }: { mapId: string; can: MapPermissions }) {
@@ -43,7 +45,16 @@ function BookmarkDialog({ mapId, can }: { mapId: string; can: MapPermissions }) 
 }
 
 /** Zoom, fit the chain, center on me, bookmark labels and the legend, bottom left of the canvas. */
-export function MapControls({ mapId, can, onFit, onCenterMe, located, legend, onLegend }: Props) {
+export function MapControls({
+  mapId,
+  can,
+  onFit,
+  onCenterMe,
+  located,
+  legend,
+  onLegend,
+  readOnly = false,
+}: Props) {
   const rf = useReactFlow();
   const legendId = useId();
   const [labels, setLabels] = useState(false);
@@ -78,25 +89,29 @@ export function MapControls({ mapId, can, onFit, onCenterMe, located, legend, on
         />
         <span className={styles.divider} aria-hidden />
         <IconButton tooltipSide="right" size="sm" label="Fit chain (F)" icon={<Maximize />} onClick={onFit} />
-        <IconButton
-          tooltipSide="right"
-          size="sm"
-          label="Center on me (C)"
-          icon={<LocateFixed />}
-          data-muted={!located || undefined}
-          onClick={onCenterMe}
-        />
-        <span className={styles.divider} aria-hidden />
-        <Dialog open={labels} onOpenChange={setLabels}>
+        {!readOnly && (
           <IconButton
             tooltipSide="right"
             size="sm"
-            label="Bookmark labels"
-            icon={<Bookmark />}
-            onClick={() => setLabels(true)}
+            label="Center on me (C)"
+            icon={<LocateFixed />}
+            data-muted={!located || undefined}
+            onClick={onCenterMe}
           />
-          {labels && <BookmarkDialog mapId={mapId} can={can} />}
-        </Dialog>
+        )}
+        <span className={styles.divider} aria-hidden />
+        {!readOnly && (
+          <Dialog open={labels} onOpenChange={setLabels}>
+            <IconButton
+              tooltipSide="right"
+              size="sm"
+              label="Bookmark labels"
+              icon={<Bookmark />}
+              onClick={() => setLabels(true)}
+            />
+            {labels && <BookmarkDialog mapId={mapId} can={can} />}
+          </Dialog>
+        )}
         <IconButton
           tooltipSide="right"
           size="sm"

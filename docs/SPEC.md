@@ -36,7 +36,7 @@ taste disagree, follow this file; when something is missing, choose the simplest
 ## Repository layout
 
 ```
-apps/server            NestJS composition root: Nest modules, controllers, gateways, adapters, plugin loader
+apps/server            NestJS composition root: Nest modules, controllers, gateways, adapters, plugin loader, MCP
 apps/web               Next.js app: map, widgets, settings, admin tab
 packages/core          shared kernel: ids, Result, clock, event envelope, authorization primitives, errors
 packages/modules/identity       accounts, sessions, Discord login, EVE character linking
@@ -48,6 +48,9 @@ packages/modules/plugins        plugin registry, manifest validation, enable/dis
 packages/modules/routing        routes over stargates and the chain, hubs, chain exits, in-game waypoints
 packages/modules/audit          audit records of events, histories, reverts, hash chain check
 packages/modules/sharing        shares between maps, composite maps, merging several maps' chains
+packages/modules/publishing     public links of maps (/p/<token>), what they show, a map's reach for AI agents
+packages/modules/api-keys       personal access tokens and service keys: scopes, expiry, address allow-lists
+packages/modules/oauth          OAuth 2.1 authorization server for the MCP endpoint
 packages/modules/telemetry      anonymous product telemetry: allow-list, pseudonymous ids, opt-outs, heartbeat
 packages/modules/observability  telemetry settings, domain metrics, admin status (OpenTelemetry SDK in adapters)
 packages/modules/backups        SQLite backups: snapshots, schedule, retention, validation, restore

@@ -94,7 +94,11 @@ export function buildAuditRecord(
     characterName: facts.characterName,
   };
   const channel: AuditChannelDto = context.channel
-    ? { kind: context.channel.kind, id: context.channel.id ?? null }
+    ? {
+        kind: context.channel.kind,
+        id: context.channel.id ?? null,
+        ...(context.channel.name !== undefined ? { name: context.channel.name } : {}),
+      }
     : defaultChannel(event.actor);
 
   const refs = new Set(descriptor.refs?.(data, before) ?? []);

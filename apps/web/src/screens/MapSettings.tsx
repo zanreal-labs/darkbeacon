@@ -17,6 +17,7 @@ import {
   Building2,
   Copy,
   Flag,
+  Globe,
   Hash,
   KeyRound,
   Lock,
@@ -44,6 +45,7 @@ import {
 import { useInstance } from '../lib/maps';
 import { useMe } from '../lib/session';
 import { DiscordNotifications } from './MapNotifications';
+import { MapPublicLinkSettings } from './MapPublicLink';
 import { MapSharing } from './MapSharing';
 import {
   AccessSubjectKind,
@@ -138,6 +140,16 @@ const SECTIONS: readonly Section[] = [
     render: (map) => (
       <Pane>
         <MapSharing map={map} />
+      </Pane>
+    ),
+  },
+  {
+    id: 'public',
+    title: 'Public link',
+    icon: <Globe />,
+    render: (map) => (
+      <Pane>
+        <MapPublicLinkSettings map={map} />
       </Pane>
     ),
   },

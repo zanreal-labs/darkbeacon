@@ -133,6 +133,29 @@ const webhook = {
  * updates and removals, what it passes as `before`. A new event type does not compile until it
  * has a sample here, and the test below fails unless its audit record is complete.
  */
+const apiKey = {
+  id: 'k1',
+  kind: 'pat',
+  name: 'Bot',
+  scopes: ['maps:read'],
+  readOnly: true,
+  expiresAt: null,
+  allowedIps: [],
+  rateLimitPerMinute: null,
+  ownerAccountId: 'a',
+  instanceRole: null,
+  mapGrants: [],
+  allMapsRole: null,
+};
+const sharing = {
+  mapId: 'm',
+  enabled: false,
+  slug: null,
+  scopes: ['topology', 'connectionStatus'],
+  noindex: true,
+  mcpMode: 'authenticated',
+  regenerated: false,
+};
 const BACKUP = 'darkbeacon-20261012T101500Z-v0.1.0-s20.db.gz';
 
 const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
@@ -193,6 +216,7 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
   'ping.removed': { data: { id: 'p1' }, before: { id: 'p1', solarSystemId: 31000005, message: 'Help' } },
   'access.rule_added': { data: rule },
   'access.rule_removed': { data: { id: 'r1' }, before: rule },
+  'access.public_link_changed': { data: { ...sharing, enabled: true }, before: sharing },
   'access.role_changed': {
     data: { accountId: 'b', role: 'admin' },
     before: { accountId: 'b', role: 'user' },
@@ -231,6 +255,38 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
   'backup.settings_changed': {
     data: { intervalMinutes: 360, keep: 14, maxAgeDays: null, notifyHost: null, notifySuccess: false },
     before: { intervalMinutes: 1440, keep: 14, maxAgeDays: null, notifyHost: null, notifySuccess: false },
+  },
+  'api_key.created': { data: apiKey },
+  'api_key.updated': { data: { ...apiKey, name: 'Bot 2' }, before: apiKey },
+  'api_key.rotated': { data: { id: 'k1', name: 'Bot', kind: 'pat', ownerAccountId: 'a' } },
+  'api_key.revoked': { data: { id: 'k1', name: 'Bot', kind: 'pat', ownerAccountId: 'a' }, before: apiKey },
+  'oauth.grant_created': {
+    data: {
+      id: 'g1',
+      accountId: 'a',
+      clientId: 'https://client.example/meta',
+      clientName: 'Claude',
+      scopes: ['*:read'],
+      readOnly: true,
+    },
+  },
+  'oauth.grant_revoked': {
+    data: {
+      id: 'g1',
+      accountId: 'a',
+      clientId: 'c',
+      clientName: 'Claude',
+      scopes: ['*:read'],
+      readOnly: true,
+    },
+    before: {
+      id: 'g1',
+      accountId: 'a',
+      clientId: 'c',
+      clientName: 'Claude',
+      scopes: ['*:read'],
+      readOnly: true,
+    },
   },
 };
 

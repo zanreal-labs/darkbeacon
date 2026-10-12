@@ -123,4 +123,74 @@ describe('reading audit entries', () => {
     expect(typesFor('signIn')).toBe('auth.*');
     expect(typesFor('all')).toBeUndefined();
   });
+
+  it('says which key or MCP client made a change, and words keys, links and app approvals', () => {
+    const names = { map: (id: string) => (id === 'm' ? 'Home chain' : undefined) };
+    expect(
+      readEntry(entry({ type: 'labels.changed', channel: { kind: 'api', id: 'k1', name: 'Spreadsheet' } }))
+        .what,
+    ).toBe('changed the labels via key Spreadsheet');
+    expect(
+      readEntry(entry({ type: 'labels.changed', channel: { kind: 'mcp', id: 'k1', name: 'Desk' } })).what,
+    ).toBe('changed the labels via MCP (Desk)');
+    // Entries from before keys had names.
+    expect(readEntry(entry({ type: 'labels.changed', channel: { kind: 'api', id: 'k1' } })).what).toBe(
+      'changed the labels via an API key',
+    );
+    expect(channelLabel({ kind: 'mcp', id: null })).toBe('MCP');
+
+    const created = readEntry(
+      entry({
+        type: 'api_key.created',
+        op: 'create',
+        diff: {
+          name: { before: null, after: 'Bot' },
+          kind: { before: null, after: 'svc' },
+          scopes: { before: null, after: ['map:m:*:read', 'account:read'] },
+        },
+      }),
+      names,
+    );
+    expect(created.what).toBe('made the service key Bot');
+    expect(created.changes).toContainEqual({
+      label: 'Permissions',
+      before: '—',
+      after: 'Read everything on Home chain; Read the account',
+    });
+    expect(JSON.stringify(created)).not.toContain('map:m');
+    expect(
+      readEntry(
+        entry({ type: 'api_key.rotated', op: 'activity', diff: { secret: { before: 'old', after: 'new' } } }),
+      ).what,
+    ).toBe('rotated an API key');
+
+    const shared = readEntry(
+      entry({
+        type: 'access.public_link_changed',
+        mapId: 'm',
+        diff: {
+          enabled: { before: false, after: true },
+          scopes: { before: ['topology'], after: ['topology', 'signatures'] },
+          mcpMode: { before: 'off', after: 'public' },
+        },
+      }),
+      names,
+    );
+    expect(shared.what).toBe('made Home chain public');
+    expect(shared.changes).toContainEqual({
+      label: 'What the link shows',
+      before: 'Systems and connections',
+      after: 'Systems and connections, Signatures',
+    });
+    expect(shared.changes).toContainEqual({ label: 'AI agents', before: 'Off', after: 'Public too' });
+    expect(
+      readEntry(
+        entry({
+          type: 'oauth.grant_created',
+          op: 'create',
+          diff: { clientName: { before: null, after: 'Desk' } },
+        }),
+      ).what,
+    ).toBe('let Desk use Darkbeacon as them');
+  });
 });

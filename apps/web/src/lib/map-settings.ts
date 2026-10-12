@@ -8,6 +8,7 @@ export const MAP_SETTINGS_SECTIONS = [
   'general',
   'access',
   'sharing',
+  'public',
   'labels',
   'bookmarks',
   'discord',
