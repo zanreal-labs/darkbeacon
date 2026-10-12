@@ -58,6 +58,9 @@ export function projectConnection(connection: ConnectionDto, scopes: Scopes): Co
     bubbled: status ? connection.bubbled : 'none',
     eolAt: status ? connection.eolAt : null,
     ...(status && connection.massStatusAt !== undefined ? { massStatusAt: connection.massStatusAt } : {}),
+    // The lifetime mark is connection status; the note is intel; the lock stays on its map.
+    ...(status && connection.lifetime ? { lifetime: connection.lifetime } : {}),
+    ...(has(scopes, 'intel') && connection.note ? { note: connection.note } : {}),
     createdAt: connection.createdAt,
     updatedAt: connection.updatedAt,
   };
@@ -75,6 +78,8 @@ export function projectSignature(signature: SignatureDto): SignatureDto {
     name: signature.name,
     description: signature.description,
     connectionId: signature.connectionId,
+    ...(signature.kind ? { kind: signature.kind } : {}),
+    ...(signature.custom ? { custom: signature.custom } : {}),
     createdAt: signature.createdAt,
     updatedAt: signature.updatedAt,
   };
@@ -162,6 +167,9 @@ export function projectEvent(event: DomainEvent, scopes: Scopes, stream: string)
     case 'character.moved':
     case 'character.ship_changed':
       return has(scopes, 'characters') ? forward(d) : null;
+    case 'kill.reported':
+      // zKillboard's public killmails of a system the view shows; nothing of the map in them.
+      return forward(event.data);
     case 'routes.exits_changed':
       return forward({ exits: asArray<MapExitDto>(d.exits).map((e) => projectExit(e, scopes)) });
     case 'map.removed':

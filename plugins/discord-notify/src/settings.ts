@@ -27,7 +27,8 @@ export const DEFAULT_SETTINGS: DiscordNotifySettings = {
     connections: true,
     eol: true,
     danger: true,
-    kills: true,
+    // Opt-in: busy chains near null-sec would post all day.
+    kills: false,
     pings: true,
     wayHome: false,
     arrivals: false,

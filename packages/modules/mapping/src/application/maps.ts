@@ -37,8 +37,8 @@ export class MapUseCases extends MappingUseCases {
         id: m.id,
         slug: m.slug,
         name: m.name,
-        ...(m.kind ? { kind: m.kind } : {}),
         ...(m.description ? { description: m.description } : {}),
+        ...(m.kind ? { kind: m.kind } : {}),
         role: roles.get(m.id)!,
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -69,8 +69,8 @@ export class MapUseCases extends MappingUseCases {
       id: newId(),
       slug: request.slug ?? (await this.freeSlug(slugify(request.name))),
       name: request.name,
-      ...(request.kind === 'composite' ? { kind: 'composite' as const } : {}),
       ...(request.description ? { description: request.description } : {}),
+      ...(request.kind === 'composite' ? { kind: 'composite' as const } : {}),
       ownerAccountId: account.id,
       settings: { scopes: ['wormhole'] },
       labels: [],
@@ -91,7 +91,7 @@ export class MapUseCases extends MappingUseCases {
     const who = await this.authorize(actor, mapId, 'admin');
     return this.write(who, mapId, async (events) => {
       const current = await this.load(mapId);
-      const { description: _old, ...rest } = current;
+      const { description: _description, ...rest } = current;
       const description = request.description ?? current.description ?? '';
       const next: ChainMap = {
         ...rest,

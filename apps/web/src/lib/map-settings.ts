@@ -13,8 +13,11 @@ export const MAP_SETTINGS_SECTIONS = [
   'labels',
   'tags',
   'bookmarks',
+  'routes',
+  'bridges',
   'discord',
   'webhooks',
+  'import',
   'transfer',
   'danger',
 ] as const;
@@ -27,6 +30,9 @@ const FOR_MANAGERS: readonly MapSettingsSection[] = [
   'labels',
   'tags',
   'bookmarks',
+  'routes',
+  'bridges',
+  'import',
   'transfer',
 ];
 

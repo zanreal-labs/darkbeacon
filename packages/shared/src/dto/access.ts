@@ -88,6 +88,11 @@ export const InstanceSettingsDto = z.object({
   /** The map `/` opens for everyone who has not starred a map of their own. */
   defaultMapId: Id.nullable().optional(),
   /**
+   * Whether imports may read Wanderer instances on private and local networks (and over plain
+   * http), e.g. a self-hosted Wanderer next to this server. Off by default.
+   */
+  importsFromPrivateNetworks: z.boolean().optional(),
+  /**
    * The sweeper deletes wormholes this many minutes after the latest moment they can still exist
    * (their lifetime after the map first saw them, or 4 h after EOL); null never deletes them.
    */
@@ -134,6 +139,7 @@ export const UpdateInstanceSettingsRequest = z.object({
   eventRetentionDays: z.number().int().min(1).max(36_500).nullable().optional(),
   loginMethod: z.enum(['discord', 'eve']).nullable().optional(),
   defaultMapId: Id.nullable().optional(),
+  importsFromPrivateNetworks: z.boolean().optional(),
   expiredConnectionMinutes: z.number().int().min(0).max(1440).nullable().optional(),
   autoEol: z.boolean().optional(),
   staleSystemMinutes: z.number().int().min(5).max(10_080).nullable().optional(),

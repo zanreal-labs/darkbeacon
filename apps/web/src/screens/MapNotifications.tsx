@@ -3,7 +3,7 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BellOff, Bot, Link2, Send } from 'lucide-react';
+import { BellOff, Bot, Link2, Route, Send } from 'lucide-react';
 import {
   buildPath,
   DISCORD_URGENT_KINDS,
@@ -52,7 +52,7 @@ const KINDS: Record<DiscordNotifyKind, { label: string; hint: string }> = {
   pings: { label: 'Rally pings', hint: 'Pings set on the map' },
   wayHome: {
     label: 'Way home',
-    hint: 'The exits to known space from home, when they change (at most every 15 min)',
+    hint: 'From each map hub: jumps and the mouth into the chain, after 10 quiet minutes',
   },
   arrivals: { label: 'Characters entering the chain', hint: 'Tracked pilots jumping in from outside' },
 };
@@ -165,6 +165,23 @@ function DiscordSettings({ map, state }: { map: MapDto; state: DiscordNotifyStat
     },
     onError: (error) =>
       toast({ title: 'Test failed', description: errorText(error, 'Try again.'), tone: 'danger' }),
+  });
+
+  const wayHomeTest = useMutation({
+    mutationFn: () =>
+      api<DiscordNotifyTestDto>(buildPath(routes.discordNotify.testWayHome.path, { mapId: map.id }), {
+        method: 'POST',
+      }),
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: notifyKey(map.id) });
+      toast(
+        result.ok
+          ? { title: 'Way home posted', description: 'Check the channel.', tone: 'success' }
+          : { title: 'Not posted', description: result.error ?? 'Discord did not take it.', tone: 'danger' },
+      );
+    },
+    onError: (error) =>
+      toast({ title: 'Not posted', description: errorText(error, 'Try again.'), tone: 'danger' }),
   });
 
   const status = state.status;
@@ -369,6 +386,11 @@ function DiscordSettings({ map, state }: { map: MapDto; state: DiscordNotifyStat
           <Button icon={<Send />} loading={test.isPending} onClick={() => test.mutate()}>
             Send test
           </Button>
+          {settings.kinds.wayHome && (
+            <Button icon={<Route />} loading={wayHomeTest.isPending} onClick={() => wayHomeTest.mutate()}>
+              Send the way home
+            </Button>
+          )}
           {draft && (
             <Button variant="ghost" onClick={() => setDraft(null)}>
               Discard

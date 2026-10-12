@@ -49,6 +49,9 @@
       "path": "../../packages/modules/routing"
     },
     {
+      "path": "../../packages/modules/intel"
+    },
+    {
       "path": "../../packages/modules/jumps"
     },
     {
@@ -65,6 +68,9 @@
     },
     {
       "path": "../../packages/modules/backups"
+    },
+    {
+      "path": "../../packages/modules/importing"
     },
     {
       "path": "../../packages/modules/api-keys"

@@ -173,7 +173,17 @@ describe('map settings dialog', () => {
     await screen.findByRole('dialog', { name: 'Map settings' });
     const tabs = screen.getAllByRole('tab').map((t) => t.textContent);
     // Managers handle viewers, members and blocks too (as in Wanderer), and see who tracks what.
-    expect(tabs).toEqual(['Access', 'Characters', 'Labels', 'Tags', 'Bookmark labels', 'Copy and hand over']);
+    expect(tabs).toEqual([
+      'Access',
+      'Characters',
+      'Labels',
+      'Tags',
+      'Bookmark labels',
+      'Routes',
+      'Bridges',
+      'Import',
+      'Copy and hand over',
+    ]);
     expect(screen.getByRole('tab', { name: 'Access', selected: true })).toBeTruthy();
   });
 

@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { AccessRuleDto } from './dto/access.js';
 import { EveId, Id, Timestamp } from './dto/common.js';
 import { InstanceRole } from './dto/identity.js';
+import { ImportJobDto, ImportOutcomeDto, ImportSourceDto } from './dto/importing.js';
+import { KillmailDto } from './dto/intel.js';
 import {
   ConnectionDto,
   LabelDto,
@@ -13,6 +15,8 @@ import {
 import { MassMode, PassageSource } from './dto/passages.js';
 import { PluginDto } from './dto/plugins.js';
 import { HubDto, MapExitDto } from './dto/routing.js';
+import { BridgeDto } from './dto/bridges.js';
+import { MapRoutingSettingsDto, WayHomeDto } from './dto/route-panel.js';
 import { McpMode } from './dto/publishing.js';
 import { MapShareDto, MapSourceDto } from './dto/sharing.js';
 import { CharacterPresenceDto } from './dto/tracking.js';
@@ -84,6 +88,7 @@ export const EVENT_DATA_SCHEMAS: Record<EventType, z.ZodType> = {
     createdAt: Timestamp,
   }),
   'ping.removed': z.object({ id: Id }),
+  'kill.reported': KillmailDto,
   'access.rule_added': AccessRuleDto,
   'access.rule_removed': z.object({ id: Id }),
   'access.public_link_changed': z.object({
@@ -104,4 +109,27 @@ export const EVENT_DATA_SCHEMAS: Record<EventType, z.ZodType> = {
   'access.owner_changed': z.object({ mapId: Id, ownerAccountId: Id, previousOwnerAccountId: Id }),
   'map.trashed': z.object({ id: Id, deletedAt: Timestamp }),
   'map.restored': MapDto,
+  'routes.bridges_changed': z.object({
+    added: z.array(BridgeDto),
+    updated: z.array(BridgeDto),
+    removed: z.array(Id),
+  }),
+  'routes.settings_changed': MapRoutingSettingsDto,
+  'routes.way_home_changed': WayHomeDto,
+  'import.started': z.object({ jobId: Id, source: ImportSourceDto, mode: z.enum(['new', 'merge']) }),
+  'import.finished': z.object({
+    jobId: Id,
+    source: ImportSourceDto,
+    status: z.enum(['done', 'failed', 'cancelled']),
+    outcome: z.record(z.string(), ImportOutcomeDto),
+    error: z.string().nullable(),
+  }),
+  'import.sync_changed': z.object({
+    syncId: Id,
+    source: ImportSourceDto,
+    enabled: z.boolean(),
+    intervalMinutes: z.number(),
+    reason: z.string().nullable(),
+  }),
+  'import.progress': ImportJobDto,
 };

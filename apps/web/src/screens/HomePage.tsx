@@ -4,7 +4,17 @@ import { useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronRight, Map as MapIcon, Plus, Settings, Star, Upload, Waypoints } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  FileUp,
+  Import,
+  Map as MapIcon,
+  Plus,
+  Settings,
+  Star,
+  Waypoints,
+} from 'lucide-react';
 import {
   MAP_EXPORT_FORMAT,
   routes,
@@ -35,6 +45,10 @@ import {
   Field,
   IconButton,
   Input,
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuTrigger,
   Page,
   PageHeader,
   Select,
@@ -114,21 +128,26 @@ export function MapsPage() {
   const maps = useMaps();
   const mayCreate = useMayCreateMaps();
   const [creating, setCreating] = useState(false);
-  const newMap = mayCreate ? (
-    <>
-      <ImportMapButton />
-      <Button variant="primary" icon={<Plus />} onClick={() => setCreating(true)}>
-        New map
-      </Button>
-    </>
-  ) : undefined;
+  const newMap = mayCreate && (
+    <Button variant="primary" icon={<Plus />} onClick={() => setCreating(true)}>
+      New map
+    </Button>
+  );
+  const importMap = mayCreate && <ImportMenu />;
 
   return (
     <Page width={880}>
       <PageHeader
         title={TITLE}
         description={DESCRIPTION}
-        actions={maps.data && maps.data.length > 0 ? newMap : undefined}
+        actions={
+          maps.data && maps.data.length > 0 ? (
+            <>
+              {importMap}
+              {newMap}
+            </>
+          ) : undefined
+        }
       />
       <Stack>
         {demo && (
@@ -153,10 +172,15 @@ export function MapsPage() {
               title="No maps yet"
               description={
                 mayCreate
-                  ? 'Create a map for your chain, or ask a map admin to give you access to theirs.'
+                  ? 'Create a map for your chain, bring one over from Wanderer or a map file, or ask a map admin to give you access to theirs.'
                   : 'Only instance admins create maps here. Ask a map admin to give you access to theirs.'
               }
-              actions={newMap}
+              actions={
+                <>
+                  {importMap}
+                  {newMap}
+                </>
+              }
             />
           </Card>
         ) : (
@@ -225,7 +249,11 @@ function MapRow({
         </span>
         <span className={styles.main}>
           <span className={styles.name}>{map.name}</span>
-          {map.description && <span className={styles.meta}>{map.description}</span>}
+          {map.description && (
+            <span className={styles.description} title={map.description}>
+              {map.description}
+            </span>
+          )}
           {(starred || instanceDefault || lastOpened) && (
             <span className={styles.meta}>
               {starred ? 'Opens first for you' : instanceDefault ? 'Opens first for everyone' : 'Opened last'}
@@ -359,7 +387,7 @@ function CreateMapForm({ autoFocus, onCancel }: { autoFocus?: boolean; onCancel?
       </Field>
       <Field label="Description" hint="Optional. Shown on the maps page.">
         <Input
-          maxLength={500}
+          maxLength={1000}
           placeholder="Home chain of our corporation"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
@@ -470,13 +498,16 @@ function useMyGroups(): Array<{
   ];
 }
 
-/** "Import map file…": a Darkbeacon map file becomes a new map of the person's own. */
-function ImportMapButton() {
+/**
+ * "Import": a map from Wanderer (the import page), or a Darkbeacon map file that becomes a new
+ * map of the person's own.
+ */
+function ImportMenu() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const toast = useToast();
   const input = useRef<HTMLInputElement>(null);
-  const importMap = useMutation({
+  const importFile = useMutation({
     mutationFn: async (file: File) => {
       const document = await readJsonFile<{ format?: string }>(file);
       if (document?.format !== MAP_EXPORT_FORMAT) throw new Error('This is not a Darkbeacon map file.');
@@ -515,13 +546,25 @@ function ImportMapButton() {
         aria-label="Map file"
         onChange={(e) => {
           const file = e.target.files?.[0];
-          if (file) importMap.mutate(file);
+          if (file) importFile.mutate(file);
           e.target.value = '';
         }}
       />
-      <Button icon={<Upload />} loading={importMap.isPending} onClick={() => input.current?.click()}>
-        Import map file…
-      </Button>
+      <Menu>
+        <MenuTrigger asChild>
+          <Button icon={<Import />} trailingIcon={<ChevronDown />} loading={importFile.isPending}>
+            Import
+          </Button>
+        </MenuTrigger>
+        <MenuContent align="end">
+          <MenuItem icon={<Import />} onSelect={() => router.push('/import')}>
+            From Wanderer…
+          </MenuItem>
+          <MenuItem icon={<FileUp />} onSelect={() => input.current?.click()}>
+            Darkbeacon map file…
+          </MenuItem>
+        </MenuContent>
+      </Menu>
     </>
   );
 }

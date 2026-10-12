@@ -7,7 +7,15 @@ export interface RouteNode {
   security: number;
   /** SDE wormhole class id (see UniverseSystemDto). */
   whClass: number | null;
+  /** How the Triglavian invasion left a known-space system; absent when untouched or unknown. */
+  invasion?: Invasion;
 }
+
+/**
+ * Outcome of the Triglavian invasion: `edencom` (an EDENCOM fortress system), `triglavian` (a
+ * Triglavian minor victory) or `final` (taken into Pochven).
+ */
+export type Invasion = 'edencom' | 'triglavian' | 'final';
 
 /** Wormhole space: C1-C6, Thera, shattered frigate systems and the Drifter systems. */
 export function isWormholeSpace(node: Pick<RouteNode, 'whClass'>): boolean {

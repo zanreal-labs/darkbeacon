@@ -66,6 +66,21 @@ export const TOKENS = {
   'status-hostile': { group: 'status', description: 'System status: hostile' },
   'status-target': { group: 'status', description: 'System status: target' },
 
+  'effect-black-hole': { group: 'status', description: 'Wormhole effect dot: Black Hole' },
+  'effect-cataclysmic-variable': {
+    group: 'status',
+    description: 'Wormhole effect dot: Cataclysmic Variable',
+  },
+  'effect-magnetar': { group: 'status', description: 'Wormhole effect dot: Magnetar' },
+  'effect-pulsar': { group: 'status', description: 'Wormhole effect dot: Pulsar' },
+  'effect-red-giant': { group: 'status', description: 'Wormhole effect dot: Red Giant' },
+  'effect-wolf-rayet': { group: 'status', description: 'Wormhole effect dot: Wolf-Rayet' },
+  'standing-excellent': { group: 'status', description: 'Standing +10 (and your own alliance)' },
+  'standing-good': { group: 'status', description: 'Standing +5' },
+  'standing-neutral': { group: 'status', description: 'Neutral or no standing' },
+  'standing-bad': { group: 'status', description: 'Standing -5' },
+  'standing-terrible': { group: 'status', description: 'Standing -10' },
+
   'node-bg': { group: 'node', description: 'System node background' },
   'node-border': { group: 'node', description: 'System node border' },
   'node-text': { group: 'node', description: 'System node text' },

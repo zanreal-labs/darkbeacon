@@ -318,6 +318,15 @@ export const routes = {
       mapRole: 'admin',
       response: dto.DiscordNotifyTestDto,
     }),
+    /** Posts the map's way home now (the hubs, their jumps and mouths). */
+    testWayHome: route({
+      method: 'POST',
+      path: '/api/plugins/discord-notify/maps/:mapId/test-way-home',
+      auth: 'account',
+      scope: 'session',
+      mapRole: 'admin',
+      response: dto.DiscordNotifyTestDto,
+    }),
   },
 
   admin: {
@@ -820,7 +829,7 @@ export const routes = {
       path: '/api/maps/:mapId/hubs',
       auth: 'account',
       scope: { resource: 'routes', action: 'write' },
-      mapRole: 'manager',
+      mapRole: 'member',
       body: dto.SetHubsRequest,
       response: z.array(dto.HubDto),
     }),
@@ -856,6 +865,147 @@ export const routes = {
       auth: 'account',
       scope: { resource: 'account', action: 'write' },
       body: dto.WaypointRequest,
+    }),
+    /** One destination or waypoint for several own characters at once. */
+    waypoints: route({
+      method: 'POST',
+      path: '/api/accounts/me/waypoints',
+      auth: 'account',
+      scope: { resource: 'account', action: 'write' },
+      body: dto.WaypointsRequest,
+      response: dto.WaypointsResultDto,
+    }),
+    /** Routes from one system to every map hub (or every own hub), with the systems on the way. */
+    hubRoutes: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/routes/hubs',
+      auth: 'account',
+      scope: { resource: 'routes', action: 'read' },
+      mapRole: 'viewer',
+      query: dto.HubRoutesQuery,
+      response: dto.HubRoutesDto,
+    }),
+    /** The nearest places of a kind (loot buyers, security offices, trade hubs, Thera, Turnur). */
+    routesBy: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/routes/by',
+      auth: 'account',
+      scope: { resource: 'routes', action: 'read' },
+      mapRole: 'viewer',
+      query: dto.RoutesByQuery,
+      response: dto.RoutesByDto,
+    }),
+    /** The viewer's route options, the same on every map. */
+    preferences: route({
+      method: 'GET',
+      path: '/api/accounts/me/route-preferences',
+      auth: 'account',
+      scope: { resource: 'account', action: 'read' },
+      response: dto.RoutePreferencesDto,
+    }),
+    updatePreferences: route({
+      method: 'PUT',
+      path: '/api/accounts/me/route-preferences',
+      auth: 'account',
+      scope: { resource: 'account', action: 'write' },
+      body: dto.UpdateRoutePreferencesRequest,
+      response: dto.RoutePreferencesDto,
+    }),
+    mapSettings: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/routing-settings',
+      auth: 'account',
+      scope: { resource: 'routes', action: 'read' },
+      mapRole: 'viewer',
+      response: dto.MapRoutingSettingsDto,
+    }),
+    updateMapSettings: route({
+      method: 'PATCH',
+      path: '/api/maps/:mapId/routing-settings',
+      auth: 'account',
+      scope: { resource: 'routes', action: 'write' },
+      mapRole: 'manager',
+      body: dto.UpdateMapRoutingSettingsRequest,
+      response: dto.MapRoutingSettingsDto,
+    }),
+    /** The way home from each hub to the map's home system. */
+    wayHome: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/way-home',
+      auth: 'account',
+      scope: { resource: 'routes', action: 'read' },
+      mapRole: 'viewer',
+      response: dto.WayHomeDto,
+    }),
+    /** Thera and Turnur holes as EVE-Scout lists them. */
+    eveScout: route({
+      method: 'GET',
+      path: '/api/routes/eve-scout',
+      auth: 'account',
+      scope: { resource: 'universe', action: 'read' },
+      response: dto.TheraDto,
+    }),
+    /** NPC stations of a system. */
+    stations: route({
+      method: 'GET',
+      path: '/api/universe/systems/:solarSystemId/stations',
+      auth: 'account',
+      scope: { resource: 'universe', action: 'read' },
+      response: dto.StationsDto,
+    }),
+  },
+
+  /** Ansiblex jump bridges a map routes over. */
+  bridges: {
+    list: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/bridges',
+      auth: 'account',
+      scope: { resource: 'routes', action: 'read' },
+      mapRole: 'viewer',
+      response: z.array(dto.BridgeDto),
+    }),
+    paste: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/bridges/paste',
+      auth: 'account',
+      scope: { resource: 'routes', action: 'write' },
+      mapRole: 'manager',
+      body: dto.PasteBridgesRequest,
+      response: dto.ImportBridgesResultDto,
+    }),
+    /** Reads the Ansiblex gates of the character's corporation (ESI, Station Manager role). */
+    readFromEsi: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/bridges/esi',
+      auth: 'account',
+      scope: { resource: 'routes', action: 'write' },
+      mapRole: 'manager',
+      body: dto.ReadBridgesFromEsiRequest,
+      response: dto.ImportBridgesResultDto,
+    }),
+    update: route({
+      method: 'PATCH',
+      path: '/api/maps/:mapId/bridges/:bridgeId',
+      auth: 'account',
+      scope: { resource: 'routes', action: 'write' },
+      mapRole: 'manager',
+      body: dto.UpdateBridgeRequest,
+      response: dto.BridgeDto,
+    }),
+    remove: route({
+      method: 'DELETE',
+      path: '/api/maps/:mapId/bridges/:bridgeId',
+      auth: 'account',
+      scope: { resource: 'routes', action: 'write' },
+      mapRole: 'manager',
+    }),
+    clear: route({
+      method: 'DELETE',
+      path: '/api/maps/:mapId/bridges',
+      auth: 'account',
+      scope: { resource: 'routes', action: 'write' },
+      mapRole: 'manager',
     }),
   },
 
@@ -1031,6 +1181,95 @@ export const routes = {
     }),
   },
 
+  /** Imports of whole maps from Wanderer (docs/migrate-from-wanderer.md). */
+  imports: {
+    /** Whether a Wanderer instance answers and the map API key works. */
+    test: route({
+      method: 'POST',
+      path: '/api/imports/wanderer/test',
+      auth: 'account',
+      scope: 'session',
+      body: dto.WandererApiSourceRequest,
+      response: dto.WandererTestResultDto,
+    }),
+    /** Reads the whole map over Wanderer's API and stages it as a preview. */
+    previewApi: route({
+      method: 'POST',
+      path: '/api/imports/wanderer',
+      auth: 'account',
+      scope: 'session',
+      body: dto.WandererApiSourceRequest,
+      response: dto.ImportJobDto,
+    }),
+    /**
+     * Stages a Wanderer export file: the raw JSON as the body with content type
+     * `WANDERER_EXPORT_CONTENT_TYPE` (streamed, 25 MB at most); `?name=` the file's name.
+     */
+    previewFile: route({
+      method: 'POST',
+      path: '/api/imports/wanderer/file',
+      auth: 'account',
+      scope: 'session',
+      upload: dto.WANDERER_EXPORT_CONTENT_TYPE,
+      response: dto.ImportJobDto,
+    }),
+    get: route({
+      method: 'GET',
+      path: '/api/imports/:jobId',
+      auth: 'account',
+      scope: 'session',
+      response: dto.ImportJobDto,
+    }),
+    /** What an import into a new map or a merge into an existing one would do. */
+    plan: route({
+      method: 'POST',
+      path: '/api/imports/:jobId/plan',
+      auth: 'account',
+      scope: 'session',
+      body: dto.ImportPlanRequest,
+      response: dto.ImportPlanDto,
+    }),
+    start: route({
+      method: 'POST',
+      path: '/api/imports/:jobId/start',
+      auth: 'account',
+      scope: 'session',
+      body: dto.StartImportRequest,
+      response: dto.ImportJobDto,
+    }),
+    cancel: route({
+      method: 'POST',
+      path: '/api/imports/:jobId/cancel',
+      auth: 'account',
+      scope: 'session',
+      response: dto.ImportJobDto,
+    }),
+    /** The whole report as a JSON download (job, mapping report, outcome, `importedExtra`). */
+    report: route({
+      method: 'GET',
+      path: '/api/imports/:jobId/report',
+      auth: 'account',
+      scope: 'session',
+      download: true,
+    }),
+    /** The map's sync from Wanderer, or null. */
+    sync: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/import-sync',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'read' },
+      mapRole: 'viewer',
+      response: dto.ImportSyncDto.nullable(),
+    }),
+    stopSync: route({
+      method: 'DELETE',
+      path: '/api/maps/:mapId/import-sync',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'write' },
+      mapRole: 'manager',
+    }),
+  },
+
   webhooks: {
     list: route({
       method: 'GET',
@@ -1072,6 +1311,16 @@ export const routes = {
       scope: { resource: 'webhooks', action: 'manage' },
       mapRole: 'admin',
       response: z.array(dto.WebhookDeliveryDto),
+    }),
+    /** A new signing secret, shown once in the answer; the old one stops working. */
+    rotateSecret: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/webhooks/:webhookId/rotate-secret',
+      auth: 'account',
+      scope: { resource: 'webhooks', action: 'manage' },
+      status: 200,
+      mapRole: 'admin',
+      response: dto.CreatedWebhookDto,
     }),
     /** Sends a `webhook.test` event once, without retries, and returns the delivery. */
     test: route({
@@ -1850,20 +2099,6 @@ export const routes = {
     }),
   },
 
-  /** More on webhooks. */
-  webhookSecrets: {
-    /** A new signing secret, shown once; the old one stops working at once. */
-    rotate: route({
-      method: 'POST',
-      path: '/api/maps/:mapId/webhooks/:webhookId/rotate-secret',
-      auth: 'account',
-      scope: { resource: 'webhooks', action: 'manage' },
-      mapRole: 'admin',
-      status: 200,
-      response: dto.CreatedWebhookDto,
-    }),
-  },
-
   /** Integration helpers: batches, connections by their systems, events since a seq, SSE. */
   mapApi: {
     /** Systems and connections added or changed in one transaction (all or nothing). */
@@ -1978,6 +2213,63 @@ export const routes = {
       path: '/api/admin/maps/:mapId',
       auth: 'admin',
       scope: { resource: 'admin', action: 'write' },
+    }),
+  },
+
+  intel: {
+    /** Sovereignty and kills of the last hour of every system on the map. */
+    map: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/intel',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'read' },
+      mapRole: 'viewer',
+      response: dto.MapIntelDto,
+    }),
+    /** One system on the map: hourly figures, recent killmails and who is active there. */
+    system: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/intel/systems/:solarSystemId',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'read' },
+      mapRole: 'viewer',
+      response: dto.SystemActivityDto,
+    }),
+    /** Killmails of the map's visible systems (or some of them), newest first. */
+    kills: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/kills',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'read' },
+      mapRole: 'viewer',
+      query: dto.MapKillsQuery,
+      response: dto.MapKillsDto,
+    }),
+    /** The signed-in account's standings (contacts of its characters). */
+    standings: route({
+      method: 'GET',
+      path: '/api/accounts/me/standings',
+      auth: 'account',
+      scope: { resource: 'account', action: 'read' },
+      response: dto.StandingsDto,
+    }),
+    /** Sets the account's standing towards an alliance or corporation by hand (null: from contacts). */
+    setStanding: route({
+      method: 'PUT',
+      path: '/api/accounts/me/standings/:entityId',
+      auth: 'account',
+      scope: { resource: 'account', action: 'write' },
+      body: dto.SetStandingRequest,
+      response: dto.StandingsDto,
+    }),
+    /** Sovereignty and kills of the last hour of the systems a public link shows (public data). */
+    publicMap: route({
+      method: 'GET',
+      path: '/api/public/maps/:token/intel',
+      auth: 'public',
+      scope: 'none',
+      summary: 'Sovereignty and kills of the last hour of the systems a public map shows',
+      response: dto.MapIntelDto,
     }),
   },
 } as const;

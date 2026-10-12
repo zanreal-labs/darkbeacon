@@ -69,6 +69,12 @@
   visibility: hidden;
 }
 
+/* As wide as the effect square and the shattered star, which may follow any name. */
+.effectSizer {
+  flex: none;
+  width: calc(9px + 7px + 12px);
+}
+
 /* The designation pill: solid, fixed width, dark bold monospace text on the EVE colour. */
 .pill {
   flex: none;
@@ -105,7 +111,6 @@
   flex: none;
   align-items: center;
   gap: 3px;
-  margin-left: auto;
   color: var(--dbk-color-text-muted);
   font-size: var(--map-text-secondary, 13px);
   font-weight: 700;
@@ -128,11 +133,55 @@
   overflow: hidden;
 }
 
-/* A locked system: a small muted padlock at the end of the statics line. */
+/* The right end of a row: kills and pilots on top, the lock and sovereignty in the corner below. */
+.end,
+.corner {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* K-space without a custom name: the region (Pochven: the constellation), muted. */
+.region {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dbk-color-text-muted);
+  font-size: 12px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A kill just came in: a soft ring that fades, never a badge that stays. */
+.node[data-pulse] {
+  animation: kill-pulse 2.4s var(--dbk-motion-easing) 1;
+}
+
+@keyframes kill-pulse {
+  0% {
+    box-shadow:
+      var(--dbk-shadow-small),
+      0 0 0 0 color-mix(in oklab, var(--dbk-status-hostile) 70%, transparent);
+  }
+  100% {
+    box-shadow:
+      var(--dbk-shadow-small),
+      0 0 0 14px color-mix(in oklab, var(--dbk-status-hostile) 0%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .node[data-pulse] {
+    animation: none;
+  }
+}
+
+/* A locked system: a small muted padlock in the bottom-right corner. */
 .lock {
   display: inline-flex;
   flex: none;
-  margin-left: auto;
   color: var(--dbk-color-text-muted);
 }
 
@@ -288,4 +337,28 @@
 
 .handle:not(:global(.connectable)) {
   pointer-events: none;
+}
+
+/* The pilots behind the count, on hover: name, then the ship, mine first and highlighted. */
+.pilotList {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+  list-style: none;
+}
+
+.pilotList li {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.pilotList li[data-mine] {
+  font-weight: 700;
+}
+
+.pilotShip {
+  color: var(--dbk-color-text-muted);
 }

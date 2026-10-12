@@ -91,6 +91,19 @@ describe('share scopes', () => {
     expect(refusedFields('system', { locked: true }, 'all')).toEqual([]);
   });
 
+  it('shares connection notes as intel, lifetime marks as status, and keeps locks on their map', () => {
+    expect(FIELD_SCOPES.connection.note).toBe('intel');
+    expect(FIELD_SCOPES.connection.lifetime).toBe('connectionStatus');
+    expect(FIELD_SCOPES.connection.locked).toBe('local');
+    expect(FIELD_SCOPES.signature.kind).toBe('signatures');
+    expect(FIELD_SCOPES.signature.custom).toBe('signatures');
+    const cut = projectEntry(present('connection'), ['topology', 'connectionStatus']);
+    const fields = cut && cut.state === 'present' ? Object.keys(cut.fields) : [];
+    expect(fields).toContain('lifetime');
+    expect(fields).not.toContain('note');
+    expect(fields).not.toContain('locked');
+  });
+
   it('shares Labels and the custom label under "labels"; Tags never leave the map', () => {
     expect(FIELD_SCOPES.system).toMatchObject({
       systemLabels: 'labels',

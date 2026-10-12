@@ -7,6 +7,7 @@ import type {
   MapSystemDto,
   PingDto,
   UniverseSystemDto,
+  WayHomeDto,
 } from '@darkbeacon/plugin-sdk';
 
 /**
@@ -272,31 +273,33 @@ export function killInChain(view: MapView, kill: KillSummary): Note {
   };
 }
 
-export interface Exit {
-  systemId: number;
-  /** Jumps from the home system through the chain. */
-  jumps: number;
-}
+/** At most this many hubs in the way home. */
+export const WAY_HOME_ROUTES = 5;
 
-/** The way home: every exit to known space, nearest first. */
-export function wayHomeDigest(view: MapView, home: number, exits: readonly Exit[], at: number): Note {
-  const lines = exits
-    .slice(0, 15)
-    .map(
-      (e) =>
-        `• [${systemLabel(view, e.systemId)}](${mapLink(view, e.systemId)}) — ${e.jumps} jump${e.jumps === 1 ? '' : 's'}`,
-    );
+const SPACE: Record<WayHomeDto['routes'][number]['space'], string> = {
+  high: ' (high-sec only)',
+  low: ' (low/null only)',
+  mixed: '',
+};
+
+/**
+ * The way home: from each hub of the map, how many jumps and through which mouth the trip
+ * leaves known space into the chain, nearest first ("Jita: 7J via Tama (low/null only)").
+ */
+export function wayHomeNote(view: MapView, wayHome: WayHomeDto, at: number): Note | null {
+  if (!wayHome.home) return null;
+  const home = wayHome.home.solarSystemId;
+  const routes = wayHome.routes.slice(0, WAY_HOME_ROUTES);
+  const lines = routes.map(
+    (r) =>
+      `**${r.hub.name}**: ${r.jumps}J via [${r.mouth.name}](${mapLink(view, r.mouth.solarSystemId)})${SPACE[r.space]}${r.viaEveScout ? ' · through Thera/Turnur' : ''}`,
+  );
   return {
     kind: 'wayHome',
     embed: {
-      title:
-        exits.length > 0
-          ? `Way home: ${exits.length} exit${exits.length === 1 ? '' : 's'} to known space`
-          : 'Way home: no exit to known space',
+      title: `Way home to ${systemLabel(view, home)}`,
       description:
-        exits.length > 0
-          ? `From ${systemLabel(view, home)}:\n${lines.join('\n')}`
-          : `Nothing in the chain of ${systemLabel(view, home)} leads to known space right now.`,
+        routes.length > 0 ? lines.join('\n') : 'No hub of the map has a way into the chain right now.',
       url: mapLink(view, home),
       color: COLORS.exit,
       footer: footer(view),
@@ -317,36 +320,4 @@ export function testNote(view: MapView, at: number): Note {
       timestamp: when(at),
     },
   };
-}
-
-/**
- * Exits to known space reachable from `home` through the map's visible systems, with their
- * distance; the search stops at known space (an exit is the first known-space system on a path).
- */
-export function exitsFrom(
-  home: number,
-  connections: readonly Pick<ConnectionDto, 'source' | 'target'>[],
-  visible: ReadonlySet<number>,
-  whClass: (id: number) => number | null | undefined,
-): Exit[] {
-  const next = new Map<number, number[]>();
-  for (const c of connections) {
-    if (!visible.has(c.source) || !visible.has(c.target)) continue;
-    next.set(c.source, [...(next.get(c.source) ?? []), c.target]);
-    next.set(c.target, [...(next.get(c.target) ?? []), c.source]);
-  }
-  const seen = new Map<number, number>([[home, 0]]);
-  const queue = [home];
-  const exits: Exit[] = [];
-  while (queue.length > 0) {
-    const id = queue.shift()!;
-    const jumps = seen.get(id)!;
-    for (const n of next.get(id) ?? []) {
-      if (seen.has(n)) continue;
-      seen.set(n, jumps + 1);
-      if (isKnownSpace(whClass(n))) exits.push({ systemId: n, jumps: jumps + 1 });
-      else queue.push(n);
-    }
-  }
-  return exits.sort((a, b) => a.jumps - b.jumps || a.systemId - b.systemId);
 }

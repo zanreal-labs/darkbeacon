@@ -18,9 +18,11 @@ export type {
   UpdateDiscordNotifyRequest,
   EventPayloads,
   EventType,
+  KillmailDto,
   MapDto,
   MapSystemDto,
   SignatureDto,
   TypedEvent,
   UniverseSystemDto,
+  WayHomeDto,
 } from '@darkbeacon/shared';

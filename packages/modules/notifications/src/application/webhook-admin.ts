@@ -51,8 +51,16 @@ export class WebhookAdmin {
     return (await this.deps.webhooks.listForMap(mapId)).map(toWebhookDto);
   }
 
-  /** The secret is returned only here; afterwards it is only used to sign. */
-  async create(actor: Actor | null, mapId: string, input: CreateWebhookRequest): Promise<CreatedWebhookDto> {
+  /**
+   * The secret is returned only here; afterwards it is only used to sign. `enabled: false` adds it
+   * switched off (imports: the receiver is not set up for this map's secret yet).
+   */
+  async create(
+    actor: Actor | null,
+    mapId: string,
+    input: CreateWebhookRequest,
+    options: { enabled?: boolean } = {},
+  ): Promise<CreatedWebhookDto> {
     await requireMapRole(this.deps.access, actor, mapId, 'admin');
     const author = actor!;
     checkUrl(input.url);
@@ -63,7 +71,7 @@ export class WebhookAdmin {
       url: input.url,
       events: [...new Set(input.events)],
       secret: newWebhookSecret(),
-      enabled: true,
+      enabled: options.enabled ?? true,
       createdAt: this.deps.clock.now(),
     };
     await this.deps.uow.transaction(async () => {

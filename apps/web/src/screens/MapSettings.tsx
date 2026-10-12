@@ -18,9 +18,11 @@ import {
   Bookmark,
   Copy,
   Globe,
+  Import,
+  KeyRound,
   Network,
   Plus,
-  RotateCw,
+  Route,
   Send,
   Settings2,
   ShieldCheck,
@@ -29,6 +31,7 @@ import {
   TriangleAlert,
   Type,
   Users,
+  Waypoints,
   Webhook,
   X,
 } from 'lucide-react';
@@ -40,10 +43,11 @@ import { MapCharactersSection } from './MapCharacters';
 import { MapTransferSection } from './MapTransfer';
 import {
   buildPath,
+  MAP_DESCRIPTION_MAX,
+  type MapRole,
   MapScope,
   routes,
   type CreatedWebhookDto,
-  type MapRole,
   type LabelDto,
   type MapDto,
   type SystemLabelDto,
@@ -58,6 +62,7 @@ import { relativeTime } from '../lib/time';
 import { track } from '../lib/telemetry';
 import { useMapSettings } from '../lib/useMapSettings';
 import { BookmarkLabelSettings } from '../map/BookmarkSettings';
+import { BridgesSettings, RoutesSettings } from '../map/routes/RoutingSettings';
 import { PluginSlot } from '../plugins/PluginSlot';
 import {
   Badge,
@@ -84,13 +89,14 @@ import {
   Stack,
   Switch,
   Tabs,
-  Textarea,
   TabsContent,
   TabsList,
   TabsTrigger,
+  Textarea,
   Tooltip,
   useToast,
 } from '../ui';
+import { MapImportSettings } from './MapImportSettings';
 import dialog from './MapSettings.module.css';
 import styles from './settings.module.css';
 
@@ -173,6 +179,26 @@ const SECTIONS: readonly Section[] = [
     ),
   },
   {
+    id: 'routes',
+    title: 'Routes',
+    icon: <Route />,
+    render: (map, can) => (
+      <Pane>
+        <RoutesSettings map={map} can={can} />
+      </Pane>
+    ),
+  },
+  {
+    id: 'bridges',
+    title: 'Bridges',
+    icon: <Waypoints />,
+    render: (map) => (
+      <Pane>
+        <BridgesSettings key={map.id} map={map} />
+      </Pane>
+    ),
+  },
+  {
     id: 'discord',
     title: 'Discord',
     icon: <Bell />,
@@ -189,6 +215,16 @@ const SECTIONS: readonly Section[] = [
     render: (map) => (
       <Pane>
         <Webhooks map={map} />
+      </Pane>
+    ),
+  },
+  {
+    id: 'import',
+    title: 'Import',
+    icon: <Import />,
+    render: (map) => (
+      <Pane>
+        <MapImportSettings map={map} />
       </Pane>
     ),
   },
@@ -325,12 +361,12 @@ function GeneralSettings({ map }: { map: MapDto }) {
   const updated = useMapUpdated();
   const [name, setName] = useState(map.name);
   const [slug, setSlug] = useState(map.slug);
-  const [scopes, setScopes] = useState<MapScope[]>(map.settings.scopes);
   const [description, setDescription] = useState(map.description ?? '');
+  const [scopes, setScopes] = useState<MapScope[]>(map.settings.scopes);
   const dirty =
     name.trim() !== map.name ||
-    description.trim() !== (map.description ?? '') ||
     slug !== map.slug ||
+    description.trim() !== (map.description ?? '') ||
     scopes.length !== map.settings.scopes.length ||
     scopes.some((s) => !map.settings.scopes.includes(s));
   const save = useMutation({
@@ -357,8 +393,8 @@ function GeneralSettings({ map }: { map: MapDto }) {
               variant="ghost"
               onClick={() => {
                 setName(map.name);
-                setDescription(map.description ?? '');
                 setSlug(map.slug);
+                setDescription(map.description ?? '');
                 setScopes(map.settings.scopes);
               }}
             >
@@ -373,7 +409,10 @@ function GeneralSettings({ map }: { map: MapDto }) {
     >
       <Card>
         <form id={formId} onSubmit={submit} aria-label="General">
-          <CardHeader title="General" description="The map's name, its address and what auto-mapping adds." />
+          <CardHeader
+            title="General"
+            description="The map's name, its address, what it is for and what auto-mapping adds."
+          />
           <CardBody>
             <div className={styles.formStack}>
               <div className={styles.grid}>
@@ -401,12 +440,12 @@ function GeneralSettings({ map }: { map: MapDto }) {
                   />
                 </Field>
               </div>
-              <Field label="Description" hint="Shown on the maps page under the name.">
+              <Field label="Description" hint="What the map is for; shown in the list of maps.">
                 <Textarea
-                  rows={2}
-                  maxLength={500}
+                  rows={3}
+                  maxLength={MAP_DESCRIPTION_MAX}
                   value={description}
-                  placeholder="What this map is for: home chain, staging, a fleet op…"
+                  placeholder="Our home chain: C5 with a C2 static, staging in Amarr"
                   onChange={(e) => setDescription(e.target.value)}
                 />
               </Field>
@@ -832,6 +871,7 @@ const EVENT_GROUPS = [
   { value: 'map.*', label: 'Map', hint: 'Settings changed' },
   { value: 'access.*', label: 'Access', hint: 'Rules and roles' },
   { value: 'ping.*', label: 'Pings', hint: 'Created and removed' },
+  { value: 'kill.*', label: 'Kills', hint: 'Ships and pods destroyed in the chain' },
 ] as const;
 
 function eventsLabel(events: readonly string[]): string[] {
@@ -869,6 +909,15 @@ function Webhooks({ map }: { map: MapDto }) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: key }),
     onError: failed('Could not delete the webhook'),
   });
+  const rotate = useMutation({
+    mutationFn: (w: WebhookDto) =>
+      api<CreatedWebhookDto>(
+        buildPath(routes.webhooks.rotateSecret.path, { mapId: map.id, webhookId: w.id }),
+        { method: 'POST' },
+      ),
+    onSuccess: (hook) => setCreated({ ...hook, rotated: true }),
+    onError: failed('Could not make a new secret'),
+  });
 
   return (
     <Stack>
@@ -883,7 +932,6 @@ function Webhooks({ map }: { map: MapDto }) {
         >
           <div style={{ display: 'grid', gap: 'var(--dbk-space-2)', marginTop: 'var(--dbk-space-1)' }}>
             It is shown only once. Use it to check the <code>x-darkbeacon-signature</code> header.
-            {created.rotated && ' The old secret stopped working.'}
             <SecretValue value={created.secret} />
             <div>
               <Button size="sm" variant="ghost" onClick={() => setCreated(null)}>
@@ -931,8 +979,8 @@ function Webhooks({ map }: { map: MapDto }) {
                   map={map}
                   hook={w}
                   onToggle={() => toggle.mutate(w)}
+                  onRotate={() => rotate.mutate(w)}
                   onRemove={() => setRemoving(w)}
-                  onRotated={(hook) => setCreated({ ...hook, rotated: true })}
                 />
               ))}
             </ul>
@@ -987,31 +1035,16 @@ function WebhookRow({
   map,
   hook,
   onToggle,
+  onRotate,
   onRemove,
-  onRotated,
 }: {
   map: MapDto;
   hook: WebhookDto;
   onToggle(): void;
+  onRotate(): void;
   onRemove(): void;
-  onRotated(hook: CreatedWebhookDto): void;
 }) {
   const toast = useToast();
-  const [rotating, setRotating] = useState(false);
-  const rotate = useMutation({
-    mutationFn: () =>
-      api<CreatedWebhookDto>(
-        buildPath(routes.webhookSecrets.rotate.path, { mapId: map.id, webhookId: hook.id }),
-        { method: 'POST' },
-      ),
-    onSuccess: onRotated,
-    onError: (error) =>
-      toast({
-        title: 'Could not make a new secret',
-        description: errorText(error, 'Try again.'),
-        tone: 'danger',
-      }),
-  });
   const [showLog, setShowLog] = useState(false);
   const deliveries = useQuery({
     queryKey: ['webhook-deliveries', hook.id],
@@ -1104,22 +1137,9 @@ function WebhookRow({
           onCheckedChange={onToggle}
           label={<span className="sr-only">Deliver to {hook.url}</span>}
         />
-        <IconButton
-          size="sm"
-          label="New signing secret"
-          icon={<RotateCw />}
-          onClick={() => setRotating(true)}
-        />
+        <IconButton size="sm" label="New signing secret" icon={<KeyRound />} onClick={onRotate} />
         <IconButton size="sm" label="Delete webhook" icon={<Trash2 />} onClick={onRemove} />
       </div>
-      <ConfirmDialog
-        open={rotating}
-        onOpenChange={setRotating}
-        title="Make a new signing secret?"
-        description="The old secret stops working at once: update the receiving service right after."
-        confirmLabel="New secret"
-        onConfirm={() => rotate.mutateAsync()}
-      />
     </li>
   );
 }

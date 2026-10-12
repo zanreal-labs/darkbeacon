@@ -164,6 +164,6 @@ function every(ms: number, work: () => Promise<unknown>, logger: Logger): () => 
     },
     WebhookWorker,
   ],
-  exports: [NotifierRegistry],
+  exports: [NotifierRegistry, WebhookAdmin],
 })
 export class NotificationsModule {}

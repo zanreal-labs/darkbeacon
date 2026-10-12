@@ -31,9 +31,12 @@ export interface HubAdminDeps {
 export class HubAdmin {
   constructor(private readonly deps: HubAdminDeps) {}
 
-  /** Replaces the map's hubs and publishes `routes.hubs_changed`. */
+  /**
+   * Replaces the map's hubs and publishes `routes.hubs_changed`. Members may, as they add and
+   * remove systems: hubs are part of keeping the map.
+   */
   async setMapHubs(actor: Actor | null, mapId: string, solarSystemIds: readonly number[]): Promise<HubDto[]> {
-    await requireMapRole(this.deps.access, actor, mapId, 'manager');
+    await requireMapRole(this.deps.access, actor, mapId, 'member');
     const ids = this.validate(solarSystemIds);
     return this.deps.uow.transaction(async () => {
       const before = await this.deps.queries.mapHubs(mapId);

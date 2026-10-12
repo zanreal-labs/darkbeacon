@@ -1,4 +1,11 @@
-import { ConflictError, NotFoundError, ValidationError, type Actor } from '@darkbeacon/core';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+  hasMapRole,
+  type Actor,
+} from '@darkbeacon/core';
 import type { AddSystemRequest, MoveSystemsRequest, UpdateSystemRequest } from '@darkbeacon/shared';
 import type { Connection, MapSystem } from '../domain/map.js';
 import { changes, defined, nextPosition } from '../domain/rules.js';
@@ -86,6 +93,7 @@ export class SystemUseCases extends MappingUseCases {
       const next: MapSystem = { ...current, ...patch, updatedAt: this.ports.clock.now() };
       if (!current.visible) return this.restore(events, next, current);
       if (!next.visible) {
+        await this.guardLockedConnections(who, mapId, solarSystemId);
         await this.hide(events, next, current);
         await renumberBookmarks(this.ports, events, mapId);
         return next;
@@ -120,9 +128,22 @@ export class SystemUseCases extends MappingUseCases {
     await this.write(who, mapId, async (events) => {
       const current = await this.visibleSystem(mapId, solarSystemId);
       if (current.locked) throw new ConflictError('The system is locked');
+      await this.guardLockedConnections(who, mapId, solarSystemId);
       await this.hide(events, { ...current, visible: false, updatedAt: this.ports.clock.now() }, current);
       await renumberBookmarks(this.ports, events, mapId);
     });
+  }
+
+  /**
+   * Hiding a system removes its connections; a locked one may only go when a map manager hides
+   * it, and never by a process acting on its own.
+   */
+  private async guardLockedConnections(who: Actor, mapId: string, solarSystemId: number): Promise<void> {
+    const connections = await this.ports.connections.listForSystem(mapId, solarSystemId);
+    if (!connections.some((c) => c.locked)) return;
+    if (who.kind === 'system') throw new ConflictError('A locked connection leads to the system');
+    if (!hasMapRole(await this.ports.access.roleOf(who, mapId), 'manager'))
+      throw new ForbiddenError('A locked connection leads to the system; a map manager can remove it');
   }
 
   /** `before`: the system as it was shown, kept as the removed snapshot. */

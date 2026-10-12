@@ -16,6 +16,7 @@ const SECRETS = {
   sigNote: 'SECRET-SIG-NOTE',
   label: 'SECRET-LABEL',
   mapHub: 'SECRET-STAGING',
+  connectionNote: 'SECRET-CONNECTION-NOTE',
 };
 
 const system = {
@@ -47,6 +48,9 @@ const connection = {
   bubbled: 'source' as const,
   eolAt: 5,
   massStatusAt: 6,
+  lifetime: { mark: '16h' as const, at: 4 },
+  locked: true,
+  note: SECRETS.connectionNote,
   createdAt: 1,
   updatedAt: 2,
 };
@@ -60,8 +64,17 @@ const signature = {
   name: SECRETS.sigName,
   description: SECRETS.sigNote,
   connectionId: null,
+  kind: 'anomaly' as const,
   createdAt: 1,
   updatedAt: 2,
+};
+const custom = {
+  ...signature,
+  id: 's2',
+  eveId: 'TOWER-1',
+  kind: undefined,
+  custom: true,
+  name: SECRETS.sigName,
 };
 const character = {
   characterId: 90000001,
@@ -103,7 +116,7 @@ const snapshot = {
   },
   systems: [system],
   connections: [connection],
-  signatures: [signature],
+  signatures: [signature, custom],
   characters: [character],
   exits: [exit],
   plugin: { secret: SECRETS.note },
@@ -130,7 +143,12 @@ describe('public projection', () => {
       timeStatus: 'eol',
       dangerous: true,
       bubbled: 'source',
+      // Lifetime marks are connection status too.
+      lifetime: { mark: '16h', at: 4 },
     });
+    // Connection notes are intel; locks never leave their map.
+    expect(view.connections[0]).not.toHaveProperty('note');
+    expect(view.connections[0]).not.toHaveProperty('locked');
     expect(view.signatures).toBeUndefined();
     expect(view.characters).toBeUndefined();
     expect(view.exits![0]!.hubs.map((h) => h.name)).toEqual(['Jita']);
@@ -148,6 +166,7 @@ describe('public projection', () => {
       bubbled: 'none',
     });
     expect(view.connections[0]).not.toHaveProperty('massStatusAt');
+    expect(view.connections[0]).not.toHaveProperty('lifetime');
   });
 
   it('adds exactly what each scope shares', () => {
@@ -155,9 +174,15 @@ describe('public projection', () => {
     // Signature notes travel with signatures (sharing's FIELD_SCOPES).
     expect(leaks(withSigs, [SECRETS.sigName, SECRETS.sigNote])).toEqual([]);
     expect(withSigs.signatures![0]!.description).toBe(SECRETS.sigNote);
+    // Anomalies and custom entries are signatures, with their kind and flag.
+    expect(withSigs.signatures!.map((x) => [x.eveId, x.kind, x.custom])).toEqual([
+      ['ABC-123', 'anomaly', undefined],
+      ['TOWER-1', undefined, true],
+    ]);
     const withIntel = projectSnapshot(snapshot, scopes('intel', 'signatures'));
     expect(withIntel.systems[0]!.description).toBe(SECRETS.note);
     expect(withIntel.signatures![0]!.description).toBe(SECRETS.sigNote);
+    expect(withIntel.connections[0]!.note).toBe(SECRETS.connectionNote);
     const withPilots = projectSnapshot(snapshot, scopes('characters'));
     expect(withPilots.characters![0]!.name).toBe(SECRETS.pilot);
     expect(leaks(withPilots, [SECRETS.pilot])).toEqual([]);
@@ -167,6 +192,7 @@ describe('public projection', () => {
     expect(leaks(withLabels, [SECRETS.temporaryName])).toEqual([]);
     const everything = projectSnapshot(snapshot, scopes('signatures', 'intel', 'characters', 'labels'));
     expect(everything.systems[0]).toMatchObject({ labelIds: [], locked: false });
+    expect(everything.connections[0]).not.toHaveProperty('locked');
     expect(
       leaks(
         everything,
@@ -219,6 +245,17 @@ describe('public projection', () => {
     expect(leaks(projectEvent(event('routes.exits_changed', { exits: [exit] }), s, 'public:tok'))).toEqual(
       [],
     );
+    // Killmails are zKillboard's public data about the system: forwarded as they are.
+    const kill = {
+      id: 1,
+      solarSystemId: 31000005,
+      victim: { ship: { id: 670, name: 'Capsule', ticker: null } },
+    };
+    expect(projectEvent(event('kill.reported', kill), s, 'public:tok')).toMatchObject({
+      stream: 'public:tok',
+      actor: { kind: 'system', id: 'darkbeacon' },
+      data: kill,
+    });
   });
 
   it('normalizes scopes and narrows the MCP reach', () => {

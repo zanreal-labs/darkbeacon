@@ -43,6 +43,8 @@ export class DomainTelemetry {
   private readonly esiErrorLimit: Recorder;
   private readonly esiRateLimit: Recorder;
   private readonly pollDuration: Recorder;
+  private readonly zkillRequests: Counter;
+  private readonly intelKills: Counter;
 
   constructor(private readonly deps: { instruments: MetricInstruments; tracer: SpanTracer }) {
     const m = deps.instruments;
@@ -80,6 +82,26 @@ export class DomainTelemetry {
       unit: 's',
       boundaries: LATENCY_BUCKETS,
     });
+    this.zkillRequests = m.counter('darkbeacon.zkill.requests', {
+      description: 'Requests to zKillboard, by endpoint (r2z2 feed, api) and outcome',
+      unit: '{request}',
+    });
+    this.intelKills = m.counter('darkbeacon.intel.kills', {
+      description: 'Killmails stored for systems on maps, by source (feed, history)',
+      unit: '{killmail}',
+    });
+  }
+
+  /** One request to zKillboard; `outcome` is a status class, `404`, `403`, `429` or `error`. */
+  zkillRequest(endpoint: 'r2z2' | 'api', outcome: string): void {
+    this.zkillRequests.add(1, {
+      endpoint,
+      outcome: /^([1-5]xx|403|404|429|error)$/.test(outcome) ? outcome : 'other',
+    });
+  }
+
+  intelKillsStored(source: 'feed' | 'history', count: number): void {
+    if (count > 0) this.intelKills.add(count, { source });
   }
 
   /** Committed events (after the transaction, as the event bus delivers them). */

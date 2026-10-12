@@ -1,3 +1,4 @@
+import { LIFETIME_MARK_HOURS } from '@darkbeacon/shared';
 import type { Connection } from './map.js';
 
 const HOUR = 60 * 60 * 1000;
@@ -21,7 +22,7 @@ export function defaultLifetimeHours(
 }
 
 export interface LifetimeInput {
-  connection: Pick<Connection, 'type' | 'shipSize' | 'timeStatus' | 'eolAt' | 'updatedAt'>;
+  connection: Pick<Connection, 'type' | 'shipSize' | 'timeStatus' | 'eolAt' | 'updatedAt' | 'lifetime'>;
   /** When the map first saw the hole: the connection or one of its signatures, whichever is older. */
   firstSeenAt: number;
   /** Lifetime of its wormhole type (SDE), when the type is known. */
@@ -35,7 +36,10 @@ export interface ConnectionLifetime {
   lifetimeHours: number | null;
   /** `type`: its wormhole type's lifetime; `class`: the default for the classes it joins. */
   lifetimeFrom: 'type' | 'class' | null;
-  /** Latest moment it can still exist: its lifetime after it was first seen, 4 h after EOL was marked. */
+  /**
+   * Latest moment it can still exist: its lifetime after it was first seen, 4 h after EOL was
+   * marked, or what a lifetime mark ("less than 16 h left") said when it was set.
+   */
   expiresBy: number | null;
   /** When it is in its last 4 hours by its lifetime alone (the moment it turns EOL in game). */
   eolBy: number | null;
@@ -55,18 +59,17 @@ export function connectionLifetime(input: LifetimeInput): ConnectionLifetime {
   const byLifetime = input.firstSeenAt + lifetimeHours * HOUR;
   const bounds = [byLifetime];
   if (c.timeStatus === 'eol') bounds.push((c.eolAt ?? c.updatedAt) + EOL_WINDOW_MS);
+  const byMark = c.lifetime ? c.lifetime.at + LIFETIME_MARK_HOURS[c.lifetime.mark] * HOUR : null;
+  if (byMark !== null) bounds.push(byMark);
   return {
     lifetimeHours,
     lifetimeFrom,
     expiresBy: Math.min(...bounds),
-    eolBy: byLifetime - EOL_WINDOW_MS,
+    eolBy: Math.min(byLifetime, byMark ?? byLifetime) - EOL_WINDOW_MS,
   };
 }
 
-/**
- * Whether the sweeper must leave a connection alone. Locked connections are coming to mapping
- * (`locked`); until then nothing is locked.
- */
+/** Whether the sweeper must leave a connection alone: a locked one only managers change. */
 export function connectionLocked(connection: object): boolean {
   return (connection as { locked?: unknown }).locked === true;
 }

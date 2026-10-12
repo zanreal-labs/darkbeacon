@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, type ClipboardEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ClipboardPaste, Radar, X } from 'lucide-react';
+import { ChevronRight, ClipboardPaste, Radar, X } from 'lucide-react';
 import {
   buildPath,
   routes,
@@ -138,6 +138,11 @@ export function SignaturesSection({
   };
 
   const sorted = [...signatures].sort((a, b) => a.eveId.localeCompare(b.eveId));
+  // Probed signatures first; anomalies and other scanner rows fold away (collapsed by default).
+  const probed = sorted.filter((x) => (x.kind ?? 'signature') === 'signature');
+  const others = sorted.filter((x) => (x.kind ?? 'signature') !== 'signature');
+  const [showOthers, setShowOthers] = useState(false);
+  const [filter, setFilter] = useState<(typeof OTHER_FILTERS)[number]['value']>('all');
 
   return (
     <div className={styles.signatures}>
@@ -167,7 +172,7 @@ export function SignaturesSection({
         </div>
       )}
 
-      {sorted.length === 0 ? (
+      {probed.length === 0 ? (
         listed.isLoading ? (
           <div className={styles.padded} aria-busy="true">
             {[0, 1, 2].map((i) => (
@@ -177,103 +182,196 @@ export function SignaturesSection({
         ) : (
           <p className={styles.empty}>
             <Radar aria-hidden />
-            {can.edit
-              ? 'No signatures yet. Copy the probe scanner and paste.'
-              : 'Nobody has scanned here yet.'}
+            {others.length > 0
+              ? 'No probed signatures yet.'
+              : can.edit
+                ? 'No signatures yet. Copy the probe scanner and paste.'
+                : 'Nobody has scanned here yet.'}
           </p>
         )
       ) : (
-        <table className={styles.table} data-edit={can.edit || undefined}>
-          <thead>
-            <tr>
-              <th scope="col">ID</th>
-              <th scope="col">Group</th>
-              <th scope="col">Type / name</th>
-              <th scope="col" className={styles.num}>
-                Age
-              </th>
-              {can.edit && <th aria-label="Actions" />}
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((s) => {
-              const target = targetOf(s, connections);
-              const targetName = target !== null ? (universe.get(target)?.name ?? '…') : null;
-              const wormhole = s.group === 'wormhole';
-              const text = [s.type, s.name].filter(Boolean).join(' · ');
-              return (
-                <tr key={s.id} data-group={s.group}>
-                  <td className={styles.sigId}>{s.eveId}</td>
-                  <td>
-                    {can.edit ? (
-                      <span className={styles.groupSelect}>
-                        <select
-                          className={styles.inlineSelect}
-                          aria-label={`Group of ${s.eveId}`}
-                          value={s.group}
-                          onChange={(e) =>
-                            void store.updateSignature(s.id, { group: e.target.value as SignatureGroup })
-                          }
-                        >
-                          {SignatureGroup.options.map((g) => (
-                            <option key={g} value={g}>
-                              {GROUP_LABEL[g]}
-                            </option>
-                          ))}
-                        </select>
-                      </span>
-                    ) : (
-                      GROUP_LABEL[s.group]
-                    )}
-                  </td>
-                  <td title={[text, s.description].filter(Boolean).join(' · ') || undefined}>
-                    <span className={styles.typeCell} data-wormhole={wormhole || undefined}>
-                      {can.edit ? (
-                        <InlineText
-                          label={wormhole ? `Wormhole type of ${s.eveId}` : `Name of ${s.eveId}`}
-                          mono={wormhole}
-                          value={(wormhole ? s.type : s.name) ?? ''}
-                          placeholder={wormhole ? 'Type' : '—'}
-                          maxLength={wormhole ? 64 : 128}
-                          onCommit={(v) =>
-                            void store.updateSignature(s.id, wormhole ? { type: v } : { name: v })
-                          }
-                        />
-                      ) : (
-                        <span className={styles.ellipsis}>{text || <span className="subtle">—</span>}</span>
-                      )}
-                      {target !== null && (
-                        <button
-                          type="button"
-                          className={styles.target}
-                          title={`Leads to ${targetName}: select it`}
-                          onClick={() => onSelectSystem(target)}
-                        >
-                          <span aria-hidden>→ </span>
-                          {targetName}
-                        </button>
-                      )}
-                    </span>
-                  </td>
-                  <td className={`${styles.num} ${styles.age}`}>{shortAge(s.createdAt)}</td>
-                  {can.edit && (
-                    <td className={styles.actionCell}>
-                      <IconButton
-                        size="sm"
-                        tooltip={false}
-                        className={styles.rowRemove}
-                        label={`Remove ${s.eveId}`}
-                        icon={<X />}
-                        onClick={() => void store.removeSignature(s.id)}
-                      />
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <SignatureTable
+          rows={probed}
+          label="Signatures"
+          can={can}
+          store={store}
+          connections={connections}
+          universe={universe}
+          onSelectSystem={onSelectSystem}
+        />
+      )}
+      {others.length > 0 && (
+        <div className={styles.others}>
+          <button
+            type="button"
+            className={styles.othersToggle}
+            aria-expanded={showOthers}
+            onClick={() => setShowOthers((v) => !v)}
+          >
+            <ChevronRight className={styles.chevron} aria-hidden />
+            Anomalies and other results
+            <span className={styles.sectionCount}>{others.length}</span>
+          </button>
+          {showOthers && (
+            <>
+              <div className={styles.othersFilter} role="group" aria-label="Show">
+                {OTHER_FILTERS.map((f) => (
+                  <button
+                    key={f.value}
+                    type="button"
+                    className={styles.filterChip}
+                    aria-pressed={filter === f.value}
+                    onClick={() => setFilter(f.value)}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+              <SignatureTable
+                rows={others.filter(
+                  (x) =>
+                    filter === 'all' ||
+                    (filter === 'other' ? x.kind === 'other' : x.kind === 'anomaly' && x.group === filter),
+                )}
+                label="Anomalies and other results"
+                can={can}
+                store={store}
+                connections={connections}
+                universe={universe}
+                onSelectSystem={onSelectSystem}
+              />
+            </>
+          )}
+        </div>
       )}
     </div>
+  );
+}
+
+const OTHER_FILTERS = [
+  { value: 'all', label: 'All' },
+  { value: 'combat', label: 'Combat' },
+  { value: 'ore', label: 'Ore' },
+  { value: 'relic', label: 'Relic' },
+  { value: 'data', label: 'Data' },
+  { value: 'gas', label: 'Gas' },
+  { value: 'other', label: 'Other' },
+] as const;
+
+/** One table of scan results: id (custom entries marked), group, type or name, age, remove. */
+function SignatureTable({
+  rows: sorted,
+  label,
+  can,
+  store,
+  connections,
+  universe,
+  onSelectSystem,
+}: {
+  rows: SignatureDto[];
+  label: string;
+  can: MapPermissions;
+  store: Pick<MapStore, 'updateSignature' | 'removeSignature'>;
+  connections: Map<string, ConnectionDto>;
+  universe: Map<number, UniverseSystemDto>;
+  onSelectSystem(solarSystemId: number): void;
+}) {
+  if (sorted.length === 0) return null;
+  return (
+    <table className={styles.table} data-edit={can.edit || undefined} aria-label={label}>
+      <thead>
+        <tr>
+          <th scope="col">ID</th>
+          <th scope="col">Group</th>
+          <th scope="col">Type / name</th>
+          <th scope="col" className={styles.num}>
+            Age
+          </th>
+          {can.edit && <th aria-label="Actions" />}
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((s) => {
+          const target = targetOf(s, connections);
+          const targetName = target !== null ? (universe.get(target)?.name ?? '…') : null;
+          const wormhole = s.group === 'wormhole';
+          const text = [s.type, s.name].filter(Boolean).join(' · ');
+          return (
+            <tr key={s.id} data-group={s.group}>
+              <td className={styles.sigId}>
+                {s.eveId}
+                {s.custom && (
+                  <span className={styles.customMark} title="Written by someone, not from the scanner">
+                    custom
+                  </span>
+                )}
+              </td>
+              <td>
+                {can.edit ? (
+                  <span className={styles.groupSelect}>
+                    <select
+                      className={styles.inlineSelect}
+                      aria-label={`Group of ${s.eveId}`}
+                      value={s.group}
+                      onChange={(e) =>
+                        void store.updateSignature(s.id, { group: e.target.value as SignatureGroup })
+                      }
+                    >
+                      {SignatureGroup.options.map((g) => (
+                        <option key={g} value={g}>
+                          {GROUP_LABEL[g]}
+                        </option>
+                      ))}
+                    </select>
+                  </span>
+                ) : (
+                  GROUP_LABEL[s.group]
+                )}
+              </td>
+              <td title={[text, s.description].filter(Boolean).join(' · ') || undefined}>
+                <span className={styles.typeCell} data-wormhole={wormhole || undefined}>
+                  {can.edit ? (
+                    <InlineText
+                      label={wormhole ? `Wormhole type of ${s.eveId}` : `Name of ${s.eveId}`}
+                      mono={wormhole}
+                      value={(wormhole ? s.type : s.name) ?? ''}
+                      placeholder={wormhole ? 'Type' : '—'}
+                      maxLength={wormhole ? 64 : 128}
+                      onCommit={(v) => void store.updateSignature(s.id, wormhole ? { type: v } : { name: v })}
+                    />
+                  ) : (
+                    <span className={styles.ellipsis}>{text || <span className="subtle">—</span>}</span>
+                  )}
+                  {target !== null && (
+                    <button
+                      type="button"
+                      className={styles.target}
+                      title={`Leads to ${targetName}: select it`}
+                      onClick={() => onSelectSystem(target)}
+                    >
+                      <span aria-hidden>→ </span>
+                      {targetName}
+                    </button>
+                  )}
+                </span>
+              </td>
+              <td className={`${styles.num} ${styles.age}`}>{shortAge(s.createdAt)}</td>
+              {can.edit && (
+                <td className={styles.actionCell}>
+                  <IconButton
+                    size="sm"
+                    tooltip={false}
+                    className={styles.rowRemove}
+                    label={`Remove ${s.eveId}`}
+                    icon={<X />}
+                    onClick={() => void store.removeSignature(s.id)}
+                  />
+                </td>
+              )}
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }

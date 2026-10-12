@@ -1,0 +1,22 @@
+{
+  "name": "@darkbeacon/importing",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Imports of whole maps from other mappers (Wanderer): sources, translation, merge, jobs",
+  "type": "module",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@darkbeacon/core": "workspace:*",
+    "@darkbeacon/shared": "workspace:*",
+    "zod": "^4.6.5"
+  }
+}
