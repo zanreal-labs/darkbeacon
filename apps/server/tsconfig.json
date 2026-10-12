@@ -23,6 +23,7 @@
     { "path": "../../packages/modules/plugins" },
     { "path": "../../packages/modules/routing" },
     { "path": "../../packages/modules/audit" },
-    { "path": "../../packages/modules/telemetry" }
+    { "path": "../../packages/modules/telemetry" },
+    { "path": "../../packages/modules/observability" }
   ]
 }

@@ -29,6 +29,8 @@ const route = <const R extends RouteDef>(r: R): R => r;
  */
 export const routes = {
   health: route({ method: 'GET', path: '/api/health', auth: 'public', response: dto.HealthDto }),
+  /** Readiness: the database answers and every migration is applied (503 otherwise). */
+  ready: route({ method: 'GET', path: '/api/ready', auth: 'public', response: dto.ReadyDto }),
 
   realtime: {
     /**
@@ -265,6 +267,13 @@ export const routes = {
       response: dto.DiscordBotDto,
     }),
     removeDiscordBot: route({ method: 'DELETE', path: '/api/admin/discord-bot', auth: 'admin' }),
+    /** What the instance exports for monitoring (OpenTelemetry); set through the environment only. */
+    observability: route({
+      method: 'GET',
+      path: '/api/admin/observability',
+      auth: 'admin',
+      response: dto.ObservabilityDto,
+    }),
   },
 
   universe: {

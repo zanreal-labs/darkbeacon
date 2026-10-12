@@ -1,16 +1,18 @@
 import {
   Inject,
   Injectable,
+  Optional,
   type OnApplicationBootstrap,
   type OnModuleDestroy,
   type OnModuleInit,
 } from '@nestjs/common';
 import type { EventBus } from '@darkbeacon/core';
+import type { DomainTelemetry } from '@darkbeacon/observability';
 import { isEventOfType } from '@darkbeacon/shared';
 import { AutoMapper, ListMapCharacters, TrackingCleanup, TrackingPoller } from '@darkbeacon/tracking';
 import type { AppConfig } from '../../config/config.js';
 import { EventConsumers } from '../../platform/event-consumers.js';
-import { APP_CONFIG, EVENT_BUS } from '../../platform/tokens.js';
+import { APP_CONFIG, EVENT_BUS, OBSERVABILITY } from '../../platform/tokens.js';
 import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
 
 /**
@@ -22,6 +24,7 @@ import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
 export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
   private timer: NodeJS.Timeout | undefined;
   private unsubscribe: (() => void) | undefined;
+  private polling = false;
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
@@ -32,6 +35,7 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
     @Inject(TrackingCleanup) private readonly cleanup: TrackingCleanup,
     @Inject(EventConsumers) private readonly consumers: EventConsumers,
     @Inject(EVENT_BUS) private readonly bus: EventBus,
+    @Optional() @Inject(OBSERVABILITY) private readonly telemetry?: DomainTelemetry | null,
   ) {}
 
   onModuleInit(): void {
@@ -67,7 +71,22 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
   onApplicationBootstrap(): void {
     // Tests drive the poller themselves.
     if (this.config.env !== 'test') {
-      this.timer = setInterval(() => void this.poller.tick(), 1000).unref();
+      this.timer = setInterval(() => void this.tick(), 1000).unref();
+    }
+  }
+
+  private async tick(): Promise<void> {
+    const telemetry = this.telemetry;
+    if (!telemetry) return this.poller.tick();
+    // A poll still running makes the next tick a no-op; only whole polls are measured.
+    if (this.polling) return;
+    this.polling = true;
+    const started = performance.now();
+    try {
+      await this.poller.tick();
+    } finally {
+      this.polling = false;
+      telemetry.trackingPolled((performance.now() - started) / 1000);
     }
   }
 

@@ -114,3 +114,19 @@ const publicOnlyLookup: LookupFunction = (hostname, options, callback) => {
 function privateTarget(what: string): Error {
   return new Error(`${what} is a private or local address; an admin can allow private networks`);
 }
+
+/** A sender that reports each delivery (a 2xx answer) or failure (any other answer, no answer). */
+export function countingDeliveries(sender: WebhookSender, delivered: (ok: boolean) => void): WebhookSender {
+  return {
+    post: async (url, body, headers) => {
+      try {
+        const answer = await sender.post(url, body, headers);
+        delivered(answer.status >= 200 && answer.status < 300);
+        return answer;
+      } catch (error) {
+        delivered(false);
+        throw error;
+      }
+    },
+  };
+}

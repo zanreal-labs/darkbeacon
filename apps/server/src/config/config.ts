@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { parseTelemetrySettings } from '@darkbeacon/observability';
 import { z } from 'zod';
 
 const flag = z
@@ -91,9 +92,13 @@ export function parseEnv(
   // Treat `KEY=` lines from .env files as unset.
   const cleaned = Object.fromEntries(Object.entries(env).filter(([, v]) => v !== undefined && v !== ''));
   const parsed = EnvSchema.safeParse(cleaned);
-  if (!parsed.success) {
-    const problems = parsed.error.issues.map((i) => `  ${i.path.join('.')}: ${i.message}`).join('\n');
-    throw new ConfigError(`Invalid configuration:\n${problems}`);
+  // OpenTelemetry settings (OTEL_*, METRICS_*) are checked here too, so a typo stops the start.
+  const problems = [
+    ...(parsed.success ? [] : parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`)),
+    ...parseTelemetrySettings(env).problems,
+  ];
+  if (!parsed.success || problems.length > 0) {
+    throw new ConfigError(`Invalid configuration:\n${problems.map((p) => `  ${p}`).join('\n')}`);
   }
   const e = parsed.data;
   const client = (id?: string, secret?: string) =>

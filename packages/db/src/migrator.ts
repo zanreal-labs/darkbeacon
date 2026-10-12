@@ -55,3 +55,19 @@ export async function migrateToLatest(
   }
   return results.map((r) => r.migrationName);
 }
+
+/** How many migrations are applied and how many are still pending. */
+export async function migrationStatus(
+  db: Kysely<unknown>,
+  options: { provider?: MigrationProvider; schema?: string | undefined } = {},
+): Promise<{ applied: number; pending: number }> {
+  const migrator = new Migrator({
+    db,
+    provider: options.provider ?? new ModuleMigrationProvider(),
+    allowUnorderedMigrations: true,
+    ...(options.schema ? { migrationTableSchema: options.schema } : {}),
+  });
+  const migrations = await migrator.getMigrations();
+  const applied = migrations.filter((m) => m.executedAt !== undefined).length;
+  return { applied, pending: migrations.length - applied };
+}

@@ -48,6 +48,7 @@ packages/modules/plugins        plugin registry, manifest validation, enable/dis
 packages/modules/routing        routes over stargates and the chain, hubs, chain exits, in-game waypoints
 packages/modules/audit          audit records of events, histories, reverts, hash chain check
 packages/modules/telemetry      anonymous product telemetry: allow-list, pseudonymous ids, opt-outs, heartbeat
+packages/modules/observability  telemetry settings, domain metrics, admin status (OpenTelemetry SDK in adapters)
 packages/db            Kysely factory, dialect switch, migration runner; migrations in migrations/<module>/
 packages/shared        zod schemas, DTOs and the WebSocket protocol shared by server and web
 packages/plugin-sdk    public plugin contract: manifest type, PluginContext (exposed ports), web slots
@@ -162,7 +163,8 @@ interface DomainEvent<T = unknown> {
 Environment only for what must exist before the first login: `PUBLIC_URL`, `SECRET_KEY`,
 `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `EVE_CLIENT_ID`, `EVE_CLIENT_SECRET`, `DATABASE_URL` (optional),
 `PORT` (default 3000), `DATA_DIR` (default /data), `DEMO_MODE`. Everything else is stored in the database and
-edited in the admin tab.
+edited in the admin tab, except observability: the standard `OTEL_*` variables plus `METRICS_PROMETHEUS` and
+`METRICS_TOKEN` (docs/observability.md), shown read-only in the admin tab.
 
 ## Container
 

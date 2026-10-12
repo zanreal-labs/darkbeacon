@@ -1,0 +1,44 @@
+# Darkbeacon next to Grafana's all-in-one OpenTelemetry backend (grafana/otel-lgtm: an OTLP
+# collector, Tempo, Loki, Prometheus and Grafana in one container), to try observability out.
+# See docs/observability.md for Grafana Cloud and production setups.
+#
+#   docker compose -f docker-compose.observability.yml up -d --build
+#   docker compose -f docker-compose.observability.yml port darkbeacon 3000   # Darkbeacon
+#   docker compose -f docker-compose.observability.yml port lgtm 3000         # Grafana (no login)
+#
+# Grafana opens with the "Darkbeacon" dashboard (docs/grafana/darkbeacon-dashboard.json); traces
+# are under Explore -> Tempo, logs under Explore -> Loki.
+services:
+  darkbeacon:
+    build: .
+    image: ${DARKBEACON_IMAGE:-darkbeacon:local}
+    environment:
+      # A demo instance, so there is something to look at without Discord or EVE SSO. Remove
+      # these two (and set PUBLIC_URL, Discord/EVE credentials) for a real instance.
+      DEMO_MODE: 'true'
+      ALLOW_DEMO_MODE: 'true'
+      # Setting an OTLP endpoint is all it takes: traces, metrics and logs go to it.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4318
+      OTEL_SERVICE_NAME: darkbeacon
+      OTEL_RESOURCE_ATTRIBUTES: deployment.environment.name=local
+      # Metrics every 15 s instead of every minute, so the dashboard fills quickly.
+      OTEL_METRIC_EXPORT_INTERVAL: '15000'
+    volumes:
+      - darkbeacon-data:/data
+    ports:
+      - '127.0.0.1::3000'
+    depends_on:
+      - lgtm
+
+  lgtm:
+    image: grafana/otel-lgtm:0.36.0
+    volumes:
+      - lgtm-data:/data
+      - ./docs/grafana/darkbeacon-dashboard.json:/otel-lgtm/darkbeacon-dashboard.json:ro
+      - ./docs/grafana/provisioning.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/darkbeacon.yaml:ro
+    ports:
+      - '127.0.0.1::3000'
+
+volumes:
+  darkbeacon-data:
+  lgtm-data:

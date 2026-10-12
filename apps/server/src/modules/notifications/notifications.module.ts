@@ -11,13 +11,21 @@ import { InstanceSettingsService } from '@darkbeacon/access';
 import type { Clock, EventLog, MapAccess, UnitOfWork } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
 import { NotifierRegistry, WebhookAdmin, WebhookDispatcher } from '@darkbeacon/notifications';
+import type { DomainTelemetry } from '@darkbeacon/observability';
 import { isEventOfType } from '@darkbeacon/shared';
-import { HttpWebhookSender } from '../../adapters/notifications/http-webhook-sender.js';
+import { countingDeliveries, HttpWebhookSender } from '../../adapters/notifications/http-webhook-sender.js';
 import { KyselyWebhookRepository } from '../../adapters/notifications/kysely-webhook-repository.js';
 import { SecretBox } from '../../adapters/notifications/secret-box.js';
 import type { AppConfig } from '../../config/config.js';
 import { EventConsumers } from '../../platform/event-consumers.js';
-import { APP_CONFIG, CLOCK, EVENT_LOG, MAP_ACCESS, UNIT_OF_WORK } from '../../platform/tokens.js';
+import {
+  APP_CONFIG,
+  CLOCK,
+  EVENT_LOG,
+  MAP_ACCESS,
+  OBSERVABILITY,
+  UNIT_OF_WORK,
+} from '../../platform/tokens.js';
 import { WebhooksController } from './webhooks.controller.js';
 
 const RETRY_EVERY_MS = 5_000;
@@ -105,13 +113,26 @@ function every(ms: number, work: () => Promise<unknown>, logger: Logger): () => 
     },
     {
       provide: WebhookDispatcher,
-      useFactory: (webhooks: KyselyWebhookRepository, clock: Clock, settings: InstanceSettingsService) => {
-        const sender = new HttpWebhookSender({
+      useFactory: (
+        webhooks: KyselyWebhookRepository,
+        clock: Clock,
+        settings: InstanceSettingsService,
+        telemetry?: DomainTelemetry | null,
+      ) => {
+        const http = new HttpWebhookSender({
           allowPrivate: async () => (await settings.current()).webhooksToPrivateNetworks,
         });
+        const sender = telemetry
+          ? countingDeliveries(http, (ok) => telemetry.notificationDelivered('webhook', ok))
+          : http;
         return new WebhookDispatcher({ webhooks, sender, clock });
       },
-      inject: [KyselyWebhookRepository, CLOCK, InstanceSettingsService],
+      inject: [
+        KyselyWebhookRepository,
+        CLOCK,
+        InstanceSettingsService,
+        { token: OBSERVABILITY, optional: true },
+      ],
     },
     {
       provide: WebhookAdmin,

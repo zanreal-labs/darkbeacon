@@ -21,3 +21,8 @@ export const AUTO_MAP_TARGET = 'AutoMapTarget';
 export const WEB_UPSTREAM = 'WebUpstream';
 /** AuditScope: facts about the current change (channel, origin, character, revert) for the audit trail. */
 export const AUDIT_SCOPE = 'AuditScope';
+/**
+ * DomainTelemetry (`@darkbeacon/observability`), or null while telemetry is off. Provided by the
+ * observability module; always inject it as optional, so that module can be left out.
+ */
+export const OBSERVABILITY = 'Observability';

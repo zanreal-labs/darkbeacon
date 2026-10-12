@@ -62,6 +62,19 @@
   min-width: 0;
 }
 
+/* A fact with no value. */
+.muted {
+  color: var(--dbk-color-text-subtle);
+  font-weight: 400;
+}
+
+/* How to turn on something that is set outside the app (environment variables). */
+.hint {
+  margin: 0;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+}
+
 .footerNote {
   margin-right: auto;
   color: var(--dbk-color-text-muted);

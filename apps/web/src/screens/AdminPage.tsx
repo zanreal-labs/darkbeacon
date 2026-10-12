@@ -26,6 +26,7 @@ import {
   type DiscordBotDto,
   type HealthDto,
   type InstanceSettingsDto,
+  type ObservabilityDto,
   type PluginDto,
   type ThemeDto,
   type ThemesDto,
@@ -101,6 +102,7 @@ export const adminKeys = {
   settings: ['admin-settings'],
   health: ['health'],
   bot: ['admin-discord-bot'],
+  observability: ['admin-observability'],
 } as const;
 
 /** The admin page as it looks while its data streams in. */
@@ -218,6 +220,7 @@ function InstanceTab() {
           )}
         </CardBody>
       </Card>
+      <ObservabilityCard />
       <SignInSettings />
       <DefaultMapSettings />
       <DiscordBotSettings />
@@ -226,6 +229,91 @@ function InstanceTab() {
       <TelemetryCard />
       <PluginSlot slot="settingsPage" props={{ mapId: null }} />
     </Stack>
+  );
+}
+
+const SIGNAL_NAMES = { traces: 'Traces', metrics: 'Metrics', logs: 'Logs' } as const;
+const PROTOCOL_NAMES = {
+  'http/protobuf': 'HTTP (protobuf)',
+  'http/json': 'HTTP (JSON)',
+  grpc: 'gRPC',
+} as const;
+
+/** Read-only: telemetry is set with environment variables (docs/observability.md). */
+function ObservabilityCard() {
+  const status = useQuery({
+    queryKey: adminKeys.observability,
+    queryFn: () => api<ObservabilityDto>(routes.admin.observability.path),
+  });
+  const data = status.data;
+  const none = <span className={styles.muted}>None</span>;
+  const fact = (label: string, value: ReactNode) => (
+    <div className={styles.fact}>
+      <dt>{label}</dt>
+      <dd>{status.isPending ? <Skeleton width="60%" height={14} /> : value}</dd>
+    </div>
+  );
+  return (
+    <Card>
+      <CardHeader
+        title="Observability"
+        description="Traces, metrics and logs over OpenTelemetry, for Grafana or any OTLP collector. Set with environment variables on the server."
+      />
+      <CardBody>
+        {status.isError ? (
+          <ErrorState compact error={status.error} onRetry={() => void status.refetch()} />
+        ) : (
+          <Stack>
+            {data?.notLoaded && (
+              <Callout tone="warning" title="Configured, but not running">
+                The server was started without the telemetry preload. Start it with{' '}
+                <span className="mono">--import ./apps/server/dist/adapters/observability/preload.js</span>,
+                as the container image does.
+              </Callout>
+            )}
+            <dl className={styles.facts}>
+              {fact(
+                'Telemetry',
+                <Badge tone={data?.enabled ? 'success' : 'neutral'} dot>
+                  {data?.enabled ? 'On' : 'Off'}
+                </Badge>,
+              )}
+              {fact('Service name', <span className="mono">{data?.serviceName}</span>)}
+              {fact(
+                'OTLP endpoint',
+                data?.otlp.endpoint ? <span className="mono">{data.otlp.endpoint}</span> : none,
+              )}
+              {fact('Protocol', data?.otlp.protocol ? PROTOCOL_NAMES[data.otlp.protocol] : none)}
+              {fact(
+                'Signals',
+                data && data.otlp.signals.length > 0
+                  ? data.otlp.signals.map((s) => SIGNAL_NAMES[s]).join(', ')
+                  : none,
+              )}
+              {fact(
+                'Prometheus',
+                data?.prometheus.enabled ? (
+                  <Badge tone="success" dot title="Scrapers send METRICS_TOKEN as a bearer token">
+                    <span className="mono">{data.prometheus.path}</span>
+                  </Badge>
+                ) : (
+                  <Badge tone="neutral" dot>
+                    Off
+                  </Badge>
+                ),
+              )}
+            </dl>
+            {data && !data.enabled && !data.notLoaded && (
+              <p className={styles.hint}>
+                Set <span className="mono">OTEL_EXPORTER_OTLP_ENDPOINT</span> to send telemetry to a
+                collector, or <span className="mono">METRICS_PROMETHEUS=true</span> with a{' '}
+                <span className="mono">METRICS_TOKEN</span> to serve <span className="mono">/metrics</span>.
+              </p>
+            )}
+          </Stack>
+        )}
+      </CardBody>
+    </Card>
   );
 }
 
