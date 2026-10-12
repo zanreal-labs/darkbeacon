@@ -88,6 +88,7 @@ export class IntelQueries {
       repo.coverage([systemId]),
     ]);
     const recent = kills.slice(0, RECENT_KILLS);
+    const wormhole = isWormholeSpace(this.deps.universe.space(systemId));
     const groups = Object.fromEntries(
       (Object.keys(WINDOWS) as ActivityWindow[]).map((w) => [w, activeGroups(kills, now - WINDOWS[w])]),
     ) as Record<ActivityWindow, ActiveGroup[]>;
@@ -105,7 +106,17 @@ export class IntelQueries {
     });
     return {
       intel: intel[0]!,
-      hours: activitySeries(systemId, rows, answered, hours).map(({ systemId: _, ...h }) => h),
+      hours: activitySeries(systemId, rows, answered, hours).map(({ systemId: _, ...h }) => {
+        const since = coverage.get(systemId)?.since;
+        const killmails =
+          since !== undefined && since <= h.hour
+            ? kills.filter((k) => k.time >= h.hour && k.time < h.hour + HOUR).length
+            : null;
+        // ESI counts nothing in wormhole space: no figures rather than zeros.
+        return wormhole
+          ? { ...h, shipKills: null, podKills: null, npcKills: null, jumps: null, killmails }
+          : { ...h, killmails };
+      }),
       kills: recent.map((k) => killDto(k, book)),
       groups: {
         '1h': groups['1h'].map(group),
@@ -172,7 +183,9 @@ export class IntelQueries {
     const book = holders.length > 0 ? await this.deps.names.lookup(holders, alliances) : new Map();
     const live = this.deps.live();
     return systemIds.map((id) => {
-      const latest = latestHour(activitySeries(id, rows, answered, hours), now);
+      const latest = isWormholeSpace(universe.space(id))
+        ? null
+        : latestHour(activitySeries(id, rows, answered, hours), now);
       const cover = coverage.get(id);
       const zkill = counts.get(id)?.count ?? 0;
       return {

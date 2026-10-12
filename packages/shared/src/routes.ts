@@ -1002,6 +1002,13 @@ export const routes = {
       query: dto.MapKillsQuery,
       response: dto.MapKillsDto,
     }),
+    /** The signed-in account's standings (contacts of its characters). */
+    standings: route({
+      method: 'GET',
+      path: '/api/accounts/me/standings',
+      auth: 'account',
+      response: dto.StandingsDto,
+    }),
   },
 } as const;
 

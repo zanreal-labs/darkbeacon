@@ -25,14 +25,17 @@ import {
   IntelJobs,
   IntelNames,
   IntelQueries,
+  Standings,
   type IntelRepository,
 } from '@darkbeacon/intel';
+import { AccountService, CharacterService } from '@darkbeacon/identity';
 import type { MappingPorts } from '@darkbeacon/mapping';
 import type { DomainTelemetry } from '@darkbeacon/observability';
 import { EveId, MapKillsQuery, nestPath, routes } from '@darkbeacon/shared';
 import { z } from 'zod';
 import {
   EsiActivitySource,
+  EsiContactsSource,
   EsiNameResolver,
   EsiPublicClient,
   EsiSovereigntySource,
@@ -41,6 +44,7 @@ import { KyselyIntelRepository } from '../../adapters/intel/kysely-intel-reposit
 import {
   CatalogIntelUniverse,
   HubIntelPublisher,
+  IdentityStandingPilots,
   MappingIntelSystems,
   TelemetryIntelMetrics,
 } from '../../adapters/intel/server-ports.js';
@@ -113,7 +117,15 @@ export function intelOptions(env: NodeJS.ProcessEnv, config: Pick<AppConfig, 'en
 
 @Controller()
 export class IntelController {
-  constructor(@Inject(IntelQueries) private readonly queries: IntelQueries) {}
+  constructor(
+    @Inject(IntelQueries) private readonly queries: IntelQueries,
+    @Inject(Standings) private readonly standings: Standings,
+  ) {}
+
+  @Get(nestPath(routes.intel.standings.path))
+  myStandings(@CurrentActor() actor: Actor | null) {
+    return this.standings.forAccount(actor);
+  }
 
   @Get(nestPath(routes.intel.map.path))
   map(@CurrentActor() actor: Actor | null, @Param('mapId') mapId: string) {
@@ -337,6 +349,26 @@ export class IntelRuntime implements OnModuleInit, OnModuleDestroy {
         INTEL_LIVE,
         { token: OBSERVABILITY, optional: true },
       ],
+    },
+    {
+      provide: Standings,
+      useFactory: (
+        accounts: AccountService,
+        characters: CharacterService,
+        client: EsiPublicClient,
+        clock: Clock,
+      ) =>
+        new Standings({
+          pilots: new IdentityStandingPilots({
+            main: async (accountId) => (await accounts.find(accountId))?.mainCharacterId ?? null,
+            listForAccount: (accountId) => characters.listForAccount(accountId),
+            scopes: (characterId) => characters.scopes(characterId),
+            accessToken: (characterId) => characters.accessToken(characterId),
+          }),
+          contacts: new EsiContactsSource(client),
+          clock,
+        }),
+      inject: [AccountService, CharacterService, EsiPublicClient, CLOCK],
     },
     IntelRuntime,
   ],

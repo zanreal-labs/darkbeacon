@@ -330,8 +330,13 @@ describeEachDialect('intel jobs and queries', (ctx) => {
       kill(1, S.hole, NOW - 20 * 60_000, [party(98000002, 99000002), party(98000003, null)]),
       kill(2, S.hole, NOW - 5 * HOUR),
     ]);
+    await repo.setCoverage(S.hole, { since: NOW - 7 * 24 * HOUR, at: NOW });
     const activity = await queries.systemActivity(alice, map.id, S.hole);
     expect(activity.hours).toHaveLength(24);
+    // Wormhole space: no ESI figures, the killmails per hour instead.
+    const fifthHour = activity.hours.find((h) => h.hour === Math.floor((NOW - 5 * HOUR) / HOUR) * HOUR)!;
+    expect(fifthHour).toMatchObject({ shipKills: null, npcKills: null, jumps: null, killmails: 1 });
+    expect(activity.hours.filter((h) => (h.killmails ?? 0) > 0)).toHaveLength(1);
     expect(activity.kills.map((k) => k.id)).toEqual([1, 2]);
     expect(activity.kills[0]).toMatchObject({
       value: 25_000_000,

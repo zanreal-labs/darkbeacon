@@ -59,7 +59,7 @@ export const SystemIntelDto = z.object({
    * the system's kills are followed live, else the larger of that and ESI's last hourly figure.
    */
   kills1h: z.number().int().nonnegative(),
-  /** ESI's last hourly figures; null before ESI answered (and in wormhole space for NPC kills). */
+  /** ESI's last hourly figures; null before ESI answered and in wormhole space (ESI has none). */
   npcKills1h: z.number().int().nonnegative().nullable(),
   jumps1h: z.number().int().nonnegative().nullable(),
   /** Time of the newest killmail known for the system. */
@@ -116,6 +116,11 @@ export const ActivityHourDto = z.object({
   podKills: z.number().int().nonnegative().nullable(),
   npcKills: z.number().int().nonnegative().nullable(),
   jumps: z.number().int().nonnegative().nullable(),
+  /**
+   * zKillboard's killmails in that hour, when the system's killmails are complete for it (the only
+   * hourly kill figure of wormhole space, which ESI leaves out).
+   */
+  killmails: z.number().int().nonnegative().nullable(),
 });
 export type ActivityHourDto = z.infer<typeof ActivityHourDto>;
 
@@ -169,3 +174,40 @@ export type MapKillsQuery = z.infer<typeof MapKillsQuery>;
 
 export const MapKillsDto = z.object({ kills: z.array(KillmailDto) });
 export type MapKillsDto = z.infer<typeof MapKillsDto>;
+
+/**
+ * `GET /api/accounts/me/standings`: how the signed-in account stands towards alliances,
+ * corporations and characters, from its characters' contacts (alliance over corporation over
+ * character, the main character first) and +10 for its own alliances and corporations.
+ */
+export const StandingsDto = z.object({
+  standings: z.array(z.object({ id: EveId, standing: z.number().min(-10).max(10) })),
+  /** Some linked characters lack the contact scopes (linked before they were asked for). */
+  missingScopes: z.boolean(),
+});
+export type StandingsDto = z.infer<typeof StandingsDto>;
+
+export type StandingTone = 'excellent' | 'good' | 'neutral' | 'bad' | 'terrible';
+
+/** The game's five standing colours: above +5, above 0, 0, down to -5, below -5. */
+export function standingTone(standing: number | null | undefined): StandingTone {
+  if (standing === null || standing === undefined || standing === 0) return 'neutral';
+  if (standing > 5) return 'excellent';
+  if (standing > 0) return 'good';
+  if (standing >= -5) return 'bad';
+  return 'terrible';
+}
+
+/**
+ * The status an unmarked system takes from its holder's standing (per viewer): friendly from +5,
+ * warning from -5, hostile at -10. A status someone set always wins.
+ */
+export function statusFromStanding(
+  standing: number | null | undefined,
+): 'friendly' | 'warning' | 'hostile' | null {
+  if (standing === null || standing === undefined) return null;
+  if (standing >= 5) return 'friendly';
+  if (standing <= -10) return 'hostile';
+  if (standing <= -5) return 'warning';
+  return null;
+}

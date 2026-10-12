@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from 'react';
 import { Skull } from 'lucide-react';
-import { killHeat, type SystemIntelDto, type WormholeEffect } from '@darkbeacon/shared';
+import { killHeat, type StandingTone, type SystemIntelDto, type WormholeEffect } from '@darkbeacon/shared';
 import { cssVar, type TokenName } from '@darkbeacon/theme-sdk';
 import { ago, formatIsk, groupLabel, groupOf, useMapKills } from '../lib/intel';
 import { Tooltip } from '../ui';
@@ -70,6 +70,11 @@ function NodeKillList({
       {!kills.isLoading && list.length === 0 && (
         <p className={styles.killListMuted}>ESI's hourly count; zKillboard has no killmails for it yet.</p>
       )}
+      {!kills.isLoading && list.length > 0 && list.length < Math.min(count, 10) && (
+        <p className={styles.killListMuted}>
+          ESI counts {count} in its last hour; zKillboard has {list.length} of them.
+        </p>
+      )}
       <ul>
         {list.map((k) => (
           <li key={k.id}>
@@ -83,9 +88,6 @@ function NodeKillList({
     </div>
   );
 }
-
-/** Standing of the holder as the viewer's contacts say (set by the standings feature). */
-export type StandingTone = 'excellent' | 'good' | 'neutral' | 'bad' | 'terrible';
 
 /** Who holds the system, small and muted in the node's bottom-right corner: `[TICKER]` or a faction. */
 export function NodeSovereignty({

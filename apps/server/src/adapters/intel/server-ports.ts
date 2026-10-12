@@ -1,6 +1,12 @@
 import { mapStream } from '@darkbeacon/core';
 import type { Database } from '@darkbeacon/db';
-import type { IntelMetrics, IntelPublisher, IntelSystems, IntelUniverse } from '@darkbeacon/intel';
+import type {
+  IntelMetrics,
+  IntelPublisher,
+  IntelSystems,
+  IntelUniverse,
+  StandingPilots,
+} from '@darkbeacon/intel';
 import type { MappingPorts, UniverseCatalog } from '@darkbeacon/mapping';
 import type { DomainTelemetry } from '@darkbeacon/observability';
 import type { UniverseSystemDto } from '@darkbeacon/shared';
@@ -103,5 +109,43 @@ export class TelemetryIntelMetrics implements IntelMetrics {
 
   killsStored(source: 'feed' | 'history', count: number): void {
     this.telemetry.intelKillsStored(source, count);
+  }
+}
+
+/** What standings need from identity: an account's characters (main first) and their tokens. */
+export class IdentityStandingPilots implements StandingPilots {
+  constructor(
+    private readonly identity: {
+      main(accountId: string): Promise<number | null>;
+      listForAccount(
+        accountId: string,
+      ): Promise<
+        Array<{ id: number; corporationId: number; allianceId: number | null; tokenValid: boolean }>
+      >;
+      scopes(characterId: number): Promise<string[]>;
+      accessToken(characterId: number): Promise<string | null>;
+    },
+  ) {}
+
+  async characters(accountId: string) {
+    const [main, characters] = await Promise.all([
+      this.identity.main(accountId),
+      this.identity.listForAccount(accountId),
+    ]);
+    const sorted = [...characters].sort(
+      (a, b) => Number(b.id === main) - Number(a.id === main) || a.id - b.id,
+    );
+    return Promise.all(
+      sorted.map(async (c) => ({
+        id: c.id,
+        corporationId: c.corporationId,
+        allianceId: c.allianceId,
+        scopes: c.tokenValid ? await this.identity.scopes(c.id) : [],
+      })),
+    );
+  }
+
+  accessToken(characterId: number): Promise<string | null> {
+    return this.identity.accessToken(characterId);
   }
 }

@@ -2,3 +2,4 @@
 export * from './jobs.js';
 export * from './names.js';
 export * from './queries.js';
+export * from './standings.js';

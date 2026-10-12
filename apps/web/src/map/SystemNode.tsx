@@ -8,6 +8,8 @@ import {
   wormholeDestination,
   type LabelDto,
   type MapSystemDto,
+  standingTone,
+  statusFromStanding,
   type SystemIntelDto,
   type UniverseSystemDto,
 } from '@darkbeacon/shared';
@@ -25,7 +27,7 @@ import {
   type NearestHub,
 } from './nodeFacts';
 import { builtNodeNameSizers } from './node-sizers';
-import { EffectDot, NodeKills, NodeKillsSizer, NodeSovereignty, type StandingTone } from './NodeIntel';
+import { EffectDot, NodeKills, NodeKillsSizer, NodeSovereignty } from './NodeIntel';
 import { destinationToken } from './WormholeFacts';
 import styles from './SystemNode.module.css';
 
@@ -46,8 +48,11 @@ export interface SystemNodeData extends Record<string, unknown> {
   mine?: boolean;
   /** Sovereignty and kills of the last hour (system intel); undefined while loading. */
   intel?: SystemIntelDto;
-  /** How the viewer stands towards the holder (contacts), for the sovereignty ticker's colour. */
-  standing?: StandingTone;
+  /**
+   * How the viewer stands towards the holder (contacts, -10..+10): colours the sovereignty ticker,
+   * and an unmarked system takes its status from it.
+   */
+  standing?: number | null;
   /** A kill just came in: the node rings softly for a moment. */
   pulse?: boolean;
 }
@@ -155,6 +160,9 @@ export const SystemNode = memo(function SystemNode({
   const { system, info, labels, characters, mapId, bookmark, hub, mine, intel, standing, pulse } = data;
   const toast = useToast();
   const name = nodeName(system, info);
+  // A status someone set wins; an unmarked system takes one from the holder's standing.
+  const derived = system.status === 'unknown' ? statusFromStanding(standing) : null;
+  const status = derived ?? system.status;
 
   const copyBookmark = (e: MouseEvent) => {
     e.stopPropagation();
@@ -171,10 +179,14 @@ export const SystemNode = memo(function SystemNode({
       className={styles.node}
       data-selected={selected || undefined}
       data-hidden={!system.visible || undefined}
-      data-status={system.status}
+      data-status={status}
+      data-derived={derived ? true : undefined}
       data-pulse={pulse || undefined}
-      style={{ '--node-status': cssVar(STATUS_BORDER[system.status]) } as CSSProperties}
-      title={systemTooltip(system, info, intel)}
+      style={{ '--node-status': cssVar(STATUS_BORDER[status]) } as CSSProperties}
+      title={
+        systemTooltip(system, info, intel) +
+        (derived ? `\n${STATUS_LABEL[derived]} from your standing towards the holder` : '')
+      }
     >
       {SIDES.map((side) => (
         <Handle
@@ -276,7 +288,10 @@ export const SystemNode = memo(function SystemNode({
               <Lock aria-label="Locked" />
             </span>
           )}
-          <NodeSovereignty intel={intel} standing={standing} />
+          <NodeSovereignty
+            intel={intel}
+            {...(standing != null ? { standing: standingTone(standing) } : {})}
+          />
         </span>
       </div>
 

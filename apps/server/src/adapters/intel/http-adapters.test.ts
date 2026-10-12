@@ -5,6 +5,7 @@ import { ManualClock } from '@darkbeacon/core';
 import type { Killmail } from '@darkbeacon/intel';
 import {
   EsiActivitySource,
+  EsiContactsSource,
   EsiNameResolver,
   EsiPublicClient,
   EsiSovereigntySource,
@@ -228,6 +229,40 @@ describe('ESI names', () => {
     expect(names.map((n) => n.id).sort()).toEqual([11, 12, 99000001]);
     expect(await resolver.ticker('alliance', 99000001)).toBe('TEST');
     expect(await resolver.ticker('alliance', 99000002)).toBeNull();
+  });
+});
+
+describe('ESI contacts', () => {
+  it('reads every page with the character token', async () => {
+    fake.routes.set('/alliances/99000001/contacts', (req, res) => {
+      const page = new URL(req.url!, fake.base).searchParams.get('page');
+      json(
+        res,
+        200,
+        page === '1'
+          ? [{ contact_id: 1354830081, contact_type: 'alliance', standing: -10 }]
+          : [{ contact_id: 98000009, contact_type: 'corporation', standing: 5 }],
+        { 'x-pages': '2' },
+      );
+    });
+    const source = new EsiContactsSource(client());
+    expect(await source.contacts({ kind: 'alliance', id: 99000001 }, 'tok')).toMatchObject({
+      ok: true,
+      data: [
+        { id: 1354830081, standing: -10 },
+        { id: 98000009, standing: 5 },
+      ],
+    });
+    expect(fake.requests.map((r) => r.headers.authorization)).toEqual(['Bearer tok', 'Bearer tok']);
+  });
+
+  it('gives up on a refused token without throwing', async () => {
+    fake.routes.set('/characters/1/contacts', (_req, res) => json(res, 403, { error: 'forbidden' }));
+    expect(await new EsiContactsSource(client()).contacts({ kind: 'character', id: 1 }, 'tok')).toMatchObject(
+      {
+        ok: false,
+      },
+    );
   });
 });
 

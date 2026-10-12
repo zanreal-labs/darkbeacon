@@ -2,6 +2,7 @@ import type { SystemIntelDto } from '@darkbeacon/shared';
 import type { ActivityHour, ActivityKind } from '../domain/activity.js';
 import type { Killmail } from '../domain/killmail.js';
 import type { SovereigntyClaim, SpaceFacts } from '../domain/sovereignty.js';
+import type { Contact } from '../domain/standings.js';
 
 export type { Clock, EventLog, MapAccess } from '@darkbeacon/core';
 
@@ -169,4 +170,23 @@ export interface IntelRepository {
   // Small values: the feed's position, when sources may be asked again
   state<T>(key: string): Promise<T | null>;
   setState(key: string, value: unknown): Promise<void>;
+}
+
+/** An account's linked characters as identity knows them (main first). */
+export interface StandingPilots {
+  characters(
+    accountId: string,
+  ): Promise<Array<{ id: number; corporationId: number; allianceId: number | null; scopes: string[] }>>;
+  accessToken(characterId: number): Promise<string | null>;
+}
+
+/**
+ * ESI contacts (`GET /characters/{id}/contacts`, `/corporations/{id}/contacts`,
+ * `/alliances/{id}/contacts`), read with a character's token.
+ */
+export interface ContactsSource {
+  contacts(
+    owner: { kind: 'character' | 'corporation' | 'alliance'; id: number },
+    accessToken: string,
+  ): Promise<SourceResult<Contact[]>>;
 }

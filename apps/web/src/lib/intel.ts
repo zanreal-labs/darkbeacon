@@ -10,6 +10,7 @@ import {
   type KillmailDto,
   type MapIntelDto,
   type MapKillsDto,
+  type StandingsDto,
   type SystemActivityDto,
   type SystemIntelDto,
 } from '@darkbeacon/shared';
@@ -123,6 +124,29 @@ export function useMapKills(mapId: string, filter: KillsFilter, enabled = true) 
     refetchInterval: 60_000,
     staleTime: 20_000,
   });
+}
+
+/** The signed-in account's standings (its characters' contacts), id -> -10..+10. */
+export function useStandings(): ReadonlyMap<number, number> {
+  const query = useQuery({
+    queryKey: ['standings'],
+    queryFn: () => api<StandingsDto>(routes.intel.standings.path),
+    staleTime: 10 * 60_000,
+    refetchInterval: 15 * 60_000,
+  });
+  return useMemo(() => new Map((query.data?.standings ?? []).map((s) => [s.id, s.standing])), [query.data]);
+}
+
+/** The standing towards whoever holds a system (alliance claims only; factions have none). */
+export function holderStanding(
+  intel: SystemIntelDto | undefined,
+  standings: ReadonlyMap<number, number>,
+): number | null {
+  const sov = intel?.sovereignty;
+  if (sov?.kind !== 'alliance') return null;
+  return (
+    standings.get(sov.holder.id) ?? (sov.corporation ? (standings.get(sov.corporation.id) ?? null) : null)
+  );
 }
 
 // ---- Words and links -------------------------------------------------------------------------

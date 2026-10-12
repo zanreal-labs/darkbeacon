@@ -27,7 +27,7 @@ import {
   type LabelDto,
   type UniverseSystemDto,
 } from '@darkbeacon/shared';
-import { useMapIntel } from '../lib/intel';
+import { holderStanding, useMapIntel, useStandings } from '../lib/intel';
 import type { MapPermissions } from '../lib/roles';
 import { useMe } from '../lib/session';
 import { track } from '../lib/telemetry';
@@ -161,6 +161,7 @@ export function MapCanvas({
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const press = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number } | null>(null);
   const intel = useMapIntel(mapId);
+  const standings = useStandings();
 
   // The viewer's own character on the map: their main first, then any other one that is online.
   const myLocation = useMemo(() => {
@@ -240,6 +241,7 @@ export function MapCanvas({
             hub: hubs.get(system.solarSystemId) ?? null,
             mine: myLocation?.solarSystemId === system.solarSystemId,
             intel: intel.systems.get(system.solarSystemId),
+            standing: holderStanding(intel.systems.get(system.solarSystemId), standings),
             pulse: intel.pulses.has(system.solarSystemId),
           },
         };
@@ -247,6 +249,7 @@ export function MapCanvas({
     });
   }, [
     intel,
+    standings,
     state.systems,
     state.characters,
     state.exits,

@@ -131,6 +131,7 @@ function activityFixture(): SystemActivityDto {
       podKills: null,
       npcKills: null,
       jumps: null,
+      killmails: i === 23 ? 6 : 0,
     })),
     kills: [killFixture(1, WH)],
     groups: {

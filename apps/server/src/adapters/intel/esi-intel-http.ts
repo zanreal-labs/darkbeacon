@@ -2,6 +2,8 @@ import type { Clock } from '@darkbeacon/core';
 import {
   esiHour,
   type ActivitySource,
+  type Contact,
+  type ContactsSource,
   type NameResolver,
   type ResolvedName,
   type SourceResult,
@@ -55,7 +57,7 @@ export class EsiPublicClient {
   async request(
     key: string,
     path: string,
-    init: { method?: 'GET' | 'POST'; body?: unknown; etag?: boolean } = {},
+    init: { method?: 'GET' | 'POST'; body?: unknown; etag?: boolean; token?: string } = {},
   ): Promise<Answer> {
     const now = this.options.clock.now();
     const group = this.groups.get(key);
@@ -70,6 +72,7 @@ export class EsiPublicClient {
           accept: 'application/json',
           'user-agent': this.options.userAgent,
           'x-compatibility-date': ESI_COMPATIBILITY_DATE,
+          ...(init.token ? { authorization: `Bearer ${init.token}` } : {}),
           ...(init.body !== undefined ? { 'content-type': 'application/json' } : {}),
           ...(etag ? { 'if-none-match': etag } : {}),
         },
@@ -289,5 +292,45 @@ export class EsiNameResolver implements NameResolver {
     }
     const body = (await answer.response.json()) as { ticker?: unknown };
     return typeof body.ticker === 'string' && body.ticker ? body.ticker : null;
+  }
+}
+
+/**
+ * Contacts with standings: `GET /characters/{id}/contacts`, `/corporations/{id}/contacts` and
+ * `/alliances/{id}/contacts` (scopes `esi-characters.read_contacts.v1`,
+ * `esi-corporations.read_contacts.v1`, `esi-alliances.read_contacts.v1`; paged by `X-Pages`;
+ * `[{contact_id, contact_type, standing}]`).
+ */
+export class EsiContactsSource implements ContactsSource {
+  constructor(private readonly client: EsiPublicClient) {}
+
+  async contacts(
+    owner: { kind: 'character' | 'corporation' | 'alliance'; id: number },
+    accessToken: string,
+  ): Promise<SourceResult<Contact[]>> {
+    const plural = `${owner.kind === 'corporation' ? 'corporations' : owner.kind === 'alliance' ? 'alliances' : 'characters'}`;
+    const key = `/${plural}/{id}/contacts`;
+    const result: Contact[] = [];
+    let pages = 1;
+    let nextAt = 0;
+    for (let page = 1; page <= Math.min(pages, 20); page++) {
+      const answer = await this.client.request(key, `/${plural}/${owner.id}/contacts?page=${page}`, {
+        token: accessToken,
+      });
+      if (!answer.ok) return answer;
+      if (answer.response.status === 404 || !answer.response.ok) {
+        await answer.response.body?.cancel();
+        return { ok: false, retryAt: answer.nextAt, reason: `HTTP ${answer.response.status}` };
+      }
+      pages = integer(answer.response.headers.get('x-pages')) ?? 1;
+      nextAt = answer.nextAt;
+      const body = (await answer.response.json()) as unknown;
+      for (const row of (Array.isArray(body) ? body : []).filter(isRecord)) {
+        const contactId = id(row.contact_id);
+        if (contactId !== null && typeof row.standing === 'number')
+          result.push({ id: contactId, standing: Math.max(-10, Math.min(10, row.standing)) });
+      }
+    }
+    return { ok: true, data: result, nextAt };
   }
 }

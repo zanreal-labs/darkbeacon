@@ -253,4 +253,32 @@ describe('SystemNode', () => {
     expect(dot.style.background).toBe('var(--dbk-effect-pulsar)');
     expect(container.querySelector('[data-pulse]')).toBeTruthy();
   });
+
+  it('colours the holder by my standing and gives an unmarked system the status it implies', () => {
+    const held = intel({
+      sovereignty: {
+        kind: 'alliance',
+        holder: { id: 1354830081, name: 'Goonswarm Federation', ticker: 'CONDI' },
+        corporation: null,
+      },
+    });
+    const { container, unmount } = renderNode({ info: nullSec, intel: held, standing: -10 });
+    const node = container.querySelector<HTMLElement>('[data-status]')!;
+    expect(screen.getByText('[CONDI]').dataset.standing).toBe('terrible');
+    expect(node.dataset.status).toBe('hostile');
+    expect(node.dataset.derived).toBe('true');
+    expect(node.title).toContain('Hostile from your standing towards the holder');
+    unmount();
+    // A status someone set wins.
+    const marked = renderNode({
+      info: nullSec,
+      system: systemFixture(31000001, { status: 'friendly' }),
+      intel: held,
+      standing: -10,
+    });
+    expect(marked.container.querySelector<HTMLElement>('[data-status]')!.dataset.status).toBe('friendly');
+    marked.unmount();
+    renderNode({ info: nullSec, intel: held, standing: 10 });
+    expect(screen.getByText('[CONDI]').dataset.standing).toBe('excellent');
+  });
 });
