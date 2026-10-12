@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { safeNext } from './lib/safe-next';
+import { LAST_MAP_COOKIE, isMapSlug } from './lib/last-map';
 
 /** Cookie names shared with the API server (apps/server/src/modules/identity/cookies.ts). */
 export const SESSION_COOKIES = ['dbk_session', 'ww_session'] as const;
@@ -20,7 +21,7 @@ function redirectTo(request: NextRequest, path: string): NextResponse {
 }
 
 /** The app's pages; anything else (robots.txt, scanners probing /wp-login.php) is a plain 404. */
-const PAGE = /^\/(?:account|admin)?\/?$|^\/m\/[^/]+(?:\/settings)?\/?$/;
+const PAGE = /^\/(?:account|admin|maps)?\/?$|^\/m\/[^/]+(?:\/settings)?\/?$/;
 
 /** Clients that are not someone browsing: crawlers, link previews, scripts, scanners. */
 const NOT_A_BROWSER =
@@ -94,7 +95,13 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     // knows comes back here with `reset`, so this cannot loop.
     return signedIn ? redirectTo(request, next) : NextResponse.next();
   }
-  if (signedIn || !PAGE.test(pathname)) return NextResponse.next();
+  if (signedIn) {
+    // `/` is the map you worked on last: go straight there, before any page renders.
+    const last = request.cookies.get(LAST_MAP_COOKIE)?.value;
+    if (pathname === '/' && isMapSlug(last)) return redirectTo(request, `/m/${last}`);
+    return NextResponse.next();
+  }
+  if (!PAGE.test(pathname)) return NextResponse.next();
 
   if (!request.cookies.has(DEMO_OPT_OUT_COOKIE) && isPageVisit(request)) {
     const setCookies = await demoSignIn(request);

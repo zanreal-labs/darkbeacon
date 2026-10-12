@@ -13,7 +13,7 @@ export default function NotFound() {
         description="This page does not exist. It may have moved, or the link is wrong."
         actions={
           <Button asChild variant="primary">
-            <Link href="/">Back to maps</Link>
+            <Link href="/maps">Back to maps</Link>
           </Button>
         }
       />

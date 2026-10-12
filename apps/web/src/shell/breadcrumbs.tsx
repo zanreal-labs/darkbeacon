@@ -21,7 +21,7 @@ export function useBreadcrumbItems(): Crumb[] | null {
 }
 
 /**
- * Lets a page name itself in the top bar, e.g. `useBreadcrumbs([{ label: 'Maps', to: '/' },
+ * Lets a page name itself in the top bar, e.g. `useBreadcrumbs([{ label: 'Maps', to: '/maps' },
  * { label: map.name }])`. Pass a stable value (memoised or built from primitives).
  */
 export function useBreadcrumbs(items: Crumb[] | null): void {

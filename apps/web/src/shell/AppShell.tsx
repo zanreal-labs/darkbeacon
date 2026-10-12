@@ -61,7 +61,7 @@ export function TabLink({ item }: { item: NavItem }) {
   );
 }
 
-export const MAPS_NAV: NavItem = { href: '/', label: 'Maps', icon: <MapIcon />, end: true };
+export const MAPS_NAV: NavItem = { href: '/', label: 'Map', icon: <MapIcon /> };
 export const ADMIN_NAV: NavItem = { href: '/admin', label: 'Admin', icon: <Shield /> };
 export const ACCOUNT_NAV: NavItem = { href: '/account', label: 'Account', icon: <UserRound /> };
 

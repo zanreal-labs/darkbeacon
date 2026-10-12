@@ -6,7 +6,9 @@ import type { ComponentProps } from 'react';
 
 /** True when `href` is the current page (or, unless `end`, a page below it). */
 export function isActive(pathname: string, href: string, end = false): boolean {
-  if (end || href === '/') return pathname === href;
+  // `/` opens the map you work on, so the map pages and the list of maps count as its section.
+  if (href === '/') return pathname === '/' || pathname === '/maps' || pathname.startsWith('/m/');
+  if (end) return pathname === href;
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 

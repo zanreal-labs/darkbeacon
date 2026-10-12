@@ -111,7 +111,7 @@ export function MapSettingsPage({ slug }: { slug: string }) {
     retry: false,
   });
   useBreadcrumbs([
-    { label: 'Maps', to: '/' },
+    { label: 'Maps', to: '/maps' },
     { label: map.data?.name ?? slug, to: `/m/${slug}` },
     { label: 'Settings' },
   ]);
@@ -140,7 +140,7 @@ export function MapSettingsPage({ slug }: { slug: string }) {
             description={`There is no map “${slug}”, or you cannot see it.`}
             actions={
               <Button asChild>
-                <Link href="/">Back to maps</Link>
+                <Link href="/maps">Back to maps</Link>
               </Button>
             }
           />

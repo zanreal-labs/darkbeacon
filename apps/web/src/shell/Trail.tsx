@@ -13,7 +13,7 @@ export function routeCrumbs(pathname: string): Crumb[] {
   const map = /^\/m\/([^/]+)(\/settings)?/.exec(pathname);
   if (map) {
     const crumbs: Crumb[] = [
-      { label: 'Maps', to: '/' },
+      { label: 'Maps', to: '/maps' },
       { label: decodeURIComponent(map[1]!), to: `/m/${map[1]}` },
     ];
     if (map[2]) crumbs.push({ label: 'Settings' });
