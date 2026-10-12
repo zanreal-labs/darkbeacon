@@ -1,7 +1,7 @@
 import { existsSync, renameSync, rmSync } from 'node:fs';
 import SQLite from 'better-sqlite3';
 import { Kysely, SqliteDialect, type SqliteDatabase } from 'kysely';
-import { WalCheckpointer } from './checkpointer.js';
+import { copyInWorker, WalCheckpointer } from './checkpointer.js';
 import { MIGRATION_TABLE, migrateToLatest } from './migrator.js';
 
 export type RawSqlite = SQLite.Database;
@@ -168,6 +168,16 @@ export class SqliteFile {
     }
     this.#raw.close();
     this.#raw = null;
+  }
+
+  /**
+   * A consistent copy of the database file into `destination` (a new file), made on a worker
+   * thread through a read-only connection (`VACUUM INTO`), so reads and writes go on meanwhile.
+   */
+  async copyTo(destination: string): Promise<void> {
+    if (this.inMemory) return this.backupTo(destination);
+    await copyInWorker(this.filename, destination);
+    selfContained(destination);
   }
 
   /**

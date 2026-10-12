@@ -94,7 +94,7 @@ export function createBackupService(w: BackupWiring): BackupService {
   const staging =
     w.database.sqlite && !w.database.sqlite.inMemory ? resolve(w.database.sqlite.filename, '..') : scratch;
   return new BackupService({
-    live: new SqliteLiveDatabase(w.database, scratch, w.separateProcess ?? false),
+    live: new SqliteLiveDatabase(w.database, scratch),
     archive: new GzipBackupArchive(scratch, staging),
     storage: new FileBackupStorage(w.config.dir),
     state: new FileBackupStateStore(join(w.config.dir, 'backups.json')),

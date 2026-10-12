@@ -6,9 +6,9 @@ import { knownMigrations, type Database } from '@darkbeacon/db';
 import { scratchFile } from './files.js';
 
 /**
- * The running SQLite database. Snapshots use SQLite's online backup API on the server's own
- * connection while it is held (`Database.exclusive`): no transaction is open, so the copy is
- * the database between two transactions, and other queries just wait for the copy to finish.
+ * The running SQLite database. Snapshots are `VACUUM INTO` on a worker thread through a read-only
+ * connection: the copy is one WAL snapshot (the database between two transactions), and the
+ * server goes on reading and writing while it is made. Restores still hold every connection.
  */
 export class SqliteLiveDatabase implements LiveDatabase {
   readonly dialect: 'sqlite' | 'postgres';
@@ -18,8 +18,6 @@ export class SqliteLiveDatabase implements LiveDatabase {
     private readonly database: Database,
     /** Where snapshots are written before they are packed. */
     private readonly scratchDir: string,
-    /** Copy in one step: set where another process (the server) may write meanwhile. */
-    private readonly oneStep = false,
   ) {
     this.dialect = database.dialect;
     this.supported = database.dialect === 'sqlite' && !!database.sqlite && !database.sqlite.inMemory;
@@ -28,7 +26,9 @@ export class SqliteLiveDatabase implements LiveDatabase {
   async snapshot(): Promise<LocalFile> {
     const file = scratchFile(this.scratchDir, 'snapshot', '.db');
     try {
-      await this.database.exclusive((sqlite) => sqlite.backupTo(file.path, { oneStep: this.oneStep }));
+      const sqlite = this.database.sqlite;
+      if (!sqlite) throw new Error('snapshots are only available on SQLite');
+      await sqlite.copyTo(file.path);
       return file;
     } catch (error) {
       await file.dispose();

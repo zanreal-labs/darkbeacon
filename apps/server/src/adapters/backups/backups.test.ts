@@ -134,6 +134,25 @@ describe('SQLite backups (file adapters)', () => {
     expect(written * 2).toBeGreaterThanOrEqual(pairs.length);
   });
 
+  it('copies the database while a transaction is open, without what it has not committed', async () => {
+    await write('before');
+    const copy = join(dir, 'open-copy.db');
+    // The snapshot no longer holds the server's connections: it runs inside an open write.
+    await database.transaction(async () => {
+      await write('uncommitted');
+      await database.sqlite!.copyTo(copy);
+    });
+    const sqlite = openSqlite(copy);
+    const streams = (
+      sqlite.prepare('select stream from event_stream').all() as Array<{ stream: string }>
+    ).map((r) => r.stream);
+    sqlite.close();
+    expect(streams).toContain('before');
+    expect(streams).not.toContain('uncommitted');
+    expect(existsSync(`${copy}-wal`)).toBe(false);
+    await rm(copy, { force: true });
+  });
+
   it('writes a gzip file with a manifest: size, sha256, versions, trigger', async () => {
     const backup = await service.create(admin);
     expect(backup.name).toMatch(/^darkbeacon-20261012T100000Z-v0\.1\.0-s\d+\.db\.gz$/);

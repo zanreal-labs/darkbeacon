@@ -74,3 +74,47 @@ export class WalCheckpointer {
     await this.worker.terminate();
   }
 }
+
+/** Runs in a worker thread: one consistent copy of the database, then the thread ends. */
+const COPY_SCRIPT = `
+const { parentPort, workerData } = require('node:worker_threads');
+const Database = require(workerData.driver);
+const db = new Database(workerData.filename, { readonly: true, fileMustExist: true });
+try {
+  db.pragma('busy_timeout = 5000');
+  db.prepare('VACUUM INTO ?').run(workerData.destination);
+  parentPort.postMessage({ ok: true });
+} catch (error) {
+  parentPort.postMessage({ ok: false, error: String((error && error.message) || error) });
+} finally {
+  db.close();
+}
+`;
+
+/**
+ * Copies the database into `destination` (a new file) on a thread of its own, through a read-only
+ * connection: `VACUUM INTO` reads one WAL snapshot, so the copy is the database between two
+ * transactions, while the server goes on reading and writing. (The online backup API had to hold
+ * every connection for the whole copy; on a busy server that took minutes.)
+ */
+export function copyInWorker(filename: string, destination: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(COPY_SCRIPT, {
+      eval: true,
+      workerData: { filename, destination, driver: require.resolve('better-sqlite3') },
+    });
+    let settled = false;
+    worker.once('message', (message: { ok: boolean; error?: string }) => {
+      settled = true;
+      if (message.ok) resolve();
+      else reject(new Error(message.error ?? 'copy failed'));
+    });
+    worker.once('error', (error) => {
+      settled = true;
+      reject(error);
+    });
+    worker.once('exit', (code) => {
+      if (!settled) reject(new Error(`copy worker exited with ${code}`));
+    });
+  });
+}
