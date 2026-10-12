@@ -204,10 +204,10 @@ describeEachDialect('MCP endpoint', (t) => {
     expect(textOf(denied)).toMatch(/lacks the scope connections:write/);
     const other = await client.callTool({ name: 'get_map', arguments: { map: secret.id } });
     expect((other as ToolResult).isError).toBe(true);
-    // Without systems:read the notes stay out of the summary.
-    expect(textOf(await client.callTool({ name: 'get_map', arguments: { map: map.id } }))).not.toContain(
-      NOTE,
-    );
+    // Without systems:read what people wrote about systems stays out of the summary.
+    const shape = textOf(await client.callTool({ name: 'get_map', arguments: { map: map.id } }));
+    expect(shape).not.toContain(NOTE);
+    expect(shape).not.toContain('status home');
 
     const ro = await alice.json<CreatedApiKeyDto>('/api/accounts/me/api-keys', {
       method: 'POST',

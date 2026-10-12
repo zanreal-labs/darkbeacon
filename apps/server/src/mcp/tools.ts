@@ -188,13 +188,18 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
       mapId: map.id,
       name: map.name,
       ref: map.id,
-      // Notes, status and tags are what `systems:read` reads; `maps:read` alone sees the shape.
+      // What people wrote about systems (notes, status, tags, names, locks) is what
+      // `systems:read` reads; `maps:read` alone sees the shape of the chain.
       systems: may({ resource: 'systems', action: 'read' }, map.id)
         ? list<MapSystemDto>('systems')
         : list<MapSystemDto>('systems').map((sys) => ({
             ...sys,
             description: '',
             tag: null,
+            customName: null,
+            temporaryName: null,
+            locked: false,
+            labelIds: [],
             status: 'unknown' as const,
           })),
       connections: may({ resource: 'connections', action: 'read' }, map.id)
