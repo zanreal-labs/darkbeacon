@@ -8,6 +8,9 @@ import { Migrator, type Migration, type MigrationProvider } from 'kysely/migrati
 const MIGRATIONS_DIR = fileURLToPath(new URL('../migrations', import.meta.url));
 const EXTENSION = import.meta.url.endsWith('.ts') ? '.ts' : '.js';
 
+/** Kysely's own table of applied migrations. */
+export const MIGRATION_TABLE = 'kysely_migration';
+
 /**
  * Loads `migrations/<module>/<NNNN>_<name>.(ts|js)` and names each `<module>/<NNNN>_<name>`.
  * Modules do not reference each other's tables, so ordering only matters within a module.
@@ -34,6 +37,11 @@ export class ModuleMigrationProvider implements MigrationProvider {
   }
 }
 
+/** Names of every migration this code ships, sorted. */
+export async function knownMigrations(provider: MigrationProvider = new ModuleMigrationProvider()) {
+  return Object.keys(await provider.getMigrations()).sort();
+}
+
 export async function migrateToLatest(
   db: Kysely<unknown>,
   options: { provider?: MigrationProvider; schema?: string | undefined } = {},
@@ -54,4 +62,22 @@ export async function migrateToLatest(
     });
   }
   return results.map((r) => r.migrationName);
+}
+
+/** Migrations applied and still to run; `applied` is empty for a fresh database. */
+export async function migrationStatus(
+  db: Kysely<unknown>,
+  options: { provider?: MigrationProvider; schema?: string | undefined } = {},
+): Promise<{ applied: string[]; pending: string[] }> {
+  const migrator = new Migrator({
+    db,
+    provider: options.provider ?? new ModuleMigrationProvider(),
+    allowUnorderedMigrations: true,
+    ...(options.schema ? { migrationTableSchema: options.schema } : {}),
+  });
+  const all = await migrator.getMigrations();
+  return {
+    applied: all.filter((m) => m.executedAt !== undefined).map((m) => m.name),
+    pending: all.filter((m) => m.executedAt === undefined).map((m) => m.name),
+  };
 }

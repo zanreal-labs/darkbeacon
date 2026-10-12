@@ -264,6 +264,34 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
     refs: (d) => ref('map', d.mapId),
     state: (d) => asFields(d.values) ?? {},
   },
+  'backup.completed': {
+    op: 'activity',
+    entity: byId('backup', 'name'),
+    activity: (d) => ({ backup: change(null, d.trigger) }),
+  },
+  'backup.failed': {
+    op: 'activity',
+    entity: (d) => (d.name ? { kind: 'backup', id: str(d.name) } : null),
+    activity: (d) => ({
+      [d.operation === 'restore' ? 'restoreFailed' : 'backupFailed']: change(null, d.message),
+    }),
+  },
+  'backup.restored': {
+    op: 'activity',
+    entity: byId('backup', 'name'),
+    activity: (d) => ({ restored: change(d.preRestore, d.name) }),
+  },
+  'backup.deleted': {
+    op: 'activity',
+    entity: byId('backup', 'name'),
+    activity: () => ({ deleted: change(null, true) }),
+  },
+  'backup.downloaded': {
+    op: 'activity',
+    entity: byId('backup', 'name'),
+    activity: () => ({ downloaded: change(null, true) }),
+  },
+  'backup.settings_changed': { op: 'update', entity: () => ({ kind: 'settings', id: 'backups' }) },
 };
 
 /** Types the plugins and future modules add are audited as activity with their data as new. */

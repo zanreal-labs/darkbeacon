@@ -117,6 +117,8 @@ const webhook = {
  * updates and removals, what it passes as `before`. A new event type does not compile until it
  * has a sample here, and the test below fails unless its audit record is complete.
  */
+const BACKUP = 'darkbeacon-20261012T101500Z-v0.1.0-s20.db.gz';
+
 const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
   'system.added': { data: system },
   'system.updated': { data: { ...system, status: 'hostile' }, before: system },
@@ -193,6 +195,17 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
   'plugin.settings_changed': {
     data: { pluginId: 'discord-notify', mapId: null, values: { username: 'Beacon' } },
     before: { pluginId: 'discord-notify', mapId: null, values: { username: 'Darkbeacon' } },
+  },
+  'backup.completed': { data: { name: BACKUP, trigger: 'manual', size: 10, schemaVersion: 20 } },
+  'backup.failed': { data: { operation: 'backup', trigger: 'scheduled', name: null, message: 'disk full' } },
+  'backup.restored': {
+    data: { name: BACKUP, source: 'backup', preRestore: BACKUP, migrationsApplied: [] },
+  },
+  'backup.deleted': { data: { name: BACKUP } },
+  'backup.downloaded': { data: { name: BACKUP } },
+  'backup.settings_changed': {
+    data: { intervalMinutes: 360, keep: 14, maxAgeDays: null, notifyHost: null, notifySuccess: false },
+    before: { intervalMinutes: 1440, keep: 14, maxAgeDays: null, notifyHost: null, notifySuccess: false },
   },
 };
 

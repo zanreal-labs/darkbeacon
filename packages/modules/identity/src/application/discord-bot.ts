@@ -28,6 +28,11 @@ export class DiscordBotService {
 
   constructor(private readonly deps: DiscordBotDeps) {}
 
+  /** Forgets the cached Discord lists (the stored bot may have changed under it, e.g. a restore). */
+  forgetCachedLists(): void {
+    this.lists.clear();
+  }
+
   async status(actor: Actor | null): Promise<DiscordBotDto> {
     requireInstanceRole(actor, 'admin');
     return toDto(await this.deps.store.load());

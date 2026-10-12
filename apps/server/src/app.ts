@@ -5,6 +5,7 @@ import { WsAdapter } from '@nestjs/platform-ws';
 import { Logger, type LogLevel } from '@nestjs/common';
 import { AppModule } from './app.module.js';
 import type { AppConfig } from './config/config.js';
+import { installMaintenanceGate, MaintenanceMode } from './platform/maintenance.js';
 import type { PlatformOptions } from './platform/platform.module.js';
 import { installUpgradeRouting, installWebProxy, type WebUpstream } from './web/web-proxy.js';
 
@@ -31,6 +32,8 @@ export async function createApp(
   app.setGlobalPrefix('api');
   app.useWebSocketAdapter(new WsAdapter(app));
   app.enableShutdownHooks();
+  // Before the web proxy: in maintenance, page loads are answered here.
+  installMaintenanceGate(app, app.get(MaintenanceMode));
   const logger = new Logger('Web');
   installWebProxy(app, web, (error) => logger.warn(`web server did not answer: ${error.message}`));
   await app.init();

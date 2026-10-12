@@ -17,6 +17,7 @@ import { KyselyWebhookRepository } from '../../adapters/notifications/kysely-web
 import { SecretBox } from '../../adapters/notifications/secret-box.js';
 import type { AppConfig } from '../../config/config.js';
 import { EventConsumers } from '../../platform/event-consumers.js';
+import { MaintenanceMode } from '../../platform/maintenance.js';
 import { APP_CONFIG, CLOCK, EVENT_LOG, MAP_ACCESS, UNIT_OF_WORK } from '../../platform/tokens.js';
 import { WebhooksController } from './webhooks.controller.js';
 
@@ -39,6 +40,7 @@ export class WebhookWorker implements OnModuleInit, OnApplicationShutdown {
     @Inject(KyselyWebhookRepository) private readonly webhooks: KyselyWebhookRepository,
     @Inject(EventConsumers) private readonly consumers: EventConsumers,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(MaintenanceMode) private readonly maintenance: MaintenanceMode,
   ) {}
 
   onModuleInit(): void {
@@ -53,7 +55,11 @@ export class WebhookWorker implements OnModuleInit, OnApplicationShutdown {
       },
     });
     this.cleanups.push(
-      every(RETRY_EVERY_MS, () => this.dispatcher.retryDue(), this.logger),
+      every(
+        RETRY_EVERY_MS,
+        () => (this.maintenance.active ? Promise.resolve() : this.dispatcher.retryDue()),
+        this.logger,
+      ),
       every(
         PRUNE_EVERY_MS,
         () => this.webhooks.pruneDeliveries(this.clock.now() - KEEP_DELIVERIES_MS),

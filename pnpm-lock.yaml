@@ -47,6 +47,9 @@ importers:
       '@darkbeacon/audit':
         specifier: workspace:*
         version: link:../../packages/modules/audit
+      '@darkbeacon/backups':
+        specifier: workspace:*
+        version: link:../../packages/modules/backups
       '@darkbeacon/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -83,6 +86,9 @@ importers:
       '@darkbeacon/tracking':
         specifier: workspace:*
         version: link:../../packages/modules/tracking
+      '@fastify/busboy':
+        specifier: ^3.2.0
+        version: 3.2.3
       '@nestjs/common':
         specifier: ^12.1.2
         version: 12.1.2(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -228,6 +234,15 @@ importers:
         version: 4.6.5
 
   packages/modules/audit:
+    dependencies:
+      '@darkbeacon/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@darkbeacon/shared':
+        specifier: workspace:*
+        version: link:../../shared
+
+  packages/modules/backups:
     dependencies:
       '@darkbeacon/core':
         specifier: workspace:*
@@ -543,6 +558,9 @@ packages:
 
   '@fastify/ajv-compiler@4.0.7':
     resolution: {integrity: sha512-VP0yIfwlc1ohj733keYDqyHm1VWeP9VQxYomunhr90jkC4aNNibbkrRiaNgPgqj1ORxUenILR4qzA/ppYBNAtQ==}
+
+  '@fastify/busboy@3.2.3':
+    resolution: {integrity: sha512-fmo/IKgkenPzz3qTKG+sIUXdF/Kv83AkvvOXJHPTHJeKJbat8SsL1ihUaFaDotqoEl4UZ1Lf8Eb/3vK6eaWX2A==}
 
   '@fastify/cors@11.3.0':
     resolution: {integrity: sha512-ggQGua+xHv1MvePbPr0v//xLYEsCXbWspquXCJS9Ot5YoRXq8J8ZWzHnxDBVnbtXosvistXo6LtNzOJswf64Fw==}
@@ -3590,6 +3608,8 @@ snapshots:
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
       fast-uri: 4.2.2
+
+  '@fastify/busboy@3.2.3': {}
 
   '@fastify/cors@11.3.0':
     dependencies:

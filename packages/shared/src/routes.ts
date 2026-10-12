@@ -266,6 +266,47 @@ export const routes = {
     removeDiscordBot: route({ method: 'DELETE', path: '/api/admin/discord-bot', auth: 'admin' }),
   },
 
+  /**
+   * SQLite backups (instance admins). On Postgres the status says `supported: false` and the
+   * other routes answer 409: back Postgres up with its own tooling.
+   */
+  backups: {
+    status: route({
+      method: 'GET',
+      path: '/api/admin/backups',
+      auth: 'admin',
+      response: dto.BackupStatusDto,
+    }),
+    create: route({ method: 'POST', path: '/api/admin/backups', auth: 'admin', response: dto.BackupDto }),
+    updateSettings: route({
+      method: 'PATCH',
+      path: '/api/admin/backups/settings',
+      auth: 'admin',
+      body: dto.UpdateBackupSettingsRequest,
+      response: dto.BackupSettingsDto,
+    }),
+    /** Streams the `.db.gz` file as an attachment. */
+    download: route({ method: 'GET', path: '/api/admin/backups/:name/download', auth: 'admin' }),
+    remove: route({ method: 'DELETE', path: '/api/admin/backups/:name', auth: 'admin' }),
+    restore: route({
+      method: 'POST',
+      path: '/api/admin/backups/:name/restore',
+      auth: 'admin',
+      body: dto.RestoreBackupRequest,
+      response: dto.RestoreResultDto,
+    }),
+    /**
+     * multipart/form-data: a `confirm` field (`RESTORE`) first, then one `file` (a `.db.gz`
+     * backup or a plain SQLite file), streamed to disk up to `maxUploadBytes`.
+     */
+    restoreUpload: route({
+      method: 'POST',
+      path: '/api/admin/backups/restore-upload',
+      auth: 'admin',
+      response: dto.RestoreResultDto,
+    }),
+  },
+
   universe: {
     searchSystems: route({
       method: 'GET',

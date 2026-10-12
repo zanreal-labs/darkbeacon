@@ -308,6 +308,21 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
         `changed the settings of ${String(entry.entity?.id ?? 'a plugin').split('@')[0]}`,
         'plugins',
       );
+    case 'backup.completed':
+      return read(`made a backup (${String(entry.diff.backup?.after ?? 'manual')})`, 'instance');
+    case 'backup.failed':
+      return read(
+        entry.diff.restoreFailed ? 'could not restore a backup' : 'could not make a backup',
+        'instance',
+      );
+    case 'backup.restored':
+      return read('restored a backup', 'instance');
+    case 'backup.deleted':
+      return read('deleted a backup', 'instance');
+    case 'backup.downloaded':
+      return read('downloaded a backup', 'instance');
+    case 'backup.settings_changed':
+      return read('changed the backup settings', 'instance');
     case 'character.unlinked':
       return read('unlinked a character', 'access');
     case 'map.created':

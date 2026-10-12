@@ -10,6 +10,7 @@ import { isEventOfType } from '@darkbeacon/shared';
 import { AutoMapper, ListMapCharacters, TrackingCleanup, TrackingPoller } from '@darkbeacon/tracking';
 import type { AppConfig } from '../../config/config.js';
 import { EventConsumers } from '../../platform/event-consumers.js';
+import { MaintenanceMode } from '../../platform/maintenance.js';
 import { APP_CONFIG, EVENT_BUS } from '../../platform/tokens.js';
 import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
 
@@ -32,6 +33,7 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
     @Inject(TrackingCleanup) private readonly cleanup: TrackingCleanup,
     @Inject(EventConsumers) private readonly consumers: EventConsumers,
     @Inject(EVENT_BUS) private readonly bus: EventBus,
+    @Inject(MaintenanceMode) private readonly maintenance: MaintenanceMode,
   ) {}
 
   onModuleInit(): void {
@@ -62,12 +64,20 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
       },
     });
     this.unsubscribe = this.bus.subscribe(() => this.poller.recheckAccess(), { types: ['access.*'] });
+    this.maintenance.register({
+      name: 'tracking',
+      resume: (restored) => {
+        if (restored) this.poller.recheckAccess();
+      },
+    });
   }
 
   onApplicationBootstrap(): void {
     // Tests drive the poller themselves.
     if (this.config.env !== 'test') {
-      this.timer = setInterval(() => void this.poller.tick(), 1000).unref();
+      this.timer = setInterval(() => {
+        if (!this.maintenance.active) void this.poller.tick();
+      }, 1000).unref();
     }
   }
 
