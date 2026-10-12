@@ -16,8 +16,9 @@ const EMPTY: MapPreferencesDto = { viewport: null, bookmarkTemplate: null, updat
 /**
  * The viewer's own view of a map, kept on the server per account: the last viewport and the
  * bookmark template override. Updates apply at once and are rolled back if the server refuses.
+ * `enabled: false` (public views, no account) never asks the server and counts as settled.
  */
-export function useMapPreferences(mapId: string) {
+export function useMapPreferences(mapId: string, { enabled = true }: { enabled?: boolean } = {}) {
   const client = useQueryClient();
   const key = mapPreferencesKey(mapId);
   const query = useQuery({
@@ -25,6 +26,7 @@ export function useMapPreferences(mapId: string) {
     queryFn: () => api<MapPreferencesDto>(buildPath(routes.maps.getPreferences.path, { mapId })),
     staleTime: Infinity,
     retry: false,
+    enabled,
   });
 
   const update = useCallback(
@@ -49,7 +51,7 @@ export function useMapPreferences(mapId: string) {
   return {
     preferences: query.data ?? EMPTY,
     /** True once the server answered (or failed): the first view waits for it. */
-    settled: !query.isPending,
+    settled: !enabled || !query.isPending,
     update,
   };
 }

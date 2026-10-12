@@ -20,7 +20,13 @@ function redirectTo(request: NextRequest, path: string): NextResponse {
 }
 
 /** The app's pages; anything else (robots.txt, scanners probing /wp-login.php) is a plain 404. */
-const PAGE = /^\/(?:account|admin|maps|dev\/components)?\/?$|^\/m\/[^/]+(?:\/settings)?\/?$/;
+const PAGE = /^\/(?:account|admin|maps|dev\/components|oauth\/authorize)?\/?$|^\/m\/[^/]+(?:\/settings)?\/?$/;
+
+/**
+ * Public maps (`/p/<token>`): for anyone, signed in or not. Never a demo sign-in, never a redirect
+ * to the sign-in page, and the address (the secret) never leaves as a referrer.
+ */
+const PUBLIC_PAGE = /^\/p\/[^/]+\/?$/;
 
 /**
  * Where `/` goes for this session (the account's star, the instance default, the last opened
@@ -118,6 +124,11 @@ async function demoSignIn(request: NextRequest): Promise<string[] | null> {
  */
 export async function proxy(request: NextRequest): Promise<NextResponse> {
   const { pathname, searchParams } = request.nextUrl;
+  if (PUBLIC_PAGE.test(pathname)) {
+    const response = NextResponse.next();
+    response.headers.set('referrer-policy', 'no-referrer');
+    return response;
+  }
   const signedIn = SESSION_COOKIES.some((name) => request.cookies.has(name));
   if (pathname === '/login') {
     const next = safeNext(searchParams.get('next'));

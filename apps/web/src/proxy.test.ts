@@ -193,4 +193,25 @@ describe('proxy', () => {
     expect(fetch).toHaveBeenCalledTimes(3);
     vi.useRealTimers();
   });
+
+  it('lets public maps through for anyone, never signing in and never sending to sign-in', async () => {
+    const fetch = fakeApi(() => new Response(null, { status: 500 }));
+    for (const cookie of [undefined, 'dbk_session=abc']) {
+      const response = await proxy(request('/p/Zq3vT8nKpL2xYw7c', cookie));
+      expect(response.headers.get('x-middleware-next')).toBe('1');
+      expect(response.headers.get('referrer-policy')).toBe('no-referrer');
+      expect(response.headers.getSetCookie()).toEqual([]);
+    }
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('sends a signed-out OAuth consent visit to sign-in with its whole query', async () => {
+    fakeApi(() => new Response(null, { status: 404 }));
+    const path = '/oauth/authorize?response_type=code&client_id=abc&state=xyz';
+    const response = await proxy(request(path));
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe(
+      `http://darkbeacon.test/login?${new URLSearchParams({ next: path })}`,
+    );
+  });
 });

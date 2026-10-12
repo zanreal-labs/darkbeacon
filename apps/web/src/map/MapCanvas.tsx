@@ -110,6 +110,11 @@ interface Props {
   coveredRight?: number;
   /** Pixels at the bottom covered by the widget sheet (phones). */
   coveredBottom?: number;
+  /**
+   * A view without an account (public links): nothing moves, connects or opens a menu, no
+   * preferences are read or saved, and the opening view does not look for the viewer's character.
+   */
+  readOnly?: boolean;
 }
 
 /**
@@ -142,11 +147,17 @@ export function MapCanvas({
   onMenu,
   coveredRight = 0,
   coveredBottom = 0,
+  readOnly = false,
 }: Props) {
   const { theme } = useTheme();
   const toast = useToast();
-  const me = useMe();
-  const { preferences, settled, update: updatePreferences } = useMapPreferences(mapId);
+  const me = useMe({ enabled: !readOnly });
+  const {
+    preferences,
+    settled,
+    update: updatePreferences,
+  } = useMapPreferences(mapId, { enabled: !readOnly });
+  const editable = can.edit && !readOnly;
   const rf = useReactFlow<SystemNodeType, ConnectionEdgeType>();
   const [nodes, setNodes, onNodesChange] = useNodesState<SystemNodeType>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<ConnectionEdgeType>([]);
@@ -211,7 +222,7 @@ export function MapCanvas({
           id,
           type: 'system',
           position: old?.dragging ? old.position : system.position,
-          draggable: can.edit && !system.locked,
+          draggable: editable && !system.locked,
           data: {
             mapId,
             system,
@@ -235,7 +246,7 @@ export function MapCanvas({
     state.connections,
     labels,
     universe,
-    can.edit,
+    editable,
     mapId,
     setNodes,
     bookmarks,
@@ -389,14 +400,14 @@ export function MapCanvas({
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
       const key = e.key.toLowerCase();
       if (key === 'f') fitChain();
-      else if (key === 'c') centerOnMe();
+      else if (key === 'c' && !readOnly) centerOnMe();
       else if (key === 'l') setLegend(!legend);
       else return;
       e.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [fitChain, centerOnMe, setLegend, legend]);
+  }, [fitChain, centerOnMe, setLegend, legend, readOnly]);
 
   useEffect(
     () => () => {
@@ -406,7 +417,7 @@ export function MapCanvas({
   );
 
   const saveViewport = (viewport: Viewport) => {
-    if (!opened.current) return;
+    if (readOnly || !opened.current) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       const box = visibleBox();
@@ -445,7 +456,7 @@ export function MapCanvas({
 
   // Touch has no right click: a long press opens the same context menu.
   const onPointerDown = (e: ReactPointerEvent) => {
-    if (e.pointerType === 'mouse') return;
+    if (readOnly || e.pointerType === 'mouse') return;
     cancelPress();
     const target = e.target as Element;
     const { clientX: x, clientY: y } = e;
@@ -509,25 +520,37 @@ export function MapCanvas({
         onConnect={({ source, target }) => {
           if (source !== target) void store.addConnection(Number(source), Number(target));
         }}
-        onNodeContextMenu={(e, node) => {
-          e.preventDefault();
-          onMenu({ kind: 'system', solarSystemId: Number(node.id) }, e.clientX, e.clientY);
-        }}
-        onEdgeContextMenu={(e, edge) => {
-          e.preventDefault();
-          onMenu({ kind: 'connection', connectionId: edge.id }, e.clientX, e.clientY);
-        }}
-        onPaneContextMenu={(e) => {
-          e.preventDefault();
-          onMenu(
-            { kind: 'pane', flow: rf.screenToFlowPosition({ x: e.clientX, y: e.clientY }) },
-            e.clientX,
-            e.clientY,
-          );
-        }}
+        onNodeContextMenu={
+          readOnly
+            ? undefined
+            : (e, node) => {
+                e.preventDefault();
+                onMenu({ kind: 'system', solarSystemId: Number(node.id) }, e.clientX, e.clientY);
+              }
+        }
+        onEdgeContextMenu={
+          readOnly
+            ? undefined
+            : (e, edge) => {
+                e.preventDefault();
+                onMenu({ kind: 'connection', connectionId: edge.id }, e.clientX, e.clientY);
+              }
+        }
+        onPaneContextMenu={
+          readOnly
+            ? undefined
+            : (e) => {
+                e.preventDefault();
+                onMenu(
+                  { kind: 'pane', flow: rf.screenToFlowPosition({ x: e.clientX, y: e.clientY }) },
+                  e.clientX,
+                  e.clientY,
+                );
+              }
+        }
         connectionMode={ConnectionMode.Loose}
-        nodesConnectable={can.edit}
-        nodesDraggable={can.edit}
+        nodesConnectable={editable}
+        nodesDraggable={editable}
         nodeDragThreshold={4}
         deleteKeyCode={null}
         colorMode={theme.colorScheme}
@@ -545,6 +568,7 @@ export function MapCanvas({
           located={myLocation !== null}
           legend={legend}
           onLegend={setLegend}
+          readOnly={readOnly}
         />
       </ReactFlow>
     </div>
