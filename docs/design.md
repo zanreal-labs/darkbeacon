@@ -43,6 +43,9 @@ locking targets and calling jumps. Everything follows from that:
   `PageHeader` (title, one line of description, at most one action) and cards stacked 16 px apart
   (`Stack`).
 - Settings with several topics use tabs under the header; the open tab is in `?tab=`.
+- Settings of a map are a dialog over the map (`DialogSheet`): sections as vertical tabs on the left,
+  the open one scrolling on the right, its form's buttons in a footer that stays in view; the open
+  section is in `?settings=`.
 - Phones: 16 px side gutter, everything in one column, no sideways scrolling.
 
 ## Cards

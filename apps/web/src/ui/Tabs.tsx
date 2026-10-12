@@ -5,7 +5,10 @@ import { Tabs as T, ToggleGroup } from 'radix-ui';
 import { cx } from './cx';
 import styles from './tabs.module.css';
 
-/** Tabs for sections of one page (admin, settings). Arrow keys move between tabs. */
+/**
+ * Tabs for sections of one page (admin) or dialog. Arrow keys move between tabs; with
+ * `orientation="vertical"` the list stands beside the content (map settings).
+ */
 export const Tabs = T.Root;
 
 export function TabsList({ className, ...props }: ComponentProps<typeof T.List>) {

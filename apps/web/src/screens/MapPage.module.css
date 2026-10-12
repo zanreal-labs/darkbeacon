@@ -31,15 +31,6 @@
   pointer-events: auto;
 }
 
-.spacer {
-  flex: 1;
-  pointer-events: none !important;
-}
-
-.toolButton {
-  box-shadow: var(--dbk-shadow-medium);
-}
-
 .saving {
   display: inline-flex;
   align-items: center;

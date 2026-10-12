@@ -269,8 +269,9 @@ async function run() {
       });
 
       await scene('map-settings', async () => {
-        await open(page, `${BASE}/m/${MAP}/settings`);
-        const tabs = await tabsOf(page);
+        // A dialog over the map: from the rail on wide screens, the map switcher on phones.
+        await open(page, `${BASE}/m/${MAP}?settings=general`);
+        const tabs = await tabsOf(page, '[role="dialog"]');
         await tabs.first().waitFor({ timeout: 15_000 });
         await settle(page);
         const count = await tabs.count();

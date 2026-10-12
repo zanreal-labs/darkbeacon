@@ -1,8 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useReactFlow } from '@xyflow/react';
 import {
   SYSTEM_PLACEMENT,
@@ -18,7 +16,6 @@ import {
   Plus,
   Puzzle,
   Radar,
-  Settings,
   UsersRound,
   Waypoints,
   X,
@@ -28,6 +25,7 @@ import { mapPermissions } from '../lib/roles';
 import { useMe } from '../lib/session';
 import { track } from '../lib/telemetry';
 import { useUniverseSystems } from '../lib/universe';
+import { useMapSettings } from '../lib/useMapSettings';
 import { usePageView } from '../lib/useTelemetry';
 import { AddSystemSearch } from '../map/AddSystemSearch';
 import { MapCanvas, type FocusRequest, type MenuTarget } from '../map/MapCanvas';
@@ -66,7 +64,7 @@ export function MapView({
   const { state } = store;
   const me = useMe();
   const rf = useReactFlow();
-  const router = useRouter();
+  const settings = useMapSettings();
   const toast = useToast();
   const can = mapPermissions(role);
   const [selected, setSelected] = useState<number | null>(null);
@@ -126,7 +124,7 @@ export function MapView({
           plugins: systemPlugins,
           characters: me.data?.characters,
           notify: toast,
-          onManageLabels: () => router.push(`/m/${map.slug}/settings?tab=labels`),
+          onManageLabels: () => settings.show('labels'),
         }),
       };
     }
@@ -303,18 +301,6 @@ export function MapView({
             <Spinner label="Saving" />
             Saving…
           </span>
-        )}
-        <span className={styles.spacer} />
-        {can.manage && (
-          <IconButton
-            asChild
-            variant="secondary"
-            className={styles.toolButton}
-            label="Map settings"
-            icon={<Settings />}
-          >
-            <Link href={`/m/${map.slug}/settings`} />
-          </IconButton>
         )}
       </div>
 

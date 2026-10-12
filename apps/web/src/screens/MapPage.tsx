@@ -14,6 +14,7 @@ import {
 import { Lock } from 'lucide-react';
 import { api, ApiError } from '../lib/api';
 import { useBreadcrumbs } from '../shell/breadcrumbs';
+import { useMapSettings } from '../lib/useMapSettings';
 import { Button, EmptyState, ErrorState, Spinner } from '../ui';
 import styles from './MapPage.module.css';
 
@@ -36,9 +37,15 @@ const MapView = dynamic(() => import('./MapView').then((m) => m.MapView), {
   loading: () => <MapLoading label="Loading systems…" />,
 });
 
+// Map settings are rarely opened: their code arrives when they are.
+const MapSettingsDialog = dynamic(() => import('./MapSettings').then((m) => m.MapSettingsDialog), {
+  ssr: false,
+});
+
 /**
  * `/m/<slug>`: the server renders it with the map, the visitor's role and a snapshot of the map's
- * stream; the canvas paints that snapshot at once and the WebSocket resumes after its seq.
+ * stream; the canvas paints that snapshot at once and the WebSocket resumes after its seq. The
+ * map's settings open over it in a dialog.
  */
 export function MapPage({ slug, snapshot }: { slug: string; snapshot?: StreamSnapshotDto }) {
   const map = useQuery({
@@ -51,19 +58,24 @@ export function MapPage({ slug, snapshot }: { slug: string; snapshot?: StreamSna
     queryFn: () => api<MapSummaryDto[]>(routes.maps.list.path),
     retry: false,
   });
+  const settings = useMapSettings();
   useBreadcrumbs([{ label: 'Maps', to: '/maps' }, { label: map.data?.name ?? slug }]);
   if (map.isPending) return <MapLoading />;
   if (map.isError) return <MapUnavailable slug={slug} error={map.error} onRetry={() => void map.refetch()} />;
   const role = maps.data?.find((m) => m.id === map.data.id)?.role ?? 'viewer';
   return (
-    <ReactFlowProvider>
-      <MapView
-        key={map.data.id}
-        map={map.data}
-        role={role}
-        snapshot={snapshot?.stream === `map:${map.data.id}` ? snapshot : undefined}
-      />
-    </ReactFlowProvider>
+    <>
+      <ReactFlowProvider>
+        <MapView
+          key={map.data.id}
+          map={map.data}
+          role={role}
+          snapshot={snapshot?.stream === `map:${map.data.id}` ? snapshot : undefined}
+        />
+      </ReactFlowProvider>
+      {/* Over the map, which stays mounted and live behind it (`?settings=<section>`). */}
+      {settings.section !== null && <MapSettingsDialog map={map.data} role={role} />}
+    </>
   );
 }
 

@@ -80,6 +80,9 @@ export const TelemetrySection = z.enum([
   'bookmarks',
   'access',
   'notifications',
+  'discord',
+  'webhooks',
+  'danger',
 ]);
 /** Map panels (the widget dock); `plugin` for any plugin widget. */
 export const TelemetryPanel = z.enum([

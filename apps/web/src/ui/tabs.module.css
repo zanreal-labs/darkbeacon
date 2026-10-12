@@ -65,6 +65,51 @@
   outline: none;
 }
 
+/* Vertical tabs: a list of sections beside their content (map settings). */
+.list[data-orientation='vertical'] {
+  flex-direction: column;
+  gap: 2px;
+  border-bottom: 0;
+  overflow: visible;
+}
+
+.trigger[data-orientation='vertical'] {
+  gap: var(--dbk-space-2);
+  height: 32px;
+  padding: 0 10px;
+  border-radius: var(--dbk-radius);
+  transition:
+    background var(--dbk-motion-fast) var(--dbk-motion-easing),
+    color var(--dbk-motion-fast) var(--dbk-motion-easing);
+}
+
+.trigger[data-orientation='vertical'] svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.trigger[data-orientation='vertical']::after {
+  content: none;
+}
+
+.trigger[data-orientation='vertical']:hover {
+  background: var(--dbk-color-surface-hover);
+}
+
+.trigger[data-orientation='vertical'][data-state='active'] {
+  background: var(--dbk-color-accent-subtle);
+  color: var(--dbk-color-accent-text);
+}
+
+.trigger[data-orientation='vertical']:focus-visible {
+  outline-offset: -2px;
+}
+
+.content[data-orientation='vertical'] {
+  padding-top: 0;
+}
+
 /* Segmented control variant (small option sets such as the theme picker). */
 .segmented {
   display: inline-flex;
