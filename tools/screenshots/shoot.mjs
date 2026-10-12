@@ -5,7 +5,7 @@
 //
 // BASE must run with DEMO_MODE=true (the demo account is an instance owner and owns "Demo chain").
 // LOGIN_BASE (optional) is an instance without demo mode for the sign-in page; without it the
-// sign-in page is shot on BASE with the provider list faked to "Discord only".
+// sign-in page is shot on BASE as someone who signed out of the demo sees it.
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
@@ -81,19 +81,12 @@ async function run() {
         });
         const p = await login.newPage();
         if (!LOGIN_BASE) {
-          await p.route('**/api/auth/providers', (r) =>
-            r.fulfill({ json: { discord: true, eve: true, demo: false } }),
-          );
-          await p.route('**/api/accounts/me', (r) =>
-            r.fulfill({
-              status: 401,
-              json: { error: { code: 'unauthenticated', message: 'Sign in first' } },
-            }),
-          );
+          // The demo instance shows its sign-in page to someone who signed out of the demo.
+          await login.addCookies([{ name: 'dbk_demo_out', value: '1', url: BASE }]);
         }
         await p.goto(`${LOGIN_BASE ?? BASE}/login`);
         await p
-          .getByRole('button', { name: /discord/i })
+          .getByRole('button', { name: /discord|explore the demo/i })
           .or(p.getByRole('link', { name: /discord/i }))
           .first()
           .waitFor();
