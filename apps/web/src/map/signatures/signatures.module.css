@@ -468,3 +468,8 @@ tr[data-group='wormhole'] .linkButton:not([data-linked]) {
 .info > button.grow {
   min-width: 7ch;
 }
+
+/* Custom entries may have long ids: they end in an ellipsis (the whole id is the title). */
+.table td.id {
+  text-overflow: ellipsis;
+}

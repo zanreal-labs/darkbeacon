@@ -392,17 +392,18 @@ export function SignaturesSection({
                 setEditing(s.id);
               }}
             >
-              <td className={styles.sigId}>
+              <td className={`${styles.sigId} ${sig.id}`} title={s.eveId}>
                 {s.eveId}
-                {s.custom && (
-                  <span className={styles.customMark} title="Written by someone, not from the scanner">
-                    custom
-                  </span>
-                )}
               </td>
               {columns.group && <td className={sig.group}>{GROUP_LABEL[s.group]}</td>}
               <td>
                 <span className={sig.info}>
+                  {/* A custom entry: its id is free text someone wrote, not the scanner's. */}
+                  {s.custom && (
+                    <span className={styles.customMark} title="Written by someone, not from the scanner">
+                      custom
+                    </span>
+                  )}
                   {/* Once linked, the temporary name is on the system it leads to. */}
                   {s.tempName && target === null && <strong className={sig.tempName}>{s.tempName}</strong>}
                   {wormhole && time === 'eol' && <Clock className={sig.iconEol} aria-label="End of life" />}
