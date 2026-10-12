@@ -121,24 +121,25 @@ made while seeding the demo map or by cleanups count as nothing; a history rever
 `history_reverted`, not as the changes it writes. `source` is `manual` (web app), `auto` (auto-mapping), `api`
 (API token) or `plugin`.
 
-| Event                                | Properties                                                                                                          |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `signed_in`                          | `method`: `discord`, `eve`, `demo`, `dev`                                                                           |
-| `map_created`                        |                                                                                                                     |
-| `system_added`                       | `source`                                                                                                            |
-| `connection_added`                   | `type`: `wormhole`, `gate`, `bridge`; `source`                                                                      |
-| `connection_updated`                 | `field`: `type`, `time`, `eol`, `mass`, `size`, `bubble`, `dangerous`, `mass_saved`; `source` (one event per field) |
-| `labels_changed`                     |                                                                                                                     |
-| `ping_created`                       |                                                                                                                     |
-| `access_rule_added`                  | `subject`: `discordRole`, `character`, `corporation`, `alliance`, `account`                                         |
-| `webhook_created`                    |                                                                                                                     |
-| `history_reverted`                   |                                                                                                                     |
-| `plugin_enabled` / `plugin_disabled` | `plugin`: a first-party id or `third_party`                                                                         |
-| `signatures_pasted`                  | `added`, `updated`, `removed`: buckets                                                                              |
-| `route_computed`                     | `mode`: `shortest`, `safer`, `highsec`, `outlaw`, `pilot`; `skips`, `avoids`: booleans                              |
-| `bookmark_template_changed`          | `scope`: `map` or `personal`                                                                                        |
-| `esi_picker_used`                    | `category`: `character`, `corporation`, `alliance`; `mode`: `search` or `exact`                                     |
-| `waypoint_set`                       | `mode`: `destination` or `waypoint`                                                                                 |
+| Event                                | Properties                                                                                                                                                                           |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `signed_in`                          | `method`: `discord`, `eve`, `demo`, `dev`                                                                                                                                            |
+| `map_created`                        |                                                                                                                                                                                      |
+| `system_added`                       | `source`                                                                                                                                                                             |
+| `connection_added`                   | `type`: `wormhole`, `gate`, `bridge`; `source`                                                                                                                                       |
+| `connection_updated`                 | `field`: `type`, `time`, `eol`, `mass`, `size`, `bubble`, `dangerous`, `mass_saved`; `source` (one event per field)                                                                  |
+| `labels_changed`                     |                                                                                                                                                                                      |
+| `ping_created`                       |                                                                                                                                                                                      |
+| `access_rule_added`                  | `subject`: `discordRole`, `character`, `corporation`, `alliance`, `account`                                                                                                          |
+| `webhook_created`                    |                                                                                                                                                                                      |
+| `history_reverted`                   |                                                                                                                                                                                      |
+| `plugin_enabled` / `plugin_disabled` | `plugin`: a first-party id or `third_party`                                                                                                                                          |
+| `signatures_pasted`                  | `added`, `updated`, `removed`: buckets                                                                                                                                               |
+| `route_computed`                     | `mode`: `shortest`, `safer`, `highsec`, `outlaw`, `pilot`; `skips`, `avoids`: booleans                                                                                               |
+| `bookmark_template_changed`          | `scope`: `map` or `personal`                                                                                                                                                         |
+| `esi_picker_used`                    | `category`: `character`, `corporation`, `alliance`; `mode`: `search` or `exact`                                                                                                      |
+| `waypoint_set`                       | `mode`: `destination` or `waypoint`                                                                                                                                                  |
+| `jump_planned`                       | `hull`: `jump_freighter`, `black_ops`, `rorqual`, `carrier`, `command_carrier`, `dreadnought`, `lancer`, `force_auxiliary`, `supercarrier`, `titan`; `legs`: bucket (`0` = no route) |
 
 ### Web app events
 
@@ -146,7 +147,7 @@ made while seeding the demo map or by cleanups count as nothing; a history rever
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `app_loaded`        | `viewport`: `phone`, `tablet`, `desktop`; `tti`: `<1s`, `1-2s`, `2-4s`, `4-8s`, `8s+`                                                                                                            |
 | `theme_used`        | `theme` (as `theme_default`); `scheme`: `light` or `dark`                                                                                                                                        |
-| `page_viewed`       | `page`: `map`, `maps`, `account`, `admin`, `map_settings`; `section`: the admin or map settings tab                                                                                              |
+| `page_viewed`       | `page`: `map`, `maps`, `account`, `admin`, `map_settings`, `jump`; `section`: the admin or map settings tab                                                                                      |
 | `panel_opened`      | `panel`: `system`, `signatures`, `local`, `routes`, `connections`, `history`, `plugin`                                                                                                           |
 | `context_menu_used` | `menu`: `system` or `connection`; `action`: `status`, `labels`, `edit`, `hidden`, `locked`, `copy_name`, `remove`, `time`, `mass`, `size`, `type`, `bubble`, `dangerous`, `mass_saved`, `plugin` |
 | `shortcut_used`     | `shortcut`: `fit_chain`, `center_on_me`, `legend`                                                                                                                                                |
