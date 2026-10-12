@@ -38,6 +38,7 @@ function humanize(key: string): string {
 
 const TAGS: Record<string, string> = {
   health: 'Health of the instance',
+  ready: 'Readiness of the instance (database and migrations)',
   realtime: 'Snapshots of realtime streams (the WebSocket protocol is in /api/asyncapi.json)',
   auth: 'Sign-in flows (browser only)',
   accounts: 'The signed-in account',
@@ -46,6 +47,7 @@ const TAGS: Record<string, string> = {
   discord: 'The instance Discord bot',
   discordNotify: 'Discord notifications of a map (bundled plugin)',
   admin: 'Instance administration',
+  backups: 'Database backups (instance admins)',
   universe: 'Static game data',
   maps: 'Maps',
   systems: 'Systems on a map',
@@ -57,10 +59,12 @@ const TAGS: Record<string, string> = {
   webhooks: 'Webhooks of a map',
   plugins: 'Plugins',
   audit: 'History and audit',
+  telemetry: 'Anonymous usage telemetry',
   presence: 'Presence settings',
   themes: 'Themes',
   apiKeys: 'API keys: personal access tokens and service keys',
-  sharing: 'Public links of maps',
+  sharing: 'Sharing a chain between maps, and composite maps',
+  publicLink: 'Public links of maps',
   public: 'Public maps (no sign-in)',
   docs: 'This description',
   oauth: 'OAuth 2.1 for the MCP endpoint',
@@ -259,6 +263,8 @@ export function buildOpenApi(options: OpenApiOptions): JsonSchema {
           description: 'OK',
           content: { 'application/json': { schema: book.of(route.response, 'output') } },
         };
+      else if (route.status)
+        responses[route.status] = { description: route.status === 202 ? 'Accepted' : 'OK' };
       else responses['204'] = { description: 'Done, no content' };
       for (const [status, description] of Object.entries(ERROR_RESPONSES)) {
         if (route.auth === 'public' && (status === '401' || status === '403') && route.scope === 'none')

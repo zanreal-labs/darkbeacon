@@ -6,7 +6,8 @@ import type { PluginDto } from './dto/plugins.js';
 import type { ConnectionDto, LabelDto, MapDto, MapSystemDto, SignatureDto } from './dto/mapping.js';
 import type { HubDto, MapExitDto } from './dto/routing.js';
 import type { CharacterPresenceDto } from './dto/tracking.js';
-import type { McpMode } from './dto/sharing.js';
+import type { MapShareDto, MapSourceDto } from './dto/sharing.js';
+import type { McpMode } from './dto/publishing.js';
 import type { ShareScope } from './share-scope.js';
 
 export const DomainEventSchema = z.object({
@@ -71,6 +72,19 @@ export interface EventPayloads {
   /** Last event of a map stream: the map and everything on it is gone. */
   'map.removed': { id: string };
   'labels.changed': { labels: LabelDto[] };
+  /** On the source's and the target's stream: a source admin offered the map to another map. */
+  'map.share.offered': MapShareDto;
+  /** On both streams: the target's admin accepted; the target merges the source from now on. */
+  'map.share.accepted': MapShareDto;
+  /** On both streams: level, scopes or hidden changed. */
+  'map.share.changed': MapShareDto;
+  /** On both streams: the share ended (revoked by either side, or an offer declined). */
+  'map.share.revoked': MapShareDto;
+  /**
+   * The maps merged into this one changed (published after the merged objects themselves were
+   * added or removed); an empty list on a standard map means it no longer merges anything.
+   */
+  'map.sources_changed': { sources: MapSourceDto[] };
   /** The chain's exits changed (recomputed after connection and system changes). */
   'routes.exits_changed': { exits: MapExitDto[] };
   /** The map's own hubs were replaced (manager+). */
@@ -83,7 +97,7 @@ export interface EventPayloads {
    * The map's public link or MCP reach changed (map admins). The link's token is never in the
    * event: map viewers and webhooks see that it changed, not the link itself.
    */
-  'access.sharing_changed': {
+  'access.public_link_changed': {
     mapId: string;
     enabled: boolean;
     slug: string | null;
@@ -130,13 +144,18 @@ export const EVENT_TYPES = [
   'map.created',
   'map.removed',
   'labels.changed',
+  'map.share.offered',
+  'map.share.accepted',
+  'map.share.changed',
+  'map.share.revoked',
+  'map.sources_changed',
   'routes.exits_changed',
   'routes.hubs_changed',
   'ping.created',
   'ping.removed',
   'access.rule_added',
   'access.rule_removed',
-  'access.sharing_changed',
+  'access.public_link_changed',
   'access.role_changed',
   'access.account_changed',
   'character.unlinked',

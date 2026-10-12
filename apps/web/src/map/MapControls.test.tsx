@@ -8,8 +8,8 @@ import { mapPermissions } from '../lib/roles';
 import { MAP_ID } from '../test/fixtures';
 import { installFlowMocks, renderWithProviders } from '../test/setup';
 import { TooltipProvider } from '../ui';
-import { edgeLineStyle, edgeVisual } from './edgeStyle';
-import { LEGEND_EDGE_STATES } from './MapLegend';
+import { edgeInnerStyle, edgeOuterStyle, edgeVisual } from './edgeStyle';
+import { LEGEND_EDGE_STATES, LEGEND_NOW } from './MapLegend';
 import { MapControls } from './MapControls';
 
 installFlowMocks();
@@ -54,17 +54,23 @@ describe('MapControls', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Show the legend (L)' }));
     const legend = screen.getByRole('region', { name: 'Map legend' });
-    expect(legend.textContent).toContain('End of life (under 4 h)');
-    expect(legend.textContent).toContain('Bubbled at that end');
+    expect(legend.textContent).toContain('end of life (under 4 h)');
+    expect(legend.textContent).toContain('under an hour left');
+    expect(legend.textContent).toContain('bubbled at that end');
     expect(legend.textContent).toContain('Target');
 
-    const lines = [...legend.querySelectorAll<SVGPathElement>('[data-legend-edge] [data-line]')];
-    expect(lines).toHaveLength(LEGEND_EDGE_STATES.length);
+    const samples = [...legend.querySelectorAll<HTMLElement>('[data-legend-edge]')];
+    expect(samples).toHaveLength(LEGEND_EDGE_STATES.length);
     LEGEND_EDGE_STATES.forEach((state, i) => {
-      const expected = edgeLineStyle(edgeVisual(state.connection));
-      expect(lines[i]!.style.stroke).toBe(expected.stroke);
-      expect(lines[i]!.style.strokeWidth).toBe(expected.strokeWidth);
-      expect(lines[i]!.style.strokeDasharray).toBe(expected.strokeDasharray ?? '');
+      const v = edgeVisual(state.connection, LEGEND_NOW);
+      const outer = edgeOuterStyle(v);
+      const line = samples[i]!.querySelector<SVGPathElement>('[data-line]')!;
+      expect(line.style.stroke).toBe(outer.stroke);
+      expect(line.style.strokeWidth).toBe(outer.strokeWidth);
+      expect(line.style.strokeDasharray).toBe(outer.strokeDasharray ?? '');
+      expect(samples[i]!.querySelector<SVGPathElement>('[data-core]')?.style.stroke).toBe(
+        edgeInnerStyle(v)?.stroke,
+      );
     });
     expect(legend.querySelectorAll('[data-legend-status]')).toHaveLength(8);
 

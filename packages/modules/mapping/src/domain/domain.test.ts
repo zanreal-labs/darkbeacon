@@ -64,7 +64,7 @@ describe('rules', () => {
   });
 
   it('picks a default ship size', () => {
-    expect(defaultShipSize('gate', null, null)).toBe('xlarge');
+    expect(defaultShipSize('gate', null, null)).toBe('capital');
     expect(defaultShipSize('wormhole', universe(5), universe(2))).toBe('large');
     expect(defaultShipSize('wormhole', universe(7), universe(1))).toBe('medium');
     expect(defaultShipSize('wormhole', universe(1), universe(13))).toBe('small');

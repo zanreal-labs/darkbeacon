@@ -1,0 +1,24 @@
+/* One quiet line of provenance under a merged object's details. */
+.provenance {
+  margin: 0;
+  padding: var(--dbk-space-2) var(--dbk-space-4);
+  border-bottom: 1px solid var(--dbk-color-border);
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-xs);
+  line-height: 1.4;
+}
+
+/* The same line inside the right-click menu of a connection. */
+.menuProvenance {
+  max-width: 280px;
+  margin: 0;
+  padding: var(--dbk-space-1) var(--dbk-space-2) var(--dbk-space-2);
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-xs);
+  line-height: 1.4;
+}
+
+.filterLabel {
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-xs);
+}

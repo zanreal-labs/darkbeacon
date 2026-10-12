@@ -11,13 +11,22 @@ import { InstanceSettingsService } from '@darkbeacon/access';
 import type { Clock, EventLog, MapAccess, UnitOfWork } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
 import { NotifierRegistry, WebhookAdmin, WebhookDispatcher } from '@darkbeacon/notifications';
-import { isEventOfType } from '@darkbeacon/shared';
-import { HttpWebhookSender } from '../../adapters/notifications/http-webhook-sender.js';
+import type { DomainTelemetry } from '@darkbeacon/observability';
+import { isEventOfType, isMergedCopy } from '@darkbeacon/shared';
+import { countingDeliveries, HttpWebhookSender } from '../../adapters/notifications/http-webhook-sender.js';
 import { KyselyWebhookRepository } from '../../adapters/notifications/kysely-webhook-repository.js';
 import { SecretBox } from '../../adapters/notifications/secret-box.js';
 import type { AppConfig } from '../../config/config.js';
 import { EventConsumers } from '../../platform/event-consumers.js';
-import { APP_CONFIG, CLOCK, EVENT_LOG, MAP_ACCESS, UNIT_OF_WORK } from '../../platform/tokens.js';
+import { MaintenanceMode } from '../../platform/maintenance.js';
+import {
+  APP_CONFIG,
+  CLOCK,
+  EVENT_LOG,
+  MAP_ACCESS,
+  OBSERVABILITY,
+  UNIT_OF_WORK,
+} from '../../platform/tokens.js';
 import { WebhooksController } from './webhooks.controller.js';
 
 const RETRY_EVERY_MS = 5_000;
@@ -39,6 +48,7 @@ export class WebhookWorker implements OnModuleInit, OnApplicationShutdown {
     @Inject(KyselyWebhookRepository) private readonly webhooks: KyselyWebhookRepository,
     @Inject(EventConsumers) private readonly consumers: EventConsumers,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(MaintenanceMode) private readonly maintenance: MaintenanceMode,
   ) {}
 
   onModuleInit(): void {
@@ -48,12 +58,18 @@ export class WebhookWorker implements OnModuleInit, OnApplicationShutdown {
       handle: async (event) => {
         // No webhook outlives its map, and none is told about the deletion.
         if (isEventOfType(event, 'map.removed')) return this.admin.forgetMap(event.data.id);
+        // A map that merges others: its webhooks hear its own changes, not the merged copies.
+        if (isMergedCopy(event)) return;
         const queued = await this.dispatcher.queue(event);
         return queued.length > 0 ? () => this.dispatcher.send(queued) : undefined;
       },
     });
     this.cleanups.push(
-      every(RETRY_EVERY_MS, () => this.dispatcher.retryDue(), this.logger),
+      every(
+        RETRY_EVERY_MS,
+        () => (this.maintenance.active ? Promise.resolve() : this.dispatcher.retryDue()),
+        this.logger,
+      ),
       every(
         PRUNE_EVERY_MS,
         () => this.webhooks.pruneDeliveries(this.clock.now() - KEEP_DELIVERIES_MS),
@@ -105,13 +121,26 @@ function every(ms: number, work: () => Promise<unknown>, logger: Logger): () => 
     },
     {
       provide: WebhookDispatcher,
-      useFactory: (webhooks: KyselyWebhookRepository, clock: Clock, settings: InstanceSettingsService) => {
-        const sender = new HttpWebhookSender({
+      useFactory: (
+        webhooks: KyselyWebhookRepository,
+        clock: Clock,
+        settings: InstanceSettingsService,
+        telemetry?: DomainTelemetry | null,
+      ) => {
+        const http = new HttpWebhookSender({
           allowPrivate: async () => (await settings.current()).webhooksToPrivateNetworks,
         });
+        const sender = telemetry
+          ? countingDeliveries(http, (ok) => telemetry.notificationDelivered('webhook', ok))
+          : http;
         return new WebhookDispatcher({ webhooks, sender, clock });
       },
-      inject: [KyselyWebhookRepository, CLOCK, InstanceSettingsService],
+      inject: [
+        KyselyWebhookRepository,
+        CLOCK,
+        InstanceSettingsService,
+        { token: OBSERVABILITY, optional: true },
+      ],
     },
     {
       provide: WebhookAdmin,

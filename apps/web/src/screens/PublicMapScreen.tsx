@@ -159,7 +159,8 @@ export function PublicMapScreen({ token, view: initial }: { token: string; view:
     if (message.op !== 'event') return;
     const event = message.event as TypedEvent;
     switch (event.type) {
-      case 'access.sharing_changed':
+      case 'access.public_link_changed':
+      case 'map.sources_changed':
         void reread();
         return;
       case 'map.removed':

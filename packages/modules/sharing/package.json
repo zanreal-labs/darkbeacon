@@ -2,7 +2,7 @@
   "name": "@darkbeacon/sharing",
   "version": "0.0.0",
   "private": true,
-  "description": "Public maps: links, what they show, and the projection that keeps everything else on the server",
+  "description": "Shares between maps and the merged (composite) chains built from them",
   "type": "module",
   "exports": {
     ".": {

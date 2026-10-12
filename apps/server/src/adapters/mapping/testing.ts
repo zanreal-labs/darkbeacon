@@ -12,6 +12,7 @@ import type { MappingPorts } from '@darkbeacon/mapping';
 import { InProcessEventBus } from '../events/in-process-event-bus.js';
 import { KyselyEventLog } from '../events/kysely-event-log.js';
 import {
+  KyselyChangeStamps,
   KyselyConnectionRepository,
   KyselyMapRepository,
   KyselyPassageRepository,
@@ -153,6 +154,7 @@ export function mappingTestPorts(database: Database) {
     connections: new KyselyConnectionRepository(database),
     signatures: new KyselySignatureRepository(database),
     passages: new KyselyPassageRepository(database),
+    stamps: new KyselyChangeStamps(database),
     universe: fixtureUniverse(),
     access,
     events: new KyselyEventLog(database, bus),

@@ -1,14 +1,17 @@
 'use client';
 
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useState, type ComponentProps, type CSSProperties, type ReactNode } from 'react';
 import { Dialog as D } from 'radix-ui';
 import { X } from 'lucide-react';
 import { Button, IconButton, type ButtonVariant } from './Button';
+import { cx } from './cx';
 import styles from './overlay.module.css';
 
 export const Dialog = D.Root;
 export const DialogTrigger = D.Trigger;
 export const DialogClose = D.Close;
+export const DialogTitle = D.Title;
+export const DialogDescription = D.Description;
 
 export interface DialogContentProps {
   title: ReactNode;
@@ -43,6 +46,33 @@ export function DialogContent({ title, description, children, footer, width }: D
         <D.Close asChild>
           <IconButton className={styles.close} label="Close" icon={<X />} size="sm" tooltip={false} />
         </D.Close>
+      </D.Content>
+    </D.Portal>
+  );
+}
+
+export interface DialogSheetProps extends Omit<ComponentProps<typeof D.Content>, 'asChild' | 'style'> {
+  /** Width in px on wider screens (default 960). */
+  width?: number;
+  /** Height in px on wider screens (default 720); never more than the window. */
+  height?: number;
+}
+
+/**
+ * A large modal whose inside the caller lays out (map settings: sections beside their content).
+ * It keeps one size whatever is inside, so switching sections does not make it jump; on phones it
+ * fills the screen. Escape, a click outside and `DialogClose` close it. It needs a `DialogTitle`.
+ */
+export function DialogSheet({ width, height, className, children, ...props }: DialogSheetProps) {
+  const size = {
+    ...(width ? { '--dialog-width': `${width}px` } : {}),
+    ...(height ? { '--dialog-height': `${height}px` } : {}),
+  } as CSSProperties;
+  return (
+    <D.Portal>
+      <D.Overlay className={styles.overlay} />
+      <D.Content className={cx(styles.dialog, styles.sheet, className)} style={size} {...props}>
+        {children}
       </D.Content>
     </D.Portal>
   );

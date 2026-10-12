@@ -166,7 +166,7 @@ describe('reading audit entries', () => {
 
     const shared = readEntry(
       entry({
-        type: 'access.sharing_changed',
+        type: 'access.public_link_changed',
         mapId: 'm',
         diff: {
           enabled: { before: false, after: true },

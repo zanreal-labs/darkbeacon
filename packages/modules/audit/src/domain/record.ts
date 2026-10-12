@@ -3,6 +3,7 @@ import type {
   AuditActorDto,
   AuditChannelDto,
   AuditFieldChange,
+  AuditMapRefDto,
   AuditOp,
   AuditOriginDto,
 } from '@darkbeacon/shared';
@@ -19,6 +20,10 @@ export interface AuditRecord {
   diff: Record<string, AuditFieldChange>;
   removed: Fields | null;
   revertOf: string | null;
+  /** Made on a map that merges this one and written back here. Absent on older records. */
+  via?: AuditMapRefDto | null;
+  /** Written by a map that merges others, from this source map. Absent on older records. */
+  mergedFrom?: AuditMapRefDto | null;
 }
 
 /** Names and characters of the people behind an event, looked up when it is written. */
@@ -110,6 +115,8 @@ export function buildAuditRecord(
       diff,
       removed,
       revertOf: context.revertOf ?? null,
+      ...(context.via ? { via: context.via } : {}),
+      ...(context.mergedFrom ? { mergedFrom: context.mergedFrom } : {}),
     },
     refs: [...refs],
   };

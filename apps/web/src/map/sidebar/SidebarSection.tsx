@@ -1,0 +1,50 @@
+'use client';
+
+import { useId, type ReactNode } from 'react';
+import { ChevronRight } from 'lucide-react';
+import styles from './sidebar.module.css';
+
+interface Props {
+  id: string;
+  title: string;
+  /** Shown after the title (signatures, pilots); nothing when undefined. */
+  count?: number;
+  /** At most one action on the right of the header. */
+  action?: ReactNode;
+  collapsed: boolean;
+  onToggle(id: string): void;
+  children: ReactNode;
+}
+
+/** One part of the system sidebar: a compact header that folds it, and its content. */
+export function SidebarSection({ id, title, count, action, collapsed, onToggle, children }: Props) {
+  const bodyId = useId();
+  return (
+    <section
+      className={styles.section}
+      data-section={id}
+      data-collapsed={collapsed || undefined}
+      aria-label={title}
+    >
+      <header className={styles.sectionHeader}>
+        <button
+          type="button"
+          className={styles.sectionToggle}
+          aria-expanded={!collapsed}
+          aria-controls={bodyId}
+          onClick={() => onToggle(id)}
+        >
+          <ChevronRight className={styles.chevron} aria-hidden />
+          <span className={styles.sectionTitle}>{title}</span>
+          {count !== undefined && <span className={styles.sectionCount}>{count}</span>}
+        </button>
+        {action && <div className={styles.sectionAction}>{action}</div>}
+      </header>
+      {!collapsed && (
+        <div id={bodyId} className={styles.sectionBody}>
+          {children}
+        </div>
+      )}
+    </section>
+  );
+}

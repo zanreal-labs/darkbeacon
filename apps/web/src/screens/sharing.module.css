@@ -1,0 +1,33 @@
+.scopes {
+  display: grid;
+  gap: var(--dbk-space-3);
+  padding-top: var(--dbk-space-2);
+}
+
+.scopeLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dbk-space-2);
+}
+
+.details {
+  margin-top: var(--dbk-space-2);
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+}
+
+.details > summary {
+  width: fit-content;
+  cursor: pointer;
+}
+
+.details[open] > summary {
+  margin-bottom: var(--dbk-space-1);
+}
+
+.offerGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  align-items: start;
+  gap: var(--dbk-space-4);
+}

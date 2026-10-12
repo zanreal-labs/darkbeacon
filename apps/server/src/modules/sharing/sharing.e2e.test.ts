@@ -3,35 +3,28 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { describeEachDialect } from '@darkbeacon/db/testing';
 import type {
-  AuditPageDto,
   ConnectionDto,
   MapDto,
-  MapSharingDto,
+  MapShareDto,
+  MapSnapshot,
   MeDto,
-  PublicMapViewDto,
   ServerMessage,
-  SignatureDto,
+  StreamSnapshotDto,
 } from '@darkbeacon/shared';
 import WebSocket from 'ws';
 import { createApp } from '../../app.js';
 import { parseEnv } from '../../config/config.js';
-import { Browser } from '../../test-support/browser.js';
 
-const JITA = 30000142;
-const PERIMETER = 30000144;
+const C2 = 31000399; // J130256
+const C5 = 31001924; // J130026
+const C1 = 31000220; // J121158
 
-/** What a public view must not show unless its scopes say so. */
-const SECRET = {
-  note: 'SECRET-NOTE-our-fleet-is-here',
-  tag: 'SECRT',
-  name: 'SECRET-HOME',
-  sigName: 'SECRET-SITE',
-  label: 'SECRET-LABEL',
-};
+type EventMessage = Extract<ServerMessage, { op: 'event' }>;
 
-describeEachDialect('public maps', (t) => {
+describeEachDialect('merged chains over HTTP and /ws', (t) => {
   let app: NestFastifyApplication;
   let base: string;
+  const sockets: WebSocket[] = [];
 
   beforeEach(async () => {
     const config = {
@@ -44,183 +37,179 @@ describeEachDialect('public maps', (t) => {
   });
 
   afterEach(async () => {
+    for (const socket of sockets.splice(0)) socket.close();
     await app.close();
   });
 
   const signIn = async (name: string) => {
-    const browser = new Browser(base);
-    await browser.json<MeDto>('/api/auth/dev', {
+    const response = await fetch(`http://${base}/api/auth/dev`, {
       method: 'POST',
-      json: { name, character: { name: `${name} Main` } },
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name }),
     });
-    return browser;
+    const cookie = response.headers
+      .getSetCookie()
+      .map((c) => c.split('; ')[0])
+      .join('; ');
+    const me = (await response.json()) as MeDto;
+    const call = async <T = unknown>(method: string, path: string, json?: unknown): Promise<T> => {
+      const r = await fetch(`http://${base}${path}`, {
+        method,
+        headers: { cookie, ...(json === undefined ? {} : { 'content-type': 'application/json' }) },
+        ...(json === undefined ? {} : { body: JSON.stringify(json) }),
+      });
+      expect(r.status, `${method} ${path}: ${r.status === 204 ? '' : await r.clone().text()}`).toBeLessThan(
+        300,
+      );
+      const text = await r.text();
+      return (text ? JSON.parse(text) : undefined) as T;
+    };
+    const status = async (method: string, path: string, json?: unknown) =>
+      (
+        await fetch(`http://${base}${path}`, {
+          method,
+          headers: { cookie, ...(json === undefined ? {} : { 'content-type': 'application/json' }) },
+          ...(json === undefined ? {} : { body: JSON.stringify(json) }),
+        })
+      ).status;
+    return { me, cookie, call, status };
   };
 
-  /** A chain with intel on it: a note, a tag, a custom name, a label, a signature, a dangerous hole. */
-  const chain = async (alice: Browser) => {
-    const map = await alice.json<MapDto>('/api/maps', { method: 'POST', json: { name: 'Home chain' } });
-    const m = `/api/maps/${map.id}`;
-    await alice.json(`${m}/labels`, {
-      method: 'PUT',
-      json: { labels: [{ id: 'l1', name: SECRET.label, color: '#22aa66', description: '' }] },
-    });
-    await alice.json(`${m}/systems`, {
-      method: 'POST',
-      json: { solarSystemId: JITA, position: { x: 0, y: 0 } },
-    });
-    await alice.json(`${m}/systems`, { method: 'POST', json: { solarSystemId: PERIMETER } });
-    await alice.json(`${m}/systems/${JITA}`, {
-      method: 'PATCH',
-      json: {
-        description: SECRET.note,
-        tag: SECRET.tag,
-        customName: SECRET.name,
-        status: 'home',
-        labelIds: ['l1'],
-      },
-    });
-    const connection = await alice.json<ConnectionDto>(`${m}/connections`, {
-      method: 'POST',
-      json: { source: JITA, target: PERIMETER, type: 'wormhole' },
-    });
-    await alice.json(`${m}/connections/${connection.id}`, {
-      method: 'PATCH',
-      json: { massStatus: 'critical', dangerous: true },
-    });
-    await alice.json<SignatureDto>(`${m}/systems/${JITA}/signatures`, {
-      method: 'POST',
-      json: { eveId: 'ABC-123', name: SECRET.sigName },
-    });
-    return { map, m };
-  };
-
-  const view = (id: string) => fetch(`http://${base}/api/public/maps/${id}`);
-  const leaks = (body: string, allowed: string[] = []) =>
-    Object.values(SECRET).filter((s) => !allowed.includes(s) && body.includes(s));
-
-  it('shares a read-only view with safe defaults, and nothing else leaves the server', async () => {
-    const alice = await signIn('alice');
-    const { map, m } = await chain(alice);
-
-    const before = await alice.json<MapSharingDto>(`${m}/sharing`);
-    expect(before).toMatchObject({
-      enabled: false,
-      token: null,
-      scopes: ['topology', 'connectionStatus'],
-      noindex: true,
-    });
-
-    const shared = await alice.json<MapSharingDto>(`${m}/sharing`, {
-      method: 'PATCH',
-      json: { enabled: true },
-    });
-    expect(shared.token).toMatch(/^[0-9A-Za-z]{32}$/);
-    expect(shared.url).toBe(`http://dbk.test/p/${shared.token}`);
-
-    const response = await view(shared.token!);
-    expect(response.status).toBe(200);
-    expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
-    expect(response.headers.get('cache-control')).toBe('no-store');
-    const body = await response.text();
-    expect(leaks(body)).toEqual([]);
-    expect(body).not.toContain(map.ownerAccountId);
-    const dto = JSON.parse(body) as PublicMapViewDto;
-    expect(dto.map).toMatchObject({ name: 'Home chain', labels: [] });
-    expect(dto.snapshot.systems.map((s) => s.solarSystemId).sort()).toEqual([JITA, PERIMETER]);
-    expect(dto.snapshot.connections[0]).toMatchObject({ massStatus: 'critical', dangerous: false });
-    expect(dto.snapshot.signatures).toBeUndefined();
-    expect(dto.universe.map((u) => u.name).sort()).toEqual(['Jita', 'Perimeter']);
-
-    // The toggle is in the map history; the link itself is not.
-    const history = await alice.json<AuditPageDto>(`${m}/history`);
-    const entry = history.entries.find((e) => e.type === 'access.sharing_changed')!;
-    expect(entry.diff.enabled).toEqual({ before: false, after: true });
-    expect(JSON.stringify(history)).not.toContain(shared.token);
-
-    // More scopes show more, and only that.
-    await alice.json(`${m}/sharing`, { method: 'PATCH', json: { scopes: ['signatures', 'labels'] } });
-    const more = await (await view(shared.token!)).text();
-    expect(leaks(more, [SECRET.sigName, SECRET.label])).toEqual([]);
-    expect(more).toContain(SECRET.sigName);
-  });
-
-  it('is managed by map admins only, regenerates, takes a slug and obeys the instance switch', async () => {
-    const alice = await signIn('alice');
-    const bob = await signIn('bob');
-    const { m } = await chain(alice);
-    expect((await bob.request(`${m}/sharing`)).status).toBe(404);
-    expect((await view('x'.repeat(32))).status).toBe(404);
-
-    const first = await alice.json<MapSharingDto>(`${m}/sharing`, {
-      method: 'PATCH',
-      json: { enabled: true, slug: 'home-public' },
-    });
-    expect((await view('home-public')).status).toBe(200);
-    const second = await alice.json<MapSharingDto>(`${m}/sharing/regenerate`, { method: 'POST' });
-    expect(second.token).not.toBe(first.token);
-    expect((await view(first.token!)).status).toBe(404);
-    expect((await view(second.token!)).status).toBe(200);
-
-    await alice.json(`${m}/sharing`, { method: 'PATCH', json: { enabled: false } });
-    expect((await view(second.token!)).status).toBe(404);
-    expect((await view('home-public')).status).toBe(404);
-
-    await alice.json('/api/admin/settings', { method: 'PATCH', json: { publicMaps: false } });
-    expect((await alice.request(`${m}/sharing`, { method: 'PATCH', json: { enabled: true } })).status).toBe(
-      403,
-    );
-  });
-
-  it('streams live changes to anonymous viewers, cut down to what the link shares', async () => {
-    const alice = await signIn('alice');
-    const { m } = await chain(alice);
-    const { token } = await alice.json<MapSharingDto>(`${m}/sharing`, {
-      method: 'PATCH',
-      json: { enabled: true },
-    });
-    const initial = (await (await view(token!)).json()) as PublicMapViewDto;
-    expect(initial.stream).toBe(`public:${token}`);
-
-    // A browser on the public page: no cookie, an Origin of the instance.
-    const socket = new WebSocket(`ws://${base}/ws`, { headers: { origin: 'http://dbk.test' } });
+  const open = async (cookie: string, stream: string, sinceSeq?: number) => {
+    const socket = new WebSocket(`ws://${base}/ws`, { headers: { cookie } });
+    sockets.push(socket);
     const messages: ServerMessage[] = [];
-    socket.on('message', (data) => messages.push(JSON.parse(String(data)) as ServerMessage));
-    await new Promise((resolve, reject) => socket.once('open', resolve).once('error', reject));
-    socket.send(JSON.stringify({ op: 'subscribe', stream: initial.stream, sinceSeq: initial.seq }));
-    await vi.waitFor(() => expect(messages.some((x) => x.op === 'subscribed')).toBe(true));
-    // Anonymous viewers cannot join presence: nothing is sent to others.
-    socket.send(
-      JSON.stringify({ op: 'presence', stream: initial.stream, state: { cursor: { x: 1, y: 1 } } }),
+    socket.on('message', (raw) => messages.push(JSON.parse(String(raw)) as ServerMessage));
+    await new Promise((resolve) => socket.once('open', resolve));
+    socket.send(JSON.stringify({ op: 'subscribe', stream, ...(sinceSeq === undefined ? {} : { sinceSeq }) }));
+    await vi.waitFor(() => expect(messages.some((m) => m.op === 'subscribed')).toBe(true));
+    const events = () => messages.filter((m): m is EventMessage => m.op === 'event').map((m) => m.event);
+    const lastSeq = () => {
+      const subscribed = messages.find((m) => m.op === 'subscribed') as { seq: number };
+      return Math.max(subscribed.seq, ...events().map((e) => e.seq));
+    };
+    return { socket, messages, events, lastSeq };
+  };
+
+  it('shows a source’s changes live on the composite, resumes by seq, writes back and drops a revoked source', async () => {
+    const alice = await signIn('alice');
+    const carol = await signIn('carol');
+    const dave = await signIn('dave');
+
+    // Alice's corporation maps C2 - C5 - C1.
+    const corp = await alice.call<MapDto>('POST', '/api/maps', { name: 'Corp A' });
+    for (const id of [C2, C5, C1])
+      await alice.call('POST', `/api/maps/${corp.id}/systems`, { solarSystemId: id });
+    const hole = await alice.call<ConnectionDto>('POST', `/api/maps/${corp.id}/connections`, {
+      source: C2,
+      target: C5,
+    });
+    await alice.call('POST', `/api/maps/${corp.id}/connections`, { source: C5, target: C1 });
+
+    // Carol runs the alliance chain; Dave edits it.
+    const alliance = await carol.call<MapDto>('POST', '/api/maps', {
+      name: 'Alliance chain',
+      kind: 'composite',
+    });
+    expect(alliance.kind).toBe('composite');
+    await carol.call('POST', `/api/maps/${alliance.id}/access-rules`, {
+      subjectKind: 'account',
+      subjectId: dave.me.account.id,
+      role: 'member',
+    });
+
+    const offered = await alice.call<MapShareDto>('POST', `/api/maps/${corp.id}/shares`, {
+      targetSlug: alliance.slug,
+      level: 'read-write',
+    });
+    expect(offered.status).toBe('offered');
+    expect(await dave.status('POST', `/api/maps/${alliance.id}/shares/${offered.id}/accept`, {})).toBe(403);
+    await carol.call('POST', `/api/maps/${alliance.id}/shares/${offered.id}/accept`, {});
+
+    const stream = `map:${alliance.id}`;
+    const snapshot = await carol.call<StreamSnapshotDto>(
+      'GET',
+      `/api/streams/${encodeURIComponent(stream)}/snapshot`,
     );
+    const data = snapshot.data as MapSnapshot;
+    expect(data.sources!.map((s) => s.name)).toEqual(['Alliance chain', 'Corp A']);
+    expect(data.systems!.map((s) => s.solarSystemId).sort()).toEqual([C2, C5, C1].sort());
+    // Dave cannot read Corp A itself: sharing gives the composite's viewers nothing of the source.
+    expect(await dave.status('GET', `/api/maps/${corp.id}`)).toBe(404);
 
-    await alice.json(`/api/maps/${initial.map.id}/systems/${PERIMETER}`, {
-      method: 'PATCH',
-      json: { description: SECRET.note, status: 'hostile' },
-    });
-    await alice.json(`/api/maps/${initial.map.id}/systems/${JITA}/signatures`, {
-      method: 'POST',
-      json: { eveId: 'XYZ-999', name: SECRET.sigName },
-    });
-    await alice.json(`/api/maps/${initial.map.id}/systems/${JITA}`, {
-      method: 'PATCH',
-      json: { position: { x: 50, y: 60 } },
-    });
-
+    // Live: Alice marks the hole EOL, the composite's stream has it within a tick.
+    const live = await open(dave.cookie, stream, snapshot.seq);
+    await alice.call('PATCH', `/api/maps/${corp.id}/connections/${hole.id}`, { timeStatus: 'eol' });
     await vi.waitFor(() =>
-      expect(
-        messages.filter((x) => x.op === 'event').map((x) => (x.op === 'event' ? x.event.type : '')),
-      ).toEqual(['system.updated', 'system.updated']),
+      expect(live.events()).toContainEqual(
+        expect.objectContaining({
+          type: 'connection.updated',
+          data: expect.objectContaining({ timeStatus: 'eol' }),
+        }),
+      ),
     );
-    const events = messages.flatMap((x) => (x.op === 'event' ? [x.event] : []));
-    expect(events.every((e) => e.stream === initial.stream && e.actor.kind === 'system')).toBe(true);
-    expect(leaks(JSON.stringify(messages))).toEqual([]);
-    expect(messages.some((x) => x.op === 'presence')).toBe(false);
+    const seen = live.lastSeq();
+    live.socket.close();
 
-    // Switching the link off drops the stream.
-    await alice.json(`/api/maps/${initial.map.id}/sharing`, { method: 'PATCH', json: { enabled: false } });
+    // Missed while away, replayed by seq afterwards.
+    await alice.call('PATCH', `/api/maps/${corp.id}/systems/${C1}`, { visible: false });
+    await vi.waitFor(async () => {
+      const latest = await carol.call<StreamSnapshotDto>(
+        'GET',
+        `/api/streams/${encodeURIComponent(stream)}/snapshot`,
+      );
+      expect(latest.seq).toBeGreaterThan(seen);
+    });
+    const back = await open(dave.cookie, stream, seen);
     await vi.waitFor(() =>
-      expect(messages.some((x) => x.op === 'error' && x.stream === initial.stream)).toBe(true),
+      expect(back.events().map((e) => e.type)).toEqual(
+        expect.arrayContaining(['connection.removed', 'system.removed']),
+      ),
     );
-    socket.close();
+    expect(back.messages.find((m) => m.op === 'subscribed')).toMatchObject({ mode: 'replay' });
+
+    // Dave edits through the composite: it lands on Corp A, and comes back merged.
+    const merged = (
+      await carol.call<StreamSnapshotDto>('GET', `/api/streams/${encodeURIComponent(stream)}/snapshot`)
+    ).data as MapSnapshot;
+    const edge = merged.connections!.find((c) => c.source === Math.min(C2, C5))!;
+    await dave.call('PATCH', `/api/maps/${alliance.id}/connections/${encodeURIComponent(edge.id)}`, {
+      massStatus: 'critical',
+    });
+    const inCorp = await alice.call<{ connections: ConnectionDto[] }>(
+      'GET',
+      `/api/streams/${encodeURIComponent(`map:${corp.id}`)}/snapshot`,
+    );
+    expect((inCorp as unknown as StreamSnapshotDto).data).toMatchObject({
+      connections: [expect.objectContaining({ massStatus: 'critical' })],
+    });
+    await vi.waitFor(() =>
+      expect(back.events()).toContainEqual(
+        expect.objectContaining({
+          type: 'connection.updated',
+          data: expect.objectContaining({ massStatus: 'critical' }),
+        }),
+      ),
+    );
+    // The plain map routes work on the composite too: adding C1 back writes it to Corp A.
+    await dave.call('POST', `/api/maps/${alliance.id}/systems`, { solarSystemId: C1 });
+    await vi.waitFor(async () => {
+      const corpNow = await alice.call<StreamSnapshotDto>(
+        'GET',
+        `/api/streams/${encodeURIComponent(`map:${corp.id}`)}/snapshot`,
+      );
+      expect((corpNow.data as MapSnapshot).systems!.map((s) => s.solarSystemId)).toContain(C1);
+    });
+
+    // Revoked: the source's objects leave the composite at once.
+    await alice.call('DELETE', `/api/maps/${corp.id}/shares/${offered.id}`);
+    await vi.waitFor(() =>
+      expect(back.events().filter((e) => e.type === 'system.removed').length).toBeGreaterThanOrEqual(3),
+    );
+    const after = (
+      await carol.call<StreamSnapshotDto>('GET', `/api/streams/${encodeURIComponent(stream)}/snapshot`)
+    ).data as MapSnapshot;
+    expect(after.systems).toEqual([]);
+    expect(after.sources!.map((s) => s.name)).toEqual(['Alliance chain']);
   });
 });

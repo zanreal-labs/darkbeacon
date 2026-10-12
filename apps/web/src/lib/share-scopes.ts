@@ -10,18 +10,22 @@ export const SHARE_SCOPE_TEXT: Record<ShareScope, { label: string; description: 
   },
   connectionStatus: {
     label: 'Connection status',
-    description: 'Mass, time left and ship size of each connection.',
+    description: 'Mass, time left, ship size, bubbles and danger of each connection.',
     noun: 'connection status',
   },
   signatures: {
     label: 'Signatures',
-    description: 'Signature ids and what they lead to.',
+    description: 'What has been scanned in each system, with its notes.',
     noun: 'signatures',
   },
-  labels: { label: 'Labels', description: "The map's labels on systems.", noun: 'labels' },
+  labels: {
+    label: 'Bookmark labels',
+    description: 'The bookmark names given to systems.',
+    noun: 'bookmark labels',
+  },
   intel: {
-    label: 'Intel',
-    description: 'Notes, statuses, tags, custom names, structures and kills.',
+    label: 'System intel',
+    description: 'Status, tags, custom names and notes of systems, and the hubs the map stages from.',
     noun: 'notes',
   },
   characters: {

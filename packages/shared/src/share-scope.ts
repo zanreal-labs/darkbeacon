@@ -1,14 +1,15 @@
 import { z } from 'zod';
 
 /**
- * What a shared view of a map may show (public maps, shared chains, anonymous MCP):
+ * What map data a share lets the other side see. One vocabulary for every way map data leaves its
+ * map: shares between maps of an instance, public maps and, later, other instances.
  *
- * - `topology`: systems, their places and the connections between them (always part of a share)
- * - `connectionStatus`: mass, time (EOL) and ship size of connections
- * - `signatures`: signatures and what they are
- * - `intel`: system notes, status, tags, custom names, structures and kill information (sensitive)
- * - `characters`: tracked characters, their names and positions (sensitive)
- * - `labels`: the map's labels on systems
+ * - `topology`: systems and the connections between them (always part of a share).
+ * - `connectionStatus`: mass, time (EOL), size, bubbles and danger of connections.
+ * - `signatures`: the signatures scanned in each system.
+ * - `intel`: what a map knows about its systems: status, tag, custom name, notes.
+ * - `characters`: where the map's tracked characters are, their ships, whether they are online.
+ * - `labels`: bookmark labels of systems.
  */
 export const shareScope = z.enum([
   'topology',
@@ -20,5 +21,5 @@ export const shareScope = z.enum([
 ]);
 export type ShareScope = z.infer<typeof shareScope>;
 
-/** Scopes that reveal who is where or what a group knows; never on by default. */
+/** Scopes that tell the other side about a map's own people and plans; the UI marks them. */
 export const SENSITIVE_SHARE_SCOPES: readonly ShareScope[] = ['intel', 'characters'];

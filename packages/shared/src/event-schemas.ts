@@ -5,7 +5,8 @@ import { InstanceRole } from './dto/identity.js';
 import { ConnectionDto, LabelDto, MapDto, MapSystemDto, SignatureDto } from './dto/mapping.js';
 import { PluginDto } from './dto/plugins.js';
 import { HubDto, MapExitDto } from './dto/routing.js';
-import { McpMode } from './dto/sharing.js';
+import { McpMode } from './dto/publishing.js';
+import { MapShareDto, MapSourceDto } from './dto/sharing.js';
 import { CharacterPresenceDto } from './dto/tracking.js';
 import type { EventType } from './events.js';
 import { shareScope } from './share-scope.js';
@@ -49,6 +50,11 @@ export const EVENT_DATA_SCHEMAS: Record<EventType, z.ZodType> = {
   'map.created': MapDto,
   'map.removed': z.object({ id: Id }),
   'labels.changed': z.object({ labels: z.array(LabelDto) }),
+  'map.share.offered': MapShareDto,
+  'map.share.accepted': MapShareDto,
+  'map.share.changed': MapShareDto,
+  'map.share.revoked': MapShareDto,
+  'map.sources_changed': z.object({ sources: z.array(MapSourceDto) }),
   'routes.exits_changed': z.object({ exits: z.array(MapExitDto) }),
   'routes.hubs_changed': z.object({ hubs: z.array(HubDto) }),
   'ping.created': z.object({
@@ -61,7 +67,7 @@ export const EVENT_DATA_SCHEMAS: Record<EventType, z.ZodType> = {
   'ping.removed': z.object({ id: Id }),
   'access.rule_added': AccessRuleDto,
   'access.rule_removed': z.object({ id: Id }),
-  'access.sharing_changed': z.object({
+  'access.public_link_changed': z.object({
     mapId: Id,
     enabled: z.boolean(),
     slug: z.string().nullable(),

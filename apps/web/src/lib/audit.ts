@@ -42,6 +42,7 @@ const SYSTEM_PROCESSES: Record<string, string> = {
   'plugin-loader': 'Plugin loader',
   plugins: 'Map cleanup',
   routing: 'Routing',
+  'bookmark-numbers': 'Bookmark numbering',
   mapping: 'Mapping',
   passages: 'Passage log',
 };
@@ -86,6 +87,8 @@ const FIELD_LABELS: Record<string, string> = {
   group: 'Group',
   name: 'Name',
   connectionId: 'Linked connection',
+  bookmarkNumber: 'Bookmark number',
+  bookmarkParent: 'Numbered from',
   role: 'Role',
   enabled: 'Enabled',
   error: 'Problem',
@@ -198,7 +201,8 @@ function value(field: string, v: unknown, names: AuditNames): string {
   if (field === 'scopes' && Array.isArray(v)) return scopesValue(v, names);
   if (v === null || v === undefined || v === '') return '—';
   if (typeof v === 'boolean') return v ? 'Yes' : 'No';
-  if (field === 'location' && typeof v === 'number') return names.system?.(v) ?? 'a known system';
+  if ((field === 'location' || field === 'bookmarkParent') && typeof v === 'number')
+    return names.system?.(v) ?? 'a known system';
   if (field === 'themeId' && typeof v === 'string') return names.theme?.(v) ?? titleCase(v);
   if (field === 'position' && typeof v === 'object') {
     const p = v as { x: number; y: number };
@@ -221,7 +225,7 @@ export function changeLines(entry: AuditEntryDto, names: AuditNames = {}): Audit
   const lines: AuditChangeLine[] = [];
   for (const [field, change] of Object.entries(entry.diff)) {
     const label =
-      entry.type === 'access.sharing_changed' && field === 'scopes'
+      entry.type === 'access.public_link_changed' && field === 'scopes'
         ? 'What the link shows'
         : FIELD_LABELS[field];
     if (HIDDEN.has(field) || label === undefined) continue;
@@ -340,6 +344,11 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
       );
     case 'settings.changed':
       return read('changed the instance settings', 'instance');
+    case 'telemetry.changed':
+      return read(
+        data.enabled ? 'turned anonymous telemetry on' : 'turned anonymous telemetry off',
+        'instance',
+      );
     case 'theme.installed':
       return read(`installed the theme ${String(data.name ?? '')}`.trim(), 'instance');
     case 'theme.removed':
@@ -366,6 +375,21 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
         `changed the settings of ${String(entry.entity?.id ?? 'a plugin').split('@')[0]}`,
         'plugins',
       );
+    case 'backup.completed':
+      return read(`made a backup (${String(entry.diff.backup?.after ?? 'manual')})`, 'instance');
+    case 'backup.failed':
+      return read(
+        entry.diff.restoreFailed ? 'could not restore a backup' : 'could not make a backup',
+        'instance',
+      );
+    case 'backup.restored':
+      return read('restored a backup', 'instance');
+    case 'backup.deleted':
+      return read('deleted a backup', 'instance');
+    case 'backup.downloaded':
+      return read('downloaded a backup', 'instance');
+    case 'backup.settings_changed':
+      return read('changed the backup settings', 'instance');
     case 'character.unlinked':
       return read('unlinked a character', 'access');
     case 'api_key.created':
@@ -377,7 +401,7 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
       const verb = API_KEY_VERBS[entry.type] ?? 'changed';
       return read(name ? `${verb} the ${noun} ${name}` : `${verb} an ${noun}`, 'access');
     }
-    case 'access.sharing_changed':
+    case 'access.public_link_changed':
       return read(
         entry.diff.regenerated?.after === true
           ? `made a new public link for ${mapName}`

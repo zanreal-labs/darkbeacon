@@ -177,7 +177,7 @@ async function run() {
         await page.keyboard.press('Escape');
         await settle(page, 200);
 
-        // Select the home system so the dock has content.
+        // Select the home system: the sidebar shows it.
         const home = page.locator('.react-flow__node', { hasText: /J014348|Home/ }).first();
         await home.click();
         await settle(page);
@@ -195,22 +195,20 @@ async function run() {
           await s('map-closeup-nodes', { clip, scale: 'device' });
         }
 
-        // Dock tabs.
-        const dock = page.locator('[aria-label="Widgets"]').first();
-        const tabs = dock.locator('[role="tab"]');
-        const count = await tabs.count();
-        for (let i = 0; i < count; i++) {
-          const tab = tabs.nth(i);
-          const label = (await tab.innerText()).trim().split('\n')[0].toLowerCase();
-          if ((await tab.getAttribute('aria-selected')) !== 'true') await tab.click();
-          await settle(page);
-          await s(`map-dock-${label.replace(/[^a-z0-9]+/g, '-')}`);
-        }
-        // Leave the dock as it was (closed on phones).
-        if (phone && (await tabs.count())) {
-          const open = dock.locator('[role="tab"][aria-selected="true"]');
-          if (await open.count()) await open.first().click();
-          await settle(page);
+        // The system sidebar on its own; on phones the sheet opened to half.
+        const sidebar = page.getByRole('complementary', { name: 'System' });
+        if (await sidebar.count()) {
+          if (phone) {
+            await sidebar.getByRole('button', { name: 'Expand the panel' }).click();
+            await settle(page);
+            await s('map-sidebar');
+            await sidebar.getByRole('button', { name: /Expand the panel fully/ }).click();
+            await sidebar.getByRole('button', { name: 'Collapse the panel' }).click();
+            await settle(page);
+          } else {
+            const clip = await sidebar.boundingBox();
+            if (clip) await s('map-sidebar', { clip });
+          }
         }
 
         // Context menus: system, connection, canvas.
@@ -269,8 +267,9 @@ async function run() {
       });
 
       await scene('map-settings', async () => {
-        await open(page, `${BASE}/m/${MAP}/settings`);
-        const tabs = await tabsOf(page);
+        // A dialog over the map: from the rail on wide screens, the map switcher on phones.
+        await open(page, `${BASE}/m/${MAP}?settings=general`);
+        const tabs = await tabsOf(page, '[role="dialog"]');
         await tabs.first().waitFor({ timeout: 15_000 });
         await settle(page);
         const count = await tabs.count();

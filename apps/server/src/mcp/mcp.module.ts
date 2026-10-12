@@ -25,7 +25,7 @@ import {
 } from '@darkbeacon/mapping';
 import { RouteQueries } from '@darkbeacon/routing';
 import { OAuthServer } from '@darkbeacon/oauth';
-import { MapSharing } from '@darkbeacon/sharing';
+import { MapPublishing } from '@darkbeacon/publishing';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { AppConfig } from '../config/config.js';
 import { LIMITS, RateLimiter } from '../platform/rate-limiter.js';
@@ -33,6 +33,7 @@ import { APP_CONFIG, UNIVERSE_CATALOG } from '../platform/tokens.js';
 import { RealtimeHub } from '../realtime/realtime.hub.js';
 import { AuditModule } from '../modules/audit/audit.module.js';
 import { MappingModule } from '../modules/mapping/mapping.module.js';
+import { MergedWriteRouter } from '../modules/mapping/merged-writes.js';
 import { RoutingModule } from '../modules/routing/routing.module.js';
 import { buildMcpServer, callerFor, type McpCaller, type McpDeps } from './tools.js';
 
@@ -60,12 +61,13 @@ export class McpController implements OnModuleDestroy {
     @Inject(SystemUseCases) systems: SystemUseCases,
     @Inject(ConnectionUseCases) connections: ConnectionUseCases,
     @Inject(SignatureUseCases) signatures: SignatureUseCases,
+    @Inject(MergedWriteRouter) merged: MergedWriteRouter,
     @Inject(ConnectionIntelQuery) intel: ConnectionIntelQuery,
     @Inject(RouteQueries) routes: RouteQueries,
     @Inject(AuditTrail) audit: AuditTrail,
     @Inject(RealtimeHub) hub: RealtimeHub,
     @Inject(UNIVERSE_CATALOG) universe: UniverseCatalog,
-    @Optional() @Inject(MapSharing) sharing: MapSharing | null,
+    @Optional() @Inject(MapPublishing) publishing: MapPublishing | null,
     @Optional() @Inject(OAuthServer) private readonly oauth: OAuthServer | null,
   ) {
     this.publicOrigin = new URL(config.publicUrl).origin;
@@ -74,12 +76,13 @@ export class McpController implements OnModuleDestroy {
       systems,
       connections,
       signatures,
+      merged,
       intel,
       routes,
       audit,
       hub,
       universe,
-      sharing: sharing ?? null,
+      publishing: publishing ?? null,
     };
     this.handler = createMcpHandler(
       (ctx) =>

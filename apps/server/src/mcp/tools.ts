@@ -18,7 +18,7 @@ import type {
   UniverseCatalog,
 } from '@darkbeacon/mapping';
 import type { RouteQueries } from '@darkbeacon/routing';
-import type { MapSharing, PublicAccess } from '@darkbeacon/sharing';
+import type { MapPublishing, PublicAccess } from '@darkbeacon/publishing';
 import {
   API_VERSION,
   RouteMode,
@@ -34,6 +34,7 @@ import {
   type SignatureDto,
 } from '@darkbeacon/shared';
 import { z } from 'zod';
+import type { MergedWriteRouter } from '../modules/mapping/merged-writes.js';
 import type { RealtimeHub } from '../realtime/realtime.hub.js';
 import {
   characterLine,
@@ -64,8 +65,13 @@ export interface McpDeps {
   audit: AuditTrail;
   hub: RealtimeHub;
   universe: UniverseCatalog;
-  /** Public maps; without the sharing module anonymous agents see nothing. */
-  sharing: MapSharing | null;
+  /**
+   * Writes on a map that merges others (a composite, or a map that accepted shares) go through
+   * sharing's write-through to the maps holding the objects, like the REST routes.
+   */
+  merged: MergedWriteRouter;
+  /** Public maps; without the publishing module anonymous agents see nothing. */
+  publishing: MapPublishing | null;
 }
 
 /** A map as a tool sees it: who reads it, and how much of it the caller may see. */
@@ -85,6 +91,9 @@ interface MapView {
 }
 
 class ToolError extends Error {}
+
+/** A write on a map that merges others lands on the maps holding the object; it shows up shortly. */
+const MERGED = '(written to the maps this one merges)';
 
 const text = (value: string) => ({ content: [{ type: 'text' as const, text: value }] });
 const failure = (message: string) => ({ isError: true, content: [{ type: 'text' as const, text: message }] });
@@ -156,12 +165,12 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
   /** `forWrite`: the tool writes and checks its own write scope, so `maps:read` is not needed. */
   const loadMap = async (ref: string, forWrite = false): Promise<MapView> => {
     if (anonymous) {
-      const access = deps.sharing ? await deps.sharing.resolve(ref) : null;
+      const access = deps.publishing ? await deps.publishing.resolve(ref) : null;
       const agents = access
-        ? (await deps.sharing!.publicForAgents()).some((a) => a.share.mapId === access.share.mapId)
+        ? (await deps.publishing!.publicForAgents()).some((a) => a.share.mapId === access.share.mapId)
         : false;
       if (!access || !agents) throw new ToolError('No such public map for agents; see list_maps');
-      const view = await deps.sharing!.view(access);
+      const view = await deps.publishing!.view(access);
       return {
         mapId: access.share.mapId,
         name: view.map.name,
@@ -179,8 +188,8 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
       if (isDomainError(error) && error.code === 'not_found') return deps.maps.getBySlug(actor, ref);
       throw error;
     });
-    if (deps.sharing && (await deps.sharing.mcpModeFor(map.id)) === 'off')
-      throw new ToolError('This map is closed to AI agents (Map settings, Sharing)');
+    if (deps.publishing && (await deps.publishing.mcpModeFor(map.id)) === 'off')
+      throw new ToolError('This map is closed to AI agents (Map settings, Public link)');
     if (!forWrite) need({ resource: 'maps', action: 'read' }, map.id);
     const { data } = await deps.hub.readSnapshot(mapStream(map.id), actor);
     const list = <T>(key: string) => (Array.isArray(data[key]) ? (data[key] as T[]) : []);
@@ -218,9 +227,12 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
   };
 
   const byShortId = <T extends { id: string }>(items: readonly T[], id: string, what: string): T => {
-    const found = items.find((i) => i.id === id || i.id.endsWith(id));
-    if (!found) throw new ToolError(`No ${what} with id ${id} on this map`);
-    return found;
+    const exact = items.find((i) => i.id === id);
+    if (exact) return exact;
+    const found = items.filter((i) => i.id.endsWith(id));
+    if (found.length === 0) throw new ToolError(`No ${what} with id ${id} on this map`);
+    if (found.length > 1) throw new ToolError(`Several ${what}s end with ${id}; give the whole id`);
+    return found[0]!;
   };
 
   // ---- reading ----------------------------------------------------------------------------
@@ -237,8 +249,8 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
     },
     run(async ({ cursor, limit }) => {
       if (anonymous) {
-        const shared = deps.sharing ? await deps.sharing.publicForAgents() : [];
-        const views = await Promise.all(shared.map(async (a) => ({ a, v: await deps.sharing!.view(a) })));
+        const shared = deps.publishing ? await deps.publishing.publicForAgents() : [];
+        const views = await Promise.all(shared.map(async (a) => ({ a, v: await deps.publishing!.view(a) })));
         const lines = views.map(
           ({ a, v }) =>
             `${v.map.name} | map ${a.share.slug ?? a.share.token} | ${v.snapshot.systems.length} systems | shows ${a.share.scopes.join(',')}`,
@@ -254,7 +266,7 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
       const maps = await deps.maps.list(actor);
       const open = [];
       for (const m of maps)
-        if (!deps.sharing || (await deps.sharing.mcpModeFor(m.id)) !== 'off') open.push(m);
+        if (!deps.publishing || (await deps.publishing.mcpModeFor(m.id)) !== 'off') open.push(m);
       const p = page(open, cursor, limit ?? 50);
       const lines = p.items.map((m) => `${m.name} | map ${m.id} | slug ${m.slug} | role ${m.role}`);
       return text([...lines, ...(p.next ? [`next ${p.next}`] : [])].join('\n') || 'No maps.');
@@ -564,14 +576,20 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
       run(async ({ map, system, eveId, group, type, name, description }) => {
         const view = await loadMap(map, true);
         need({ resource: 'signatures', action: 'write' }, view.mapId);
-        const sig = await deps.signatures.add(actor, view.mapId, resolveSystem(system), {
+        const id = resolveSystem(system);
+        const request = {
           eveId,
           ...(group ? { group } : {}),
           ...(type !== undefined ? { type } : {}),
           ...(name !== undefined ? { name } : {}),
           ...(description !== undefined ? { description } : {}),
-        });
-        return text(`Added ${signatureLine(sig)}`);
+        };
+        const sig = await deps.merged.route(
+          view.mapId,
+          (w) => w.addSignature(actor, view.mapId, id, request),
+          () => deps.signatures.add(actor, view.mapId, id, request),
+        );
+        return text(sig ? `Added ${signatureLine(sig)}` : `Added ${eveId} ${MERGED}`);
       }),
     );
 
@@ -609,14 +627,19 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
             : connection === null
               ? null
               : byShortId(view.connections, connection, 'connection').id;
-        const sig = await deps.signatures.update(actor, view.mapId, target.id, {
+        const request = {
           ...(group ? { group } : {}),
           ...(type !== undefined ? { type } : {}),
           ...(name !== undefined ? { name } : {}),
           ...(description !== undefined ? { description } : {}),
           ...(linked !== undefined ? { connectionId: linked } : {}),
-        });
-        return text(`Updated ${signatureLine(sig)}`);
+        };
+        const sig = await deps.merged.route(
+          view.mapId,
+          (w) => w.updateSignature(actor, view.mapId, target.id, request),
+          () => deps.signatures.update(actor, view.mapId, target.id, request),
+        );
+        return text(sig ? `Updated ${signatureLine(sig)}` : `Updated ${target.eveId} ${MERGED}`);
       }),
     );
 
@@ -642,15 +665,24 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
         for (const id of [source, target]) {
           if (!view.systems.some((s) => s.solarSystemId === id)) {
             need({ resource: 'systems', action: 'write' }, view.mapId);
-            await deps.systems.add(actor, view.mapId, { solarSystemId: id });
+            await deps.merged.route(
+              view.mapId,
+              (w) => w.addSystem(actor, view.mapId, { solarSystemId: id }),
+              () => deps.systems.add(actor, view.mapId, { solarSystemId: id }),
+            );
           }
         }
-        const c = await deps.connections.add(actor, view.mapId, {
-          source,
-          target,
-          ...(type ? { type } : {}),
-        });
-        return text(`Connected ${connectionLine(deps.universe, c, true)}`);
+        const request = { source, target, ...(type ? { type } : {}) };
+        const c = await deps.merged.route(
+          view.mapId,
+          (w) => w.addConnection(actor, view.mapId, request),
+          () => deps.connections.add(actor, view.mapId, request),
+        );
+        return text(
+          c
+            ? `Connected ${connectionLine(deps.universe, c, true)}`
+            : `Connected ${systemName(deps.universe, source)} and ${systemName(deps.universe, target)} ${MERGED}`,
+        );
       }),
     );
 
@@ -677,8 +709,12 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
         const target = byShortId(view.connections, connection, 'connection');
         const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
         if (Object.keys(defined).length === 0) throw new ValidationError('Nothing to change');
-        const c = await deps.connections.update(actor, view.mapId, target.id, defined);
-        return text(`Updated ${connectionLine(deps.universe, c, true)}`);
+        const c = await deps.merged.route(
+          view.mapId,
+          (w) => w.updateConnection(actor, view.mapId, target.id, defined),
+          () => deps.connections.update(actor, view.mapId, target.id, defined),
+        );
+        return text(`Updated ${connectionLine(deps.universe, c ?? { ...target, ...defined }, true)}`);
       }),
     );
 
@@ -704,8 +740,12 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
         const description = replace || !current.description ? note : `${current.description}\n${note}`;
         if (description.length > 10_000)
           throw new ValidationError('The notes would be longer than 10 000 characters');
-        const updated = await deps.systems.update(actor, view.mapId, id, { description });
-        return text(`Notes of ${systemName(deps.universe, id)} now: "${oneLine(updated.description, 200)}"`);
+        await deps.merged.route(
+          view.mapId,
+          (w) => w.updateSystem(actor, view.mapId, id, { description }),
+          () => deps.systems.update(actor, view.mapId, id, { description }),
+        );
+        return text(`Notes of ${systemName(deps.universe, id)} now: "${oneLine(description, 200)}"`);
       }),
     );
   }
@@ -717,7 +757,7 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
     new ResourceTemplate('darkbeacon://maps/{map}/snapshot', {
       list: async () => {
         if (anonymous) {
-          const shared = deps.sharing ? await deps.sharing.publicForAgents() : [];
+          const shared = deps.publishing ? await deps.publishing.publicForAgents() : [];
           return {
             resources: shared.map((a) => ({
               uri: `darkbeacon://maps/${a.share.slug ?? a.share.token}/snapshot`,

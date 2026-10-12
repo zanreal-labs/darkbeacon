@@ -105,7 +105,7 @@ describe('scope builder', () => {
       invalid: ['nope'],
     });
     expect(notSharedSentence(['topology', 'connectionStatus'])).toBe(
-      'Signatures, labels, notes and pilots are not shared',
+      'Signatures, bookmark labels, notes and pilots are not shared',
     );
     expect(notSharedSentence(['topology', 'signatures', 'labels', 'intel', 'characters'])).toBe(
       'Connection status is not shared',

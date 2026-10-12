@@ -2,10 +2,13 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, ChevronDown, LayoutList, Plus, Star, StarOff } from 'lucide-react';
+import { Check, ChevronDown, LayoutList, Plus, Settings, Star, StarOff } from 'lucide-react';
 import type { MapSummaryDto, MeDto } from '@darkbeacon/shared';
+import { mapSettingsSections } from '../lib/map-settings';
 import { orderedMaps, useCachedData, useEnsureMaps, useSetDefaultMap } from '../lib/maps';
+import { mapPermissions } from '../lib/roles';
 import { mapsKey, meKey } from '../lib/session-keys';
+import { useMapSettings } from '../lib/useMapSettings';
 import { CreateMapDialog } from '../screens/HomePage';
 import {
   Menu,
@@ -24,7 +27,8 @@ const LISTED = 8;
 
 /**
  * The map name in the top bar, as a menu: the maps opened recently, a star for the map `/` opens,
- * All maps and New map. The maps list itself is only shown through All maps.
+ * the map's settings (managers; phones have no rail), All maps and New map. The maps list itself
+ * is only shown through All maps.
  */
 export function MapSwitcher({ slug }: { slug: string }) {
   const router = useRouter();
@@ -39,6 +43,8 @@ export function MapSwitcher({ slug }: { slug: string }) {
   const defaultId = me?.account.defaultMapId ?? null;
   const listed = orderedMaps(maps ?? [], me?.account.recentMapIds).slice(0, LISTED);
   const starred = current !== undefined && defaultId === current.id;
+  const settings = useMapSettings();
+  const sections = mapSettingsSections(mapPermissions(current?.role));
 
   return (
     <>
@@ -80,6 +86,11 @@ export function MapSwitcher({ slug }: { slug: string }) {
               >
                 {starred ? 'Stop opening this map first' : 'Open this map first'}
               </MenuItem>
+              {sections[0] && (
+                <MenuItem icon={<Settings />} onSelect={() => settings.show(sections[0]!)}>
+                  Map settings
+                </MenuItem>
+              )}
             </>
           )}
           <MenuSeparator />

@@ -9,13 +9,17 @@ import {
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { AuditStamper } from '@darkbeacon/audit';
 import { systemClock, type EventBus } from '@darkbeacon/core';
-import { createDatabase, Database } from '@darkbeacon/db';
+import { createDatabase, Database, isPostgresUrl } from '@darkbeacon/db';
 import { InProcessEventBus } from '../adapters/events/in-process-event-bus.js';
 import { KyselyEventLog } from '../adapters/events/kysely-event-log.js';
+import { telemetryRuntime } from '../adapters/observability/runtime.js';
 import type { AppConfig } from '../config/config.js';
 import { ActorGuard, ActorResolverRegistry } from './actor.js';
 import { AsyncAuditScope, AuditContextInterceptor, AuditDirectoryRegistry } from './audit.js';
+import { beforeMigrationHooks } from './database-hooks.js';
 import { EventConsumers } from './event-consumers.js';
+import { EventLogTaps } from './event-taps.js';
+import { MaintenanceMode } from './maintenance.js';
 import { SignInCookies } from './sign-in-cookies.js';
 import { ApiExceptionFilter } from './http.js';
 import { RateLimiter } from './rate-limiter.js';
@@ -58,7 +62,19 @@ export class PlatformModule {
           useFactory: async () => {
             const database =
               options.database ??
-              (await createDatabase({ url: config.databaseUrl, dataDir: config.dataDir }));
+              (await createDatabase({
+                url: config.databaseUrl,
+                dataDir: config.dataDir,
+                // Postgres has its driver instrumentation; SQLite statements get spans from here.
+                tracer: isPostgresUrl(config.databaseUrl)
+                  ? undefined
+                  : (telemetryRuntime().queryTracer ?? undefined),
+              }));
+            const { applied: before, pending } = await database.migrationStatus();
+            // Hooks (a backup) only matter for an existing database that is about to change.
+            if (before.length > 0 && pending.length > 0) {
+              for (const hook of beforeMigrationHooks()) await hook({ config, database, pending });
+            }
             const applied = await database.migrate();
             if (applied.length > 0) new Logger('Database').log(`applied migrations: ${applied.join(', ')}`);
             return database;
@@ -85,6 +101,7 @@ export class PlatformModule {
         AsyncAuditScope,
         { provide: AUDIT_SCOPE, useExisting: AsyncAuditScope },
         AuditDirectoryRegistry,
+        EventLogTaps,
         {
           provide: EVENT_LOG,
           useFactory: (
@@ -92,11 +109,18 @@ export class PlatformModule {
             bus: EventBus,
             scope: AsyncAuditScope,
             directory: AuditDirectoryRegistry,
-          ) => new KyselyEventLog(database, bus, { scope, stamper: new AuditStamper(directory) }),
-          inject: [Database, EVENT_BUS, AsyncAuditScope, AuditDirectoryRegistry],
+            taps: EventLogTaps,
+          ) =>
+            new KyselyEventLog(database, bus, {
+              scope,
+              stamper: new AuditStamper(directory),
+              committed: (events, context) => taps.notify(events, context),
+            }),
+          inject: [Database, EVENT_BUS, AsyncAuditScope, AuditDirectoryRegistry, EventLogTaps],
         },
         ActorResolverRegistry,
         { provide: RateLimiter, useFactory: () => new RateLimiter() },
+        MaintenanceMode,
         EventConsumers,
         SignInCookies,
         { provide: APP_GUARD, useClass: ActorGuard },
@@ -113,11 +137,13 @@ export class PlatformModule {
         HTTP_FETCH,
         ActorResolverRegistry,
         RateLimiter,
+        MaintenanceMode,
         EventConsumers,
         SignInCookies,
         AsyncAuditScope,
         AUDIT_SCOPE,
         AuditDirectoryRegistry,
+        EventLogTaps,
       ],
     };
   }

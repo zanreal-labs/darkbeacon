@@ -132,9 +132,13 @@ export function characterLine(catalog: UniverseCatalog, c: CharacterPresenceDto)
   return `${c.name} in ${where}${c.online ? '' : ' (offline)'}${c.shipName ? ` ship "${c.shipName}"` : ''}`;
 }
 
-/** The last 8 characters of an id (the random part of a v7 id): enough to tell things apart; tools take it back. */
+/**
+ * The last 8 characters of an id (the random part of a v7 id): enough to tell things apart; tools
+ * take it back. Ids on maps that merge others (`c:<low>-<high>`, `s:<system>:<code>`) are made from
+ * system ids, so their ends repeat; they are given whole.
+ */
 export function short(id: string): string {
-  return id.length > 8 ? id.slice(-8) : id;
+  return id.length > 8 && !id.includes(':') ? id.slice(-8) : id;
 }
 
 function hours(ms: number): string {

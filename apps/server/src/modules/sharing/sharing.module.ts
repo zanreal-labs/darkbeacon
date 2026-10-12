@@ -1,208 +1,194 @@
 import {
-  Body,
-  Controller,
-  Get,
-  Global,
-  HttpCode,
-  HttpException,
   Inject,
+  Logger,
   Module,
-  Param,
-  Patch,
-  Post,
-  Res,
+  type OnApplicationBootstrap,
+  type OnModuleDestroy,
   type OnModuleInit,
 } from '@nestjs/common';
-import { InstanceSettingsService } from '@darkbeacon/access';
 import {
-  mapStream,
-  NotFoundError,
-  type Actor,
+  type AuditScope,
   type Clock,
+  type DomainEvent,
+  type EventBus,
   type EventLog,
   type MapAccess,
   type UnitOfWork,
 } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
-import type { UniverseCatalog } from '@darkbeacon/mapping';
-import { MapSharing } from '@darkbeacon/sharing';
+import type { ChainOverlaySlot, MappingPorts } from '@darkbeacon/mapping';
 import {
-  isEventOfType,
-  nestPath,
-  routes,
-  UpdateMapSharingRequest,
-  type MapSharingDto,
-  type PublicMapViewDto,
-} from '@darkbeacon/shared';
-import type { FastifyReply } from 'fastify';
-import { cryptoShareSecrets, KyselyMapShareRepository } from '../../adapters/sharing/kysely-map-shares.js';
-import type { AppConfig } from '../../config/config.js';
-import { ClientIp, CurrentActor } from '../../platform/actor.js';
-import { EventConsumers } from '../../platform/event-consumers.js';
-import { ZodPipe } from '../../platform/http.js';
-import { LIMITS, RateLimiter } from '../../platform/rate-limiter.js';
+  ChainMerger,
+  ChainWrites,
+  SharingFeed,
+  SharingUseCases,
+  type SharingPorts,
+} from '@darkbeacon/sharing';
+import { ListMapCharacters } from '@darkbeacon/tracking';
 import {
-  APP_CONFIG,
-  CLOCK,
-  EVENT_LOG,
-  MAP_ACCESS,
-  UNIT_OF_WORK,
-  UNIVERSE_CATALOG,
-} from '../../platform/tokens.js';
-import { RealtimeHub } from '../../realtime/realtime.hub.js';
+  KyselyChainLayoutRepository,
+  KyselyChainViewRepository,
+  KyselyCompositeMaps,
+  KyselyLocalFieldsRepository,
+  KyselyShareRepository,
+} from '../../adapters/sharing/kysely-sharing.js';
+import { LocalChainSources } from '../../adapters/sharing/local-chain-source.js';
+import { AUDIT_SCOPE, CLOCK, EVENT_BUS, EVENT_LOG, MAP_ACCESS, UNIT_OF_WORK } from '../../platform/tokens.js';
 import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
+import { MaintenanceMode } from '../../platform/maintenance.js';
+import { MappingModule } from '../mapping/mapping.module.js';
+import { CHAIN_OVERLAY, MAPPING_PORTS } from '../mapping/mapping.tokens.js';
+import { TrackingModule } from '../tracking/tracking.module.js';
+import { SharesController } from './sharing.controllers.js';
 
-const r = routes.sharing;
+export const SHARING_PORTS = 'SharingPorts';
 
-@Controller()
-export class SharingController {
-  constructor(@Inject(MapSharing) private readonly sharing: MapSharing) {}
-
-  @Get(nestPath(r.get.path))
-  get(@CurrentActor() actor: Actor | null, @Param('mapId') mapId: string): Promise<MapSharingDto> {
-    return this.sharing.get(actor, mapId);
-  }
-
-  @Patch(nestPath(r.update.path))
-  update(
-    @CurrentActor() actor: Actor | null,
-    @Param('mapId') mapId: string,
-    @Body(new ZodPipe(UpdateMapSharingRequest)) body: UpdateMapSharingRequest,
-  ): Promise<MapSharingDto> {
-    return this.sharing.update(actor, mapId, body);
-  }
-
-  @Post(nestPath(r.regenerate.path))
-  @HttpCode(200)
-  regenerate(@CurrentActor() actor: Actor | null, @Param('mapId') mapId: string): Promise<MapSharingDto> {
-    return this.sharing.regenerate(actor, mapId);
-  }
-}
-
-/** `GET /api/public/maps/:token`: no session, rate limited per address, never cached. */
-@Controller()
-export class PublicMapsController {
-  constructor(
-    @Inject(MapSharing) private readonly sharing: MapSharing,
-    @Inject(UNIVERSE_CATALOG) private readonly universe: UniverseCatalog,
-    @Inject(RateLimiter) private readonly limiter: RateLimiter,
-  ) {}
-
-  @Get(nestPath(routes.public.map.path))
-  async map(
-    @Param('token') token: string,
-    @ClientIp() ip: string | null,
-    @Res({ passthrough: true }) reply: FastifyReply,
-  ): Promise<PublicMapViewDto> {
-    const limit = this.limiter.take(`public:${ip ?? 'unknown'}`, LIMITS.publicReads);
-    if (!limit.ok) {
-      reply.header('retry-after', String(limit.retryAfterSeconds));
-      throw new HttpException('Too many requests; slow down', 429);
-    }
-    reply.header('cache-control', 'no-store');
-    reply.header('referrer-policy', 'no-referrer');
-    const access = await this.sharing.resolve(token);
-    if (!access) throw new NotFoundError('Public map');
-    if (access.share.noindex) reply.header('x-robots-tag', 'noindex, nofollow');
-    const view = await this.sharing.view(access);
-    const ids = view.snapshot.systems.map((s) => s.solarSystemId);
-    return {
-      map: view.map,
-      stream: `public:${token}`,
-      seq: view.seq,
-      snapshot: view.snapshot,
-      universe: ids.flatMap((id) => this.universe.getSystem(id) ?? []),
-    };
-  }
-}
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+/** How long deletions are remembered for merged maps. */
+export const TOMBSTONE_DAYS = 30;
 
 /**
- * Public maps: a map admin switches on a link (`/p/<token>`) that anyone can open read-only,
- * choosing what it shows. Visitors read the map as a `public` actor through the same use cases,
- * cut down by the projection; they follow it live on `public:<token>` streams (anonymous,
- * read-only, no presence). Without this module there are no public links.
+ * Shares between maps and merged chains: maps of this instance are sources through
+ * `LocalChainSources` (over mapping and tracking); merged maps get their chain into mapping's
+ * overlay slot (snapshots, routing, connection intel) and their sources into the map snapshot.
+ * Source changes arrive from the event bus; every merged map is built again at startup, so
+ * anything missed while the server was down is published then.
  */
-@Global()
 @Module({
-  controllers: [SharingController, PublicMapsController],
+  imports: [MappingModule, TrackingModule],
+  controllers: [SharesController],
   providers: [
     {
-      provide: MapSharing,
+      provide: SHARING_PORTS,
       useFactory: (
-        db: Database,
+        database: Database,
+        mapping: MappingPorts,
+        characters: ListMapCharacters,
         access: MapAccess,
-        settings: InstanceSettingsService,
-        hub: RealtimeHub,
-        uow: UnitOfWork,
         events: EventLog,
+        uow: UnitOfWork,
         clock: Clock,
-        config: AppConfig,
-      ) =>
-        new MapSharing({
-          shares: new KyselyMapShareRepository(db),
-          access,
-          policy: {
-            publicMaps: async () => (await settings.current()).publicMaps ?? true,
-            mcpMode: async () => (await settings.current()).mcpMode ?? 'off',
-          },
-          secrets: cryptoShareSecrets,
-          snapshots: { read: (actor, mapId) => hub.readSnapshot(mapStream(mapId), actor) },
-          uow,
-          events,
-          clock,
-          publicUrl: config.publicUrl,
-        }),
+        audit: AuditScope,
+      ): SharingPorts => ({
+        shares: new KyselyShareRepository(database),
+        sources: new LocalChainSources({ ports: mapping, characters, audit }),
+        views: new KyselyChainViewRepository(database),
+        layout: new KyselyChainLayoutRepository(database),
+        local: new KyselyLocalFieldsRepository(database),
+        composites: new KyselyCompositeMaps(database),
+        access,
+        events,
+        uow,
+        clock,
+        audit,
+      }),
       inject: [
         Database,
+        MAPPING_PORTS,
+        ListMapCharacters,
         MAP_ACCESS,
-        InstanceSettingsService,
-        RealtimeHub,
-        UNIT_OF_WORK,
         EVENT_LOG,
+        UNIT_OF_WORK,
         CLOCK,
-        APP_CONFIG,
+        AUDIT_SCOPE,
       ],
     },
+    {
+      provide: ChainMerger,
+      useFactory: (ports: SharingPorts) => new ChainMerger(ports),
+      inject: [SHARING_PORTS],
+    },
+    {
+      provide: SharingUseCases,
+      useFactory: (ports: SharingPorts, merger: ChainMerger) => new SharingUseCases(ports, merger),
+      inject: [SHARING_PORTS, ChainMerger],
+    },
+    {
+      provide: ChainWrites,
+      useFactory: (ports: SharingPorts, merger: ChainMerger) => new ChainWrites(ports, merger),
+      inject: [SHARING_PORTS, ChainMerger],
+    },
   ],
-  exports: [MapSharing],
+  exports: [ChainMerger, ChainWrites, SharingUseCases],
 })
-export class SharingModule implements OnModuleInit {
+export class SharingModule implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
+  private readonly logger = new Logger('Sharing');
+  private unsubscribe: (() => void) | undefined;
+
   constructor(
-    @Inject(MapSharing) private readonly sharing: MapSharing,
-    @Inject(RealtimeRegistry) private readonly realtime: RealtimeRegistry,
-    @Inject(EventConsumers) private readonly consumers: EventConsumers,
-    @Inject(RateLimiter) private readonly limiter: RateLimiter,
-  ) {}
+    @Inject(ChainMerger) private readonly merger: ChainMerger,
+    @Inject(SHARING_PORTS) private readonly ports: SharingPorts,
+    @Inject(CHAIN_OVERLAY) private readonly overlay: ChainOverlaySlot,
+    @Inject(RealtimeRegistry) private readonly registry: RealtimeRegistry,
+    @Inject(EVENT_BUS) private readonly bus: EventBus,
+    @Inject(MaintenanceMode) private readonly maintenance: MaintenanceMode,
+    @Inject(MAPPING_PORTS) private readonly mapping: MappingPorts,
+  ) {
+    this.feed = new SharingFeed(this.ports, this.merger);
+  }
+
+  private readonly feed: SharingFeed;
+  private paused = false;
+  private pruneTimer: NodeJS.Timeout | undefined;
 
   onModuleInit(): void {
-    this.realtime.registerStream('public', {
-      authorize: async (_actor, id) => (await this.sharing.resolve(id)) !== null,
-      admit: (_id, client) =>
-        this.limiter.take(`public-ws:${client.ip ?? 'unknown'}`, LIMITS.publicSubscribes).ok,
-      view: {
-        source: async (id) => {
-          const access = await this.sharing.resolve(id);
-          return access ? mapStream(access.share.mapId) : null;
-        },
-        project: async (id, event, stream) => {
-          const access = await this.sharing.resolve(id);
-          return access ? this.sharing.project(access, event, stream) : null;
-        },
+    this.overlay.use({ view: (mapId) => this.merger.chain(mapId) });
+    // After mapping's and tracking's parts, so merged characters replace the map's own list.
+    this.registry.registerSnapshot('map', (mapId) => this.merger.snapshot(mapId));
+    this.unsubscribe = this.bus.subscribe((event) => this.onEvent(event));
+    // A restore replaces the database: what is kept in memory goes, merged maps build again.
+    this.maintenance.register({
+      name: 'sharing',
+      pause: async () => {
+        this.paused = true;
+        await this.merger.idle();
       },
-    });
-    this.realtime.registerSnapshot('public', async (id) => {
-      const access = await this.sharing.resolve(id);
-      if (!access) return {};
-      const view = await this.sharing.view(access);
-      return { map: view.map, ...view.snapshot };
-    });
-    this.consumers.register({
-      name: 'sharing.removed-maps',
-      streams: ['map'],
-      types: ['map.removed'],
-      handle: async (event) => {
-        if (isEventOfType(event, 'map.removed')) await this.sharing.forgetMap(event.data.id);
+      resume: async (restored) => {
+        this.paused = false;
+        if (!restored) return;
+        this.merger.reset();
+        await this.merger
+          .rebuildAll()
+          .catch((error: unknown) => this.logger.error(`rebuilding merged maps: ${message(error)}`));
       },
     });
   }
+
+  async onApplicationBootstrap(): Promise<void> {
+    this.pruneTimer = setInterval(
+      () => void this.pruneTombstones().catch((error: unknown) => this.logger.error(message(error))),
+      HOUR_MS,
+    ).unref();
+    await this.merger
+      .rebuildAll()
+      .catch((error: unknown) => this.logger.error(`rebuilding merged maps: ${message(error)}`));
+  }
+
+  onModuleDestroy(): void {
+    this.unsubscribe?.();
+    clearInterval(this.pruneTimer);
+  }
+
+  /** Deletions older than 30 days are forgotten (a very old copy elsewhere may then show again). */
+  private async pruneTombstones(): Promise<void> {
+    if (this.paused) return;
+    const pruned = await this.mapping.stamps.pruneTombstones(
+      this.ports.clock.now() - TOMBSTONE_DAYS * DAY_MS,
+    );
+    if (pruned > 0) this.logger.log(`forgot ${pruned} deletion(s) older than ${TOMBSTONE_DAYS} days`);
+  }
+
+  private onEvent(event: DomainEvent): void {
+    if (this.paused) return;
+    this.feed
+      .handle(event)
+      .catch((error: unknown) =>
+        this.logger.error(`merging ${event.type} of ${event.stream}: ${message(error)}`),
+      );
+  }
+}
+
+function message(error: unknown): string {
+  return error instanceof Error ? (error.stack ?? error.message) : String(error);
 }

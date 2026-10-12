@@ -29,6 +29,7 @@ import {
 } from '@darkbeacon/shared';
 import type { MapPermissions } from '../lib/roles';
 import { useMe } from '../lib/session';
+import { track } from '../lib/telemetry';
 import { useTheme } from '../theme/ThemeProvider';
 import { useToast } from '../ui';
 import { ConnectionEdge, type ConnectionEdgeType } from './ConnectionEdge';
@@ -36,7 +37,7 @@ import { boundsOf, fitViewport, type Point, type Rect } from './geometry';
 import { MapControls } from './MapControls';
 import { DEFAULT_ZOOM, FIT_MIN_ZOOM, mapTypeVars } from './mapType';
 import type { MapState } from './mapState';
-import { exitLetters } from './nodeFacts';
+import { exitHubs } from './nodeFacts';
 import { SystemNode, systemDisplayName, type SystemNodeType } from './SystemNode';
 import { useMapPreferences } from './useMapPreferences';
 import type { MapStore } from './useMapStore';
@@ -83,9 +84,12 @@ function typing(target: EventTarget | null): boolean {
   return !!el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName));
 }
 
-/** Moves the selection to a node once it is rendered (it may still be on its way from the store). */
+/**
+ * Moves the selection to a node once it is rendered (it may still be on its way from the store);
+ * `id: null` clears the selection.
+ */
 export interface FocusRequest {
-  id: number;
+  id: number | null;
   center: boolean;
   n: number;
 }
@@ -93,7 +97,7 @@ export interface FocusRequest {
 export type MenuTarget =
   | { kind: 'system'; solarSystemId: number }
   | { kind: 'connection'; connectionId: string }
-  | { kind: 'pane'; flow: { x: number; y: number } };
+  | { kind: 'pane'; flow: { x: number; y: number }; fitChain(): void; centerOnMe(): void };
 
 interface Props {
   mapId: string;
@@ -118,8 +122,8 @@ interface Props {
 }
 
 /**
- * Where the map opens: the viewer's last view of it, else their own location, else home, else
- * the system changed last, at the one readable zoom. The whole chain is never fitted on open
+ * Where the map opens: the viewer's last view of it, else the whole chain when it fits at the
+ * readable zoom, else their own location, else home, else the system changed last, at that zoom. The whole chain is never fitted on open
  * (chains get huge); "Fit chain" does that on demand.
  */
 export function openingFocus({
@@ -187,15 +191,32 @@ export function MapCanvas({
 
   const template =
     preferences.bookmarkTemplate ?? state.map?.settings.bookmarkTemplate ?? DEFAULT_BOOKMARK_TEMPLATE;
+  // `{n}` in the viewer's own order is counted here; in the map's order it is the shared number.
+  const mapOrder = state.map?.settings.bookmarkNumbering?.order ?? 'found';
+  const ownOrder =
+    preferences.bookmarkOrder && preferences.bookmarkOrder !== mapOrder
+      ? preferences.bookmarkOrder
+      : undefined;
   const bookmarks = useMemo(() => {
     const chain = bookmarkChain({
       systems: [...state.systems.values()],
       connections: [...state.connections.values()],
       signatures: [...state.signatures.values()],
       classOf: (id) => bookmarkClassLabel(universe.get(id)),
+      // Stored numbers are the sources' own on a merged map: it counts in its order here.
+      order: ownOrder ?? (state.sources ? mapOrder : undefined),
     });
     return new Map([...chain].map(([id, vars]) => [id, bookmarkLabel(template, vars)]));
-  }, [state.systems, state.connections, state.signatures, universe, template]);
+  }, [
+    state.systems,
+    state.connections,
+    state.signatures,
+    state.sources,
+    universe,
+    template,
+    ownOrder,
+    mapOrder,
+  ]);
 
   // Store -> React Flow, keeping what React Flow owns: measurements, selection, a drag in progress.
   useEffect(() => {
@@ -204,12 +225,7 @@ export function MapCanvas({
       if (c.online && c.solarSystemId !== null)
         here.set(c.solarSystemId, (here.get(c.solarSystemId) ?? 0) + 1);
     }
-    const bubbled = new Set<number>();
-    for (const c of state.connections.values()) {
-      if (c.bubbled === 'source' || c.bubbled === 'both') bubbled.add(c.source);
-      if (c.bubbled === 'target' || c.bubbled === 'both') bubbled.add(c.target);
-    }
-    const connections = [...state.connections.values()];
+    const hubs = exitHubs(state.exits);
     const labelById = new Map(labels.map((l) => [l.id, l]));
     setNodes((prev) => {
       const previous = new Map(prev.map((n) => [n.id, n]));
@@ -230,12 +246,8 @@ export function MapCanvas({
             labels: system.labelIds.flatMap((l) => labelById.get(l) ?? []),
             characters: here.get(system.solarSystemId) ?? 0,
             bookmark: bookmarks.get(system.solarSystemId) ?? null,
-            exit: exitLetters(system.solarSystemId, info, connections),
-            bubbled: bubbled.has(system.solarSystemId),
-            me:
-              myLocation?.solarSystemId === system.solarSystemId
-                ? { characterId: myLocation.characterId, name: myLocation.name }
-                : null,
+            hub: hubs.get(system.solarSystemId) ?? null,
+            mine: myLocation?.solarSystemId === system.solarSystemId,
           },
         };
       });
@@ -243,7 +255,7 @@ export function MapCanvas({
   }, [
     state.systems,
     state.characters,
-    state.connections,
+    state.exits,
     labels,
     universe,
     editable,
@@ -327,6 +339,18 @@ export function MapCanvas({
       centerOn({ x, y }, zoom, false);
       return;
     }
+    // A chain that fits on screen at the readable zoom opens centred as a whole.
+    const bounds = boundsOf(rectsOf());
+    const visible = visibleBox();
+    if (
+      bounds &&
+      visible &&
+      bounds.width * DEFAULT_ZOOM <= visible.width - 96 &&
+      bounds.height * DEFAULT_ZOOM <= visible.height - 160
+    ) {
+      centerOn({ x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }, DEFAULT_ZOOM, false);
+      return;
+    }
     const systems = [...state.systems.values()];
     const id = openingFocus({
       mine: myLocation?.solarSystemId ?? null,
@@ -350,6 +374,8 @@ export function MapCanvas({
     centerOfSystem,
     centerOn,
     readOnly,
+    rectsOf,
+    visibleBox,
   ]);
 
   const fitChain = useCallback(() => {
@@ -389,18 +415,20 @@ export function MapCanvas({
     centerOn(at, Math.max(rf.getZoom(), DEFAULT_ZOOM), true);
   }, [myLocation, centerOfSystem, centerOn, rf, toast]);
 
-  // A panel that opens over the canvas must not hide the selected system: pan it into view.
+  // A panel that opens over the canvas must not hide the selected system, nor may a system picked
+  // at the panel's edge stay under it: pan it into view (never while it is being dragged).
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   useEffect(() => {
     const box = canvasRef.current?.getBoundingClientRect();
-    const node = rf.getNodes().find((n) => n.selected);
-    if (!box || !node || (coveredRight === 0 && coveredBottom === 0)) return;
+    const node = selectedId === null ? undefined : rf.getNode(selectedId);
+    if (!box || !node || node.dragging || (coveredRight === 0 && coveredBottom === 0)) return;
     const { x, y, zoom } = rf.getViewport();
     const right = x + (node.position.x + (node.measured?.width ?? 230)) * zoom;
     const bottom = y + (node.position.y + (node.measured?.height ?? 90)) * zoom;
     const dx = Math.max(0, right - (box.width - coveredRight - 24));
     const dy = Math.max(0, bottom - (box.height - coveredBottom - 24));
     if (dx > 0 || dy > 0) void rf.setViewport({ x: x - dx, y: y - dy, zoom }, { duration: 250 });
-  }, [coveredRight, coveredBottom, rf]);
+  }, [coveredRight, coveredBottom, selectedId, rf]);
 
   const [legend, setLegendState] = useState(false);
   useEffect(() => {
@@ -423,6 +451,9 @@ export function MapCanvas({
       else if (key === 'l') setLegend(!legend);
       else return;
       e.preventDefault();
+      track('shortcut_used', {
+        shortcut: key === 'f' ? 'fit_chain' : key === 'c' ? 'center_on_me' : 'legend',
+      });
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -454,6 +485,11 @@ export function MapCanvas({
 
   useEffect(() => {
     if (!focus || handledFocus.current === focus.n) return;
+    if (focus.id === null) {
+      handledFocus.current = focus.n;
+      setNodes((ns) => ns.map((n) => (n.selected ? { ...n, selected: false } : n)));
+      return;
+    }
     const id = String(focus.id);
     const node = nodes.find((n) => n.id === id);
     if (!node) return; // not rendered yet; runs again when the nodes change
@@ -500,11 +536,12 @@ export function MapCanvas({
     const edge = target.closest<SVGElement>('.react-flow__edge');
     if (edge?.dataset.id) return onMenu({ kind: 'connection', connectionId: edge.dataset.id }, x, y);
     if (target.closest('.react-flow__pane')) {
-      onMenu({ kind: 'pane', flow: rf.screenToFlowPosition({ x, y }) }, x, y);
+      onMenu({ kind: 'pane', flow: rf.screenToFlowPosition({ x, y }), fitChain, centerOnMe }, x, y);
     }
   };
 
   const onSelectionChange = ({ nodes: selected }: OnSelectionChangeParams) => {
+    setSelectedId(selected.length === 1 ? selected[0]!.id : null);
     onSelect(selected.length === 1 ? Number(selected[0]!.id) : null);
   };
 
@@ -560,17 +597,19 @@ export function MapCanvas({
             ? undefined
             : (e) => {
                 e.preventDefault();
-                onMenu(
-                  { kind: 'pane', flow: rf.screenToFlowPosition({ x: e.clientX, y: e.clientY }) },
-                  e.clientX,
-                  e.clientY,
-                );
+                const flow = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY });
+                onMenu({ kind: 'pane', flow, fitChain, centerOnMe }, e.clientX, e.clientY);
               }
         }
         connectionMode={ConnectionMode.Loose}
         nodesConnectable={editable}
         nodesDraggable={editable}
         nodeDragThreshold={4}
+        // Dragging moves a system without selecting it: the panel opening mid-drag shifted the
+        // view under the pointer and threw the system across the map.
+        selectNodesOnDrag={false}
+        // Double click is not a zoom: it jumped the view in close in the middle of work.
+        zoomOnDoubleClick={false}
         deleteKeyCode={null}
         colorMode={theme.colorScheme}
         defaultViewport={{ x: 0, y: 0, zoom: DEFAULT_ZOOM }}

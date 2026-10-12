@@ -1,0 +1,38 @@
+/* The Backups tab of the admin page; shared layout lives in settings.module.css. */
+
+.summary {
+  display: grid;
+  gap: var(--dbk-space-3);
+}
+
+/* The list sits under the summary, separated like a new section of the card. */
+.listBody {
+  border-top: 1px solid var(--dbk-color-border);
+}
+
+.picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dbk-space-3);
+  min-width: 0;
+}
+
+.fileName {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+}
+
+/* Phones: the actions move under the date, aligned with it. */
+@media (max-width: 560px) {
+  .row {
+    flex-wrap: wrap;
+  }
+
+  .actions {
+    width: 100%;
+    padding-left: calc(32px + var(--dbk-space-3));
+  }
+}

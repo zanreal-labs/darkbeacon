@@ -7,8 +7,11 @@ import { InstanceSettingsService } from '@darkbeacon/access';
 import { AppModule } from './app.module.js';
 import type { AppConfig } from './config/config.js';
 import { installCors } from './platform/cors.js';
+import { installMaintenanceGate, MaintenanceMode } from './platform/maintenance.js';
 import type { PlatformOptions } from './platform/platform.module.js';
 import { rewriteVersionedUrl } from './platform/route-index.js';
+import { OtelBridgeLogger } from './adapters/observability/otel-logger.js';
+import { telemetryRuntime } from './adapters/observability/runtime.js';
 import {
   WELL_KNOWN_PATHS,
   installUpgradeRouting,
@@ -40,6 +43,10 @@ export async function createApp(
   options: CreateAppOptions = {},
 ): Promise<NestFastifyApplication> {
   const web = options.web ?? null;
+  const levels: LogLevel[] = ['log', 'warn', 'error'];
+  // With logs going out over OpenTelemetry, every line is also a log record tied to its trace.
+  const appLogger =
+    options.logger ?? (telemetryRuntime().logs ? new OtelBridgeLogger({ logLevels: levels }) : levels);
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule.forRoot(config, options, web),
     // `/api/v1/...` is the versioned alias of `/api/...` (docs/api.md).
@@ -47,7 +54,7 @@ export async function createApp(
       trustProxy: true,
       rewriteUrl: (req: { url?: string }) => rewriteVersionedUrl(req.url ?? '/'),
     }),
-    { logger: options.logger ?? ['log', 'warn', 'error'] },
+    { logger: appLogger },
   );
   // The MCP endpoint lives at /mcp and the OAuth metadata under /.well-known, outside the REST prefix.
   app.setGlobalPrefix('api', {
@@ -58,6 +65,8 @@ export async function createApp(
   });
   app.useWebSocketAdapter(new WsAdapter(app));
   app.enableShutdownHooks();
+  // Before the web proxy: in maintenance, page loads are answered here.
+  installMaintenanceGate(app, app.get(MaintenanceMode));
   const logger = new Logger('Web');
   installWebProxy(app, web, (error) => logger.warn(`web server did not answer: ${error.message}`));
   const seen: Array<{ method: string; url: string }> = [];

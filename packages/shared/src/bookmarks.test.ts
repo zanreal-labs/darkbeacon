@@ -150,4 +150,48 @@ describe('bookmarkChain', () => {
     expect(lone.get(8)).toMatchObject({ chainIndex: '1a', sig: 'QQQ-111' });
     expect(lone.has(7)).toBe(false);
   });
+
+  describe('{n}', () => {
+    // home(1) -> 2 (#3, XYZ, HS), 3 (#1, ABC, C3), 4 (#2, no signature, LS); 4 -> 5 by stargate.
+    const systems = [system(1, { status: 'home' }), system(2), system(3), system(4), system(5)];
+    const connections = [
+      connection('a', 1, 2, { createdAt: 1, bookmarkNumber: 3, bookmarkParent: 1 }),
+      connection('b', 1, 3, { createdAt: 2, bookmarkNumber: 1, bookmarkParent: 1 }),
+      connection('c', 4, 1, { createdAt: 3, bookmarkNumber: 2, bookmarkParent: 1 }),
+      connection('d', 4, 5, { createdAt: 4, type: 'gate' }),
+    ];
+    const signatures = [signature(1, 'XYZ-777', 'a', null), signature(1, 'ABC-123', 'b', null)];
+    const classOf = (id: number) => ({ 2: 'HS', 3: 'C3', 4: 'LS' })[id] ?? 'NS';
+    const label = (template: string, vars: ReturnType<typeof bookmarkChain>, id: number) =>
+      bookmarkLabel(template, vars.get(id)!);
+
+    it('shows the number the server keeps, the same for everyone', () => {
+      const chain = bookmarkChain({ systems, connections, signatures, classOf });
+      expect([2, 3, 4].map((id) => label('WH{n}', chain, id))).toEqual(['WH3', 'WH1', 'WH2']);
+      expect(label('WH{N} {destClass}', chain, 2)).toBe('WH03 HS');
+      expect(label('{n} {sig3}', chain, 3)).toBe('1 ABC');
+      // Stargates have no number, so nothing to show; nor does home.
+      expect(label('WH{n}', chain, 5)).toBeNull();
+      expect(label('WH{n}', chain, 1)).toBeNull();
+      // A number given for another parent (the chain turned since) is not shown.
+      const turned = bookmarkChain({
+        systems,
+        connections: connections.map((c) => (c.id === 'a' ? { ...c, bookmarkParent: 2 } : c)),
+        signatures,
+        classOf,
+      });
+      expect(label('WH{n}', turned, 2)).toBeNull();
+    });
+
+    it("counts in the viewer's own order on their screen", () => {
+      const own = (order: 'found' | 'signature' | 'class' | 'manual') =>
+        [2, 3, 4].map((id) =>
+          label('WH{n}', bookmarkChain({ systems, connections, signatures, classOf, order }), id),
+        );
+      expect(own('found')).toEqual(['WH1', 'WH2', 'WH3']);
+      expect(own('signature')).toEqual(['WH2', 'WH1', 'WH3']);
+      expect(own('class')).toEqual(['WH1', 'WH3', 'WH2']);
+      expect(own('manual')).toEqual(['WH3', 'WH1', 'WH2']);
+    });
+  });
 });

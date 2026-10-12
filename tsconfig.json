@@ -44,13 +44,25 @@
       "path": "packages/modules/audit"
     },
     {
-      "path": "packages/modules/api-keys"
-    },
-    {
       "path": "packages/modules/sharing"
     },
     {
+      "path": "packages/modules/api-keys"
+    },
+    {
+      "path": "packages/modules/publishing"
+    },
+    {
       "path": "packages/modules/oauth"
+    },
+    {
+      "path": "packages/modules/telemetry"
+    },
+    {
+      "path": "packages/modules/observability"
+    },
+    {
+      "path": "packages/modules/backups"
     },
     {
       "path": "apps/server"

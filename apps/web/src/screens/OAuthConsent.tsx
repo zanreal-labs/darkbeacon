@@ -6,6 +6,7 @@ import type { MapSummaryDto, OAuthAuthorizeQuery, OAuthAuthorizeRequestDto } fro
 import { ApiError } from '../lib/api';
 import { decideAuthorization } from '../lib/oauth';
 import { describeScopes } from '../lib/scope-builder';
+import { usePageView } from '../lib/useTelemetry';
 import { LogoMark } from '../shell/Logo';
 import {
   Badge,
@@ -65,6 +66,7 @@ export function OAuthConsent({
   maps: readonly MapSummaryDto[];
   accountName: string;
 }) {
+  usePageView('oauth_consent');
   const [which, setWhich] = useState<'all' | 'picked'>('all');
   const [mapIds, setMapIds] = useState<string[]>([]);
   const [readOnly, setReadOnly] = useState(false);

@@ -24,6 +24,17 @@ export interface AuditContext {
   origin?: AuditOrigin;
   /** Set while reverting: the id of the event being reverted. */
   revertOf?: string;
+  /** Made on a map that merges this one and written back here ("via <map>"). */
+  via?: AuditMapRef;
+  /** Written by a map that merges others: the source map the change came from. */
+  mergedFrom?: AuditMapRef;
+}
+
+/** A map named in an audit record, possibly on another instance (`local` for this one). */
+export interface AuditMapRef {
+  instance: string;
+  mapId: string;
+  name: string;
 }
 
 /**

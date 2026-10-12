@@ -1,0 +1,21 @@
+{
+  "name": "@darkbeacon/publishing",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Public maps: read-only links, what they show, and the projection that keeps everything else on the server",
+  "type": "module",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@darkbeacon/core": "workspace:*",
+    "@darkbeacon/shared": "workspace:*"
+  }
+}

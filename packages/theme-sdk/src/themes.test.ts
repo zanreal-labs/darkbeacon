@@ -32,7 +32,7 @@ describe('themes', () => {
     const css = themeToCss(darkTheme);
     expect(css).toContain(':root {');
     expect(css).toContain('color-scheme: dark;');
-    expect(css).toContain('--dbk-edge-time-eol: #cf7cf2;');
+    expect(css).toContain('--dbk-edge-time-eol: #b25ee0;');
     expect(themesToCss(builtInThemes)).toContain('[data-theme="contrast"]');
   });
 

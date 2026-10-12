@@ -7,7 +7,7 @@ import type {
   ConnectionDto,
   CreatedApiKeyDto,
   MapDto,
-  MapSharingDto,
+  PublicLinkDto,
   MeDto,
 } from '@darkbeacon/shared';
 import { createApp } from '../app.js';
@@ -233,7 +233,7 @@ describeEachDialect('MCP endpoint', (t) => {
     );
 
     // A map closed to agents is invisible to every key.
-    await alice.json(`/api/maps/${map.id}/sharing`, { method: 'PATCH', json: { mcpMode: 'off' } });
+    await alice.json(`/api/maps/${map.id}/public-link`, { method: 'PATCH', json: { mcpMode: 'off' } });
     const closed = await client.callTool({ name: 'get_map', arguments: { map: map.id } });
     expect(textOf(closed)).toMatch(/closed to AI agents/);
   });
@@ -241,7 +241,7 @@ describeEachDialect('MCP endpoint', (t) => {
   it('lets anonymous agents read only public maps opened to them, never write', async () => {
     const { alice, map } = await setup();
     await alice.json('/api/admin/settings', { method: 'PATCH', json: { mcpMode: 'public' } });
-    const share = await alice.json<MapSharingDto>(`/api/maps/${map.id}/sharing`, {
+    const share = await alice.json<PublicLinkDto>(`/api/maps/${map.id}/public-link`, {
       method: 'PATCH',
       json: { enabled: true, slug: 'home-public' },
     });
@@ -251,7 +251,7 @@ describeEachDialect('MCP endpoint', (t) => {
       'No public maps',
     );
 
-    await alice.json(`/api/maps/${map.id}/sharing`, { method: 'PATCH', json: { mcpMode: 'public' } });
+    await alice.json(`/api/maps/${map.id}/public-link`, { method: 'PATCH', json: { mcpMode: 'public' } });
     const listed = textOf(await anonymous.callTool({ name: 'list_maps', arguments: {} }));
     expect(listed).toContain('Home chain');
     expect(listed).toContain('home-public');

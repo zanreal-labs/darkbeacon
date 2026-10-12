@@ -29,7 +29,7 @@ export interface AuditDescriptor {
 
 export type AuditedEventType = EventType | AuditEventType;
 
-const STAMPS = ['createdAt', 'updatedAt', 'mapId'] as const;
+const STAMPS = ['createdAt', 'updatedAt', 'mapId', 'provenance'] as const;
 const str = (v: unknown) => String(v);
 const num = (v: unknown) => (typeof v === 'number' ? v : null);
 const ref = (kind: string, id: unknown) => (id === null || id === undefined ? [] : [`${kind}:${str(id)}`]);
@@ -58,6 +58,17 @@ const subject = (d: Fields) => num(d.characterId);
 const change = (before: unknown, after: unknown) => ({ before, after });
 
 const MAP_ENTITY: Partial<AuditDescriptor> = { ignore: ['createdAt', 'updatedAt'] };
+
+const originMap = (value: unknown) => asFields(value)?.mapId;
+/** A share between two maps: found in both maps' histories. */
+const SHARE: Omit<AuditDescriptor, 'op'> = {
+  entity: byId('share'),
+  refs: (d, b) => [
+    ...ref('map', originMap(d.source) ?? originMap(b?.source)),
+    ...ref('map', originMap(d.target) ?? originMap(b?.target)),
+  ],
+  ignore: ['updatedAt', 'offeredAt', 'acceptedAt', 'id', 'source', 'target'],
+};
 
 /**
  * The catalogue: event type -> descriptor. A `Record` over every type of `EventPayloads` and
@@ -158,6 +169,17 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
     entity: () => ({ kind: 'labels', id: 'map' }),
     state: (d) => ({ labels: d.labels }),
   },
+  'map.share.offered': { ...SHARE, op: 'create' },
+  'map.share.accepted': { ...SHARE, op: 'update' },
+  'map.share.changed': { ...SHARE, op: 'update' },
+  'map.share.revoked': { ...SHARE, op: 'delete' },
+  'map.sources_changed': {
+    op: 'update',
+    entity: () => ({ kind: 'sources', id: 'map' }),
+    state: (d) => ({
+      sources: Array.isArray(d.sources) ? d.sources.map((s: Fields) => str(s.name)) : [],
+    }),
+  },
   'routes.exits_changed': {
     op: 'update',
     entity: () => ({ kind: 'exits', id: 'map' }),
@@ -187,9 +209,9 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
   'ping.removed': { op: 'delete', entity: byId('ping'), refs: (d, b) => ref('system', b?.solarSystemId) },
   'access.rule_added': { op: 'create', entity: byId('accessRule'), ignore: ['createdAt', 'mapId'] },
   'access.rule_removed': { op: 'delete', entity: byId('accessRule'), ignore: ['createdAt', 'mapId'] },
-  'access.sharing_changed': {
+  'access.public_link_changed': {
     op: 'update',
-    entity: byId('mapSharing', 'mapId'),
+    entity: byId('publicLink', 'mapId'),
     refs: (d) => ref('map', d.mapId),
     ignore: ['mapId'],
   },
@@ -240,6 +262,7 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
   },
   'discord_bot.changed': { op: 'update', entity: () => ({ kind: 'settings', id: 'discordBot' }) },
   'settings.changed': { op: 'update', entity: () => ({ kind: 'settings', id: 'instance' }) },
+  'telemetry.changed': { op: 'update', entity: () => ({ kind: 'settings', id: 'telemetry' }) },
   'theme.installed': { op: 'create', entity: byId('theme') },
   'theme.removed': { op: 'delete', entity: byId('theme') },
   'theme.default_changed': { op: 'update', entity: () => ({ kind: 'settings', id: 'defaultTheme' }) },
@@ -270,6 +293,34 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
     refs: (d) => ref('map', d.mapId),
     state: (d) => asFields(d.values) ?? {},
   },
+  'backup.completed': {
+    op: 'activity',
+    entity: byId('backup', 'name'),
+    activity: (d) => ({ backup: change(null, d.trigger) }),
+  },
+  'backup.failed': {
+    op: 'activity',
+    entity: (d) => (d.name ? { kind: 'backup', id: str(d.name) } : null),
+    activity: (d) => ({
+      [d.operation === 'restore' ? 'restoreFailed' : 'backupFailed']: change(null, d.message),
+    }),
+  },
+  'backup.restored': {
+    op: 'activity',
+    entity: byId('backup', 'name'),
+    activity: (d) => ({ restored: change(d.preRestore, d.name) }),
+  },
+  'backup.deleted': {
+    op: 'activity',
+    entity: byId('backup', 'name'),
+    activity: () => ({ deleted: change(null, true) }),
+  },
+  'backup.downloaded': {
+    op: 'activity',
+    entity: byId('backup', 'name'),
+    activity: () => ({ downloaded: change(null, true) }),
+  },
+  'backup.settings_changed': { op: 'update', entity: () => ({ kind: 'settings', id: 'backups' }) },
   'api_key.created': {
     op: 'create',
     entity: byId('apiKey'),

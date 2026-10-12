@@ -34,7 +34,7 @@ export function defaultShipSize(
   a: UniverseSystemDto | null,
   b: UniverseSystemDto | null,
 ): ShipSize {
-  if (type !== 'wormhole') return 'xlarge';
+  if (type !== 'wormhole') return 'capital';
   const classes = [a?.whClass, b?.whClass];
   if (classes.includes(SHATTERED_FRIGATE)) return 'small';
   if (classes.includes(C1)) return 'medium';

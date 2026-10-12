@@ -5,7 +5,7 @@ A map admin can open a map to anyone with a link: read-only, no sign-in, live. U
 
 ## Switching it on
 
-**Map settings → Sharing → Public link**: switch it on and copy the link, `https://<instance>/p/<token>`.
+**Map settings → Public link** (`/m/<slug>?settings=public`): switch it on and copy the link, `https://<instance>/p/<token>`.
 
 - The token is 32 random characters (about 190 bits), so links cannot be guessed. An optional readable
   name (`/p/home-chain`) works as well, as long as it is set; it is as public as the token, so pick one
@@ -18,22 +18,33 @@ A map admin can open a map to anyone with a link: read-only, no sign-in, live. U
 
 ## What the link shows
 
-| Scope              | Shows                                                                                            | Default         |
-| ------------------ | ------------------------------------------------------------------------------------------------ | --------------- |
-| `topology`         | systems, their places, connections, statics, exits and the trade hubs                            | always          |
-| `connectionStatus` | mass, time (EOL) and ship size of connections                                                    | on              |
-| `signatures`       | signatures (ids, groups, types, site names)                                                      | off             |
-| `labels`           | the map's labels on systems                                                                      | off             |
-| `intel`            | notes, status, tags, custom and temporary names, dangerous and bubbled holes, the map's own hubs | off (sensitive) |
-| `characters`       | tracked characters, their names, ships and where they are                                        | off (sensitive) |
+| Scope              | Shows                                                                       | Default         |
+| ------------------ | --------------------------------------------------------------------------- | --------------- |
+| `topology`         | systems, their places, connections, statics, exits and the trade hubs       | always          |
+| `connectionStatus` | mass, time (EOL), ship size, mass saved, dangerous and bubbled connections  | on              |
+| `signatures`       | signatures (ids, groups, types, site names, their notes)                    | off             |
+| `labels`           | bookmark labels (temporary names) of systems                                | off             |
+| `intel`            | notes, status, tags and custom names of systems, the map's own staging hubs | off (sensitive) |
+| `characters`       | tracked characters, their names, ships and where they are                   | off (sensitive) |
+
+A field belongs to the same scope here as in shares between maps (`FIELD_SCOPES` in the sharing module).
+Label assignments and locks are the map's own and are never public, whatever the scopes.
 
 What a scope does not share never leaves the server: the public view is read by the server as an
 anonymous viewer of that one map, and everything it sends goes through a whitelist projection. Fields
-that are not shared are blanked (empty notes, `unknown` status, no labels) and whole parts left out
+that are not shared are blanked (empty notes, `unknown` status, no bookmark label) and whole parts left out
 (signatures, characters); events are forwarded only for what is shared, with no author. The map's owner,
 its settings, access rules, webhooks, pings, history and the people looking at it are never public.
 
-These scopes are the same vocabulary later sharing features (shared chains between instances) use.
+These scopes are the same vocabulary shares between maps use (`packages/shared/src/share-scope.ts`).
+
+## Composite maps
+
+A composite map (or any map that merges shares) publishes what its own members see: the merged chain,
+built from its sources and cut by each share's scopes first, then by the link's scopes. A field a source
+does not share with the composite cannot reach its public link either. Provenance (which map an object
+came from) is never sent. Writes by API keys and agents on a composite go through sharing's write-through
+to the source maps like any edit there; read-only sources refuse them (403), and conflicts are 409.
 
 ## The public page
 
@@ -51,5 +62,5 @@ they then read exactly what the link shows. See [`mcp.md`](mcp.md).
 
 - `GET /api/public/maps/{token or name}`: the map, the snapshot cut to its scopes, the static data of its
   systems and the stream to follow from `seq`. 404 for unknown or switched-off links.
-- WebSocket: `{"op":"subscribe","stream":"public:<token>","sinceSeq":<seq>}`; `access.sharing_changed`
+- WebSocket: `{"op":"subscribe","stream":"public:<token>","sinceSeq":<seq>}`; `access.public_link_changed`
   (with no data) means "read the view again", an `error` on the stream means the link stopped working.

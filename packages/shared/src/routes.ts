@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import * as dto from './dto/index.js';
 import type { ScopeRequirement } from './scopes.js';
+import * as telemetry from './telemetry.js';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 /** Who may call: anyone, a signed-in account, or an instance admin. Map routes also check the map role. */
@@ -37,7 +38,7 @@ export interface RouteDef {
   /** Media type of the body when it is not JSON (the OAuth token endpoint takes a form). */
   bodyContentType?: string;
   /** Success status when it is not the default (201 for POST with a body, else 200; 204 without one). */
-  status?: 200;
+  status?: 200 | 202;
 }
 
 const route = <const R extends RouteDef>(r: R): R => r;
@@ -54,6 +55,8 @@ export const routes = {
     scope: 'none',
     response: dto.HealthDto,
   }),
+  /** Readiness: the database answers and every migration is applied (503 otherwise). */
+  ready: route({ method: 'GET', path: '/api/ready', auth: 'public', scope: 'none', response: dto.ReadyDto }),
 
   realtime: {
     /**
@@ -132,18 +135,18 @@ export const routes = {
     demo: route({
       method: 'POST',
       path: '/api/auth/demo',
-      status: 200,
       auth: 'public',
       scope: 'session',
+      status: 200,
       response: dto.MeDto,
     }),
     /** Demo mode: signs in a named local account (scripts and tests). */
     dev: route({
       method: 'POST',
       path: '/api/auth/dev',
-      status: 200,
       auth: 'public',
       scope: 'session',
+      status: 200,
       body: dto.DevLoginRequest,
       response: dto.MeDto,
     }),
@@ -377,6 +380,77 @@ export const routes = {
       auth: 'admin',
       scope: { resource: 'admin', action: 'write' },
     }),
+    /** What the instance exports for monitoring (OpenTelemetry); set through the environment only. */
+    observability: route({
+      method: 'GET',
+      path: '/api/admin/observability',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'read' },
+      response: dto.ObservabilityDto,
+    }),
+  },
+
+  /**
+   * SQLite backups (instance admins). On Postgres the status says `supported: false` and the
+   * other routes answer 409: back Postgres up with its own tooling.
+   */
+  backups: {
+    status: route({
+      method: 'GET',
+      path: '/api/admin/backups',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'read' },
+      response: dto.BackupStatusDto,
+    }),
+    create: route({
+      method: 'POST',
+      path: '/api/admin/backups',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
+      response: dto.BackupDto,
+    }),
+    updateSettings: route({
+      method: 'PATCH',
+      path: '/api/admin/backups/settings',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
+      body: dto.UpdateBackupSettingsRequest,
+      response: dto.BackupSettingsDto,
+    }),
+    /** Streams the `.db.gz` file as an attachment. */
+    download: route({
+      method: 'GET',
+      path: '/api/admin/backups/:name/download',
+      auth: 'admin',
+      scope: 'session',
+      download: true,
+    }),
+    remove: route({
+      method: 'DELETE',
+      path: '/api/admin/backups/:name',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
+    }),
+    restore: route({
+      method: 'POST',
+      path: '/api/admin/backups/:name/restore',
+      auth: 'admin',
+      scope: 'session',
+      body: dto.RestoreBackupRequest,
+      response: dto.RestoreResultDto,
+    }),
+    /**
+     * multipart/form-data: a `confirm` field (`RESTORE`) first, then one `file` (a `.db.gz`
+     * backup or a plain SQLite file), streamed to disk up to `maxUploadBytes`.
+     */
+    restoreUpload: route({
+      method: 'POST',
+      path: '/api/admin/backups/restore-upload',
+      auth: 'admin',
+      scope: 'session',
+      upload: 'multipart/form-data',
+      response: dto.RestoreResultDto,
+    }),
   },
 
   universe: {
@@ -481,6 +555,28 @@ export const routes = {
       body: dto.SetBookmarkTemplateRequest,
       response: dto.MapDto,
     }),
+    /**
+     * The map's `{n}` numbering: order and renumber on close (manager+); published as
+     * `map.settings_changed`. A new order numbers every system's wormholes again.
+     */
+    setBookmarkNumbering: route({
+      method: 'PUT',
+      path: '/api/maps/:mapId/bookmark-numbering',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'write' },
+      mapRole: 'manager',
+      body: dto.SetBookmarkNumberingRequest,
+      response: dto.MapDto,
+    }),
+    /** Numbers wormholes 1, 2, 3 again in the map's order; changes arrive as `connection.updated`. */
+    renumberBookmarks: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/bookmark-numbers/renumber',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'write' },
+      mapRole: 'member',
+      body: dto.RenumberBookmarksRequest,
+    }),
     /** The caller's own view of the map: last viewport and bookmark template override. */
     getPreferences: route({
       method: 'GET',
@@ -562,6 +658,16 @@ export const routes = {
       auth: 'account',
       scope: { resource: 'connections', action: 'write' },
       mapRole: 'member',
+    }),
+    /** A wormhole's `{n}` set by hand; the sibling that had the number swaps with it. */
+    setBookmarkNumber: route({
+      method: 'PUT',
+      path: '/api/maps/:mapId/connections/:connectionId/bookmark-number',
+      auth: 'account',
+      scope: { resource: 'connections', action: 'write' },
+      mapRole: 'member',
+      body: dto.SetBookmarkNumberRequest,
+      response: dto.ConnectionDto,
     }),
     /** The connections panel: every visible connection with type, mass and time estimates, most urgent first. */
     intel: route({
@@ -677,9 +783,9 @@ export const routes = {
     paste: route({
       method: 'POST',
       path: '/api/maps/:mapId/systems/:solarSystemId/signatures/paste',
-      status: 200,
       auth: 'account',
       scope: { resource: 'signatures', action: 'write' },
+      status: 200,
       mapRole: 'member',
       body: dto.PasteSignaturesRequest,
       response: dto.PasteSignaturesResult,
@@ -699,6 +805,53 @@ export const routes = {
       auth: 'account',
       scope: { resource: 'signatures', action: 'write' },
       mapRole: 'member',
+    }),
+  },
+
+  /** Shares between maps: a source map's admins offer, the target map's admins accept. */
+  sharing: {
+    list: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/shares',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'manage' },
+      mapRole: 'admin',
+      response: dto.MapSharesDto,
+    }),
+    offer: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/shares',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'manage' },
+      mapRole: 'admin',
+      body: dto.OfferShareRequest,
+      response: dto.MapShareDto,
+    }),
+    update: route({
+      method: 'PATCH',
+      path: '/api/maps/:mapId/shares/:shareId',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'manage' },
+      mapRole: 'admin',
+      body: dto.UpdateShareRequest,
+      response: dto.MapShareDto,
+    }),
+    accept: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/shares/:shareId/accept',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'manage' },
+      mapRole: 'admin',
+      body: dto.AcceptShareRequest,
+      response: dto.MapShareDto,
+    }),
+    /** Revokes a share or declines an offer (either side's admins). */
+    revoke: route({
+      method: 'DELETE',
+      path: '/api/maps/:mapId/shares/:shareId',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'manage' },
+      mapRole: 'admin',
     }),
   },
 
@@ -794,9 +947,9 @@ export const routes = {
     test: route({
       method: 'POST',
       path: '/api/maps/:mapId/webhooks/:webhookId/test',
-      status: 200,
       auth: 'account',
       scope: { resource: 'webhooks', action: 'manage' },
+      status: 200,
       mapRole: 'admin',
       response: dto.WebhookDeliveryDto,
     }),
@@ -933,9 +1086,9 @@ export const routes = {
     revert: route({
       method: 'POST',
       path: '/api/maps/:mapId/history/:eventId/revert',
-      status: 200,
       auth: 'account',
       scope: { resource: 'audit', action: 'write' },
+      status: 200,
       mapRole: 'member',
       response: dto.AuditRevertDto,
     }),
@@ -963,10 +1116,59 @@ export const routes = {
     verify: route({
       method: 'POST',
       path: '/api/admin/audit/verify',
-      status: 200,
       auth: 'admin',
       scope: { resource: 'admin', action: 'read' },
+      status: 200,
       response: dto.AuditVerifyDto,
+    }),
+  },
+
+  /** Anonymous product telemetry (see docs/telemetry.md). */
+  telemetry: {
+    /** Whether the web app reports usage, and whether to show the admin the notice about it. */
+    client: route({
+      method: 'GET',
+      path: '/api/telemetry',
+      auth: 'account',
+      scope: 'none',
+      response: telemetry.TelemetryClientDto,
+    }),
+    /**
+     * Usage events from the web app, checked against the allow-list and forwarded without the
+     * request's IP or anything else about the browser. 400 when any event is not on the list.
+     */
+    ingest: route({
+      method: 'POST',
+      path: '/api/telemetry/e',
+      auth: 'account',
+      scope: 'session',
+      status: 202,
+      body: telemetry.TelemetryIngestRequest,
+      response: telemetry.TelemetryIngestResultDto,
+    }),
+    /** Status, instance id, the last payloads sent and the heartbeat as it would be sent now. */
+    status: route({
+      method: 'GET',
+      path: '/api/admin/telemetry',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'read' },
+      response: telemetry.TelemetryStatusDto,
+    }),
+    /** The admin switch; recorded on the instance audit as `telemetry.changed`. */
+    setEnabled: route({
+      method: 'PUT',
+      path: '/api/admin/telemetry/enabled',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
+      body: telemetry.SetTelemetryEnabledRequest,
+      response: telemetry.TelemetryStatusDto,
+    }),
+    /** The admin has read the notice about telemetry; it is not shown to them again. */
+    dismissNotice: route({
+      method: 'POST',
+      path: '/api/admin/telemetry/notice',
+      auth: 'admin',
+      scope: 'session',
     }),
   },
 
@@ -1070,8 +1272,8 @@ export const routes = {
     rotate: route({
       method: 'POST',
       path: '/api/accounts/me/api-keys/:keyId/rotate',
-      status: 200,
       auth: 'account',
+      status: 200,
       scope: 'session',
       summary: 'Replace the secret of a token; the old one stops working at once',
       response: dto.CreatedApiKeyDto,
@@ -1121,8 +1323,8 @@ export const routes = {
     rotateService: route({
       method: 'POST',
       path: '/api/admin/service-keys/:keyId/rotate',
-      status: 200,
       auth: 'admin',
+      status: 200,
       scope: 'session',
       summary: 'Replace the secret of a service key',
       response: dto.CreatedApiKeyDto,
@@ -1130,35 +1332,35 @@ export const routes = {
   },
 
   /** A map's public link (`/p/<token>`) and what it shows; map admins. */
-  sharing: {
+  publicLink: {
     get: route({
       method: 'GET',
-      path: '/api/maps/:mapId/sharing',
+      path: '/api/maps/:mapId/public-link',
       auth: 'account',
       mapRole: 'admin',
       scope: { resource: 'maps', action: 'manage' },
       summary: 'Public link and AI agent reach of a map',
-      response: dto.MapSharingDto,
+      response: dto.PublicLinkDto,
     }),
     update: route({
       method: 'PATCH',
-      path: '/api/maps/:mapId/sharing',
+      path: '/api/maps/:mapId/public-link',
       auth: 'account',
       mapRole: 'admin',
       scope: { resource: 'maps', action: 'manage' },
       summary: 'Switch the public link on or off and choose what it shows',
-      body: dto.UpdateMapSharingRequest,
-      response: dto.MapSharingDto,
+      body: dto.UpdatePublicLinkRequest,
+      response: dto.PublicLinkDto,
     }),
     regenerate: route({
       method: 'POST',
-      path: '/api/maps/:mapId/sharing/regenerate',
-      status: 200,
+      path: '/api/maps/:mapId/public-link/regenerate',
       auth: 'account',
+      status: 200,
       mapRole: 'admin',
       scope: { resource: 'maps', action: 'manage' },
       summary: 'Make a new public link; the old one stops working',
-      response: dto.MapSharingDto,
+      response: dto.PublicLinkDto,
     }),
   },
 

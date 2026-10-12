@@ -89,6 +89,7 @@ describeEachDialect('discord-notify plugin', (t) => {
     const consumers: DurableConsumer[] = [];
     const routes: PluginRoute[] = [];
     const audits: PluginConfigChange[] = [];
+    const deliveries: string[] = [];
     const systems = [system(31000001, { status: 'home' }), system(31000002), system(30002537)];
     const connections = [connection('c1', 31000001, 30002537)];
     const ctx = {
@@ -127,6 +128,7 @@ describeEachDialect('discord-notify plugin', (t) => {
       provide: () => undefined,
       settings: { get: async () => ({ username: 'Darkbeacon' }), forMap: async () => ({}) },
       logger: { debug() {}, info() {}, warn() {}, error() {} },
+      metrics: { delivery: (channel: string, outcome: string) => deliveries.push(`${channel}:${outcome}`) },
     } as unknown as PluginContext<'maps' | 'universe' | 'db' | 'discord' | 'clock'>;
 
     app = new DiscordNotify(ctx, { fetch: fetchFn as typeof fetch, tickMs: 3_600_000, kills: false });
@@ -165,6 +167,7 @@ describeEachDialect('discord-notify plugin', (t) => {
       state,
       emit,
       audits,
+      deliveries,
       systems,
       connections,
       now: () => now,
@@ -287,6 +290,7 @@ describeEachDialect('discord-notify plugin', (t) => {
     await s.app.flush();
     expect(s.posts).toHaveLength(3);
     expect((await s.state()).status.pending).toBe(0);
+    expect(s.deliveries).toEqual(['discord:failed', 'discord:failed', 'discord:ok']);
   });
 
   it('keeps quiet hours: only urgent kinds, and without mentions', async () => {

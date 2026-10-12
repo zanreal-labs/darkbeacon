@@ -57,7 +57,8 @@ describe('OpenAPI description', () => {
       if (!op['x-darkbeacon-scope']) missing.push(`${name}: no scope`);
       if (!(op.security as unknown[] | undefined)?.length) missing.push(`${name}: no security`);
       const responses = op.responses as Record<string, unknown>;
-      const ok = responses['200'] ?? responses['201'] ?? responses['204'] ?? responses['302'];
+      const ok =
+        responses['200'] ?? responses['201'] ?? responses['202'] ?? responses['204'] ?? responses['302'];
       if (!ok) missing.push(`${name}: no success response`);
       // A JSON answer must come with its schema; only 204s, redirects and files have none.
       if (

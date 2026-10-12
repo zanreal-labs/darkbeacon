@@ -1,4 +1,5 @@
 import type { InstanceSettingsDto } from './dto/access.js';
+import type { BackupSettingsDto, BackupTrigger } from './dto/backups.js';
 import type { WebhookDto } from './dto/notifications.js';
 import type { ApiKeyKind, ServiceKeyMapGrant } from './dto/api-keys.js';
 
@@ -50,6 +51,31 @@ export interface AuditEventPayloads {
    * keys (tokens, webhook URLs, passwords) are replaced by a short fingerprint.
    */
   'plugin.settings_changed': { pluginId: string; mapId: string | null; values: Record<string, unknown> };
+  /** An admin turned anonymous telemetry on or off (see docs/telemetry.md). */
+  'telemetry.changed': { enabled: boolean };
+  /** A backup of the database was written (any trigger). */
+  'backup.completed': { name: string; trigger: BackupTrigger; size: number; schemaVersion: number };
+  /** A backup or a restore failed; the database is unchanged. */
+  'backup.failed': {
+    operation: 'backup' | 'restore';
+    trigger: BackupTrigger | null;
+    name: string | null;
+    message: string;
+  };
+  /**
+   * The database was replaced by a backup. Recorded in the restored database, so its history
+   * continues from the backup; `preRestore` holds the database as it was before.
+   */
+  'backup.restored': {
+    name: string;
+    source: 'backup' | 'upload';
+    preRestore: string;
+    migrationsApplied: string[];
+  };
+  'backup.deleted': { name: string };
+  'backup.downloaded': { name: string };
+  /** The alert webhook address is never recorded, only its host. */
+  'backup.settings_changed': BackupSettingsDto;
   /** API keys (personal tokens and service keys); the token and its hash are never recorded. */
   'api_key.created': ApiKeyAuditDto;
   'api_key.updated': ApiKeyAuditDto;
@@ -87,6 +113,13 @@ export const AUDIT_EVENT_TYPES = [
   'webhook.updated',
   'webhook.removed',
   'plugin.settings_changed',
+  'telemetry.changed',
+  'backup.completed',
+  'backup.failed',
+  'backup.restored',
+  'backup.deleted',
+  'backup.downloaded',
+  'backup.settings_changed',
   'api_key.created',
   'api_key.updated',
   'api_key.rotated',

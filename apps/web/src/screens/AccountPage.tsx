@@ -29,6 +29,7 @@ import { usePresenceSettings } from '../lib/presence';
 import { useMaps, useSetDefaultMap } from '../lib/maps';
 import { meKey, useLogout, useMe, useProviders, useRevokeSession, useSessions } from '../lib/session';
 import { relativeTime } from '../lib/time';
+import { usePageView } from '../lib/useTelemetry';
 import { eveLinkHref, ROLE_LABEL } from '../shell/AccountMenu';
 import { ThemePicker } from '../theme/ThemePicker';
 import {
@@ -92,6 +93,7 @@ export function AccountPageSkeleton() {
  */
 export function AccountPage({ authError = null }: { authError?: string | null }) {
   const me = useMe();
+  usePageView('account');
   if (!me.data) return null;
 
   return (

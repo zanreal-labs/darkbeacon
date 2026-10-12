@@ -22,7 +22,7 @@ An instance admin chooses the mode in **Admin → API access → AI agents**:
 | `authenticated` | clients that sign in (OAuth) or carry an API key (`Authorization: Bearer`)    |
 | `public`        | the above, and anonymous clients, read-only, for public maps opened to agents |
 
-Each map narrows it in **Map settings → Sharing → AI agents**: `off` (no agent sees the map, with any
+Each map narrows it in **Map settings → Public link → AI agents** (`?settings=public`): `off` (no agent sees the map, with any
 key), `authenticated` (the default: keys whose scopes name the map) or `public` (also anonymous agents,
 only while the map's public link is on, and only what the link shows).
 

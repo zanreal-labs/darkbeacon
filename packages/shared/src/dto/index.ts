@@ -16,4 +16,7 @@ export * from './audit.js';
 export * from './presence.js';
 export * from './api-keys.js';
 export * from './sharing.js';
+export * from './publishing.js';
 export * from './oauth.js';
+export * from './observability.js';
+export * from './backups.js';

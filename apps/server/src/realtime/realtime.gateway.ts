@@ -1,10 +1,12 @@
 import type { IncomingMessage } from 'node:http';
-import { Inject, type OnModuleDestroy } from '@nestjs/common';
+import { Inject, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { WebSocketGateway, type OnGatewayConnection, type OnGatewayDisconnect } from '@nestjs/websockets';
 import type { WebSocket } from 'ws';
 import type { AppConfig } from '../config/config.js';
+import { RESTORED_CLOSE_CODE } from '@darkbeacon/shared';
 import { ActorResolverRegistry } from '../platform/actor.js';
 import { clientAddress } from '../platform/client-address.js';
+import { MaintenanceMode } from '../platform/maintenance.js';
 import { APP_CONFIG } from '../platform/tokens.js';
 import { RealtimeHub, type HubConnection } from './realtime.hub.js';
 
@@ -13,10 +15,14 @@ const HEARTBEAT_MS = 30_000;
 export const MAX_FRAME_BYTES = 64 * 1024;
 /** Close code for a refused origin or an ended session (policy violation). */
 const POLICY_VIOLATION = 1008;
+/** Close code for "try again later" (maintenance). */
+const TRY_AGAIN_LATER = 1013;
 
 /** The `/ws` transport: one hub connection per socket, plus ping/pong liveness checks. */
 @WebSocketGateway({ path: '/ws', maxPayload: MAX_FRAME_BYTES })
-export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy {
+export class RealtimeGateway
+  implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit, OnModuleDestroy
+{
   private readonly sockets = new Map<WebSocket, { hub: HubConnection; alive: boolean }>();
   private readonly heartbeat = setInterval(() => this.checkLiveness(), HEARTBEAT_MS).unref();
   private readonly publicOrigin: string;
@@ -25,8 +31,24 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     @Inject(RealtimeHub) private readonly hub: RealtimeHub,
     @Inject(ActorResolverRegistry) private readonly actors: ActorResolverRegistry,
     @Inject(APP_CONFIG) config: AppConfig,
+    @Inject(MaintenanceMode) private readonly maintenance: MaintenanceMode,
   ) {
     this.publicOrigin = new URL(config.publicUrl).origin;
+  }
+
+  onModuleInit(): void {
+    // After a restore the seqs a client holds belong to the old database: it must start over.
+    this.maintenance.register({
+      name: 'realtime',
+      resume: (restored) => {
+        if (restored) this.closeAll(RESTORED_CLOSE_CODE, 'Database restored');
+      },
+    });
+  }
+
+  /** Closes every socket; clients reconnect on their own. */
+  closeAll(code: number, reason: string): void {
+    for (const socket of this.sockets.keys()) socket.close(code, reason);
   }
 
   handleConnection(socket: WebSocket, request: IncomingMessage): void {
@@ -34,6 +56,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     // (even a sibling subdomain, which SameSite lets through) must not open one.
     if (!sameOrigin(request, this.publicOrigin)) {
       socket.close(POLICY_VIOLATION, 'Origin not allowed');
+      return;
+    }
+    if (this.maintenance.active) {
+      socket.close(TRY_AGAIN_LATER, 'Restoring a backup');
       return;
     }
     const ip = clientAddress(request.socket.remoteAddress, request.headers['x-forwarded-for']);

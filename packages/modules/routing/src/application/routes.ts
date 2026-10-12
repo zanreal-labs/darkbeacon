@@ -24,7 +24,7 @@ import {
 } from '@darkbeacon/shared';
 import { findRoute } from '../domain/graph.js';
 import { isLowSec, TRADE_HUBS } from '../domain/hubs.js';
-import { isWormholeSpace, policyFor, type RouteNode, type RoutePolicy } from '../domain/modes.js';
+import { isWormholeSpace, policyFor, routeSpace, type RouteNode, type RoutePolicy } from '../domain/modes.js';
 import { closedLevels } from '../domain/security.js';
 import type { HubRepository, PilotDirectory, RoutingUniverse } from '../ports/index.js';
 import type { Router } from './router.js';
@@ -154,6 +154,14 @@ export class RouteQueries {
     );
   }
 
+  /** The kind of space the route from an exit to its nearest hub runs through. */
+  private async spaceOf(mapId: string, fromId: number, hubId: number, policy: RoutePolicy) {
+    const graph = await this.deps.router.graph(mapId);
+    const steps = graph && findRoute(graph, fromId, hubId, policy);
+    if (!graph || !steps) return 'mixed' as const;
+    return routeSpace(steps.flatMap((step) => graph.node(step.id) ?? []));
+  }
+
   private async exitsOf(mapId: string, policy: RoutePolicy, hubs: HubDto[]): Promise<MapExitDto[]> {
     const chain = await this.deps.router.chain(mapId);
     if (!chain) throw new NotFoundError('Map');
@@ -178,6 +186,7 @@ export class RouteQueries {
         if (destination) reached.set(from, [...(reached.get(from) ?? []), destination]);
       }
       const distances = await this.distances(mapId, id, hubs, policy);
+      const nearest = distances.find((d) => d.jumps !== null) ?? null;
       connected.push({
         kind: 'connected',
         solarSystemId: id,
@@ -188,7 +197,10 @@ export class RouteQueries {
         connectionId: via.id,
         chainSystemId: other,
         statics: [],
-        nearest: distances.find((d) => d.jumps !== null) ?? null,
+        nearest: nearest && {
+          ...nearest,
+          space: await this.spaceOf(mapId, id, nearest.solarSystemId, policy),
+        },
         hubs: distances,
       });
     }

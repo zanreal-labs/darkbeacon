@@ -9,3 +9,4 @@ export * from './share-scope.js';
 export * from './cidr.js';
 export * from './tokens.js';
 export * from './openapi.js';
+export * from './telemetry.js';
