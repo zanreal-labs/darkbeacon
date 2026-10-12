@@ -282,6 +282,11 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
       );
     case 'settings.changed':
       return read('changed the instance settings', 'instance');
+    case 'telemetry.changed':
+      return read(
+        data.enabled ? 'turned anonymous telemetry on' : 'turned anonymous telemetry off',
+        'instance',
+      );
     case 'theme.installed':
       return read(`installed the theme ${String(data.name ?? '')}`.trim(), 'instance');
     case 'theme.removed':

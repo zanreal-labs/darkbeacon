@@ -16,6 +16,7 @@ import type { AppConfig } from '../config/config.js';
 import { ActorGuard, ActorResolverRegistry } from './actor.js';
 import { AsyncAuditScope, AuditContextInterceptor, AuditDirectoryRegistry } from './audit.js';
 import { EventConsumers } from './event-consumers.js';
+import { EventLogTaps } from './event-taps.js';
 import { SignInCookies } from './sign-in-cookies.js';
 import { ApiExceptionFilter } from './http.js';
 import { APP_CONFIG, AUDIT_SCOPE, CLOCK, EVENT_BUS, EVENT_LOG, HTTP_FETCH, UNIT_OF_WORK } from './tokens.js';
@@ -84,6 +85,7 @@ export class PlatformModule {
         AsyncAuditScope,
         { provide: AUDIT_SCOPE, useExisting: AsyncAuditScope },
         AuditDirectoryRegistry,
+        EventLogTaps,
         {
           provide: EVENT_LOG,
           useFactory: (
@@ -91,8 +93,14 @@ export class PlatformModule {
             bus: EventBus,
             scope: AsyncAuditScope,
             directory: AuditDirectoryRegistry,
-          ) => new KyselyEventLog(database, bus, { scope, stamper: new AuditStamper(directory) }),
-          inject: [Database, EVENT_BUS, AsyncAuditScope, AuditDirectoryRegistry],
+            taps: EventLogTaps,
+          ) =>
+            new KyselyEventLog(database, bus, {
+              scope,
+              stamper: new AuditStamper(directory),
+              committed: (events, context) => taps.notify(events, context),
+            }),
+          inject: [Database, EVENT_BUS, AsyncAuditScope, AuditDirectoryRegistry, EventLogTaps],
         },
         ActorResolverRegistry,
         EventConsumers,
@@ -115,6 +123,7 @@ export class PlatformModule {
         AsyncAuditScope,
         AUDIT_SCOPE,
         AuditDirectoryRegistry,
+        EventLogTaps,
       ],
     };
   }

@@ -234,6 +234,7 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
   },
   'discord_bot.changed': { op: 'update', entity: () => ({ kind: 'settings', id: 'discordBot' }) },
   'settings.changed': { op: 'update', entity: () => ({ kind: 'settings', id: 'instance' }) },
+  'telemetry.changed': { op: 'update', entity: () => ({ kind: 'settings', id: 'telemetry' }) },
   'theme.installed': { op: 'create', entity: byId('theme') },
   'theme.removed': { op: 'delete', entity: byId('theme') },
   'theme.default_changed': { op: 'update', entity: () => ({ kind: 'settings', id: 'defaultTheme' }) },

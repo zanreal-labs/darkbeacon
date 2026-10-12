@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useReactFlow } from '@xyflow/react';
 import {
@@ -25,7 +25,9 @@ import {
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
 import { mapPermissions } from '../lib/roles';
 import { useMe } from '../lib/session';
+import { track } from '../lib/telemetry';
 import { useUniverseSystems } from '../lib/universe';
+import { usePageView } from '../lib/useTelemetry';
 import { AddSystemSearch } from '../map/AddSystemSearch';
 import { MapCanvas, type FocusRequest, type MenuTarget } from '../map/MapCanvas';
 import { freeSpot } from '../map/geometry';
@@ -68,6 +70,13 @@ export function MapView({
   // The dock starts closed, so the first view has the whole width for the chain; selecting a
   // system opens it on wide screens and clearing the selection closes it.
   const [dock, setDock] = useState({ tab: 'system', open: false });
+  usePageView('map');
+  useEffect(() => {
+    if (!dock.open) return;
+    const panel =
+      dock.tab === 'system' || dock.tab === 'signatures' || dock.tab === 'local' ? dock.tab : 'plugin';
+    track('panel_opened', { panel });
+  }, [dock.open, dock.tab]);
   // Phones get the bottom dock, which covers nothing the view needs to avoid.
   const wide = typeof window !== 'undefined' && !window.matchMedia?.('(max-width: 760px)').matches;
   const [menu, setMenu] = useState<OpenMenu | null>(null);
