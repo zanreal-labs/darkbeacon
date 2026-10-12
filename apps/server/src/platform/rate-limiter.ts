@@ -1,54 +1,11 @@
-import { Injectable } from '@nestjs/common';
-
-interface Bucket {
-  tokens: number;
-  at: number;
-}
-
-/** Most buckets kept; the oldest go first when an attack fills the table. */
-const MAX_BUCKETS = 50_000;
+import { TokenBuckets } from '../adapters/rate-limit/token-buckets.js';
 
 /**
- * In-process token buckets: `take(key, perMinute)` allows bursts up to `perMinute` and refills
- * continuously. One process serves the instance, so memory is the right place; a restart only
- * forgets who was close to a limit.
+ * The edge's limits (client addresses, API keys, public reads) as keyed token buckets: the same
+ * mechanism as the tracking poller's ESI budget. Each replica counts its own requests, so behind
+ * a load balancer spreading one client over N replicas the limit is N times as high.
  */
-@Injectable()
-export class RateLimiter {
-  private readonly buckets = new Map<string, Bucket>();
-
-  constructor(private readonly now: () => number = () => Date.now()) {}
-
-  /** Takes one token; when none is left, says how many seconds until one is. */
-  take(key: string, perMinute: number, cost = 1): { ok: true } | { ok: false; retryAfterSeconds: number } {
-    const now = this.now();
-    const rate = perMinute / 60_000;
-    const current = this.buckets.get(key);
-    const tokens = current ? Math.min(perMinute, current.tokens + (now - current.at) * rate) : perMinute;
-    if (tokens < cost) {
-      this.set(key, { tokens, at: now });
-      return { ok: false, retryAfterSeconds: Math.max(1, Math.ceil((cost - tokens) / rate / 1000)) };
-    }
-    this.set(key, { tokens: tokens - cost, at: now });
-    return { ok: true };
-  }
-
-  /** True while `key` has no token left (without taking one). */
-  exhausted(key: string, perMinute: number): boolean {
-    const current = this.buckets.get(key);
-    if (!current) return false;
-    return current.tokens + (this.now() - current.at) * (perMinute / 60_000) < 1;
-  }
-
-  private set(key: string, bucket: Bucket): void {
-    this.buckets.delete(key);
-    this.buckets.set(key, bucket);
-    if (this.buckets.size > MAX_BUCKETS) {
-      const oldest = this.buckets.keys().next().value;
-      if (oldest !== undefined) this.buckets.delete(oldest);
-    }
-  }
-}
+export class RateLimiter extends TokenBuckets {}
 
 /** Limits, per minute. */
 export const LIMITS = {

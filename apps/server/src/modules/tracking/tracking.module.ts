@@ -23,7 +23,7 @@ import {
   type MappingPorts,
 } from '@darkbeacon/mapping';
 import { CharacterService } from '@darkbeacon/identity';
-import { TokenBucket } from '../../adapters/rate-limit/token-bucket.js';
+import { BucketBudget, TokenBuckets } from '../../adapters/rate-limit/token-buckets.js';
 import { HttpEsiGateway } from '../../adapters/tracking/http-esi-gateway.js';
 import { RealtimeMapViewers } from '../../adapters/tracking/realtime-map-viewers.js';
 import { MappingAutoMapTarget } from '../../adapters/tracking/mapping-auto-map-target.js';
@@ -178,7 +178,7 @@ const { version } = JSON.parse(readFileSync(new URL('../../../package.json', imp
           events,
           uow,
           clock,
-          budget: new TokenBucket(clock, ESI_REQUESTS_PER_SECOND),
+          budget: new BucketBudget(new TokenBuckets(() => clock.now()), 'esi', ESI_REQUESTS_PER_SECOND),
           viewers: new RealtimeMapViewers(hub),
           onError: (error, characterId) =>
             logger.error(`polling character ${characterId} failed: ${String(error)}`),
