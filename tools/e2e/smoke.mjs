@@ -258,8 +258,8 @@ async function run() {
           for (const state of ['closed', 'open']) {
             const strip = await tablist.boundingBox();
             assert.ok(strip.x >= 0 && strip.x + strip.width <= width, `${width} ${state}: strip in view`);
-            const gear = await page.getByRole('link', { name: 'Map settings' }).boundingBox();
-            if (gear) assert.ok(gear.x + gear.width <= strip.x, `${width} ${state}: gear clear of the tabs`);
+            // Settings open from the rail, never from the canvas.
+            assert.equal(await page.locator('main').getByRole('link', { name: 'Map settings' }).count(), 0);
             // Clicking the plugin tab opens the dock on it, clicking it again closes the dock.
             await pluginTab.click();
             const panel = page.getByRole('tabpanel');
@@ -284,8 +284,14 @@ async function run() {
       await page.getByText('This device').first().waitFor();
       await page.goto(`${BASE}/maps`);
       await page.getByRole('heading', { name: 'All maps', exact: true }).waitFor();
+      // The old settings address opens the map with the dialog over it.
       await page.goto(`${BASE}/m/${MAP}/settings?tab=notifications`);
+      await page.getByRole('dialog', { name: 'Map settings' }).waitFor();
+      assert.equal(new URL(page.url()).pathname, `/m/${MAP}`);
+      await page.getByRole('tab', { name: 'Webhooks' }).click();
       await page.getByRole('heading', { name: 'Webhooks', exact: true }).waitFor();
+      await page.keyboard.press('Escape');
+      await page.getByRole('dialog').waitFor({ state: 'hidden' });
       await page.waitForTimeout(500);
       assert.deepEqual(errors, []);
     });

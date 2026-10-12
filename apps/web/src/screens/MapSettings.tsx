@@ -1,11 +1,9 @@
 'use client';
 
-import { useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
-import Link from 'next/link';
+import { useId, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowUpRight,
   Bell,
   Bookmark,
   Building2,
@@ -20,6 +18,7 @@ import {
   ShieldCheck,
   Tags,
   Trash2,
+  TriangleAlert,
   UserRound,
   Webhook,
   X,
@@ -47,15 +46,15 @@ import {
   type CreatedWebhookDto,
   type LabelDto,
   type MapDto,
-  type MapSummaryDto,
   type UpdateMapRequest,
   type WebhookDeliveryDto,
   type WebhookDto,
 } from '@darkbeacon/shared';
 import { api, ApiError } from '../lib/api';
-import { mapPermissions } from '../lib/roles';
+import { mapSettingsHref, mapSettingsSections, type MapSettingsSection } from '../lib/map-settings';
+import { mapPermissions, type MapPermissions } from '../lib/roles';
 import { relativeTime } from '../lib/time';
-import { useTabParam } from '../lib/useTabParam';
+import { useMapSettings } from '../lib/useMapSettings';
 import { BookmarkLabelSettings } from '../map/BookmarkSettings';
 import { PluginSlot } from '../plugins/PluginSlot';
 import {
@@ -72,13 +71,14 @@ import {
   Dialog,
   DialogClose,
   DialogContent,
+  DialogDescription,
+  DialogSheet,
+  DialogTitle,
   EmptyState,
   ErrorState,
   Field,
   IconButton,
   Input,
-  Page,
-  PageHeader,
   Select,
   Skeleton,
   SkeletonRows,
@@ -91,128 +91,162 @@ import {
   Tooltip,
   useToast,
 } from '../ui';
-import { Redirect } from '../components/Redirect';
+import dialog from './MapSettings.module.css';
 import styles from './settings.module.css';
 
 const errorText = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback);
 
-type TabId = 'general' | 'labels' | 'bookmarks' | 'access' | 'notifications';
+interface Section {
+  id: MapSettingsSection;
+  title: string;
+  icon: ReactNode;
+  render(map: MapDto, can: MapPermissions): ReactNode;
+}
 
-/** Map settings while they load (also the server's Suspense fallback). */
-export function MapSettingsSkeleton() {
+const SECTIONS: readonly Section[] = [
+  {
+    id: 'general',
+    title: 'General',
+    icon: <Settings2 />,
+    render: (map) => <GeneralSettings map={map} />,
+  },
+  {
+    id: 'access',
+    title: 'Access',
+    icon: <ShieldCheck />,
+    render: (map) => (
+      <Pane>
+        <AccessRules map={map} />
+      </Pane>
+    ),
+  },
+  {
+    id: 'labels',
+    title: 'Labels',
+    icon: <Tags />,
+    render: (map) => <LabelSettings key={map.id} map={map} />,
+  },
+  {
+    id: 'bookmarks',
+    title: 'Bookmark labels',
+    icon: <Bookmark />,
+    render: (map, can) => (
+      <Pane>
+        <BookmarkLabelSettings key={map.id} map={map} canManage={can.manage} />
+      </Pane>
+    ),
+  },
+  {
+    id: 'discord',
+    title: 'Discord',
+    icon: <Bell />,
+    render: (map) => (
+      <Pane>
+        <DiscordNotifications map={map} />
+      </Pane>
+    ),
+  },
+  {
+    id: 'webhooks',
+    title: 'Webhooks',
+    icon: <Webhook />,
+    render: (map) => (
+      <Pane>
+        <Webhooks map={map} />
+      </Pane>
+    ),
+  },
+  {
+    id: 'danger',
+    title: 'Danger zone',
+    icon: <TriangleAlert />,
+    render: (map) => (
+      <Pane>
+        <DeleteMap map={map} />
+      </Pane>
+    ),
+  },
+];
+
+/**
+ * Settings of a map, in a dialog over the live map (managers and up). It is open while the
+ * address has `?settings=<section>`: the rail's settings button sets it, old links to
+ * `/m/<slug>/settings` arrive with it, and closing the dialog drops it again. Nothing navigates,
+ * so the map behind keeps its view, its selection and its live updates.
+ */
+export function MapSettingsDialog({ map, role }: { map: MapDto; role: MapRole | null | undefined }) {
+  const can = mapPermissions(role);
+  const { section, show, hide } = useMapSettings();
+  const body = useRef<HTMLDivElement>(null);
+  const allowed = mapSettingsSections(can);
+  const sections = SECTIONS.filter((s) => allowed.includes(s.id));
+  const first = sections[0];
+  if (!first) return null;
+  // An unknown or forbidden section (an old link, a role that changed) opens the first one.
+  const current = sections.find((s) => s.id === section) ?? first;
+
   return (
-    <Page width={880} aria-busy="true">
-      <Skeleton width={220} height={24} />
-      <Skeleton width={320} height={14} style={{ marginTop: 10 }} />
-      <Skeleton width="100%" height={36} style={{ margin: '32px 0 24px' }} />
-      <Skeleton width="100%" height={220} radius={10} />
-    </Page>
+    <Dialog open={section !== null} onOpenChange={(open) => !open && hide()}>
+      <DialogSheet
+        width={960}
+        height={720}
+        // The map's own keys (F, C, L, /, Escape for the legend) stay with the map.
+        onKeyDown={(e) => e.stopPropagation()}
+        onOpenAutoFocus={(e) => {
+          // The open section, so the arrow keys move between sections at once. On touch screens
+          // the sheet itself, so no focus ring greets a tap and no keyboard pops up.
+          e.preventDefault();
+          const touch = window.matchMedia?.('(pointer: coarse)').matches;
+          const target = touch
+            ? body.current?.closest<HTMLElement>('[role="dialog"]')
+            : body.current?.querySelector<HTMLElement>('[role="tab"][data-state="active"]');
+          target?.focus();
+        }}
+      >
+        <Tabs
+          ref={body}
+          value={current.id}
+          onValueChange={show}
+          orientation="vertical"
+          className={dialog.layout}
+        >
+          <header className={dialog.header}>
+            <div className={dialog.heading}>
+              <DialogTitle className={dialog.title}>Map settings</DialogTitle>
+              <DialogDescription className={dialog.subtitle}>{map.name}</DialogDescription>
+            </div>
+            <DialogClose asChild>
+              <IconButton label="Close" icon={<X />} size="sm" tooltip={false} />
+            </DialogClose>
+          </header>
+          <TabsList className={dialog.nav} aria-label="Map settings sections">
+            {sections.map((s) => (
+              <TabsTrigger key={s.id} value={s.id} icon={s.icon} data-section={s.id}>
+                {s.title}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          {sections.map((s) => (
+            <TabsContent key={s.id} value={s.id} className={dialog.panel}>
+              {s.render(map, can)}
+            </TabsContent>
+          ))}
+        </Tabs>
+      </DialogSheet>
+    </Dialog>
   );
 }
 
-/** Settings of the map at `/m/<slug>/settings`; the server renders it with the map already loaded. */
-export function MapSettingsPage({ slug }: { slug: string }) {
-  const map = useQuery({
-    queryKey: ['map', slug],
-    queryFn: () => api<MapDto>(buildPath(routes.maps.bySlug.path, { slug })),
-    retry: false,
-  });
-  const maps = useQuery({
-    queryKey: ['maps'],
-    queryFn: () => api<MapSummaryDto[]>(routes.maps.list.path),
-    retry: false,
-  });
-  const can = mapPermissions(maps.data?.find((m) => m.id === map.data?.id)?.role);
-  const tabs: { id: TabId; title: string; icon: ReactNode; show: boolean }[] = [
-    { id: 'general', title: 'General', icon: <Settings2 />, show: can.admin },
-    { id: 'labels', title: 'Labels', icon: <Tags />, show: can.manage },
-    { id: 'bookmarks', title: 'Bookmark labels', icon: <Bookmark />, show: can.manage },
-    { id: 'access', title: 'Access', icon: <ShieldCheck />, show: can.admin },
-    { id: 'notifications', title: 'Notifications', icon: <Bell />, show: can.admin },
-  ];
-  const visible = tabs.filter((t) => t.show);
-  const [tab, setTab] = useTabParam<TabId>(
-    visible.map((t) => t.id),
-    visible[0]?.id ?? 'labels',
-  );
-
-  if (map.isPending || maps.isPending) return <MapSettingsSkeleton />;
-  if (map.isError) {
-    const missing = map.error instanceof ApiError && map.error.status === 404;
-    return (
-      <Page width={880}>
-        {missing ? (
-          <EmptyState
-            icon={<Lock />}
-            title="This map is not available"
-            description={`There is no map “${slug}”, or you cannot see it.`}
-            actions={
-              <Button asChild>
-                <Link href="/maps">All maps</Link>
-              </Button>
-            }
-          />
-        ) : (
-          <ErrorState
-            title="Settings could not be loaded"
-            error={map.error}
-            onRetry={() => void map.refetch()}
-          />
-        )}
-      </Page>
-    );
-  }
-  if (!can.manage) return <Redirect to={`/m/${slug}`} />;
-
+/**
+ * One section of the dialog: its cards scroll on their own; `footer` (the buttons of the
+ * section's form) stays at the bottom, always in reach.
+ */
+function Pane({ children, footer }: { children: ReactNode; footer?: ReactNode }) {
   return (
-    <Page width={880}>
-      <PageHeader
-        title={map.data.name}
-        description="Map settings"
-        actions={
-          <Button asChild trailingIcon={<ArrowUpRight />}>
-            <Link href={`/m/${map.data.slug}`}>Open map</Link>
-          </Button>
-        }
-      />
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className={styles.tabs} aria-label="Map settings sections">
-          {visible.map((t) => (
-            <TabsTrigger key={t.id} value={t.id} icon={t.icon}>
-              {t.title}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-        {can.admin && (
-          <TabsContent value="general">
-            <Stack>
-              <GeneralSettings map={map.data} />
-              <PluginSlot slot="settingsPage" props={{ mapId: map.data.id }} />
-              <DeleteMap map={map.data} />
-            </Stack>
-          </TabsContent>
-        )}
-        <TabsContent value="labels">
-          <LabelSettings key={map.data.id} map={map.data} />
-        </TabsContent>
-        <TabsContent value="bookmarks">
-          <BookmarkLabelSettings key={map.data.id} map={map.data} canManage={can.manage} />
-        </TabsContent>
-        {can.admin && (
-          <TabsContent value="access">
-            <AccessRules map={map.data} />
-          </TabsContent>
-        )}
-        {can.admin && (
-          <TabsContent value="notifications">
-            <Stack>
-              <DiscordNotifications map={map.data} />
-              <Webhooks map={map.data} />
-            </Stack>
-          </TabsContent>
-        )}
-      </Tabs>
-    </Page>
+    <div className={dialog.pane}>
+      <div className={dialog.scroll}>{children}</div>
+      {footer && <div className={dialog.footer}>{footer}</div>}
+    </div>
   );
 }
 
@@ -236,6 +270,7 @@ const SCOPES: Record<MapScope, { label: string; hint: string }> = {
 
 function GeneralSettings({ map }: { map: MapDto }) {
   const router = useRouter();
+  const formId = useId();
   const toast = useToast();
   const updated = useMapUpdated();
   const [name, setName] = useState(map.name);
@@ -252,7 +287,7 @@ function GeneralSettings({ map }: { map: MapDto }) {
     onSuccess: (next) => {
       updated(next);
       toast({ title: 'Map settings saved', tone: 'success' });
-      if (next.slug !== map.slug) router.replace(`/m/${next.slug}/settings`);
+      if (next.slug !== map.slug) router.replace(mapSettingsHref(next.slug));
     },
   });
 
@@ -262,64 +297,9 @@ function GeneralSettings({ map }: { map: MapDto }) {
   };
 
   return (
-    <Card>
-      <form onSubmit={submit} aria-label="General">
-        <CardHeader title="General" description="The map's name, its address and what auto-mapping adds." />
-        <CardBody>
-          <div className={styles.formStack}>
-            <div className={styles.grid}>
-              <Field label="Name">
-                <Input required maxLength={64} value={name} onChange={(e) => setName(e.target.value)} />
-              </Field>
-              <Field
-                label="Address"
-                hint="Changing it breaks old links."
-                error={save.error ? errorText(save.error, 'Could not save.') : undefined}
-              >
-                <Input
-                  mono
-                  required
-                  minLength={2}
-                  maxLength={48}
-                  pattern="[a-z0-9]+(-[a-z0-9]+)*"
-                  icon={
-                    <span className="mono subtle" style={{ paddingLeft: 4 }}>
-                      /m/
-                    </span>
-                  }
-                  value={slug}
-                  onChange={(e) => setSlug(e.target.value)}
-                />
-              </Field>
-            </div>
-            <fieldset
-              style={{ border: 0, margin: 0, padding: 0, display: 'grid', gap: 'var(--dbk-space-2)' }}
-            >
-              <legend
-                className="muted"
-                style={{
-                  fontSize: 'var(--dbk-font-size-small)',
-                  fontWeight: 500,
-                  marginBottom: 'var(--dbk-space-2)',
-                }}
-              >
-                Auto-mapping adds systems in
-              </legend>
-              <div className={styles.grid} style={{ gap: 'var(--dbk-space-3)' }}>
-                {MapScope.options.map((s) => (
-                  <Checkbox
-                    key={s}
-                    checked={scopes.includes(s)}
-                    onCheckedChange={(on) => setScopes(on ? [...scopes, s] : scopes.filter((x) => x !== s))}
-                    label={SCOPES[s].label}
-                    description={SCOPES[s].hint}
-                  />
-                ))}
-              </div>
-            </fieldset>
-          </div>
-        </CardBody>
-        <CardFooter>
+    <Pane
+      footer={
+        <>
           {dirty && (
             <Button
               variant="ghost"
@@ -332,12 +312,73 @@ function GeneralSettings({ map }: { map: MapDto }) {
               Discard
             </Button>
           )}
-          <Button type="submit" variant="primary" loading={save.isPending} disabled={!dirty}>
+          <Button type="submit" form={formId} variant="primary" loading={save.isPending} disabled={!dirty}>
             Save changes
           </Button>
-        </CardFooter>
-      </form>
-    </Card>
+        </>
+      }
+    >
+      <Card>
+        <form id={formId} onSubmit={submit} aria-label="General">
+          <CardHeader title="General" description="The map's name, its address and what auto-mapping adds." />
+          <CardBody>
+            <div className={styles.formStack}>
+              <div className={styles.grid}>
+                <Field label="Name">
+                  <Input required maxLength={64} value={name} onChange={(e) => setName(e.target.value)} />
+                </Field>
+                <Field
+                  label="Address"
+                  hint="Changing it breaks old links."
+                  error={save.error ? errorText(save.error, 'Could not save.') : undefined}
+                >
+                  <Input
+                    mono
+                    required
+                    minLength={2}
+                    maxLength={48}
+                    pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                    icon={
+                      <span className="mono subtle" style={{ paddingLeft: 4 }}>
+                        /m/
+                      </span>
+                    }
+                    value={slug}
+                    onChange={(e) => setSlug(e.target.value)}
+                  />
+                </Field>
+              </div>
+              <fieldset
+                style={{ border: 0, margin: 0, padding: 0, display: 'grid', gap: 'var(--dbk-space-2)' }}
+              >
+                <legend
+                  className="muted"
+                  style={{
+                    fontSize: 'var(--dbk-font-size-small)',
+                    fontWeight: 500,
+                    marginBottom: 'var(--dbk-space-2)',
+                  }}
+                >
+                  Auto-mapping adds systems in
+                </legend>
+                <div className={styles.grid} style={{ gap: 'var(--dbk-space-3)' }}>
+                  {MapScope.options.map((s) => (
+                    <Checkbox
+                      key={s}
+                      checked={scopes.includes(s)}
+                      onCheckedChange={(on) => setScopes(on ? [...scopes, s] : scopes.filter((x) => x !== s))}
+                      label={SCOPES[s].label}
+                      description={SCOPES[s].hint}
+                    />
+                  ))}
+                </div>
+              </fieldset>
+            </div>
+          </CardBody>
+        </form>
+      </Card>
+      <PluginSlot slot="settingsPage" props={{ mapId: map.id }} />
+    </Pane>
   );
 }
 
@@ -411,14 +452,20 @@ function DeleteMap({ map }: { map: MapDto }) {
 // ---- Labels -----------------------------------------------------------------------------------
 
 const PALETTE = ['#38c6d6', '#3fbf7f', '#eba23b', '#f05252', '#7b93ff', '#b98cf5', '#f472b6', '#94a3b8'];
+/** `crypto.randomUUID` exists only on HTTPS and localhost; an instance on plain HTTP gets random hex. */
+const labelId = () =>
+  typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
 const newLabel = (n: number): LabelDto => ({
-  id: crypto.randomUUID(),
+  id: labelId(),
   name: '',
   color: PALETTE[n % PALETTE.length]!,
   description: '',
 });
 
 function LabelSettings({ map }: { map: MapDto }) {
+  const formId = useId();
   const queryClient = useQueryClient();
   const toast = useToast();
   const [labels, setLabels] = useState<LabelDto[]>(map.labels);
@@ -446,73 +493,11 @@ function LabelSettings({ map }: { map: MapDto }) {
   };
 
   return (
-    <Card>
-      <form onSubmit={submit} aria-label="Labels">
-        <CardHeader
-          title="Labels"
-          description="Tags for systems, like Staging or Sites. The description shows when someone hovers the label."
-          actions={
-            <Button
-              size="sm"
-              icon={<Plus />}
-              onClick={() => setLabels((ls) => [...ls, newLabel(ls.length)])}
-              disabled={labels.length >= 64}
-            >
-              Add label
-            </Button>
-          }
-        />
-        <CardBody flush>
-          {labels.length === 0 ? (
-            <EmptyState
-              compact
-              icon={<Tags />}
-              title="No labels yet"
-              description="Add a few to mark staging systems, sites or exits on the map."
-            />
-          ) : (
-            <div>
-              {labels.map((l) => (
-                <div key={l.id} className={styles.labelRow}>
-                  <Tooltip content="Colour">
-                    <label className={styles.swatch} style={{ background: l.color }}>
-                      <input
-                        type="color"
-                        aria-label={`Colour of ${l.name || 'new label'}`}
-                        value={l.color}
-                        onChange={(e) => change(l.id, { color: e.target.value })}
-                        style={{ opacity: 0 }}
-                      />
-                    </label>
-                  </Tooltip>
-                  <Input
-                    aria-label="Label name"
-                    placeholder="Name"
-                    maxLength={32}
-                    value={l.name}
-                    onChange={(e) => change(l.id, { name: e.target.value })}
-                  />
-                  <Input
-                    aria-label="Description"
-                    placeholder="Description (optional)"
-                    maxLength={500}
-                    value={l.description}
-                    onChange={(e) => change(l.id, { description: e.target.value })}
-                  />
-                  <IconButton
-                    size="sm"
-                    label={`Remove label ${l.name || 'new label'}`}
-                    icon={<X />}
-                    onClick={() => setLabels((ls) => ls.filter((x) => x.id !== l.id))}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-        </CardBody>
-        <CardFooter>
+    <Pane
+      footer={
+        <>
           {labels.some((l) => l.name.trim()) && (
-            <span className={styles.footerNote}>
+            <span className={`${styles.footerNote} ${dialog.footerNote}`}>
               <span className={styles.preview}>
                 {labels
                   .filter((l) => l.name.trim())
@@ -534,12 +519,79 @@ function LabelSettings({ map }: { map: MapDto }) {
               Discard
             </Button>
           )}
-          <Button type="submit" variant="primary" loading={save.isPending} disabled={!dirty}>
+          <Button type="submit" form={formId} variant="primary" loading={save.isPending} disabled={!dirty}>
             Save labels
           </Button>
-        </CardFooter>
-      </form>
-    </Card>
+        </>
+      }
+    >
+      <Card>
+        <form id={formId} onSubmit={submit} aria-label="Labels">
+          <CardHeader
+            title="Labels"
+            description="Tags for systems, like Staging or Sites. The description shows when someone hovers the label."
+            actions={
+              <Button
+                size="sm"
+                icon={<Plus />}
+                onClick={() => setLabels((ls) => [...ls, newLabel(ls.length)])}
+                disabled={labels.length >= 64}
+              >
+                Add label
+              </Button>
+            }
+          />
+          <CardBody flush>
+            {labels.length === 0 ? (
+              <EmptyState
+                compact
+                icon={<Tags />}
+                title="No labels yet"
+                description="Add a few to mark staging systems, sites or exits on the map."
+              />
+            ) : (
+              <div>
+                {labels.map((l) => (
+                  <div key={l.id} className={styles.labelRow}>
+                    <Tooltip content="Colour">
+                      <label className={styles.swatch} style={{ background: l.color }}>
+                        <input
+                          type="color"
+                          aria-label={`Colour of ${l.name || 'new label'}`}
+                          value={l.color}
+                          onChange={(e) => change(l.id, { color: e.target.value })}
+                          style={{ opacity: 0 }}
+                        />
+                      </label>
+                    </Tooltip>
+                    <Input
+                      aria-label="Label name"
+                      placeholder="Name"
+                      maxLength={32}
+                      value={l.name}
+                      onChange={(e) => change(l.id, { name: e.target.value })}
+                    />
+                    <Input
+                      aria-label="Description"
+                      placeholder="Description (optional)"
+                      maxLength={500}
+                      value={l.description}
+                      onChange={(e) => change(l.id, { description: e.target.value })}
+                    />
+                    <IconButton
+                      size="sm"
+                      label={`Remove label ${l.name || 'new label'}`}
+                      icon={<X />}
+                      onClick={() => setLabels((ls) => ls.filter((x) => x.id !== l.id))}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardBody>
+        </form>
+      </Card>
+    </Pane>
   );
 }
 

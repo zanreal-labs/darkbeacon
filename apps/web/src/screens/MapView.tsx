@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
 import { useReactFlow } from '@xyflow/react';
 import {
   SYSTEM_PLACEMENT,
@@ -17,7 +16,6 @@ import {
   Plus,
   Puzzle,
   Radar,
-  Settings,
   UsersRound,
   Waypoints,
   X,
@@ -289,18 +287,6 @@ export function MapView({
             <Spinner label="Saving" />
             Saving…
           </span>
-        )}
-        <span className={styles.spacer} />
-        {can.manage && (
-          <IconButton
-            asChild
-            variant="secondary"
-            className={styles.toolButton}
-            label="Map settings"
-            icon={<Settings />}
-          >
-            <Link href={`/m/${map.slug}/settings`} />
-          </IconButton>
         )}
       </div>
 
