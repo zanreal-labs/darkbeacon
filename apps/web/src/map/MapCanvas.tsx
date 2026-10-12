@@ -83,9 +83,12 @@ function typing(target: EventTarget | null): boolean {
   return !!el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName));
 }
 
-/** Moves the selection to a node once it is rendered (it may still be on its way from the store). */
+/**
+ * Moves the selection to a node once it is rendered (it may still be on its way from the store);
+ * `id: null` clears the selection.
+ */
 export interface FocusRequest {
-  id: number;
+  id: number | null;
   center: boolean;
   n: number;
 }
@@ -350,10 +353,12 @@ export function MapCanvas({
     centerOn(at, Math.max(rf.getZoom(), DEFAULT_ZOOM), true);
   }, [myLocation, centerOfSystem, centerOn, rf, toast]);
 
-  // A panel that opens over the canvas must not hide the selected system: pan it into view.
+  // A panel that opens over the canvas must not hide the selected system, nor may a system picked
+  // at the panel's edge stay under it: pan it into view (never while it is being dragged).
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   useEffect(() => {
     const box = canvasRef.current?.getBoundingClientRect();
-    const node = rf.getNodes().find((n) => n.selected);
+    const node = selectedId === null ? undefined : rf.getNode(selectedId);
     if (!box || !node || node.dragging || (coveredRight === 0 && coveredBottom === 0)) return;
     const { x, y, zoom } = rf.getViewport();
     const right = x + (node.position.x + (node.measured?.width ?? 230)) * zoom;
@@ -361,7 +366,7 @@ export function MapCanvas({
     const dx = Math.max(0, right - (box.width - coveredRight - 24));
     const dy = Math.max(0, bottom - (box.height - coveredBottom - 24));
     if (dx > 0 || dy > 0) void rf.setViewport({ x: x - dx, y: y - dy, zoom }, { duration: 250 });
-  }, [coveredRight, coveredBottom, rf]);
+  }, [coveredRight, coveredBottom, selectedId, rf]);
 
   const [legend, setLegendState] = useState(false);
   useEffect(() => {
@@ -415,6 +420,11 @@ export function MapCanvas({
 
   useEffect(() => {
     if (!focus || handledFocus.current === focus.n) return;
+    if (focus.id === null) {
+      handledFocus.current = focus.n;
+      setNodes((ns) => ns.map((n) => (n.selected ? { ...n, selected: false } : n)));
+      return;
+    }
     const id = String(focus.id);
     const node = nodes.find((n) => n.id === id);
     if (!node) return; // not rendered yet; runs again when the nodes change
@@ -466,6 +476,7 @@ export function MapCanvas({
   };
 
   const onSelectionChange = ({ nodes: selected }: OnSelectionChangeParams) => {
+    setSelectedId(selected.length === 1 ? selected[0]!.id : null);
     onSelect(selected.length === 1 ? Number(selected[0]!.id) : null);
   };
 
