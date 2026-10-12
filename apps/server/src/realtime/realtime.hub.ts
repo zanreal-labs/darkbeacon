@@ -164,17 +164,11 @@ export class RealtimeHub {
     );
   }
 
-  private async denial(
+  private denial(
     connection: Connection,
     stream: string,
   ): Promise<{ code: WsErrorCode; message: string } | null> {
-    const parsed = parseStream(stream);
-    const kind = parsed && this.options.registry.stream(parsed.kind);
-    if (!parsed || !kind) return { code: 'unknown_stream', message: `Unknown stream ${stream}` };
-    if (await kind.authorize(connection.actor, parsed.id)) return null;
-    return connection.actor
-      ? { code: 'forbidden', message: 'You cannot follow this stream' }
-      : { code: 'unauthenticated', message: 'Sign in first' };
+    return this.check(connection.actor, stream);
   }
 
   private async catchUp(sub: Subscription, sinceSeq: number | undefined): Promise<void> {
@@ -206,12 +200,38 @@ export class RealtimeHub {
   }
 
   private async snapshot(sub: Subscription): Promise<void> {
-    const { kind, id } = parseStream(sub.stream)!;
+    const { seq, data } = await this.readSnapshot(sub.stream, sub.connection.actor);
+    sub.lastSeq = seq;
+    if (sub.active) sub.connection.send({ op: 'snapshot', stream: sub.stream, seq, data });
+  }
+
+  /**
+   * May `actor` follow `stream`? Null when allowed, else the reason (the same check a subscribe
+   * runs, also used by the REST snapshot).
+   */
+  async check(actor: Actor | null, stream: string): Promise<{ code: WsErrorCode; message: string } | null> {
+    const parsed = parseStream(stream);
+    const kind = parsed && this.options.registry.stream(parsed.kind);
+    if (!parsed || !kind) return { code: 'unknown_stream', message: `Unknown stream ${stream}` };
+    if (await kind.authorize(actor, parsed.id)) return null;
+    return actor
+      ? { code: 'forbidden', message: 'You cannot follow this stream' }
+      : { code: 'unauthenticated', message: 'Sign in first' };
+  }
+
+  /**
+   * The merged snapshot of a stream and the head seq it corresponds to, read in one repeatable-read
+   * transaction. Callers authorize first (see `check`).
+   */
+  async readSnapshot(
+    stream: string,
+    actor: Actor | null,
+  ): Promise<{ seq: number; data: Record<string, unknown> }> {
+    const { kind, id } = parseStream(stream)!;
     const { database, log, registry } = this.options;
-    const actor = sub.connection.actor;
-    const { seq, data } = await database.transaction(
+    return database.transaction(
       async () => {
-        const seq = await log.headSeq(sub.stream);
+        const seq = await log.headSeq(stream);
         const data: Record<string, unknown> = {};
         for (const provider of registry.snapshotProviders(kind))
           Object.assign(data, await provider(id, actor));
@@ -219,8 +239,6 @@ export class RealtimeHub {
       },
       { isolation: 'repeatable read' },
     );
-    sub.lastSeq = seq;
-    if (sub.active) sub.connection.send({ op: 'snapshot', stream: sub.stream, seq, data });
   }
 
   private deliver(sub: Subscription, event: DomainEvent): void {

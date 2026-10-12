@@ -4,7 +4,7 @@ import { nestPath, routes, type MeDto } from '@darkbeacon/shared';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { AppConfig } from '../../config/config.js';
 import { APP_CONFIG } from '../../platform/tokens.js';
-import { serializeCookie, SESSION_COOKIE } from '../identity/cookies.js';
+import { clearCookie, DEMO_OPT_OUT_COOKIE, serializeCookie, SESSION_COOKIE } from '../identity/cookies.js';
 import { DemoService } from './demo.service.js';
 
 @Controller()
@@ -15,7 +15,10 @@ export class DemoController {
     @Inject(AccountService) private readonly accounts: AccountService,
   ) {}
 
-  /** Demo mode only (404 otherwise): signs in as the demo account; the web app calls it by itself. */
+  /**
+   * Demo mode only (404 otherwise): signs in as the demo account. The web app's proxy calls it for a
+   * signed-out page visit, so the first HTML is already the signed-in app.
+   */
   @Post(nestPath(routes.auth.demo.path))
   @HttpCode(200)
   async signIn(
@@ -23,13 +26,11 @@ export class DemoController {
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<MeDto> {
     const signedIn = await this.demo.signIn(request.headers['user-agent'] ?? null);
-    reply.header(
-      'set-cookie',
-      serializeCookie(SESSION_COOKIE, signedIn.token, {
-        maxAgeSeconds: SESSION_TTL_MS / 1000,
-        secure: this.config.publicUrl.startsWith('https://'),
-      }),
-    );
+    const secure = this.config.publicUrl.startsWith('https://');
+    reply.header('set-cookie', [
+      serializeCookie(SESSION_COOKIE, signedIn.token, { maxAgeSeconds: SESSION_TTL_MS / 1000, secure }),
+      clearCookie(DEMO_OPT_OUT_COOKIE, { secure }),
+    ]);
     return this.accounts.me(await this.accounts.actorFor(signedIn.account));
   }
 }

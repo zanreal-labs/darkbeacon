@@ -29,6 +29,19 @@ const route = <const R extends RouteDef>(r: R): R => r;
 export const routes = {
   health: route({ method: 'GET', path: '/api/health', auth: 'public', response: dto.HealthDto }),
 
+  realtime: {
+    /**
+     * Snapshot of a stream (`map:<id>`, `instance`) for whoever may follow it over /ws. Streams the
+     * caller cannot follow answer 404 (signed in) or 401 (anonymous).
+     */
+    snapshot: route({
+      method: 'GET',
+      path: '/api/streams/:stream/snapshot',
+      auth: 'public',
+      response: dto.StreamSnapshotDto,
+    }),
+  },
+
   auth: {
     providers: route({
       method: 'GET',

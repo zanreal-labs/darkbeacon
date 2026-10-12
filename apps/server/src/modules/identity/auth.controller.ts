@@ -19,6 +19,7 @@ import { ZodPipe } from '../../platform/http.js';
 import { APP_CONFIG } from '../../platform/tokens.js';
 import {
   clearCookie,
+  DEMO_OPT_OUT_COOKIE,
   LEGACY_SESSION_COOKIE,
   openPending,
   PENDING_COOKIE,
@@ -174,6 +175,9 @@ export class AuthController {
   private clearSession(reply: FastifyReply): void {
     this.addCookie(reply, clearCookie(SESSION_COOKIE, { secure: this.secure }));
     this.addCookie(reply, clearCookie(LEGACY_SESSION_COOKIE, { secure: this.secure }));
+    // In demo mode a signed-out visitor would otherwise be signed straight back in.
+    if (this.demo.enabled)
+      this.addCookie(reply, serializeCookie(DEMO_OPT_OUT_COOKIE, '1', { secure: this.secure }));
   }
 
   private addCookie(reply: FastifyReply, cookie: string): void {

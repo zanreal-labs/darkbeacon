@@ -6,10 +6,12 @@ import { EventRetention } from './event-retention.js';
 import { RealtimeGateway } from './realtime.gateway.js';
 import { RealtimeHub } from './realtime.hub.js';
 import { RealtimeRegistry } from './realtime.registry.js';
+import { SnapshotController } from './snapshot.controller.js';
 
 /** WebSocket gateway at /ws. Feature modules inject RealtimeRegistry to add stream kinds and snapshots. */
 @Global()
 @Module({
+  controllers: [SnapshotController],
   providers: [
     RealtimeRegistry,
     {

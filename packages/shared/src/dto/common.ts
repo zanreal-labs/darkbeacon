@@ -29,3 +29,15 @@ export const HealthDto = z.object({
   database: z.enum(['sqlite', 'postgres']),
 });
 export type HealthDto = z.infer<typeof HealthDto>;
+
+/**
+ * The state of a realtime stream at `seq`, read over REST so a server-rendered page can show it
+ * before its WebSocket opens; the client then subscribes with `sinceSeq: seq` and only gets
+ * what happened after. `data` has the same shape as the WebSocket snapshot (e.g. `MapSnapshot`).
+ */
+export const StreamSnapshotDto = z.object({
+  stream: z.string(),
+  seq: z.number().int().min(0),
+  data: z.record(z.string(), z.unknown()),
+});
+export type StreamSnapshotDto = z.infer<typeof StreamSnapshotDto>;

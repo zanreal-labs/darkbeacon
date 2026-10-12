@@ -8,11 +8,18 @@ export const SESSION_COOKIE = 'dbk_session';
  * upgrade; it is never set again and lapses with its 30-day Max-Age.
  */
 export const LEGACY_SESSION_COOKIE = 'ww_session';
+/**
+ * Demo mode only: set when someone signs out, so the web app shows the sign-in page (with
+ * "Explore the demo") instead of signing them straight back in. Lasts the browser session and is
+ * cleared by the next demo sign-in.
+ */
+export const DEMO_OPT_OUT_COOKIE = 'dbk_demo_out';
 /** Holds the sealed state of an OAuth round trip; scoped to /api/auth. */
 export const PENDING_COOKIE = 'dbk_oauth';
 
 export interface CookieOptions {
-  maxAgeSeconds: number;
+  /** Omitted: a browser-session cookie. */
+  maxAgeSeconds?: number;
   path?: string;
   secure: boolean;
 }
@@ -44,7 +51,7 @@ export function serializeCookie(name: string, value: string, options: CookieOpti
   const parts = [
     `${name}=${encodeURIComponent(value)}`,
     `Path=${options.path ?? '/'}`,
-    `Max-Age=${options.maxAgeSeconds}`,
+    ...(options.maxAgeSeconds !== undefined ? [`Max-Age=${options.maxAgeSeconds}`] : []),
     'HttpOnly',
     'SameSite=Lax',
   ];
