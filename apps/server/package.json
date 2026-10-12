@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@darkbeacon/access": "workspace:*",
+    "@darkbeacon/api-keys": "workspace:*",
     "@darkbeacon/audit": "workspace:*",
     "@darkbeacon/backups": "workspace:*",
     "@darkbeacon/core": "workspace:*",
@@ -20,18 +21,21 @@
     "@darkbeacon/jumps": "workspace:*",
     "@darkbeacon/mapping": "workspace:*",
     "@darkbeacon/notifications": "workspace:*",
+    "@darkbeacon/oauth": "workspace:*",
     "@darkbeacon/observability": "workspace:*",
     "@darkbeacon/plugin-sdk": "workspace:*",
     "@darkbeacon/plugins": "workspace:*",
+    "@darkbeacon/publishing": "workspace:*",
     "@darkbeacon/routing": "workspace:*",
     "@darkbeacon/sde": "workspace:*",
-    "@darkbeacon/sharing": "workspace:*",
     "@darkbeacon/shared": "workspace:*",
-    "@darkbeacon/theme-sdk": "workspace:*",
+    "@darkbeacon/sharing": "workspace:*",
     "@darkbeacon/telemetry": "workspace:*",
+    "@darkbeacon/theme-sdk": "workspace:*",
     "@darkbeacon/tracking": "workspace:*",
     "@fastify/busboy": "^3.2.0",
     "@fastify/otel": "0.21.2",
+    "@modelcontextprotocol/server": "2.1.0",
     "@nestjs/common": "^12.1.2",
     "@nestjs/core": "^12.1.2",
     "@nestjs/platform-fastify": "^12.1.2",
@@ -60,6 +64,7 @@
     "@opentelemetry/sdk-node": "0.222.0",
     "@opentelemetry/sdk-trace-base": "2.11.0",
     "@opentelemetry/semantic-conventions": "1.43.0",
+    "@scalar/api-reference": "1.72.1",
     "fastify": "^5.12.5",
     "import-in-the-middle": "3.5.2",
     "kysely": "^0.29.6",
@@ -71,6 +76,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "2.1.0",
     "@types/ws": "^8.18.2"
   }
 }

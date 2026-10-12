@@ -5,6 +5,7 @@ import type { WebSocket } from 'ws';
 import type { AppConfig } from '../config/config.js';
 import { RESTORED_CLOSE_CODE } from '@darkbeacon/shared';
 import { ActorResolverRegistry } from '../platform/actor.js';
+import { clientAddress } from '../platform/client-address.js';
 import { MaintenanceMode } from '../platform/maintenance.js';
 import { APP_CONFIG } from '../platform/tokens.js';
 import { RealtimeHub, type HubConnection } from './realtime.hub.js';
@@ -61,12 +62,14 @@ export class RealtimeGateway
       socket.close(TRY_AGAIN_LATER, 'Restoring a backup');
       return;
     }
+    const ip = clientAddress(request.socket.remoteAddress, request.headers['x-forwarded-for']);
     const hub = this.hub.connect(
-      () => this.actors.resolve({ headers: request.headers }),
+      () => this.actors.resolve({ headers: request.headers, ip, url: '/ws' }),
       (message) => {
         if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(message));
       },
       () => socket.close(POLICY_VIOLATION, 'Signed out'),
+      { ip },
     );
     const entry = { hub, alive: true };
     this.sockets.set(socket, entry);

@@ -47,9 +47,9 @@ describeEachDialect('observability', (t) => {
     app
       .get(ActorResolverRegistry)
       .use(async (req) =>
-        req.headers.authorization === 'Bearer admin'
+        req.headers['x-test-actor'] === 'admin'
           ? { kind: 'account', id: 'admin', instanceRole: 'admin' }
-          : req.headers.authorization === 'Bearer user'
+          : req.headers['x-test-actor'] === 'user'
             ? { kind: 'account', id: 'user', instanceRole: 'user' }
             : null,
       );
@@ -97,7 +97,7 @@ describeEachDialect('observability', (t) => {
   it('shows admins what is exported, and nobody else', async () => {
     await start(prometheusRuntime());
     const status = await fetch(`${base}/api/admin/observability`, {
-      headers: { authorization: 'Bearer admin' },
+      headers: { 'x-test-actor': 'admin' },
     });
     expect(status.status).toBe(200);
     expect(await status.json()).toEqual({
@@ -108,7 +108,7 @@ describeEachDialect('observability', (t) => {
       prometheus: { enabled: true, path: '/metrics' },
     });
     expect(
-      (await fetch(`${base}/api/admin/observability`, { headers: { authorization: 'Bearer user' } })).status,
+      (await fetch(`${base}/api/admin/observability`, { headers: { 'x-test-actor': 'user' } })).status,
     ).toBe(403);
     expect((await fetch(`${base}/api/admin/observability`)).status).toBe(401);
   });
@@ -119,7 +119,7 @@ describeEachDialect('observability', (t) => {
       404,
     );
     const status = await fetch(`${base}/api/admin/observability`, {
-      headers: { authorization: 'Bearer admin' },
+      headers: { 'x-test-actor': 'admin' },
     });
     expect(await status.json()).toMatchObject({ enabled: false, prometheus: { enabled: false } });
 

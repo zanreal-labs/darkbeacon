@@ -128,7 +128,8 @@ made while seeding the demo map or by cleanups count as nothing; a history rever
 | `system_added`                       | `source`                                                                                                                                                                             |
 | `connection_added`                   | `type`: `wormhole`, `gate`, `bridge`; `source`                                                                                                                                       |
 | `connection_updated`                 | `field`: `type`, `time`, `eol`, `mass`, `size`, `bubble`, `dangerous`, `mass_saved`; `source` (one event per field)                                                                  |
-| `labels_changed`                     |                                                                                                                                                                                      |
+| `labels_changed`                     | the map's Tags were replaced                                                                                                                                                         |
+| `system_labels_changed`              | the map's Labels (WH1, WH2...) were replaced                                                                                                                                         |
 | `ping_created`                       |                                                                                                                                                                                      |
 | `access_rule_added`                  | `subject`: `discordRole`, `character`, `corporation`, `alliance`, `account`                                                                                                          |
 | `webhook_created`                    |                                                                                                                                                                                      |
@@ -143,14 +144,22 @@ made while seeding the demo map or by cleanups count as nothing; a history rever
 
 ### Web app events
 
-| Event               | Properties                                                                                                                                                                                       |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `app_loaded`        | `viewport`: `phone`, `tablet`, `desktop`; `tti`: `<1s`, `1-2s`, `2-4s`, `4-8s`, `8s+`                                                                                                            |
-| `theme_used`        | `theme` (as `theme_default`); `scheme`: `light` or `dark`                                                                                                                                        |
-| `page_viewed`       | `page`: `map`, `maps`, `account`, `admin`, `map_settings`, `jump`; `section`: the admin or map settings tab                                                                                      |
-| `panel_opened`      | `panel`: `system`, `signatures`, `local`, `routes`, `connections`, `history`, `plugin`                                                                                                           |
-| `context_menu_used` | `menu`: `system` or `connection`; `action`: `status`, `labels`, `edit`, `hidden`, `locked`, `copy_name`, `remove`, `time`, `mass`, `size`, `type`, `bubble`, `dangerous`, `mass_saved`, `plugin` |
-| `shortcut_used`     | `shortcut`: `fit_chain`, `center_on_me`, `legend`                                                                                                                                                |
+| Event               | Properties                                                                                                                                                                                               |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app_loaded`        | `viewport`: `phone`, `tablet`, `desktop`; `tti`: `<1s`, `1-2s`, `2-4s`, `4-8s`, `8s+`                                                                                                                    |
+| `theme_used`        | `theme` (as `theme_default`); `scheme`: `light` or `dark`                                                                                                                                                |
+| `page_viewed`       | `page`: `map`, `maps`, `account`, `admin`, `map_settings`, `oauth_consent`; `section`: the admin or map settings tab                                                                                     |
+| `panel_opened`      | `panel`: `system`, `signatures`, `local`, `routes`, `connections`, `history`, `plugin`                                                                                                                   |
+| `context_menu_used` | `menu`: `system` or `connection`; `action`: `status`, `labels`, `edit`, `hidden`, `locked`, `copy_name`, `remove`, `time`, `mass`, `size`, `type`, `bubble`, `dangerous`, `mass_saved`, `plugin`         |
+| `shortcut_used`     | `shortcut`: `fit_chain`, `center_on_me`, `legend`                                                                                                                                                        |
+| Event               | Properties                                                                                                                                                                                               |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app_loaded`        | `viewport`: `phone`, `tablet`, `desktop`; `tti`: `<1s`, `1-2s`, `2-4s`, `4-8s`, `8s+`                                                                                                                    |
+| `theme_used`        | `theme` (as `theme_default`); `scheme`: `light` or `dark`                                                                                                                                                |
+| `page_viewed`       | `page`: `map`, `maps`, `account`, `admin`, `map_settings`; `section`: the admin or map settings tab                                                                                                      |
+| `panel_opened`      | `panel`: `system`, `signatures`, `local`, `routes`, `connections`, `history`, `plugin`                                                                                                                   |
+| `context_menu_used` | `menu`: `system` or `connection`; `action`: `status`, `labels`, `tags`, `edit`, `hidden`, `locked`, `copy_name`, `remove`, `time`, `mass`, `size`, `type`, `bubble`, `dangerous`, `mass_saved`, `plugin` |
+| `shortcut_used`     | `shortcut`: `fit_chain`, `center_on_me`, `legend`                                                                                                                                                        |
 
 ## Delivery
 

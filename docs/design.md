@@ -138,9 +138,11 @@ and danger, `status-warning` amber for pings and stars, `status-friendly` green 
 - Row 2: the statics as plain text, the hole type in the normal text colour (white in dark themes)
   and monospace, the destination (`HS`, `LS`, `NS`, `C1`-`C6`) in its colour right after it:
   `D845 HS`. No chips, no borders.
-- Nothing else on the node: region, effect, tag, notes and lock are in the tooltip and the side panel.
-- Above the node, left-aligned with its left edge: the map labels (a small coloured square and the
-  label's name, `■ Staging`), then the bookmark code (`ABC-123`, a click copies it).
+- Nothing else on the node: region, effect, notes and lock are in the tooltip and the side panel.
+- Above the node, left-aligned with its left edge, in this order: the system's Labels (`WH1`, plain
+  bold text in a neutral frame), its custom label (`bait`, the same), the bookmark code (`ABC-123`,
+  grey mono, a click copies it) and its Tags (`Staging`, framed in the tag's muted colour). All are
+  the same 14 px chips; nodes keep one width.
 - Below an exit system, left-aligned: the nearest hub and its jumps (`Jita 4j`), followed by a small
   square in the colour of the space the whole route runs through (high-sec green, low-sec orange,
   null-sec red) only when it runs through one kind of space; a mixed route shows no square. The
@@ -169,7 +171,8 @@ its samples with the same functions as the edge, and a test checks that every st
 The small mono tag above a system: by default the signature of the wormhole that leads into it from
 its parent (`ABC-123`); a click copies it. Templates mix text with `{sig} {sig3} {chainIndex}
 {destClass} {type} {size} {mass} {eol} {tempName}`; managers set the map default, everyone may pick
-their own (Map settings → Bookmark labels, or the bookmark button on the map). A temporary name wins
+their own (Map settings → Bookmark labels, or the bookmark button on the map); `{labels}` adds the
+system's Labels and custom label. A temporary name wins
 unless the template places `{tempName}` itself. The chain is walked from the home system;
 `{chainIndex}` is the depth and the order among siblings (`1a`, `1b`, `2a`).
 
@@ -186,8 +189,9 @@ unless the template places `{tempName}` itself. The chain is walked from the hom
   handle (peek shows the header, then half and full).
 - The header carries what is needed at a glance: the designation pill (the node's), the name and
   custom name, region › constellation, the kind of space ("Class 3 wormhole", "High-sec 0.82"),
-  the effect (its summary on hover) and the statics as plain text (`D845 HS`), the tag and the
-  lock. The System section edits status, labels, names, tag and notes in place (saved on Enter or
+  the effect (its summary on hover) and the statics as plain text (`D845 HS`) and the lock. The
+  System section edits status, Labels with the custom label (one row), Tags, names and notes in
+  place (saved on Enter or
   leaving the field) and links out to zKillboard, Dotlan and Anoikis; Set destination is its
   action. Kills and jumps show there once an intel source provides them.
 - Signatures are a table (id, group, type or name with where a wormhole leads, age), edited in
@@ -196,7 +200,7 @@ unless the template places `{tempName}` itself. The chain is walked from the hom
 - Local lists the tracked characters in the system (portrait, name, ship), yours first and
   highlighted; tracking your characters is the section's action.
 - Context menus are short lists (at most about eight items, one line each with an icon and a key
-  hint) with submenus for choices (`Status ▸`, `Labels ▸`, `Mass ▸`, `Time ▸`...), never settings
+  hint) with submenus for choices (`Status ▸`, `Labels ▸`, `Tags ▸`, `Mass ▸`, `Time ▸`...), never settings
   panels with chips or switches.
 - Other people on the map are arrow cursors with a name tag in their colour; the top bar says
   `Live · 3 on this map`. No avatar circles for presence.

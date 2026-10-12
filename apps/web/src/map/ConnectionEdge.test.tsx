@@ -69,7 +69,7 @@ describe('ConnectionEdge', () => {
     expect(line(container).style.strokeWidth).toBe('var(--dbk-edge-width)');
     expect(core(container)?.style.stroke).toBe('var(--dbk-edge-mass-fresh)');
     // The line runs between the node borders, not their centres.
-    expect(line(container).getAttribute('d')).toBe('M 160,30 L 400,30');
+    expect(line(container).getAttribute('d')).toBe('M 80,30 L 480,30');
     expect(label(container).textContent).toBe('');
   });
 
@@ -85,7 +85,7 @@ describe('ConnectionEdge', () => {
       }),
     );
     const halo = container.querySelector('[data-underlay="dangerous"]')!;
-    expect(halo.getAttribute('d')).toBe('M 160,30 L 400,30');
+    expect(halo.getAttribute('d')).toBe('M 80,30 L 480,30');
     // The halo is drawn first, so it sits beneath the line.
     expect(halo.compareDocumentPosition(line(container))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
 

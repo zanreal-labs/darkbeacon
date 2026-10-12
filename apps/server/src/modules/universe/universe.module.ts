@@ -1,5 +1,5 @@
 import { Controller, Get, Global, Inject, Logger, Module, Param, Query } from '@nestjs/common';
-import { NotFoundError, requireAccount, type Actor } from '@darkbeacon/core';
+import { NotFoundError, requirePrincipal, type Actor } from '@darkbeacon/core';
 import type { UniverseCatalog } from '@darkbeacon/mapping';
 import {
   EveId,
@@ -26,7 +26,7 @@ export class UniverseController {
     @CurrentActor() actor: Actor | null,
     @Query(new ZodPipe(UniverseSearchQuery)) query: UniverseSearchQuery,
   ): UniverseSystemDto[] {
-    requireAccount(actor);
+    requirePrincipal(actor);
     return this.catalog.searchSystems(query.q, query.limit);
   }
 
@@ -35,13 +35,13 @@ export class UniverseController {
     @CurrentActor() actor: Actor | null,
     @Query(new ZodPipe(UniverseLookupQuery)) query: UniverseLookupQuery,
   ): UniverseSystemDto[] {
-    requireAccount(actor);
+    requirePrincipal(actor);
     return query.ids.flatMap((id) => this.catalog.getSystem(id) ?? []);
   }
 
   @Get(nestPath(routes.universe.wormholes.path))
   wormholes(@CurrentActor() actor: Actor | null): WormholeCatalogDto {
-    requireAccount(actor);
+    requirePrincipal(actor);
     return { types: this.catalog.wormholeTypes(), hullClasses: this.catalog.hullClasses() };
   }
 
@@ -50,7 +50,7 @@ export class UniverseController {
     @CurrentActor() actor: Actor | null,
     @Param('solarSystemId', new ZodPipe(z.coerce.number().pipe(EveId))) solarSystemId: number,
   ): UniverseSystemDto {
-    requireAccount(actor);
+    requirePrincipal(actor);
     const system = this.catalog.getSystem(solarSystemId);
     if (!system) throw new NotFoundError('Solar system');
     return system;

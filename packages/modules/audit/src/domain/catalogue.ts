@@ -169,6 +169,11 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
     entity: () => ({ kind: 'labels', id: 'map' }),
     state: (d) => ({ labels: d.labels }),
   },
+  'system_labels.changed': {
+    op: 'update',
+    entity: () => ({ kind: 'systemLabels', id: 'map' }),
+    state: (d) => ({ systemLabels: d.systemLabels }),
+  },
   'map.share.offered': { ...SHARE, op: 'create' },
   'map.share.accepted': { ...SHARE, op: 'update' },
   'map.share.changed': { ...SHARE, op: 'update' },
@@ -209,6 +214,12 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
   'ping.removed': { op: 'delete', entity: byId('ping'), refs: (d, b) => ref('system', b?.solarSystemId) },
   'access.rule_added': { op: 'create', entity: byId('accessRule'), ignore: ['createdAt', 'mapId'] },
   'access.rule_removed': { op: 'delete', entity: byId('accessRule'), ignore: ['createdAt', 'mapId'] },
+  'access.public_link_changed': {
+    op: 'update',
+    entity: byId('publicLink', 'mapId'),
+    refs: (d) => ref('map', d.mapId),
+    ignore: ['mapId'],
+  },
   'access.role_changed': {
     op: 'update',
     entity: byId('account', 'accountId'),
@@ -315,6 +326,37 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
     activity: () => ({ downloaded: change(null, true) }),
   },
   'backup.settings_changed': { op: 'update', entity: () => ({ kind: 'settings', id: 'backups' }) },
+  'api_key.created': {
+    op: 'create',
+    entity: byId('apiKey'),
+    refs: (d) => ref('account', d.ownerAccountId),
+  },
+  'api_key.updated': {
+    op: 'update',
+    entity: byId('apiKey'),
+    refs: (d) => ref('account', d.ownerAccountId),
+  },
+  'api_key.rotated': {
+    op: 'activity',
+    entity: byId('apiKey'),
+    refs: (d) => ref('account', d.ownerAccountId),
+    activity: (d) => ({ secret: change('old', 'new'), name: change(null, d.name) }),
+  },
+  'api_key.revoked': {
+    op: 'delete',
+    entity: byId('apiKey'),
+    refs: (d) => ref('account', d.ownerAccountId),
+  },
+  'oauth.grant_created': {
+    op: 'create',
+    entity: byId('oauthGrant'),
+    refs: (d) => ref('account', d.accountId),
+  },
+  'oauth.grant_revoked': {
+    op: 'delete',
+    entity: byId('oauthGrant'),
+    refs: (d) => ref('account', d.accountId),
+  },
 };
 
 /** Types the plugins and future modules add are audited as activity with their data as new. */
