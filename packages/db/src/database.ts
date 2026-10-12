@@ -5,7 +5,8 @@ import SQLite from 'better-sqlite3';
 import { Kysely, PostgresDialect, SqliteDialect, type Transaction } from 'kysely';
 import pg from 'pg';
 import type { UnitOfWork } from '@darkbeacon/core';
-import { migrateToLatest } from './migrator.js';
+import { migrateToLatest, migrationStatus } from './migrator.js';
+import { tracedDialect, type QueryTracer } from './tracing.js';
 
 export type Dialect = 'sqlite' | 'postgres';
 
@@ -20,6 +21,8 @@ export interface DatabaseOptions {
   schema?: string | undefined;
   /** Postgres pool size (default 10). */
   poolSize?: number | undefined;
+  /** Runs every statement through this tracer (spans where the driver has no instrumentation). */
+  tracer?: QueryTracer | undefined;
 }
 
 export interface TransactionOptions {
@@ -89,6 +92,11 @@ export class Database implements UnitOfWork {
     return migrateToLatest(this.kysely, { schema: this.schema });
   }
 
+  /** Applied and pending migrations (readiness: nothing may be pending). */
+  migrationStatus(): Promise<{ applied: number; pending: number }> {
+    return migrationStatus(this.kysely, { schema: this.schema });
+  }
+
   async ping(): Promise<void> {
     await this.db<never>()
       .selectNoFrom((eb) => eb.lit(1).as('one'))
@@ -116,7 +124,11 @@ export async function createDatabase(options: DatabaseOptions = {}): Promise<Dat
   sqlite.pragma('synchronous = NORMAL');
   sqlite.pragma('foreign_keys = ON');
   sqlite.pragma('busy_timeout = 5000');
-  return new Database(new Kysely({ dialect: new SqliteDialect({ database: sqlite }) }), 'sqlite');
+  const dialect = new SqliteDialect({ database: sqlite });
+  return new Database(
+    new Kysely({ dialect: options.tracer ? tracedDialect(dialect, options.tracer, 'sqlite') : dialect }),
+    'sqlite',
+  );
 }
 
 async function createPostgres(url: string, options: DatabaseOptions): Promise<Database> {
@@ -143,5 +155,10 @@ async function createPostgres(url: string, options: DatabaseOptions): Promise<Da
           : pg.types.getTypeParser(oid, format)) as typeof pg.types.getTypeParser,
     },
   });
-  return new Database(new Kysely({ dialect: new PostgresDialect({ pool }) }), 'postgres', schema);
+  const dialect = new PostgresDialect({ pool });
+  return new Database(
+    new Kysely({ dialect: options.tracer ? tracedDialect(dialect, options.tracer, 'postgres') : dialect }),
+    'postgres',
+    schema,
+  );
 }
