@@ -331,4 +331,10 @@ describe('SystemNode', () => {
     expect(list.textContent).toContain('Me MyselfLoki');
     expect(list.textContent).toContain('ship unknown');
   });
+
+  it('marks a shattered system after its name and in its tooltip', () => {
+    const { container } = renderNode({ info: { ...info, effect: 'redGiant', shattered: true } });
+    expect(container.querySelector('[data-shattered]')!.getAttribute('title')).toBe('Shattered system');
+    expect(container.querySelector<HTMLElement>('[data-status]')!.title).toContain('Shattered system');
+  });
 });

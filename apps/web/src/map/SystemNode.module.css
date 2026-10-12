@@ -69,10 +69,10 @@
   visibility: hidden;
 }
 
-/* As wide as the effect square, which may follow any name. */
+/* As wide as the effect square and the shattered star, which may follow any name. */
 .effectSizer {
   flex: none;
-  width: 9px;
+  width: calc(9px + 7px + 12px);
 }
 
 /* The designation pill: solid, fixed width, dark bold monospace text on the EVE colour. */

@@ -11,10 +11,12 @@ import {
   type WormholeTypeDto,
 } from '@darkbeacon/shared';
 import {
+  loadSystemFlags,
   loadUniverseData,
   loadWormholeData,
   UNIVERSE_DATA_FILE,
   WORMHOLE_DATA_FILE,
+  type SystemFlagsData,
   type UniverseData,
   type WormholeData,
   type WormholeTypeData,
@@ -30,7 +32,12 @@ export class StaticUniverseCatalog implements UniverseCatalog {
   private readonly hulls: HullClassDto[];
   private readonly masses: ReadonlyMap<number, number>;
 
-  constructor(data: UniverseData, wormholes: WormholeData = { source: 'none', systems: {} }) {
+  constructor(
+    data: UniverseData,
+    wormholes: WormholeData = { source: 'none', systems: {} },
+    flags: Pick<SystemFlagsData, 'shattered'> = { shattered: [] },
+  ) {
+    const shattered = new Set(flags.shattered);
     const regions = new Map(data.regions.map((r) => [r.id, r.name]));
     const constellations = new Map(data.constellations.map((c) => [c.id, c.name]));
     for (const s of data.systems) {
@@ -42,6 +49,7 @@ export class StaticUniverseCatalog implements UniverseCatalog {
         security: s.security,
         whClass: s.whClass,
         ...wormholeFacts(wormholes.systems[s.id]),
+        ...(shattered.has(s.id) ? { shattered: true } : {}),
       });
       this.gates.set(s.id, s.gates);
     }
@@ -86,7 +94,7 @@ export class StaticUniverseCatalog implements UniverseCatalog {
         shipMasses: wormholes.shipMasses ?? base.shipMasses,
       };
     }
-    const catalog = new StaticUniverseCatalog(loadUniverseData(file), wormholes);
+    const catalog = new StaticUniverseCatalog(loadUniverseData(file), wormholes, loadSystemFlags());
     if (committed) loaded = catalog;
     return catalog;
   }

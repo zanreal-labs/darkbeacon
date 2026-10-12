@@ -30,7 +30,7 @@ import {
   type NearestHub,
 } from './nodeFacts';
 import { builtNodeNameSizers } from './node-sizers';
-import { EffectDot, NodeKills, NodeKillsSizer, NodeSovereignty } from './NodeIntel';
+import { EffectDot, NodeKills, NodeKillsSizer, NodeSovereignty, ShatteredMark } from './NodeIntel';
 import { destinationToken } from './WormholeFacts';
 import styles from './SystemNode.module.css';
 
@@ -145,6 +145,7 @@ export function systemTooltip(
   lines.push(`Status: ${STATUS_LABEL[system.status]}`);
   if (info?.effect)
     lines.push(`${WORMHOLE_EFFECTS[info.effect].name}: ${WORMHOLE_EFFECTS[info.effect].summary}`);
+  if (info?.shattered) lines.push('Shattered system');
   if (intel?.sovereignty?.holder.name)
     lines.push(
       `${intel.sovereignty.kind === 'faction' ? 'Faction space' : 'Sovereignty'}: ${intel.sovereignty.holder.name}`,
@@ -360,6 +361,7 @@ export const SystemNode = memo(function SystemNode({
           <PillContent info={info} />
           <span className={styles.name}>{name}</span>
           <EffectDot effect={info?.effect} />
+          <ShatteredMark shattered={info?.shattered} />
           <span className={styles.end}>
             <NodeKills
               mapId={mapId}

@@ -22,6 +22,7 @@ import {
   type RawTypeDogma,
   type WormholeInput,
 } from './wormholes.js';
+import { buildSystemFlags, formatSystemFlags, SYSTEM_FLAGS_FILE, type RawSystemEffect } from './flags.js';
 import { readZipEntries } from './zip.js';
 
 // Builds data/universe.json, data/wormholes.json and data/kspace.json:
@@ -44,6 +45,7 @@ const { values } = parseArgs({
     out: { type: 'string', default: UNIVERSE_DATA_FILE },
     'wormholes-out': { type: 'string', default: WORMHOLE_DATA_FILE },
     'kspace-out': { type: 'string', default: KSPACE_DATA_FILE },
+    'flags-out': { type: 'string', default: SYSTEM_FLAGS_FILE },
   },
 });
 
@@ -131,3 +133,7 @@ await writeFile(values['kspace-out'], formatKspace(kspace));
 console.log(
   `${kspace.systems.id.length} known-space systems, ${kspace.gates.length / 2} stargates, ${kspace.ships.length} jump-capable ships -> ${values['kspace-out']}`,
 );
+
+const flags = buildSystemFlags(universe.source, rawSystems as unknown as RawSystemEffect[]);
+await writeFile(values['flags-out'], formatSystemFlags(flags));
+console.log(`${flags.shattered.length} shattered systems -> ${values['flags-out']}`);

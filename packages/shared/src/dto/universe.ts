@@ -19,6 +19,8 @@ export const UniverseSystemDto = z.object({
   statics: z.array(z.string()),
   /** The system's wormhole effect; null when it has none or it is not known. */
   effect: WormholeEffect.nullable(),
+  /** A shattered system (the SDE's shattered overlay: J0 wormholes, C13s, Turnur); absent: no. */
+  shattered: z.boolean().optional(),
 });
 export type UniverseSystemDto = z.infer<typeof UniverseSystemDto>;
 

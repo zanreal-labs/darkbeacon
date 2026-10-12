@@ -115,3 +115,16 @@
   height: 9px;
   border-radius: 2px;
 }
+
+/* A shattered system: a small muted star after the name (and the effect square). */
+.shattered {
+  display: inline-flex;
+  flex: none;
+  color: var(--dbk-color-text-muted);
+  cursor: help;
+}
+
+.shattered svg {
+  width: 12px;
+  height: 12px;
+}

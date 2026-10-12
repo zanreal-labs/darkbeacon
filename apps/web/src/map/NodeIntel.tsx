@@ -1,7 +1,7 @@
 'use client';
 
 import type { CSSProperties } from 'react';
-import { Skull } from 'lucide-react';
+import { Skull, Sparkle } from 'lucide-react';
 import { killHeat, type StandingTone, type SystemIntelDto, type WormholeEffect } from '@darkbeacon/shared';
 import { cssVar, type TokenName } from '@darkbeacon/theme-sdk';
 import { ago, formatIsk, groupLabel, groupOf, useMapKills } from '../lib/intel';
@@ -148,5 +148,15 @@ export function EffectDot({ effect }: { effect: WormholeEffect | null | undefine
       style={{ background: cssVar(EFFECT_TOKEN[effect]) }}
       aria-hidden
     />
+  );
+}
+
+/** A shattered system (the SDE's shattered overlay): a small muted star after the name. */
+export function ShatteredMark({ shattered }: { shattered: boolean | undefined }) {
+  if (!shattered) return null;
+  return (
+    <span className={styles.shattered} title="Shattered system" data-shattered>
+      <Sparkle aria-label="Shattered" />
+    </span>
   );
 }
