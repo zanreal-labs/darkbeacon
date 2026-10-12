@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+<defs><mask id="gap" maskUnits="userSpaceOnUse" x="-6" y="-6" width="36" height="36"><rect x="-6" y="-6" width="36" height="36" fill="#fff"/><path d="M 12.937 11.063 L 13.846 -0.043 A 13.35 13.35 0 0 1 24.043 10.154 Z" fill="#000"/></mask></defs>
+<g><circle cx="11" cy="13" r="7.25" fill="none" stroke-width="1.75" stroke="#e6e9ef" mask="url(#gap)"/><circle cx="11" cy="13" r="3.25" fill="#e6e9ef"/><path d="M 14.182 9.818 L 15.390 1.564 A 12.25 12.25 0 0 1 22.436 8.610 Z" fill="#38c6d6"/></g>
+</svg>

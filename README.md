@@ -1,4 +1,13 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/mark-dark.svg">
+    <img src="docs/brand/mark-light.svg" alt="" width="72" height="72">
+  </picture>
+</p>
+
 # Darkbeacon
+
+![The demo chain in the dark theme](docs/screenshots/map--desktop-dark.png)
 
 A self-hosted wormhole and chain mapper for EVE Online. One container, one login (Discord), EVE characters
 linked through EVE SSO, and every change streamed live to everyone looking at the map.
@@ -89,6 +98,7 @@ the dev server refuses hot reload from other host names.
 
 Two checks run against a container from the outside, in the Playwright image: `tools/e2e/` (a smoke test:
 prerendered shell, demo sign-in, map, a live event) and `tools/screenshots/` (every screen, light and dark).
+`tools/icons/` rebuilds the favicon, the PWA icons and the marks in `docs/brand/` from the logo's geometry.
 
 ## Layout
 

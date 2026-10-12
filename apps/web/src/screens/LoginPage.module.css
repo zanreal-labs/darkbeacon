@@ -82,13 +82,6 @@
   padding: var(--dbk-space-3) var(--dbk-space-4);
 }
 
-.brand {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--dbk-space-2);
-  font-weight: 600;
-}
-
 .main {
   display: grid;
   align-content: center;
@@ -105,10 +98,11 @@
 }
 
 .mark {
+  position: relative;
   display: grid;
   place-items: center;
-  width: 80px;
-  height: 80px;
+  width: 88px;
+  height: 88px;
   margin-bottom: var(--dbk-space-3);
   border: 1px solid color-mix(in oklab, var(--dbk-color-accent) 30%, var(--dbk-color-border));
   border-radius: 22px;
@@ -117,6 +111,46 @@
     0 0 0 6px color-mix(in oklab, var(--dbk-color-accent) 6%, transparent),
     0 18px 50px color-mix(in oklab, var(--dbk-color-accent) 22%, transparent);
   backdrop-filter: blur(8px);
+}
+
+/*
+ * The beacon's light: a soft cone from the mark's core across the sky, turning with the beam of
+ * the mark (same start angle and period as its sweep). It stays put with reduced motion.
+ */
+.beam {
+  position: absolute;
+  z-index: -1;
+  /* The core of a 56 px mark (at 11/24, 13/24 of it), centred in the 88 px tile. */
+  top: calc(16px + 56px * 13 / 24);
+  left: calc(16px + 56px * 11 / 24);
+  width: min(1100px, 220vmax);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  translate: -50% -50%;
+  background: conic-gradient(
+    from 21deg,
+    transparent 0deg,
+    color-mix(in oklab, var(--dbk-color-accent) 20%, transparent) 14deg,
+    color-mix(in oklab, var(--dbk-color-accent) 20%, transparent) 34deg,
+    transparent 48deg
+  );
+  mask-image: radial-gradient(closest-side, black 6%, transparent 100%);
+  pointer-events: none;
+  animation: sweep 9s linear infinite;
+}
+
+@keyframes sweep {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .beam,
+  .stars,
+  .starsFar {
+    animation: none;
+  }
 }
 
 .title {

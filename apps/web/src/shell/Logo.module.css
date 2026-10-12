@@ -1,0 +1,47 @@
+.mark {
+  flex: none;
+  display: block;
+  overflow: visible;
+}
+
+.mark[data-tone='brand'] {
+  color: var(--dbk-color-text);
+}
+
+.beamStart {
+  stop-color: var(--dbk-color-accent);
+}
+
+.beamEnd {
+  stop-color: color-mix(in oklab, var(--dbk-color-accent) 55%, transparent);
+}
+
+.sweep {
+  transform-box: view-box;
+  transform-origin: 11px 13px;
+}
+
+/* A slow lighthouse sweep; the break in the ring travels with the beam. */
+.mark[data-animated] .sweep {
+  animation: sweep 9s linear infinite;
+}
+
+@keyframes sweep {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mark[data-animated] .sweep {
+    animation: none;
+  }
+}
+
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dbk-space-2);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}

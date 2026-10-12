@@ -9,10 +9,25 @@ import { Providers } from './providers';
 export const metadata: Metadata = {
   title: 'Darkbeacon',
   description: 'Map your wormhole chain together, live.',
-  icons: { icon: { url: '/favicon.svg', type: 'image/svg+xml' } },
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/icons/icon-192.png', type: 'image/png', sizes: '192x192' },
+    ],
+    apple: { url: '/icons/apple-touch-icon.png', sizes: '180x180' },
+  },
+  applicationName: 'Darkbeacon',
 };
 
-export const viewport: Viewport = { width: 'device-width', initialScale: 1, colorScheme: 'light dark' };
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  colorScheme: 'light dark',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f7f8fa' },
+    { media: '(prefers-color-scheme: dark)', color: '#0d0f14' },
+  ],
+};
 
 /**
  * The document: theme tokens and the theme head script come first, so the first paint already

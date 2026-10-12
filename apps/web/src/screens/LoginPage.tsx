@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Compass } from 'lucide-react';
 import { routes, type AuthProvidersDto } from '@darkbeacon/shared';
 import { useEnterDemo } from '../lib/session';
-import { LogoMark } from '../shell/Logo';
+import { LogoMark, Wordmark } from '../shell/Logo';
 import { ThemeMenu } from '../shell/ThemeMenu';
 import { Button, Callout, Skeleton } from '../ui';
 import styles from './LoginPage.module.css';
@@ -34,17 +34,15 @@ export function LoginScreen({ actions }: { actions: ReactNode }) {
       </div>
 
       <header className={styles.top}>
-        <span className={styles.brand}>
-          <LogoMark size={22} />
-          Darkbeacon
-        </span>
+        <Wordmark />
         <ThemeMenu />
       </header>
 
       <main className={styles.main}>
         <div className={styles.hero}>
           <div className={styles.mark}>
-            <LogoMark size={48} />
+            <span className={styles.beam} aria-hidden />
+            <LogoMark size={56} animated />
           </div>
           <h1 className={styles.title}>Darkbeacon</h1>
           <p className={styles.pitch}>Map your wormhole chain together, live.</p>

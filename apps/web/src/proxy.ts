@@ -87,5 +87,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 
 export const config = {
   // Pages only: not the API (Nest answers it before this app sees anything), not built assets.
-  matcher: ['/((?!api/|ws$|_next/static|_next/image|healthz$|favicon\\.svg$).*)'],
+  matcher: [
+    '/((?!api/|ws$|_next/static|_next/image|healthz$|favicon\\.svg$|icons/|manifest\\.webmanifest$).*)',
+  ],
 };
