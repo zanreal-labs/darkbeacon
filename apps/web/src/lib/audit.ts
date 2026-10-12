@@ -151,7 +151,9 @@ const HIDDEN = new Set([
 
 /** Mass in tonnes as the game shows it: "148 400 t". */
 export function formatTonnes(kg: number): string {
-  return `${Math.round(kg / 1000).toLocaleString('en-US').replace(/,/g, ' ')} t`;
+  return `${Math.round(kg / 1000)
+    .toLocaleString('en-US')
+    .replace(/,/g, ' ')} t`;
 }
 
 const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);

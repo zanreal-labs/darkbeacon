@@ -82,6 +82,7 @@ import {
 } from '../ui';
 import { AuditTab } from './AuditTab';
 import { TelemetryCard } from './TelemetryCard';
+import { ChainCleanupCard } from './ChainCleanupCard';
 import { BackupsTab, useBackupStatus } from './BackupsTab';
 import styles from './settings.module.css';
 
@@ -252,6 +253,7 @@ function InstanceTab() {
       <DiscordBotSettings />
       {providers.data?.loginMethod === 'discord' && <DiscordAdminSettings />}
       <WebhookSettings />
+      <ChainCleanup />
       <TelemetryCard />
       <PluginSlot slot="settingsPage" props={{ mapId: null }} />
     </Stack>
@@ -617,6 +619,18 @@ function DiscordAdminSettings() {
         </Button>
       </CardFooter>
     </Card>
+  );
+}
+
+function ChainCleanup() {
+  const settings = useInstanceSettings();
+  const save = useSaveSettings('Cleanup saved');
+  return (
+    <ChainCleanupCard
+      settings={settings.data}
+      saving={save.isPending}
+      onSave={(patch) => save.mutate(patch)}
+    />
   );
 }
 
