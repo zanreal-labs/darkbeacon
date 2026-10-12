@@ -284,7 +284,7 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
     op: 'activity',
     entity: byId('apiKey'),
     refs: (d) => ref('account', d.ownerAccountId),
-    activity: () => ({ secret: change('old', 'new') }),
+    activity: (d) => ({ secret: change('old', 'new'), name: change(null, d.name) }),
   },
   'api_key.revoked': {
     op: 'delete',

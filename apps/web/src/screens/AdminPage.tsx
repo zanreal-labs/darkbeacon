@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowUpRight,
   Crown,
+  KeyRound,
   MessageSquare,
   MoreHorizontal,
   Package,
@@ -77,6 +78,7 @@ import {
   TabsTrigger,
   useToast,
 } from '../ui';
+import { AdminApiAccess } from './AdminApiAccess';
 import { AuditTab } from './AuditTab';
 import styles from './settings.module.css';
 
@@ -85,6 +87,7 @@ const TABS = [
   { id: 'people', title: 'People', icon: <Users /> },
   { id: 'plugins', title: 'Plugins', icon: <Puzzle /> },
   { id: 'themes', title: 'Themes', icon: <Palette /> },
+  { id: 'api', title: 'API access', icon: <KeyRound /> },
   { id: 'audit', title: 'Audit', icon: <ScrollText /> },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
@@ -92,7 +95,8 @@ type TabId = (typeof TABS)[number]['id'];
 const errorText = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback);
 
 const TITLE = 'Admin';
-const DESCRIPTION = 'Settings for this instance, the people on it, plugins, themes and what changed.';
+const DESCRIPTION =
+  'Settings for this instance, the people on it, plugins, themes, API access and what changed.';
 
 /** Query keys of the data the server renders the first tab with. */
 export const adminKeys = {
@@ -140,6 +144,9 @@ export function AdminPage() {
         </TabsContent>
         <TabsContent value="themes">
           <ThemesTab />
+        </TabsContent>
+        <TabsContent value="api">
+          <AdminApiAccess settingsKey={adminKeys.settings} />
         </TabsContent>
         <TabsContent value="audit">
           <AuditTab settingsKey={adminKeys.settings} />
