@@ -7,8 +7,6 @@
   border: 1px solid var(--dbk-color-border);
   border-radius: var(--dbk-radius-large);
   box-shadow: var(--dbk-shadow-medium);
-  --xy-minimap-mask-stroke-color-props: var(--dbk-color-accent);
-  --xy-minimap-mask-stroke-width-props: 1.5;
 }
 
 .minimap svg {

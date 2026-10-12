@@ -51,8 +51,12 @@ export function findOnMap(entries: readonly OnMapEntry[], text: string, limit = 
     const real = entry.info?.name.toLowerCase() ?? '';
     let score = -1;
     let match: string | null = null;
-    if (name.startsWith(q) || real.startsWith(q)) score = 0;
-    else if (name.includes(q) || real.includes(q)) score = 2;
+    if (name.startsWith(q)) score = 0;
+    else if (name.includes(q)) score = 2;
+    else if (real && real !== name && (real.startsWith(q) || real.includes(q))) {
+      score = real.startsWith(q) ? 1 : 3;
+      match = `real name ${entry.info!.name}`;
+    }
     for (const alias of entry.aliases) {
       const a = alias.text.toLowerCase();
       const s = a.startsWith(q) ? 1 : a.includes(q) ? 3 : -1;

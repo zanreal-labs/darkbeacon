@@ -41,6 +41,16 @@ export interface Notice {
   message: string;
 }
 
+/** Undoes a gesture once its request is through; refused when it never went through. */
+async function undoWhenSent(sent: Promise<unknown>, mapId: string, action: string) {
+  try {
+    await sent;
+  } catch {
+    return { ok: false as const, reason: 'It never went through' };
+  }
+  return undoAction(mapId, action);
+}
+
 /**
  * One gesture that sends several requests (a bulk change of a selection, a paste): they share
  * one action id and are undone together. Made by `store.gesture`.
@@ -173,15 +183,20 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto, options:
       setPending((p) => [...p, change]);
       const gesture: Gesture | null =
         typeof spec.undo === 'string' ? { action: newActionId(), succeeded: false } : (spec.undo ?? null);
+      const sent = spec.request(gesture ? { [ACTION_HEADER]: gesture.action } : {});
+      // On the stack at once, so Ctrl+Z right after a change undoes it (once it went through).
+      const entry =
+        gesture && typeof spec.undo === 'string'
+          ? undoStack.push({ label: spec.undo, undo: () => undoWhenSent(sent, mapId, gesture.action) })
+          : null;
       try {
-        await spec.request(gesture ? { [ACTION_HEADER]: gesture.action } : {});
+        await sent;
         if (gesture) gesture.succeeded = true;
-        if (gesture && typeof spec.undo === 'string')
-          undoStack.push({ label: spec.undo, undo: () => undoAction(mapId, gesture.action) });
         setPending((p) => settlePending(p, id));
         later(CONFIRM_GRACE_MS, () => setPending((p) => dropPending(p, id)));
         return true;
       } catch (error) {
+        if (entry !== null) undoStack.forget(entry);
         setPending((p) => dropPending(p, id));
         notify(`${spec.failure}: ${error instanceof ApiError ? error.message : 'network error'}`);
         return false;
@@ -515,10 +530,20 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto, options:
        */
       async gesture<T>(label: string, work: (gesture: Gesture) => Promise<T>): Promise<T> {
         const gesture: Gesture = { action: newActionId(), succeeded: false };
+        const done = work(gesture);
+        const entry = undoStack.push({
+          label,
+          undo: async () => {
+            await done.catch(() => undefined);
+            return gesture.succeeded
+              ? undoAction(mapId, gesture.action)
+              : { ok: false, reason: 'None of it went through' };
+          },
+        });
         try {
-          return await work(gesture);
+          return await done;
         } finally {
-          if (gesture.succeeded) undoStack.push({ label, undo: () => undoAction(mapId, gesture.action) });
+          if (!gesture.succeeded) undoStack.forget(entry);
         }
       },
 

@@ -21,6 +21,8 @@ export function CanvasMinimap({ corner }: { corner: Corner }) {
       nodeStrokeWidth={0}
       nodeColor="var(--dbk-color-text-subtle)"
       maskColor="color-mix(in oklab, var(--dbk-color-canvas) 70%, transparent)"
+      maskStrokeColor="var(--dbk-color-accent)"
+      maskStrokeWidth={2}
       bgColor="var(--dbk-color-surface)"
     />
   );

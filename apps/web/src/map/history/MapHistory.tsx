@@ -152,7 +152,7 @@ export function MapHistory({ map, can }: { map: MapDto; can: MapPermissions }) {
           </Menu>
         }
       />
-      <div className={auditStyles.filters}>
+      <div className={`${auditStyles.filters} ${styles.filters}`}>
         <Select
           size="sm"
           aria-label="Period"

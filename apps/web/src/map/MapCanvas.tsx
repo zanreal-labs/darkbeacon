@@ -211,6 +211,7 @@ export function MapCanvas({
   const prefs = readOnly ? { ...ownPrefs, minimap: 'off' as const, dragSelects: false } : ownPrefs;
   // A right drag pans in the drag-to-select mode; its release must not open the pane menu.
   const rightDrag = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  const sharedSelection = useRef('null');
   const rf = useReactFlow<SystemNodeType, ConnectionEdgeType>();
   const [nodes, setNodes, onNodesChange] = useNodesState<SystemNodeType>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<ConnectionEdgeType>([]);
@@ -709,7 +710,8 @@ export function MapCanvas({
   };
 
   const onSelectionChange = ({ nodes: selected, edges: edgesSelected }: OnSelectionChangeParams) => {
-    presence?.publish.selection(
+    // React Flow reports the selection again on every render: share it only when it changed.
+    const shared =
       selected.length + edgesSelected.length > 0
         ? {
             systems: selected.slice(0, 200).map((n) => Number(n.id)),
@@ -718,8 +720,12 @@ export function MapCanvas({
               .slice(0, 200)
               .map((e) => e.id),
           }
-        : null,
-    );
+        : null;
+    const key = JSON.stringify(shared);
+    if (presence && key !== sharedSelection.current) {
+      sharedSelection.current = key;
+      presence.publish.selection(shared);
+    }
     setSelectedId(selected.length === 1 ? selected[0]!.id : null);
     // A click on a connection selects it alone; the sidebar then shows the connection.
     const edge = selected.length === 0 && edgesSelected.length === 1 ? edgesSelected[0]!.id : null;
