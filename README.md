@@ -43,6 +43,24 @@ every other request (pages, their assets, streamed HTML) through to it. If that 
 and `/api/health` answers 503 until it is back, so the container's health check covers both. Put any reverse
 proxy you like in front; it must not buffer responses, or pages lose their streaming.
 
+### Backups
+
+On SQLite (the default) Darkbeacon backs its database up by itself: daily by default, while it runs, into
+`/data/backups`, keeping the 14 newest automatic backups. Admin > Backups shows when the last one ran and
+the next one runs, makes one now, downloads, deletes and restores them (from the list or an uploaded file,
+after typing `RESTORE`), and sets the schedule, retention and an alert webhook for failures. Before an
+update migrates the database it is backed up too. Copy backups off the server now and then (download them,
+or `docker cp darkbeacon:/data/backups .`), and keep `/data/secret.key` with them: it is not in a backup.
+For when the web app is not an option there is a command line:
+
+```sh
+docker exec -it darkbeacon darkbeacon backup list      # also: create, verify <file>
+docker run --rm -it -v dbk-data:/data darkbeacon darkbeacon backup restore <file>   # server stopped
+```
+
+`BACKUP_SCHEDULE`, `BACKUP_RETENTION`, `BACKUP_DIR` and friends set the defaults. On PostgreSQL use
+`pg_dump`. Everything else, including how a restore works, is in [`docs/backups.md`](docs/backups.md).
+
 ### Demo mode: a preview without Discord or EVE
 
 ```sh
@@ -119,8 +137,8 @@ apps/web               Next.js app (App Router, Cache Components, React Flow, Ta
 packages/core          ids, Result, Clock, DomainEvent envelope, authorization, errors, core ports
 packages/db            Kysely factory (SQLite/Postgres), Database = UnitOfWork, migrations/<module>/
 packages/shared        zod DTOs, REST routes (routes.ts), WebSocket protocol, event catalogue
-packages/modules/*     identity, access, mapping, tracking, notifications, plugins, routing
-                       (domain/application/ports)
+packages/modules/*     identity, access, mapping, tracking, notifications, plugins, routing, audit,
+                       backups (domain/application/ports)
 packages/plugin-sdk    plugin manifest, PluginContext, web slots
 packages/theme-sdk     theme tokens, built-in themes, CSS generator
 packages/sde           SDE builder and the committed datasets: universe (systems, regions, gates) and wormholes

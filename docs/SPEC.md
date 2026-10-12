@@ -47,6 +47,7 @@ packages/modules/notifications  notifier port + webhook delivery
 packages/modules/plugins        plugin registry, manifest validation, enable/disable state
 packages/modules/routing        routes over stargates and the chain, hubs, chain exits, in-game waypoints
 packages/modules/audit          audit records of events, histories, reverts, hash chain check
+packages/modules/backups        SQLite backups: snapshots, schedule, retention, validation, restore
 packages/db            Kysely factory, dialect switch, migration runner; migrations in migrations/<module>/
 packages/shared        zod schemas, DTOs and the WebSocket protocol shared by server and web
 packages/plugin-sdk    public plugin contract: manifest type, PluginContext (exposed ports), web slots
