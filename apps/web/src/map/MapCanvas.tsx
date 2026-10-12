@@ -94,7 +94,7 @@ export interface FocusRequest {
 export type MenuTarget =
   | { kind: 'system'; solarSystemId: number }
   | { kind: 'connection'; connectionId: string }
-  | { kind: 'pane'; flow: { x: number; y: number } };
+  | { kind: 'pane'; flow: { x: number; y: number }; fitChain(): void; centerOnMe(): void };
 
 interface Props {
   mapId: string;
@@ -465,7 +465,7 @@ export function MapCanvas({
     const edge = target.closest<SVGElement>('.react-flow__edge');
     if (edge?.dataset.id) return onMenu({ kind: 'connection', connectionId: edge.dataset.id }, x, y);
     if (target.closest('.react-flow__pane')) {
-      onMenu({ kind: 'pane', flow: rf.screenToFlowPosition({ x, y }) }, x, y);
+      onMenu({ kind: 'pane', flow: rf.screenToFlowPosition({ x, y }), fitChain, centerOnMe }, x, y);
     }
   };
 
@@ -514,11 +514,8 @@ export function MapCanvas({
         }}
         onPaneContextMenu={(e) => {
           e.preventDefault();
-          onMenu(
-            { kind: 'pane', flow: rf.screenToFlowPosition({ x: e.clientX, y: e.clientY }) },
-            e.clientX,
-            e.clientY,
-          );
+          const flow = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY });
+          onMenu({ kind: 'pane', flow, fitChain, centerOnMe }, e.clientX, e.clientY);
         }}
         connectionMode={ConnectionMode.Loose}
         nodesConnectable={can.edit}
