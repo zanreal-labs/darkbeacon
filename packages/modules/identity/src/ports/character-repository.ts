@@ -3,6 +3,8 @@ import type { CharacterTokens, LinkedCharacter } from '../domain/account.js';
 export interface CharacterRepository {
   findById(characterId: number): Promise<LinkedCharacter | null>;
   listForAccount(accountId: string): Promise<LinkedCharacter[]>;
+  /** Every linked character, by name (the admins' character list). */
+  listAll(): Promise<LinkedCharacter[]>;
   upsert(character: LinkedCharacter): Promise<void>;
   /**
    * Updates what token use learns (affiliation, token validity) while the character still

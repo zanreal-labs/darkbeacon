@@ -1,4 +1,6 @@
 import { Inject, Logger, Module, type OnApplicationBootstrap, type OnModuleInit } from '@nestjs/common';
+import { HttpAdapterHost } from '@nestjs/core';
+import type { FastifyInstance } from 'fastify';
 import {
   parseStream,
   type Clock,
@@ -8,6 +10,9 @@ import {
   type UnitOfWork,
 } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
+import { AccessRules, InstanceSettingsService } from '@darkbeacon/access';
+import { AccountService } from '@darkbeacon/identity';
+import { InstanceMapDirectory } from '../../adapters/mapping/map-directory.js';
 import {
   ChainOverlaySlot,
   BookmarkNumberUseCases,
@@ -17,6 +22,8 @@ import {
   MapPreferenceUseCases,
   MapSnapshotQuery,
   PassageRecorder,
+  MapTransfer,
+  MapBatchUseCases,
   PassageUseCases,
   MapUseCases,
   SignatureUseCases,
@@ -57,6 +64,9 @@ import {
 import { CommentsController, StructuresController } from './intel.controllers.js';
 import { SignatureSweep } from './signature-sweep.js';
 import { MergedWriteRouter } from './merged-writes.js';
+import { AdminMapsController, MapLifecycleController } from './lifecycle.controllers.js';
+import { MAP_FILE_LIMIT, MAP_FILE_TYPE, MapFilesController } from './transfer.controller.js';
+import { MapApiController } from './map-api.controller.js';
 import { SweeperRuntime } from './sweeper.runtime.js';
 import { CHAIN_OVERLAY, MAP_OWNERSHIP, MAP_REPOSITORY, MAPPING_PORTS } from './mapping.tokens.js';
 
@@ -73,6 +83,10 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
 @Module({
   controllers: [
     MapsController,
+    MapLifecycleController,
+    AdminMapsController,
+    MapFilesController,
+    MapApiController,
     MapPreferencesController,
     SystemsController,
     ConnectionsController,
@@ -105,6 +119,9 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
         access: MapAccess,
         overlay: ChainOverlaySlot,
         directory: AuditDirectoryRegistry,
+        accounts: AccountService,
+        settings: InstanceSettingsService,
+        rules: AccessRules,
       ): MappingPorts => ({
         maps,
         systems: new KyselySystemRepository(database),
@@ -116,10 +133,13 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
         overlay,
         universe,
         authors: new DirectoryAuthors(directory),
+        structures: new KyselyStructureRepository(database),
+        comments: new KyselyCommentRepository(database),
         access,
         events,
         uow,
         clock,
+        directory: new InstanceMapDirectory(accounts, settings, rules),
       }),
       inject: [
         Database,
@@ -131,11 +151,16 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
         MAP_ACCESS,
         CHAIN_OVERLAY,
         AuditDirectoryRegistry,
+        AccountService,
+        InstanceSettingsService,
+        AccessRules,
       ],
     },
     MergedWriteRouter,
     SweeperRuntime,
     useCase(MapUseCases),
+    useCase(MapTransfer),
+    useCase(MapBatchUseCases),
     useCase(SystemUseCases),
     useCase(ConnectionUseCases),
     useCase(SignatureUseCases),
@@ -199,6 +224,7 @@ export class MappingModule implements OnModuleInit, OnApplicationBootstrap {
     @Inject(EVENT_LOG) private readonly log: EventLog,
     @Inject(BookmarkNumberUseCases) private readonly numbers: BookmarkNumberUseCases,
     @Inject(AsyncAuditScope) private readonly audit: AsyncAuditScope,
+    @Inject(HttpAdapterHost) private readonly http: HttpAdapterHost,
   ) {}
 
   /** Wormholes mapped before bookmark numbers existed get theirs once, as the server. */
@@ -211,6 +237,21 @@ export class MappingModule implements OnModuleInit, OnApplicationBootstrap {
   }
 
   onModuleInit(): void {
+    // Map files can be larger than the 1 MB a JSON body may be.
+    const fastify = this.http.httpAdapter.getInstance<FastifyInstance>();
+    if (!fastify.hasContentTypeParser(MAP_FILE_TYPE)) {
+      fastify.addContentTypeParser(
+        MAP_FILE_TYPE,
+        { parseAs: 'string', bodyLimit: MAP_FILE_LIMIT },
+        (_req, body, done) => {
+          try {
+            done(null, JSON.parse(String(body)) as unknown);
+          } catch (error) {
+            done(Object.assign(error as Error, { statusCode: 400 }), undefined);
+          }
+        },
+      );
+    }
     this.registry.registerSnapshot('map', (mapId, actor) => this.snapshots.snapshot(actor, mapId));
     // Jumps through a connection become passages. Auto-mapping adds the connection only after the
     // jump that found it, so a new connection also looks back for the jumps just before it.

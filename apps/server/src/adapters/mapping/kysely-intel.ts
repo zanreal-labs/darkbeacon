@@ -56,6 +56,17 @@ export class KyselyCommentRepository extends Repository implements CommentReposi
     return rows.map(commentFromRow);
   }
 
+  async listForMap(mapId: string): Promise<Comment[]> {
+    const rows = await this.db
+      .selectFrom('map_comments')
+      .selectAll()
+      .where('map_id', '=', mapId)
+      .orderBy('created_at')
+      .orderBy('id')
+      .execute();
+    return rows.map(commentFromRow);
+  }
+
   async countsForMap(mapId: string): Promise<Map<number, number>> {
     const rows = await this.db
       .selectFrom('map_comments')

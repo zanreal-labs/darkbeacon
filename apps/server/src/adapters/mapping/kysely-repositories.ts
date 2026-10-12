@@ -35,6 +35,8 @@ export interface MappingTables {
     system_labels: string;
     created_at: number;
     updated_at: number;
+    /** Set while the map is deleted but restorable. */
+    deleted_at: number | null;
   };
   map_systems: {
     map_id: string;
@@ -166,14 +168,26 @@ export class KyselyMapRepository extends Repository implements MapRepository {
       .selectFrom('maps')
       .selectAll()
       .where('owner_account_id', '=', accountId)
+      .where('deleted_at', 'is', null)
       .orderBy('name')
       .execute();
     return rows.map(mapFromRow);
   }
 
   async allIds(): Promise<string[]> {
-    const rows = await this.db.selectFrom('maps').select('id').orderBy('created_at').orderBy('id').execute();
+    const rows = await this.db
+      .selectFrom('maps')
+      .select('id')
+      .where('deleted_at', 'is', null)
+      .orderBy('created_at')
+      .orderBy('id')
+      .execute();
     return rows.map((r) => r.id);
+  }
+
+  async listAll(): Promise<ChainMap[]> {
+    const rows = await this.db.selectFrom('maps').selectAll().orderBy('created_at').orderBy('id').execute();
+    return rows.map(mapFromRow);
   }
 
   async insert(map: ChainMap): Promise<void> {
@@ -199,6 +213,16 @@ function slugConflict(slug: string) {
 }
 
 export class KyselySystemRepository extends Repository implements SystemRepository {
+  async countVisibleByMap(): Promise<Map<string, number>> {
+    const rows = await this.db
+      .selectFrom('map_systems')
+      .select(['map_id', (eb) => eb.fn.countAll<number | string>().as('n')])
+      .where('visible', '=', bool.encode(true))
+      .groupBy('map_id')
+      .execute();
+    return new Map(rows.map((r) => [r.map_id, Number(r.n)]));
+  }
+
   async list(mapId: string): Promise<MapSystem[]> {
     const rows = await this.db
       .selectFrom('map_systems')
@@ -646,6 +670,7 @@ function mapToRow(map: ChainMap): MapRow {
     system_labels: json.encode(map.systemLabels),
     created_at: map.createdAt,
     updated_at: map.updatedAt,
+    deleted_at: map.deletedAt ?? null,
   };
 }
 
@@ -662,6 +687,8 @@ function mapFromRow(row: MapRow): ChainMap {
     systemLabels: json.decode<ChainMap['systemLabels']>(row.system_labels) ?? [],
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
+    // Left out while not deleted, so maps read the same as before it existed.
+    ...(row.deleted_at === null || row.deleted_at === undefined ? {} : { deletedAt: Number(row.deleted_at) }),
   };
 }
 

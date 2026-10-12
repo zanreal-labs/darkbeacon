@@ -286,6 +286,19 @@ export class RealtimeHub {
       }
       source = resolved;
       project = (event) => view.project(parsed.id, event, stream);
+    } else if (parsed) {
+      // Per-follower filters (offline characters for managers only...), with the actor as it is
+      // now: re-checks update `connection.actor`.
+      const filters = this.options.registry.eventFilters(parsed.kind);
+      if (filters.length > 0)
+        project = async (event) => {
+          let shown: DomainEvent | null = event;
+          for (const filter of filters) {
+            if (!shown) break;
+            shown = await filter(connection.actor, parsed.id, shown);
+          }
+          return shown;
+        };
     }
     this.drop(connection, stream);
     const sub = new Subscription(stream, connection, sinceSeq ?? 0, source, project);
@@ -416,7 +429,8 @@ export class RealtimeHub {
         if (connection.actor?.kind === 'account' && connection.actor.id === accountId)
           this.reauthorize(connection);
       }
-    } else if (event.type.startsWith('access.')) {
+    } else if (event.type.startsWith('access.') || event.type === 'map.trashed') {
+      // A deleted map has nobody on it any more: its followers are checked like after a rule change.
       for (const connection of this.connections) {
         if (
           [...connection.subscriptions.values()].some(

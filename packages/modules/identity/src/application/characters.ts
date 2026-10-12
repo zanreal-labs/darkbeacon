@@ -4,7 +4,9 @@ import {
   INSTANCE_STREAM,
   newEvent,
   NotFoundError,
+  actorRef,
   requireAccount,
+  requireInstanceRole,
   ValidationError,
   type Actor,
   type ActorRef,
@@ -118,12 +120,13 @@ export class CharacterService {
   }
 
   /** Starts signing in with an EVE character (the caller checks the instance's login method). */
-  async startSignIn(returnTo: unknown): Promise<{ url: string; pending: PendingAuth }> {
+  async startSignIn(returnTo: unknown, invite?: unknown): Promise<{ url: string; pending: PendingAuth }> {
     const eve = requireConfigured(this.deps.eve, 'EVE');
     const { pending, codeChallenge } = await beginPendingAuth(this.deps.clock, {
       kind: 'eve-signin',
       accountId: null,
       returnTo,
+      invite,
     });
     const url = eve.authorizationUrl({
       state: pending.state,
@@ -145,7 +148,10 @@ export class CharacterService {
     input: { code: string | undefined; state: string | undefined; pending: PendingAuth | null },
     options: {
       signedInAccountId: string | null;
-      createAccount(character: { id: number; name: string }): Promise<{ id: string }>;
+      createAccount(
+        character: { id: number; name: string; corporationId: number; allianceId: number | null },
+        invite: string | null,
+      ): Promise<{ id: string }>;
     },
   ): Promise<{ accountId: string; character: LinkedCharacter; created: boolean; returnTo: string }> {
     const eve = requireConfigured(this.deps.eve, 'EVE');
@@ -177,7 +183,15 @@ export class CharacterService {
           accountId = options.signedInAccountId;
         } else {
           accountId = (
-            await options.createAccount({ id: identity.characterId, name: identity.characterName })
+            await options.createAccount(
+              {
+                id: identity.characterId,
+                name: identity.characterName,
+                corporationId: affiliation.corporationId,
+                allianceId: affiliation.allianceId,
+              },
+              pending.invite ?? null,
+            )
           ).id;
           created = true;
         }
@@ -239,6 +253,36 @@ export class CharacterService {
 
   listForAccount(accountId: string): Promise<LinkedCharacter[]> {
     return this.deps.characters.listForAccount(accountId);
+  }
+
+  /** Every linked character of the instance (instance admins). */
+  async adminList(actor: Actor | null): Promise<LinkedCharacter[]> {
+    requireInstanceRole(actor, 'admin');
+    return this.deps.characters.listAll();
+  }
+
+  /**
+   * An instance admin takes a character off its account (Wanderer's admin unlink): its tracking
+   * and the map access it gave stop, and its owner can link it again with EVE SSO.
+   */
+  async adminUnlink(actor: Actor | null, characterId: number): Promise<void> {
+    const admin = requireInstanceRole(actor, 'admin');
+    await this.deps.uow.transaction(async () => {
+      const character = await this.deps.characters.findById(characterId);
+      if (!character) throw new NotFoundError('Character');
+      await this.deps.characters.delete(characterId);
+      await this.left(character, actorRef(admin));
+    });
+  }
+
+  /** Linked characters by id, with their corporation and alliance; unknown ids are left out. */
+  async linked(characterIds: readonly number[]): Promise<LinkedCharacter[]> {
+    const found: LinkedCharacter[] = [];
+    for (const id of new Set(characterIds)) {
+      const character = await this.deps.characters.findById(id);
+      if (character) found.push(character);
+    }
+    return found;
   }
 
   /** Name and owner account of a linked character (CharacterTokenSource of tracking). */

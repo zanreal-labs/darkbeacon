@@ -161,6 +161,17 @@ export interface EventPayloads {
   'structure.added': StructureDto;
   'structure.updated': StructureDto;
   'structure.removed': { id: string; solarSystemId: number };
+  /** A rule's role changed in place (the audit record holds the role before). */
+  'access.rule_changed': AccessRuleDto;
+  /** The map was handed to another account (the new owner is admin, the old one keeps only rules). */
+  'access.owner_changed': { mapId: string; ownerAccountId: string; previousOwnerAccountId: string };
+  /**
+   * The map was deleted, but can still be restored by an instance admin: nobody can open it until
+   * then. Rules, shares and webhooks stay with it (`map.removed` follows once it is purged).
+   */
+  'map.trashed': { id: string; deletedAt: number };
+  /** An instance admin brought a deleted map back as it was. */
+  'map.restored': MapDto;
   /** The map's Ansiblex jump bridges changed: added (`added`), flagged or removed (by id). */
   'routes.bridges_changed': { added: BridgeDto[]; updated: BridgeDto[]; removed: string[] };
   /** The map's own routing settings changed (manager+). */
@@ -238,6 +249,10 @@ export const EVENT_TYPES = [
   'structure.added',
   'structure.updated',
   'structure.removed',
+  'access.rule_changed',
+  'access.owner_changed',
+  'map.trashed',
+  'map.restored',
   'routes.bridges_changed',
   'routes.settings_changed',
   'routes.way_home_changed',

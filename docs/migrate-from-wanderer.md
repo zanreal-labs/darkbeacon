@@ -163,9 +163,9 @@ here. Webhooks need a map admin.
 | viewer            | viewer                                |
 | blocked           | blocked                               |
 
-A subject in several ACLs gets its strongest role. A block on a character beats every grant (as in
-Darkbeacon), while a block on a corporation or alliance yields to grants from other rules; the preview says
-so. Access rules only grant map roles: an import never makes anyone an instance admin. Importing access
+A subject in several ACLs gets its strongest role, and one blocked in any ACL stays blocked. Blocks work as
+in Wanderer: a block on a character beats every grant, a block on a corporation or alliance beats every
+corporation and alliance grant, and only a rule on a character gets past it. Access rules only grant map roles: an import never makes anyone an instance admin. Importing access
 rules needs a map admin; the person who imports into a new map is its owner. Wanderer's map owner is not
 carried over.
 

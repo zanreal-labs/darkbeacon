@@ -86,6 +86,17 @@ export interface AuditEventPayloads {
   'oauth.grant_created': OAuthGrantAuditDto;
   /** The approval was revoked (by the person, or because a code or refresh token was replayed). */
   'oauth.grant_revoked': OAuthGrantAuditDto;
+  /** An instance admin disabled an account (it cannot sign in or use anything) or enabled it again. */
+  'account.disabled_changed': { accountId: string; disabled: boolean; reason: string | null };
+  /** A webhook got a new signing secret; the old one stopped working at once. */
+  'webhook.secret_rotated': { id: string; mapId: string };
+  /** A webhook was turned off after too many deliveries in a row failed. */
+  'webhook.auto_disabled': { id: string; mapId: string; failures: number; lastError: string | null };
+  /** An invite link to sign up (the token is never recorded). */
+  'invite.created': { id: string; note: string | null; expiresAt: number | null; maxUses: number | null };
+  'invite.revoked': { id: string };
+  /** Someone signed up with an invite. */
+  'invite.used': { id: string; accountId: string };
 }
 
 export interface OAuthGrantAuditDto {
@@ -126,4 +137,10 @@ export const AUDIT_EVENT_TYPES = [
   'api_key.revoked',
   'oauth.grant_created',
   'oauth.grant_revoked',
+  'account.disabled_changed',
+  'webhook.secret_rotated',
+  'webhook.auto_disabled',
+  'invite.created',
+  'invite.revoked',
+  'invite.used',
 ] as const satisfies readonly AuditEventType[];

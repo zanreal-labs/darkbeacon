@@ -169,6 +169,15 @@ describeEachDialect('signatures, comments and structures', (t) => {
     expect(await env.ports.signatures.findById(map.id, old.id)).toBeNull();
     expect(await env.ports.signatures.findById(map.id, seen.id)).not.toBeNull();
 
+    // A deleted map waits as it was, for a restore.
+    await maps.remove(alice, map.id);
+    env.clock.advance(30 * DAY);
+    expect(await signatures.sweep()).toBe(0);
+    expect(await env.ports.signatures.findById(map.id, seen.id)).not.toBeNull();
+    const trashed = (await env.ports.maps.findById(map.id))!;
+    const { deletedAt: _gone, ...restored } = trashed;
+    await env.ports.maps.update(restored);
+
     // 0 keeps everything.
     await maps.update(alice, map.id, { settings: { signatureRetentionDays: 0 } });
     env.clock.advance(60 * DAY);

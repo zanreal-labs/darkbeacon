@@ -2,6 +2,9 @@ import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post } f
 import { AccessRules, InstanceSettingsService } from '@darkbeacon/access';
 import type { Actor } from '@darkbeacon/core';
 import {
+  CopyAccessRulesRequest,
+  UpdateAccessRuleRequest,
+  type CopyAccessRulesResultDto,
   CreateAccessRuleRequest,
   nestPath,
   routes,
@@ -28,6 +31,26 @@ export class AccessRulesController {
     @Body(new ZodPipe(CreateAccessRuleRequest)) body: CreateAccessRuleRequest,
   ): Promise<AccessRuleDto> {
     return this.rules.add(actor, mapId, body);
+  }
+
+  @Patch(nestPath(routes.accessRules.update.path))
+  update(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Param('ruleId') ruleId: string,
+    @Body(new ZodPipe(UpdateAccessRuleRequest)) body: UpdateAccessRuleRequest,
+  ): Promise<AccessRuleDto> {
+    return this.rules.update(actor, mapId, ruleId, body.role);
+  }
+
+  @Post(nestPath(routes.accessRules.copy.path))
+  @HttpCode(200)
+  copy(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Body(new ZodPipe(CopyAccessRulesRequest)) body: CopyAccessRulesRequest,
+  ): Promise<CopyAccessRulesResultDto> {
+    return this.rules.copyFrom(actor, mapId, body.fromMapId, body.overwrite);
   }
 
   @Delete(nestPath(routes.access.remove.path))

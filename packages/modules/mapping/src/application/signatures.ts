@@ -366,7 +366,8 @@ export class SignatureUseCases extends MappingUseCases {
     for (const [mapId, signatures] of byMap) {
       const map = await this.ports.maps.findById(mapId);
       const days = map?.settings.signatureRetentionDays ?? DEFAULT_SIGNATURE_RETENTION_DAYS;
-      if (!map || days === 0) continue;
+      // A deleted map waits as it was, for a restore or the purge.
+      if (!map || map.deletedAt || days === 0) continue;
       const stale = signatures.filter((s) => s.updatedAt < now - days * DAY);
       if (stale.length === 0) continue;
       count += await this.write(SWEEPER, mapId, async (events) => {

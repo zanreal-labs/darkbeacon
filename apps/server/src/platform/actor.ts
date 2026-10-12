@@ -59,6 +59,7 @@ export function bearerToken(request: RequestLike): string | null {
 export class ActorResolverRegistry {
   private resolver: ActorResolver = () => Promise.resolve(null);
   private readonly bearers: Array<{ prefixes: readonly string[]; resolve: BearerResolver }> = [];
+  private apiSwitch: () => Promise<boolean> = () => Promise.resolve(true);
 
   use(resolver: ActorResolver): void {
     this.resolver = resolver;
@@ -74,10 +75,19 @@ export class ActorResolverRegistry {
     return this.resolver(request);
   }
 
-  /** Verifies a bearer token (throws when it is not valid). */
-  verifyBearer(token: string, request: RequestLike): Promise<BearerResolution> {
+  /**
+   * The instance API switch (the access module's `apiAccess` setting): while it is off every
+   * bearer token is refused, on HTTP, WebSocket, SSE and MCP alike.
+   */
+  useApiSwitch(enabled: () => Promise<boolean>): void {
+    this.apiSwitch = enabled;
+  }
+
+  /** Verifies a bearer token (throws when it is not valid, or when keys are turned off). */
+  async verifyBearer(token: string, request: RequestLike): Promise<BearerResolution> {
+    if (!(await this.apiSwitch())) throw new ForbiddenError(API_OFF);
     const bearer = this.bearers.find((b) => b.prefixes.some((p) => token.startsWith(p)));
-    if (!bearer) return Promise.reject(new UnauthenticatedError('Invalid API key'));
+    if (!bearer) throw new UnauthenticatedError('Invalid API key');
     return bearer.resolve(token, request);
   }
 
@@ -131,6 +141,7 @@ class TooManyRequests extends HttpException {
 @Injectable()
 export class ActorGuard implements CanActivate {
   private readonly publicOrigin: string;
+  private readonly perAddress: number;
 
   constructor(
     @Inject(ActorResolverRegistry) private readonly actors: ActorResolverRegistry,
@@ -138,6 +149,7 @@ export class ActorGuard implements CanActivate {
     @Inject(APP_CONFIG) config: AppConfig,
   ) {
     this.publicOrigin = new URL(config.publicUrl).origin;
+    this.perAddress = config.rateLimitPerAddress ?? LIMITS.perAddress;
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -148,6 +160,15 @@ export class ActorGuard implements CanActivate {
     request.clientIp = ip;
     const like: RequestLike = { headers: request.headers, ip, url: request.url };
     const token = bearerToken(like);
+    // Every address has a budget of requests a minute, whoever it is (the server's own page
+    // renderer on loopback excepted).
+    if (ip && this.perAddress > 0 && !isLoopback(ip)) {
+      const budget = this.limiter.take(`address:${ip}`, this.perAddress);
+      if (!budget.ok) {
+        reply.header('retry-after', String(budget.retryAfterSeconds));
+        throw new TooManyRequests('Too many requests from this address; slow down');
+      }
+    }
 
     if (!token) {
       request.actor = sameOrigin(request.headers, this.publicOrigin) ? await this.actors.session(like) : null;
@@ -163,6 +184,8 @@ export class ActorGuard implements CanActivate {
     try {
       resolved = await this.actors.verifyBearer(token, like);
     } catch (error) {
+      // The switch is off: not a wrong token, so not counted against the address.
+      if (error instanceof ForbiddenError) throw error;
       this.limiter.take(failures, LIMITS.authFailures);
       const message = error instanceof Error ? error.message : 'Invalid API key';
       reply.header('www-authenticate', challenge('invalid_token', message));
@@ -206,6 +229,12 @@ export class ActorGuard implements CanActivate {
       throw new ForbiddenError(message, needed ? { requiredScope: needed } : undefined);
     }
   }
+}
+
+const API_OFF = 'API access is turned off on this instance';
+
+function isLoopback(ip: string): boolean {
+  return ip === '::1' || ip.startsWith('127.');
 }
 
 /** A Bearer challenge (RFC 6750 section 3). */

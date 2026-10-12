@@ -47,6 +47,26 @@ export const CreateAccessRuleRequest = z
   });
 export type CreateAccessRuleRequest = z.infer<typeof CreateAccessRuleRequest>;
 
+/** Who may create maps on the instance (Wanderer's env flag, here an admin setting). */
+export const MapCreation = z.enum(['everyone', 'admins']);
+export type MapCreation = z.infer<typeof MapCreation>;
+
+/**
+ * Who may sign up (create an account by signing in for the first time). `open`: anyone, as
+ * before. `restricted`: only people with a character in one of the corporations or alliances,
+ * a member of one of the Discord servers, or someone holding an invite link.
+ */
+export const SignInPolicy = z.object({
+  mode: z.enum(['open', 'restricted']),
+  corporationIds: z.array(z.number().int().positive()).max(200).default([]),
+  allianceIds: z.array(z.number().int().positive()).max(200).default([]),
+  guildIds: z
+    .array(z.string().regex(/^\d{1,20}$/))
+    .max(50)
+    .default([]),
+});
+export type SignInPolicy = z.infer<typeof SignInPolicy>;
+
 /** Instance-wide settings kept in the database and edited in the admin tab. */
 export const InstanceSettingsDto = z.object({
   /** Discord guild whose roles can make an account an instance admin. */
@@ -96,6 +116,17 @@ export const InstanceSettingsDto = z.object({
   apiCorsOrigins: z.array(z.string()).optional(),
   /** Whether map admins may make maps public (`/p/<token>`); on by default. */
   publicMaps: z.boolean().optional(),
+  /** Who may create maps: everyone (default) or instance admins only. */
+  mapCreation: MapCreation.optional(),
+  /**
+   * The instance API switch: when off, API keys, OAuth tokens and the MCP endpoint are refused
+   * (browser sessions keep working). On by default.
+   */
+  apiAccess: z.boolean().optional(),
+  /** When off, no webhook of any map is delivered (they keep their settings). On by default. */
+  webhooksEnabled: z.boolean().optional(),
+  /** Who may sign up; existing accounts always sign in unless disabled. */
+  signIn: SignInPolicy.optional(),
 });
 export type InstanceSettingsDto = z.infer<typeof InstanceSettingsDto>;
 
@@ -125,5 +156,9 @@ export const UpdateInstanceSettingsRequest = z.object({
     .max(20)
     .optional(),
   publicMaps: z.boolean().optional(),
+  mapCreation: MapCreation.optional(),
+  apiAccess: z.boolean().optional(),
+  webhooksEnabled: z.boolean().optional(),
+  signIn: SignInPolicy.optional(),
 });
 export type UpdateInstanceSettingsRequest = z.infer<typeof UpdateInstanceSettingsRequest>;

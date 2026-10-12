@@ -455,9 +455,21 @@ describeEachDialect('sharing and merged chains', (t) => {
     expect(types(await env.events(alliance.id, head))).toEqual(['connection.updated']);
   });
 
-  it('forgets the shares of a deleted map', async () => {
+  it('hides a deleted map from the maps that merge it and forgets its shares once purged', async () => {
     await share(corpA, alice, 'read');
+    const merged = (await view(alliance.id)).systems.length;
+    expect(merged).toBeGreaterThan(0);
     await env.maps.remove(alice, corpA.id);
+    await env.settle();
+    expect((await view(alliance.id)).systems).toEqual([]);
+    // Restorable: the share stays until the map is purged.
+    expect((await env.sharing.list(carol, alliance.id)).incoming).toHaveLength(1);
+    const admin = { kind: 'account' as const, id: 'root', instanceRole: 'admin' as const };
+    await env.maps.restore(admin, corpA.id);
+    await env.settle();
+    expect((await view(alliance.id)).systems).toHaveLength(merged);
+    await env.maps.adminTrash(admin, corpA.id);
+    await env.maps.purge(admin, corpA.id);
     await env.settle();
     expect((await view(alliance.id)).systems).toEqual([]);
     expect((await env.sharing.list(carol, alliance.id)).incoming).toEqual([]);
@@ -468,7 +480,11 @@ describeEachDialect('sharing and merged chains', (t) => {
     await share(corpA, alice, 'read', ['topology', 'intel']);
     const before = (await view(alliance.id)).systems.find((s) => s.solarSystemId === c5)!;
     expect(before.description).toBe('Corp A notes');
-    // Even on a read-only source's system: these live on the composite.
+    // Even on a read-only source's system: these live on the composite. Locks are for managers.
+    await expect(env.writes.updateSystem(dave, alliance.id, c5, { locked: true })).rejects.toMatchObject({
+      code: 'forbidden',
+    });
+    env.access.grant('dave', alliance.id, 'manager');
     await env.writes.updateSystem(dave, alliance.id, c5, { description: 'Alliance notes', locked: true });
     const after = (await view(alliance.id)).systems.find((s) => s.solarSystemId === c5)!;
     expect(after).toMatchObject({ description: 'Alliance notes', locked: true });

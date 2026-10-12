@@ -18,7 +18,14 @@ export interface Webhook {
   secret: string;
   enabled: boolean;
   createdAt: number;
+  /** Deliveries that failed in a row (every attempt used up); a success resets it. */
+  consecutiveFailures?: number;
+  /** Why the server turned it off (too many failures); null once someone turns it on again. */
+  disabledReason?: string | null;
 }
+
+/** Deliveries failing in a row before a webhook is turned off (Wanderer: 10). */
+export const WEBHOOK_MAX_CONSECUTIVE_FAILURES = 10;
 
 /** One event to one webhook; `attempt` counts the POSTs made so far. */
 export interface WebhookDelivery {

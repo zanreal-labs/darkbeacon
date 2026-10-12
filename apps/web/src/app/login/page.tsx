@@ -31,6 +31,7 @@ async function Actions({ searchParams }: Pick<PageProps<'/login'>, 'searchParams
         providers={providers}
         next={next}
         authError={typeof query.auth_error === 'string' ? query.auth_error : null}
+        invite={typeof query.invite === 'string' ? query.invite : null}
       />
     </HydrationBoundary>
   );

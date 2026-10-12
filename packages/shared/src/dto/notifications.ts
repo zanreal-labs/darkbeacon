@@ -9,6 +9,10 @@ export const WebhookDto = z.object({
   events: z.array(z.string().min(1)).min(1),
   enabled: z.boolean(),
   createdAt: Timestamp,
+  /** Deliveries that failed for good in a row; ten turn the webhook off. Optional: added later. */
+  consecutiveFailures: z.number().int().optional(),
+  /** Why the server turned it off, until someone turns it on again. */
+  disabledReason: z.string().nullable().optional(),
 });
 export type WebhookDto = z.infer<typeof WebhookDto>;
 

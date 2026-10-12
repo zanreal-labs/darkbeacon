@@ -1,5 +1,6 @@
 import {
   actorRef,
+  AUDIT_STREAM,
   ConflictError,
   ForbiddenError,
   INSTANCE_STREAM,
@@ -57,6 +58,8 @@ export interface AccountSubjects {
   corporationIds: number[];
   allianceIds: number[];
   discordRoles: Array<{ guildId: string; roleId: string }>;
+  /** A disabled account matches nothing and holds no map role. */
+  disabled?: boolean;
 }
 
 export function toAccountDto(account: Account, instanceRole: InstanceRole): AccountDto {
@@ -273,6 +276,47 @@ export class AccountService {
     });
   }
 
+  /**
+   * Disables an account (instance admins; never the owner or yourself): it cannot sign in, its
+   * sessions and keys stop working and it holds no map role. Enabling it again restores that.
+   */
+  async setDisabled(
+    actor: Actor | null,
+    accountId: string,
+    disabled: boolean,
+    reason: string | null = null,
+  ): Promise<AdminAccountDto> {
+    const admin = requireInstanceRole(actor, 'admin');
+    if (admin.kind === 'account' && accountId === admin.id)
+      throw new ForbiddenError('You cannot disable yourself');
+    return this.deps.uow.transaction(async () => {
+      const target = await this.deps.accounts.findById(accountId);
+      if (!target) throw new NotFoundError('Account');
+      if (target.instanceRole === 'owner') throw new ForbiddenError('The owner cannot be disabled');
+      if (!!target.disabledAt === disabled) return this.adminDto(target);
+      const now = this.deps.clock.now();
+      const updated: Account = {
+        ...target,
+        disabledAt: disabled ? now : null,
+        disabledReason: disabled ? reason || null : null,
+        updatedAt: now,
+      };
+      await this.deps.accounts.update(updated);
+      await this.deps.events.append([
+        newEvent({
+          stream: AUDIT_STREAM,
+          type: 'account.disabled_changed',
+          actor: actorRef(admin),
+          data: { accountId, disabled, reason: updated.disabledReason ?? null },
+          occurredAt: now,
+        }),
+        // Open sockets and map access of the account are checked again.
+        accountChanged(accountId, actorRef(admin), now),
+      ]);
+      return this.adminDto(updated);
+    });
+  }
+
   /** The owner hands the instance to another account and becomes an admin. */
   async transferOwnership(actor: Actor | null, accountId: string): Promise<void> {
     const caller = requireAccount(actor);
@@ -316,9 +360,10 @@ export class AccountService {
   }
 
   async subjectsOf(accountId: string): Promise<AccountSubjects> {
-    const [characters, link] = await Promise.all([
+    const [characters, link, account] = await Promise.all([
       this.deps.characters.listForAccount(accountId),
       this.deps.discordLinks.find(accountId),
+      this.deps.accounts.findById(accountId),
     ]);
     const unique = (ids: Array<number | null>) => [...new Set(ids.filter((id): id is number => id !== null))];
     return {
@@ -327,6 +372,7 @@ export class AccountService {
       corporationIds: unique(characters.map((c) => c.corporationId)),
       allianceIds: unique(characters.map((c) => c.allianceId)),
       discordRoles: link?.guildRoles ?? [],
+      ...(account?.disabledAt ? { disabled: true } : {}),
     };
   }
 
@@ -361,6 +407,8 @@ export class AccountService {
       ...toAccountDto(account, await this.effectiveRole(account)),
       mainCharacterId: account.mainCharacterId ?? null,
       lastSeenAt: account.lastSeenAt,
+      disabledAt: account.disabledAt ?? null,
+      disabledReason: account.disabledReason ?? null,
     };
   }
 

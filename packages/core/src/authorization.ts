@@ -108,22 +108,32 @@ export function hasMapRole(role: MapRole | null, min: GrantingMapRole): boolean 
 
 export interface RoleGrant {
   role: MapRole;
-  /** A `blocked` grant on a character or account is decisive and beats everything. */
-  decisive?: boolean;
+  /**
+   * True when the rule names one person (a character or an account); false or absent when it
+   * names a group (a corporation, an alliance or a Discord role).
+   */
+  personal?: boolean;
 }
 
 /**
- * Combines matching grants: a decisive block wins, otherwise the highest granting role,
- * otherwise `blocked` if only blocks matched, otherwise null (no access).
+ * Combines matching grants the way Wanderer does (`check_characters_access`):
+ * 1. A block on one of the person's characters, or on the account, beats everything.
+ * 2. A block on a group (corporation, alliance, Discord role) beats every group grant; past it
+ *    only personal grants count, and with none the person stays blocked.
+ * 3. Otherwise the highest granted role wins.
+ *
+ * `null` means nothing matched (no access); `blocked` means something matched and refused.
  */
 export function resolveMapRole(grants: readonly RoleGrant[]): MapRole | null {
-  if (grants.some((g) => g.role === 'blocked' && g.decisive)) return 'blocked';
+  if (grants.length === 0) return null;
+  if (grants.some((g) => g.role === 'blocked' && g.personal)) return 'blocked';
+  const groupBlocked = grants.some((g) => g.role === 'blocked');
   let best: GrantingMapRole | null = null;
-  for (const { role } of grants) {
-    if (role !== 'blocked' && (best === null || mapRank[role] > mapRank[best])) best = role;
+  for (const { role, personal } of grants) {
+    if (role === 'blocked' || (groupBlocked && !personal)) continue;
+    if (best === null || mapRank[role] > mapRank[best]) best = role;
   }
-  if (best) return best;
-  return grants.length > 0 ? 'blocked' : null;
+  return best ?? 'blocked';
 }
 
 export function requireActor(actor: Actor | null): Actor {

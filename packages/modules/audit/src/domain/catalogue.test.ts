@@ -433,6 +433,16 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
       readOnly: true,
     },
   },
+  'access.rule_changed': { data: { ...rule, role: 'manager' }, before: rule },
+  'access.owner_changed': { data: { mapId: 'm', ownerAccountId: 'b', previousOwnerAccountId: 'a' } },
+  'map.trashed': { data: { id: 'm', deletedAt: 5 } },
+  'map.restored': { data: map },
+  'account.disabled_changed': { data: { accountId: 'b', disabled: true, reason: 'spy' } },
+  'webhook.secret_rotated': { data: { id: 'w1', mapId: 'm' } },
+  'webhook.auto_disabled': { data: { id: 'w1', mapId: 'm', failures: 10, lastError: 'HTTP 500' } },
+  'invite.created': { data: { id: 'i1', note: 'new corp', expiresAt: null, maxUses: 5 } },
+  'invite.revoked': { data: { id: 'i1' }, before: { id: 'i1', note: null, expiresAt: null, maxUses: 5 } },
+  'invite.used': { data: { id: 'i1', accountId: 'b' } },
 };
 
 const facts = { accountId: 'a', accountName: 'Alice', characterId: 9, characterName: 'Alice Main' };

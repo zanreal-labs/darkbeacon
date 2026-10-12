@@ -28,6 +28,17 @@ export interface StreamKind {
 export type SnapshotProvider = (id: string, actor: Actor | null) => Promise<Record<string, unknown>>;
 
 /**
+ * Shapes an event for one follower of `<kind>:<id>` (null: that follower does not get it), e.g.
+ * offline characters hidden from viewers. Runs for every event and follower, so it must be cheap
+ * for events it does not care about.
+ */
+export type EventFilter = (
+  actor: Actor | null,
+  id: string,
+  event: DomainEvent,
+) => DomainEvent | null | Promise<DomainEvent | null>;
+
+/**
  * Extension point of the realtime gateway. Modules register in `onModuleInit`:
  *
  *   registry.registerStream('map', { authorize: (actor, mapId) => ... });   // access module
@@ -37,6 +48,7 @@ export type SnapshotProvider = (id: string, actor: Actor | null) => Promise<Reco
 export class RealtimeRegistry {
   private readonly kinds = new Map<string, StreamKind>();
   private readonly snapshots = new Map<string, SnapshotProvider[]>();
+  private readonly filters = new Map<string, EventFilter[]>();
 
   constructor() {
     // Default: any signed-in account may follow the instance stream. Replaceable.
@@ -50,6 +62,15 @@ export class RealtimeRegistry {
 
   registerSnapshot(kind: string, provider: SnapshotProvider): void {
     this.snapshots.set(kind, [...(this.snapshots.get(kind) ?? []), provider]);
+  }
+
+  /** Adds a per-follower event filter to a stream kind (applied in registration order). */
+  registerEventFilter(kind: string, filter: EventFilter): void {
+    this.filters.set(kind, [...(this.filters.get(kind) ?? []), filter]);
+  }
+
+  eventFilters(kind: string): readonly EventFilter[] {
+    return this.filters.get(kind) ?? [];
   }
 
   stream(kind: string): StreamKind | undefined {

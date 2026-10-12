@@ -1,13 +1,18 @@
 import {
   ConflictError,
+  ForbiddenError,
+  isInstanceAdmin,
   NotFoundError,
   newId,
   requireAccount,
   requireActor,
+  requireInstanceRole,
+  ValidationError,
   type Actor,
 } from '@darkbeacon/core';
 import {
   DEFAULT_BOOKMARK_NUMBERING,
+  type AdminMapDto,
   DEFAULT_SYSTEM_LABELS,
   type BookmarkNumbering,
   type CreateMapRequest,
@@ -51,9 +56,14 @@ export class MapUseCases extends MappingUseCases {
     return map;
   }
 
-  /** Any signed-in account may create a map and becomes its owner. */
+  /**
+   * A signed-in account creates a map and becomes its owner; where the instance lets only admins
+   * create maps, only they do.
+   */
   async create(actor: Actor | null, request: CreateMapRequest): Promise<ChainMap> {
     const account = requireAccount(actor);
+    if (this.ports.directory && !(await this.ports.directory.mayCreateMaps(account)))
+      throw new ForbiddenError('Only instance admins create maps on this instance');
     const now = this.ports.clock.now();
     const map: ChainMap = {
       id: newId(),
@@ -100,9 +110,15 @@ export class MapUseCases extends MappingUseCases {
           ...(request.settings?.signatureRetentionDays !== undefined
             ? { signatureRetentionDays: request.settings.signatureRetentionDays }
             : {}),
+          ...(request.settings?.onlyTrackedCharacters !== undefined
+            ? { onlyTrackedCharacters: request.settings.onlyTrackedCharacters }
+            : {}),
+          ...(request.settings?.offlineForManagersOnly !== undefined
+            ? { offlineForManagersOnly: request.settings.offlineForManagersOnly }
+            : {}),
         },
       };
-      if (!changes(current, next)) return current;
+      if (!changes(current, next) && (current.description ?? '') === description) return current;
       if (next.slug !== current.slug) await this.ensureSlugFree(next.slug);
       next.updatedAt = this.ports.clock.now();
       await this.ports.maps.update(next);
@@ -227,13 +243,113 @@ export class MapUseCases extends MappingUseCases {
     });
   }
 
-  /** Deletes the map and everything on it (admin). */
+  /**
+   * Deletes the map (admin), softly: nobody can open it any more, but an instance admin can
+   * restore it with everything on it, or purge it for good.
+   */
   async remove(actor: Actor | null, mapId: string): Promise<void> {
     const who = await this.authorize(actor, mapId, 'admin');
-    await this.write(who, mapId, async (events) => {
+    await this.trashAs(who, mapId);
+  }
+
+  /**
+   * Hands the map to another account: its owner may, and an instance admin may for any map (also
+   * a deleted one). The new owner is admin from then on; the old one keeps only what rules give.
+   */
+  async transferOwner(actor: Actor | null, mapId: string, accountId: string): Promise<ChainMap> {
+    const who = requireActor(actor);
+    const admin = isInstanceAdmin(who);
+    if (!admin) {
+      await this.authorize(who, mapId, 'admin');
+      const map = await this.load(mapId);
+      if (who.kind !== 'account' || who.id !== map.ownerAccountId)
+        throw new ForbiddenError('Only the owner or an instance admin hands a map over');
+    }
+    const names = (await this.ports.directory?.accountNames([accountId])) ?? new Map<string, string>();
+    if (!names.has(accountId)) throw new ValidationError('No such account');
+    return this.write(who, mapId, async (events) => {
       const current = await this.load(mapId);
+      if (current.ownerAccountId === accountId) return current;
+      const next: ChainMap = { ...current, ownerAccountId: accountId, updatedAt: this.ports.clock.now() };
+      await this.ports.maps.update(next);
+      if (!current.deletedAt) events.add('map.settings_changed', next, current);
+      events.add('access.owner_changed', {
+        mapId,
+        ownerAccountId: accountId,
+        previousOwnerAccountId: current.ownerAccountId,
+      });
+      return next;
+    });
+  }
+
+  /**
+   * Every map of the instance for its admins: name, owner, size and whether it is deleted. Never
+   * what is on it: instance admins hold no role on maps.
+   */
+  async inventory(actor: Actor | null): Promise<AdminMapDto[]> {
+    requireInstanceRole(actor, 'admin');
+    const maps = await this.ports.maps.listAll();
+    const [systems, rules, names] = await Promise.all([
+      this.ports.systems.countVisibleByMap(),
+      this.ports.directory?.accessRuleCounts() ?? new Map<string, number>(),
+      this.ports.directory?.accountNames([...new Set(maps.map((m) => m.ownerAccountId))]) ??
+        new Map<string, string>(),
+    ]);
+    return maps.map((m) => ({
+      id: m.id,
+      slug: m.slug,
+      name: m.name,
+      ...(m.kind ? { kind: m.kind } : {}),
+      description: m.description ?? '',
+      ownerAccountId: m.ownerAccountId,
+      ownerName: names.get(m.ownerAccountId) ?? null,
+      createdAt: m.createdAt,
+      updatedAt: m.updatedAt,
+      deletedAt: m.deletedAt ?? null,
+      systems: systems.get(m.id) ?? 0,
+      rules: rules.get(m.id) ?? 0,
+    }));
+  }
+
+  /** An instance admin deletes a map (softly, like its admins do). */
+  async adminTrash(actor: Actor | null, mapId: string): Promise<void> {
+    const admin = requireInstanceRole(actor, 'admin');
+    await this.trashAs(admin, mapId);
+  }
+
+  /** An instance admin brings a deleted map back as it was. */
+  async restore(actor: Actor | null, mapId: string): Promise<ChainMap> {
+    const admin = requireInstanceRole(actor, 'admin');
+    return this.write(admin, mapId, async (events) => {
+      const current = await this.load(mapId);
+      if (!current.deletedAt) throw new ConflictError('The map is not deleted');
+      // The address stayed reserved while it was deleted, so it is still free.
+      const { deletedAt: _gone, ...rest } = current;
+      const next: ChainMap = { ...rest, updatedAt: this.ports.clock.now() };
+      await this.ports.maps.update(next);
+      events.add('map.restored', next, current);
+      return next;
+    });
+  }
+
+  /** An instance admin removes a deleted map and everything on it for good. */
+  async purge(actor: Actor | null, mapId: string): Promise<void> {
+    const admin = requireInstanceRole(actor, 'admin');
+    await this.write(admin, mapId, async (events) => {
+      const current = await this.load(mapId);
+      if (!current.deletedAt) throw new ConflictError('Delete the map first; only deleted maps are purged');
       await this.ports.maps.delete(mapId);
       events.add('map.removed', { id: mapId }, current);
+    });
+  }
+
+  private async trashAs(who: Actor, mapId: string): Promise<void> {
+    await this.write(who, mapId, async (events) => {
+      const current = await this.load(mapId);
+      if (current.deletedAt) return;
+      const deletedAt = this.ports.clock.now();
+      await this.ports.maps.update({ ...current, deletedAt, updatedAt: deletedAt });
+      events.add('map.trashed', { id: mapId, deletedAt }, current);
     });
   }
 

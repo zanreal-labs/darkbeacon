@@ -1,6 +1,14 @@
-import { newId, parseStream, type DomainEvent } from '@darkbeacon/core';
+import {
+  AUDIT_STREAM,
+  newEvent,
+  newId,
+  parseStream,
+  type DomainEvent,
+  type EventLog,
+} from '@darkbeacon/core';
 import {
   WEBHOOK_HEADERS,
+  WEBHOOK_MAX_CONSECUTIVE_FAILURES,
   WEBHOOK_RETRY_DELAYS,
   retryDelay,
   signWebhookPayload,
@@ -15,6 +23,10 @@ export interface WebhookDispatcherDeps {
   webhooks: WebhookRepository;
   sender: WebhookSender;
   clock: Clock;
+  /** The instance switch for webhooks; absent: always on. */
+  enabled?: () => Promise<boolean>;
+  /** Where turning a failing webhook off is recorded (the audit stream). */
+  events?: EventLog;
 }
 
 /**
@@ -37,6 +49,8 @@ export class WebhookDispatcher {
   async queue(event: DomainEvent): Promise<Array<{ delivery: WebhookDelivery; webhook: Webhook }>> {
     const stream = parseStream(event.stream);
     if (stream?.kind !== 'map') return [];
+    // Turned off on the instance: nothing is queued, so nothing is sent later either.
+    if (!(await this.on())) return [];
     const webhooks = (await this.deps.webhooks.listForMap(stream.id)).filter((w) => webhookWants(w, event));
     const queued = [];
     for (const webhook of webhooks) {
@@ -71,6 +85,7 @@ export class WebhookDispatcher {
 
   /** Resends due deliveries. Returns how many were attempted. */
   async retryDue(limit = 50): Promise<number> {
+    if (!(await this.on())) return 0;
     const due = await this.deps.webhooks.dueDeliveries(this.deps.clock.now(), limit);
     const ready = due.filter((d) => !this.inFlight.has(d.id));
     await Promise.all(ready.map((d) => this.attempt(d)));
@@ -99,9 +114,52 @@ export class WebhookDispatcher {
         nextAttemptAt: delay === null ? null : this.deps.clock.now() + delay,
       };
       await this.deps.webhooks.saveDelivery(updated);
+      if (options.retry && target?.enabled) await this.health(target.id, updated);
       return updated;
     } finally {
       this.inFlight.delete(delivery.id);
+    }
+  }
+
+  private async on(): Promise<boolean> {
+    return (await this.deps.enabled?.()) ?? true;
+  }
+
+  /**
+   * Counts deliveries that failed for good in a row and turns the webhook off after
+   * `WEBHOOK_MAX_CONSECUTIVE_FAILURES`; a delivered one resets the count.
+   */
+  private async health(webhookId: string, delivery: WebhookDelivery): Promise<void> {
+    if (delivery.status === 'pending') return;
+    const webhook = await this.deps.webhooks.findById(webhookId);
+    if (!webhook) return;
+    const failures = webhook.consecutiveFailures ?? 0;
+    if (delivery.status === 'delivered') {
+      if (failures > 0) await this.deps.webhooks.update({ ...webhook, consecutiveFailures: 0 });
+      return;
+    }
+    const count = failures + 1;
+    const off = count >= WEBHOOK_MAX_CONSECUTIVE_FAILURES && webhook.enabled;
+    await this.deps.webhooks.update({
+      ...webhook,
+      consecutiveFailures: count,
+      ...(off
+        ? {
+            enabled: false,
+            disabledReason: `Turned off after ${count} deliveries failed in a row (last: ${delivery.error ?? 'error'})`,
+          }
+        : {}),
+    });
+    if (off && this.deps.events) {
+      await this.deps.events.append([
+        newEvent({
+          stream: AUDIT_STREAM,
+          type: 'webhook.auto_disabled',
+          actor: { kind: 'system', id: 'webhooks' },
+          data: { id: webhook.id, mapId: webhook.mapId, failures: count, lastError: delivery.error },
+          occurredAt: this.deps.clock.now(),
+        }),
+      ]);
     }
   }
 

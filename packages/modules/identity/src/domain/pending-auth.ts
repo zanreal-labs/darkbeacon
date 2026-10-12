@@ -19,4 +19,6 @@ export interface PendingAuth {
   /** The account a character or Discord user is being connected to. */
   accountId: string | null;
   expiresAt: number;
+  /** An invite link's token brought to the sign-in (restricted sign-up). */
+  invite?: string | null;
 }

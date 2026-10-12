@@ -6,6 +6,7 @@ import { Database } from '@darkbeacon/db';
 import {
   AutoMapper,
   ListMapCharacters,
+  ManageMapTracking,
   SetTracking,
   TrackingCleanup,
   TrackingPoller,
@@ -15,7 +16,12 @@ import {
   type TrackingRepository,
   type UniverseLookup,
 } from '@darkbeacon/tracking';
-import { ConnectionUseCases, SystemUseCases, type MappingPorts } from '@darkbeacon/mapping';
+import {
+  ConnectionUseCases,
+  SystemUseCases,
+  type MapRepository,
+  type MappingPorts,
+} from '@darkbeacon/mapping';
 import { CharacterService } from '@darkbeacon/identity';
 import { HttpEsiGateway } from '../../adapters/tracking/http-esi-gateway.js';
 import { MappingAutoMapTarget } from '../../adapters/tracking/mapping-auto-map-target.js';
@@ -35,7 +41,8 @@ import {
   UNIVERSE_CATALOG,
 } from '../../platform/tokens.js';
 import { MappingModule } from '../mapping/mapping.module.js';
-import { MAPPING_PORTS } from '../mapping/mapping.tokens.js';
+import { MAP_REPOSITORY, MAPPING_PORTS } from '../mapping/mapping.tokens.js';
+import { OfflineVisibility } from './offline-visibility.js';
 import { TrackingController } from './tracking.controller.js';
 import { TrackingRuntime } from './tracking.runtime.js';
 
@@ -118,6 +125,23 @@ const { version } = JSON.parse(readFileSync(new URL('../../../package.json', imp
       useFactory: (tracking: TrackingRepository, access: MapAccess) =>
         new ListMapCharacters({ tracking, access }),
       inject: [TRACKING_REPOSITORY, MAP_ACCESS],
+    },
+    {
+      provide: ManageMapTracking,
+      useFactory: (
+        tracking: TrackingRepository,
+        access: MapAccess,
+        events: EventLog,
+        uow: UnitOfWork,
+        clock: Clock,
+      ) => new ManageMapTracking({ tracking, access, events, uow, clock }),
+      inject: [TRACKING_REPOSITORY, MAP_ACCESS, EVENT_LOG, UNIT_OF_WORK, CLOCK],
+    },
+    {
+      provide: OfflineVisibility,
+      useFactory: (maps: MapRepository, access: MapAccess, tracking: TrackingRepository) =>
+        new OfflineVisibility(maps, access, tracking),
+      inject: [MAP_REPOSITORY, MAP_ACCESS, TRACKING_REPOSITORY],
     },
     {
       provide: TrackingPoller,
