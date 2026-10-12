@@ -35,3 +35,5 @@ export * from './identity-admin.js';
 export * from './map-characters.js';
 export * from './intel.js';
 export * from './effect-modifiers.js';
+export * from './characters.js';
+export * from './auto-map.js';

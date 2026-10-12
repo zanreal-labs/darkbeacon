@@ -113,6 +113,7 @@ export class MapUseCases extends MappingUseCases {
           ...(request.settings?.offlineForManagersOnly !== undefined
             ? { offlineForManagersOnly: request.settings.offlineForManagersOnly }
             : {}),
+          ...(request.settings?.autoMap ? { autoMap: request.settings.autoMap } : {}),
         },
       };
       if (!changes(current, next) && (current.description ?? '') === description) return current;

@@ -23,6 +23,10 @@ export class SharingAutoMapTarget implements AutoMapTarget {
     return this.base.scopes(mapId);
   }
 
+  rules(mapId: string) {
+    return this.base.rules ? this.base.rules(mapId) : Promise.resolve(null);
+  }
+
   async recordJump(jump: RecordedJump): Promise<void> {
     const sharing = this.sharing();
     const merged = sharing ? await sharing.merger.state(jump.mapId) : null;
