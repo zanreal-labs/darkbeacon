@@ -109,14 +109,16 @@ fi
 wait_healthy http://app:3000
 echo "app is up"
 
-# Every 5 s: CPU and memory of the app containers, RSS of each node process in them.
+# Every 5 s: CPU and memory of the app containers, RSS of their node processes, SQLite's WAL size.
 (
-  echo "time,container,cpu,mem,rss_kb"
+  echo "time,container,cpu,mem,rss_kb,wal_kb"
   while true; do
     for c in "${APPS[@]}"; do
       stats=$(docker stats --no-stream --format '{{.CPUPerc}},{{.MemUsage}}' "$c" 2>/dev/null | cut -d/ -f1)
       rss=$(docker exec "$c" sh -c 'cat /proc/[0-9]*/status 2>/dev/null' | awk '/^VmRSS/ {s+=$2} END {print s}')
-      echo "$(date +%s),$c,$stats,$rss"
+      # SQLite's write-ahead log: it should stay small when checkpoints keep up.
+      wal=$(docker exec "$c" sh -c 'wc -c < /data/app.db-wal 2>/dev/null' | awk '{print int($1/1024)}')
+      echo "$(date +%s),$c,$stats,$rss,$wal"
     done
     sleep 5
   done

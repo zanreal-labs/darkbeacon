@@ -108,9 +108,13 @@ const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 export function paste() {
   const map = pick(maps.slice(1));
   const system = pick(map.systems);
+  // A system is scanned again and again: the same signatures each time, a few new ones (5 %).
   const lines = [];
   for (let i = 0; i < 200; i++) {
-    const id = `${LETTERS[i % 26]}${LETTERS[Math.floor(i / 26) % 26]}${pick(LETTERS)}-${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`;
+    const seen = Math.random() >= 0.05;
+    const third = seen ? LETTERS[(system + i) % 26] : pick(LETTERS);
+    const digits = seen ? (system * 7 + i * 13) % 1000 : Math.floor(Math.random() * 1000);
+    const id = `${LETTERS[i % 26]}${LETTERS[Math.floor(i / 26) % 26]}${third}-${String(digits).padStart(3, '0')}`;
     lines.push(
       i % 3 === 0
         ? `${id}\tCosmic Signature\tWormhole\tUnstable Wormhole\t100.0%\t4.32 AU`

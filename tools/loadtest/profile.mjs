@@ -33,13 +33,17 @@ process.on('SIGWINCH', () => {
     .finally(() => session.post('Profiler.start').catch(() => {}));
 });
 
-// Event-loop delay every 10 s: long synchronous work shows here before it shows in latencies.
+// Event-loop delay and memory every 10 s: long synchronous work shows here before it shows in
+// latencies, and the memory split tells a JavaScript leak (heap) from native memory (rss alone).
 const delay = monitorEventLoopDelay({ resolution: 10 });
 delay.enable();
 setInterval(() => {
   const ms = (ns) => Math.round(ns / 1e6);
+  const mb = (bytes) => Math.round(bytes / 1048576);
+  const memory = process.memoryUsage();
   console.log(
-    `event loop delay pid=${process.pid} p50=${ms(delay.percentile(50))} p99=${ms(delay.percentile(99))} max=${ms(delay.max)} ms`,
+    `event loop delay pid=${process.pid} p50=${ms(delay.percentile(50))} p99=${ms(delay.percentile(99))} max=${ms(delay.max)} ms` +
+      ` memory rss=${mb(memory.rss)} heap=${mb(memory.heapUsed)}/${mb(memory.heapTotal)} external=${mb(memory.external)} buffers=${mb(memory.arrayBuffers)} MB`,
   );
   delay.reset();
 }, 10_000).unref();
