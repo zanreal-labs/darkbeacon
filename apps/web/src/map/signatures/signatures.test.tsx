@@ -28,6 +28,7 @@ import {
   renderWithProviders,
   setupMockServer,
 } from '../../test/setup';
+import { signatureUndoables, subscribeSignatureUndo } from './undo';
 import { ToastProvider, TooltipProvider } from '../../ui';
 import { CommentsSection } from '../sidebar/CommentsSection';
 import { SignaturesSection, useSignaturePaste } from '../sidebar/SignaturesSection';
@@ -134,7 +135,7 @@ describe('SignatureEditor', () => {
 
 function Section({ signatures }: { signatures: SignatureDto[] }) {
   const store = useMapStore(MAP_ID);
-  const paste = useSignaturePaste(SYSTEM, store);
+  const paste = useSignaturePaste(MAP_ID, SYSTEM, store);
   return (
     <SignaturesSection
       mapId={MAP_ID}
@@ -180,8 +181,41 @@ describe('selecting and removing signatures', () => {
       expect(removed).toEqual([{ ids: ['s1', 's2'], withConnections: false, backLinks: true }]),
     );
     expect(await screen.findByRole('button', { name: /Undo/ })).toBeTruthy();
+    expect(signatureUndoables(MAP_ID).map((u) => u.label)).toEqual(['2 signatures removed']);
     await user.keyboard('{Control>}z{/Control}');
     await waitFor(() => expect(restored).toEqual([{ signatures: [a, b] }]));
+    expect(signatureUndoables(MAP_ID)).toEqual([]);
+  });
+
+  it('hands its removals to a shared undo stack, whose undo clears the bar too', async () => {
+    const restored: unknown[] = [];
+    const a = signatureFixture('s1', SYSTEM, 'AAA-111');
+    server.use(
+      http.post(buildPath(routes.signatures.removeMany.path, { mapId: MAP_ID, solarSystemId: SYSTEM }), () =>
+        HttpResponse.json({ signatures: [a], connectionIds: [] }),
+      ),
+      http.post(buildPath(routes.signatures.restore.path, { mapId: MAP_ID }), async ({ request }) => {
+        restored.push(await request.json());
+        return HttpResponse.json([a]);
+      }),
+    );
+    const changes = vi.fn();
+    const unsubscribe = subscribeSignatureUndo(changes);
+    const user = userEvent.setup();
+    render(<Section signatures={[a]} />);
+    await user.click(screen.getByText('AAA-111'));
+    await user.keyboard('{Delete}');
+    expect(await screen.findByRole('button', { name: /Undo/ })).toBeTruthy();
+    expect(changes).toHaveBeenCalled();
+    const [action] = signatureUndoables(MAP_ID);
+    expect(action).toMatchObject({ mapId: MAP_ID, solarSystemId: SYSTEM, label: '1 signature removed' });
+    expect(signatureUndoables('another-map')).toEqual([]);
+    await act(async () => {
+      expect(await action!.undo()).toEqual({ restored: 1, missed: 0 });
+    });
+    expect(restored).toEqual([{ signatures: [a] }]);
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Undo/ })).toBeNull());
+    unsubscribe();
   });
 });
 

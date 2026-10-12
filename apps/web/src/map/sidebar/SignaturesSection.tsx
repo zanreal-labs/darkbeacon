@@ -87,6 +87,7 @@ export interface SignaturePaste {
  * they say to keep it; what it removed can be put back for the undo window.
  */
 export function useSignaturePaste(
+  mapId: string,
   solarSystemId: number | null,
   store: Pick<MapStore, 'pasteSignatures'>,
 ): SignaturePaste {
@@ -102,10 +103,10 @@ export function useSignaturePaste(
       setBusy(false);
       if (!result) return;
       toast({ ...pasteSummary(result), tone: 'success' });
-      if (result.removedSignatures?.length) rememberRemoved(solarSystemId, result.removedSignatures);
+      if (result.removedSignatures?.length) rememberRemoved(mapId, solarSystemId, result.removedSignatures);
       if (replace && !signaturePrefs().keepLazyDelete) setReplace(false);
     },
-    [solarSystemId, busy, pasteSignatures, replace, toast],
+    [mapId, solarSystemId, busy, pasteSignatures, replace, toast],
   );
   return { busy, replace, setReplace, submit };
 }

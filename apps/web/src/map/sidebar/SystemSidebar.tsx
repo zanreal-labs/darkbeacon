@@ -103,7 +103,7 @@ export function SystemSidebar({
   const { collapsed, toggle, expand } = useCollapsedSections();
   const id = system.solarSystemId;
 
-  const paste = useSignaturePaste(id, store);
+  const paste = useSignaturePaste(mapId, id, store);
   const [killSettings, setKillSettings] = useKillsSettings(mapId);
   const presence = usePresence(mapId, store);
 

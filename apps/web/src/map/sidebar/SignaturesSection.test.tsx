@@ -35,7 +35,7 @@ function Section({
   onSelectSystem?: (id: number) => void;
 }) {
   const store = useMapStore(MAP_ID);
-  const paste = useSignaturePaste(SYSTEM, store);
+  const paste = useSignaturePaste(MAP_ID, SYSTEM, store);
   return (
     <>
       <SignaturesSection
