@@ -452,6 +452,62 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto, options:
       },
 
       /**
+       * Removes several systems and connections in one request (Delete on a selection): one
+       * transaction, one gesture to undo.
+       */
+      removeMany(selection: { systems: number[]; connections: string[] }, label: string) {
+        const systems = new Set(selection.systems);
+        const connections = new Set(selection.connections);
+        if (systems.size + connections.size === 0) return Promise.resolve(true);
+        return run({
+          apply: (s) => ({
+            ...s,
+            systems: mapWithout(s.systems, (_, id) => !systems.has(id)),
+            connections: mapWithout(
+              s.connections,
+              (c, id) => !connections.has(id) && !systems.has(c.source) && !systems.has(c.target),
+            ),
+          }),
+          confirmedBy: (e) =>
+            (e.type === 'system.removed' && systems.has(e.data.solarSystemId)) ||
+            (e.type === 'connection.removed' && connections.has(e.data.id)),
+          request: (headers) =>
+            api(buildPath(routes.mapApi.batchDelete.path, { mapId }), {
+              method: 'POST',
+              json: { systems: [...systems], connections: [...connections] },
+              headers,
+            }),
+          failure: 'Could not remove the selection',
+          undo: label,
+        });
+      },
+
+      /** The same change to several systems in one request (a status for a selection). */
+      updateMany(patches: Array<{ solarSystemId: number; patch: UpdateSystemRequest }>, label: string) {
+        if (patches.length === 0) return Promise.resolve(true);
+        const byId = new Map(patches.map((p) => [p.solarSystemId, p.patch]));
+        return run({
+          apply: (s) => {
+            const next = new Map(s.systems);
+            for (const [id, patch] of byId) {
+              const sys = next.get(id);
+              if (sys) next.set(id, { ...sys, ...patch });
+            }
+            return { ...s, systems: next };
+          },
+          confirmedBy: isSystemEvent(['system.updated'], [...byId.keys()]),
+          request: (headers) =>
+            api(buildPath(routes.mapApi.batchUpsert.path, { mapId }), {
+              method: 'POST',
+              json: { systems: patches.map((p) => ({ solarSystemId: p.solarSystemId, ...p.patch })) },
+              headers,
+            }),
+          failure: 'Could not change the systems',
+          undo: label,
+        });
+      },
+
+      /**
        * Runs a gesture of several requests (each command given the `Gesture`); it goes on the undo
        * stack as one entry when any of them went through.
        */

@@ -1,0 +1,185 @@
+/* The rally card and its folded pill sit in the corner the viewer chose, clear of the top bar
+   (search), the view controls (bottom left) and the panel (`--covered-right`). */
+.card,
+.pill {
+  position: absolute;
+  z-index: 8;
+}
+
+.card[data-corner^='top'],
+.pill[data-corner^='top'] {
+  top: 60px;
+}
+
+.card[data-corner^='bottom'],
+.pill[data-corner^='bottom'] {
+  bottom: var(--dbk-space-3);
+}
+
+.card[data-corner$='right'],
+.pill[data-corner$='right'] {
+  right: calc(var(--covered-right, 0px) + var(--dbk-space-3));
+}
+
+.card[data-corner$='left'],
+.pill[data-corner$='left'] {
+  left: var(--dbk-space-3);
+}
+
+.card[data-corner='bottom-left'],
+.pill[data-corner='bottom-left'] {
+  left: 60px;
+}
+
+.card {
+  display: grid;
+  gap: var(--dbk-space-2);
+  width: min(340px, calc(100% - 24px));
+  padding: var(--dbk-space-3);
+  border: 1px solid color-mix(in oklab, var(--dbk-color-warning) 45%, var(--dbk-color-border));
+  border-radius: var(--dbk-radius-large);
+  background: var(--dbk-color-surface-raised);
+  box-shadow: var(--dbk-shadow-large);
+  color: var(--dbk-color-text);
+  animation: arrive var(--dbk-motion-normal) var(--dbk-motion-easing);
+}
+
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--dbk-space-2);
+}
+
+.icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--dbk-color-warning);
+}
+
+.title {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: var(--dbk-space-2);
+  min-width: 0;
+}
+
+.kind {
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.system {
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dbk-color-text);
+  font: inherit;
+  font-size: var(--dbk-font-size-large);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.system:hover {
+  color: var(--dbk-color-accent-text);
+  text-decoration: underline;
+}
+
+.message {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+}
+
+.route {
+  display: grid;
+  gap: 4px;
+}
+
+.routeText {
+  margin: 0;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dbk-space-2);
+}
+
+.cancel {
+  margin-left: auto;
+  color: var(--dbk-color-danger);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  max-width: 260px;
+  padding: 0 var(--dbk-space-3);
+  border: 1px solid color-mix(in oklab, var(--dbk-color-warning) 45%, var(--dbk-color-border));
+  border-radius: 999px;
+  background: var(--dbk-color-surface-raised);
+  box-shadow: var(--dbk-shadow-medium);
+  color: var(--dbk-color-text);
+  font: inherit;
+  font-size: var(--dbk-font-size-small);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pill svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--dbk-color-warning);
+}
+
+.pillName {
+  overflow: hidden;
+  color: var(--dbk-color-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Phones: the card spans the top, under the search. */
+@media (max-width: 760px) {
+  .card,
+  .pill {
+    top: 60px;
+    bottom: auto;
+    left: var(--dbk-space-3);
+    right: auto;
+  }
+
+  .card {
+    width: calc(100% - 24px);
+  }
+}

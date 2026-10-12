@@ -12,19 +12,24 @@ import {
 } from '@darkbeacon/shared';
 import { AlertTriangle, PanelRight, Plus, Waypoints, X } from 'lucide-react';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
+import { setMapPeople, useMapPresence } from '../lib/presence';
 import { mapPermissions } from '../lib/roles';
 import { useMe } from '../lib/session';
 import { track } from '../lib/telemetry';
 import { useUniverseSystems } from '../lib/universe';
 import { useMapSettings } from '../lib/useMapSettings';
 import { usePageView } from '../lib/useTelemetry';
-import { AddSystemSearch } from '../map/AddSystemSearch';
+import { AddSystemSearch, type OnMapEntry } from '../map/AddSystemSearch';
 import { OnlyTrackedGate, untrackedOf } from '../map/OnlyTrackedGate';
 import { useMapIntel as useSystemIntel, useSetStanding, useStandingsQuery } from '../lib/intel';
 import { MapCanvas, type FocusRequest, type MenuTarget } from '../map/MapCanvas';
 import type { HolderStanding } from '../map/menus/intel';
 import { freeSpot } from '../map/geometry';
-import { connectionMenu, paneMenu, systemMenu } from '../map/menus';
+import { connectionMenu, paneMenu, statusOptions, systemMenu } from '../map/menus';
+import { selectionMenu } from '../map/menus/selection';
+import { keptText, planRemoval } from '../map/selection/removal';
+import { count } from '../map/undo/labels';
+import type { CanvasSelection } from '../map/MapCanvas';
 import { useHubMenu } from '../map/routes/api';
 import { ConnectionSidebar } from '../map/connection/ConnectionSidebar';
 import { useConnectionIntel, useLivePassages, useMapIntel } from '../map/connection/data';
@@ -34,6 +39,11 @@ import type { ConnectionTraffic } from '../map/ConnectionEdge';
 import { systemDisplayName } from '../map/SystemNode';
 import { useMapStore } from '../map/useMapStore';
 import { useUndoShortcut } from '../map/undo/useUndoShortcut';
+import { useSystemsClipboard } from '../map/clipboard/useSystemsClipboard';
+import { useCanvasPrefs } from '../map/canvas/prefs';
+import { RallyCard } from '../map/pings/RallyCard';
+import { usePingCommands, usePings } from '../map/pings/api';
+import { isWormholeSpace } from '../map/sidebar/SystemDetails';
 import { SystemSidebar } from '../map/sidebar/SystemSidebar';
 import { filterableSources, permissionsFor, withoutSources } from '../map/sharing/chain';
 import { ProvenanceLine, provenanceText } from '../map/sharing/ProvenanceLine';
@@ -121,6 +131,18 @@ export function MapView({
   );
   const me = useMe();
   const rf = useReactFlow();
+  // Who else is here: cursors on the canvas, "N on this map" in the top bar.
+  const presence = useMapPresence(`map:${map.id}`);
+  const myId = me.data?.account.id;
+  const peopleHere = presence.people.length + (presence.people.some((p) => p.accountId === myId) ? 0 : 1);
+  const othersHere = presence.people
+    .filter((p) => p.accountId !== myId)
+    .map((p) => p.characterName ?? p.name)
+    .join('\n');
+  useEffect(() => {
+    setMapPeople({ count: peopleHere, others: othersHere ? othersHere.split('\n') : [] });
+  }, [peopleHere, othersHere]);
+  useEffect(() => () => setMapPeople(null), []);
   const settings = useMapSettings();
   const toast = useToast();
   const can = mapPermissions(role);
@@ -167,7 +189,8 @@ export function MapView({
 
   // Tags (`labels` in the data) and Labels (WH1...) of the map.
   const labels = (state.map ?? map).labels;
-  const systemLabels = (state.map ?? map).systemLabels ?? [];
+  const shownMap = state.map ?? map;
+  const systemLabels = useMemo(() => shownMap.systemLabels ?? [], [shownMap]);
   const ids = useMemo(() => [...state.systems.keys()], [state.systems]);
   const universe = useUniverseSystems(ids);
   const onMap = useMemo(() => new Set(ids), [ids]);
@@ -180,6 +203,29 @@ export function MapView({
   useEffect(() => {
     nameRef.current = endName;
   });
+  // The search finds systems on the map by their other names, Labels and Tags too.
+  const searchEntries = useMemo((): OnMapEntry[] => {
+    const labelName = new Map(systemLabels.map((l) => [l.id, l.name]));
+    const tagName = new Map(labels.map((t) => [t.id, t.name]));
+    return [...state.systems.values()].map((s) => {
+      const info = universe.get(s.solarSystemId);
+      const aliases: Array<{ text: string; what: string }> = [];
+      const name = systemDisplayName(s, info);
+      if (info && name !== info.name) aliases.push({ text: info.name, what: 'real name' });
+      if (s.temporaryName) aliases.push({ text: s.temporaryName, what: 'temp name' });
+      if (s.tag) aliases.push({ text: s.tag, what: 'tag' });
+      if (s.customLabel) aliases.push({ text: s.customLabel, what: 'label' });
+      for (const id of s.systemLabelIds) {
+        const name = labelName.get(id);
+        if (name) aliases.push({ text: name, what: 'label' });
+      }
+      for (const id of s.labelIds) {
+        const name = tagName.get(id);
+        if (name) aliases.push({ text: name, what: 'tag' });
+      }
+      return { id: s.solarSystemId, name, info, aliases };
+    });
+  }, [state.systems, universe, systemLabels, labels]);
   const undo = useUndoShortcut(store.undo, toast, can.edit);
 
   const closeMenu = useCallback(() => setMenu(null), []);
@@ -221,6 +267,124 @@ export function MapView({
   // A right click only opens the menu: it does not select the system or open the panel.
   const openMenu = (target: MenuTarget, x: number, y: number) => setMenu({ target, x, y });
 
+  // The map's rally ping: a card in a corner, the system drawn as a rally, a route there.
+  const prefs = useCanvasPrefs();
+  const myAccount = me.data?.account.id;
+  const myCharacters = useMemo(() => new Set(me.data?.characters.map((c) => c.id)), [me.data]);
+  /** Where the viewer's own character is on the map: the main first, else any one online. */
+  const myLocation = (() => {
+    const own = [...state.characters.values()].filter(
+      (c) =>
+        (c.accountId === myAccount || myCharacters.has(c.characterId)) &&
+        c.online &&
+        c.solarSystemId !== null &&
+        state.systems.has(c.solarSystemId),
+    );
+    const main = me.data?.account.mainCharacterId;
+    return (own.find((c) => c.characterId === main) ?? own[0])?.solarSystemId ?? null;
+  })();
+  const { pings, pinged } = usePings(map.id, (ping) => {
+    if (ping.createdBy === myAccount) return;
+    toast({
+      title: `Rally in ${endName(ping.solarSystemId)}`,
+      description: `${ping.characterName ?? ping.createdByName ?? 'Someone'}${ping.message ? `: ${ping.message}` : ''}`,
+      tone: 'warning',
+      duration: 6000,
+    });
+  });
+  const rally = pings.at(-1);
+  const pingCommands = usePingCommands(map.id, toast);
+
+  // "Select the system you jump into": a jump of one of the viewer's characters selects where it lands.
+  const lastSeen = useRef(new Map<number, number | null>());
+  useEffect(() => {
+    const seen = lastSeen.current;
+    for (const c of state.characters.values()) {
+      if (!(c.accountId === myAccount || myCharacters.has(c.characterId))) continue;
+      const before = seen.get(c.characterId);
+      seen.set(c.characterId, c.solarSystemId);
+      if (
+        prefs.selectOnJump &&
+        before !== undefined &&
+        c.solarSystemId !== null &&
+        before !== c.solarSystemId &&
+        state.systems.has(c.solarSystemId)
+      )
+        select(c.solarSystemId, true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when characters move
+  }, [state.characters, prefs.selectOnJump, myAccount, myCharacters]);
+
+  /** Delete on a selection, or "Remove" in its menu: what may go goes, in one gesture. */
+  const removeSelection = (selected: CanvasSelection) => {
+    const plan = planRemoval(selected, state, can, pinged);
+    const kept = keptText(plan, endName);
+    const label =
+      plan.systems.length === 1 && plan.connections.length === 0
+        ? `Removed ${endName(plan.systems[0]!)}`
+        : plan.systems.length === 0
+          ? `Removed ${count(plan.connections.length, 'connection')}`
+          : `Removed ${count(plan.systems.length, 'system')}`;
+    if (plan.systems.length + plan.connections.length > 0) {
+      if (map.kind === 'composite')
+        // A merged map writes through to its sources one change at a time.
+        void store.gesture(label, (g) =>
+          Promise.all([
+            ...plan.connections.map((id) => store.removeConnection(id, g)),
+            ...plan.systems.map((id) => store.removeSystem(id, g)),
+          ]),
+        );
+      else void store.removeMany({ systems: plan.systems, connections: plan.connections }, label);
+      if (plan.systems.includes(selected.systems[0] ?? -1)) deselect();
+    }
+    if (kept)
+      toast({
+        title: plan.systems.length + plan.connections.length > 0 ? 'Some of it stays' : 'Nothing removed',
+        description: kept,
+        tone: 'warning',
+      });
+  };
+
+  /** Applies one change to every system of a selection, as one gesture. */
+  const updateSelection = (
+    ids: readonly number[],
+    patchOf: (
+      system: NonNullable<ReturnType<typeof state.systems.get>>,
+    ) => Parameters<typeof store.updateSystem>[1] | null,
+    label: string,
+  ) => {
+    const patches = ids.flatMap((id) => {
+      const sys = state.systems.get(id);
+      const patch = sys ? patchOf(sys) : null;
+      return patch ? [{ solarSystemId: id, patch }] : [];
+    });
+    if (map.kind === 'composite')
+      void store.gesture(label, (g) =>
+        Promise.all(patches.map((p) => store.updateSystem(p.solarSystemId, p.patch, g))),
+      );
+    else void store.updateMany(patches, label);
+  };
+
+  // Copy and paste of systems: at the pointer, else the middle of the visible canvas.
+  const pointer = useRef<{ x: number; y: number } | null>(null);
+  const clipboard = useSystemsClipboard({
+    map: state.map ?? map,
+    role,
+    state,
+    systemLabels,
+    tags: labels,
+    store,
+    toast,
+    editable: map.kind !== 'composite',
+    selected: () =>
+      rf
+        .getNodes()
+        .filter((n) => n.selected)
+        .map((n) => Number(n.id)),
+    pasteAt: () => pointer.current ?? defaultPosition(),
+  });
+  const copySelection = (ids: readonly number[]) => clipboard.copy(ids);
+
   // Built on every render, so toggles in an open menu show the current state.
   const menuContent = ((): { title?: string; note?: string; items: MenuItem[] } | null => {
     if (!menu) return null;
@@ -246,6 +410,75 @@ export function MapView({
           routes: hubMenu,
           onManageTags: () => settings.show('tags'),
           ...holderOf(sys.solarSystemId),
+          info: universe.get(sys.solarSystemId),
+          dotlan: prefs.dotlan,
+          ...(map.kind === 'composite'
+            ? {}
+            : {
+                rally: {
+                  ping: rally,
+                  onCall: (message: string) =>
+                    void pingCommands.call({ solarSystemId: sys.solarSystemId, message }),
+                  onCancel: (pingId: string) => void pingCommands.cancel(pingId),
+                },
+              }),
+        }),
+      };
+    }
+    if (target.kind === 'selection') {
+      const systems = target.selection.systems.flatMap((id) => state.systems.get(id) ?? []);
+      if (systems.length === 0) return null;
+      const ids = systems.map((s) => s.solarSystemId);
+      const n = count(systems.length, 'system');
+      const plan = planRemoval(target.selection, state, can, pinged);
+      return {
+        title: target.selection.connections.length
+          ? `${n}, ${count(target.selection.connections.length, 'connection')}`
+          : n,
+        items: selectionMenu({
+          systems,
+          connections: plan.connections.length,
+          can: map.kind === 'composite' ? { ...can, manage: false } : can,
+          statusOptions,
+          systemLabels,
+          tags: labels,
+          removable: plan.systems.length,
+          onStatus: (status) =>
+            updateSelection(
+              ids,
+              (s) => (s.status === status ? null : { status }),
+              `Changed the status of ${n}`,
+            ),
+          onLabel: (labelId, on) =>
+            updateSelection(
+              ids,
+              (s) =>
+                s.systemLabelIds.includes(labelId) === on
+                  ? null
+                  : {
+                      systemLabelIds: on
+                        ? [...s.systemLabelIds, labelId]
+                        : s.systemLabelIds.filter((l) => l !== labelId),
+                    },
+              `Changed the labels of ${n}`,
+            ),
+          onTag: (tagId, on) =>
+            updateSelection(
+              ids,
+              (s) =>
+                s.labelIds.includes(tagId) === on
+                  ? null
+                  : { labelIds: on ? [...s.labelIds, tagId] : s.labelIds.filter((l) => l !== tagId) },
+              `Changed the tags of ${n}`,
+            ),
+          onLock: (locked) =>
+            updateSelection(
+              ids,
+              (s) => (s.locked === locked ? null : { locked }),
+              `${locked ? 'Locked' : 'Unlocked'} ${n}`,
+            ),
+          ...(clipboard.canCopy ? { onCopy: () => copySelection(ids) } : {}),
+          onRemove: () => removeSelection(target.selection),
         }),
       };
     }
@@ -285,6 +518,7 @@ export function MapView({
         onCenterOnMe: target.centerOnMe,
         undoLabel: can.edit ? store.undoLabel : null,
         onUndo: undo,
+        ...(clipboard.canPaste ? { onPaste: () => void clipboard.pasteFromClipboard(target.flow) } : {}),
       }),
     };
   })();
@@ -348,19 +582,26 @@ export function MapView({
         traffic={traffic}
         focus={focusNode}
         onMenu={openMenu}
+        onDeleteSelection={removeSelection}
+        onPointerAt={(p) => {
+          pointer.current = p;
+        }}
+        rallies={pinged}
+        presence={presence}
         coveredRight={covered.right}
         coveredBottom={covered.bottom}
       />
 
       <div className={styles.topbar}>
-        {can.edit && (
-          <AddSystemSearch
-            onMap={onMap}
-            onPick={addSystem}
-            focusToken={focus.search}
-            placeholder={addAt ? 'Add a system at the pointer…' : undefined}
-          />
-        )}
+        <AddSystemSearch
+          onMap={onMap}
+          onPick={addSystem}
+          entries={searchEntries}
+          onFind={(id) => select(id, true)}
+          canAdd={can.edit}
+          focusToken={focus.search}
+          placeholder={addAt ? 'Add a system at the pointer…' : undefined}
+        />
         {store.pendingCount > 0 && (
           <span className={styles.saving} role="status">
             <Spinner label="Saving" />
@@ -501,6 +742,29 @@ export function MapView({
           }}
           merged={merged}
           onClose={() => setConnectionDialog(null)}
+        />
+      )}
+
+      {rally && state.systems.has(rally.solarSystemId) && (
+        <RallyCard
+          mapId={map.id}
+          ping={rally}
+          name={endName(rally.solarSystemId)}
+          from={
+            selected !== null && state.systems.has(selected)
+              ? { solarSystemId: selected, name: endName(selected) }
+              : myLocation !== null
+                ? { solarSystemId: myLocation, name: endName(myLocation) }
+                : null
+          }
+          corner={prefs.pings}
+          canCancel={can.edit && map.kind !== 'composite'}
+          characters={me.data?.characters}
+          routable={!isWormholeSpace(universe.get(rally.solarSystemId))}
+          notify={toast}
+          onShow={() => select(rally.solarSystemId, true)}
+          onSelectStep={(id) => (state.systems.has(id) ? select(id, true) : undefined)}
+          onCancel={() => pingCommands.cancel(rally.id)}
         />
       )}
 

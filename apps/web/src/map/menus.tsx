@@ -14,6 +14,7 @@ import {
   type LabelDto,
   type MapSystemDto,
   type SystemLabelDto,
+  type UniverseSystemDto,
 } from '@darkbeacon/shared';
 import { cssVar } from '@darkbeacon/theme-sdk';
 import {
@@ -21,7 +22,6 @@ import {
   CircleDot,
   Clock,
   Hourglass,
-  Copy,
   EyeOff,
   LocateFixed,
   Lock,
@@ -37,6 +37,7 @@ import {
   Trash2,
   TriangleAlert,
   Type,
+  ClipboardPaste,
   Undo2,
   Weight,
 } from 'lucide-react';
@@ -52,6 +53,10 @@ import { STATUS_LABEL } from './nodeFacts';
 import type { MapStore } from './useMapStore';
 import { lowerFirst } from './undo/undoStack';
 import { holderStandingMenu, type HolderStanding } from './menus/intel';
+import { linksMenu } from './menus/links';
+import { pingMenuItems, type PingMenuContext } from './menus/pings';
+import type { DotlanTarget } from './canvas/prefs';
+import { isWormholeSpace } from './sidebar/SystemDetails';
 
 /*
  * The map's context menus. Short top levels with the details in submenus; only what the user
@@ -111,6 +116,12 @@ export interface SystemMenuContext {
   onManageTags?(): void;
   /** The alliance holding the system and the viewer's standing towards it (system intel). */
   holder?: HolderStanding;
+  /** The system in the universe data: links, and whether EVE can route there. */
+  info?: UniverseSystemDto;
+  /** Where the Dotlan link goes (the viewer's setting). */
+  dotlan?: DotlanTarget;
+  /** The map's rally: call one here, move it here, or cancel it here. */
+  rally?: Omit<PingMenuContext, 'solarSystemId' | 'canEdit'>;
 }
 
 /** "WH1" or "WH1 — Static to high-sec": the name alone is often a letter or two. */
@@ -266,25 +277,33 @@ export function systemMenu(ctx: SystemMenuContext): MenuItem[] {
     });
   }
 
+  const rally = ctx.rally ? pingMenuItems({ ...ctx.rally, solarSystemId: id, canEdit: can.edit }) : [];
   const go: MenuItem[] = [
-    ...waypointMenu(ctx.characters, { solarSystemId: id, name: ctx.name }, ctx.notify),
+    ...rally,
+    ...waypointMenu(
+      ctx.characters,
+      { solarSystemId: id, name: ctx.name, wormhole: isWormholeSpace(ctx.info) },
+      ctx.notify,
+    ),
     ...hubMenu(ctx.routes, { solarSystemId: id, name: ctx.name }),
     ...(ctx.holder ? [holderStandingMenu(ctx.holder)] : []),
+    ...linksMenu({
+      info: ctx.info,
+      name: ctx.name,
+      dotlan: ctx.dotlan ?? 'system',
+      onCopyName: () =>
+        void navigator.clipboard
+          ?.writeText(ctx.name)
+          .then(() => ctx.notify?.({ title: `Copied ${ctx.name}`, tone: 'success', duration: 2000 }))
+          .catch(() => {}),
+    }),
   ];
-  go.push({
-    kind: 'action',
-    label: 'Copy name',
-    icon: <Copy />,
-    onSelect: () =>
-      void navigator.clipboard
-        ?.writeText(ctx.name)
-        .then(() => ctx.notify?.({ title: `Copied ${ctx.name}`, tone: 'success', duration: 2000 }))
-        .catch(() => {}),
-  });
   go.push(...more(ctx.plugins, (close) => ({ mapId: ctx.mapId, solarSystemId: id, close })));
 
+  // A rally keeps its system on the map (the server refuses too).
+  const pinged = ctx.rally?.ping?.solarSystemId === id;
   const remove: MenuItem[] =
-    can.edit && !system.locked
+    can.edit && !system.locked && !pinged
       ? [
           {
             kind: 'action',
@@ -483,6 +502,8 @@ export interface PaneMenuContext {
   /** What Ctrl+Z would undo now; null or absent when nothing. */
   undoLabel?: string | null;
   onUndo?(): void;
+  /** Pastes copied systems at the pointer; absent when the viewer may not paste here. */
+  onPaste?(): void;
 }
 
 export function paneMenu(ctx: PaneMenuContext): MenuItem[] {
@@ -500,9 +521,22 @@ export function paneMenu(ctx: PaneMenuContext): MenuItem[] {
       : [];
   return groups(
     undo,
-    ctx.can.edit
-      ? [{ kind: 'action', label: 'Add system here…', icon: <Plus />, onSelect: ctx.onAddSystem }]
-      : [],
+    [
+      ...(ctx.can.edit
+        ? [{ kind: 'action', label: 'Add system here…', icon: <Plus />, onSelect: ctx.onAddSystem } as const]
+        : []),
+      ...(ctx.onPaste
+        ? [
+            {
+              kind: 'action',
+              label: 'Paste systems here',
+              icon: <ClipboardPaste />,
+              shortcut: 'Ctrl+V',
+              onSelect: ctx.onPaste,
+            } as const,
+          ]
+        : []),
+    ],
     [
       { kind: 'action', label: 'Fit chain', icon: <Maximize />, shortcut: 'F', onSelect: ctx.onFitChain },
       {

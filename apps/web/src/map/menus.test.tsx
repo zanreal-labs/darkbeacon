@@ -5,6 +5,7 @@ import { mapPermissions } from '../lib/roles';
 import type { SlotEntry } from '../plugins/registry';
 import { connectionFixture, MAP_ID, systemFixture } from '../test/fixtures';
 import { connectionMenu, paneMenu, systemMenu } from './menus';
+import { selectionMenu } from './menus/selection';
 import type { MapStore } from './useMapStore';
 
 const store = () => ({
@@ -68,9 +69,9 @@ function system(role: MapRole, extra: Parameters<typeof systemFixture>[1] = {}, 
 
 describe('system menu', () => {
   it('shows a viewer only what a viewer can do', () => {
-    expect(rows(system('viewer').items)).toEqual(['Copy name']);
+    expect(rows(system('viewer').items)).toEqual(['Links']);
     const withPilot = system('viewer', {}, { characters: [pilot(1, 'Ayla Vex')] }).items;
-    expect(rows(withPilot)).toEqual(['Set destination', 'Copy name']);
+    expect(rows(withPilot)).toEqual(['Set destination', 'Links']);
     expect(rows(sub(withPilot, 'Set destination'))).toEqual([
       'Set destination',
       'Add waypoint',
@@ -86,7 +87,7 @@ describe('system menu', () => {
       personal: [],
     };
     const viewer = system('viewer', {}, { routes: { hubs, canEdit: false, toggle } }).items;
-    expect(rows(viewer)).toEqual(['My hub', 'Copy name']);
+    expect(rows(viewer)).toEqual(['My hub', 'Links']);
     const member = system('member', {}, { routes: { hubs, canEdit: true, toggle } }).items;
     const mapHub = member.find((i) => i.kind === 'check' && i.label === 'Map hub');
     if (mapHub?.kind !== 'check') throw new Error('Map hub');
@@ -104,7 +105,7 @@ describe('system menu', () => {
       set: (v: number | null) => void set.push(v),
     });
     const items = system('viewer', {}, { holder: holder(5, false) }).items;
-    expect(rows(items)).toEqual(['Standing towards [CONDI]', 'Copy name']);
+    expect(rows(items)).toEqual(['Standing towards [CONDI]', 'Links']);
     const choices = sub(items, 'Standing towards [CONDI]');
     expect(rows(choices)).toEqual([
       'Excellent (+10)',
@@ -131,7 +132,7 @@ describe('system menu', () => {
       'Rename',
       'Hide from routes',
       '—',
-      'Copy name',
+      'Links',
       '—',
       'Remove from map',
     ]);
@@ -247,7 +248,7 @@ describe('system menu', () => {
   it('puts plugin items into one "More" submenu at the bottom', () => {
     const entry = { key: 'p:1', pluginId: 'p', title: 'Ping', order: 0, component: () => null };
     const { items } = system('member', {}, { plugins: [entry] as SlotEntry<'systemContextMenu'>[] });
-    expect(rows(items).slice(-4)).toEqual(['Copy name', 'More', '—', 'Remove from map']);
+    expect(rows(items).slice(-4)).toEqual(['Links', 'More', '—', 'Remove from map']);
     expect(rows(sub(items, 'More'))).toEqual(['custom']);
   });
 });
@@ -353,5 +354,149 @@ describe('pane menu', () => {
     expect(rows(member)).toEqual(['Add system here…', '—', 'Fit chain', 'Center on me']);
     pick(member, 'Fit chain');
     expect(ctx.onFitChain).toHaveBeenCalledOnce();
+  });
+
+  it('offers to undo the last gesture and to paste copied systems', () => {
+    const ctx = { onAddSystem: vi.fn(), onFitChain: vi.fn(), onCenterOnMe: vi.fn() };
+    const onUndo = vi.fn();
+    const items = paneMenu({
+      ...ctx,
+      can: mapPermissions('member'),
+      undoLabel: 'Removed J123456',
+      onUndo,
+      onPaste: vi.fn(),
+    });
+    expect(rows(items)).toEqual([
+      'Undo removed J123456',
+      '—',
+      'Add system here…',
+      'Paste systems here',
+      '—',
+      'Fit chain',
+      'Center on me',
+    ]);
+    pick(items, 'Undo removed J123456');
+    expect(onUndo).toHaveBeenCalledOnce();
+  });
+});
+
+describe('system menu links and rally', () => {
+  const JITA = {
+    id: 30000142,
+    name: 'Jita',
+    regionName: 'The Forge',
+    constellationName: 'Kimotoro',
+    security: 0.9,
+    whClass: 7,
+    statics: [],
+    effect: null,
+  };
+  const HOLE = { ...JITA, id: 31000005, name: 'J123456', regionName: 'A-R00001', whClass: 3 };
+
+  it('links Dotlan where the viewer asked, Anoikis for wormholes, and keeps Copy name', () => {
+    const open = vi.fn();
+    vi.stubGlobal('window', { open });
+    const kspace = system('viewer', {}, { info: JITA, dotlan: 'sov' }).items;
+    expect(rows(sub(kspace, 'Links'))).toEqual(['zKillboard', 'Dotlan', '—', 'Copy name']);
+    pick(sub(kspace, 'Links'), 'Dotlan');
+    expect(open).toHaveBeenLastCalledWith(
+      'https://evemaps.dotlan.net/map/The_Forge/Jita#sov',
+      '_blank',
+      'noopener,noreferrer',
+    );
+    const wormhole = system('viewer', {}, { info: HOLE, dotlan: 'sov' }).items;
+    expect(rows(sub(wormhole, 'Links'))).toEqual(['zKillboard', 'Dotlan', 'Anoikis', '—', 'Copy name']);
+    pick(sub(wormhole, 'Links'), 'Dotlan');
+    expect(open).toHaveBeenLastCalledWith(
+      'https://evemaps.dotlan.net/system/J123456',
+      '_blank',
+      'noopener,noreferrer',
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it('sets no destination in wormhole space, where EVE routes nowhere', () => {
+    const items = system('viewer', {}, { info: HOLE, characters: [pilot(1, 'Ayla Vex')] }).items;
+    expect(rows(items)).toEqual(['Links']);
+  });
+
+  it('calls a rally, moves it, cancels it, and keeps a pinged system on the map', () => {
+    const onCall = vi.fn();
+    const onCancel = vi.fn();
+    const none = system('member', {}, { rally: { ping: undefined, onCall, onCancel } }).items;
+    const call = none.find((i) => i.kind === 'input' && i.label === 'Call a rally here');
+    expect(call?.kind).toBe('input');
+    if (call?.kind === 'input') call.onSubmit(' Form up ');
+    expect(onCall).toHaveBeenCalledWith('Form up');
+
+    const ping = {
+      id: 'p1',
+      mapId: MAP_ID,
+      solarSystemId: 31000005,
+      type: 'rally' as const,
+      message: '',
+      createdBy: 'a',
+      createdByName: null,
+      characterId: null,
+      characterName: null,
+      createdAt: 0,
+    };
+    const here = system('member', {}, { rally: { ping, onCall, onCancel } }).items;
+    expect(rows(here)).toContain('Cancel the rally');
+    expect(rows(here)).not.toContain('Remove from map');
+    pick(here, 'Cancel the rally');
+    expect(onCancel).toHaveBeenCalledWith('p1');
+    const elsewhere = system(
+      'member',
+      {},
+      { rally: { ping: { ...ping, solarSystemId: 1 }, onCall, onCancel } },
+    );
+    expect(rows(elsewhere.items)).toContain('Move the rally here');
+    expect(rows(elsewhere.items)).toContain('Remove from map');
+  });
+});
+
+describe('selection menu', () => {
+  const statusOptions = [
+    { value: 'unknown' as const, label: 'Unknown' },
+    { value: 'hostile' as const, label: 'Hostile' },
+  ];
+  const menu = (role: MapRole, removable = 2) => {
+    const calls = {
+      onStatus: vi.fn(),
+      onLabel: vi.fn(),
+      onTag: vi.fn(),
+      onLock: vi.fn(),
+      onCopy: vi.fn(),
+      onRemove: vi.fn(),
+    };
+    const items = selectionMenu({
+      systems: [systemFixture(1, { systemLabelIds: ['wh1'] }), systemFixture(2)],
+      connections: 0,
+      can: mapPermissions(role),
+      statusOptions,
+      systemLabels: SYSTEM_LABELS,
+      tags: LABELS,
+      removable,
+      ...calls,
+    });
+    return { items, calls };
+  };
+
+  it('changes every selected system at once, copies and removes them', () => {
+    const { items, calls } = menu('manager');
+    expect(rows(items)).toEqual(['Status', 'Labels', 'Tags', 'Lock', '—', 'Copy', '—', 'Remove from map']);
+    pick(sub(items, 'Status'), 'Hostile');
+    expect(calls.onStatus).toHaveBeenCalledWith('hostile');
+    // WH1 is on one of the two: checking it puts it on both.
+    pick(sub(items, 'Labels'), 'WH1');
+    expect(calls.onLabel).toHaveBeenCalledWith('wh1', true);
+    pick(items, 'Remove from map');
+    expect(calls.onRemove).toHaveBeenCalledOnce();
+  });
+
+  it('says how many of the selection go when some stay, and gives viewers only Copy', () => {
+    expect(rows(menu('member', 1).items).at(-1)).toBe('Remove 1 of 2');
+    expect(rows(menu('viewer').items)).toEqual(['Copy']);
   });
 });
