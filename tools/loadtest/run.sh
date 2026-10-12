@@ -78,7 +78,7 @@ start_app() {
   docker run -d --name "$name" --network "$NET" --network-alias "$alias" \
     --cpus "$APP_CPUS" --memory "$APP_MEM" --stop-timeout 30 \
     -v "$P-data:/data" -v "$OUT:/out" -v "$HERE:/loadtest:ro" \
-    -e SECRET_KEY="$SECRET_KEY" -e PUBLIC_URL=http://app:3000 -e ESI_BASE_URL=http://fake-esi:8080 \
+    -e SECRET_KEY="$SECRET_KEY" -e PUBLIC_URL=http://app:3000 -e ESI_BASE_URL=http://fake-esi:8080 -e TELEMETRY=off \
     -e CLUSTER ${DB_ENV[@]+"${DB_ENV[@]}"} ${PROFILE_ENV[@]+"${PROFILE_ENV[@]}"} \
     "$IMAGE" >/dev/null
 }
