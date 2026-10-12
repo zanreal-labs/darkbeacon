@@ -9,7 +9,6 @@ import {
   type EveScoutSignature,
   type Invasion,
   type InvasionLookup,
-  type PingTargets,
   type SovereigntyLookup,
   type StationCatalog,
   type SystemDistances,
@@ -277,6 +276,3 @@ export class StaticInvasionLookup implements InvasionLookup {
     return this.byId.get(solarSystemId) ?? null;
   }
 }
-
-/** Pings are not built yet: no pinged system is a route target until they are. */
-export const NO_PINGS: PingTargets = { pinged: async () => [] };

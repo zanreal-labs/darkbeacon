@@ -11,7 +11,7 @@ import {
 } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
 import { AccountService, CharacterService } from '@darkbeacon/identity';
-import type { MappingPorts } from '@darkbeacon/mapping';
+import { PingUseCases, type MappingPorts } from '@darkbeacon/mapping';
 import {
   BridgeAdmin,
   BridgeEdgeSource,
@@ -47,7 +47,6 @@ import {
   EsiSovereignty,
   HttpEveScoutClient,
   KspaceDistances,
-  NO_PINGS,
   StaticInvasionLookup,
   StaticStationCatalog,
 } from '../../adapters/routing/external-adapters.js';
@@ -340,6 +339,7 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
         alliances: AllianceDirectory,
         stations: StationCatalog,
         thera: TheraFeed,
+        pings: PingUseCases,
       ) =>
         new RouteQueries({
           router,
@@ -351,7 +351,8 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
           alliances,
           stations,
           thera,
-          pings: NO_PINGS,
+          // Pinged systems are route targets ahead of the map's hubs.
+          pings: { pinged: (mapId) => pings.pinged(mapId) },
         }),
       inject: [
         Router,
@@ -363,6 +364,7 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
         ALLIANCES,
         STATIONS,
         TheraFeed,
+        PingUseCases,
       ],
     },
     {

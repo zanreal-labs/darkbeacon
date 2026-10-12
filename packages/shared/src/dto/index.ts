@@ -36,3 +36,5 @@ export * from './map-characters.js';
 export * from './intel.js';
 export * from './effect-modifiers.js';
 export * from './undo.js';
+export * from './clipboard.js';
+export * from './pings.js';

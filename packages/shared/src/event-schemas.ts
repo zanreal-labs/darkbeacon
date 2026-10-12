@@ -13,6 +13,7 @@ import {
   SystemLabelDto,
 } from './dto/mapping.js';
 import { MassMode, PassageSource } from './dto/passages.js';
+import { MapPingDto } from './dto/pings.js';
 import { PluginDto } from './dto/plugins.js';
 import { HubDto, MapExitDto } from './dto/routing.js';
 import { BridgeDto } from './dto/bridges.js';
@@ -80,13 +81,7 @@ export const EVENT_DATA_SCHEMAS: Record<EventType, z.ZodType> = {
   'map.sources_changed': z.object({ sources: z.array(MapSourceDto) }),
   'routes.exits_changed': z.object({ exits: z.array(MapExitDto) }),
   'routes.hubs_changed': z.object({ hubs: z.array(HubDto) }),
-  'ping.created': z.object({
-    id: Id,
-    solarSystemId: EveId,
-    message: z.string(),
-    createdBy: z.string(),
-    createdAt: Timestamp,
-  }),
+  'ping.created': MapPingDto,
   'ping.removed': z.object({ id: Id }),
   'kill.reported': KillmailDto,
   'access.rule_added': AccessRuleDto,

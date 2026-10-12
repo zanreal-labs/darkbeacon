@@ -2290,6 +2290,65 @@ export const routes = {
       summary: 'Undo one gesture of the caller (all changes made with one action id)',
     }),
   },
+
+  /** Rally pings: one system of the map everyone is called to (Wanderer's rally points). */
+  pings: {
+    list: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/pings',
+      auth: 'account',
+      scope: { resource: 'systems', action: 'read' },
+      mapRole: 'viewer',
+      response: z.array(dto.MapPingDto),
+    }),
+    /** Calls a rally on a system; it replaces the map's ping before it (`ping.created`). */
+    create: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/pings',
+      auth: 'account',
+      scope: { resource: 'systems', action: 'write' },
+      mapRole: 'member',
+      body: dto.CreatePingRequest,
+      response: dto.MapPingDto,
+    }),
+    /** Cancels a ping (`ping.removed`). */
+    remove: route({
+      method: 'DELETE',
+      path: '/api/maps/:mapId/pings/:pingId',
+      auth: 'account',
+      scope: { resource: 'systems', action: 'write' },
+      mapRole: 'member',
+    }),
+  },
+
+  /** Copy and paste of systems between maps, keeping their attributes. */
+  clipboard: {
+    /**
+     * Places copied systems (a `darkbeacon/systems` clipboard) with their status, names, notes,
+     * Labels and Tags (by name) and connects them with their flags, in one transaction. Who may
+     * paste is the map's `settings.clipboard.paste` (members by default).
+     */
+    paste: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/paste',
+      auth: 'account',
+      scope: { resource: 'systems', action: 'write' },
+      mapRole: 'member',
+      status: 200,
+      body: dto.PasteSystemsRequest,
+      response: dto.PasteSystemsResultDto,
+    }),
+    /** Who may copy systems off the map and paste onto it (manager+). */
+    setRoles: route({
+      method: 'PUT',
+      path: '/api/maps/:mapId/clipboard-roles',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'write' },
+      mapRole: 'manager',
+      body: dto.ClipboardRolesRequest,
+      response: dto.MapDto,
+    }),
+  },
 } as const;
 
 type PathParams<P extends string> = P extends `${string}:${infer Name}/${infer Rest}`

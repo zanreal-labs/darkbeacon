@@ -21,6 +21,11 @@ export const MapSettings = z.object({
   onlyTrackedCharacters: z.boolean().optional(),
   /** Wanderer's `restrict_offline_showing`: offline characters are shown to managers and up only. */
   offlineForManagersOnly: z.boolean().optional(),
+  /**
+   * Who may copy systems off this map and paste systems onto it (the lowest role). Absent: viewers
+   * copy, members paste.
+   */
+  clipboard: z.object({ copy: MapRole, paste: MapRole }).optional(),
 });
 export type MapSettings = z.infer<typeof MapSettings>;
 

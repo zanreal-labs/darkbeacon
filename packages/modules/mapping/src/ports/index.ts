@@ -8,3 +8,4 @@ export type * from './signature-repository.js';
 export type * from './system-repository.js';
 export type * from './universe-catalog.js';
 export type * from './map-directory.js';
+export type * from './ping-repository.js';

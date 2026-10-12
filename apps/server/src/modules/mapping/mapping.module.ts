@@ -23,6 +23,8 @@ import {
   PassageRecorder,
   MapTransfer,
   MapBatchUseCases,
+  ClipboardUseCases,
+  PingUseCases,
   PassageUseCases,
   MapUseCases,
   SignatureUseCases,
@@ -41,9 +43,10 @@ import {
 } from '../../adapters/mapping/kysely-repositories.js';
 import { KyselyMapPreferenceRepository } from '../../adapters/mapping/kysely-preferences.js';
 import { KyselyPilotDirectory } from '../../adapters/mapping/pilot-directory.js';
+import { KyselyPingRepository } from '../../adapters/mapping/kysely-pings.js';
 import { MappingMapOwnership } from '../../adapters/mapping/map-ownership.js';
 import { isEventOfType } from '@darkbeacon/shared';
-import { AsyncAuditScope } from '../../platform/audit.js';
+import { AsyncAuditScope, AuditDirectoryRegistry } from '../../platform/audit.js';
 import { EventConsumers } from '../../platform/event-consumers.js';
 import { CLOCK, EVENT_LOG, MAP_ACCESS, UNIT_OF_WORK, UNIVERSE_CATALOG } from '../../platform/tokens.js';
 import { MapOwnershipRegistry } from '../access/map-ownership.registry.js';
@@ -60,6 +63,7 @@ import { MergedWriteRouter } from './merged-writes.js';
 import { AdminMapsController, MapLifecycleController } from './lifecycle.controllers.js';
 import { MAP_FILE_LIMIT, MAP_FILE_TYPE, MapFilesController } from './transfer.controller.js';
 import { MapApiController } from './map-api.controller.js';
+import { CanvasController } from './canvas.controller.js';
 import { SweeperRuntime } from './sweeper.runtime.js';
 import { CHAIN_OVERLAY, MAP_OWNERSHIP, MAP_REPOSITORY, MAPPING_PORTS } from './mapping.tokens.js';
 
@@ -80,6 +84,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
     AdminMapsController,
     MapFilesController,
     MapApiController,
+    CanvasController,
     MapPreferencesController,
     SystemsController,
     ConnectionsController,
@@ -112,6 +117,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
         accounts: AccountService,
         settings: InstanceSettingsService,
         rules: AccessRules,
+        authors: AuditDirectoryRegistry,
       ): MappingPorts => ({
         maps,
         systems: new KyselySystemRepository(database),
@@ -127,6 +133,8 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
         uow,
         clock,
         directory: new InstanceMapDirectory(accounts, settings, rules),
+        pings: new KyselyPingRepository(database),
+        pingAuthors: authors,
       }),
       inject: [
         Database,
@@ -140,6 +148,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
         AccountService,
         InstanceSettingsService,
         AccessRules,
+        AuditDirectoryRegistry,
       ],
     },
     MergedWriteRouter,
@@ -147,6 +156,8 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
     useCase(MapUseCases),
     useCase(MapTransfer),
     useCase(MapBatchUseCases),
+    useCase(ClipboardUseCases),
+    useCase(PingUseCases),
     useCase(SystemUseCases),
     useCase(ConnectionUseCases),
     useCase(SignatureUseCases),
@@ -177,6 +188,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
     SignatureUseCases,
     BookmarkNumberUseCases,
     PassageUseCases,
+    PingUseCases,
     SweeperRuntime,
     ConnectionIntelQuery,
     MergedWriteRouter,
