@@ -231,7 +231,9 @@ export function MapView({
       return { id: s.solarSystemId, name, info, aliases };
     });
   }, [state.systems, universe, systemLabels, labels]);
-  const undo = useUndoShortcut(store.undo, toast, can.edit);
+  // Undo reverts this map's own history; a map that merges others writes to its sources'.
+  const canUndo = can.edit && map.kind !== 'composite';
+  const undo = useUndoShortcut(store.undo, toast, canUndo);
   // One stack for Ctrl+Z: removed signatures join it while they can be put back.
   useSignatureUndoBridge(map.id, store, endName);
 
@@ -534,7 +536,7 @@ export function MapView({
         },
         onFitChain: target.fitChain,
         onCenterOnMe: target.centerOnMe,
-        undoLabel: can.edit ? store.undoLabel : null,
+        undoLabel: canUndo ? store.undoLabel : null,
         onUndo: undo,
         ...(clipboard.canPaste ? { onPaste: () => void clipboard.pasteFromClipboard(target.flow) } : {}),
       }),
