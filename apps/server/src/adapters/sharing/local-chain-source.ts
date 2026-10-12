@@ -10,6 +10,7 @@ import {
 } from '@darkbeacon/core';
 import {
   ConnectionUseCases,
+  PassageUseCases,
   signatureTypeCode,
   SignatureUseCases,
   SystemUseCases,
@@ -35,6 +36,9 @@ import {
 import {
   pairKey,
   parsePair,
+  passageKey,
+  passagesShared,
+  pilotsShared,
   parseSignatureKey,
   projectEntry,
   refusedFields,
@@ -43,6 +47,7 @@ import {
   signatureKey,
   type ChainCommand,
   type ChainMapInfo,
+  type ChainPassage,
   type ChainSelector,
   type ChainSource,
   type ChainSources,
@@ -192,7 +197,41 @@ export class LocalChainSource implements ChainSource {
 
   // --- writing --------------------------------------------------------------------------------
 
+  async passages(key: string, scopes: readonly ShareScope[] | 'all'): Promise<ChainPassage[]> {
+    if (!passagesShared(scopes)) return [];
+    const { ports } = this.deps;
+    const connection = await this.connectionOrNull(key);
+    if (!connection) return [];
+    const rows = await ports.passages.listForConnection(this.mapId, connection.id);
+    const withPilots = pilotsShared(scopes);
+    const pilots = withPilots
+      ? [...new Set(rows.flatMap((p) => (p.characterId === null ? [] : [p.characterId])))]
+      : [];
+    const names = pilots.length > 0 && ports.pilots ? await ports.pilots.names(pilots) : new Map();
+    return rows.map((p) => ({
+      key: passageKey({ ...p, at: p.occurredAt }),
+      // Only the map's own merged view keeps row ids (its passages stay editable there).
+      ...(scopes === 'all' ? { id: p.id } : {}),
+      at: p.occurredAt,
+      from: p.from,
+      to: p.to,
+      shipTypeId: p.shipTypeId,
+      mass: p.mass,
+      source: p.source,
+      massMode: p.massMode,
+      higgs: p.higgs,
+      entangler: p.entangler,
+      note: p.note,
+      pilot:
+        withPilots && p.characterId !== null
+          ? { id: p.characterId, name: names.get(p.characterId) ?? null }
+          : null,
+    }));
+  }
+
   async write(command: ChainCommand, context: ChainWriteContext): Promise<unknown> {
+    if (command.op.startsWith('passages.') && !passagesShared(context.scopes))
+      throw new ForbiddenError(`This map does not share ${SCOPE_WORDS.connectionStatus}`);
     if ('fields' in command) {
       const kind = command.op.startsWith('system')
         ? 'system'
@@ -218,11 +257,12 @@ export class LocalChainSource implements ChainSource {
       systems: new SystemUseCases(ports),
       connections: new ConnectionUseCases(ports),
       signatures: new SignatureUseCases(ports),
+      passages: new PassageUseCases(ports),
     };
   }
 
   private async apply(command: ChainCommand, actor: Actor, delegated: boolean): Promise<unknown> {
-    const { systems, connections, signatures } = this.useCases(delegated);
+    const { systems, connections, signatures, passages } = this.useCases(delegated);
     const { ports } = this.deps;
     const mapId = this.mapId;
     switch (command.op) {
@@ -292,6 +332,25 @@ export class LocalChainSource implements ChainSource {
           text: command.text,
           mode: command.mode,
         });
+      case 'passages.log': {
+        const connection = await this.connection(command.key);
+        const p = command.passage;
+        await passages.log(actor, mapId, connection.id, {
+          shipTypeId: p.shipTypeId,
+          direction: Number(p.from) === connection.source ? 'sourceToTarget' : 'targetToSource',
+          massMode: p.massMode,
+          ...(p.higgs !== undefined ? { higgs: p.higgs } : {}),
+          ...(p.entangler !== undefined ? { entangler: p.entangler } : {}),
+          ...(p.mass !== undefined ? { mass: p.mass } : {}),
+          ...(p.note ? { note: p.note } : {}),
+          count: p.count,
+          ...(p.at !== undefined ? { occurredAt: p.at } : {}),
+        });
+        return;
+      }
+      case 'passages.reset':
+        await passages.resetCounter(actor, mapId, (await this.connection(command.key)).id);
+        return;
     }
     void ports;
   }

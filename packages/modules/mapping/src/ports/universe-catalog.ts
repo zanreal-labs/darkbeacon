@@ -1,4 +1,10 @@
-import type { HullClassDto, UniverseSystemDto, WormholeTypeDto } from '@darkbeacon/shared';
+import type {
+  HullClassDto,
+  MassModifiersDto,
+  ShipTypeDto,
+  UniverseSystemDto,
+  WormholeTypeDto,
+} from '@darkbeacon/shared';
 
 export type UniverseSystem = UniverseSystemDto;
 
@@ -17,4 +23,10 @@ export interface UniverseCatalog {
   hullClasses(): HullClassDto[];
   /** Hull mass (kg) of a ship type, null when the type is not a known ship. */
   shipMass(shipTypeId: number): number | null;
+  /** A published ship with what changes its jump mass; null when not a known published ship. */
+  ship(shipTypeId: number): ShipTypeDto | null;
+  /** Published ships by name: prefix matches first, then substrings; at most `limit`. */
+  searchShips(query: string, limit: number): ShipTypeDto[];
+  /** What prop modules, Higgs Anchors and the mass entangler do to a ship's mass (SDE dogma). */
+  massModifiers(): MassModifiersDto;
 }

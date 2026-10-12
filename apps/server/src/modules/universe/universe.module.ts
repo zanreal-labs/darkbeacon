@@ -5,8 +5,11 @@ import {
   EveId,
   nestPath,
   routes,
+  ShipSearchQuery,
   UniverseLookupQuery,
   UniverseSearchQuery,
+  type ShipCatalogDto,
+  type ShipTypeDto,
   type UniverseSystemDto,
   type WormholeCatalogDto,
 } from '@darkbeacon/shared';
@@ -16,6 +19,13 @@ import { CurrentActor } from '../../platform/actor.js';
 import { ZodPipe } from '../../platform/http.js';
 import type { AppConfig } from '../../config/config.js';
 import { APP_CONFIG, UNIVERSE_CATALOG } from '../../platform/tokens.js';
+
+/**
+ * Ships rolling crews use, offered before anyone searches: the battleships with the most mass
+ * (Megathron, Typhoon), the Orca and Porpoise, and the heavy interdiction cruisers that take a mass
+ * entangler (Onyx, Broadsword, Devoter, Phobos). SDE type ids.
+ */
+const SUGGESTED_SHIPS = [641, 644, 28606, 42244, 11995, 12013, 12017, 12021];
 
 @Controller()
 export class UniverseController {
@@ -37,6 +47,35 @@ export class UniverseController {
   ): UniverseSystemDto[] {
     requireAccount(actor);
     return query.ids.flatMap((id) => this.catalog.getSystem(id) ?? []);
+  }
+
+  @Get(nestPath(routes.universe.searchShips.path))
+  searchShips(
+    @CurrentActor() actor: Actor | null,
+    @Query(new ZodPipe(ShipSearchQuery)) query: ShipSearchQuery,
+  ): ShipTypeDto[] {
+    requireAccount(actor);
+    return this.catalog.searchShips(query.q, query.limit);
+  }
+
+  @Get(nestPath(routes.universe.shipCatalog.path))
+  shipCatalog(@CurrentActor() actor: Actor | null): ShipCatalogDto {
+    requireAccount(actor);
+    return {
+      modifiers: this.catalog.massModifiers(),
+      suggested: SUGGESTED_SHIPS.flatMap((id) => this.catalog.ship(id) ?? []),
+    };
+  }
+
+  @Get(nestPath(routes.universe.getShip.path))
+  getShip(
+    @CurrentActor() actor: Actor | null,
+    @Param('shipTypeId', new ZodPipe(z.coerce.number().pipe(EveId))) shipTypeId: number,
+  ): ShipTypeDto {
+    requireAccount(actor);
+    const ship = this.catalog.ship(shipTypeId);
+    if (!ship) throw new NotFoundError('Ship');
+    return ship;
   }
 
   @Get(nestPath(routes.universe.wormholes.path))

@@ -139,6 +139,8 @@ made while seeding the demo map or by cleanups count as nothing; a history rever
 | `bookmark_template_changed`          | `scope`: `map` or `personal`                                                                                        |
 | `esi_picker_used`                    | `category`: `character`, `corporation`, `alliance`; `mode`: `search` or `exact`                                     |
 | `waypoint_set`                       | `mode`: `destination` or `waypoint`                                                                                 |
+| `passage_logged`                     | `source`: `tracked` or `manual`; `mode`: `cold`, `hot`, `custom`                                                    |
+| `roll_planned`                       | `result`: `ok`, `risky`, `impossible`                                                                               |
 
 ### Web app events
 

@@ -251,6 +251,9 @@ describeEachDialect('identity and access over HTTP', (t) => {
       eventRetentionDays: null,
       loginMethod: null,
       defaultMapId: null,
+      expiredConnectionMinutes: 0,
+      autoEol: true,
+      staleSystemMinutes: 15,
     });
     expect(
       (await bob.request('/api/admin/settings', { method: 'PATCH', json: { adminGuildId: 'x' } })).status,

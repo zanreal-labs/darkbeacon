@@ -6,6 +6,9 @@ import {
   EveEntityCategory,
   FIRST_PARTY_PLUGIN_IDS,
   FirstPartyPluginId,
+  MassMode,
+  PassageSource,
+  RollResult,
   RouteMode,
   TELEMETRY_WEB_EVENTS,
   TelemetryThemeId,
@@ -97,6 +100,10 @@ export const TELEMETRY_SERVER_EVENTS = {
   bookmark_template_changed: z.strictObject({ scope: z.enum(['map', 'personal']) }),
   esi_picker_used: z.strictObject({ category: EveEntityCategory, mode: z.enum(['search', 'exact']) }),
   waypoint_set: z.strictObject({ mode: z.enum(['destination', 'waypoint']) }),
+  /** A passage recorded from a tracked jump or logged by hand, and how its mass counted. */
+  passage_logged: z.strictObject({ source: PassageSource, mode: MassMode }),
+  /** A rolling plan was asked for, and whether it closes the hole safely. */
+  roll_planned: z.strictObject({ result: RollResult }),
 } as const;
 
 export type TelemetryServerEventName = keyof typeof TELEMETRY_SERVER_EVENTS;

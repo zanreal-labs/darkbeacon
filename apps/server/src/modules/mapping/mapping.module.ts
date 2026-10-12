@@ -16,6 +16,7 @@ import {
   MapPreferenceUseCases,
   MapSnapshotQuery,
   PassageRecorder,
+  PassageUseCases,
   MapUseCases,
   SignatureUseCases,
   SystemUseCases,
@@ -32,6 +33,7 @@ import {
   KyselySystemRepository,
 } from '../../adapters/mapping/kysely-repositories.js';
 import { KyselyMapPreferenceRepository } from '../../adapters/mapping/kysely-preferences.js';
+import { KyselyPilotDirectory } from '../../adapters/mapping/pilot-directory.js';
 import { MappingMapOwnership } from '../../adapters/mapping/map-ownership.js';
 import { isEventOfType } from '@darkbeacon/shared';
 import { AsyncAuditScope } from '../../platform/audit.js';
@@ -48,6 +50,7 @@ import {
   SystemsController,
 } from './mapping.controllers.js';
 import { MergedWriteRouter } from './merged-writes.js';
+import { SweeperRuntime } from './sweeper.runtime.js';
 import { CHAIN_OVERLAY, MAP_OWNERSHIP, MAP_REPOSITORY, MAPPING_PORTS } from './mapping.tokens.js';
 
 const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
@@ -98,6 +101,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
         connections: new KyselyConnectionRepository(database),
         signatures: new KyselySignatureRepository(database),
         passages: new KyselyPassageRepository(database),
+        pilots: new KyselyPilotDirectory(database),
         stamps: new KyselyChangeStamps(database),
         overlay,
         universe,
@@ -118,6 +122,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
       ],
     },
     MergedWriteRouter,
+    SweeperRuntime,
     useCase(MapUseCases),
     useCase(SystemUseCases),
     useCase(ConnectionUseCases),
@@ -126,6 +131,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
     useCase(MapSnapshotQuery),
     useCase(ConnectionIntelQuery),
     useCase(PassageRecorder),
+    useCase(PassageUseCases),
     {
       provide: MapPreferenceUseCases,
       useFactory: (database: Database, access: MapAccess, clock: Clock) =>
@@ -147,6 +153,8 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
     ConnectionUseCases,
     SignatureUseCases,
     BookmarkNumberUseCases,
+    PassageUseCases,
+    SweeperRuntime,
   ],
 })
 export class MappingModule implements OnModuleInit, OnApplicationBootstrap {

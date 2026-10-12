@@ -11,10 +11,12 @@ import {
   type ChainEntry,
   type ChainOrigin,
   type MapSourceDto,
+  type PassageDto,
   type Position,
 } from '@darkbeacon/shared';
 import type { FeedSelector } from '../domain/feed.js';
-import { parseRefId, refId, sameOrigin } from '../domain/keys.js';
+import { pairKey, parseRefId, refId, sameOrigin } from '../domain/keys.js';
+import { mergePassages, passagesShared, type ChainPassage } from '../domain/passages.js';
 import { asPosition, besideNeighbour, placeFree } from '../domain/layout.js';
 import { ChainMerge } from '../domain/merge.js';
 import { shareScopes, type Share } from '../domain/shares.js';
@@ -93,6 +95,46 @@ export class ChainMerger {
       sources: stored.sources,
       characters: stored.entities.filter((e) => e.kind === 'character').map((e) => e.dto),
     };
+  }
+
+  /**
+   * Passages of a merged connection: read from every visible source holding the hole that shares
+   * its status (each cuts them to its scopes), a jump two sources recorded counted once. The
+   * map's own passages keep their ids; the others are read-only here and say where they live.
+   */
+  async passages(
+    mapId: string,
+    connection: { id: string; source: number; target: number },
+  ): Promise<PassageDto[]> {
+    const map = await this.state(mapId);
+    if (!map) return [];
+    const pair = pairKey(connection.source, connection.target);
+    const holding = new Set(map.merge.holders(refId('connection', pair)));
+    const perSource: Array<Array<{ passage: ChainPassage; source: SourceInfo }>> = [];
+    for (const source of map.sources) {
+      if (source.hidden || !holding.has(source.id) || !passagesShared(source.scopes)) continue;
+      const adapter = this.ports.sources.source(source.origin);
+      if (!adapter) continue;
+      const found = await adapter.passages(pair, source.scopes);
+      perSource.push(found.map((passage) => ({ passage, source })));
+    }
+    return mergePassages(perSource).map(({ passage: p, source }) => ({
+      id: p.id && source.id === SELF ? p.id : `m:${source.id}:${p.key}`,
+      connectionId: connection.id,
+      characterId: p.pilot?.id ?? null,
+      characterName: p.pilot?.name ?? null,
+      shipTypeId: p.shipTypeId,
+      mass: p.mass,
+      from: p.from,
+      to: p.to,
+      occurredAt: p.at,
+      source: p.source,
+      massMode: p.massMode,
+      higgs: p.higgs,
+      entangler: p.entangler,
+      note: p.note,
+      recordedOn: source.id === SELF ? null : source.name,
+    }));
   }
 
   /** True when the map merges other maps (as stored, i.e. what its viewers see). */

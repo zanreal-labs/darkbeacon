@@ -240,6 +240,9 @@ describe('InstanceSettingsService', () => {
       eventRetentionDays: null,
       loginMethod: null,
       defaultMapId: null,
+      expiredConnectionMinutes: 0,
+      autoEol: true,
+      staleSystemMinutes: 15,
     });
     expect(await service.update(admin, { adminGuildId: 'g1', adminRoleIds: ['r1', 'r1'] })).toEqual({
       adminGuildId: 'g1',
@@ -248,6 +251,9 @@ describe('InstanceSettingsService', () => {
       eventRetentionDays: null,
       loginMethod: null,
       defaultMapId: null,
+      expiredConnectionMinutes: 0,
+      autoEol: true,
+      staleSystemMinutes: 15,
     });
     expect((await service.update(admin, {})).adminGuildId).toBe('g1');
     // A change is recorded on the audit stream with what it was before; no change, no record.

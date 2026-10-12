@@ -1,3 +1,5 @@
+import type { PassageDto } from '@darkbeacon/shared';
+import type { Connection } from '../domain/map.js';
 import type { ChainView, FieldTimes, StampedKind } from '../domain/stamps.js';
 
 /**
@@ -31,4 +33,9 @@ export interface ChangeStamps {
  */
 export interface ChainOverlay {
   view(mapId: string): Promise<ChainView | null>;
+  /**
+   * Passages of a merged connection, from the sources that share its status (passages stay with
+   * the map that recorded them; here they are read-only). Absent: merged maps show none.
+   */
+  passages?(mapId: string, connection: Connection): Promise<PassageDto[]>;
 }

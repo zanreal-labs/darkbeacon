@@ -92,6 +92,11 @@ export function featureEvents(event: ObservedEvent, context: AuditContext): Feat
         accountId,
       }));
     }
+    case 'connection.passage':
+      return one('passage_logged', {
+        source: data?.source ?? 'tracked',
+        mode: data?.massMode ?? 'cold',
+      });
     case 'labels.changed':
       return one('labels_changed');
     case 'ping.created':

@@ -4,9 +4,26 @@ import type { AccessRuleDto } from './dto/access.js';
 import type { InstanceRole } from './dto/identity.js';
 import type { PluginDto } from './dto/plugins.js';
 import type { ConnectionDto, LabelDto, MapDto, MapSystemDto, SignatureDto } from './dto/mapping.js';
+import type { MassMode, PassageSource } from './dto/passages.js';
 import type { HubDto, MapExitDto } from './dto/routing.js';
 import type { CharacterPresenceDto } from './dto/tracking.js';
 import type { MapShareDto, MapSourceDto } from './dto/sharing.js';
+
+/** A passage as events carry it. */
+export interface PassageEventData {
+  connectionId: string;
+  characterId: number | null;
+  shipTypeId: number | null;
+  mass?: number | null;
+  from?: number;
+  to?: number;
+  passageId?: string;
+  source?: PassageSource;
+  massMode?: MassMode;
+  higgs?: boolean;
+  entangler?: boolean;
+  note?: string | null;
+}
 
 export const DomainEventSchema = z.object({
   id: z.string(),
@@ -40,18 +57,16 @@ export interface EventPayloads {
   'connection.updated': ConnectionDto;
   'connection.removed': { id: string };
   /**
-   * A tracked character jumped through a connection on the map. `mass` (hull mass in kg, null for
-   * unknown ships), `from`, `to` and `passageId` were added later and are optional for readers.
+   * A ship went through a connection on the map: a tracked character's jump, or one logged by
+   * hand (`source: 'manual'`, `characterId` null). `mass` (kg, null for unknown ships), `from`,
+   * `to` and `passageId` were added later, and `source`, `massMode`, `higgs`, `entangler` and
+   * `note` after them; all are optional for readers.
    */
-  'connection.passage': {
-    connectionId: string;
-    characterId: number;
-    shipTypeId: number | null;
-    mass?: number | null;
-    from?: number;
-    to?: number;
-    passageId?: string;
-  };
+  'connection.passage': PassageEventData;
+  /** A passage's mass mode (cold, hot, custom), modifiers or note changed. */
+  'connection.passage_updated': PassageEventData & { passageId: string };
+  /** A passage was deleted (logged by mistake). */
+  'connection.passage_removed': { passageId: string; connectionId: string };
   'signature.added': SignatureDto;
   'signature.updated': SignatureDto;
   'signature.removed': { id: string; solarSystemId: number };
@@ -115,6 +130,8 @@ export const EVENT_TYPES = [
   'connection.updated',
   'connection.removed',
   'connection.passage',
+  'connection.passage_updated',
+  'connection.passage_removed',
   'signature.added',
   'signature.updated',
   'signature.removed',

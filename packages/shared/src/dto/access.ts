@@ -67,6 +67,18 @@ export const InstanceSettingsDto = z.object({
   loginMethod: z.enum(['discord', 'eve']).nullable().optional(),
   /** The map `/` opens for everyone who has not starred a map of their own. */
   defaultMapId: Id.nullable().optional(),
+  /**
+   * The sweeper deletes wormholes this many minutes after the latest moment they can still exist
+   * (their lifetime after the map first saw them, or 4 h after EOL); null never deletes them.
+   */
+  expiredConnectionMinutes: z.number().int().min(0).max(1440).nullable().optional(),
+  /** The sweeper marks wormholes EOL when the last 4 hours of their lifetime begin. */
+  autoEol: z.boolean().optional(),
+  /**
+   * The sweeper hides systems nobody touched for this many minutes that have no connection, no
+   * tracked character in them, no lock and are not home; null never.
+   */
+  staleSystemMinutes: z.number().int().min(5).max(10_080).nullable().optional(),
 });
 export type InstanceSettingsDto = z.infer<typeof InstanceSettingsDto>;
 
@@ -79,5 +91,8 @@ export const UpdateInstanceSettingsRequest = z.object({
   eventRetentionDays: z.number().int().min(1).max(36_500).nullable().optional(),
   loginMethod: z.enum(['discord', 'eve']).nullable().optional(),
   defaultMapId: Id.nullable().optional(),
+  expiredConnectionMinutes: z.number().int().min(0).max(1440).nullable().optional(),
+  autoEol: z.boolean().optional(),
+  staleSystemMinutes: z.number().int().min(5).max(10_080).nullable().optional(),
 });
 export type UpdateInstanceSettingsRequest = z.infer<typeof UpdateInstanceSettingsRequest>;

@@ -13,6 +13,7 @@ import {
   type AddSystemRequest,
   type ChainObjectKind,
   type ConnectionType,
+  type LogPassagesRequest,
   type MoveSystemsRequest,
   type PasteSignaturesRequest,
   type PasteSignaturesResult,
@@ -30,6 +31,7 @@ import {
   type ChainCommand,
 } from '../domain/commands.js';
 import { connectionGroupOf, pairKey, refId, signatureKey, signatureKeyOf } from '../domain/keys.js';
+import { passagesShared } from '../domain/passages.js';
 import { objectAllowed } from '../domain/scopes.js';
 import { SELF, type SourceInfo } from '../domain/view.js';
 import type { ChainMerger } from './merger.js';
@@ -295,7 +297,73 @@ export class ChainWrites {
     await this.addConnection(owner, mapId, { source: jump.from, target: jump.to, type: jump.type });
   }
 
+  /**
+   * "Log a jump" on a merged map: recorded by one source only (passages stay with the map that
+   * records them, and must not count twice) — the one that takes new objects, among the writable
+   * sources holding the hole and sharing its status.
+   */
+  async logPassages(
+    actor: Actor | null,
+    mapId: string,
+    connectionId: string,
+    request: LogPassagesRequest,
+  ): Promise<void> {
+    const { who, map } = await this.open(actor, mapId);
+    const group = connectionGroupOf(connectionId);
+    if (!group) throw new NotFoundError('Connection');
+    const [low, high] = group.pair.split('-');
+    const [target] = this.passageWriters(map, group.pair);
+    if (!target) throw new ForbiddenError(this.passageRefusal(map, group.pair));
+    await this.write(who, map, target, {
+      op: 'passages.log',
+      key: group.pair,
+      passage: {
+        shipTypeId: request.shipTypeId,
+        // The merged connection runs from the lower system id to the higher.
+        from: request.direction === 'targetToSource' ? high! : low!,
+        massMode: request.massMode ?? 'cold',
+        ...(request.higgs !== undefined ? { higgs: request.higgs } : {}),
+        ...(request.entangler !== undefined ? { entangler: request.entangler } : {}),
+        ...(request.mass !== undefined ? { mass: request.mass } : {}),
+        ...(request.note ? { note: request.note } : {}),
+        count: request.count ?? 1,
+        ...(request.occurredAt !== undefined ? { at: request.occurredAt } : {}),
+      },
+    });
+  }
+
+  /** "Reset counter" on every writable source holding the hole that shares its status. */
+  async resetPassages(actor: Actor | null, mapId: string, connectionId: string): Promise<void> {
+    const { who, map } = await this.open(actor, mapId);
+    const group = connectionGroupOf(connectionId);
+    if (!group) throw new NotFoundError('Connection');
+    const writers = this.passageWriters(map, group.pair);
+    if (writers.length === 0) throw new ForbiddenError(this.passageRefusal(map, group.pair));
+    for (const target of writers)
+      await this.write(who, map, target, { op: 'passages.reset', key: group.pair });
+  }
+
   // --- helpers --------------------------------------------------------------------------------
+
+  /** Writable sources holding the hole that share its status, the one taking new objects first. */
+  private passageWriters(map: MergedMapState, pair: string): SourceInfo[] {
+    const holding = new Set(map.merge.holders(refId('connection', pair)));
+    const writable = this.writable(map, 'connection').filter(
+      (s) => holding.has(s.id) && passagesShared(s.scopes),
+    );
+    const preferred = this.newObjectTargets(map, 'connection').map((s) => s.id);
+    const rank = (s: SourceInfo) => {
+      const at = preferred.indexOf(s.id);
+      return at < 0 ? preferred.length : at;
+    };
+    return writable.sort((a, b) => rank(a) - rank(b));
+  }
+
+  private passageRefusal(map: MergedMapState, pair: string): string {
+    return map.merge.holders(refId('connection', pair)).length === 0
+      ? 'Connection not found'
+      : `Only maps shared read-only or without ${SCOPE_WORDS.connectionStatus} hold this connection`;
+  }
 
   /** A merged map the actor may edit (member+). */
   private async open(actor: Actor | null, mapId: string): Promise<{ who: Actor; map: MergedMapState }> {
