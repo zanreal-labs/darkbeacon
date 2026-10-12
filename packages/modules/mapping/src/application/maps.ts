@@ -6,10 +6,18 @@ import {
   requireActor,
   type Actor,
 } from '@darkbeacon/core';
-import type { CreateMapRequest, LabelDto, MapSummaryDto, UpdateMapRequest } from '@darkbeacon/shared';
+import {
+  DEFAULT_BOOKMARK_NUMBERING,
+  type BookmarkNumbering,
+  type CreateMapRequest,
+  type LabelDto,
+  type MapSummaryDto,
+  type UpdateMapRequest,
+} from '@darkbeacon/shared';
 import type { ChainMap } from '../domain/map.js';
 import { changes, slugify, validateLabels } from '../domain/rules.js';
-import { MappingUseCases } from './base.js';
+import { MappingUseCases, type EventBatch } from './base.js';
+import { renumberBookmarks } from './bookmark-numbers.js';
 
 export class MapUseCases extends MappingUseCases {
   /** Maps the actor can at least view, sorted by name. */
@@ -71,6 +79,9 @@ export class MapUseCases extends MappingUseCases {
           ...(request.settings?.bookmarkTemplate
             ? { bookmarkTemplate: request.settings.bookmarkTemplate }
             : {}),
+          ...(request.settings?.bookmarkNumbering
+            ? { bookmarkNumbering: request.settings.bookmarkNumbering }
+            : {}),
         },
       };
       if (!changes(current, next)) return current;
@@ -78,6 +89,7 @@ export class MapUseCases extends MappingUseCases {
       next.updatedAt = this.ports.clock.now();
       await this.ports.maps.update(next);
       events.add('map.settings_changed', next, current);
+      await this.applyNumbering(events, current, next);
       return next;
     });
   }
@@ -126,6 +138,44 @@ export class MapUseCases extends MappingUseCases {
       await this.ports.maps.update(next);
       events.add('map.settings_changed', next, current);
       return next;
+    });
+  }
+
+  /**
+   * The map's `{n}` numbering (manager+); null goes back to found order with gaps kept. A new
+   * order numbers every system's wormholes again in it; turning on renumber on close closes the
+   * gaps there are.
+   */
+  async setBookmarkNumbering(
+    actor: Actor | null,
+    mapId: string,
+    numbering: BookmarkNumbering | null,
+  ): Promise<ChainMap> {
+    const who = await this.authorize(actor, mapId, 'manager');
+    return this.write(who, mapId, async (events) => {
+      const current = await this.load(mapId);
+      const { bookmarkNumbering: _old, ...settings } = current.settings;
+      const next: ChainMap = {
+        ...current,
+        settings: numbering === null ? settings : { ...settings, bookmarkNumbering: numbering },
+      };
+      if (!changes(current, next)) return current;
+      next.updatedAt = this.ports.clock.now();
+      await this.ports.maps.update(next);
+      events.add('map.settings_changed', next, current);
+      await this.applyNumbering(events, current, next);
+      return next;
+    });
+  }
+
+  /** After a settings change: renumber everything in a new order, else keep (or close gaps). */
+  private async applyNumbering(events: EventBatch, before: ChainMap, after: ChainMap): Promise<void> {
+    const was = before.settings.bookmarkNumbering ?? DEFAULT_BOOKMARK_NUMBERING;
+    const is = after.settings.bookmarkNumbering ?? DEFAULT_BOOKMARK_NUMBERING;
+    if (was.order === is.order && was.renumberOnClose === is.renumberOnClose) return;
+    await renumberBookmarks(this.ports, events, after.id, {
+      numbering: is,
+      renumber: was.order === is.order ? 'none' : 'all',
     });
   }
 

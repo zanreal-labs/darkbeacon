@@ -346,6 +346,26 @@ export const routes = {
       body: dto.SetBookmarkTemplateRequest,
       response: dto.MapDto,
     }),
+    /**
+     * The map's `{n}` numbering: order and renumber on close (manager+); published as
+     * `map.settings_changed`. A new order numbers every system's wormholes again.
+     */
+    setBookmarkNumbering: route({
+      method: 'PUT',
+      path: '/api/maps/:mapId/bookmark-numbering',
+      auth: 'account',
+      mapRole: 'manager',
+      body: dto.SetBookmarkNumberingRequest,
+      response: dto.MapDto,
+    }),
+    /** Numbers wormholes 1, 2, 3 again in the map's order; changes arrive as `connection.updated`. */
+    renumberBookmarks: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/bookmark-numbers/renumber',
+      auth: 'account',
+      mapRole: 'member',
+      body: dto.RenumberBookmarksRequest,
+    }),
     /** The caller's own view of the map: last viewport and bookmark template override. */
     getPreferences: route({
       method: 'GET',
@@ -418,6 +438,15 @@ export const routes = {
       path: '/api/maps/:mapId/connections/:connectionId',
       auth: 'account',
       mapRole: 'member',
+    }),
+    /** A wormhole's `{n}` set by hand; the sibling that had the number swaps with it. */
+    setBookmarkNumber: route({
+      method: 'PUT',
+      path: '/api/maps/:mapId/connections/:connectionId/bookmark-number',
+      auth: 'account',
+      mapRole: 'member',
+      body: dto.SetBookmarkNumberRequest,
+      response: dto.ConnectionDto,
     }),
     /** The connections panel: every visible connection with type, mass and time estimates, most urgent first. */
     intel: route({

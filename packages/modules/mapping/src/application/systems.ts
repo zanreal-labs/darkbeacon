@@ -3,6 +3,7 @@ import type { AddSystemRequest, MoveSystemsRequest, UpdateSystemRequest } from '
 import type { Connection, MapSystem } from '../domain/map.js';
 import { changes, defined, nextPosition } from '../domain/rules.js';
 import { MappingUseCases, type EventBatch, type MappingPorts } from './base.js';
+import { renumberBookmarks } from './bookmark-numbers.js';
 
 /**
  * Systems on a map. Removing a system only hides it: its attributes and signatures stay, its
@@ -75,10 +76,13 @@ export class SystemUseCases extends MappingUseCases {
       if (!current.visible) return this.restore(events, next, current);
       if (!next.visible) {
         await this.hide(events, next, current);
+        await renumberBookmarks(this.ports, events, mapId);
         return next;
       }
       await this.ports.systems.update(next);
       events.add('system.updated', next, current);
+      // A new home turns the chain around it: wormholes may lead out of other systems now.
+      if (next.status !== current.status) await renumberBookmarks(this.ports, events, mapId);
       return next;
     });
   }
@@ -106,6 +110,7 @@ export class SystemUseCases extends MappingUseCases {
       const current = await this.visibleSystem(mapId, solarSystemId);
       if (current.locked) throw new ConflictError('The system is locked');
       await this.hide(events, { ...current, visible: false, updatedAt: this.ports.clock.now() }, current);
+      await renumberBookmarks(this.ports, events, mapId);
     });
   }
 

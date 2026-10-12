@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post, Put } from '@nestjs/common';
 import type { Actor } from '@darkbeacon/core';
 import {
+  BookmarkNumberUseCases,
   ConnectionIntelQuery,
   ConnectionUseCases,
   MapPreferenceUseCases,
@@ -17,7 +18,10 @@ import {
   MoveSystemsRequest,
   nestPath,
   PasteSignaturesRequest,
+  RenumberBookmarksRequest,
   routes,
+  SetBookmarkNumberingRequest,
+  SetBookmarkNumberRequest,
   SetBookmarkTemplateRequest,
   SetLabelsRequest,
   UpdateConnectionRequest,
@@ -88,6 +92,41 @@ export class MapsController {
     @Body(new ZodPipe(SetBookmarkTemplateRequest)) body: SetBookmarkTemplateRequest,
   ) {
     return this.maps.setBookmarkTemplate(actor, mapId, body.template);
+  }
+
+  @Put(nestPath(routes.maps.setBookmarkNumbering.path))
+  setBookmarkNumbering(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Body(new ZodPipe(SetBookmarkNumberingRequest)) body: SetBookmarkNumberingRequest,
+  ) {
+    return this.maps.setBookmarkNumbering(actor, mapId, body.numbering);
+  }
+}
+
+/** `{n}` of wormholes: renumbering on request and numbers set by hand. */
+@Controller()
+export class BookmarkNumbersController {
+  constructor(@Inject(BookmarkNumberUseCases) private readonly numbers: BookmarkNumberUseCases) {}
+
+  @Post(nestPath(routes.maps.renumberBookmarks.path))
+  @HttpCode(204)
+  async renumber(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Body(new ZodPipe(RenumberBookmarksRequest)) body: RenumberBookmarksRequest,
+  ): Promise<void> {
+    await this.numbers.renumber(actor, mapId, body.parent);
+  }
+
+  @Put(nestPath(routes.connections.setBookmarkNumber.path))
+  setNumber(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Param('connectionId') connectionId: string,
+    @Body(new ZodPipe(SetBookmarkNumberRequest)) body: SetBookmarkNumberRequest,
+  ) {
+    return this.numbers.setNumber(actor, mapId, connectionId, body.number);
   }
 }
 
