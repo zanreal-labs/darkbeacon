@@ -283,6 +283,22 @@ describeEachDialect('routing over a map', (t) => {
     expect(await queries.sharedExits(map.id)).toEqual(exits);
   });
 
+  it('computes shared exits once per state of the chain and its hubs', async () => {
+    const first = queries.sharedExits(map.id);
+    expect(queries.sharedExits(map.id)).toBe(first);
+    const exits = await first;
+    // Hubs changed: the exits are computed again, the route tables are kept.
+    router.forgetDerived(map.id);
+    const again = queries.sharedExits(map.id);
+    expect(again).not.toBe(first);
+    expect(await again).toEqual(exits);
+    // The chain changed: everything goes.
+    const link = (await env.ports.connections.findBetween(map.id, S.home, S.tama))!;
+    await connections.remove(alice, map.id, link.id);
+    router.invalidate(map.id);
+    expect((await queries.sharedExits(map.id)).map((e) => e.name)).toEqual(['J014348', 'J130256']);
+  });
+
   it('hides routes from people who cannot see the map', async () => {
     await expect(
       queries.route(account('eve'), map.id, { from: S.tama, to: S.jita, mode: 'shortest' }),

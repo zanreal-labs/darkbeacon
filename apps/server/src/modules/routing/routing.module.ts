@@ -109,6 +109,7 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
           if (chain && chain.visible.has(event.data.solarSystemId) === event.data.visible) return;
         }
         if (event.type !== 'routes.hubs_changed') this.router.invalidate(stream.id);
+        else this.router.forgetDerived(stream.id);
         this.schedule(stream.id);
       },
       {

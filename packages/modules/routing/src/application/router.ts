@@ -20,6 +20,8 @@ interface MapRoutes {
   graph?: Promise<RouteGraph | null>;
   /** policy key -> hub system id -> jumps from every system (by graph index). */
   tables: Map<string, Map<number, Int16Array>>;
+  /** Results derived from this state (exits), dropped with it. */
+  memo?: Map<string, Promise<unknown>>;
 }
 
 /** Maps whose routing data is kept; the least recently used one goes first. */
@@ -56,6 +58,29 @@ export class Router {
 
   invalidate(mapId: string): void {
     this.maps.delete(mapId);
+  }
+
+  /**
+   * `compute` once per state of the map's chain: the result is kept until the chain changes
+   * (`invalidate`) or `forgetDerived` drops it (what it depends on besides the chain changed).
+   */
+  derived<T>(mapId: string, key: string, compute: () => Promise<T>): Promise<T> {
+    const state = this.state(mapId);
+    const memo = (state.memo ??= new Map());
+    let value = memo.get(key) as Promise<T> | undefined;
+    if (!value) {
+      const computing = compute();
+      memo.set(key, computing);
+      // A failure is not kept.
+      computing.catch(() => memo.get(key) === computing && memo.delete(key));
+      value = computing;
+    }
+    return value;
+  }
+
+  /** Drops what `derived` keeps for a map (its hubs changed), keeping the route tables. */
+  forgetDerived(mapId: string): void {
+    this.maps.get(mapId)?.memo?.clear();
   }
 
   /** The chain of a map as the router sees it; null when the map does not exist. */

@@ -108,9 +108,13 @@ export class RouteQueries {
    * Exits for everyone on the map (shortest mode, trade and map hubs): what `routes.exits_changed`
    * and map snapshots carry. No authorization; callers decide who sees it.
    */
-  async sharedExits(mapId: string): Promise<MapExitDto[]> {
-    const policy = policyFor('shortest');
-    return this.exitsOf(mapId, policy, await this.hubsFor(mapId, policy, null));
+  sharedExits(mapId: string): Promise<MapExitDto[]> {
+    // Every map snapshot carries them, and each exit's route space is a search over the universe:
+    // computed once per state of the chain and its hubs, not once per snapshot.
+    return this.deps.router.derived(mapId, 'sharedExits', async () => {
+      const policy = policyFor('shortest');
+      return this.exitsOf(mapId, policy, await this.hubsFor(mapId, policy, null));
+    });
   }
 
   async mapHubs(mapId: string): Promise<HubDto[]> {
