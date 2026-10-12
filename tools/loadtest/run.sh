@@ -6,8 +6,8 @@
 #   DB=postgres SCENARIO=soak DURATION_S=1800 OUT=/tmp/x tools/loadtest/run.sh
 #
 # Scenarios: full (tracking + WebSocket clients + REST at once), snapshot (snapshot timing on an
-# idle instance), soak (full for DURATION_S, with heap snapshots), cluster (two replicas on
-# Postgres behind a proxy; needs CLUSTER support in the image).
+# idle instance), tracking (ESI polling alone), soak (full for DURATION_S; heap snapshots with
+# PROFILE=1 HEAP_SNAPSHOT=1), cluster (two replicas with CLUSTER=postgres behind a proxy).
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -159,6 +159,13 @@ case "$SCENARIO" in
       >"$OUT/snapshot.json"
     run_load "$DURATION_S"
     on_net "$LOAD_IMAGE" node -e "fetch('http://fake-esi:8080/_stats').then(r=>r.text()).then(console.log)" >"$OUT/esi.json"
+    ;;
+  tracking)
+    # ESI polling alone (no clients): what tracking costs, and how far the budget goes.
+    on_net "$LOAD_IMAGE" node -e "fetch('http://fake-esi:8080/_reset',{method:'POST'})"
+    sleep "$DURATION_S"
+    on_net "$LOAD_IMAGE" node -e "fetch('http://fake-esi:8080/_stats').then(r=>r.text()).then(console.log)" \
+      >"$OUT/esi.json"
     ;;
   soak)
     # A heap snapshot ten minutes in and one at the end show what grows.

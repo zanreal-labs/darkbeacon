@@ -1,7 +1,8 @@
-// Synthetic WebSocket clients: each signs in with a seeded session, subscribes to a map, and the
-// ones on the main map move their cursor like a browser does (presence patches at CURSOR_HZ).
-// One editor moves systems on the main map over REST. Measures:
-//   - subscribe -> snapshot time and size,
+// Synthetic WebSocket clients: each signs in with a seeded session, opens a map as the web app
+// does (snapshot over HTTP, then a socket resuming from its seq), and the ones on the main map
+// move their cursor like a browser does (presence patches at CURSOR_HZ). One editor moves
+// systems on the main map over REST. Measures:
+//   - snapshot time and size, subscribe -> subscribed (replay) time,
 //   - edit fan-out: REST request sent -> `system.updated` received by every client on the map,
 //   - presence fan-out: cursor sent -> seen by the other clients,
 //   - tracking: fake ESI jump -> `character.jumped` on the map,
@@ -90,6 +91,7 @@ async function worker(index) {
     messages: 0,
     bytes: 0,
     snapshotBytes: new Histogram(),
+    pageSnapshot: new Histogram(),
     subscribe: new Histogram(),
     edit: new Histogram(),
     presence: new Histogram(),
@@ -101,22 +103,34 @@ async function worker(index) {
   const stopAt = Date.now() + config.durationSeconds * 1000;
   const ramp = (config.rampSeconds * 1000) / Math.max(1, mine.length);
 
-  const open = (i) => {
+  // As a browser opening the map: the page brings the snapshot (read over HTTP by the web
+  // server), then the socket resumes from its seq with a replay.
+  const open = async (i) => {
     const account = fixture.accounts[1 + (i % (fixture.accounts.length - 1))];
     const onMain = i < config.cursors || i % 3 === 0;
     const map = onMain ? main : fixture.maps[1 + (i % (fixture.maps.length - 1))];
     const stream = `map:${map.id}`;
-    const ws = new WebSocket(`${BASE.replace(/^http/, 'ws')}/ws`, {
-      headers: { cookie: `dbk_session=${account.session}` },
-      perMessageDeflate: true,
-    });
+    const cookie = `dbk_session=${account.session}`;
+    let sinceSeq;
+    try {
+      const started = Date.now();
+      const response = await fetch(`${BASE}/api/streams/${stream}/snapshot`, { headers: { cookie } });
+      const body = await response.arrayBuffer();
+      metrics.pageSnapshot.add(Date.now() - started);
+      metrics.snapshotBytes.add(body.byteLength / 1024);
+      sinceSeq = JSON.parse(Buffer.from(body).toString()).seq;
+    } catch {
+      metrics.failed++;
+      return;
+    }
+    const ws = new WebSocket(`${BASE.replace(/^http/, 'ws')}/ws`, { headers: { cookie } });
     sockets.push(ws);
     let subscribedAt = 0;
     let cursorTimer = null;
     ws.on('open', () => {
       metrics.connected++;
       subscribedAt = Date.now();
-      ws.send(JSON.stringify({ op: 'subscribe', stream }));
+      ws.send(JSON.stringify({ op: 'subscribe', stream, sinceSeq }));
     });
     ws.on('message', (data) => {
       metrics.messages++;
@@ -153,7 +167,7 @@ async function worker(index) {
     });
   };
 
-  mine.forEach((i, n) => setTimeout(() => open(i), n * ramp));
+  mine.forEach((i, n) => setTimeout(() => void open(i), n * ramp));
   await new Promise((resolve) => setTimeout(resolve, stopAt - Date.now()));
   for (const ws of sockets) ws.terminate();
   // Keep only jumps seen on the main map's clients once per (character, system).
@@ -194,84 +208,93 @@ async function editor(stopAt) {
   return { rest: rest.summary(), failures };
 }
 
+// ---- the run: forks the workers, runs the editor, merges and reports
+async function run() {
+  const started = Date.now();
+  await fetch(`${ESI}/_reset`, { method: 'POST' }).catch(() => {});
+  const results = await Promise.all([
+    ...Array.from(
+      { length: config.procs },
+      (_, i) =>
+        new Promise((resolve, reject) => {
+          const child = fork(new URL(import.meta.url).pathname, {
+            env: { ...process.env, WS_WORKER: String(i) },
+          });
+          let result = null;
+          child.on('message', (text) => (result = JSON.parse(text)));
+          child.on('exit', (code) =>
+            result ? resolve(result) : reject(new Error(`worker ${i} exited ${code}`)),
+          );
+        }),
+    ),
+    // Edits start once clients are connected.
+    new Promise((resolve) => setTimeout(resolve, config.rampSeconds * 1000)).then(() =>
+      editor(started + config.durationSeconds * 1000 - 2000),
+    ),
+  ]);
+  const edits = results.pop();
+  const total = {
+    connected: 0,
+    failed: 0,
+    closed: 0,
+    errors: 0,
+    messages: 0,
+    bytes: 0,
+  };
+  const histograms = ['snapshotBytes', 'pageSnapshot', 'subscribe', 'edit', 'presence'];
+  const merged = Object.fromEntries(histograms.map((h) => [h, new Histogram()]));
+  const jumpSeen = new Map();
+  for (const r of results) {
+    for (const key of Object.keys(total)) total[key] += r[key];
+    for (const h of histograms) merged[h].merge(Histogram.from(r[h]));
+    for (const [key, at] of r.jumpSeen)
+      if (!jumpSeen.has(key) || jumpSeen.get(key) > at) jumpSeen.set(key, at);
+  }
+
+  // Jumps on the main map that a client saw: how long after the fake ESI made them.
+  const jumps = await fetch(`${ESI}/_jumps?since=${started}`)
+    .then((r) => r.json())
+    .catch(() => []);
+  const esi = await fetch(`${ESI}/_stats`)
+    .then((r) => r.json())
+    .catch(() => null);
+  const onMain = new Set(
+    fixture.tracking.filter((t) => t.mapIds.includes(main.id)).map((t) => t.characterId),
+  );
+  const jumpLatency = new Histogram(60_000);
+  let missed = 0;
+  for (const j of jumps) {
+    if (!onMain.has(j.characterId)) continue;
+    const at = jumpSeen.get(`${j.characterId}:${j.to}`);
+    if (at && at >= j.at) jumpLatency.add(at - j.at);
+    else missed++;
+  }
+
+  const seconds = config.durationSeconds;
+  const report = {
+    config,
+    clients: total,
+    perClient: {
+      messagesPerSecond: total.messages / Math.max(1, total.connected) / seconds,
+      kbPerSecond: total.bytes / 1024 / Math.max(1, total.connected) / seconds,
+    },
+    snapshotKb: merged.snapshotBytes.summary(),
+    pageSnapshotMs: merged.pageSnapshot.summary(),
+    subscribeMs: merged.subscribe.summary(),
+    editFanoutMs: merged.edit.summary(),
+    editRest: edits,
+    presenceFanoutMs: merged.presence.summary(),
+    jumpToMapMs: { ...jumpLatency.summary(), missed },
+    esi,
+  };
+  const text = JSON.stringify(report, null, 2);
+  if (process.env.OUT) writeFileSync(process.env.OUT, text);
+  console.log(text);
+}
+
 if (process.env.WS_WORKER !== undefined) {
   const metrics = await worker(Number(process.env.WS_WORKER));
   process.send(JSON.stringify(metrics), () => process.exit(0));
+} else {
+  await run();
 }
-
-const started = Date.now();
-await fetch(`${ESI}/_reset`, { method: 'POST' }).catch(() => {});
-const results = await Promise.all([
-  ...Array.from(
-    { length: config.procs },
-    (_, i) =>
-      new Promise((resolve, reject) => {
-        const child = fork(new URL(import.meta.url).pathname, {
-          env: { ...process.env, WS_WORKER: String(i) },
-        });
-        let result = null;
-        child.on('message', (text) => (result = JSON.parse(text)));
-        child.on('exit', (code) =>
-          result ? resolve(result) : reject(new Error(`worker ${i} exited ${code}`)),
-        );
-      }),
-  ),
-  // Edits start once clients are connected.
-  new Promise((resolve) => setTimeout(resolve, config.rampSeconds * 1000)).then(() =>
-    editor(started + config.durationSeconds * 1000 - 2000),
-  ),
-]);
-const edits = results.pop();
-const total = {
-  connected: 0,
-  failed: 0,
-  closed: 0,
-  errors: 0,
-  messages: 0,
-  bytes: 0,
-};
-const histograms = ['snapshotBytes', 'subscribe', 'edit', 'presence'];
-const merged = Object.fromEntries(histograms.map((h) => [h, new Histogram()]));
-const jumpSeen = new Map();
-for (const r of results) {
-  for (const key of Object.keys(total)) total[key] += r[key];
-  for (const h of histograms) merged[h].merge(Histogram.from(r[h]));
-  for (const [key, at] of r.jumpSeen) if (!jumpSeen.has(key) || jumpSeen.get(key) > at) jumpSeen.set(key, at);
-}
-
-// Jumps on the main map that a client saw: how long after the fake ESI made them.
-const jumps = await fetch(`${ESI}/_jumps?since=${started}`)
-  .then((r) => r.json())
-  .catch(() => []);
-const esi = await fetch(`${ESI}/_stats`)
-  .then((r) => r.json())
-  .catch(() => null);
-const onMain = new Set(fixture.tracking.filter((t) => t.mapIds.includes(main.id)).map((t) => t.characterId));
-const jumpLatency = new Histogram(60_000);
-let missed = 0;
-for (const j of jumps) {
-  if (!onMain.has(j.characterId)) continue;
-  const at = jumpSeen.get(`${j.characterId}:${j.to}`);
-  if (at && at >= j.at) jumpLatency.add(at - j.at);
-  else missed++;
-}
-
-const seconds = config.durationSeconds;
-const report = {
-  config,
-  clients: total,
-  perClient: {
-    messagesPerSecond: total.messages / Math.max(1, total.connected) / seconds,
-    kbPerSecond: total.bytes / 1024 / Math.max(1, total.connected) / seconds,
-  },
-  snapshotKb: merged.snapshotBytes.summary(),
-  subscribeMs: merged.subscribe.summary(),
-  editFanoutMs: merged.edit.summary(),
-  editRest: edits,
-  presenceFanoutMs: merged.presence.summary(),
-  jumpToMapMs: { ...jumpLatency.summary(), missed },
-  esi,
-};
-const text = JSON.stringify(report, null, 2);
-if (process.env.OUT) writeFileSync(process.env.OUT, text);
-console.log(text);

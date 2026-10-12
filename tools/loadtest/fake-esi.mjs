@@ -174,7 +174,16 @@ function send(res, status, headers, text) {
   res.end(text);
 }
 
-function count(route, status, now) {
+/** Time between two location requests of one character: how fresh tracking is. */
+const lastLocation = new Map();
+let locationGaps = [];
+function count(route, status, now, characterId) {
+  if (route === 'location' && characterId !== undefined) {
+    const last = lastLocation.get(characterId);
+    if (last !== undefined) locationGaps.push(now - last);
+    if (locationGaps.length > 50_000) locationGaps = locationGaps.slice(-25_000);
+    lastLocation.set(characterId, now);
+  }
   stats.requests++;
   stats.byRoute[route] = (stats.byRoute[route] ?? 0) + 1;
   stats.byStatus[status] = (stats.byStatus[status] ?? 0) + 1;
@@ -205,7 +214,7 @@ function handleEsi(req, res, route, characterId) {
   const fail = (status, cost, text) => {
     if (status !== 429) errors.errors++;
     spend(characterId, now, cost);
-    count(route, status, now);
+    count(route, status, now, characterId);
     send(res, status, { date, ...limitHeaders(cost) }, text);
   };
 
@@ -220,7 +229,7 @@ function handleEsi(req, res, route, characterId) {
     const list = spent(characterId, now);
     const retry = Math.max(1, Math.ceil((list[0].at + config.bucketWindowSeconds * 1000 - now) / 1000));
     stats.tooMany++;
-    count(route, 429, now);
+    count(route, 429, now, characterId);
     return send(
       res,
       429,
@@ -243,12 +252,12 @@ function handleEsi(req, res, route, characterId) {
   };
   if (req.headers['if-none-match'] === entry.etag) {
     spend(characterId, now, COST.notModified);
-    count(route, 304, now);
+    count(route, 304, now, characterId);
     res.writeHead(304, { ...headers, ...limitHeaders(COST.notModified) });
     return res.end();
   }
   spend(characterId, now, COST.ok);
-  count(route, 200, now);
+  count(route, 200, now, characterId);
   send(res, 200, { ...headers, ...limitHeaders(COST.ok) }, entry.text);
 }
 
@@ -262,8 +271,16 @@ function snapshotStats() {
     uptimeSeconds: Math.round((Date.now() - stats.startedAt) / 1000),
     onlineCharacters: online().length,
     rpsLast60s: recent.reduce((a, b) => a + b, 0) / 60,
+    locationEveryMs: quantiles(locationGaps),
     peakRps: Math.max(0, ...stats.perSecond.values()),
   };
+}
+
+function quantiles(values) {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const q = (p) => sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))];
+  return { n: sorted.length, p50: q(0.5), p95: q(0.95), max: sorted.at(-1) };
 }
 
 const ROUTE = /^\/characters\/(\d+)\/(location|ship|online)\/?$/;
@@ -277,6 +294,7 @@ createServer((req, res) => {
   if (url.pathname === '/_reset' && req.method === 'POST') {
     Object.assign(stats, newStats());
     jumps = [];
+    locationGaps = [];
     return send(res, 200, {}, '{}');
   }
   if (url.pathname === '/_control' && req.method === 'POST') {
