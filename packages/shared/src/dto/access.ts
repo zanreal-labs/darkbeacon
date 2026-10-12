@@ -17,6 +17,20 @@ export const AccessRuleDto = z.object({
   guildId: z.string().nullable(),
   role: MapRole,
   createdAt: Timestamp,
+  /**
+   * Who the rule is about, by name: the character, corporation or alliance (with its ticker), the
+   * account, or the Discord role (with its server). Filled in where it could be looked up; the
+   * web app shows it instead of the raw id.
+   */
+  subject: z
+    .object({
+      name: z.string(),
+      /** Ticker, Discord server name... */
+      detail: z.string().nullable(),
+      imageUrl: z.string().nullable(),
+    })
+    .nullable()
+    .optional(),
 });
 export type AccessRuleDto = z.infer<typeof AccessRuleDto>;
 
@@ -41,6 +55,13 @@ export const InstanceSettingsDto = z.object({
   adminRoleIds: z.array(z.string()),
   /** Whether webhooks may target loopback, private and link-local addresses (off by default). */
   webhooksToPrivateNetworks: z.boolean(),
+  /**
+   * How people sign in. Stored as chosen; the effective method is `eve` whenever Discord is not
+   * configured (see `AuthProvidersDto.loginMethod`). Null: the default (Discord when configured).
+   */
+  loginMethod: z.enum(['discord', 'eve']).nullable().optional(),
+  /** The map `/` opens for everyone who has not starred a map of their own. */
+  defaultMapId: Id.nullable().optional(),
 });
 export type InstanceSettingsDto = z.infer<typeof InstanceSettingsDto>;
 
@@ -50,5 +71,7 @@ export const UpdateInstanceSettingsRequest = z.object({
   adminGuildId: Snowflake.nullable().optional(),
   adminRoleIds: z.array(Snowflake).max(50).optional(),
   webhooksToPrivateNetworks: z.boolean().optional(),
+  loginMethod: z.enum(['discord', 'eve']).nullable().optional(),
+  defaultMapId: Id.nullable().optional(),
 });
 export type UpdateInstanceSettingsRequest = z.infer<typeof UpdateInstanceSettingsRequest>;

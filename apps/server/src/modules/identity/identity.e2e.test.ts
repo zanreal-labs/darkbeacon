@@ -115,6 +115,7 @@ describeEachDialect('identity and access over HTTP', (t) => {
     expect(await browser().json('/api/auth/providers')).toEqual({
       discord: true,
       eve: true,
+      loginMethod: 'discord',
       demo: true,
       discordRedirectUrl: 'http://ww.test/api/auth/discord/callback',
     });
@@ -247,6 +248,8 @@ describeEachDialect('identity and access over HTTP', (t) => {
       adminGuildId: '123',
       adminRoleIds: ['456'],
       webhooksToPrivateNetworks: false,
+      loginMethod: null,
+      defaultMapId: null,
     });
     expect(
       (await bob.request('/api/admin/settings', { method: 'PATCH', json: { adminGuildId: 'x' } })).status,

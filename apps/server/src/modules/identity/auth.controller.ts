@@ -1,10 +1,12 @@
 import { Body, Controller, Get, HttpCode, Inject, Logger, Post, Query, Req, Res } from '@nestjs/common';
+import { InstanceSettingsService } from '@darkbeacon/access';
 import { isDomainError, requireAccount, type Actor } from '@darkbeacon/core';
 import {
   AccountService,
   CharacterService,
   DemoLogin,
   DiscordLogin,
+  EveLogin,
   safeReturnTo,
   SESSION_TTL_MS,
   SessionService,
@@ -54,15 +56,18 @@ export class AuthController {
     @Inject(SessionService) private readonly sessions: SessionService,
     @Inject(AccountService) private readonly accounts: AccountService,
     @Inject(SignInCookies) private readonly signInCookies: SignInCookies,
+    @Inject(EveLogin) private readonly eveSignin: EveLogin,
+    @Inject(InstanceSettingsService) private readonly settings: InstanceSettingsService,
   ) {
     this.secure = config.publicUrl.startsWith('https://');
   }
 
   @Get(nestPath(routes.auth.providers.path))
-  providers(): AuthProvidersDto {
+  async providers(): Promise<AuthProvidersDto> {
     return {
       discord: this.discord.enabled,
       eve: this.characters.enabled,
+      loginMethod: await this.settings.loginMethod(),
       demo: this.demo.enabled,
       discordRedirectUrl: oauthCallbackUrl(this.config, 'discord'),
     };
@@ -73,8 +78,21 @@ export class AuthController {
     await this.redirect(reply, '/', async () => this.begin(reply, await this.discord.start(returnTo)));
   }
 
+  @Get(nestPath(routes.auth.discordConnect.path))
+  async discordConnect(
+    @CurrentActor() actor: Actor | null,
+    @Query('returnTo') returnTo: unknown,
+    @Res() reply: FastifyReply,
+  ): Promise<void> {
+    await this.redirect(reply, '/account', async () =>
+      this.begin(reply, await this.discord.startConnect(actor, returnTo ?? '/account')),
+    );
+  }
+
+  /** One redirect URI for both Discord round trips: signing in and connecting to an account. */
   @Get(nestPath(routes.auth.discordCallback.path))
   async discordCallback(
+    @CurrentActor() actor: Actor | null,
     @Query() query: CallbackQuery,
     @Req() request: FastifyRequest,
     @Res() reply: FastifyReply,
@@ -82,15 +100,19 @@ export class AuthController {
     const pending = this.takePending(request, reply);
     await this.redirect(reply, pending?.returnTo ?? '/', async () => {
       if (query.error) return withError(pending?.returnTo ?? '/', 'Discord sign-in was cancelled');
-      const signedIn = await this.discord.complete({
-        code: query.code,
-        state: query.state,
-        pending,
-        userAgent: userAgent(request),
-      });
+      const input = { code: query.code, state: query.state, pending };
+      if (pending?.kind === 'discord-connect') {
+        return (await this.discord.completeConnect(actor, input)).returnTo;
+      }
+      const signedIn = await this.discord.complete({ ...input, userAgent: userAgent(request) });
       await this.startSession(request, reply, signedIn.token, signedIn.account.id);
       return signedIn.returnTo;
     });
+  }
+
+  @Get(nestPath(routes.auth.eveSignIn.path))
+  async eveSignIn(@Query('returnTo') returnTo: unknown, @Res() reply: FastifyReply): Promise<void> {
+    await this.redirect(reply, '/login', async () => this.begin(reply, await this.eveSignin.start(returnTo)));
   }
 
   @Get(nestPath(routes.auth.eveLogin.path))
@@ -112,14 +134,17 @@ export class AuthController {
     @Res() reply: FastifyReply,
   ): Promise<void> {
     const pending = this.takePending(request, reply);
-    await this.redirect(reply, pending?.returnTo ?? '/', async () => {
-      if (query.error) return withError(pending?.returnTo ?? '/', 'EVE sign-in was cancelled');
-      const linked = await this.characters.completeLink(actor, {
-        code: query.code,
-        state: query.state,
-        pending,
-      });
-      return linked.returnTo;
+    // A failed sign-in goes back to the sign-in page, a failed link to where it started.
+    const fallback = pending?.kind === 'eve-signin' ? '/login' : (pending?.returnTo ?? '/');
+    await this.redirect(reply, fallback, async () => {
+      if (query.error) return withError(fallback, 'EVE sign-in was cancelled');
+      const input = { code: query.code, state: query.state, pending };
+      if (pending?.kind === 'eve-signin') {
+        const signedIn = await this.eveSignin.complete(actor, { ...input, userAgent: userAgent(request) });
+        await this.startSession(request, reply, signedIn.token, signedIn.account.id);
+        return signedIn.returnTo;
+      }
+      return (await this.characters.completeLink(actor, input)).returnTo;
     });
   }
 

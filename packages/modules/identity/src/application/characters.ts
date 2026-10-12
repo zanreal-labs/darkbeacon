@@ -15,7 +15,7 @@ import {
 import type { CharacterTokens, LinkedCharacter } from '../domain/account.js';
 import { ExternalAuthError } from '../domain/errors.js';
 import type { PendingAuth } from '../domain/pending-auth.js';
-import { EVE_SCOPES, TOKEN_REFRESH_MARGIN_MS } from '../domain/rules.js';
+import { EVE_SCOPES, EVE_SEARCH_SCOPE, TOKEN_REFRESH_MARGIN_MS } from '../domain/rules.js';
 import type { CharacterRepository } from '../ports/character-repository.js';
 import type { EveSso, EveTokenSet } from '../ports/eve-sso.js';
 import { accountChanged, IDENTITY_ACTOR } from './events.js';
@@ -108,9 +108,123 @@ export class CharacterService {
       };
       await this.deps.characters.upsert(character);
       await this.deps.characters.saveTokens(character.id, storedTokens(tokens));
+      // A new character may match access rules (its corporation, alliance or itself).
+      if (existing?.accountId !== account.id) {
+        await this.deps.events.append([accountChanged(account.id, { kind: 'account', id: account.id }, now)]);
+      }
       return character;
     });
     return { character, returnTo: pending.returnTo };
+  }
+
+  /** Starts signing in with an EVE character (the caller checks the instance's login method). */
+  async startSignIn(returnTo: unknown): Promise<{ url: string; pending: PendingAuth }> {
+    const eve = requireConfigured(this.deps.eve, 'EVE');
+    const { pending, codeChallenge } = await beginPendingAuth(this.deps.clock, {
+      kind: 'eve-signin',
+      accountId: null,
+      returnTo,
+    });
+    const url = eve.authorizationUrl({
+      state: pending.state,
+      codeChallenge,
+      redirectUri: this.deps.redirectUri,
+      scopes: [...EVE_SCOPES],
+    });
+    return { url, pending };
+  }
+
+  /**
+   * Finishes an EVE sign-in. The character decides the account:
+   * - a character linked to an account (same EVE owner) opens that account;
+   * - otherwise, someone already signed in gets it attached to their account;
+   * - otherwise a new account is created for it (`createAccount`).
+   * A character that changed EVE owner since it was linked (sold) counts as unknown.
+   */
+  async completeSignIn(
+    input: { code: string | undefined; state: string | undefined; pending: PendingAuth | null },
+    options: {
+      signedInAccountId: string | null;
+      createAccount(character: { id: number; name: string }): Promise<{ id: string }>;
+    },
+  ): Promise<{ accountId: string; character: LinkedCharacter; created: boolean; returnTo: string }> {
+    const eve = requireConfigured(this.deps.eve, 'EVE');
+    const pending = checkPendingAuth(this.deps.clock, 'eve-signin', input.pending, input.state);
+    if (!input.code) throw new ValidationError('EVE SSO did not return an authorization code');
+    const tokens = await asAuthFailure(
+      eve.exchangeCode({
+        code: input.code,
+        codeVerifier: pending.codeVerifier,
+        redirectUri: this.deps.redirectUri,
+      }),
+    );
+    const { identity } = tokens;
+    const affiliation = await eve.affiliation(identity.characterId);
+
+    return this.deps.uow.transaction(async () => {
+      const existing = await this.deps.characters.findById(identity.characterId);
+      const now = this.deps.clock.now();
+      let accountId: string;
+      let created = false;
+      if (existing && existing.ownerHash === identity.ownerHash) {
+        accountId = existing.accountId;
+      } else {
+        if (existing) {
+          // Sold: the former owner's account and maps must stop seeing it.
+          await this.left(existing, IDENTITY_ACTOR);
+        }
+        if (options.signedInAccountId) {
+          accountId = options.signedInAccountId;
+        } else {
+          accountId = (
+            await options.createAccount({ id: identity.characterId, name: identity.characterName })
+          ).id;
+          created = true;
+        }
+      }
+      const character: LinkedCharacter = {
+        id: identity.characterId,
+        accountId,
+        name: identity.characterName,
+        corporationId: affiliation.corporationId,
+        allianceId: affiliation.allianceId,
+        ownerHash: identity.ownerHash,
+        tokenValid: true,
+        linkedAt: existing?.accountId === accountId ? existing.linkedAt : now,
+        updatedAt: now,
+      };
+      await this.deps.characters.upsert(character);
+      await this.deps.characters.saveTokens(character.id, storedTokens(tokens));
+      if (
+        existing?.accountId !== accountId ||
+        existing?.corporationId !== character.corporationId ||
+        existing?.allianceId !== character.allianceId
+      ) {
+        await this.deps.events.append([accountChanged(accountId, IDENTITY_ACTOR, now)]);
+      }
+      return { accountId, character, created, returnTo: pending.returnTo };
+    });
+  }
+
+  /**
+   * A character of the account whose token may use ESI search (the main one first), with a
+   * fresh access token; null when none may. `characters` says whether the account has any.
+   */
+  async searchToken(
+    accountId: string,
+    mainCharacterId: number | null | undefined,
+  ): Promise<{ token: { characterId: number; accessToken: string } | null; characters: number }> {
+    const characters = (await this.deps.characters.listForAccount(accountId)).filter((c) => c.tokenValid);
+    const scopes = await this.deps.characters.scopesOf(characters.map((c) => c.id));
+    const able = characters
+      .filter((c) => scopes.get(c.id)?.includes(EVE_SEARCH_SCOPE))
+      .sort((a, b) => Number(b.id === mainCharacterId) - Number(a.id === mainCharacterId));
+    for (const character of able) {
+      const accessToken = await this.accessToken(character.id);
+      if (accessToken)
+        return { token: { characterId: character.id, accessToken }, characters: characters.length };
+    }
+    return { token: null, characters: characters.length };
   }
 
   async unlink(actor: Actor | null, characterId: number): Promise<void> {

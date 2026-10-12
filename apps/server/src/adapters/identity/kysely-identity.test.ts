@@ -4,6 +4,7 @@ import type { Account, LinkedCharacter } from '@darkbeacon/identity';
 import {
   KyselyAccountRepository,
   KyselyCharacterRepository,
+  KyselyDiscordBotStore,
   KyselyDiscordLinkRepository,
   KyselySessionRepository,
   type IdentityTables,
@@ -45,20 +46,71 @@ describeEachDialect('identity repositories', (t) => {
     expect(await repo.findById('a')).toEqual({
       ...account('a', { discordId: '123', name: 'Alice', instanceRole: 'owner' }),
       mainCharacterId: null,
+      defaultMapId: null,
+      recentMapIds: [],
     });
     expect((await repo.findByDiscordId('123'))?.id).toBe('a');
     expect((await repo.findByName('dev-bob'))?.id).toBe('b');
     // Discord accounts are never matched by name.
     expect(await repo.findByName('Alice')).toBeNull();
 
-    await repo.update({ ...account('b', { name: 'dev-bob' }), instanceRole: 'admin', updatedAt: 5 });
+    await repo.update({
+      ...account('b', { name: 'dev-bob' }),
+      instanceRole: 'admin',
+      defaultMapId: 'map-1',
+      updatedAt: 5,
+    });
     await repo.touch('b', 1_900_000_000_000);
+    await repo.setRecentMaps('b', ['map-2', 'map-1']);
     expect(await repo.findById('b')).toMatchObject({
       instanceRole: 'admin',
+      defaultMapId: 'map-1',
+      recentMapIds: ['map-2', 'map-1'],
       updatedAt: 5,
       lastSeenAt: 1_900_000_000_000,
     });
     expect((await repo.list()).map((a) => a.id)).toEqual(['a', 'b']);
+  });
+
+  it('finds accounts by part of their name, prefixes first', async () => {
+    const repo = new KyselyAccountRepository(t.db);
+    await repo.insert(account('a', { name: 'Ayla Vex', discordId: '1' }));
+    await repo.insert(account('b', { name: 'Vexed 100%' }));
+    await repo.insert(account('c', { name: 'Torren' }));
+    expect((await repo.search('vex', 10)).map((a) => a.name)).toEqual(['Vexed 100%', 'Ayla Vex']);
+    expect((await repo.search('0%', 10)).map((a) => a.id)).toEqual(['b']);
+    // `%` and `_` are literal characters, not wildcards.
+    expect(await repo.search('%', 10)).toHaveLength(1);
+    expect(await repo.search('_', 10)).toHaveLength(0);
+  });
+
+  it('lists sessions of an account, most recently used first', async () => {
+    const repo = new KyselySessionRepository(t.db);
+    await repo.insert({
+      id: 's1',
+      accountId: 'a',
+      createdAt: 1,
+      lastSeenAt: 5,
+      expiresAt: 9e12,
+      userAgent: null,
+    });
+    await repo.insert({
+      id: 's2',
+      accountId: 'a',
+      createdAt: 1,
+      lastSeenAt: 7,
+      expiresAt: 9e12,
+      userAgent: 'ua',
+    });
+    await repo.insert({
+      id: 's3',
+      accountId: 'b',
+      createdAt: 1,
+      lastSeenAt: 9,
+      expiresAt: 9e12,
+      userAgent: null,
+    });
+    expect((await repo.listForAccount('a')).map((s) => s.id)).toEqual(['s2', 's1']);
   });
 
   it('allows only one owner and one account per Discord user', async () => {
@@ -117,6 +169,8 @@ describeEachDialect('identity repositories', (t) => {
     await repo.saveTokens(pilot.id, tokens);
     await repo.saveTokens(pilot.id, { ...tokens, accessToken: 'newer' });
     expect(await repo.getTokens(pilot.id)).toEqual({ ...tokens, accessToken: 'newer' });
+    expect(await repo.scopesOf([pilot.id, 404])).toEqual(new Map([[pilot.id, ['x']]]));
+    expect(await repo.scopesOf([])).toEqual(new Map());
     const raw = await t.db
       .db<IdentityTables>()
       .selectFrom('eve_character_token')
@@ -151,5 +205,25 @@ describeEachDialect('identity repositories', (t) => {
       .executeTakeFirstOrThrow();
     expect(JSON.stringify(raw)).not.toContain('discord-access');
     expect(await repo.find('missing')).toBeNull();
+    await repo.remove('a');
+    expect(await repo.find('a')).toBeNull();
+  });
+
+  it('keeps one Discord bot with its token sealed', async () => {
+    const store = new KyselyDiscordBotStore(t.db, box);
+    expect(await store.load()).toBeNull();
+    const bot = {
+      token: 'bot-token-secret',
+      user: { id: '9', name: 'Beacon', avatarUrl: null },
+      error: null,
+    };
+    await store.save(bot);
+    await store.save({ ...bot, error: 'Missing access' });
+    expect(await store.load()).toEqual({ ...bot, error: 'Missing access' });
+    const raw = await t.db.db<IdentityTables>().selectFrom('discord_bot').selectAll().execute();
+    expect(raw).toHaveLength(1);
+    expect(JSON.stringify(raw)).not.toContain('bot-token-secret');
+    await store.clear();
+    expect(await store.load()).toBeNull();
   });
 });

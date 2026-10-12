@@ -12,6 +12,10 @@ export const AccountDto = z.object({
   instanceRole: InstanceRole,
   /** The character the account acts as by default (presence, pings); null until chosen. */
   mainCharacterId: EveId.nullable().optional(),
+  /** The map `/` opens for this account (starred); null when none was chosen. */
+  defaultMapId: Id.nullable().optional(),
+  /** Maps this account opened, most recent first (at most five). */
+  recentMapIds: z.array(Id).optional(),
   createdAt: Timestamp,
 });
 export type AccountDto = z.infer<typeof AccountDto>;
@@ -23,6 +27,8 @@ export const CharacterDto = z.object({
   allianceId: EveId.nullable(),
   /** False when the stored EVE token no longer works and the character must be re-linked. */
   tokenValid: z.boolean(),
+  /** True when the token allows ESI search (pickers); characters linked before it was asked lack it. */
+  canSearch: z.boolean().optional(),
   linkedAt: Timestamp,
 });
 export type CharacterDto = z.infer<typeof CharacterDto>;
@@ -55,10 +61,19 @@ export const DevLoginRequest = z.object({
 });
 export type DevLoginRequest = z.infer<typeof DevLoginRequest>;
 
+/** How people sign in to this instance: their Discord user, or their EVE characters. */
+export const LoginMethod = z.enum(['discord', 'eve']);
+export type LoginMethod = z.infer<typeof LoginMethod>;
+
 /** GET /api/auth/providers: which login buttons the web app shows. */
 export const AuthProvidersDto = z.object({
   discord: z.boolean(),
   eve: z.boolean(),
+  /**
+   * The way in the sign-in page offers: `eve` when Discord is not configured, otherwise the
+   * instance setting (Discord by default).
+   */
+  loginMethod: LoginMethod,
   /** Demo mode: unauthenticated visits are signed in as the demo account (POST /api/auth/demo). */
   demo: z.boolean(),
   /** The Discord OAuth redirect this instance uses (from PUBLIC_URL), for admins setting it up. */
@@ -74,3 +89,59 @@ export type UpdateInstanceRoleRequest = z.infer<typeof UpdateInstanceRoleRequest
 
 export const TransferOwnershipRequest = z.object({ accountId: Id });
 export type TransferOwnershipRequest = z.infer<typeof TransferOwnershipRequest>;
+
+/** PUT /api/accounts/me/default-map: the map `/` opens (null clears it). */
+export const SetDefaultMapRequest = z.object({ mapId: Id.nullable() });
+export type SetDefaultMapRequest = z.infer<typeof SetDefaultMapRequest>;
+
+/** PUT /api/accounts/me/recent-map: the map this account just opened. */
+export const RecordMapOpenedRequest = z.object({ mapId: Id });
+export type RecordMapOpenedRequest = z.infer<typeof RecordMapOpenedRequest>;
+
+/** GET /api/accounts/me/landing: where `/` sends the account (slug null: it can see no map). */
+export const LandingDto = z.object({
+  slug: z.string().nullable(),
+  /** Why this map: the account's star, the instance default, the last opened, or the only one. */
+  reason: z.enum(['account', 'instance', 'recent', 'only', 'first']).nullable(),
+});
+export type LandingDto = z.infer<typeof LandingDto>;
+
+/** One signed-in browser or device of the account. */
+export const SessionDto = z.object({
+  /** Opaque handle for revoking; neither the cookie nor its stored hash. */
+  id: z.string(),
+  /** "Firefox", "Chrome", ... or null when the browser did not say. */
+  browser: z.string().nullable(),
+  /** "macOS", "Windows", "iPhone", ... */
+  os: z.string().nullable(),
+  device: z.enum(['desktop', 'mobile', 'tablet', 'unknown']),
+  createdAt: Timestamp,
+  lastSeenAt: Timestamp,
+  /** The session this request was made with. */
+  current: z.boolean(),
+});
+export type SessionDto = z.infer<typeof SessionDto>;
+
+/** GET /api/accounts/search?q=: accounts by name, for map admins picking people. */
+export const AccountSearchQuery = z.object({ q: z.string().trim().min(1).max(64) });
+export type AccountSearchQuery = z.infer<typeof AccountSearchQuery>;
+
+export const AccountSummaryDto = z.object({
+  id: Id,
+  name: z.string(),
+  avatarUrl: z.string().nullable(),
+  mainCharacterId: EveId.nullable(),
+});
+export type AccountSummaryDto = z.infer<typeof AccountSummaryDto>;
+
+/** GET /api/instance: what signed-in pages need to know about the instance. */
+export const InstanceInfoDto = z.object({
+  /** The map admins chose for everyone who has not starred one. */
+  defaultMapId: Id.nullable(),
+  loginMethod: LoginMethod,
+  /** Discord roles can grant map access and instance admin (Discord sign-in only). */
+  discordRoles: z.boolean(),
+  /** A Discord bot is connected: servers, roles and channels are picked from lists. */
+  discordBot: z.boolean(),
+});
+export type InstanceInfoDto = z.infer<typeof InstanceInfoDto>;

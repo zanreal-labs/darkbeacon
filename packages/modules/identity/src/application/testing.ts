@@ -47,6 +47,24 @@ export class MemoryAccounts implements AccountRepository {
     if (row) this.rows.set(id, { ...row, lastSeenAt });
     return Promise.resolve();
   }
+  search(text: string, limit: number) {
+    const t = text.toLowerCase();
+    return Promise.resolve(
+      [...this.rows.values()]
+        .filter((a) => a.name.toLowerCase().includes(t))
+        .sort(
+          (a, b) =>
+            Number(!a.name.toLowerCase().startsWith(t)) - Number(!b.name.toLowerCase().startsWith(t)) ||
+            a.name.localeCompare(b.name),
+        )
+        .slice(0, limit),
+    );
+  }
+  setRecentMaps(id: string, recentMapIds: string[]) {
+    const row = this.rows.get(id);
+    if (row) this.rows.set(id, { ...row, recentMapIds });
+    return Promise.resolve();
+  }
 }
 
 export class MemorySessions implements SessionRepository {
@@ -58,6 +76,13 @@ export class MemorySessions implements SessionRepository {
   }
   findById(id: string) {
     return Promise.resolve(this.rows.get(id) ?? null);
+  }
+  listForAccount(accountId: string) {
+    return Promise.resolve(
+      [...this.rows.values()]
+        .filter((s) => s.accountId === accountId)
+        .sort((a, b) => b.lastSeenAt - a.lastSeenAt),
+    );
   }
   touch(id: string, lastSeenAt: number, expiresAt: number) {
     const row = this.rows.get(id);
@@ -118,6 +143,11 @@ export class MemoryCharacters implements CharacterRepository {
   getTokens(id: number) {
     return Promise.resolve(this.tokens.get(id) ?? null);
   }
+  scopesOf(ids: readonly number[]) {
+    return Promise.resolve(
+      new Map(ids.flatMap((id) => (this.tokens.has(id) ? [[id, this.tokens.get(id)!.scopes] as const] : []))),
+    );
+  }
 }
 
 export class MemoryDiscordLinks implements DiscordLinkRepository {
@@ -128,6 +158,10 @@ export class MemoryDiscordLinks implements DiscordLinkRepository {
   }
   save(link: DiscordLink) {
     this.rows.set(link.accountId, link);
+    return Promise.resolve();
+  }
+  remove(accountId: string) {
+    this.rows.delete(accountId);
     return Promise.resolve();
   }
 }

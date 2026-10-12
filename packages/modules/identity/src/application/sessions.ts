@@ -1,6 +1,7 @@
-import type { Clock, EventLog } from '@darkbeacon/core';
+import { NotFoundError, type Clock, type EventLog } from '@darkbeacon/core';
+import type { SessionDto } from '@darkbeacon/shared';
 import type { Account, Session } from '../domain/account.js';
-import { SESSION_TOUCH_MS, SESSION_TTL_MS } from '../domain/rules.js';
+import { describeUserAgent, SESSION_TOUCH_MS, SESSION_TTL_MS } from '../domain/rules.js';
 import type { AccountRepository } from '../ports/account-repository.js';
 import type { SessionRepository } from '../ports/session-repository.js';
 import { randomToken, sha256 } from './crypto.js';
@@ -64,6 +65,33 @@ export class SessionService {
     await this.ended(session.accountId);
   }
 
+  /** The account's live sessions, most recently used first; `token` marks the caller's own. */
+  async list(accountId: string, token: string | null | undefined): Promise<SessionDto[]> {
+    const now = this.deps.clock.now();
+    const current = token ? await sha256(token) : null;
+    const sessions = (await this.deps.sessions.listForAccount(accountId)).filter((s) => s.expiresAt > now);
+    return Promise.all(
+      sessions.map(async (s) => ({
+        id: await publicSessionId(s.id),
+        ...describeUserAgent(s.userAgent),
+        createdAt: s.createdAt,
+        lastSeenAt: s.lastSeenAt,
+        current: s.id === current,
+      })),
+    );
+  }
+
+  /** Ends one of the account's sessions by its public id (from `list`). */
+  async revoke(accountId: string, publicId: string): Promise<void> {
+    for (const session of await this.deps.sessions.listForAccount(accountId)) {
+      if ((await publicSessionId(session.id)) !== publicId) continue;
+      await this.deps.sessions.delete(session.id);
+      await this.ended(accountId);
+      return;
+    }
+    throw new NotFoundError('Session');
+  }
+
   /** "Log out everywhere": ends every session of the account. */
   async logoutEverywhere(accountId: string): Promise<number> {
     const ended = await this.deps.sessions.deleteForAccount(accountId);
@@ -79,4 +107,12 @@ export class SessionService {
   pruneExpired(): Promise<number> {
     return this.deps.sessions.deleteExpired(this.deps.clock.now());
   }
+}
+
+/**
+ * What the browser sees of a session: a hash of the stored id (itself a hash of the cookie), so
+ * neither the cookie nor the row key leaves the server.
+ */
+async function publicSessionId(storedId: string): Promise<string> {
+  return (await sha256(`session:${storedId}`)).slice(0, 22);
 }

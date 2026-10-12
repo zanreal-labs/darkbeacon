@@ -533,6 +533,8 @@ describe('CharacterService', () => {
     expect(await t.characters.findById(1001)).toBeNull();
     expect(t.characters.tokens.size).toBe(0);
     expect(t.events.events.map((e) => [e.type, e.data])).toEqual([
+      // Linking: the account may now match rules on the character, its corporation or alliance.
+      ['access.account_changed', { accountId: 'acc-a' }],
       ['character.unlinked', { characterId: 1001 }],
       ['access.account_changed', { accountId: 'acc-a' }],
     ]);
@@ -545,8 +547,10 @@ describe('CharacterService', () => {
     await link(t, 'acc-a', 'c1');
     await link(t, 'acc-b', 'c2');
     expect(t.events.events.map((e) => [e.type, e.data])).toEqual([
+      ['access.account_changed', { accountId: 'acc-a' }],
       ['character.unlinked', { characterId: 1001 }],
       ['access.account_changed', { accountId: 'acc-a' }],
+      ['access.account_changed', { accountId: 'acc-b' }],
     ]);
   });
 
@@ -586,6 +590,7 @@ describe('CharacterService', () => {
     expect(await t.service.accessToken(1001)).toBe('access-1');
     expect(await t.characters.findById(1001)).toMatchObject({ corporationId: 7, allianceId: 8 });
     expect(t.events.events.map((e) => [e.type, e.data])).toEqual([
+      ['access.account_changed', { accountId: 'acc-a' }],
       ['access.account_changed', { accountId: 'acc-a' }],
     ]);
   });

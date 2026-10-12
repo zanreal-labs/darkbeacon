@@ -10,12 +10,107 @@ export const PENDING_AUTH_TTL_MS = 10 * 60 * 1000;
 /** Refresh EVE access tokens this long before they expire. */
 export const TOKEN_REFRESH_MARGIN_MS = 60 * 1000;
 
-/** ESI scopes requested when linking a character: location, ship and online status for tracking. */
+/**
+ * The scope of ESI's character search (`GET /characters/{character_id}/search`), which the
+ * name pickers use; its name says structures, but it covers every search category.
+ */
+export const EVE_SEARCH_SCOPE = 'esi-search.search_structures.v1';
+
+/**
+ * ESI scopes requested when linking a character: location, ship and online status for tracking,
+ * and search for the name pickers.
+ */
 export const EVE_SCOPES: readonly string[] = [
   'esi-location.read_location.v1',
   'esi-location.read_ship_type.v1',
   'esi-location.read_online.v1',
+  EVE_SEARCH_SCOPE,
 ];
+
+/** How many recently opened maps an account remembers. */
+export const RECENT_MAPS = 5;
+
+/** `mapId` first, then the others, without duplicates, at most RECENT_MAPS. */
+export function withRecentMap(recent: readonly string[] | undefined, mapId: string): string[] {
+  return [mapId, ...(recent ?? []).filter((id) => id !== mapId)].slice(0, RECENT_MAPS);
+}
+
+export type LandingReason = 'account' | 'instance' | 'recent' | 'only' | 'first';
+
+/**
+ * The map `/` opens: the account's own default, else the instance default, else the map opened
+ * last, else the only map. With several maps and none of those, the first one (by name), so `/`
+ * always lands on a map; null only when the account can see no map at all. Ids that point at
+ * maps the account cannot see (deleted, access lost) are skipped.
+ */
+export function chooseLanding<M extends { id: string }>(input: {
+  maps: readonly M[];
+  accountDefault: string | null | undefined;
+  instanceDefault: string | null | undefined;
+  recent: readonly string[] | undefined;
+}): { map: M; reason: LandingReason } | null {
+  const find = (id: string | null | undefined) => (id ? input.maps.find((m) => m.id === id) : undefined);
+  const account = find(input.accountDefault);
+  if (account) return { map: account, reason: 'account' };
+  const instance = find(input.instanceDefault);
+  if (instance) return { map: instance, reason: 'instance' };
+  for (const id of input.recent ?? []) {
+    const recent = find(id);
+    if (recent) return { map: recent, reason: 'recent' };
+  }
+  if (input.maps.length === 1) return { map: input.maps[0]!, reason: 'only' };
+  return input.maps[0] ? { map: input.maps[0], reason: 'first' } : null;
+}
+
+export interface DeviceDescription {
+  browser: string | null;
+  os: string | null;
+  device: 'desktop' | 'mobile' | 'tablet' | 'unknown';
+}
+
+/** A readable name for a session's browser and device, from its User-Agent header. */
+export function describeUserAgent(userAgent: string | null): DeviceDescription {
+  const ua = userAgent ?? '';
+  const browser = /Edg\//.test(ua)
+    ? 'Edge'
+    : /OPR\/|Opera/.test(ua)
+      ? 'Opera'
+      : /Vivaldi\//.test(ua)
+        ? 'Vivaldi'
+        : /Firefox\/|FxiOS\//.test(ua)
+          ? 'Firefox'
+          : /Chrome\/|CriOS\//.test(ua)
+            ? 'Chrome'
+            : /Safari\//.test(ua) && /Version\//.test(ua)
+              ? 'Safari'
+              : /EVE|CCP/.test(ua)
+                ? 'EVE launcher'
+                : null;
+  const os = /iPhone/.test(ua)
+    ? 'iPhone'
+    : /iPad/.test(ua)
+      ? 'iPad'
+      : /Android/.test(ua)
+        ? 'Android'
+        : /Mac OS X|Macintosh/.test(ua)
+          ? 'macOS'
+          : /Windows/.test(ua)
+            ? 'Windows'
+            : /CrOS/.test(ua)
+              ? 'ChromeOS'
+              : /Linux/.test(ua)
+                ? 'Linux'
+                : null;
+  const device =
+    /iPad|Tablet/.test(ua) || (/Android/.test(ua) && !/Mobile/.test(ua))
+      ? 'tablet'
+      : /Mobile|iPhone/.test(ua)
+        ? 'mobile'
+        : browser || os
+          ? 'desktop'
+          : 'unknown';
+  return { browser, os, device };
+}
 
 /** The first account of an instance becomes its owner. */
 export function initialInstanceRole(existingAccounts: number): InstanceRole {

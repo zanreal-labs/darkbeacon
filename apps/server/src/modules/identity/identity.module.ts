@@ -14,21 +14,29 @@ import {
   AccountService,
   CharacterService,
   DemoLogin,
+  DiscordBotService,
   DiscordLogin,
+  EveDirectoryService,
+  EveLogin,
   GuildRoleSync,
   SessionService,
   type CharacterRepository,
   type DiscordLinkRepository,
   type IdentityProvider,
 } from '@darkbeacon/identity';
+import { DiscordBotHttp } from '../../adapters/identity/discord-bot-http.js';
 import { DiscordHttpProvider } from '../../adapters/identity/discord-http.js';
+import { EsiDirectoryHttp } from '../../adapters/identity/esi-directory-http.js';
 import { EveSsoHttp } from '../../adapters/identity/eve-sso-http.js';
 import {
   KyselyAccountRepository,
   KyselyCharacterRepository,
+  KyselyDiscordBotStore,
   KyselyDiscordLinkRepository,
   KyselySessionRepository,
 } from '../../adapters/identity/kysely-identity.js';
+import { DiscordDirectoryController, EveDirectoryController } from './directory.controller.js';
+import { PickerAccess } from './picker-access.js';
 import type { FetchLike } from '../../adapters/identity/oauth-http.js';
 import { SecretBox } from '../../adapters/identity/secret-box.js';
 import type { AppConfig } from '../../config/config.js';
@@ -52,7 +60,13 @@ const DISCORD_LINKS = 'identity.DiscordLinkRepository';
  */
 @Global()
 @Module({
-  controllers: [AuthController, AccountsController, AdminAccountsController],
+  controllers: [
+    AuthController,
+    AccountsController,
+    AdminAccountsController,
+    EveDirectoryController,
+    DiscordDirectoryController,
+  ],
   providers: [
     {
       provide: PENDING_BOX,
@@ -85,13 +99,61 @@ const DISCORD_LINKS = 'identity.DiscordLinkRepository';
         accounts: KyselyAccountRepository,
         characters: CharacterRepository,
         discordLinks: DiscordLinkRepository,
-        guildPolicy: InstanceSettingsService,
+        settings: InstanceSettingsService,
         uow: UnitOfWork,
         events: EventLog,
         clock: Clock,
-      ) => new AccountService({ accounts, characters, discordLinks, guildPolicy, uow, events, clock }),
+      ) =>
+        new AccountService({
+          accounts,
+          characters,
+          discordLinks,
+          guildPolicy: settings,
+          loginPolicy: settings,
+          uow,
+          events,
+          clock,
+        }),
       inject: [ACCOUNTS, CHARACTERS, DISCORD_LINKS, InstanceSettingsService, UNIT_OF_WORK, EVENT_LOG, CLOCK],
     },
+    {
+      provide: EveDirectoryService,
+      useFactory: (
+        characters: CharacterService,
+        accounts: KyselyAccountRepository,
+        clock: Clock,
+        fetchFn: FetchLike,
+        config: AppConfig,
+      ) =>
+        new EveDirectoryService({
+          directory: new EsiDirectoryHttp(clock, fetchFn, `Darkbeacon (${config.publicUrl})`),
+          characters,
+          accounts,
+          clock,
+        }),
+      inject: [CharacterService, ACCOUNTS, CLOCK, HTTP_FETCH, APP_CONFIG],
+    },
+    {
+      provide: DiscordBotService,
+      useFactory: (db: Database, config: AppConfig, clock: Clock, fetchFn: FetchLike) =>
+        new DiscordBotService({
+          api: new DiscordBotHttp(fetchFn),
+          store: new KyselyDiscordBotStore(db, new SecretBox(config.secretKey, 'discord-bot')),
+          clock,
+        }),
+      inject: [Database, APP_CONFIG, CLOCK, HTTP_FETCH],
+    },
+    {
+      provide: EveLogin,
+      useFactory: (
+        characters: CharacterService,
+        accounts: AccountService,
+        sessions: SessionService,
+        settings: InstanceSettingsService,
+      ) => new EveLogin({ characters, accounts, sessions, loginPolicy: settings }),
+      inject: [CharacterService, AccountService, SessionService, InstanceSettingsService],
+    },
+    PickerAccess,
     {
       provide: SessionService,
       useFactory: (
@@ -122,16 +184,29 @@ const DISCORD_LINKS = 'identity.DiscordLinkRepository';
         sessions: SessionService,
         clock: Clock,
         config: AppConfig,
+        settings: InstanceSettingsService,
+        accountRepository: KyselyAccountRepository,
       ) =>
         new DiscordLogin({
           discord,
           accounts,
           guildRoles,
           sessions,
+          loginPolicy: settings,
+          accountRepository,
           clock,
           redirectUri: oauthCallbackUrl(config, 'discord'),
         }),
-      inject: [DISCORD, AccountService, GuildRoleSync, SessionService, CLOCK, APP_CONFIG],
+      inject: [
+        DISCORD,
+        AccountService,
+        GuildRoleSync,
+        SessionService,
+        CLOCK,
+        APP_CONFIG,
+        InstanceSettingsService,
+        ACCOUNTS,
+      ],
     },
     {
       provide: DemoLogin,
@@ -166,7 +241,15 @@ const DISCORD_LINKS = 'identity.DiscordLinkRepository';
       inject: [APP_CONFIG, CHARACTERS, UNIT_OF_WORK, EVENT_LOG, CLOCK, HTTP_FETCH],
     },
   ],
-  exports: [AccountService, CharacterService, SessionService, DemoLogin],
+  exports: [
+    AccountService,
+    CharacterService,
+    SessionService,
+    DemoLogin,
+    EveDirectoryService,
+    DiscordBotService,
+    PickerAccess,
+  ],
 })
 export class IdentityModule implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger('Identity');

@@ -18,4 +18,6 @@ export interface CharacterRepository {
   delete(characterId: number): Promise<void>;
   saveTokens(characterId: number, tokens: CharacterTokens): Promise<void>;
   getTokens(characterId: number): Promise<CharacterTokens | null>;
+  /** The scopes each character's token was granted (no secrets are read). */
+  scopesOf(characterIds: readonly number[]): Promise<Map<number, string[]>>;
 }

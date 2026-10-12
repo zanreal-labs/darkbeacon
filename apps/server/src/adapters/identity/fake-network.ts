@@ -44,6 +44,31 @@ export class FakeNetwork {
   readonly eveCodes = new Map<string, PendingCode<EveCharacter>>();
   readonly eveRefresh = new Map<string, EveCharacter>();
   readonly characters = new Map<number, EveCharacter>();
+  /** Scopes EVE SSO grants (the `scp` claim of new tokens). */
+  eveScopes = [
+    'esi-location.read_location.v1',
+    'esi-location.read_ship_type.v1',
+    'esi-location.read_online.v1',
+    'esi-search.search_structures.v1',
+  ];
+  /** What ESI knows by id: names, categories, tickers (for search, /universe/names and /ids). */
+  readonly esiEntities = new Map<number, { name: string; category: string; ticker?: string }>();
+
+  /** Discord bot tokens Discord accepts, and what the bot sees. */
+  readonly botTokens = new Set<string>();
+  readonly botGuilds: Array<{ id: string; name: string; icon: string | null }> = [];
+  readonly botRoles = new Map<
+    string,
+    Array<{ id: string; name: string; color: number; managed: boolean; position: number }>
+  >();
+  readonly botChannels = new Map<
+    string,
+    Array<{ id: string; name: string; type: number; position: number; parent_id?: string | null }>
+  >();
+  /** Messages posted by the bot (channel id) or through webhooks (`webhook:<id>`). */
+  readonly discordMessages: Array<{ to: string; body: Record<string, unknown> }> = [];
+  /** Channel webhooks Discord knows: `<id>/<token>` -> channel and guild. */
+  readonly discordWebhooks = new Map<string, { channelId: string; guildId: string; name: string }>();
   private counter = 0;
 
   /** Issues a Discord authorization code, as if the user approved the login. */
@@ -70,7 +95,7 @@ export class FakeNetwork {
     const now = Math.floor(this.now() / 1000);
     const header = { alg: 'RS256', kid, typ: 'JWT' };
     const payload = {
-      scp: ['esi-location.read_location.v1', 'esi-location.read_ship_type.v1'],
+      scp: this.eveScopes,
       jti: `jti-${++this.counter}`,
       kid,
       sub: `CHARACTER:EVE:${character.id}`,
@@ -113,6 +138,28 @@ export class FakeNetwork {
       }
       if (u.pathname === '/v2/oauth/token') return this.eveToken(auth, form);
     }
+    if (u.host === 'discord.com' && auth.startsWith('Bot ')) return this.discordBot(auth, method, u, init);
+    if (u.host === 'discord.com' && u.pathname.startsWith('/api/webhooks/')) {
+      const key = u.pathname.slice('/api/webhooks/'.length);
+      const hook = this.discordWebhooks.get(key);
+      if (!hook) return json({ message: 'Unknown Webhook', code: 10015 }, 404);
+      if (method === 'GET')
+        return json({
+          id: key.split('/')[0],
+          channel_id: hook.channelId,
+          guild_id: hook.guildId,
+          name: hook.name,
+        });
+      this.discordMessages.push({
+        to: `webhook:${key.split('/')[0]}`,
+        body: JSON.parse(String(init.body)) as Record<string, unknown>,
+      });
+      return json({ id: `m-${++this.counter}` });
+    }
+    if (u.host === 'esi.evetech.net') {
+      const esi = this.esi(method, u, init);
+      if (esi) return esi;
+    }
     if (u.host === 'discord.com') {
       if (u.pathname === '/api/v10/oauth2/token') return this.discordToken(auth, form);
       const user = this.discordTokens.get(auth.replace(/^Bearer /, ''));
@@ -135,6 +182,78 @@ export class FakeNetwork {
     }
     return json({ error: 'not found' }, 404);
   };
+
+  /** Character search, /universe/names and /ids, corporations and alliances. */
+  private esi(method: string, u: URL, init: RequestInit): Response | null {
+    const entity = (id: number) => this.esiEntities.get(id);
+    const search = /^\/characters\/(\d+)\/search$/.exec(u.pathname);
+    if (search && method === 'GET') {
+      const token = (new Headers(init.headers).get('authorization') ?? '').replace(/^Bearer /, '');
+      const claims = JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString() || '{}') as {
+        scp?: string[];
+        sub?: string;
+      };
+      if (
+        claims.sub !== `CHARACTER:EVE:${search[1]}` ||
+        !claims.scp?.includes('esi-search.search_structures.v1')
+      ) {
+        return json({ error: 'token is not valid for scope(s): esi-search.search_structures.v1' }, 403);
+      }
+      const category = u.searchParams.get('categories') ?? '';
+      const text = (u.searchParams.get('search') ?? '').toLowerCase();
+      if (text.length < 3) return json({ error: 'search must be at least 3 characters' }, 400);
+      const ids = [...this.esiEntities]
+        .filter(([, e]) => e.category === category && e.name.toLowerCase().includes(text))
+        .map(([id]) => id);
+      return json(ids.length > 0 ? { [category]: ids } : {});
+    }
+    if (u.pathname === '/universe/names' && method === 'POST') {
+      const ids = JSON.parse(String(init.body)) as number[];
+      if (ids.some((id) => !entity(id)))
+        return json({ error: 'Ensure all IDs are valid before resolving.' }, 404);
+      return json(ids.map((id) => ({ id, name: entity(id)!.name, category: entity(id)!.category })));
+    }
+    if (u.pathname === '/universe/ids' && method === 'POST') {
+      const names = (JSON.parse(String(init.body)) as string[]).map((n) => n.toLowerCase());
+      const out: Record<string, Array<{ id: number; name: string }>> = {};
+      for (const [id, e] of this.esiEntities) {
+        if (!names.includes(e.name.toLowerCase())) continue;
+        (out[`${e.category}s`] ??= []).push({ id, name: e.name });
+      }
+      return json(out);
+    }
+    const detail = /^\/(corporations|alliances)\/(\d+)$/.exec(u.pathname);
+    if (detail) {
+      const e = entity(Number(detail[2]));
+      return e && `${e.category}s` === detail[1]
+        ? json({ name: e.name, ticker: e.ticker ?? 'TICK' })
+        : json({ error: 'not found' }, 404);
+    }
+    return null;
+  }
+
+  private discordBot(auth: string, method: string, u: URL, init: RequestInit): Response {
+    if (!this.botTokens.has(auth.slice(4))) return json({ message: '401: Unauthorized', code: 0 }, 401);
+    const path = u.pathname.replace(/^\/api\/v10/, '');
+    if (path === '/users/@me')
+      return json({ id: '7001', username: 'darkbeacon', global_name: 'Beacon', avatar: null });
+    if (path === '/users/@me/guilds') return json(this.botGuilds);
+    const roles = /^\/guilds\/(\d+)\/roles$/.exec(path);
+    if (roles) return json(this.botRoles.get(roles[1]!) ?? []);
+    const channels = /^\/guilds\/(\d+)\/channels$/.exec(path);
+    if (channels) return json(this.botChannels.get(channels[1]!) ?? []);
+    const post = /^\/channels\/(\d+)\/messages$/.exec(path);
+    if (post && method === 'POST') {
+      const known = [...this.botChannels.values()].some((list) => list.some((c) => c.id === post[1]));
+      if (!known) return json({ message: 'Unknown Channel', code: 10003 }, 404);
+      this.discordMessages.push({
+        to: post[1]!,
+        body: JSON.parse(String(init.body)) as Record<string, unknown>,
+      });
+      return json({ id: `m-${++this.counter}` });
+    }
+    return json({ message: '404: Not Found', code: 0 }, 404);
+  }
 
   private eveToken(auth: string, form: URLSearchParams): Response {
     if (auth !== basic(EVE_CLIENT)) return json({ error: 'invalid_client' }, 401);

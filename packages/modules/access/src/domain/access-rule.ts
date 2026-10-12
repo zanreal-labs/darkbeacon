@@ -87,6 +87,11 @@ export function parseSubject(input: {
   }
 }
 
+/** How a rule's subject is keyed in `AccessSubjectDirectory.describe` answers. */
+export function subjectKey(kind: AccessSubjectKind, id: string): string {
+  return `${kind}:${id}`;
+}
+
 export function toAccessRuleDto(rule: AccessRule): AccessRuleDto {
   return {
     id: rule.id,
