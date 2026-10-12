@@ -142,6 +142,8 @@ made while seeding the demo map or by cleanups count as nothing; a history rever
 | `waypoint_set`                       | `mode`: `destination` or `waypoint`                                                                                                                                                      |
 | `import_completed`                   | `source`: `api` or `file`; `status`: `done`, `failed`, `cancelled`; `systems`, `connections`, `signatures`, `access_rules`: buckets of what was written (never the Wanderer host or map) |
 | `jump_planned`                       | `hull`: `jump_freighter`, `black_ops`, `rorqual`, `carrier`, `command_carrier`, `dreadnought`, `lancer`, `force_auxiliary`, `supercarrier`, `titan`; `legs`: bucket (`0` = no route)     |
+| `passage_logged`                     | `source`: `tracked` or `manual`; `mode`: `cold`, `hot`, `custom`                                                                                                                         |
+| `roll_planned`                       | `result`: `ok`, `risky`, `impossible`                                                                                                                                                    |
 
 ### Web app events
 

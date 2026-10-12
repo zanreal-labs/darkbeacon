@@ -1,4 +1,13 @@
-import type { HullClassData, WormholeData, WormholeSystemFacts, WormholeTypeData } from './index.js';
+import type {
+  FitItemData,
+  HullClassData,
+  MassModifierData,
+  PropSizeData,
+  ShipData,
+  WormholeData,
+  WormholeSystemFacts,
+  WormholeTypeData,
+} from './index.js';
 
 /** SDE files the wormhole dataset is built from (besides `_sde.jsonl`). */
 export const WORMHOLE_SDE_FILES = {
@@ -12,6 +21,52 @@ export const WORMHOLE_SDE_FILES = {
 export const WORMHOLE_GROUP_ID = 988;
 /** The SDE inventory category of ships. */
 export const SHIP_CATEGORY_ID = 6;
+
+/** SDE inventory groups of the modules that change a ship's mass when it jumps. */
+export const MASS_MODULE_GROUPS = {
+  /** Afterburners and microwarpdrives. */
+  propulsion: 46,
+  /** Higgs Anchor rigs. */
+  rigAnchor: 1308,
+  /** Zero-Point Mass Entangler. */
+  massEntangler: 2008,
+} as const;
+
+/** The SDE inventory category of subsystems (strategic cruisers add their mass). */
+export const SUBSYSTEM_CATEGORY_ID = 32;
+
+/** Strategic cruisers take their slots from subsystems, so the hull lists no mid slots. */
+const STRATEGIC_CRUISER_GROUP_ID = 963;
+
+/** Dogma attributes of ships and mass modules, by id as `dogmaAttributes.jsonl` names them. */
+export const MASS_ATTRIBUTES = {
+  medSlots: 13, // medSlots
+  rigSlots: 1137, // rigSlots
+  rigSize: 1547, // rigSize: 1 small, 2 medium, 3 large, 4 capital
+  massAddition: 796, // massAddition: "adding mass to a ship via an afterburner or MWD"
+  massBonusPercentage: 1131, // massBonusPercentage, applied to `mass` as a post-percent modifier
+} as const;
+
+/** `canFitShipGroup01`..`20` and `canFitShipType1`..`12`: where a restricted module fits. */
+const CAN_FIT_GROUP_ATTRIBUTES = [
+  1298, 1299, 1300, 1301, 1872, 1879, 1880, 1881, 2065, 2396, 2476, 2477, 2478, 2479, 2480, 2481, 2482, 2483,
+  2484, 2485,
+];
+const CAN_FIT_TYPE_ATTRIBUTES = [1302, 1303, 1304, 1305, 1944, 2103, 2463, 2486, 2487, 2488, 2758, 5948];
+
+const RIG_SIZES: Record<number, PropSizeData> = { 1: 'small', 2: 'medium', 3: 'large', 4: 'capital' };
+
+/** Prop module size by the MN in its name: 1MN AB and 5MN MWD are small, and so on. */
+const PROP_SIZE_BY_MN: Record<string, PropSizeData> = {
+  '1': 'small',
+  '5': 'small',
+  '10': 'medium',
+  '50': 'medium',
+  '100': 'large',
+  '500': 'large',
+  '10000': 'capital',
+  '50000': 'capital',
+};
 
 /**
  * Dogma attributes of wormhole types, by id and name as `dogmaAttributes.jsonl` lists them
@@ -100,9 +155,9 @@ export interface StaticsRow {
 export interface WormholeInput {
   meta: { buildNumber: number; releaseDate?: string };
   groups: RawGroup[];
-  /** Wormhole and ship types; other types are ignored. */
+  /** Wormhole, ship and mass module types; other types are ignored. */
   types: RawType[];
-  /** Dogma of at least the wormhole types. */
+  /** Dogma of at least the wormhole, ship and mass module types. */
   typeDogma: RawTypeDogma[];
   secondarySuns: RawSecondarySun[];
   statics: StaticsRow[];
@@ -169,6 +224,9 @@ export function buildWormholes(input: WormholeInput): WormholeData {
     return { id: hull.id, minMass: range.min, maxMass: range.max };
   });
 
+  const { ships, massModifiers } = shipFacts(input, groups, dogma, classOfGroup);
+  const fitItems = fitItemFacts(input, groups, dogma);
+
   const typeNames = new Map(input.types.map((t) => [t._key, t.name.en ?? '']));
   const systems: Record<string, WormholeSystemFacts> = {};
   for (const row of input.statics) {
@@ -192,8 +250,120 @@ export function buildWormholes(input: WormholeInput): WormholeData {
     types,
     hullClasses,
     shipMasses,
+    ships,
+    massModifiers,
+    fitItems,
     systems: sortedSystems,
   };
+}
+
+type Dogma = Map<number, Map<number, number>>;
+
+/**
+ * Published modules with a `massAddition` or a `massBonusPercentage`, and subsystems with their
+ * own mass: what a pasted fit needs to weigh the ship. Sorted by name.
+ */
+function fitItemFacts(input: WormholeInput, groups: Map<number, RawGroup>, dogma: Dogma): FitItemData[] {
+  const items: FitItemData[] = [];
+  for (const type of input.types) {
+    if (!type.published || !type.name.en) continue;
+    const group = groups.get(type.groupID);
+    if (group?.categoryID === SUBSYSTEM_CATEGORY_ID) {
+      if (type.mass) items.push({ name: type.name.en, add: type.mass });
+      continue;
+    }
+    const attrs = dogma.get(type._key);
+    const add = attrs?.get(MASS_ATTRIBUTES.massAddition) ?? 0;
+    const percent = attrs?.get(MASS_ATTRIBUTES.massBonusPercentage) ?? 0;
+    if (!add && !percent) continue;
+    items.push({
+      name: type.name.en,
+      ...(add ? { add } : {}),
+      ...(percent ? { percent } : {}),
+      ...(type.groupID === MASS_MODULE_GROUPS.propulsion ? { prop: true as const } : {}),
+    });
+  }
+  return items.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+}
+
+/**
+ * Published ships (name, group, prop size, rig slots, whether the mass entangler fits) and the
+ * mass modules' dogma. Every published prop module of one size must add the same mass, and every
+ * Higgs Anchor the same percentage; a new SDE that breaks that fails the build instead of guessing.
+ */
+function shipFacts(
+  input: WormholeInput,
+  groups: Map<number, RawGroup>,
+  dogma: Dogma,
+  classOfGroup: Map<number, HullClassData['id']>,
+): { ships: ShipData[]; massModifiers: MassModifierData } {
+  const attr = (typeId: number, id: number) => dogma.get(typeId)?.get(id) ?? null;
+  const published = (groupId: number) =>
+    input.types.filter((t) => t.groupID === groupId && t.published).sort((a, b) => a._key - b._key);
+
+  const prop: Partial<Record<PropSizeData, number>> = {};
+  for (const module of published(MASS_MODULE_GROUPS.propulsion)) {
+    const added = attr(module._key, MASS_ATTRIBUTES.massAddition);
+    // Abyssal modules are rolled from a base module and list no mass of their own.
+    if (added === null) continue;
+    const mn = /(\d+)MN\b/.exec(module.name.en ?? '')?.[1];
+    const size = mn ? PROP_SIZE_BY_MN[mn] : undefined;
+    if (!size) throw new Error(`propulsion module ${module.name.en} has no known size`);
+    if (prop[size] !== undefined && prop[size] !== added)
+      throw new Error(`${size} propulsion modules add different masses (${prop[size]}, ${added})`);
+    prop[size] = added;
+  }
+  const one = (groupId: number, what: string) => {
+    const values = new Set(
+      published(groupId).map((t) => attr(t._key, MASS_ATTRIBUTES.massBonusPercentage) ?? 0),
+    );
+    if (values.size !== 1) throw new Error(`${what} change mass by ${[...values].join(', ') || 'nothing'}`);
+    return [...values][0]!;
+  };
+  for (const size of Object.values(RIG_SIZES))
+    if (prop[size] === undefined) throw new Error(`no ${size} propulsion module`);
+  const massModifiers: MassModifierData = {
+    prop: Object.fromEntries(Object.values(RIG_SIZES).map((size) => [size, prop[size]!])) as Record<
+      PropSizeData,
+      number
+    >,
+    higgsPercent: one(MASS_MODULE_GROUPS.rigAnchor, 'Higgs Anchors'),
+    entanglerPercent: one(MASS_MODULE_GROUPS.massEntangler, 'mass entanglers'),
+  };
+
+  const entanglerGroups = new Set<number>();
+  const entanglerTypes = new Set<number>();
+  for (const module of published(MASS_MODULE_GROUPS.massEntangler)) {
+    for (const id of CAN_FIT_GROUP_ATTRIBUTES) {
+      const value = attr(module._key, id);
+      if (value) entanglerGroups.add(value);
+    }
+    for (const id of CAN_FIT_TYPE_ATTRIBUTES) {
+      const value = attr(module._key, id);
+      if (value) entanglerTypes.add(value);
+    }
+  }
+
+  const ships: ShipData[] = [];
+  for (const type of input.types) {
+    const group = groups.get(type.groupID);
+    if (group?.categoryID !== SHIP_CATEGORY_ID || !type.published || !type.mass) continue;
+    const medSlots = attr(type._key, MASS_ATTRIBUTES.medSlots) ?? 0;
+    const rigSize = attr(type._key, MASS_ATTRIBUTES.rigSize);
+    const fitsProp = medSlots > 0 || type.groupID === STRATEGIC_CRUISER_GROUP_ID;
+    ships.push({
+      id: type._key,
+      name: type.name.en ?? String(type._key),
+      group: group.name.en ?? '',
+      hull: classOfGroup.get(type.groupID) ?? null,
+      // Rookie ships, corvettes and shuttles list no rig size: they fit the small modules.
+      propSize: fitsProp ? (RIG_SIZES[rigSize ?? 1] ?? 'small') : null,
+      rigs: (attr(type._key, MASS_ATTRIBUTES.rigSlots) ?? 0) > 0,
+      entangler: entanglerGroups.has(type.groupID) || entanglerTypes.has(type._key),
+    });
+  }
+  ships.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : a.id - b.id));
+  return { ships, massModifiers };
 }
 
 /**
@@ -264,6 +434,9 @@ export function formatWormholes(data: WormholeData): string {
     `  "types": [\n${lines(data.types ?? [])}\n  ],`,
     `  "hullClasses": [\n${lines(data.hullClasses ?? [])}\n  ],`,
     `  "shipMasses": {\n${entries(data.shipMasses ?? {})}\n  },`,
+    `  "ships": [\n${lines(data.ships ?? [])}\n  ],`,
+    `  "massModifiers": ${JSON.stringify(data.massModifiers ?? null)},`,
+    `  "fitItems": [\n${lines(data.fitItems ?? [])}\n  ],`,
     `  "systems": {\n${entries(data.systems)}\n  }`,
     '}',
     '',

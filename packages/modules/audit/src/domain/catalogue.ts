@@ -109,8 +109,30 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
     activity: (d) => ({
       shipTypeId: change(null, d.shipTypeId ?? null),
       ...(typeof d.mass === 'number' ? { mass: change(null, d.mass) } : {}),
+      ...(typeof d.massMode === 'string' ? { massMode: change(null, d.massMode) } : {}),
+      ...(typeof d.note === 'string' && d.note ? { note: change(null, d.note) } : {}),
     }),
     subjectCharacter: subject,
+  },
+  'connection.passage_updated': {
+    op: 'update',
+    entity: byId('passage', 'passageId'),
+    refs: (d, b) => [
+      ...ref('connection', either(d, b, 'connectionId')),
+      ...characterRefs(d),
+      ...ref('system', either(d, b, 'from')),
+      ...ref('system', either(d, b, 'to')),
+    ],
+    ignore: ['passageId', 'connectionId', 'characterId', 'from', 'to', 'source', 'shipTypeId'],
+  },
+  'connection.passage_removed': {
+    op: 'delete',
+    entity: byId('passage', 'passageId'),
+    refs: (d, b) => [
+      ...ref('connection', either(d, b, 'connectionId')),
+      ...ref('system', b?.from),
+      ...ref('system', b?.to),
+    ],
   },
   'signature.added': { op: 'create', entity: byId('signature'), refs: signatureRefs, ignore: STAMPS },
   'signature.updated': { op: 'update', entity: byId('signature'), refs: signatureRefs, ignore: STAMPS },

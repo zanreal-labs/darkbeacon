@@ -211,12 +211,21 @@
   white-space: nowrap;
 }
 
+/* A Label from the map's list (WH1, WH2...): inverted, so it reads first at a glance. */
 .systemLabel {
-  border-color: color-mix(in oklab, var(--dbk-node-text) 45%, var(--dbk-node-border));
-  background: color-mix(in oklab, var(--dbk-node-text) 9%, var(--dbk-node-bg));
+  border-color: var(--dbk-node-text);
+  background: var(--dbk-node-text);
+  color: var(--dbk-node-bg);
   font-weight: 800;
   pointer-events: auto;
   cursor: help;
+}
+
+/* The free-text custom label stays a plain neutral chip. */
+.systemLabel[data-custom] {
+  border-color: color-mix(in oklab, var(--dbk-node-text) 45%, var(--dbk-node-border));
+  background: var(--dbk-node-bg);
+  color: var(--dbk-node-text);
 }
 
 .label {

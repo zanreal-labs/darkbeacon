@@ -7,6 +7,9 @@ import {
   FIRST_PARTY_PLUGIN_IDS,
   FirstPartyPluginId,
   JumpHull,
+  MassMode,
+  PassageSource,
+  RollResult,
   RouteMode,
   TELEMETRY_WEB_EVENTS,
   TelemetryThemeId,
@@ -113,6 +116,10 @@ export const TELEMETRY_SERVER_EVENTS = {
   }),
   /** A jump route was planned: the hull class and how many legs it has (a bucket; 0 = no route). */
   jump_planned: z.strictObject({ hull: JumpHull, legs: CountBucket }),
+  /** A passage recorded from a tracked jump or logged by hand, and how its mass counted. */
+  passage_logged: z.strictObject({ source: PassageSource, mode: MassMode }),
+  /** A rolling plan was asked for, and whether it closes the hole safely. */
+  roll_planned: z.strictObject({ result: RollResult }),
 } as const;
 
 export type TelemetryServerEventName = keyof typeof TELEMETRY_SERVER_EVENTS;

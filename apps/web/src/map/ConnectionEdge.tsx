@@ -16,12 +16,29 @@ import { floatingEnds, type Point, type Rect } from './geometry';
 import { lifetimeText } from './sidebar/ConnectionsSection';
 import styles from './ConnectionEdge.module.css';
 
+/** What went through a connection since its mass was last marked, for the hover card. */
+export interface ConnectionTraffic {
+  passages: number;
+  /** kg */
+  passed: number;
+}
+
 export interface ConnectionEdgeData extends Record<string, unknown> {
   mapId: string;
   connection: ConnectionDto;
   /** Names of the two ends, for the tooltip. */
   sourceName?: string;
   targetName?: string;
+  traffic?: ConnectionTraffic;
+}
+
+/** "3 jumps counted, 445 200 t". */
+export function trafficLine(traffic: ConnectionTraffic | undefined): string | null {
+  if (!traffic || traffic.passages === 0) return null;
+  const tonnes = Math.round(traffic.passed / 1000)
+    .toLocaleString('en-US')
+    .replace(/,/g, ' ');
+  return `${traffic.passages} jump${traffic.passages === 1 ? '' : 's'} counted, ${tonnes} t`;
 }
 
 export type ConnectionEdgeType = Edge<ConnectionEdgeData, 'connection'>;
@@ -81,6 +98,7 @@ function EdgeDetails({ data, visual, at }: { data: ConnectionEdgeData; visual: E
     ...(c.type === 'wormhole' && c.lifetime ? [`Lifetime ${lifetimeText(c)}`] : []),
     ...(c.locked ? ['Locked: a map manager can change it'] : []),
     ...(c.note ? [`Note: ${c.note.length > 120 ? `${c.note.slice(0, 119)}…` : c.note}`] : []),
+    ...(c.type === 'wormhole' && trafficLine(data.traffic) ? [trafficLine(data.traffic)!] : []),
   ];
   return (
     <div

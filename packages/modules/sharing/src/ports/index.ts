@@ -8,6 +8,7 @@ import type {
   ShareScope,
 } from '@darkbeacon/shared';
 import type { ChainCommand } from '../domain/commands.js';
+import type { ChainPassage } from '../domain/passages.js';
 import type { Share } from '../domain/shares.js';
 import type { ViewEntity, ViewKind } from '../domain/view.js';
 
@@ -48,6 +49,11 @@ export interface ChainSource {
    * the change reports (a scanner paste's counts), else nothing.
    */
   write(command: ChainCommand, context: ChainWriteContext): Promise<unknown>;
+  /**
+   * Passages through the hole between a pair (`<low>-<high>`), newest first: none unless `scopes`
+   * share connection status; pilots only with characters. Passages stay with the source.
+   */
+  passages(key: string, scopes: readonly ShareScope[] | 'all'): Promise<ChainPassage[]>;
 }
 
 /** The map behind an origin, by name: null when it is gone (or unreachable). */

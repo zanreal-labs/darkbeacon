@@ -9,7 +9,7 @@ import {
   type SignatureDto,
   type SystemLabelDto,
 } from '@darkbeacon/shared';
-import type { Connection, MapSystem, Signature } from '../domain/map.js';
+import type { Connection, MapSystem, Passage, Signature } from '../domain/map.js';
 import {
   changes,
   compactConnection,
@@ -21,6 +21,7 @@ import {
 } from '../domain/rules.js';
 import { MappingUseCases, type EventBatch } from './base.js';
 import { renumberBookmarks } from './bookmark-numbers.js';
+import { passageEvent } from './intel.js';
 import { removeConnection } from './systems.js';
 
 /** System attributes an import may set. */
@@ -337,7 +338,8 @@ export class ChainImportUseCases extends MappingUseCases {
     return this.write(who, mapId, async (events) => {
       const connection = await this.ports.connections.findBetween(mapId, passage.source, passage.target);
       if (!connection) return 'skipped';
-      const record = {
+      // A jump Wanderer saw a tracked pilot make: counted cold, like a tracked jump here.
+      const record: Passage = {
         id: newId(),
         connectionId: connection.id,
         characterId: passage.characterId,
@@ -346,18 +348,16 @@ export class ChainImportUseCases extends MappingUseCases {
         from: passage.source,
         to: passage.target,
         occurredAt: Math.min(passage.occurredAt, this.ports.clock.now()),
+        source: 'tracked',
+        massMode: 'cold',
+        higgs: false,
+        entangler: false,
+        note: null,
+        createdBy: null,
       };
       // The id marks it as imported and keeps it unique (the table's event id).
       if (!(await this.ports.passages.insert(mapId, record, `import:${externalId}`))) return 'unchanged';
-      events.add('connection.passage', {
-        connectionId: connection.id,
-        characterId: record.characterId,
-        shipTypeId: record.shipTypeId,
-        mass: record.mass,
-        from: record.from,
-        to: record.to,
-        passageId: record.id,
-      });
+      events.add('connection.passage', passageEvent(record));
       return 'created';
     });
   }

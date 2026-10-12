@@ -6,6 +6,7 @@ import {
   ConnectionUseCases,
   MapUseCases,
   PassageRecorder,
+  PassageUseCases,
   SignatureUseCases,
   SystemUseCases,
   type ChainMap,
@@ -152,9 +153,19 @@ describeEachDialect('connections panel', (t) => {
     expect(row.mass.passages).toBe(10);
     expect(row.totalPassages).toBe(12);
 
-    const list = await intel.passages(bob, map.id, c.id);
+    const list = await new PassageUseCases(env.ports).list(bob, map.id, c.id);
     expect(list).toHaveLength(12);
-    expect(list[0]).toMatchObject({ connectionId: c.id, characterId: 9001, shipTypeId: RAVEN, mass: raven });
+    expect(list[0]).toMatchObject({
+      connectionId: c.id,
+      characterId: 9001,
+      shipTypeId: RAVEN,
+      shipName: 'Raven',
+      mass: raven,
+      source: 'tracked',
+      massMode: 'cold',
+      counted: true,
+    });
+    expect(list.at(-1)).toMatchObject({ counted: false });
 
     // The same jump event is recorded once.
     expect(
