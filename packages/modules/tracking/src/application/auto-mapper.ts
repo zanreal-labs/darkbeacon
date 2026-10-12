@@ -97,7 +97,8 @@ export class AutoMapper {
   private async locate(mapId: string, characterId: number, solarSystemId: number): Promise<void> {
     const { tracking, access, target, universe } = this.deps;
     if (!target.placeSystem) return;
-    const entry = (await tracking.listTrackedOnMap(mapId)).find((t) => t.characterId === characterId);
+    // Every character is located when tracking starts: one row each, not the map's whole list.
+    const entry = await tracking.findTracked(mapId, characterId);
     if (!entry) return;
     const rules = await this.rulesOf(mapId);
     if (!rules) return;

@@ -64,8 +64,8 @@ export class MappingAutoMapTarget implements AutoMapTarget {
 
   async placeSystem(input: { mapId: string; solarSystemId: number; characterId: number; accountId: string }) {
     const actor: Actor = { kind: 'account', id: input.accountId, instanceRole: 'user' };
-    const all = await this.ports.systems.list(input.mapId);
-    if (all.find((s) => s.solarSystemId === input.solarSystemId)?.visible) return;
+    // Usually the system is on the map already: one row, not the whole chain.
+    if ((await this.ports.systems.find(input.mapId, input.solarSystemId))?.visible) return;
     await this.audit.run(
       { channel: { kind: 'system', id: 'auto-mapping' }, characterId: input.characterId },
       () =>
