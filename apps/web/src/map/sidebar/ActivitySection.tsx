@@ -27,7 +27,9 @@ function sum(hours: readonly ActivityHourDto[], pick: (h: ActivityHourDto) => nu
   return known.length === 0 ? null : known.reduce((a, b) => a + b, 0);
 }
 
-const shipAndPod = (h: ActivityHourDto) => (h.shipKills === null ? null : h.shipKills + (h.podKills ?? 0));
+/** Ships and pods destroyed in an hour: ESI's figure, else zKillboard's killmails (wormholes). */
+const shipAndPod = (h: ActivityHourDto) =>
+  h.shipKills === null ? h.killmails : Math.max(h.shipKills + (h.podKills ?? 0), h.killmails ?? 0);
 
 /** 24 bars, one per hour, oldest left; an hour ESI said nothing about is a gap. */
 export function Sparkline({

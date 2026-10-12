@@ -15,6 +15,7 @@ import {
 } from '@darkbeacon/shared';
 import { cssVar } from '@darkbeacon/theme-sdk';
 import { Lock, Users } from 'lucide-react';
+import { staticFacts, useWormholeTypes } from '../lib/wormholes';
 import { PluginSlot } from '../plugins/PluginSlot';
 import { useToast } from '../ui';
 import {
@@ -127,13 +128,19 @@ function PillContent({ info }: { info: UniverseSystemDto | undefined }) {
 /** Statics as plain text: the hole type, then where it leads in that place's colour ("D845 HS"). */
 function StaticsText({ statics }: { statics: readonly string[] }) {
   if (statics.length === 0) return null;
+  return <StaticsList statics={statics} />;
+}
+
+/** The statics with their facts (mass, per-jump mass, lifetime) on hover. */
+function StaticsList({ statics }: { statics: readonly string[] }) {
+  const types = useWormholeTypes();
   return (
     <ul className={styles.statics} aria-label="Statics">
       {statics.map((type) => {
         const to = wormholeDestination(type);
         const where = to ? WORMHOLE_DESTINATION_LABEL[to] : null;
         return (
-          <li key={type} title={where ? `Static ${type} to ${where}` : `Static ${type}`}>
+          <li key={type} title={staticFacts(type, types.get(type))}>
             <span className={styles.code}>{type}</span>
             {where && (
               <span className={styles.to} style={{ color: cssVar(destinationToken(to)) }}>
