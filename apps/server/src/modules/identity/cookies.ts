@@ -22,6 +22,8 @@ export interface CookieOptions {
   maxAgeSeconds?: number;
   path?: string;
   secure: boolean;
+  /** Default true; false only for values page scripts must read (the theme choice). */
+  httpOnly?: boolean;
 }
 
 export function readCookie(request: RequestLike, name: string): string | null {
@@ -46,13 +48,16 @@ export function readSessionCookie(request: RequestLike): string | null {
   return readCookie(request, SESSION_COOKIE) ?? readCookie(request, LEGACY_SESSION_COOKIE);
 }
 
-/** httpOnly, SameSite=Lax: sent on top-level navigations (OAuth callbacks), never on cross-site POSTs. */
+/**
+ * httpOnly (unless asked otherwise), SameSite=Lax: sent on top-level navigations (OAuth
+ * callbacks), never on cross-site POSTs.
+ */
 export function serializeCookie(name: string, value: string, options: CookieOptions): string {
   const parts = [
     `${name}=${encodeURIComponent(value)}`,
     `Path=${options.path ?? '/'}`,
     ...(options.maxAgeSeconds !== undefined ? [`Max-Age=${options.maxAgeSeconds}`] : []),
-    'HttpOnly',
+    ...(options.httpOnly === false ? [] : ['HttpOnly']),
     'SameSite=Lax',
   ];
   if (options.secure) parts.push('Secure');

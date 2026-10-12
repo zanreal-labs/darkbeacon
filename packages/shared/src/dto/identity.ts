@@ -61,6 +61,8 @@ export const AuthProvidersDto = z.object({
   eve: z.boolean(),
   /** Demo mode: unauthenticated visits are signed in as the demo account (POST /api/auth/demo). */
   demo: z.boolean(),
+  /** The Discord OAuth redirect this instance uses (from PUBLIC_URL), for admins setting it up. */
+  discordRedirectUrl: z.string(),
 });
 export type AuthProvidersDto = z.infer<typeof AuthProvidersDto>;
 

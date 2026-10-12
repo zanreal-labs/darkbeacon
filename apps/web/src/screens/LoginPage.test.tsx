@@ -8,18 +8,16 @@ import { LoginActions, LoginScreen } from './LoginPage';
 
 setupMockServer();
 
-function renderLogin(providers: AuthProvidersDto, { next = '/', authError = null as string | null } = {}) {
+const redirect = { discordRedirectUrl: 'https://darkbeacon.test/api/auth/discord/callback' };
+
+function renderLogin(
+  providers: Omit<AuthProvidersDto, 'discordRedirectUrl'>,
+  { next = '/', authError = null as string | null } = {},
+) {
   return renderWithProviders(
     <TooltipProvider>
       <LoginScreen
-        actions={
-          <LoginActions
-            providers={providers}
-            next={next}
-            authError={authError}
-            redirectUrl="https://darkbeacon.test/api/auth/discord/callback"
-          />
-        }
+        actions={<LoginActions providers={{ ...providers, ...redirect }} next={next} authError={authError} />}
       />
     </TooltipProvider>,
   );

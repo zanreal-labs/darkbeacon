@@ -92,6 +92,21 @@ describeEachDialect('web proxy', (t) => {
     expect(web.seen.some((r) => r.url.startsWith('/api'))).toBe(false);
   });
 
+  it('does not pass on a host the client names in x-forwarded-host', async () => {
+    await fetch(`http://${base}/admin`, {
+      headers: { 'x-forwarded-host': 'evil.example', 'x-forwarded-proto': 'https' },
+    });
+    await fetch(`http://${base}/account`, { headers: { 'x-forwarded-proto': 'javascript' } });
+    const admin = web.seen.find((r) => r.url === '/admin')!;
+    // The scheme a TLS-terminating proxy reports is kept; the host is the one the request went to.
+    expect(admin.headers).toMatchObject({
+      host: base,
+      'x-forwarded-host': base,
+      'x-forwarded-proto': 'https',
+    });
+    expect(web.seen.find((r) => r.url === '/account')!.headers['x-forwarded-proto']).toBe('http');
+  });
+
   it('passes request bodies through untouched', async () => {
     const body = JSON.stringify({ hello: 'world' });
     await fetch(`http://${base}/m/home`, {

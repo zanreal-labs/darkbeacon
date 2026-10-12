@@ -6,37 +6,47 @@ import { AccountMenu } from '../../shell/AccountMenu';
 import { AccountPlaceholder, ADMIN_NAV, AppShell, RailLink, TabLink } from '../../shell/AppShell';
 import { DemoBadge } from '../../shell/DemoBadge';
 import { SessionSync, SignInRedirect } from '../../shell/Session';
+import { SlotBoundary } from '../../shell/SlotBoundary';
 
 /**
  * Every signed-in screen. The frame (rail, top bar, tab bar) is static and prerendered; the
- * parts that need the account stream into it, each behind its own Suspense boundary.
+ * parts that need the account stream into it, each behind its own Suspense and error boundary.
  */
 export default function SignedInLayout({ children }: { children: ReactNode }) {
+  // Each part has its own error boundary too: an API hiccup leaves a placeholder, not an error page.
   return (
     <AppShell
       account={
-        <Suspense fallback={<AccountPlaceholder />}>
-          <Account />
-        </Suspense>
+        <SlotBoundary fallback={<AccountPlaceholder />}>
+          <Suspense fallback={<AccountPlaceholder />}>
+            <Account />
+          </Suspense>
+        </SlotBoundary>
       }
       adminRail={
-        <Suspense fallback={null}>
-          <AdminOnly>
-            <RailLink item={ADMIN_NAV} />
-          </AdminOnly>
-        </Suspense>
+        <SlotBoundary fallback={null}>
+          <Suspense fallback={null}>
+            <AdminOnly>
+              <RailLink item={ADMIN_NAV} />
+            </AdminOnly>
+          </Suspense>
+        </SlotBoundary>
       }
       adminTab={
-        <Suspense fallback={null}>
-          <AdminOnly>
-            <TabLink item={ADMIN_NAV} />
-          </AdminOnly>
-        </Suspense>
+        <SlotBoundary fallback={null}>
+          <Suspense fallback={null}>
+            <AdminOnly>
+              <TabLink item={ADMIN_NAV} />
+            </AdminOnly>
+          </Suspense>
+        </SlotBoundary>
       }
       demoBadge={
-        <Suspense fallback={null}>
-          <Demo />
-        </Suspense>
+        <SlotBoundary fallback={null}>
+          <Suspense fallback={null}>
+            <Demo />
+          </Suspense>
+        </SlotBoundary>
       }
     >
       {children}

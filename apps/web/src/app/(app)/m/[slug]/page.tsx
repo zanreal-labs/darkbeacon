@@ -1,9 +1,16 @@
 import { Suspense } from 'react';
 import { HydrationBoundary } from '@tanstack/react-query';
-import { buildPath, routes, type MapSnapshot } from '@darkbeacon/shared';
+import { buildPath, routes, type MapSnapshot, type UniverseSystemDto } from '@darkbeacon/shared';
 import { mapKey, mapsKey, meKey } from '../../../../lib/session-keys';
 import { universeKey } from '../../../../lib/universe-keys';
-import { getMapBySlug, getMaps, getMe, prefilled, serverFind, serverGet } from '../../../../server/api';
+import {
+  getMapBySlug,
+  getMaps,
+  getMe,
+  getUniverseSystems,
+  prefilled,
+  serverGet,
+} from '../../../../server/api';
 import { MapLoading, MapPage, MapUnavailable } from '../../../../screens/MapPage';
 import { SignInRedirect } from '../../../../shell/Session';
 
@@ -21,28 +28,30 @@ export default function MapRoute({ params }: PageProps<'/m/[slug]'>) {
 
 async function LiveMap({ params }: Pick<PageProps<'/m/[slug]'>, 'params'>) {
   const { slug } = await params;
-  const me = await getMe();
+  // Read together: the account, the map and the list (signed out, the list is never used).
+  const maps = getMaps();
+  maps.catch(() => {});
+  const [me, map] = await Promise.all([getMe(), getMapBySlug(slug)]);
   if (!me) return <SignInRedirect />;
-  const [map, maps] = await Promise.all([getMapBySlug(slug), getMaps()]);
   if (!map) return <MapUnavailable slug={slug} error={null} />;
-  const snapshot = await serverGet(
-    routes.realtime.snapshot,
-    buildPath(routes.realtime.snapshot.path, { stream: `map:${map.id}` }),
-  );
-  // Names and classes of the systems on the map, so the first paint is complete.
-  const ids = ((snapshot.data as MapSnapshot).systems ?? []).map((s) => s.solarSystemId);
-  const universe = await Promise.all(
-    ids.map((id) =>
-      serverFind(routes.universe.getSystem, buildPath(routes.universe.getSystem.path, { solarSystemId: id })),
+  const [list, snapshot] = await Promise.all([
+    maps,
+    serverGet(
+      routes.realtime.snapshot,
+      buildPath(routes.realtime.snapshot.path, { stream: `map:${map.id}` }),
     ),
-  );
+  ]);
+  // Names and classes of the systems on the map, so the first paint is complete (static data,
+  // cached by this server after the first time it is asked).
+  const ids = ((snapshot.data as MapSnapshot).systems ?? []).map((s) => s.solarSystemId);
+  const universe = ids.length > 0 ? await getUniverseSystems(ids) : new Map<number, UniverseSystemDto>();
   return (
     <HydrationBoundary
       state={prefilled([
         [meKey, me],
-        [mapsKey, maps],
+        [mapsKey, list],
         [mapKey(slug), map],
-        ...ids.map((id, i) => [universeKey(id), universe[i] ?? undefined] as const),
+        ...ids.map((id) => [universeKey(id), universe.get(id)] as const),
       ])}
     >
       <MapPage slug={slug} snapshot={snapshot} />

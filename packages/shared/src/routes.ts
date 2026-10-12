@@ -138,6 +138,14 @@ export const routes = {
       auth: 'account',
       response: dto.UniverseSystemDto,
     }),
+    /** Several systems at once (unknown ids are left out), e.g. every system on a map. */
+    lookup: route({
+      method: 'GET',
+      path: '/api/universe/lookup',
+      auth: 'account',
+      query: dto.UniverseLookupQuery,
+      response: z.array(dto.UniverseSystemDto),
+    }),
   },
 
   maps: {

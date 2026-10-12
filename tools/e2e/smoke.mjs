@@ -49,7 +49,11 @@ async function run() {
   });
 
   await check('first HTML for / is the prerendered shell, signed in, with the rest streamed', async () => {
-    const response = await fetch(`${BASE}/`, { redirect: 'manual' });
+    // As a browser opening the page: only page visits get a demo session.
+    const response = await fetch(`${BASE}/`, {
+      redirect: 'manual',
+      headers: { 'sec-fetch-dest': 'document' },
+    });
     assert.equal(response.status, 200, 'no redirect to the sign-in page');
     assert.equal(response.headers.get('x-nextjs-prerender'), '1', 'served from the static shell');
     assert.equal(response.headers.get('x-nextjs-postponed'), '1', 'with dynamic parts resumed');
@@ -67,6 +71,40 @@ async function run() {
     assert.ok(html.indexOf('aria-label="Loading maps"') < html.indexOf('Demo chain'), 'fallback first');
     assert.match(html, /<style id="dbk-themes">/);
     assert.match(html, /prefers-color-scheme: dark/);
+  });
+
+  await check('crawlers, scanners and HEAD requests get no demo session', async () => {
+    const asks = [
+      ['GET', '/robots.txt'],
+      ['GET', '/wp-login.php'],
+      ['GET', '/apple-touch-icon.png'],
+      ['GET', '/.well-known/security.txt'],
+      ['HEAD', '/'],
+      ['GET', '/m/demo-chain'], // no Sec-Fetch-Dest: a link preview, not a browser
+    ];
+    for (const [method, path] of asks) {
+      const response = await fetch(`${BASE}${path}`, { method, redirect: 'manual' });
+      await response.body?.cancel();
+      const cookies = response.headers.getSetCookie().join('\n');
+      assert.doesNotMatch(cookies, /dbk_session=/, `${method} ${path} -> ${response.status}`);
+      if (path !== '/' && path !== '/m/demo-chain') assert.equal(response.status, 404, `${method} ${path}`);
+    }
+  });
+
+  await check('sign-in redirects never leave the site', async () => {
+    const asks = [
+      ['/login?reset=1&next=/%5Cevil.example/phish', {}],
+      ['/login?reset=1&next=/%09/evil.example', {}],
+      ['/login?next=/%5Cevil.example', { cookie: 'dbk_session=x' }],
+      ['/admin', { 'x-forwarded-host': 'evil.example', 'x-forwarded-proto': 'https' }],
+    ];
+    for (const [path, headers] of asks) {
+      const response = await fetch(`${BASE}${path}`, { redirect: 'manual', headers });
+      await response.body?.cancel();
+      assert.equal(response.status, 307, path);
+      const location = response.headers.get('location');
+      assert.ok(location.startsWith('/') && !location.startsWith('//'), `${path} -> ${location}`);
+    }
   });
 
   const browser = await chromium.launch();
@@ -103,6 +141,29 @@ async function run() {
       await page.goto(`${BASE}/login`);
       assert.equal(await page.evaluate(() => globalThis.__themeAtLoad), 'default');
       await context.close();
+    });
+
+    await check("a new browser starts with the account's theme, before any script", async () => {
+      // The (shared) demo account picks dark; a browser that never saw it opens the app.
+      const admin = await browser.newContext();
+      assert.equal((await admin.request.post(`${BASE}/api/auth/demo`)).status(), 200);
+      const pick = (themeId) => admin.request.put(`${BASE}/api/accounts/me/theme`, { data: { themeId } });
+      assert.equal((await pick('dark')).status(), 200);
+      try {
+        const context = await browser.newContext({ colorScheme: 'light' });
+        const page = await context.newPage();
+        await page.addInitScript(() => {
+          globalThis.document.addEventListener('DOMContentLoaded', () => {
+            globalThis.__themeAtLoad = globalThis.document.documentElement.dataset.theme ?? 'none';
+          });
+        });
+        await page.goto(`${BASE}/`);
+        assert.equal(await page.evaluate(() => globalThis.__themeAtLoad), 'dark');
+        await context.close();
+      } finally {
+        await pick(null);
+        await admin.close();
+      }
     });
 
     const context = await browser.newContext();
@@ -145,7 +206,7 @@ async function run() {
       // Another browser (its own demo session) renames the home system over REST.
       const other = await browser.newContext();
       const api = other.request;
-      await api.get(`${BASE}/`);
+      await api.post(`${BASE}/api/auth/demo`);
       const maps = await (await api.get(`${BASE}/api/maps`)).json();
       const map = maps.find((m) => m.slug === MAP);
       assert.ok(map, 'the demo map');
@@ -158,6 +219,46 @@ async function run() {
       await api.patch(`${BASE}/api/maps/${map.id}/systems/${HOME}`, { data: { customName: null } });
       await other.close();
     });
+    await check('plugin widgets fit in the dock, open or closed', async () => {
+      // Install and switch on the sample widget (the demo pilot owns the instance).
+      const api = context.request;
+      const installed = await api.post(`${BASE}/api/admin/plugins`, {
+        data: { source: 'catalog:sample-widget' },
+      });
+      assert.ok([200, 201, 409].includes(installed.status()), await installed.text());
+      const enabled = await api.put(`${BASE}/api/admin/plugins/sample-widget/enabled`, {
+        data: { enabled: true },
+      });
+      assert.equal(enabled.status(), 200, await enabled.text());
+      try {
+        for (const width of [1440, 1024, 800]) {
+          await page.setViewportSize({ width, height: 800 });
+          await page.goto(`${BASE}/m/${MAP}`);
+          await page.locator('.react-flow__node').first().waitFor({ timeout: 15_000 });
+          const tablist = page.getByRole('tablist', { name: 'Widgets' });
+          const pluginTab = tablist.getByRole('tab', { name: /Added since start|Sample/ });
+          await pluginTab.waitFor({ timeout: 15_000 });
+          for (const state of ['closed', 'open']) {
+            const strip = await tablist.boundingBox();
+            assert.ok(strip.x >= 0 && strip.x + strip.width <= width, `${width} ${state}: strip in view`);
+            const gear = await page.getByRole('link', { name: 'Map settings' }).boundingBox();
+            if (gear) assert.ok(gear.x + gear.width <= strip.x, `${width} ${state}: gear clear of the tabs`);
+            // Clicking the plugin tab opens the dock on it, clicking it again closes the dock.
+            await pluginTab.click();
+            const panel = page.getByRole('tabpanel');
+            await panel.waitFor({ state: state === 'closed' ? 'visible' : 'hidden' });
+            const pageWidth = await page.evaluate(() => globalThis.document.documentElement.scrollWidth);
+            assert.ok(pageWidth <= width, `${width} ${state}: no sideways page scroll`);
+            const search = await page.getByRole('combobox', { name: 'Search systems to add' }).boundingBox();
+            if (search) assert.ok(search.x >= 0, `${width} ${state}: the search box stays put`);
+          }
+        }
+      } finally {
+        await page.setViewportSize({ width: 1280, height: 720 });
+        await api.delete(`${BASE}/api/admin/plugins/sample-widget`);
+      }
+    });
+
     await check('no script errors (hydration included) on the way', async () => {
       await page.goto(`${BASE}/admin`);
       await page.getByRole('heading', { name: 'Admin', exact: true }).waitFor();

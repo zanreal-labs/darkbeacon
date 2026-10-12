@@ -28,3 +28,12 @@ export const UniverseSearchQuery = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 export type UniverseSearchQuery = z.infer<typeof UniverseSearchQuery>;
+
+/** GET /api/universe/lookup?ids=30000142,31000005: up to 1000 systems in one request. */
+export const UniverseLookupQuery = z.object({
+  ids: z
+    .string()
+    .transform((ids) => [...new Set(ids.split(',').filter(Boolean).map(Number))])
+    .pipe(z.array(EveId).min(1).max(1000)),
+});
+export type UniverseLookupQuery = z.infer<typeof UniverseLookupQuery>;

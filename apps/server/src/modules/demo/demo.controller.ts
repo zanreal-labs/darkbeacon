@@ -3,6 +3,7 @@ import { AccountService, SESSION_TTL_MS } from '@darkbeacon/identity';
 import { nestPath, routes, type MeDto } from '@darkbeacon/shared';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { AppConfig } from '../../config/config.js';
+import { SignInCookies } from '../../platform/sign-in-cookies.js';
 import { APP_CONFIG } from '../../platform/tokens.js';
 import { clearCookie, DEMO_OPT_OUT_COOKIE, serializeCookie, SESSION_COOKIE } from '../identity/cookies.js';
 import { DemoService } from './demo.service.js';
@@ -13,6 +14,7 @@ export class DemoController {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(DemoService) private readonly demo: DemoService,
     @Inject(AccountService) private readonly accounts: AccountService,
+    @Inject(SignInCookies) private readonly signInCookies: SignInCookies,
   ) {}
 
   /**
@@ -30,6 +32,7 @@ export class DemoController {
     reply.header('set-cookie', [
       serializeCookie(SESSION_COOKIE, signedIn.token, { maxAgeSeconds: SESSION_TTL_MS / 1000, secure }),
       clearCookie(DEMO_OPT_OUT_COOKIE, { secure }),
+      ...(await this.signInCookies.for(signedIn.account.id, request, secure)),
     ]);
     return this.accounts.me(await this.accounts.actorFor(signedIn.account));
   }

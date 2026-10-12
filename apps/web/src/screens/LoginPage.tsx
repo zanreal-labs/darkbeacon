@@ -65,19 +65,17 @@ export function LoginActionsSkeleton() {
 
 /**
  * The ways in this instance offers. `next` is where to go after signing in (a same-site path),
- * `authError` an OAuth failure (`?auth_error=`), `redirectUrl` the Discord callback to register.
+ * `authError` an OAuth failure (`?auth_error=`).
  * In demo mode a visitor who signed out can step back into the demo.
  */
 export function LoginActions({
   providers,
   next,
   authError,
-  redirectUrl,
 }: {
   providers: AuthProvidersDto;
   next: string;
   authError: string | null;
-  redirectUrl: string;
 }) {
   const router = useRouter();
   const enterDemo = useEnterDemo();
@@ -105,7 +103,7 @@ export function LoginActions({
           <span className={styles.setup}>
             An admin of this instance needs to create a Discord application, set{' '}
             <code>DISCORD_CLIENT_ID</code> and <code>DISCORD_CLIENT_SECRET</code>, add the redirect{' '}
-            <code className={styles.url}>{redirectUrl}</code> and restart the server.
+            <code className={styles.url}>{providers.discordRedirectUrl}</code> and restart the server.
           </span>
         </Callout>
       )}

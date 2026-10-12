@@ -111,6 +111,29 @@ describeEachDialect('demo mode over HTTP', (t) => {
     expect(back.cookies.some((c) => c.startsWith('dbk_demo_out=;') && c.includes('Max-Age=0'))).toBe(true);
   });
 
+  it("starts a new browser with the account's theme, so it paints before any script asks", async () => {
+    await start({ DEMO_MODE: 'true' });
+    const theme = (cookies: string[]) => cookies.find((c) => c.startsWith('dbk_theme='));
+    const { cookie, cookies } = await request('POST', '/api/auth/demo');
+    // Nothing chosen and the instance follows the system: no cookie, CSS decides.
+    expect(theme(cookies)).toBeUndefined();
+
+    const inject = app.getHttpAdapter().getInstance().inject.bind(app.getHttpAdapter().getInstance());
+    const picked = await inject({
+      method: 'PUT',
+      url: '/api/accounts/me/theme',
+      headers: { cookie: cookie! },
+      payload: { themeId: 'dark' },
+    });
+    expect(picked.statusCode).toBe(200);
+    const pickedCookie = [picked.headers['set-cookie']].flat()[0]!;
+    expect(pickedCookie).toMatch(/^dbk_theme=dark; Path=\/; Max-Age=31536000; SameSite=Lax$/);
+
+    const fresh = await request('POST', '/api/auth/demo');
+    expect(theme(fresh.cookies)).toMatch(/^dbk_theme=dark;/);
+    expect(theme(fresh.cookies)).not.toContain('HttpOnly');
+  });
+
   it('is not there without demo mode', async () => {
     await start({});
     expect((await request('GET', '/api/auth/providers')).body).toMatchObject({ demo: false });

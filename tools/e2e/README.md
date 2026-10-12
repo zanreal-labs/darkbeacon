@@ -4,7 +4,9 @@
 prerendered shell with the signed-in parts streamed into it, the system colour scheme is right
 without any script, a saved theme applies before the page renders, a visit lands in the app
 signed in (no sign-in page), the map renders from the server's snapshot and a change made by
-another browser arrives live. It runs inside the Playwright image, never on the host.
+another browser arrives live. It also checks that crawlers and scanners get no demo session, that
+sign-in redirects never leave the site, that a new browser starts with the account's theme and
+that a plugin widget fits in the map dock. It runs inside the Playwright image, never on the host.
 
 ```sh
 docker network create dbk-e2e

@@ -31,6 +31,15 @@ export interface ThemeOverview {
   selectedThemeId: string | null;
 }
 
+/** The theme an account's pages start with, for the web app's head script. */
+export interface StartingTheme {
+  themeId: string;
+  /** The account picked it (otherwise it is the instance default). */
+  own: boolean;
+  /** Set for a theme package: its colour scheme. */
+  packageScheme: 'light' | 'dark' | null;
+}
+
 /** Theme packages, the instance default and each account's own choice. */
 export class ThemeAdmin {
   constructor(private readonly deps: ThemeAdminDeps) {}
@@ -43,6 +52,16 @@ export class ThemeAdmin {
     const selectedThemeId =
       actor?.kind === 'account' ? known(await this.deps.themes.getChoice(accountThemeScope(actor.id))) : null;
     return { installed, defaultThemeId, selectedThemeId };
+  }
+
+  /** The account's own choice, else the instance default (a theme that is gone counts as none). */
+  async startingTheme(accountId: string): Promise<StartingTheme> {
+    const installed = await this.deps.themes.list();
+    const known = (id: string | null) => (id !== null && this.exists(id, installed) ? id : null);
+    const own = known(await this.deps.themes.getChoice(accountThemeScope(accountId)));
+    const themeId = own ?? known(await this.deps.themes.getChoice(INSTANCE_THEME_SCOPE)) ?? DEFAULT_THEME_ID;
+    const pkg = installed.find((t) => t.id === themeId);
+    return { themeId, own: own !== null, packageScheme: pkg?.colorScheme ?? null };
   }
 
   async install(actor: Actor | null, source: PackageSource): Promise<InstalledTheme> {

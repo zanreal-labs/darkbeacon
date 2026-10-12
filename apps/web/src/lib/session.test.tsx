@@ -12,7 +12,9 @@ const server = setupMockServer(
   http.get(routes.accounts.me.path, () =>
     HttpResponse.json({ error: { code: 'unauthenticated', message: 'Sign in first.' } }, { status: 401 }),
   ),
-  http.get(routes.auth.providers.path, () => HttpResponse.json({ discord: false, eve: false, demo: true })),
+  http.get(routes.auth.providers.path, () =>
+    HttpResponse.json({ discord: false, eve: false, demo: true, discordRedirectUrl: 'http://x/cb' }),
+  ),
   http.post(routes.auth.demo.path, () => {
     demoCalls += 1;
     return HttpResponse.json(meFixture());

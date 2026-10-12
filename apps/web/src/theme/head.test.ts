@@ -58,6 +58,20 @@ describe('theme head script', () => {
     expect(document.getElementById('dbk-package-themes')?.textContent).toContain('[data-theme="nebula"]');
   });
 
+  it("shows the built-in theme of a package's colour scheme while its CSS is not saved yet", () => {
+    // As the API sets it at sign-in on a new browser.
+    document.cookie = `dbk_theme=${encodeURIComponent('nebula|dark')}; Path=/`;
+    runHeadScript();
+    expect(root.dataset.theme).toBe('dark');
+
+    localStorage.setItem(
+      'dbk-theme-css',
+      themeToCss({ ...darkTheme, id: 'nebula' }, '[data-theme="nebula"]'),
+    );
+    runHeadScript();
+    expect(root.dataset.theme).toBe('nebula');
+  });
+
   it('never throws, even without storage', () => {
     const storage = Object.getOwnPropertyDescriptor(window, 'localStorage')!;
     Object.defineProperty(window, 'localStorage', {

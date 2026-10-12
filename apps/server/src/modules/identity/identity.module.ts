@@ -35,7 +35,7 @@ import type { AppConfig } from '../../config/config.js';
 import { ActorResolverRegistry } from '../../platform/actor.js';
 import { APP_CONFIG, CLOCK, EVENT_LOG, HTTP_FETCH, UNIT_OF_WORK } from '../../platform/tokens.js';
 import { AccountsController, AdminAccountsController } from './accounts.controller.js';
-import { AuthController } from './auth.controller.js';
+import { AuthController, oauthCallbackUrl } from './auth.controller.js';
 import { readSessionCookie } from './cookies.js';
 import { PENDING_BOX } from './identity.tokens.js';
 
@@ -44,9 +44,6 @@ const ACCOUNTS = 'identity.AccountRepository';
 const SESSIONS = 'identity.SessionRepository';
 const CHARACTERS = 'identity.CharacterRepository';
 const DISCORD_LINKS = 'identity.DiscordLinkRepository';
-
-const callback = (config: AppConfig, provider: 'discord' | 'eve') =>
-  `${config.publicUrl}/api/auth/${provider}/callback`;
 
 /**
  * Accounts, sessions, Discord login and EVE character linking. Installs the actor resolver:
@@ -132,7 +129,7 @@ const callback = (config: AppConfig, provider: 'discord' | 'eve') =>
           guildRoles,
           sessions,
           clock,
-          redirectUri: callback(config, 'discord'),
+          redirectUri: oauthCallbackUrl(config, 'discord'),
         }),
       inject: [DISCORD, AccountService, GuildRoleSync, SessionService, CLOCK, APP_CONFIG],
     },
@@ -164,7 +161,7 @@ const callback = (config: AppConfig, provider: 'discord' | 'eve') =>
           uow,
           events,
           clock,
-          redirectUri: callback(config, 'eve'),
+          redirectUri: oauthCallbackUrl(config, 'eve'),
         }),
       inject: [APP_CONFIG, CHARACTERS, UNIT_OF_WORK, EVENT_LOG, CLOCK, HTTP_FETCH],
     },

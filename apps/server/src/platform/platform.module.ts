@@ -14,6 +14,7 @@ import { KyselyEventLog } from '../adapters/events/kysely-event-log.js';
 import type { AppConfig } from '../config/config.js';
 import { ActorGuard, ActorResolverRegistry } from './actor.js';
 import { EventConsumers } from './event-consumers.js';
+import { SignInCookies } from './sign-in-cookies.js';
 import { ApiExceptionFilter } from './http.js';
 import { APP_CONFIG, CLOCK, EVENT_BUS, EVENT_LOG, HTTP_FETCH, UNIT_OF_WORK } from './tokens.js';
 
@@ -81,6 +82,7 @@ export class PlatformModule {
         },
         ActorResolverRegistry,
         EventConsumers,
+        SignInCookies,
         { provide: APP_GUARD, useClass: ActorGuard },
         { provide: APP_FILTER, useClass: ApiExceptionFilter },
       ],
@@ -94,6 +96,7 @@ export class PlatformModule {
         HTTP_FETCH,
         ActorResolverRegistry,
         EventConsumers,
+        SignInCookies,
       ],
     };
   }

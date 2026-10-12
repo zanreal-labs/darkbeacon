@@ -16,6 +16,7 @@ import type { SecretBox } from '../../adapters/identity/secret-box.js';
 import type { AppConfig } from '../../config/config.js';
 import { CurrentActor } from '../../platform/actor.js';
 import { ZodPipe } from '../../platform/http.js';
+import { SignInCookies } from '../../platform/sign-in-cookies.js';
 import { APP_CONFIG } from '../../platform/tokens.js';
 import {
   clearCookie,
@@ -35,6 +36,10 @@ type CallbackQuery = { code?: string; state?: string; error?: string };
 
 const PENDING_PATH = '/api/auth';
 
+/** Where Discord and EVE SSO send people back to; registered with each provider. */
+export const oauthCallbackUrl = (config: AppConfig, provider: 'discord' | 'eve') =>
+  `${config.publicUrl}/api/auth/${provider}/callback`;
+
 @Controller()
 export class AuthController {
   private readonly logger = new Logger('Auth');
@@ -48,13 +53,19 @@ export class AuthController {
     @Inject(CharacterService) private readonly characters: CharacterService,
     @Inject(SessionService) private readonly sessions: SessionService,
     @Inject(AccountService) private readonly accounts: AccountService,
+    @Inject(SignInCookies) private readonly signInCookies: SignInCookies,
   ) {
     this.secure = config.publicUrl.startsWith('https://');
   }
 
   @Get(nestPath(routes.auth.providers.path))
   providers(): AuthProvidersDto {
-    return { discord: this.discord.enabled, eve: this.characters.enabled, demo: this.demo.enabled };
+    return {
+      discord: this.discord.enabled,
+      eve: this.characters.enabled,
+      demo: this.demo.enabled,
+      discordRedirectUrl: oauthCallbackUrl(this.config, 'discord'),
+    };
   }
 
   @Get(nestPath(routes.auth.discordLogin.path))
@@ -77,7 +88,7 @@ export class AuthController {
         pending,
         userAgent: userAgent(request),
       });
-      this.setSession(reply, signedIn.token);
+      await this.startSession(request, reply, signedIn.token, signedIn.account.id);
       return signedIn.returnTo;
     });
   }
@@ -121,7 +132,7 @@ export class AuthController {
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<MeDto> {
     const signedIn = await this.demo.signIn(body, userAgent(request));
-    this.setSession(reply, signedIn.token);
+    await this.startSession(request, reply, signedIn.token, signedIn.account.id);
     return this.accounts.me(await this.accounts.actorFor(signedIn.account));
   }
 
@@ -165,11 +176,19 @@ export class AuthController {
     return openPending(this.box, readCookie(request, PENDING_COOKIE));
   }
 
-  private setSession(reply: FastifyReply, token: string): void {
+  /** The session cookie, plus what other modules add to a new session (the account's theme). */
+  private async startSession(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    token: string,
+    accountId: string,
+  ): Promise<void> {
     this.addCookie(
       reply,
       serializeCookie(SESSION_COOKIE, token, { maxAgeSeconds: SESSION_TTL_MS / 1000, secure: this.secure }),
     );
+    for (const cookie of await this.signInCookies.for(accountId, request, this.secure))
+      this.addCookie(reply, cookie);
   }
 
   private clearSession(reply: FastifyReply): void {

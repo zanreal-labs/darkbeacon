@@ -42,8 +42,22 @@ function forwardedHeaders(req: IncomingMessage, keepUpgrade: boolean): IncomingH
   const address = req.socket.remoteAddress;
   const prior = req.headers['x-forwarded-for'];
   if (address) headers['x-forwarded-for'] = prior ? `${String(prior)}, ${address}` : address;
-  headers['x-forwarded-host'] ??= req.headers.host;
-  headers['x-forwarded-proto'] ??= (req.socket as { encrypted?: boolean }).encrypted ? 'https' : 'http';
+  // The host is the one this request was sent to: a client-supplied x-forwarded-host could name
+  // any site. A reverse proxy in front keeps the visitor's Host (as Caddy does, or nginx with
+  // `proxy_set_header Host $host`). The scheme a TLS-terminating proxy reports is kept, but only
+  // as http or https: it cannot point anywhere else.
+  if (req.headers.host) headers['x-forwarded-host'] = req.headers.host;
+  else delete headers['x-forwarded-host'];
+  const proto = String(req.headers['x-forwarded-proto'] ?? '')
+    .split(',')[0]
+    ?.trim()
+    .toLowerCase();
+  headers['x-forwarded-proto'] =
+    proto === 'https' || proto === 'http'
+      ? proto
+      : (req.socket as { encrypted?: boolean }).encrypted
+        ? 'https'
+        : 'http';
   return headers;
 }
 

@@ -6,12 +6,22 @@ import {
   contrastTheme,
   darkTheme,
   lightTheme,
+  parseThemeCookie,
   resolveThemePreference,
   SYSTEM_THEME_ID,
+  themeCookieValue,
 } from './themes.js';
 import { TOKEN_NAMES } from './tokens.js';
 
 describe('themes', () => {
+  it('carry a built-in fallback for theme packages in the cookie', () => {
+    expect(themeCookieValue('dark')).toBe('dark');
+    expect(themeCookieValue('amarr', 'dark')).toBe('amarr|dark');
+    expect(themeCookieValue('sunset', 'light')).toBe('sunset|default');
+    expect(parseThemeCookie('amarr|dark')).toEqual({ themeId: 'amarr', fallback: 'dark' });
+    expect(parseThemeCookie('system')).toEqual({ themeId: 'system', fallback: null });
+  });
+
   it('define every token and nothing else', () => {
     for (const theme of builtInThemes) {
       expect(Object.keys(theme.tokens).sort()).toEqual([...TOKEN_NAMES].sort());

@@ -1,7 +1,8 @@
 import { cookies, headers } from 'next/headers';
+import { connection } from 'next/server';
 import { cache } from 'react';
 import { dehydrate, QueryClient, type DehydratedState, type QueryKey } from '@tanstack/react-query';
-import { ApiErrorBody, buildPath, routes, type RouteDef } from '@darkbeacon/shared';
+import { ApiErrorBody, buildPath, routes, type RouteDef, type UniverseSystemDto } from '@darkbeacon/shared';
 import type { z } from 'zod';
 import { ApiError } from '../lib/api';
 
@@ -26,6 +27,9 @@ export async function serverGet<R extends GetRoute>(
 ): Promise<z.infer<R['response']>> {
   const jar = await cookies();
   const incoming = await headers();
+  // Request time only, never a runtime prefetch: what callers do with the answer (TanStack
+  // Query's cache stamps entries with Date.now()) must not run while Next.js prerenders.
+  await connection();
   const response = await fetch(`${internalApiUrl()}${path}`, {
     cache: 'no-store',
     headers: {
@@ -75,6 +79,33 @@ export const getMaps = cache(() => serverGet(routes.maps.list));
 export const getMapBySlug = cache((slug: string) =>
   serverFind(routes.maps.bySlug, buildPath(routes.maps.bySlug.path, { slug })),
 );
+
+/**
+ * Static game data, kept for the life of this process: it does not depend on who asks and only
+ * changes with a new release (or a new `universe.json`, which restarts both servers). Unknown
+ * systems are remembered as null.
+ */
+const universe = new Map<number, UniverseSystemDto | null>();
+
+/** The static data of these systems; whatever is not known yet comes in one request. */
+export async function getUniverseSystems(ids: readonly number[]): Promise<Map<number, UniverseSystemDto>> {
+  const missing = [...new Set(ids)].filter((id) => !universe.has(id));
+  for (let i = 0; i < missing.length; i += 1000) {
+    const batch = missing.slice(i, i + 1000);
+    const found = await serverGet(
+      routes.universe.lookup,
+      `${routes.universe.lookup.path}?ids=${batch.join(',')}`,
+    );
+    for (const id of batch) universe.set(id, null);
+    for (const system of found) universe.set(system.id, system);
+  }
+  const known = new Map<number, UniverseSystemDto>();
+  for (const id of ids) {
+    const system = universe.get(id);
+    if (system) known.set(id, system);
+  }
+  return known;
+}
 
 /**
  * Query cache entries for the browser, so client components start with server data instead of

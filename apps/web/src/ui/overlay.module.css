@@ -1,4 +1,4 @@
-/* Floating surfaces: menus, popovers, tooltips, dialogs, sheets, toasts, select lists. */
+/* Floating surfaces: menus, popovers, tooltips, dialogs, toasts, select lists. */
 
 .surface {
   z-index: 50;
@@ -178,56 +178,6 @@
   right: var(--dbk-space-3);
 }
 
-.sheet {
-  position: fixed;
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-  background: var(--dbk-color-surface-raised);
-  box-shadow: var(--dbk-shadow-large);
-}
-
-.sheet:focus {
-  outline: none;
-}
-
-.sheet[data-side='bottom'] {
-  left: 0;
-  right: 0;
-  bottom: 0;
-  max-height: 85dvh;
-  border-top: 1px solid var(--dbk-color-border);
-  border-radius: var(--dbk-radius-large) var(--dbk-radius-large) 0 0;
-  padding-bottom: env(safe-area-inset-bottom);
-  animation: sheetUp var(--dbk-motion-normal) var(--dbk-motion-easing);
-}
-
-.sheet[data-side='right'] {
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: min(100vw, var(--sheet-width, 400px));
-  border-left: 1px solid var(--dbk-color-border);
-  animation: sheetLeft var(--dbk-motion-normal) var(--dbk-motion-easing);
-}
-
-.sheet[data-side='left'] {
-  top: 0;
-  left: 0;
-  bottom: 0;
-  width: min(100vw, var(--sheet-width, 320px));
-  border-right: 1px solid var(--dbk-color-border);
-  animation: sheetRight var(--dbk-motion-normal) var(--dbk-motion-easing);
-}
-
-.grabber {
-  width: 36px;
-  height: 4px;
-  margin: var(--dbk-space-2) auto 0;
-  border-radius: 2px;
-  background: var(--dbk-color-border-strong);
-}
-
 .toastViewport {
   position: fixed;
   z-index: 70;
@@ -328,24 +278,6 @@
   from {
     opacity: 0;
     transform: translate(-50%, -48%) scale(0.98);
-  }
-}
-
-@keyframes sheetUp {
-  from {
-    transform: translateY(100%);
-  }
-}
-
-@keyframes sheetLeft {
-  from {
-    transform: translateX(100%);
-  }
-}
-
-@keyframes sheetRight {
-  from {
-    transform: translateX(-100%);
   }
 }
 

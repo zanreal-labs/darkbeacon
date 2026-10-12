@@ -15,8 +15,10 @@ import {
 import { routes, type ThemesDto } from '@darkbeacon/shared';
 import {
   builtInThemes,
+  parseThemeCookie,
   resolveThemePreference,
   SYSTEM_THEME_ID,
+  themeCookieValue,
   themeToCss,
   type Theme,
   type TokenValues,
@@ -62,7 +64,7 @@ function cookiePreference(): string | null {
   if (typeof document === 'undefined') return null;
   const match = new RegExp(`(?:^|; )${THEME_COOKIE}=([^;]*)`).exec(document.cookie);
   try {
-    return match ? decodeURIComponent(match[1]!) : null;
+    return match ? parseThemeCookie(decodeURIComponent(match[1]!)).themeId : null;
   } catch {
     return null;
   }
@@ -87,11 +89,15 @@ function storedPreference(): string | null {
   }
 }
 
-/** Saved as a cookie (read before the first paint) and mirrored to localStorage. */
-function storePreference(id: string): void {
+/**
+ * Saved as a cookie (read before the first paint) and mirrored to localStorage. For a theme
+ * package the cookie also names the built-in theme of its colour scheme (see the head script).
+ */
+function storePreference(id: string, packageTheme?: Theme): void {
   if (typeof document !== 'undefined') {
     const secure = location.protocol === 'https:' ? '; Secure' : '';
-    document.cookie = `${THEME_COOKIE}=${encodeURIComponent(id)}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
+    const value = themeCookieValue(id, packageTheme?.colorScheme);
+    document.cookie = `${THEME_COOKIE}=${encodeURIComponent(value)}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
   }
   try {
     localStorage.setItem(STORAGE_KEY, id);
@@ -186,6 +192,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const preference = chosen ?? stored ?? SYSTEM_THEME_ID;
   const [themes, setThemes] = useState<readonly Theme[]>(builtInThemes);
   const [defaultThemeId, setDefaultThemeId] = useState(SYSTEM_THEME_ID);
+  // Until the theme list answered, a theme package is unknown here; the head script applied it.
+  const [listed, setListed] = useState(false);
   const [version, setVersion] = useState(0);
   const system = useSystemColorScheme();
   const themesRef = useRef(themes);
@@ -206,12 +214,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         const known = (id: string | null) =>
           id !== null && (id === SYSTEM_THEME_ID || all.some((t) => t.id === id)) ? id : null;
         const chosen = known(data.selectedThemeId) ?? known(storedPreference()) ?? data.defaultThemeId;
+        const packageTheme = all.find((t) => t.id === chosen && !t.builtIn);
         setPreferenceState(chosen);
-        storePreference(chosen);
-        storePackageCss(all.find((t) => t.id === chosen && !t.builtIn));
+        storePreference(chosen, packageTheme);
+        storePackageCss(packageTheme);
       })
       .catch(() => {
-        // Offline or no server (tests, mock mode): the built-in themes still work.
+        // Offline or no server (tests): the built-in themes still work.
+      })
+      .finally(() => {
+        if (!cancelled) setListed(true);
       });
     return () => {
       cancelled = true;
@@ -219,16 +231,22 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [version]);
 
   const resolvedId = resolveThemePreference(preference, system);
-  const theme = themes.find((t) => t.id === resolvedId) ?? builtInThemes[0]!;
+  const resolved = themes.find((t) => t.id === resolvedId);
+  const theme = resolved ?? builtInThemes[0]!;
+  // A theme package not listed yet stays as the head script applied it (no flash to light).
+  const ready = inBrowser && (resolved !== undefined || listed);
 
   useLayoutEffect(() => {
-    if (inBrowser) apply(theme.id, theme.colorScheme);
-  }, [theme, inBrowser]);
+    if (ready) apply(theme.id, theme.colorScheme);
+  }, [theme, ready]);
 
   const setPreference = useCallback((id: string) => {
+    const packageTheme = themesRef.current.find(
+      (t) => t.id === id && !builtInThemes.some((b) => b.id === t.id),
+    );
     setPreferenceState(id);
-    storePreference(id);
-    storePackageCss(themesRef.current.find((t) => t.id === id && !builtInThemes.some((b) => b.id === t.id)));
+    storePreference(id, packageTheme);
+    storePackageCss(packageTheme);
     // Signed out this answers 401, and the browser copy is all there is.
     void fetch(routes.themes.select.path, {
       method: 'PUT',

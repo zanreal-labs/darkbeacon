@@ -149,6 +149,15 @@ describeEachDialect('mapping over HTTP and WebSocket', (t) => {
       name: 'J100104',
     });
     expect((await call('GET', '/api/universe/systems?q=j', null)).status).toBe(401);
+    // Many at once; unknown ids are left out.
+    const lookup = await call(
+      'GET',
+      `/api/universe/lookup?ids=${SYSTEMS.c5},${SYSTEMS.c2},31999999`,
+      'alice',
+    );
+    expect((lookup.body as { name: string }[]).map((s) => s.name)).toEqual(['J100104', 'J100101']);
+    expect((await call('GET', '/api/universe/lookup?ids=', 'alice')).status).toBe(400);
+    expect((await call('GET', `/api/universe/lookup?ids=${SYSTEMS.c2}`, null)).status).toBe(401);
 
     expect((await call('DELETE', `${systems}/${SYSTEMS.c5}`, 'alice')).status).toBe(204);
     expect((await call('DELETE', `/api/maps/${map.id}`, 'alice')).status).toBe(204);

@@ -13,6 +13,24 @@ export const SYSTEM_THEME_ID = 'system';
 export const SYSTEM_THEMES = { light: 'default', dark: 'dark', contrast: 'contrast' } as const;
 
 /**
+ * The cookie the web app's head script reads before the first paint (not httpOnly, not a secret):
+ * a theme id, or for a theme package `<id>|<built-in id>`, the built-in theme of the package's
+ * colour scheme to show while the package's own CSS is not in the browser yet.
+ */
+export const THEME_COOKIE = 'dbk_theme';
+
+export function themeCookieValue(themeId: string, packageScheme?: 'light' | 'dark' | null): string {
+  return packageScheme ? `${themeId}|${SYSTEM_THEMES[packageScheme]}` : themeId;
+}
+
+export function parseThemeCookie(value: string): { themeId: string; fallback: string | null } {
+  const at = value.indexOf('|');
+  return at < 0
+    ? { themeId: value, fallback: null }
+    : { themeId: value.slice(0, at), fallback: value.slice(at + 1) };
+}
+
+/**
  * The theme id to apply for a preference. `system` follows `prefers-color-scheme` and, when the
  * system asks for more contrast, picks the contrast theme.
  */

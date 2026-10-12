@@ -1,7 +1,14 @@
 import { Controller, Get, Global, Inject, Logger, Module, Param, Query } from '@nestjs/common';
 import { NotFoundError, requireAccount, type Actor } from '@darkbeacon/core';
 import type { UniverseCatalog } from '@darkbeacon/mapping';
-import { EveId, nestPath, routes, UniverseSearchQuery, type UniverseSystemDto } from '@darkbeacon/shared';
+import {
+  EveId,
+  nestPath,
+  routes,
+  UniverseLookupQuery,
+  UniverseSearchQuery,
+  type UniverseSystemDto,
+} from '@darkbeacon/shared';
 import { z } from 'zod';
 import { StaticUniverseCatalog } from '../../adapters/universe/static-universe-catalog.js';
 import { CurrentActor } from '../../platform/actor.js';
@@ -20,6 +27,15 @@ export class UniverseController {
   ): UniverseSystemDto[] {
     requireAccount(actor);
     return this.catalog.searchSystems(query.q, query.limit);
+  }
+
+  @Get(nestPath(routes.universe.lookup.path))
+  lookup(
+    @CurrentActor() actor: Actor | null,
+    @Query(new ZodPipe(UniverseLookupQuery)) query: UniverseLookupQuery,
+  ): UniverseSystemDto[] {
+    requireAccount(actor);
+    return query.ids.flatMap((id) => this.catalog.getSystem(id) ?? []);
   }
 
   @Get(nestPath(routes.universe.getSystem.path))

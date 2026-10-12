@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Post, Put, Res } from '@nestjs/common';
 import type { Actor } from '@darkbeacon/core';
 import { ThemeAdmin, parsePackageSource, type InstalledTheme, type ThemeOverview } from '@darkbeacon/plugins';
 import {
@@ -11,8 +11,12 @@ import {
   type ThemesDto,
 } from '@darkbeacon/shared';
 import { builtInThemes, resolveTheme, type ThemeManifest } from '@darkbeacon/theme-sdk';
+import type { FastifyReply } from 'fastify';
+import type { AppConfig } from '../../config/config.js';
 import { CurrentActor } from '../../platform/actor.js';
 import { ZodPipe } from '../../platform/http.js';
+import { APP_CONFIG } from '../../platform/tokens.js';
+import { themeCookie } from './theme-cookie.js';
 import { uploadedPackage } from './plugins.controller.js';
 
 const r = routes.themes;
@@ -49,7 +53,10 @@ function toThemesDto(overview: ThemeOverview): ThemesDto {
 
 @Controller()
 export class ThemesController {
-  constructor(@Inject(ThemeAdmin) private readonly themes: ThemeAdmin) {}
+  constructor(
+    @Inject(ThemeAdmin) private readonly themes: ThemeAdmin,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
+  ) {}
 
   @Get(nestPath(r.list.path))
   async list(@CurrentActor() actor: Actor | null): Promise<ThemesDto> {
@@ -60,8 +67,17 @@ export class ThemesController {
   async select(
     @CurrentActor() actor: Actor | null,
     @Body(new ZodPipe(SelectThemeRequest)) body: SelectThemeRequest,
+    @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<ThemesDto> {
-    return toThemesDto(await this.themes.select(actor, body.themeId));
+    const overview = await this.themes.select(actor, body.themeId);
+    // The cookie the head script reads, so the next page load (in any tab) starts with it.
+    const themeId = overview.selectedThemeId ?? overview.defaultThemeId;
+    const pkg = overview.installed.find((t) => t.id === themeId);
+    reply.header(
+      'set-cookie',
+      themeCookie(themeId, pkg?.colorScheme ?? null, this.config.publicUrl.startsWith('https://')),
+    );
+    return toThemesDto(overview);
   }
 
   @Put(nestPath(r.setDefault.path))

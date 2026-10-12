@@ -112,7 +112,12 @@ describeEachDialect('identity and access over HTTP', (t) => {
   });
 
   it('lists the configured sign-in providers', async () => {
-    expect(await browser().json('/api/auth/providers')).toEqual({ discord: true, eve: true, demo: true });
+    expect(await browser().json('/api/auth/providers')).toEqual({
+      discord: true,
+      eve: true,
+      demo: true,
+      discordRedirectUrl: 'http://ww.test/api/auth/discord/callback',
+    });
   });
 
   it('signs in with Discord, links an EVE character and logs out', async () => {

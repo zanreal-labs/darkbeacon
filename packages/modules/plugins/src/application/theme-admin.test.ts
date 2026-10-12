@@ -43,6 +43,18 @@ describe('ThemeAdmin', () => {
     expect(installer.committed).toEqual([]);
   });
 
+  it("names the theme an account's pages start with", async () => {
+    expect(await uc.startingTheme('alice')).toEqual({ themeId: 'system', own: false, packageScheme: null });
+    await installAmarr();
+    await uc.setDefault(admin, 'amarr');
+    expect(await uc.startingTheme('alice')).toEqual({ themeId: 'amarr', own: false, packageScheme: 'dark' });
+    await uc.select(alice, 'contrast');
+    expect(await uc.startingTheme('alice')).toEqual({ themeId: 'contrast', own: true, packageScheme: null });
+    await uc.select(alice, 'amarr');
+    await uc.uninstall(admin, 'amarr');
+    expect(await uc.startingTheme('alice')).toEqual({ themeId: 'system', own: false, packageScheme: null });
+  });
+
   it('refuses built-in ids, unknown bases and plugin packages', async () => {
     await expect(installAmarr({ ...amarr, id: 'dark' })).rejects.toMatchObject({ code: 'validation' });
     await expect(installAmarr({ ...amarr, extends: 'neon' })).rejects.toMatchObject({ code: 'validation' });

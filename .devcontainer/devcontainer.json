@@ -5,7 +5,6 @@
   "runServices": ["dev", "postgres"],
   "workspaceFolder": "/workspace",
   "overrideCommand": true,
-  "forwardPorts": [3000, 5173],
   "postCreateCommand": "corepack enable pnpm && pnpm install",
   "customizations": {
     "vscode": {

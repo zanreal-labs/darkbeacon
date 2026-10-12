@@ -27,6 +27,7 @@ import { FilePluginInstaller } from '../../plugins/installer.js';
 import { PluginCommandRegistry } from '../../plugins/plugin-commands.js';
 import { PluginHost, PluginPortProviders } from '../../plugins/plugin-host.js';
 import { EventConsumers } from '../../platform/event-consumers.js';
+import { SignInCookies } from '../../platform/sign-in-cookies.js';
 import { FilePluginSettingsSchemas } from '../../plugins/settings-schemas.js';
 import {
   APP_CONFIG,
@@ -39,6 +40,7 @@ import {
 } from '../../platform/tokens.js';
 import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
 import { PluginRuntimeController, PluginsAdminController } from './plugins.controller.js';
+import { signInThemeCookies } from './theme-cookie.js';
 import { ThemesController } from './themes.controller.js';
 
 const MAX_UPLOAD = 20 * 1024 * 1024;
@@ -65,6 +67,8 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
     @Inject(UNIVERSE_CATALOG) private readonly universe: UniverseCatalog,
     @Inject(PluginAdmin) private readonly admin: PluginAdmin,
     @Inject(EventConsumers) private readonly consumers: EventConsumers,
+    @Inject(ThemeAdmin) private readonly themes: ThemeAdmin,
+    @Inject(SignInCookies) private readonly signInCookies: SignInCookies,
   ) {}
 
   onModuleInit(): void {
@@ -93,6 +97,11 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
         if (isEventOfType(event, 'map.removed')) await this.admin.forgetMap(event.data.id);
       },
     });
+
+    // A new session comes with the account's theme, for the first paint of a new browser.
+    this.signInCookies.use((accountId, request, secure) =>
+      signInThemeCookies(this.themes, accountId, request, secure),
+    );
 
     // Plugins read maps through the same providers that build realtime snapshots.
     this.providers.mapSnapshot = (mapId) => this.mapSnapshot(mapId);
