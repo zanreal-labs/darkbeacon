@@ -244,6 +244,7 @@ describe('connection menu', () => {
     expect(rows(items)).toEqual([
       'Mass',
       'Time',
+      'Lifetime left',
       'Size',
       'Bubbled',
       'Type',
@@ -254,6 +255,27 @@ describe('connection menu', () => {
       'Remove connection',
     ]);
     expect(rows(sub(items, 'Mass'))).toEqual(['Fresh', 'Reduced', 'Critical']);
+    expect(rows(sub(items, 'Lifetime left'))).toEqual([
+      'Not marked',
+      'Less than 1h',
+      'Less than 4h',
+      'Less than 4.5h',
+      'Less than 16h',
+      'Less than 24h',
+      'Less than 48h',
+    ]);
+  });
+
+  it('locks and unlocks for managers; a locked connection is read-only for members', () => {
+    const { items } = menu('member');
+    expect(rows(items)).not.toContain('Lock');
+    const managed = menu('manager');
+    expect(rows(managed.items)).toContain('Lock');
+    pick(managed.items, 'Lock');
+    expect(managed.commands.updateConnection.mock.calls).toEqual([['c1', { locked: true }]]);
+    const locked = { locked: true };
+    expect(rows(menu('member', locked).items)).not.toContain('Remove connection');
+    expect(rows(menu('manager', locked).items)).toContain('Unlock');
     expect(rows(sub(items, 'Size'))).toEqual(['Frigate', 'Medium', 'Large', 'Freighter', 'Capital']);
     expect(rows(sub(items, 'Bubbled'))).toEqual(['None', 'Near J123456', 'Near Jita', 'Both ends']);
   });

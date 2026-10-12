@@ -21,7 +21,7 @@ function redirectTo(request: NextRequest, path: string): NextResponse {
 }
 
 /** The app's pages; anything else (robots.txt, scanners probing /wp-login.php) is a plain 404. */
-const PAGE = /^\/(?:account|admin|maps|jump|dev\/components|oauth\/authorize)?\/?$|^\/m\/[^/]+\/?$/;
+const PAGE = /^\/(?:account|admin|maps|import|jump|dev\/components|oauth\/authorize)?\/?$|^\/m\/[^/]+\/?$/;
 
 /**
  * Public maps (`/p/<token>`): for anyone, signed in or not. Never a demo sign-in, never a redirect

@@ -21,10 +21,14 @@ import type { RouteQueries } from '@darkbeacon/routing';
 import type { MapPublishing, PublicAccess } from '@darkbeacon/publishing';
 import {
   API_VERSION,
+  CONNECTION_NOTE_MAX,
+  CustomSignatureId,
+  LifetimeMark,
   RouteMode,
   RouteSkip,
   SignatureEveId,
   SignatureGroup,
+  SignatureKind,
   scopesAllow,
   type CharacterPresenceDto,
   type ConnectionDto,
@@ -268,7 +272,10 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
       for (const m of maps)
         if (!deps.publishing || (await deps.publishing.mcpModeFor(m.id)) !== 'off') open.push(m);
       const p = page(open, cursor, limit ?? 50);
-      const lines = p.items.map((m) => `${m.name} | map ${m.id} | slug ${m.slug} | role ${m.role}`);
+      const lines = p.items.map(
+        (m) =>
+          `${m.name} | map ${m.id} | slug ${m.slug} | role ${m.role}${m.description ? ` | "${m.description.replace(/\s+/g, ' ').slice(0, 120)}"` : ''}`,
+      );
       return text([...lines, ...(p.next ? [`next ${p.next}`] : [])].join('\n') || 'No maps.');
     }),
   );
@@ -561,11 +568,16 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
       'add_signature',
       {
         title: 'Add a signature',
-        description: 'Record a scanned signature in a system of the map.',
+        description:
+          'Record a scan result in a system of the map: a signature, an anomaly or another scanner row (kind), or a custom entry with an id of your own (custom).',
         inputSchema: z.object({
           map: MapArg,
           system: SystemArg,
-          eveId: SignatureEveId.describe('In-game id such as ABC-123'),
+          eveId: z
+            .union([SignatureEveId, CustomSignatureId])
+            .describe('In-game id such as ABC-123, or any short id for a custom entry'),
+          kind: SignatureKind.optional().describe('signature (default), anomaly or other'),
+          custom: z.boolean().optional().describe('An entry someone wrote, not from the scanner'),
           group: SignatureGroup.optional(),
           type: z.string().max(64).optional().describe('Wormhole type code (B274) or site type'),
           name: z.string().max(128).optional(),
@@ -573,12 +585,14 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
         }),
         annotations: write,
       },
-      run(async ({ map, system, eveId, group, type, name, description }) => {
+      run(async ({ map, system, eveId, kind, custom, group, type, name, description }) => {
         const view = await loadMap(map, true);
         need({ resource: 'signatures', action: 'write' }, view.mapId);
         const id = resolveSystem(system);
         const request = {
           eveId,
+          ...(kind ? { kind } : {}),
+          ...(custom ? { custom } : {}),
           ...(group ? { group } : {}),
           ...(type !== undefined ? { type } : {}),
           ...(name !== undefined ? { name } : {}),
@@ -690,7 +704,8 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
       'update_connection',
       {
         title: 'Update a connection',
-        description: 'Set mass, time (EOL), size, mass saved, danger or bubbles of a connection.',
+        description:
+          'Set mass, time (EOL), lifetime left, size, mass saved, danger, bubbles or the note of a connection, or lock it (managers).',
         inputSchema: z.object({
           map: MapArg,
           connection: z.string().min(4).max(64).describe('Connection id (short id from get_map)'),
@@ -700,6 +715,11 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
           massSaved: z.boolean().optional(),
           dangerous: z.boolean().optional(),
           bubbled: z.enum(['none', 'source', 'target', 'both']).optional(),
+          lifetime: LifetimeMark.nullable()
+            .optional()
+            .describe('Less than this much time left (1h to 48h), or null to clear'),
+          note: z.string().max(CONNECTION_NOTE_MAX).optional(),
+          locked: z.boolean().optional().describe('Only map managers lock and unlock'),
         }),
         annotations: write,
       },
@@ -714,7 +734,9 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
           (w) => w.updateConnection(actor, view.mapId, target.id, defined),
           () => deps.connections.update(actor, view.mapId, target.id, defined),
         );
-        return text(`Updated ${connectionLine(deps.universe, c ?? { ...target, ...defined }, true)}`);
+        return text(
+          c ? `Updated ${connectionLine(deps.universe, c, true)}` : `Updated ${short(target.id)} ${MERGED}`,
+        );
       }),
     );
 

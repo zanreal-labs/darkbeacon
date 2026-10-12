@@ -160,6 +160,39 @@ const sharing = {
   regenerated: false,
 };
 const BACKUP = 'darkbeacon-20261012T101500Z-v0.1.0-s20.db.gz';
+const importSource = { kind: 'wanderer-api' as const, host: 'wanderer.ltd', slug: 'home', name: 'Home' };
+const importJob = {
+  id: 'j',
+  status: 'running' as const,
+  source: importSource,
+  mode: 'new' as const,
+  mapId: 'm',
+  mapSlug: 'home',
+  mapName: 'Home',
+  phase: 'systems',
+  done: 0,
+  total: 1,
+  counts: {
+    systems: 1,
+    hiddenSystems: 0,
+    connections: 0,
+    signatures: 0,
+    structures: 0,
+    comments: 0,
+    labels: 0,
+    accessRules: 0,
+    hubs: 0,
+  },
+  report: [],
+  access: [],
+  outcome: {},
+  warnings: [],
+  error: null,
+  createdAt: 1,
+  updatedAt: 1,
+  finishedAt: null,
+  syncId: null,
+};
 
 const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
   'system.added': { data: system },
@@ -277,6 +310,17 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
   'character.unlinked': { data: { characterId: 9 } },
   'plugin.updated': { data: { ...plugin, enabled: true }, before: plugin },
   'plugin.removed': { data: { id: 'p' }, before: plugin },
+  'import.started': { data: { jobId: 'j', source: importSource, mode: 'new' } },
+  'import.finished': {
+    data: { jobId: 'j', source: importSource, status: 'done', outcome: {}, error: null },
+  },
+  'import.sync_changed': {
+    data: { syncId: 's', source: importSource, enabled: true, intervalMinutes: 15, reason: null },
+  },
+  'import.progress': {
+    data: { ...importJob, status: 'done', phase: 'done' },
+    before: { ...importJob, status: 'running', phase: 'systems' },
+  },
   'auth.signed_in': { data: { accountId: 'a', provider: 'discord' } },
   'auth.sign_in_failed': { data: { provider: 'discord', reason: 'cancelled', accountId: null } },
   'auth.signed_out': { data: { accountId: 'a', everywhere: false, device: 'Firefox on Windows' } },

@@ -21,6 +21,7 @@ import {
   Flag,
   Globe,
   Hash,
+  Import,
   KeyRound,
   Lock,
   Network,
@@ -55,6 +56,7 @@ import { MapSharing } from './MapSharing';
 import {
   AccessSubjectKind,
   buildPath,
+  MAP_DESCRIPTION_MAX,
   MapRole,
   MapScope,
   routes,
@@ -108,9 +110,11 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
+  Textarea,
   Tooltip,
   useToast,
 } from '../ui';
+import { MapImportSettings } from './MapImportSettings';
 import dialog from './MapSettings.module.css';
 import styles from './settings.module.css';
 
@@ -219,6 +223,16 @@ const SECTIONS: readonly Section[] = [
     render: (map) => (
       <Pane>
         <Webhooks map={map} />
+      </Pane>
+    ),
+  },
+  {
+    id: 'import',
+    title: 'Import',
+    icon: <Import />,
+    render: (map) => (
+      <Pane>
+        <MapImportSettings map={map} />
       </Pane>
     ),
   },
@@ -345,10 +359,12 @@ function GeneralSettings({ map }: { map: MapDto }) {
   const updated = useMapUpdated();
   const [name, setName] = useState(map.name);
   const [slug, setSlug] = useState(map.slug);
+  const [description, setDescription] = useState(map.description ?? '');
   const [scopes, setScopes] = useState<MapScope[]>(map.settings.scopes);
   const dirty =
     name.trim() !== map.name ||
     slug !== map.slug ||
+    description.trim() !== (map.description ?? '') ||
     scopes.length !== map.settings.scopes.length ||
     scopes.some((s) => !map.settings.scopes.includes(s));
   const save = useMutation({
@@ -363,7 +379,7 @@ function GeneralSettings({ map }: { map: MapDto }) {
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    save.mutate({ name: name.trim(), slug, settings: { scopes } });
+    save.mutate({ name: name.trim(), slug, description: description.trim(), settings: { scopes } });
   };
 
   return (
@@ -376,6 +392,7 @@ function GeneralSettings({ map }: { map: MapDto }) {
               onClick={() => {
                 setName(map.name);
                 setSlug(map.slug);
+                setDescription(map.description ?? '');
                 setScopes(map.settings.scopes);
               }}
             >
@@ -390,7 +407,10 @@ function GeneralSettings({ map }: { map: MapDto }) {
     >
       <Card>
         <form id={formId} onSubmit={submit} aria-label="General">
-          <CardHeader title="General" description="The map's name, its address and what auto-mapping adds." />
+          <CardHeader
+            title="General"
+            description="The map's name, its address, what it is for and what auto-mapping adds."
+          />
           <CardBody>
             <div className={styles.formStack}>
               <div className={styles.grid}>
@@ -418,6 +438,15 @@ function GeneralSettings({ map }: { map: MapDto }) {
                   />
                 </Field>
               </div>
+              <Field label="Description" hint="What the map is for; shown in the list of maps.">
+                <Textarea
+                  rows={3}
+                  maxLength={MAP_DESCRIPTION_MAX}
+                  value={description}
+                  placeholder="Our home chain: C5 with a C2 static, staging in Amarr"
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+              </Field>
               <fieldset
                 style={{ border: 0, margin: 0, padding: 0, display: 'grid', gap: 'var(--dbk-space-2)' }}
               >
@@ -1136,7 +1165,7 @@ function Webhooks({ map }: { map: MapDto }) {
     queryFn: () => api<WebhookDto[]>(buildPath(routes.webhooks.list.path, { mapId: map.id })),
   });
   const [creating, setCreating] = useState(false);
-  const [created, setCreated] = useState<CreatedWebhookDto | null>(null);
+  const [created, setCreated] = useState<(CreatedWebhookDto & { rotated?: boolean }) | null>(null);
   const [removing, setRemoving] = useState<WebhookDto | null>(null);
   const failed = (title: string) => (error: unknown) =>
     toast({ title, description: errorText(error, 'Try again.'), tone: 'danger' });
@@ -1157,11 +1186,27 @@ function Webhooks({ map }: { map: MapDto }) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: key }),
     onError: failed('Could not delete the webhook'),
   });
+  const rotate = useMutation({
+    mutationFn: (w: WebhookDto) =>
+      api<CreatedWebhookDto>(
+        buildPath(routes.webhooks.rotateSecret.path, { mapId: map.id, webhookId: w.id }),
+        { method: 'POST' },
+      ),
+    onSuccess: (hook) => setCreated({ ...hook, rotated: true }),
+    onError: failed('Could not make a new secret'),
+  });
 
   return (
     <Stack>
       {created && (
-        <Callout tone="success" title="Webhook created. Copy its signing secret now">
+        <Callout
+          tone="success"
+          title={
+            created.rotated
+              ? 'New signing secret. Copy it now'
+              : 'Webhook created. Copy its signing secret now'
+          }
+        >
           <div style={{ display: 'grid', gap: 'var(--dbk-space-2)', marginTop: 'var(--dbk-space-1)' }}>
             It is shown only once. Use it to check the <code>x-darkbeacon-signature</code> header.
             <SecretValue value={created.secret} />
@@ -1211,6 +1256,7 @@ function Webhooks({ map }: { map: MapDto }) {
                   map={map}
                   hook={w}
                   onToggle={() => toggle.mutate(w)}
+                  onRotate={() => rotate.mutate(w)}
                   onRemove={() => setRemoving(w)}
                 />
               ))}
@@ -1266,11 +1312,13 @@ function WebhookRow({
   map,
   hook,
   onToggle,
+  onRotate,
   onRemove,
 }: {
   map: MapDto;
   hook: WebhookDto;
   onToggle(): void;
+  onRotate(): void;
   onRemove(): void;
 }) {
   const toast = useToast();
@@ -1361,6 +1409,7 @@ function WebhookRow({
           onCheckedChange={onToggle}
           label={<span className="sr-only">Deliver to {hook.url}</span>}
         />
+        <IconButton size="sm" label="New signing secret" icon={<KeyRound />} onClick={onRotate} />
         <IconButton size="sm" label="Delete webhook" icon={<Trash2 />} onClick={onRemove} />
       </div>
     </li>

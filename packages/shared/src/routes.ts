@@ -1181,6 +1181,95 @@ export const routes = {
     }),
   },
 
+  /** Imports of whole maps from Wanderer (docs/migrate-from-wanderer.md). */
+  imports: {
+    /** Whether a Wanderer instance answers and the map API key works. */
+    test: route({
+      method: 'POST',
+      path: '/api/imports/wanderer/test',
+      auth: 'account',
+      scope: 'session',
+      body: dto.WandererApiSourceRequest,
+      response: dto.WandererTestResultDto,
+    }),
+    /** Reads the whole map over Wanderer's API and stages it as a preview. */
+    previewApi: route({
+      method: 'POST',
+      path: '/api/imports/wanderer',
+      auth: 'account',
+      scope: 'session',
+      body: dto.WandererApiSourceRequest,
+      response: dto.ImportJobDto,
+    }),
+    /**
+     * Stages a Wanderer export file: the raw JSON as the body with content type
+     * `WANDERER_EXPORT_CONTENT_TYPE` (streamed, 25 MB at most); `?name=` the file's name.
+     */
+    previewFile: route({
+      method: 'POST',
+      path: '/api/imports/wanderer/file',
+      auth: 'account',
+      scope: 'session',
+      upload: dto.WANDERER_EXPORT_CONTENT_TYPE,
+      response: dto.ImportJobDto,
+    }),
+    get: route({
+      method: 'GET',
+      path: '/api/imports/:jobId',
+      auth: 'account',
+      scope: 'session',
+      response: dto.ImportJobDto,
+    }),
+    /** What an import into a new map or a merge into an existing one would do. */
+    plan: route({
+      method: 'POST',
+      path: '/api/imports/:jobId/plan',
+      auth: 'account',
+      scope: 'session',
+      body: dto.ImportPlanRequest,
+      response: dto.ImportPlanDto,
+    }),
+    start: route({
+      method: 'POST',
+      path: '/api/imports/:jobId/start',
+      auth: 'account',
+      scope: 'session',
+      body: dto.StartImportRequest,
+      response: dto.ImportJobDto,
+    }),
+    cancel: route({
+      method: 'POST',
+      path: '/api/imports/:jobId/cancel',
+      auth: 'account',
+      scope: 'session',
+      response: dto.ImportJobDto,
+    }),
+    /** The whole report as a JSON download (job, mapping report, outcome, `importedExtra`). */
+    report: route({
+      method: 'GET',
+      path: '/api/imports/:jobId/report',
+      auth: 'account',
+      scope: 'session',
+      download: true,
+    }),
+    /** The map's sync from Wanderer, or null. */
+    sync: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/import-sync',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'read' },
+      mapRole: 'viewer',
+      response: dto.ImportSyncDto.nullable(),
+    }),
+    stopSync: route({
+      method: 'DELETE',
+      path: '/api/maps/:mapId/import-sync',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'write' },
+      mapRole: 'manager',
+    }),
+  },
+
   webhooks: {
     list: route({
       method: 'GET',
@@ -1222,6 +1311,16 @@ export const routes = {
       scope: { resource: 'webhooks', action: 'manage' },
       mapRole: 'admin',
       response: z.array(dto.WebhookDeliveryDto),
+    }),
+    /** A new signing secret, shown once in the answer; the old one stops working. */
+    rotateSecret: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/webhooks/:webhookId/rotate-secret',
+      auth: 'account',
+      scope: { resource: 'webhooks', action: 'manage' },
+      status: 200,
+      mapRole: 'admin',
+      response: dto.CreatedWebhookDto,
     }),
     /** Sends a `webhook.test` event once, without retries, and returns the delivery. */
     test: route({

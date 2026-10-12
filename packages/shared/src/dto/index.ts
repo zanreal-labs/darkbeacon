@@ -24,4 +24,5 @@ export * from './backups.js';
 export * from './route-options.js';
 export * from './route-panel.js';
 export * from './bridges.js';
+export * from './importing.js';
 export * from './jumps.js';

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { AccessRuleDto } from './dto/access.js';
 import { EveId, Id, Timestamp } from './dto/common.js';
 import { InstanceRole } from './dto/identity.js';
+import { ImportJobDto, ImportOutcomeDto, ImportSourceDto } from './dto/importing.js';
 import {
   ConnectionDto,
   LabelDto,
@@ -109,4 +110,20 @@ export const EVENT_DATA_SCHEMAS: Record<EventType, z.ZodType> = {
   }),
   'routes.settings_changed': MapRoutingSettingsDto,
   'routes.way_home_changed': WayHomeDto,
+  'import.started': z.object({ jobId: Id, source: ImportSourceDto, mode: z.enum(['new', 'merge']) }),
+  'import.finished': z.object({
+    jobId: Id,
+    source: ImportSourceDto,
+    status: z.enum(['done', 'failed', 'cancelled']),
+    outcome: z.record(z.string(), ImportOutcomeDto),
+    error: z.string().nullable(),
+  }),
+  'import.sync_changed': z.object({
+    syncId: Id,
+    source: ImportSourceDto,
+    enabled: z.boolean(),
+    intervalMinutes: z.number(),
+    reason: z.string().nullable(),
+  }),
+  'import.progress': ImportJobDto,
 };

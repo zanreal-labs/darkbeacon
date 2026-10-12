@@ -68,6 +68,9 @@
       "path": "packages/modules/backups"
     },
     {
+      "path": "packages/modules/importing"
+    },
+    {
       "path": "apps/server"
     },
     {

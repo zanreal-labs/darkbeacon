@@ -3,6 +3,7 @@
 export { EventBatch, MappingUseCases, type MappingPorts } from './base.js';
 export * from './bookmark-numbers.js';
 export * from './connections.js';
+export * from './imports.js';
 export * from './intel.js';
 export * from './maps.js';
 export * from './passages.js';

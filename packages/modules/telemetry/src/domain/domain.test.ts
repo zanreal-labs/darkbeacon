@@ -151,6 +151,48 @@ describe('feature events', () => {
     ).toEqual(['eol', 'mass']);
   });
 
+  it('count an import by kind and size, never by where it came from', () => {
+    const channel = { kind: 'system' as const, id: 'wanderer:wanderer.example.org/secret-chain' };
+    const outcome = {
+      systems: { created: 28, updated: 2, unchanged: 0, skipped: 0, removed: 0 },
+      connections: { created: 27, updated: 0, unchanged: 1, skipped: 0, removed: 0 },
+      signatures: { created: 0, updated: 0, unchanged: 48, skipped: 0, removed: 0 },
+      access: { created: 6, updated: 0, unchanged: 0, skipped: 0, removed: 0 },
+    };
+    const source = {
+      kind: 'wanderer-api',
+      host: 'wanderer.example.org',
+      slug: 'secret-chain',
+      name: 'Secret',
+    };
+    const events = featureEvents(
+      {
+        type: 'import.finished',
+        actor: by,
+        data: { jobId: 'j', source, status: 'done', outcome, error: null },
+      },
+      { channel },
+    );
+    expect(events).toEqual([
+      {
+        event: 'import_completed',
+        props: {
+          source: 'api',
+          status: 'done',
+          systems: countBucket(30),
+          connections: countBucket(27),
+          signatures: countBucket(0),
+          access_rules: countBucket(6),
+        },
+        accountId: 'acc-1',
+      },
+    ]);
+    expect(validateTelemetryEvent('import_completed', events[0]!.props).ok).toBe(true);
+    expect(JSON.stringify(events)).not.toMatch(/secret|example/i);
+    // What the import wrote is not counted as people's edits.
+    expect(featureEvents({ type: 'system.added', actor: by, data: {} }, { channel })).toEqual([]);
+  });
+
   it('count passages by how they were recorded, never which ship or pilot', () => {
     const tracked = featureEvents(
       {

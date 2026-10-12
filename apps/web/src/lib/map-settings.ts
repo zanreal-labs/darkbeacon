@@ -16,12 +16,20 @@ export const MAP_SETTINGS_SECTIONS = [
   'bridges',
   'discord',
   'webhooks',
+  'import',
   'danger',
 ] as const;
 export type MapSettingsSection = (typeof MAP_SETTINGS_SECTIONS)[number];
 
 /** What managers may change; every other section is for the map's admins. */
-const FOR_MANAGERS: readonly MapSettingsSection[] = ['labels', 'tags', 'bookmarks', 'routes', 'bridges'];
+const FOR_MANAGERS: readonly MapSettingsSection[] = [
+  'labels',
+  'tags',
+  'bookmarks',
+  'routes',
+  'bridges',
+  'import',
+];
 
 /** The sections someone with these rights sees, in order (none below manager). */
 export function mapSettingsSections(can: { manage: boolean; admin: boolean }): MapSettingsSection[] {

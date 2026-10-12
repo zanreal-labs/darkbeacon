@@ -30,6 +30,9 @@ export const ConnectionField = z.enum([
   'bubble',
   'dangerous',
   'mass_saved',
+  'lock',
+  'note',
+  'lifetime',
 ]);
 export type ConnectionField = z.infer<typeof ConnectionField>;
 
@@ -102,6 +105,15 @@ export const TELEMETRY_SERVER_EVENTS = {
   bookmark_template_changed: z.strictObject({ scope: z.enum(['map', 'personal']) }),
   esi_picker_used: z.strictObject({ category: EveEntityCategory, mode: z.enum(['search', 'exact']) }),
   waypoint_set: z.strictObject({ mode: z.enum(['destination', 'waypoint']) }),
+  /** An import from Wanderer finished: how it was read and how much it wrote, never from where. */
+  import_completed: z.strictObject({
+    source: z.enum(['api', 'file']),
+    status: z.enum(['done', 'failed', 'cancelled']),
+    systems: CountBucket,
+    connections: CountBucket,
+    signatures: CountBucket,
+    access_rules: CountBucket,
+  }),
   /** A jump route was planned: the hull class and how many legs it has (a bucket; 0 = no route). */
   jump_planned: z.strictObject({ hull: JumpHull, legs: CountBucket }),
   /** A passage recorded from a tracked jump or logged by hand, and how its mass counted. */
