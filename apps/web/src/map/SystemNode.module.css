@@ -170,7 +170,8 @@
 }
 
 /* ---- Above and below the box, left-aligned with its left edge: framed chips, big enough to read
-   at a glance. A label is framed in its own colour, the bookmark code and the hub in neutral grey. */
+   at a glance. Labels (WH1) and the custom label are plain text in a neutral frame, the bookmark
+   code and the hub are neutral grey, a Tag is framed in its own colour. */
 .above {
   position: absolute;
   bottom: calc(100% + 6px);
@@ -192,6 +193,7 @@
 }
 
 .label,
+.systemLabel,
 .bookmark,
 .hub {
   display: inline-flex;
@@ -207,6 +209,23 @@
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
+}
+
+/* A Label from the map's list (WH1, WH2...): inverted, so it reads first at a glance. */
+.systemLabel {
+  border-color: var(--dbk-node-text);
+  background: var(--dbk-node-text);
+  color: var(--dbk-node-bg);
+  font-weight: 800;
+  pointer-events: auto;
+  cursor: help;
+}
+
+/* The free-text custom label stays a plain neutral chip. */
+.systemLabel[data-custom] {
+  border-color: color-mix(in oklab, var(--dbk-node-text) 45%, var(--dbk-node-border));
+  background: var(--dbk-node-bg);
+  color: var(--dbk-node-text);
 }
 
 .label {

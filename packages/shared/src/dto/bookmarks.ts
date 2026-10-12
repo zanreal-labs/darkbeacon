@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { EveId } from './common.js';
-import type { ConnectionDto, MapSystemDto, SignatureDto } from './mapping.js';
+import type { ConnectionDto, MapSystemDto, SignatureDto, SystemLabelDto } from './mapping.js';
 
 /**
  * Bookmark labels: the short name shown above a system, the one pilots type into their in-game
@@ -19,6 +19,7 @@ export const BOOKMARK_VARIABLES = {
   mass: 'Mass left when not fresh (reduced, crit)',
   eol: 'EOL when the wormhole is at the end of its life',
   tempName: "This system's temporary name",
+  labels: "This system's Labels and custom label (WH1 bait)",
 } as const;
 
 export type BookmarkVariable = keyof typeof BOOKMARK_VARIABLES;
@@ -267,6 +268,19 @@ export interface BookmarkChainInput {
    * order on this screen only.
    */
   order?: BookmarkOrder | undefined;
+  /** The map's Labels, for `{labels}`; left out, `{labels}` has only the custom label. */
+  systemLabels?: readonly SystemLabelDto[] | undefined;
+}
+
+/** `{labels}` of a system: its Labels in the map's order, then its custom label. */
+export function systemLabelsText(
+  system: Pick<MapSystemDto, 'systemLabelIds' | 'customLabel'>,
+  systemLabels: readonly SystemLabelDto[] = [],
+): string {
+  const on = new Set(system.systemLabelIds);
+  const names = systemLabels.filter((l) => on.has(l.id)).map((l) => l.name);
+  if (system.customLabel) names.push(system.customLabel);
+  return names.join(' ');
 }
 
 /** `{n}` text: `3`, and `{N}`: `03`. */
@@ -332,6 +346,7 @@ export function bookmarkChain(input: BookmarkChainInput): Map<number, BookmarkVa
     mass: '',
     eol: '',
     tempName: s.temporaryName ?? '',
+    labels: systemLabelsText(s, input.systemLabels),
   });
   for (const root of roots) result.set(root, { ...base(byId.get(root)!), chainIndex: '0', root: true });
   const letters = new Map<number, number>();
@@ -387,6 +402,7 @@ export const BOOKMARK_PREVIEW_VARS: BookmarkVars & { root: boolean } = {
   mass: '',
   eol: '',
   tempName: '',
+  labels: 'WH1',
   root: false,
 };
 

@@ -1,7 +1,14 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
 import { buildUniverse, formatUniverse, parseJsonl, SDE_FILES, type SdeInput } from './build.js';
-import { STATION_DATA_FILE, UNIVERSE_DATA_FILE, WORMHOLE_DATA_FILE } from './index.js';
+import { KSPACE_DATA_FILE, STATION_DATA_FILE, UNIVERSE_DATA_FILE, WORMHOLE_DATA_FILE } from './index.js';
+import {
+  buildKspace,
+  formatKspace,
+  KSPACE_SDE_FILES,
+  type RawStation,
+  type RawSystemPosition,
+} from './kspace.js';
 import {
   BLUE_LOOT_TYPES,
   buildStations,
@@ -27,7 +34,7 @@ import {
 } from './wormholes.js';
 import { readZipEntries } from './zip.js';
 
-// Builds data/universe.json and data/wormholes.json:
+// Builds data/universe.json, data/wormholes.json and data/kspace.json:
 //   pnpm --filter @darkbeacon/sde data [--from <url|zip>] [--statics <url|csv>] [--out <dir files>]
 
 const LATEST = 'https://developers.eveonline.com/static-data/eve-online-static-data-latest-jsonl.zip';
@@ -46,6 +53,7 @@ const { values } = parseArgs({
     statics: { type: 'string', default: STATICS },
     out: { type: 'string', default: UNIVERSE_DATA_FILE },
     'wormholes-out': { type: 'string', default: WORMHOLE_DATA_FILE },
+    'kspace-out': { type: 'string', default: KSPACE_DATA_FILE },
     'stations-out': { type: 'string', default: STATION_DATA_FILE },
   },
 });
@@ -61,6 +69,7 @@ async function fetchBytes(source: string): Promise<Buffer> {
 const entries = readZipEntries(await fetchBytes(values.from), [
   ...Object.values(SDE_FILES),
   ...Object.values(WORMHOLE_SDE_FILES),
+  ...Object.values(KSPACE_SDE_FILES),
   ...Object.values(STATION_SDE_FILES),
 ]);
 const text = (name: string) => {
@@ -71,11 +80,12 @@ const text = (name: string) => {
 const read = <T>(name: string) => parseJsonl<T>(text(name));
 
 const meta = read<SdeInput['meta']>(SDE_FILES.meta)[0]!;
+const rawSystems = read<SdeInput['systems'][number] & RawSystemPosition>(SDE_FILES.systems);
 const universe = buildUniverse({
   meta,
   regions: read(SDE_FILES.regions),
   constellations: read(SDE_FILES.constellations),
-  systems: read(SDE_FILES.systems),
+  systems: rawSystems,
   stargates: read(SDE_FILES.stargates),
 });
 await writeFile(values.out, formatUniverse(universe));
@@ -98,11 +108,15 @@ const types = text(WORMHOLE_SDE_FILES.types)
   })
   .map((line) => JSON.parse(line) as RawType);
 const wormholeIds = new Set(types.filter((t) => t.groupID === WORMHOLE_GROUP_ID).map((t) => t._key));
+const shipIds = new Set(types.filter((t) => shipGroups.has(t.groupID)).map((t) => t._key));
+const typeDogma = read<RawTypeDogma>(WORMHOLE_SDE_FILES.typeDogma).filter(
+  (d) => wormholeIds.has(d._key) || shipIds.has(d._key),
+);
 const input: WormholeInput = {
   meta,
   groups,
   types,
-  typeDogma: read<RawTypeDogma>(WORMHOLE_SDE_FILES.typeDogma).filter((d) => wormholeIds.has(d._key)),
+  typeDogma: typeDogma.filter((d) => wormholeIds.has(d._key)),
   secondarySuns,
   statics: parseStaticsCsv((await fetchBytes(values.statics)).toString('utf8')),
   staticsSource: `WormholeSystems ${STATICS_COMMIT.slice(0, 7)} (MIT)`,
@@ -116,6 +130,18 @@ if (missing.length > 0)
 await writeFile(values['wormholes-out'], formatWormholes(wormholes));
 console.log(
   `${wormholes.types?.length} wormhole types, ${Object.keys(wormholes.systems).length} systems -> ${values['wormholes-out']}`,
+);
+
+const kspace = buildKspace({
+  universe,
+  positions: rawSystems,
+  stations: read<RawStation>(KSPACE_SDE_FILES.stations),
+  types: types.filter((t) => shipIds.has(t._key)),
+  typeDogma: typeDogma.filter((d) => shipIds.has(d._key)),
+});
+await writeFile(values['kspace-out'], formatKspace(kspace));
+console.log(
+  `${kspace.systems.id.length} known-space systems, ${kspace.gates.length / 2} stargates, ${kspace.ships.length} jump-capable ships -> ${values['kspace-out']}`,
 );
 
 // Stations, and which of them buy blue and red loot (NPC buy orders on ESI's regional markets).

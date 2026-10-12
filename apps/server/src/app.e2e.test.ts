@@ -18,11 +18,11 @@ describeEachDialect('server', (t) => {
   beforeEach(async () => {
     const config = { ...parseEnv({ NODE_ENV: 'test' }), secretKey: 'x'.repeat(32) };
     app = await createApp(config, { database: t.db, logger: false });
-    // Stand-in for the identity module: a bearer header names the account.
+    // Stand-in for the identity module: a test header names the account.
     app
       .get(ActorResolverRegistry)
       .use(async (req) =>
-        req.headers.authorization === 'Bearer alice'
+        req.headers['x-test-actor'] === 'alice'
           ? { kind: 'account', id: 'alice', instanceRole: 'user' }
           : null,
       );
@@ -45,7 +45,7 @@ describeEachDialect('server', (t) => {
   });
 
   it('streams events over /ws to an authorized subscriber', async () => {
-    const socket = new WebSocket(`ws://${base}/ws`, { headers: { authorization: 'Bearer alice' } });
+    const socket = new WebSocket(`ws://${base}/ws`, { headers: { 'x-test-actor': 'alice' } });
     const messages: ServerMessage[] = [];
     socket.on('message', (data) => messages.push(JSON.parse(String(data)) as ServerMessage));
     await new Promise((resolve, reject) => socket.once('open', resolve).once('error', reject));

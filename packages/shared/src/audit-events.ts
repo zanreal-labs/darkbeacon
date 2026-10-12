@@ -1,6 +1,23 @@
 import type { InstanceSettingsDto } from './dto/access.js';
 import type { BackupSettingsDto, BackupTrigger } from './dto/backups.js';
 import type { WebhookDto } from './dto/notifications.js';
+import type { ApiKeyKind, ServiceKeyMapGrant } from './dto/api-keys.js';
+
+/** An API key as the audit trail records it: everything but the secret. */
+export interface ApiKeyAuditDto {
+  id: string;
+  kind: ApiKeyKind;
+  name: string;
+  scopes: string[];
+  readOnly: boolean;
+  expiresAt: number | null;
+  allowedIps: string[];
+  rateLimitPerMinute: number | null;
+  ownerAccountId: string | null;
+  instanceRole: 'user' | 'admin' | null;
+  mapGrants: ServiceKeyMapGrant[];
+  allMapsRole: ServiceKeyMapGrant['role'] | null;
+}
 
 /** How someone signed in. */
 export type SignInProvider = 'discord' | 'eve' | 'demo' | 'dev';
@@ -59,6 +76,25 @@ export interface AuditEventPayloads {
   'backup.downloaded': { name: string };
   /** The alert webhook address is never recorded, only its host. */
   'backup.settings_changed': BackupSettingsDto;
+  /** API keys (personal tokens and service keys); the token and its hash are never recorded. */
+  'api_key.created': ApiKeyAuditDto;
+  'api_key.updated': ApiKeyAuditDto;
+  /** A new secret for the same key; the old one stopped working at once. */
+  'api_key.rotated': { id: string; name: string; kind: ApiKeyKind; ownerAccountId: string | null };
+  'api_key.revoked': { id: string; name: string; kind: ApiKeyKind; ownerAccountId: string | null };
+  /** A person approved an OAuth client (an MCP client) to act for them, with these scopes. */
+  'oauth.grant_created': OAuthGrantAuditDto;
+  /** The approval was revoked (by the person, or because a code or refresh token was replayed). */
+  'oauth.grant_revoked': OAuthGrantAuditDto;
+}
+
+export interface OAuthGrantAuditDto {
+  id: string;
+  accountId: string;
+  clientId: string;
+  clientName: string;
+  scopes: string[];
+  readOnly: boolean;
 }
 
 export type AuditEventType = keyof AuditEventPayloads;
@@ -84,4 +120,10 @@ export const AUDIT_EVENT_TYPES = [
   'backup.deleted',
   'backup.downloaded',
   'backup.settings_changed',
+  'api_key.created',
+  'api_key.updated',
+  'api_key.rotated',
+  'api_key.revoked',
+  'oauth.grant_created',
+  'oauth.grant_revoked',
 ] as const satisfies readonly AuditEventType[];

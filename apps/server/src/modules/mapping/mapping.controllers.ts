@@ -24,6 +24,7 @@ import {
   SetBookmarkNumberRequest,
   SetBookmarkTemplateRequest,
   SetLabelsRequest,
+  SetSystemLabelsRequest,
   UpdateConnectionRequest,
   UpdateMapPreferencesRequest,
   UpdateMapRequest,
@@ -84,6 +85,15 @@ export class MapsController {
     @Body(new ZodPipe(SetLabelsRequest)) body: SetLabelsRequest,
   ) {
     return this.maps.setLabels(actor, mapId, body.labels);
+  }
+
+  @Put(nestPath(routes.maps.setSystemLabels.path))
+  setSystemLabels(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Body(new ZodPipe(SetSystemLabelsRequest)) body: SetSystemLabelsRequest,
+  ) {
+    return this.maps.setSystemLabels(actor, mapId, body.systemLabels);
   }
 
   @Put(nestPath(routes.maps.setBookmarkTemplate.path))

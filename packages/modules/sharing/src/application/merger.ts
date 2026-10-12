@@ -431,6 +431,7 @@ export class ChainMerger {
       sources: new Map(map.sources.filter((s) => !s.hidden).map((s) => [s.id, s])),
       layout,
       local,
+      ...(map.info.systemLabels ? { systemLabels: map.info.systemLabels } : {}),
     };
     const next: ViewEntity[] = [];
     for (const ref of refs) next.push(...entitiesOf(map.merge, ref, ctx));

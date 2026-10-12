@@ -277,6 +277,46 @@ describeEachDialect('audit trail over HTTP', (t) => {
     expect((await alice.request(`${m}/history/${created.id}/revert`, { method: 'POST' })).status).toBe(400);
   });
 
+  it('records Labels and the custom label of systems and the list of Labels, and reverts them', async () => {
+    const { browser: alice } = await signIn('alice', 'Alice Main');
+    const map = await alice.json<MapDto>('/api/maps', { method: 'POST', json: { name: 'Chain' } });
+    expect(map.systemLabels.map((l) => l.name)).toEqual(['WH1', 'WH2', 'WH3']);
+    const m = `/api/maps/${map.id}`;
+    await alice.json(`${m}/systems`, { method: 'POST', json: { solarSystemId: JITA } });
+    await alice.json(`${m}/systems/${JITA}`, { method: 'PATCH', json: { systemLabelIds: ['wh1'] } });
+    await alice.json(`${m}/systems/${JITA}`, { method: 'PATCH', json: { customLabel: 'bait' } });
+    const list = [{ id: 'wh1', name: 'WH1', description: 'Static' }];
+    expect(await alice.json(`${m}/system-labels`, { method: 'PUT', json: { systemLabels: list } })).toEqual(
+      list,
+    );
+
+    const entries = await history(alice, `${m}/history?limit=50`);
+    const updates = entries.filter((e) => e.type === 'system.updated').reverse();
+    expect(updates.map((e) => e.diff)).toEqual([
+      { systemLabelIds: { before: [], after: ['wh1'] } },
+      { customLabel: { before: null, after: 'bait' } },
+    ]);
+    const listChange = entries.find((e) => e.type === 'system_labels.changed')!;
+    expect(listChange).toMatchObject({
+      entity: { kind: 'systemLabels', id: 'map' },
+      revertible: true,
+      diff: { systemLabels: { before: map.systemLabels, after: list } },
+    });
+
+    // Back to WH1 to WH3; then the custom label goes, then the label.
+    await alice.json(`${m}/history/${listChange.id}/revert`, { method: 'POST' });
+    expect((await alice.json<MapDto>(m)).systemLabels).toEqual(map.systemLabels);
+    await alice.json(`${m}/history/${updates[1]!.id}/revert`, { method: 'POST' });
+    await alice.json(`${m}/history/${updates[0]!.id}/revert`, { method: 'POST' });
+    const systems = await alice
+      .json<{ data: { systems: MapSystemDto[] } }>(`/api/streams/map:${map.id}/snapshot`)
+      .then((s) => s.data.systems);
+    expect(systems.find((s) => s.solarSystemId === JITA)).toMatchObject({
+      systemLabelIds: [],
+      customLabel: null,
+    });
+  });
+
   it('keeps an instance audit for admins, exports it and verifies the hash chain', async () => {
     const { browser: owner } = await signIn('owner', 'Owner Main');
     const { browser: pilot, me: pilotMe } = await signIn('pilot', 'Pilot Main');
