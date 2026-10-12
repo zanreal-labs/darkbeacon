@@ -1,8 +1,10 @@
 # Development environment. Every Node command runs inside `dev`:
 #   docker compose -f docker-compose.dev.yml run --rm dev pnpm test
-# `app` runs the dev servers (API + Vite) on random loopback ports:
+# `app` runs the API (watch mode) and the Next.js dev server behind it, as in production: one
+# public port (3000, published on a random loopback port), everything but /api and /ws proxied
+# to `next dev` on 3001 inside the container (hot reload included).
 #   docker compose -f docker-compose.dev.yml up app
-#   docker compose -f docker-compose.dev.yml port app 5173
+#   docker compose -f docker-compose.dev.yml port app 3000
 x-node: &node
   image: node:24-bookworm
   working_dir: /workspace
@@ -31,8 +33,18 @@ services:
   app:
     <<: *node
     command: ['pnpm', 'dev']
+    environment:
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+      npm_config_store_dir: /pnpm-store
+      DATA_DIR: /data
+      DEMO_MODE: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+      # The API proxies pages to the dev server instead of starting the built one ...
+      WEB_UPSTREAM: http://127.0.0.1:3001
+      WEB_PORT: '3001'
+      # ... which reads the API over loopback.
+      INTERNAL_API_URL: http://127.0.0.1:3000
     ports:
-      - '127.0.0.1::5173'
       - '127.0.0.1::3000'
 
   postgres:

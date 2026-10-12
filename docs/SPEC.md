@@ -15,9 +15,13 @@ taste disagree, follow this file; when something is missing, choose the simplest
 
 - Node 24 LTS, TypeScript (strict, ESM everywhere), pnpm 10 workspaces with `node-linker=hoisted`.
 - Server: NestJS 12 on the Fastify adapter, WebSockets through `@nestjs/platform-ws` (plain `ws`, no socket.io).
-  The same process serves REST under `/api`, WebSocket at `/ws`, and the built web app as static files.
-- Web: React 19 + Vite + `@xyflow/react` (React Flow 12). Styling via CSS variables (theme tokens) and CSS
-  modules. Data fetching with TanStack Query; realtime through one WebSocket client.
+  It is the one front door: REST under `/api`, WebSocket at `/ws`, everything else proxied (streaming) to the
+  web app's Next.js server, which it starts on a loopback port in the same container.
+- Web: Next.js 16 (App Router, Cache Components / Partial Prerendering, `output: 'standalone'`), React 19,
+  `@xyflow/react` (React Flow 12). The app shell is prerendered; per-user data streams in through Suspense,
+  read on the server from the API with the visitor's cookie. Styling via CSS variables (theme tokens) and CSS
+  modules. Mutations go over REST from the browser (TanStack Query, optimistic); realtime through one
+  WebSocket client.
 - Database: Kysely. SQLite (`better-sqlite3`) by default at `/data/app.db`; Postgres (`pg`) when `DATABASE_URL`
   starts with `postgres`. ONE set of TypeScript migrations that runs on both. Portable column types only:
   text, integer, real; JSON stored as text (helper may use jsonb on Postgres); timestamps as integer epoch ms;
@@ -33,7 +37,7 @@ taste disagree, follow this file; when something is missing, choose the simplest
 
 ```
 apps/server            NestJS composition root: Nest modules, controllers, gateways, adapters, plugin loader
-apps/web               React SPA: map, widgets, settings, admin tab
+apps/web               Next.js app: map, widgets, settings, admin tab
 packages/core          shared kernel: ids, Result, clock, event envelope, authorization primitives, errors
 packages/modules/identity       accounts, sessions, Discord login, EVE character linking
 packages/modules/access         instance roles, map roles, access rules (Discord role / character / corp / alliance)
@@ -153,5 +157,5 @@ edited in the admin tab.
 
 ## Container
 
-Multi-stage `Dockerfile`; final image runs `node apps/server/dist/main.js`, serves `apps/web/dist`, exposes
-`PORT`, declares volume `/data`. `docker run -p 3000:3000 -v dbk-data:/data --env-file .env <image>` must work.
+Multi-stage `Dockerfile`; final image runs `node apps/server/dist/main.js`, which starts the web app's
+standalone server (`apps/web/.next/standalone`) behind it, exposes `PORT`, declares volume `/data`. `docker run -p 3000:3000 -v dbk-data:/data --env-file .env <image>` must work.

@@ -14,7 +14,7 @@
     "test": "vitest run",
     "test:pg": "TEST_DIALECTS=postgres vitest run",
     "test:watch": "vitest",
-    "dev": "concurrently -k -n server,web -c blue,magenta \"pnpm --filter @darkbeacon/server dev\" \"pnpm --filter @darkbeacon/web dev\""
+    "dev": "tsc -b && concurrently -k -n server,web -c blue,magenta \"pnpm --filter @darkbeacon/server dev\" \"pnpm --filter @darkbeacon/web dev\""
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

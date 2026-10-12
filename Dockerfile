@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
 
-# ---- build: install everything, compile server and packages, bundle the web app
+# ---- build: install everything, compile server and packages, build the web app (Next.js standalone)
 FROM node:24-bookworm AS build
-ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0 CI=true
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0 CI=true NEXT_TELEMETRY_DISABLED=1
 RUN corepack enable pnpm
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
@@ -16,9 +16,11 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store \
     rm -rf node_modules apps/*/node_modules packages/*/node_modules packages/modules/*/node_modules plugins/*/node_modules \
     && pnpm install --offline --frozen-lockfile --prod --store-dir /pnpm-store
 
-# ---- runtime: node, production dependencies and build output only
+# ---- runtime: node, production dependencies and build output only.
+# One process tree, one public port: the API server listens on PORT and starts the web app's
+# server (Next.js standalone, with its own traced node_modules) on a loopback port behind it.
 FROM node:24-bookworm-slim AS runtime
-ENV NODE_ENV=production PORT=3000 DATA_DIR=/data
+ENV NODE_ENV=production PORT=3000 DATA_DIR=/data NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app
 COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules ./node_modules
@@ -27,7 +29,8 @@ COPY --from=build /app/packages ./packages
 COPY --from=build /app/apps/server/package.json ./apps/server/package.json
 COPY --from=build /app/apps/server/node_modules ./apps/server/node_modules
 COPY --from=build /app/apps/server/dist ./apps/server/dist
-COPY --from=build /app/apps/web/dist ./apps/web/dist
+# Owned by node: Next.js keeps its runtime cache next to the build.
+COPY --from=build --chown=node:node /app/apps/web/.next/standalone ./apps/web/.next/standalone
 # First-party plugins and themes: the catalogue admins install from.
 COPY --from=build /app/plugins ./plugins
 RUN mkdir -p /data && chown node:node /data

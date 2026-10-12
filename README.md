@@ -18,6 +18,12 @@ Open `http://localhost:3000`. The first account to sign in becomes the instance 
 `/data` volume (SQLite by default; set `DATABASE_URL=postgres://...` to use Postgres). Without `SECRET_KEY`
 the server generates one and keeps it in `/data/secret.key`.
 
+The container runs one process tree behind one port: the API server (NestJS) listens on `PORT`, answers
+`/api` and `/ws` itself and starts the web app's server (Next.js) on a loopback port only it knows, passing
+every other request (pages, their assets, streamed HTML) through to it. If that server stops it is restarted,
+and `/api/health` answers 503 until it is back, so the container's health check covers both. Put any reverse
+proxy you like in front; it must not buffer responses, or pages lose their streaming.
+
 ### Demo mode: a preview without Discord or EVE
 
 ```sh
@@ -46,7 +52,13 @@ it; the `darkbeacon-preview` volume keeps the data.
 
 The web app follows the computer's light or dark mode by default (and switches live when it changes); people
 can pick System, Light, Dark, High contrast or an installed theme from the top bar, and the choice is kept on
-their account. Fonts (Inter, JetBrains Mono) are bundled, so nothing is loaded from a CDN.
+their account. The very first paint is already right: the system mode comes from CSS alone, and a picked
+theme is applied by a tiny script in the page head before anything shows. Fonts (Inter, JetBrains Mono) are
+bundled, so nothing is loaded from a CDN.
+
+Pages are served as a prerendered shell (the rail, the top bar, the page frame) that appears at once, while
+the parts that depend on who is looking (the account, the maps list, the map, settings) stream into it. The
+map opens on a snapshot read on the server and then stays live over the WebSocket.
 
 ## Development
 
@@ -62,24 +74,28 @@ dc run --rm dev pnpm typecheck     # tsc -b over all packages + the web app
 dc run --rm dev pnpm lint          # eslint (with import boundaries) + prettier --check
 dc run --rm dev pnpm test          # vitest; DB tests run on SQLite and Postgres
 dc run --rm dev pnpm test:pg       # Postgres only
-dc run --rm dev pnpm build         # server/packages to dist, web app to apps/web/dist
+dc run --rm dev pnpm build         # server/packages to dist, the web app to apps/web/.next/standalone
 dc run --rm dev pnpm format        # prettier --write
 dc run --rm dev pnpm --filter @darkbeacon/sde universe   # rebuild universe.json from CCP's SDE (~100 MB download)
 
-dc up app                          # API (watch mode) + Vite, DEMO_MODE=true
-dc port app 5173                   # the random loopback port of the web app
-
-# The web app alone, against an in-browser mock of the API and WebSocket:
-dc run --rm -p 127.0.0.1::5173 dev pnpm --filter @darkbeacon/web dev:mock
+dc up app                          # API (watch mode) + `next dev` behind it, DEMO_MODE=true
+dc port app 3000                   # the random loopback port of the app (pages, API and /ws)
 ```
 
-No fixed host ports are published; `dc port` prints where the app landed.
+No fixed host ports are published; `dc port` prints where the app landed. In development the API proxies
+pages to `next dev` (`WEB_UPSTREAM`, hot reload included) instead of starting the built server, so the app
+is reached the same way as in production: one address for pages, `/api` and `/ws`. Open it as `localhost`;
+the dev server refuses hot reload from other host names.
+
+Two checks run against a container from the outside, in the Playwright image: `tools/e2e/` (a smoke test:
+prerendered shell, demo sign-in, map, a live event) and `tools/screenshots/` (every screen, light and dark).
 
 ## Layout
 
 ```
-apps/server            NestJS composition root: Nest modules, controllers, ws gateway, adapters
-apps/web               React SPA (Vite, React Flow, TanStack Query); design system in src/ui, shell in src/shell
+apps/server            NestJS composition root: Nest modules, controllers, ws gateway, adapters, front door
+apps/web               Next.js app (App Router, Cache Components, React Flow, TanStack Query): routes in
+                       src/app, screens in src/screens, design system in src/ui, shell in src/shell
 packages/core          ids, Result, Clock, DomainEvent envelope, authorization, errors, core ports
 packages/db            Kysely factory (SQLite/Postgres), Database = UnitOfWork, migrations/<module>/
 packages/shared        zod DTOs, REST routes (routes.ts), WebSocket protocol, event catalogue
