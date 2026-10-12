@@ -117,8 +117,8 @@ interface Props {
 }
 
 /**
- * Where the map opens: the viewer's last view of it, else their own location, else home, else
- * the system changed last, at the one readable zoom. The whole chain is never fitted on open
+ * Where the map opens: the viewer's last view of it, else the whole chain when it fits at the
+ * readable zoom, else their own location, else home, else the system changed last, at that zoom. The whole chain is never fitted on open
  * (chains get huge); "Fit chain" does that on demand.
  */
 export function openingFocus({
@@ -328,6 +328,18 @@ export function MapCanvas({
       centerOn({ x, y }, zoom, false);
       return;
     }
+    // A chain that fits on screen at the readable zoom opens centred as a whole.
+    const bounds = boundsOf(rectsOf());
+    const visible = visibleBox();
+    if (
+      bounds &&
+      visible &&
+      bounds.width * DEFAULT_ZOOM <= visible.width - 96 &&
+      bounds.height * DEFAULT_ZOOM <= visible.height - 160
+    ) {
+      centerOn({ x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }, DEFAULT_ZOOM, false);
+      return;
+    }
     const systems = [...state.systems.values()];
     const id = openingFocus({
       mine: myLocation?.solarSystemId ?? null,
@@ -340,7 +352,19 @@ export function MapCanvas({
     });
     const at = id !== null ? centerOfSystem(id) : null;
     if (at) centerOn(at, DEFAULT_ZOOM, false);
-  }, [loaded, settled, nodes, rf, preferences.viewport, state.systems, myLocation, centerOfSystem, centerOn]);
+  }, [
+    loaded,
+    settled,
+    nodes,
+    rf,
+    preferences.viewport,
+    state.systems,
+    myLocation,
+    centerOfSystem,
+    centerOn,
+    rectsOf,
+    visibleBox,
+  ]);
 
   const fitChain = useCallback(() => {
     const bounds = boundsOf(rectsOf());
