@@ -31,6 +31,7 @@ import {
   Stack,
   useToast,
 } from '../ui';
+import { usePageView } from '../lib/useTelemetry';
 import styles from './HomePage.module.css';
 
 /** `My Chain 2` -> `my-chain-2`; the server validates again. */
@@ -96,6 +97,7 @@ export function LandingSkeleton() {
 /** `/maps`: every map the account can see, with a star for the one `/` opens. */
 export function MapsPage() {
   useBreadcrumbs([{ label: TITLE }]);
+  usePageView('maps');
   const demo = useDemoMode();
   const maps = useMaps();
   const [creating, setCreating] = useState(false);

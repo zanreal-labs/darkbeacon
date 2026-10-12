@@ -8,6 +8,7 @@ import { BreadcrumbProvider } from './breadcrumbs';
 import { ConnectionIndicator } from './ConnectionIndicator';
 import { LogoMark } from './Logo';
 import { NavLink } from './NavLink';
+import { TelemetryRoot } from './Telemetry';
 import { ThemeMenu } from './ThemeMenu';
 import styles from './AppShell.module.css';
 
@@ -134,6 +135,9 @@ export function AppShell({
             {adminTab}
             <TabLink item={ACCOUNT_NAV} />
           </nav>
+          <Suspense fallback={null}>
+            <TelemetryRoot />
+          </Suspense>
         </div>
       </BreadcrumbProvider>
     </PluginsProvider>

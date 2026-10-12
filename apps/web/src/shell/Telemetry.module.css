@@ -1,0 +1,53 @@
+.notice {
+  position: fixed;
+  z-index: 40;
+  right: var(--dbk-space-4);
+  bottom: var(--dbk-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--dbk-space-3);
+  width: min(400px, calc(100vw - 2 * var(--dbk-space-4)));
+  padding: var(--dbk-space-4);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius-large, var(--dbk-radius));
+  background: var(--dbk-color-surface-raised);
+  box-shadow: var(--dbk-shadow-medium);
+  color: var(--dbk-color-text);
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: var(--dbk-space-2);
+  font-weight: 600;
+}
+
+.title svg {
+  width: 16px;
+  height: 16px;
+  color: var(--dbk-color-accent);
+}
+
+.text {
+  margin: 0;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-sm, 13px);
+  line-height: 1.5;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--dbk-space-2);
+}
+
+@media (max-width: 767px) {
+  /* Above the tab bar (and the safe area under it). */
+  .notice {
+    right: var(--dbk-space-4);
+    left: var(--dbk-space-4);
+    bottom: calc(64px + env(safe-area-inset-bottom));
+    width: auto;
+  }
+}

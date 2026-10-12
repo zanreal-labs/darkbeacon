@@ -40,6 +40,7 @@ import { instanceKey } from '../lib/session-keys';
 import { meKey, providersKey, useMe, useProviders } from '../lib/session';
 import { relativeTime } from '../lib/time';
 import { useTabParam } from '../lib/useTabParam';
+import { usePageView } from '../lib/useTelemetry';
 import { PluginSlot } from '../plugins/PluginSlot';
 import { useBreadcrumbs } from '../shell/breadcrumbs';
 import { ThemePicker } from '../theme/ThemePicker';
@@ -78,6 +79,7 @@ import {
   useToast,
 } from '../ui';
 import { AuditTab } from './AuditTab';
+import { TelemetryCard } from './TelemetryCard';
 import styles from './settings.module.css';
 
 const TABS = [
@@ -118,6 +120,7 @@ export function AdminPage() {
     TABS.map((t) => t.id),
     'instance',
   );
+  usePageView('admin', tab);
   return (
     <Page width={880}>
       <PageHeader title={TITLE} description={DESCRIPTION} />
@@ -220,6 +223,7 @@ function InstanceTab() {
       <DiscordBotSettings />
       {providers.data?.loginMethod === 'discord' && <DiscordAdminSettings />}
       <WebhookSettings />
+      <TelemetryCard />
       <PluginSlot slot="settingsPage" props={{ mapId: null }} />
     </Stack>
   );

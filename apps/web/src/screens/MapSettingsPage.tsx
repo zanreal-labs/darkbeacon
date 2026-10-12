@@ -56,6 +56,7 @@ import { api, ApiError } from '../lib/api';
 import { mapPermissions } from '../lib/roles';
 import { relativeTime } from '../lib/time';
 import { useTabParam } from '../lib/useTabParam';
+import { usePageView } from '../lib/useTelemetry';
 import { BookmarkLabelSettings } from '../map/BookmarkSettings';
 import { PluginSlot } from '../plugins/PluginSlot';
 import {
@@ -135,6 +136,7 @@ export function MapSettingsPage({ slug }: { slug: string }) {
     visible.map((t) => t.id),
     visible[0]?.id ?? 'labels',
   );
+  usePageView('map_settings', map.data ? tab : undefined);
 
   if (map.isPending || maps.isPending) return <MapSettingsSkeleton />;
   if (map.isError) {

@@ -29,6 +29,7 @@ import {
 } from '@darkbeacon/shared';
 import type { MapPermissions } from '../lib/roles';
 import { useMe } from '../lib/session';
+import { track } from '../lib/telemetry';
 import { useTheme } from '../theme/ThemeProvider';
 import { useToast } from '../ui';
 import { ConnectionEdge, type ConnectionEdgeType } from './ConnectionEdge';
@@ -393,6 +394,9 @@ export function MapCanvas({
       else if (key === 'l') setLegend(!legend);
       else return;
       e.preventDefault();
+      track('shortcut_used', {
+        shortcut: key === 'f' ? 'fit_chain' : key === 'c' ? 'center_on_me' : 'legend',
+      });
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
