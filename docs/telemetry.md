@@ -150,7 +150,7 @@ made while seeding the demo map or by cleanups count as nothing; a history rever
 | `panel_opened`      | `panel`: `system`, `signatures`, `local`, `routes`, `connections`, `history`, `plugin`                                                                                                           |
 | `context_menu_used` | `menu`: `system` or `connection`; `action`: `status`, `labels`, `edit`, `hidden`, `locked`, `copy_name`, `remove`, `time`, `mass`, `size`, `type`, `bubble`, `dangerous`, `mass_saved`, `plugin` |
 | `shortcut_used`     | `shortcut`: `fit_chain`, `center_on_me`, `legend`                                                                                                                                                |
-| `activity_viewed`   | `section`: `activity` or `kills`; `window`: `1h`, `4h`, `12h`, `24h`, `7d` (opening a section or changing its time window)                                                                       |
+| `activity_viewed`   | `section`: `activity` or `kills`; `window`: `1h`, `4h`, `12h`, `24h`, `7d` (its time window was changed)                                                                                         |
 
 ## Delivery
 
