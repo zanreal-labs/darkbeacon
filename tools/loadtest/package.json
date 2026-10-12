@@ -1,0 +1,9 @@
+{
+  "name": "darkbeacon-loadtest",
+  "private": true,
+  "type": "module",
+  "description": "Load harness: fake ESI, synthetic WebSocket clients, seed generator (see docs/scaling.md)",
+  "dependencies": {
+    "ws": "8.18.3"
+  }
+}
