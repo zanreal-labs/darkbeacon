@@ -153,7 +153,8 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
   };
 
   /** Loads a map for the caller: through the use cases (keys) or the public projection. */
-  const loadMap = async (ref: string): Promise<MapView> => {
+  /** `forWrite`: the tool writes and checks its own write scope, so `maps:read` is not needed. */
+  const loadMap = async (ref: string, forWrite = false): Promise<MapView> => {
     if (anonymous) {
       const access = deps.sharing ? await deps.sharing.resolve(ref) : null;
       const agents = access
@@ -180,7 +181,7 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
     });
     if (deps.sharing && (await deps.sharing.mcpModeFor(map.id)) === 'off')
       throw new ToolError('This map is closed to AI agents (Map settings, Sharing)');
-    need({ resource: 'maps', action: 'read' }, map.id);
+    if (!forWrite) need({ resource: 'maps', action: 'read' }, map.id);
     const { data } = await deps.hub.readSnapshot(mapStream(map.id), actor);
     const list = <T>(key: string) => (Array.isArray(data[key]) ? (data[key] as T[]) : []);
     return {
@@ -556,7 +557,7 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
         annotations: write,
       },
       run(async ({ map, system, eveId, group, type, name, description }) => {
-        const view = await loadMap(map);
+        const view = await loadMap(map, true);
         need({ resource: 'signatures', action: 'write' }, view.mapId);
         const sig = await deps.signatures.add(actor, view.mapId, resolveSystem(system), {
           eveId,
@@ -593,7 +594,7 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
         annotations: write,
       },
       run(async ({ map, signature, group, type, name, description, connection }) => {
-        const view = await loadMap(map);
+        const view = await loadMap(map, true);
         need({ resource: 'signatures', action: 'write' }, view.mapId);
         const all = view.signatures ?? (await allSignatures(deps, actor!, view));
         const target = byShortId(all, signature, 'signature');
@@ -629,7 +630,7 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
         annotations: write,
       },
       run(async ({ map, from, to, type }) => {
-        const view = await loadMap(map);
+        const view = await loadMap(map, true);
         need({ resource: 'connections', action: 'write' }, view.mapId);
         const source = resolveSystem(from);
         const target = resolveSystem(to);
@@ -666,7 +667,7 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
         annotations: write,
       },
       run(async ({ map, connection, ...patch }) => {
-        const view = await loadMap(map);
+        const view = await loadMap(map, true);
         need({ resource: 'connections', action: 'write' }, view.mapId);
         const target = byShortId(view.connections, connection, 'connection');
         const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
@@ -690,7 +691,7 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
         annotations: write,
       },
       run(async ({ map, system, note, replace }) => {
-        const view = await loadMap(map);
+        const view = await loadMap(map, true);
         need({ resource: 'systems', action: 'write' }, view.mapId);
         const id = resolveSystem(system);
         const current = view.systems.find((s) => s.solarSystemId === id);

@@ -217,6 +217,21 @@ describeEachDialect('MCP endpoint', (t) => {
     expect(tools).not.toContain('add_signature');
     expect(tools).not.toContain('add_note');
 
+    // A key that only writes signatures can do that, and nothing else.
+    const signer = await alice.json<CreatedApiKeyDto>('/api/accounts/me/api-keys', {
+      method: 'POST',
+      json: { name: 'signer', scopes: [`map:${map.id}:signatures:write`], allowedIps: [] },
+    });
+    const signing = await connect(signer.token);
+    const signed = await signing.callTool({
+      name: 'add_signature',
+      arguments: { map: map.id, system: 'Jita', eveId: 'SIG-001' },
+    });
+    expect((signed as ToolResult).isError).toBeFalsy();
+    expect(textOf(await signing.callTool({ name: 'get_map', arguments: { map: map.id } }))).toMatch(
+      /lacks the scope maps:read/,
+    );
+
     // A map closed to agents is invisible to every key.
     await alice.json(`/api/maps/${map.id}/sharing`, { method: 'PATCH', json: { mcpMode: 'off' } });
     const closed = await client.callTool({ name: 'get_map', arguments: { map: map.id } });
