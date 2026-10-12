@@ -7,6 +7,8 @@ import {
   IntelJobs,
   IntelNames,
   IntelQueries,
+  type IntelChange,
+  type IntelJobsDeps,
   type IntelPublisher,
   type KillFeed,
   type Killmail,
@@ -199,6 +201,7 @@ describeEachDialect('intel jobs and queries', (ctx) => {
   let publisher: FakePublisher;
   let queries: IntelQueries;
   let jobs: IntelJobs;
+  let deps: IntelJobsDeps;
   let events: DomainEvent[];
   let history: Map<number, Killmail[]>;
   let historyCalls: number[];
@@ -230,7 +233,7 @@ describeEachDialect('intel jobs and queries', (ctx) => {
       clock: env.clock,
       live: () => live(),
     });
-    jobs = new IntelJobs({
+    deps = {
       repo,
       queries,
       systems: new MappingIntelSystems(ctx.db, env.ports),
@@ -260,7 +263,8 @@ describeEachDialect('intel jobs and queries', (ctx) => {
         systemJumps: async () =>
           ok({ hour: Date.UTC(2026, 9, 12, 13), rows: [{ systemId: S.oneDq, jumps: 40 }] }),
       },
-    });
+    };
+    jobs = new IntelJobs(deps);
     live = () => jobs.live();
     await jobs.start();
   });
@@ -292,6 +296,46 @@ describeEachDialect('intel jobs and queries', (ctx) => {
         (p) => p.mapId === other.id && p.systems.some((s) => s.solarSystemId === S.oneDq),
       ),
     ).toBe(false);
+  });
+
+  it('with replicas, announces what changed for each replica to push, and lets the others see the feed live', async () => {
+    await jobs.stop();
+    const announced: IntelChange[] = [];
+    const leaderFeed = new FakeFeed();
+    const leader = new IntelJobs({
+      ...deps,
+      feed: leaderFeed,
+      changes: { announce: (c) => announced.push(c) },
+    });
+    const replicaPublisher = new FakePublisher();
+    const replica = new IntelJobs({ ...deps, publisher: replicaPublisher });
+    publisher.followed = [map.id];
+    replicaPublisher.followed = [map.id];
+    await leader.start();
+    await leaderFeed.push();
+    await leader.tick();
+    // The leader's own viewers hear it like every replica's: through the announcement.
+    expect(publisher.pushes).toEqual([]);
+    expect(announced.some((c) => c.claims)).toBe(true);
+    expect(announced.flatMap((c) => c.systemIds)).toContain(S.oneDq);
+
+    for (const change of announced) await replica.changed(change);
+    expect(replicaPublisher.pushes.flatMap((p) => p.systems.map((s) => s.solarSystemId))).toContain(S.oneDq);
+    expect(
+      (await queries.mapIntel(alice, map.id)).systems.find((s) => s.solarSystemId === S.oneDq)!.sovereignty,
+    ).toMatchObject({ kind: 'alliance' });
+
+    // A replica not running the jobs reads whether the feed is live, and leaves coverage alone.
+    expect(replica.live()).toBe(false);
+    await replica.observe();
+    expect(replica.live()).toBe(true);
+    await repo.setCoverage(S.jita, { since: NOW - HOUR, at: NOW });
+    await replica.systemsChanged();
+    const covered = await repo.coverage([S.hole, S.oneDq, S.jita]);
+    await systems.remove(alice, map.id, S.jita);
+    await replica.systemsChanged(map.id);
+    expect(await repo.coverage([S.hole, S.oneDq, S.jita])).toEqual(covered);
+    await leader.stop();
   });
 
   it('fetches the history of every system once, then counts live killmails and reports them where the system shows', async () => {

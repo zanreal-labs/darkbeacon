@@ -8,7 +8,7 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import { InstanceSettingsService } from '@darkbeacon/access';
-import type { Clock, EventLog, UnitOfWork } from '@darkbeacon/core';
+import type { Clock, EventLog, Leadership, UnitOfWork } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
 import {
   AccountService,
@@ -45,7 +45,7 @@ import type { AppConfig } from '../../config/config.js';
 import { ActorResolverRegistry } from '../../platform/actor.js';
 import { AuditDirectoryRegistry } from '../../platform/audit.js';
 import { MaintenanceMode } from '../../platform/maintenance.js';
-import { APP_CONFIG, CLOCK, EVENT_LOG, HTTP_FETCH, UNIT_OF_WORK } from '../../platform/tokens.js';
+import { APP_CONFIG, CLOCK, EVENT_LOG, HTTP_FETCH, LEADERSHIP, UNIT_OF_WORK } from '../../platform/tokens.js';
 import { AccountsController, AdminAccountsController } from './accounts.controller.js';
 import { AdminIdentityController } from './admin-identity.controller.js';
 import { AuthController, oauthCallbackUrl } from './auth.controller.js';
@@ -302,6 +302,7 @@ export class IdentityModule implements OnModuleInit, OnApplicationBootstrap, OnM
     @Inject(CHARACTERS) private readonly characterRepository: CharacterRepository,
     @Inject(DiscordBotService) private readonly bot: DiscordBotService,
     @Inject(MaintenanceMode) private readonly maintenance: MaintenanceMode,
+    @Inject(LEADERSHIP) private readonly leadership: Leadership,
   ) {}
 
   onModuleInit(): void {
@@ -349,6 +350,7 @@ export class IdentityModule implements OnModuleInit, OnApplicationBootstrap, OnM
   onApplicationBootstrap(): void {
     this.timer = setInterval(
       () => {
+        if (!this.leadership.isLeader()) return;
         this.sessions
           .pruneExpired()
           .catch((error: unknown) => this.logger.error(`session cleanup failed: ${String(error)}`));

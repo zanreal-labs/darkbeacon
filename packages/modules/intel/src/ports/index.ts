@@ -110,6 +110,21 @@ export interface IntelPublisher {
   push(mapId: string, update: { systems: SystemIntelDto[] }): void;
 }
 
+/** What the jobs changed: systems whose intel is new, and whether sovereignty claims changed. */
+export interface IntelChange {
+  systemIds: number[];
+  claims: boolean;
+}
+
+/**
+ * Tells every process serving viewers what the jobs changed (one process runs the jobs; each
+ * replica pushes to its own viewers through `IntelJobs.changed`). Without it the jobs' process
+ * pushes to its viewers itself.
+ */
+export interface IntelChanges {
+  announce(change: IntelChange): void;
+}
+
 /** Measurements (OpenTelemetry when the operator turned it on). */
 export interface IntelMetrics {
   /** One request to zKillboard: `r2z2` (the feed) or `api`, and its outcome (`2xx`, `404`, `error`...). */

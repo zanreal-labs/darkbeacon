@@ -262,6 +262,15 @@ export class ChainMerger {
     });
   }
 
+  /**
+   * Forgets what is kept of one map, and the shares (another process merged it, or changed
+   * them); the next use builds it again from what is stored.
+   */
+  forget(mapId: string): void {
+    this.maps.delete(mapId);
+    this.shares = null;
+  }
+
   /** Forgets everything kept in memory (the database was replaced); the next use builds again. */
   reset(): void {
     this.maps.clear();

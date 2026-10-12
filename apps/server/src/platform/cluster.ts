@@ -1,9 +1,17 @@
 import { Logger, type OnApplicationShutdown } from '@nestjs/common';
-import { singleProcess, type EventBus, type EventLog, type Leadership } from '@darkbeacon/core';
+import {
+  LocalSignals,
+  singleProcess,
+  type EventBus,
+  type EventLog,
+  type Leadership,
+  type Signals,
+} from '@darkbeacon/core';
 import type { Database } from '@darkbeacon/db';
 import { PostgresEventBus } from '../adapters/cluster/postgres-event-bus.js';
 import { PostgresLeadership } from '../adapters/cluster/postgres-leadership.js';
 import { PostgresPresenceRelay } from '../adapters/cluster/postgres-presence-relay.js';
+import { PostgresSignals } from '../adapters/cluster/postgres-signals.js';
 import type { InProcessEventBus } from '../adapters/events/in-process-event-bus.js';
 import type { AppConfig } from '../config/config.js';
 import type { PresenceRelay } from '../realtime/presence.js';
@@ -11,9 +19,9 @@ import type { PresenceRelay } from '../realtime/presence.js';
 /**
  * How this process works with the others of its instance, chosen by CLUSTER: the event bus
  * every module publishes to and subscribes on, the leadership that once-per-instance work
- * (poller, durable consumers, schedules) asks before it runs, and the relay that shares presence.
- * `none`: in process, always the leader, no relay. `postgres`: LISTEN/NOTIFY and an advisory
- * lock; nothing else changes.
+ * (poller, durable consumers, schedules) asks before it runs, the relay that shares presence and
+ * the signals the leader's jobs send every replica. `none`: in process, always the leader, no
+ * relay. `postgres`: LISTEN/NOTIFY and an advisory lock; nothing else changes.
  */
 export class Cluster implements OnApplicationShutdown {
   private readonly logger = new Logger('Cluster');
@@ -22,12 +30,20 @@ export class Cluster implements OnApplicationShutdown {
     readonly bus: EventBus,
     readonly leadership: Leadership,
     readonly presence: PresenceRelay | undefined,
+    readonly signals: Signals,
     private readonly stop: () => Promise<void>,
   ) {}
 
   static async start(config: AppConfig, database: Database, local: InProcessEventBus): Promise<Cluster> {
     if (config.cluster !== 'postgres' || !config.databaseUrl) {
-      return new Cluster(local, singleProcess, undefined, async () => {});
+      const logger = new Logger('Signals');
+      return new Cluster(
+        local,
+        singleProcess,
+        undefined,
+        new LocalSignals((error) => logger.warn(String(error))),
+        async () => {},
+      );
     }
     const logger = new Logger('Cluster');
     const scope = database.schema ?? 'public';
@@ -42,6 +58,11 @@ export class Cluster implements OnApplicationShutdown {
       channel: scope === 'public' ? 'dbk_presence' : `dbk_presence_${scope}`,
       onError: (error) => logger.warn(`presence relay: ${String(error)}`),
     });
+    const signals = new PostgresSignals({
+      url: config.databaseUrl,
+      channel: scope === 'public' ? 'dbk_signals' : `dbk_signals_${scope}`,
+      onError: (error) => logger.warn(`signals: ${String(error)}`),
+    });
     const leadership = new PostgresLeadership({
       url: config.databaseUrl,
       name: `darkbeacon:leader:${scope}`,
@@ -49,11 +70,13 @@ export class Cluster implements OnApplicationShutdown {
     });
     await bus.start();
     await presence.start();
+    await signals.start();
     await leadership.start();
     leadership.onChange((leader) => logger.log(leader ? 'this replica leads' : 'this replica follows'));
     logger.log(`clustered on Postgres; ${leadership.isLeader() ? 'leading' : 'following'}`);
-    return new Cluster(bus, leadership, presence, async () => {
+    return new Cluster(bus, leadership, presence, signals, async () => {
       await leadership.stop();
+      await signals.stop();
       await presence.stop();
       await bus.stop();
     });

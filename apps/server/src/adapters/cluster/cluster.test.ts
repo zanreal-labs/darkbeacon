@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { newEvent, type DomainEvent } from '@darkbeacon/core';
+import { LocalSignals, newEvent, type DomainEvent } from '@darkbeacon/core';
 import { createTestDatabase, type TestDatabase } from '@darkbeacon/db/testing';
 import { KyselyEventLog } from '../events/kysely-event-log.js';
 import { payloads, PostgresEventBus } from './postgres-event-bus.js';
 import { PostgresLeadership } from './postgres-leadership.js';
 import { PostgresPresenceRelay, split } from './postgres-presence-relay.js';
+import { PostgresSignals } from './postgres-signals.js';
 import type { PresenceBroadcast } from '../../realtime/presence.js';
 
 const url = process.env.TEST_DATABASE_URL;
@@ -49,6 +50,19 @@ describe('presence notices', () => {
     expect(split(broadcast).every((p) => p.length < 8000)).toBe(true);
     expect(parts.flatMap((p) => p.peers)).toEqual(broadcast.peers);
     expect(parts.flatMap((p) => p.left)).toEqual(['gone']);
+  });
+});
+
+describe('local signals', () => {
+  it('reach this process at once, by topic, until unsubscribed', () => {
+    const signals = new LocalSignals();
+    const heard: unknown[] = [];
+    const stop = signals.subscribe('a', (payload) => heard.push(payload));
+    signals.subscribe('b', () => heard.push('wrong topic'));
+    signals.publish('a', { n: 1 });
+    stop();
+    signals.publish('a', { n: 2 });
+    expect(heard).toEqual([{ n: 1 }]);
   });
 });
 
@@ -122,5 +136,28 @@ describe.skipIf(!url)('clustering on Postgres', () => {
     expect(heard.flatMap((b) => b.peers.map((p) => p.key)).sort()).toEqual(
       broadcast.peers.map((p) => p.key).sort(),
     );
+  });
+
+  it('signals every replica once, the sender at once', async () => {
+    const channel = `dbk_test_${randomUUID().slice(0, 8)}`;
+    const one = new PostgresSignals({ url: url!, channel });
+    const two = new PostgresSignals({ url: url!, channel });
+    cleanups.push(
+      () => one.stop(),
+      () => two.stop(),
+    );
+    await one.start();
+    await two.start();
+    const heardOne: unknown[] = [];
+    const heardTwo: unknown[] = [];
+    one.subscribe('intel.changed', (payload) => heardOne.push(payload));
+    two.subscribe('intel.changed', (payload) => heardTwo.push(payload));
+    two.subscribe('other', () => heardTwo.push('wrong topic'));
+    one.publish('intel.changed', { systemIds: [1, 2], claims: true });
+    expect(heardOne).toEqual([{ systemIds: [1, 2], claims: true }]);
+    await vi.waitFor(() => expect(heardTwo).toEqual([{ systemIds: [1, 2], claims: true }]));
+    // The sender does not hear its own notification again.
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(heardOne).toHaveLength(1);
   });
 });

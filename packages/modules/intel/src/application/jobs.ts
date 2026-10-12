@@ -3,6 +3,8 @@ import { DAY, HOUR, MINUTE } from '../domain/activity.js';
 import type { Killmail } from '../domain/killmail.js';
 import type {
   ActivitySource,
+  IntelChange,
+  IntelChanges,
   IntelMetrics,
   IntelPublisher,
   IntelRepository,
@@ -35,6 +37,8 @@ export interface IntelJobsDeps {
   queries: IntelQueries;
   systems: IntelSystems;
   publisher: IntelPublisher;
+  /** Where changes go when other processes serve viewers too (replicas). */
+  changes?: IntelChanges;
   /** New live killmails become `kill.reported` events on every map showing their system. */
   events: EventLog;
   clock: Clock;
@@ -53,7 +57,9 @@ export interface IntelJobsDeps {
  * Keeps intel current for every system on any map, once per system whatever the number of maps:
  * ESI's sovereignty and hourly figures when their caches expire, zKillboard's history of a system
  * when it first appears on a map, its live feed for everything after; tells the maps' viewers what
- * changed. `tick()` runs whatever is due; the server calls it every few seconds.
+ * changed. `tick()` runs whatever is due; the server calls it every few seconds, on one process
+ * of the instance (`start` and `stop` follow its leadership). The others only push what
+ * `changed` tells them to their viewers and `observe` whether the feed is live.
  */
 export class IntelJobs {
   private readonly due = { sovereignty: 0, kills: 0, jumps: 0, history: 0, prune: 0, alive: 0 };
@@ -98,6 +104,19 @@ export class IntelJobs {
     await this.ticking;
   }
 
+  /** Reads whether the feed is live from what the process running it last wrote (a replica). */
+  async observe(): Promise<void> {
+    if (this.started || !this.deps.feed) return;
+    const at = await this.deps.repo.state<number>('feed:alive');
+    if (at !== null) this.lastAlive = Math.max(this.lastAlive, at);
+  }
+
+  /** What the process running the jobs changed: pushed to this process's viewers. */
+  async changed(change: IntelChange): Promise<void> {
+    if (change.claims) this.deps.queries.claimsChanged();
+    await this.push(change.systemIds);
+  }
+
   /** Runs every job that is due, one tick at a time. */
   tick(): Promise<void> {
     this.ticking ??= this.runDue().finally(() => (this.ticking = null));
@@ -112,6 +131,8 @@ export class IntelJobs {
   async systemsChanged(mapId?: string): Promise<void> {
     if (mapId) this.onMap.delete(mapId);
     else this.onMap.clear();
+    // Coverage and history belong to the process running the jobs.
+    if (!this.started) return;
     const before = this.watched?.ids ?? null;
     this.watched = null;
     const now = await this.watchedSystems();
@@ -165,9 +186,11 @@ export class IntelJobs {
     if (!result.ok) return result.retryAt;
     if (result.data) {
       const changed = await this.deps.repo.replaceClaims(result.data, this.deps.clock.now());
-      if (changed.length > 0) this.deps.queries.claimsChanged();
       const watched = await this.watchedSystems();
-      await this.publish(changed.filter((id) => watched.has(id)));
+      await this.publish(
+        changed.filter((id) => watched.has(id)),
+        changed.length > 0,
+      );
     }
     return this.next(result.nextAt);
   }
@@ -261,8 +284,18 @@ export class IntelJobs {
     }
   }
 
+  /** Tells every process serving viewers (or this one's viewers) that these systems changed. */
+  private async publish(systemIds: readonly number[], claims = false): Promise<void> {
+    if (systemIds.length === 0 && !claims) return;
+    if (this.deps.changes) {
+      this.deps.changes.announce({ systemIds: [...systemIds], claims });
+      return;
+    }
+    await this.changed({ systemIds: [...systemIds], claims });
+  }
+
   /** Tells the viewers of every followed map holding one of these systems what they look like now. */
-  private async publish(systemIds: readonly number[]): Promise<void> {
+  private async push(systemIds: readonly number[]): Promise<void> {
     if (systemIds.length === 0) return;
     const changed = new Set(systemIds);
     const targets: Array<[string, number[]]> = [];

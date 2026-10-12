@@ -24,7 +24,9 @@ import {
   type Clock,
   type EventBus,
   type EventLog,
+  type Leadership,
   type MapAccess,
+  type Signals,
 } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
 import {
@@ -58,10 +60,13 @@ import {
 } from '../../adapters/intel/esi-intel-http.js';
 import { KyselyIntelRepository } from '../../adapters/intel/kysely-intel-repository.js';
 import {
+  asIntelChange,
   CatalogIntelUniverse,
   HubIntelPublisher,
   IdentityStandingPilots,
+  INTEL_CHANGED,
   MappingIntelSystems,
+  SignalIntelChanges,
   TelemetryIntelMetrics,
 } from '../../adapters/intel/server-ports.js';
 import { R2z2KillFeed, ZkillHistory } from '../../adapters/intel/zkill-http.js';
@@ -76,8 +81,10 @@ import {
   EVENT_BUS,
   EVENT_LOG,
   HTTP_FETCH,
+  LEADERSHIP,
   MAP_ACCESS,
   OBSERVABILITY,
+  SIGNALS,
   UNIVERSE_CATALOG,
 } from '../../platform/tokens.js';
 import { RealtimeHub } from '../../realtime/realtime.hub.js';
@@ -209,30 +216,41 @@ export class PublicIntelController {
 const TICK_MS = 5_000;
 const SYSTEMS_DEBOUNCE_MS = 1_000;
 
+/**
+ * Runs intel's jobs on one replica (the leader): ESI's sovereignty and hourly figures, zKillboard's
+ * history and R2Z2 feed, pruning. Every replica pushes the changes the jobs announce to its own
+ * viewers, and the others read whether the feed is live from what the leader writes.
+ */
 @Injectable()
 export class IntelRuntime implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger('Intel');
   private timer: NodeJS.Timeout | undefined;
   private unsubscribe: (() => void) | undefined;
+  private unsubscribeChanges: (() => void) | undefined;
   private readonly pending = new Map<string, NodeJS.Timeout>();
+  private leading = false;
 
   constructor(
     @Inject(IntelJobs) private readonly jobs: IntelJobs,
     @Inject(EVENT_BUS) private readonly bus: EventBus,
     @Inject(INTEL_OPTIONS) private readonly options: IntelOptions,
+    @Inject(LEADERSHIP) private readonly leadership: Leadership,
+    @Inject(SIGNALS) private readonly signals: Signals,
   ) {}
 
   async onModuleInit(): Promise<void> {
+    this.unsubscribeChanges = this.signals.subscribe(INTEL_CHANGED, (payload) => {
+      const change = asIntelChange(payload);
+      if (change) this.jobs.changed(change).catch((error: unknown) => this.logger.warn(String(error)));
+    });
     if (this.options.sources.size === 0) return;
     this.logger.log(
       `following ${[...this.options.sources].join(', ')}; killmails kept ${this.options.killDays} days`,
     );
-    await this.jobs.start();
-    this.timer = setInterval(() => {
-      void this.jobs.tick();
-    }, TICK_MS);
+    if (this.leadership.isLeader()) await this.lead();
+    this.timer = setInterval(() => void this.tick(), TICK_MS);
     this.timer.unref();
-    void this.jobs.tick();
+    void this.tick();
     this.unsubscribe = this.bus.subscribe(
       (event) => {
         const stream = parseStream(event.stream);
@@ -250,9 +268,33 @@ export class IntelRuntime implements OnModuleInit, OnModuleDestroy {
     );
   }
 
+  /** The jobs run where the leader is; a replica that stops leading stops them (and its feed). */
+  private async tick(): Promise<void> {
+    try {
+      if (this.leadership.isLeader()) {
+        if (!this.leading) await this.lead();
+        await this.jobs.tick();
+      } else {
+        if (this.leading) {
+          this.leading = false;
+          await this.jobs.stop();
+        }
+        await this.jobs.observe();
+      }
+    } catch (error) {
+      this.logger.warn(String(error));
+    }
+  }
+
+  private async lead(): Promise<void> {
+    this.leading = true;
+    await this.jobs.start();
+  }
+
   async onModuleDestroy(): Promise<void> {
     clearInterval(this.timer);
     this.unsubscribe?.();
+    this.unsubscribeChanges?.();
     for (const timer of this.pending.values()) clearTimeout(timer);
     await this.jobs.stop();
   }
@@ -286,6 +328,7 @@ export class IntelRuntime implements OnModuleInit, OnModuleDestroy {
           clock,
           fetch: fetchFn,
           userAgent: `Darkbeacon/${version} (+${config.publicUrl})`,
+          baseUrl: config.esiBaseUrl,
         }),
       inject: [APP_CONFIG, CLOCK, HTTP_FETCH],
     },
@@ -351,6 +394,7 @@ export class IntelRuntime implements OnModuleInit, OnModuleDestroy {
         clock: Clock,
         fetchFn: typeof fetch,
         live: LiveFlag,
+        signals: Signals,
         telemetry?: DomainTelemetry | null,
       ) => {
         const logger = new Logger('Intel');
@@ -367,6 +411,8 @@ export class IntelRuntime implements OnModuleInit, OnModuleDestroy {
           queries,
           systems,
           publisher: new HubIntelPublisher(hub),
+          // Replicas: the leader runs the jobs and every replica pushes to its own viewers.
+          ...(config.cluster === 'postgres' ? { changes: new SignalIntelChanges(signals) } : {}),
           events,
           clock,
           metrics,
@@ -402,6 +448,7 @@ export class IntelRuntime implements OnModuleInit, OnModuleDestroy {
         CLOCK,
         HTTP_FETCH,
         INTEL_LIVE,
+        SIGNALS,
         { token: OBSERVABILITY, optional: true },
       ],
     },

@@ -9,7 +9,15 @@ import {
 } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
 import { AccessRules, InstanceSettingsService } from '@darkbeacon/access';
-import { parseStream, type Clock, type EventLog, type MapAccess, type UnitOfWork } from '@darkbeacon/core';
+import {
+  parseStream,
+  type Clock,
+  type EventLog,
+  type Leadership,
+  type MapAccess,
+  type Signals,
+  type UnitOfWork,
+} from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
 import { EveDirectoryService } from '@darkbeacon/identity';
 import {
@@ -55,7 +63,9 @@ import {
   APP_CONFIG,
   CLOCK,
   EVENT_LOG,
+  LEADERSHIP,
   MAP_ACCESS,
+  SIGNALS,
   UNIT_OF_WORK,
   UNIVERSE_CATALOG,
 } from '../../platform/tokens.js';
@@ -70,16 +80,20 @@ const IMPORTING_DEPS = 'ImportingDeps';
 /** Due syncs are looked for this often. */
 const SYNC_TICK_MS = 30_000;
 const PRUNE_MS = 3_600_000;
+/** Signal asking the replica that runs jobs (the leader) to look for queued ones. */
+const IMPORTS_QUEUED = 'imports.queued';
 
 /**
  * Starts the job runner (resuming jobs a restart interrupted), pulls due syncs, follows deleted
  * maps, serves `import:<jobId>` streams to the account that runs the job, and accepts export
- * file uploads.
+ * file uploads. Jobs and syncs run on one replica (the leader): a job queued on another is
+ * signalled to it, and a new leader resumes what the old one left running.
  */
 @Injectable()
 export class ImportingRuntime implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger('Imports');
   private timers: NodeJS.Timeout[] = [];
+  private unsubscribe: Array<() => void> = [];
 
   constructor(
     @Inject(ImportService) private readonly service: ImportService,
@@ -92,6 +106,8 @@ export class ImportingRuntime implements OnModuleInit, OnApplicationBootstrap, O
     @Inject(AsyncAuditScope) private readonly audit: AsyncAuditScope,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(MaintenanceMode) private readonly maintenance: MaintenanceMode,
+    @Inject(LEADERSHIP) private readonly leadership: Leadership,
+    @Inject(SIGNALS) private readonly signals: Signals,
   ) {}
 
   onModuleInit(): void {
@@ -126,6 +142,14 @@ export class ImportingRuntime implements OnModuleInit, OnApplicationBootstrap, O
   }
 
   onApplicationBootstrap(): void {
+    this.unsubscribe.push(
+      this.signals.subscribe(IMPORTS_QUEUED, () => {
+        if (this.leadership.isLeader()) this.wake();
+      }),
+      this.leadership.onChange((leader) => {
+        if (leader) this.wake();
+      }),
+    );
     this.wake();
     if (this.config.env === 'test') return;
     const every = (ms: number, work: () => Promise<unknown>) => {
@@ -135,17 +159,23 @@ export class ImportingRuntime implements OnModuleInit, OnApplicationBootstrap, O
       timer.unref();
       this.timers.push(timer);
     };
-    every(SYNC_TICK_MS, () => (this.maintenance.active ? Promise.resolve() : this.scheduler.tick()));
-    every(PRUNE_MS, () => this.service.prune());
+    const leading = () => this.leadership.isLeader() && !this.maintenance.active;
+    every(SYNC_TICK_MS, () => (leading() ? this.scheduler.tick() : Promise.resolve()));
+    every(PRUNE_MS, () => (leading() ? this.service.prune() : Promise.resolve()));
   }
 
   onModuleDestroy(): void {
     for (const timer of this.timers) clearInterval(timer);
     this.timers = [];
+    for (const unsubscribe of this.unsubscribe.splice(0)) unsubscribe();
   }
 
-  /** Runs queued jobs outside whatever request asked for it. */
+  /** Runs queued jobs outside whatever request asked for it, on the leader (told by a signal). */
   wake(): void {
+    if (!this.leadership.isLeader()) {
+      this.signals.publish(IMPORTS_QUEUED, null);
+      return;
+    }
     this.audit.detached(() => {
       void this.runner.drain().catch((error: unknown) => this.logger.error(String(error)));
     });

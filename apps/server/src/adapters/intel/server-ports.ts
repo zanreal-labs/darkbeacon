@@ -1,6 +1,8 @@
-import { mapStream } from '@darkbeacon/core';
+import { mapStream, type Signals } from '@darkbeacon/core';
 import type { Database } from '@darkbeacon/db';
 import type {
+  IntelChange,
+  IntelChanges,
   IntelMetrics,
   IntelPublisher,
   IntelSystems,
@@ -84,6 +86,37 @@ export class CatalogIntelUniverse implements IntelUniverse {
       yield { id: s.id, space: { security: s.security, whClass: s.whClass, region: s.regionName } };
     }
   }
+}
+
+/** The signal topic intel changes travel on. */
+export const INTEL_CHANGED = 'intel.changed';
+/** Systems per signal: a NOTIFY payload stays well under its limit. */
+const SYSTEMS_PER_SIGNAL = 500;
+
+/** Intel changes as signals to every replica (each pushes to its own viewers). */
+export class SignalIntelChanges implements IntelChanges {
+  constructor(private readonly signals: Pick<Signals, 'publish'>) {}
+
+  announce(change: IntelChange): void {
+    const { systemIds, claims } = change;
+    if (systemIds.length <= SYSTEMS_PER_SIGNAL) {
+      this.signals.publish(INTEL_CHANGED, change);
+      return;
+    }
+    for (let i = 0; i < systemIds.length; i += SYSTEMS_PER_SIGNAL) {
+      this.signals.publish(INTEL_CHANGED, {
+        systemIds: systemIds.slice(i, i + SYSTEMS_PER_SIGNAL),
+        claims: claims && i === 0,
+      } satisfies IntelChange);
+    }
+  }
+}
+
+/** Reads a signal's payload as an intel change; null when it is not one. */
+export function asIntelChange(payload: unknown): IntelChange | null {
+  const p = payload as Partial<IntelChange> | null;
+  if (!p || !Array.isArray(p.systemIds) || !p.systemIds.every((id) => Number.isInteger(id))) return null;
+  return { systemIds: p.systemIds, claims: p.claims === true };
 }
 
 /** Pushes over the realtime hub to whoever follows the map's stream (its authorization applies). */

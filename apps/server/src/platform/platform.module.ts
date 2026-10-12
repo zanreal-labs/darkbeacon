@@ -31,6 +31,7 @@ import {
   EVENT_LOG,
   HTTP_FETCH,
   LEADERSHIP,
+  SIGNALS,
   UNIT_OF_WORK,
 } from './tokens.js';
 import { RateLimiter } from './rate-limiter.js';
@@ -114,6 +115,7 @@ export class PlatformModule {
         },
         { provide: EVENT_BUS, useFactory: (cluster: Cluster) => cluster.bus, inject: [Cluster] },
         { provide: LEADERSHIP, useFactory: (cluster: Cluster) => cluster.leadership, inject: [Cluster] },
+        { provide: SIGNALS, useFactory: (cluster: Cluster) => cluster.signals, inject: [Cluster] },
         AsyncAuditScope,
         { provide: AUDIT_SCOPE, useExisting: AsyncAuditScope },
         AuditDirectoryRegistry,
@@ -156,6 +158,7 @@ export class PlatformModule {
         EVENT_BUS,
         EVENT_LOG,
         LEADERSHIP,
+        SIGNALS,
         HTTP_FETCH,
         ActorResolverRegistry,
         RateLimiter,

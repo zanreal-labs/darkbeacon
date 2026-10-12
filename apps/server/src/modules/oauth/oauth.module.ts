@@ -17,7 +17,7 @@ import {
   type OnModuleDestroy,
   type OnModuleInit,
 } from '@nestjs/common';
-import type { Actor, Clock, EventLog, MapAccess, UnitOfWork } from '@darkbeacon/core';
+import type { Actor, Clock, EventLog, Leadership, MapAccess, UnitOfWork } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
 import { AccountService } from '@darkbeacon/identity';
 import type { MapRepository } from '@darkbeacon/mapping';
@@ -46,7 +46,7 @@ import type { AppConfig } from '../../config/config.js';
 import { ActorResolverRegistry, ClientIp, CurrentActor, isMcpPath } from '../../platform/actor.js';
 import { ZodPipe } from '../../platform/http.js';
 import { LIMITS, RateLimiter } from '../../platform/rate-limiter.js';
-import { APP_CONFIG, CLOCK, EVENT_LOG, MAP_ACCESS, UNIT_OF_WORK } from '../../platform/tokens.js';
+import { APP_CONFIG, CLOCK, EVENT_LOG, LEADERSHIP, MAP_ACCESS, UNIT_OF_WORK } from '../../platform/tokens.js';
 import { MappingModule } from '../mapping/mapping.module.js';
 import { MAP_REPOSITORY } from '../mapping/mapping.tokens.js';
 
@@ -259,6 +259,7 @@ export class OAuthModule implements OnModuleInit, OnApplicationBootstrap, OnModu
   constructor(
     @Inject(ActorResolverRegistry) private readonly actors: ActorResolverRegistry,
     @Inject(OAuthServer) private readonly server: OAuthServer,
+    @Inject(LEADERSHIP) private readonly leadership: Leadership,
   ) {}
 
   onModuleInit(): void {
@@ -274,6 +275,7 @@ export class OAuthModule implements OnModuleInit, OnApplicationBootstrap, OnModu
   onApplicationBootstrap(): void {
     this.timer = setInterval(
       () => {
+        if (!this.leadership.isLeader()) return;
         this.server.prune().catch((error: unknown) => this.logger.error(`pruning failed: ${String(error)}`));
       },
       60 * 60 * 1000,

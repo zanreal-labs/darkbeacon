@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { InstanceSettingsService } from '@darkbeacon/access';
-import type { Actor, Clock, EventLog } from '@darkbeacon/core';
+import type { Actor, Clock, EventLog, Leadership } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
 import { OBSERVED_ROUTES, TelemetryService } from '@darkbeacon/telemetry';
 import { tap, type Observable } from 'rxjs';
@@ -21,7 +21,7 @@ import { KyselyTelemetryState } from '../../adapters/telemetry/kysely-telemetry-
 import { hmacSha256, inertSink, PostHogSink } from '../../adapters/telemetry/posthog-sink.js';
 import type { AppConfig } from '../../config/config.js';
 import { EventLogTaps } from '../../platform/event-taps.js';
-import { APP_CONFIG, CLOCK, EVENT_LOG, HTTP_FETCH } from '../../platform/tokens.js';
+import { APP_CONFIG, CLOCK, EVENT_LOG, HTTP_FETCH, LEADERSHIP } from '../../platform/tokens.js';
 import { TelemetryController } from './telemetry.controller.js';
 import { telemetrySettings } from './telemetry.settings.js';
 
@@ -77,6 +77,7 @@ class TelemetryLifecycle implements OnApplicationBootstrap, OnApplicationShutdow
   constructor(
     @Inject(TelemetryService) private readonly telemetry: TelemetryService,
     @Inject(EventLogTaps) private readonly taps: EventLogTaps,
+    @Inject(LEADERSHIP) private readonly leadership: Leadership,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -86,14 +87,20 @@ class TelemetryLifecycle implements OnApplicationBootstrap, OnApplicationShutdow
     });
     const reason = this.telemetry.offReason;
     if (reason === null) this.logger.log('anonymous telemetry is on (see docs/telemetry.md to opt out)');
-    const check = () =>
+    // One heartbeat per instance: the leader sends it and samples who is online for it.
+    const check = () => {
+      if (!this.leadership.isLeader()) return;
       void this.telemetry
         .heartbeatIfDue(DAY - HOUR)
         .catch((error: unknown) => this.logger.warn(`heartbeat failed: ${String(error)}`));
+    };
+    const sample = () => {
+      if (this.leadership.isLeader()) void this.telemetry.sampleOnline().catch(() => {});
+    };
     this.timers.push(
       setTimeout(check, FIRST_CHECK_MS).unref(),
       setInterval(check, HOUR).unref(),
-      setInterval(() => void this.telemetry.sampleOnline().catch(() => {}), ONLINE_SAMPLE_MS).unref(),
+      setInterval(sample, ONLINE_SAMPLE_MS).unref(),
     );
   }
 

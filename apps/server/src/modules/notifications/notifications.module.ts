@@ -78,7 +78,10 @@ export class WebhookWorker implements OnModuleInit, OnApplicationShutdown {
       ),
       every(
         PRUNE_EVERY_MS,
-        () => this.webhooks.pruneDeliveries(this.clock.now() - KEEP_DELIVERIES_MS),
+        () =>
+          this.leadership.isLeader()
+            ? this.webhooks.pruneDeliveries(this.clock.now() - KEEP_DELIVERIES_MS)
+            : Promise.resolve(),
         this.logger,
       ),
     );
