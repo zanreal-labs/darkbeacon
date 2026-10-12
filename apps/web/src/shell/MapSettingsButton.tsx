@@ -11,18 +11,21 @@ import { useMapSettings } from '../lib/useMapSettings';
 import { Tooltip } from '../ui';
 import styles from './AppShell.module.css';
 
-/** The map open at `pathname` (`/m/<slug>`), when the visitor may change its settings. */
+/**
+ * The map open at `pathname` (`/m/<slug>`), when the visitor has a settings section there:
+ * managers change the map, everyone has their own view of it and its history.
+ */
 export function useManagedMap(pathname: string): MapSummaryDto | null {
   // The shell sits outside the page's HydrationBoundary: read what the page put in the cache.
   const maps = useCachedData<MapSummaryDto[]>(mapsKey);
   const slug = /^\/m\/([^/]+)\/?$/.exec(pathname)?.[1];
   const map = slug ? maps?.find((m) => m.slug === decodeURIComponent(slug)) : undefined;
-  return map && mapPermissions(map.role).manage ? map : null;
+  return map && mapSettingsSections(mapPermissions(map.role)).length > 0 ? map : null;
 }
 
 /**
- * The rail's settings button, under the Map icon: on a map the visitor manages, it opens the
- * map's settings in a dialog over the map (`?settings=`), without leaving it.
+ * The rail's settings button, under the Map icon: on a map, it opens the map's settings in a
+ * dialog over the map (`?settings=`), without leaving it.
  */
 export function MapSettingsRailButton() {
   const map = useManagedMap(usePathname());

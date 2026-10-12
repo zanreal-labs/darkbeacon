@@ -4,8 +4,9 @@ import { useEffect, useId, useState } from 'react';
 import { Panel, useReactFlow } from '@xyflow/react';
 import { useQuery } from '@tanstack/react-query';
 import { buildPath, routes, type MapDto } from '@darkbeacon/shared';
-import { Bookmark, Info, LocateFixed, Maximize, Minus, Plus } from 'lucide-react';
+import { Bookmark, History, Info, LocateFixed, Maximize, Minus, Plus } from 'lucide-react';
 import { api } from '../lib/api';
+import { useMapSettings } from '../lib/useMapSettings';
 import type { MapPermissions } from '../lib/roles';
 import { Dialog, DialogContent, IconButton } from '../ui';
 import { BookmarkLabelSettings } from './BookmarkSettings';
@@ -58,6 +59,7 @@ export function MapControls({
   const rf = useReactFlow();
   const legendId = useId();
   const [labels, setLabels] = useState(false);
+  const settings = useMapSettings();
 
   useEffect(() => {
     if (!legend) return;
@@ -111,6 +113,16 @@ export function MapControls({
             />
             {labels && <BookmarkDialog mapId={mapId} can={can} />}
           </Dialog>
+        )}
+        {!readOnly && (
+          <IconButton
+            tooltipSide="right"
+            size="sm"
+            label="History"
+            icon={<History />}
+            aria-haspopup="dialog"
+            onClick={() => settings.show('history')}
+          />
         )}
         <IconButton
           tooltipSide="right"

@@ -1,0 +1,4 @@
+/* The revert button sits at the end of the entry's meta line. */
+.revert {
+  margin-left: auto;
+}

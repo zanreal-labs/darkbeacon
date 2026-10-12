@@ -109,6 +109,10 @@ export const TelemetrySection = z.enum([
   'api',
   /** Map settings, Public link. */
   'public',
+  /** Map settings, Your view (canvas preferences of this browser). */
+  'view',
+  /** Map settings, History. */
+  'history',
 ]);
 /** Map panels (the widget dock); `plugin` for any plugin widget. */
 export const TelemetryPanel = z.enum([
@@ -149,7 +153,6 @@ export const KeyboardShortcut = z.enum([
   'delete_selection',
   'copy_selection',
   'paste_systems',
-  'search',
 ]);
 
 /**

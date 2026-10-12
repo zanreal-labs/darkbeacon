@@ -14,6 +14,46 @@
   --xy-selection-border: 1px dashed var(--dbk-color-accent);
 }
 
+/* "Soft background": the canvas takes the page's quieter colour and the pattern fades further. */
+.canvas[data-soft] {
+  background: var(--dbk-color-bg-subtle);
+  --xy-background-color: var(--dbk-color-bg-subtle);
+  --xy-background-pattern-color: color-mix(in oklab, var(--dbk-color-canvas-grid) 55%, transparent);
+}
+
+/*
+ * A rally point (Wanderer's): slow diagonal stripes in the warning colour around the system,
+ * behind it, so nothing on the node itself changes. Still when motion is reduced.
+ */
+.canvas :global(.react-flow__node).rally::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -7px;
+  border: 1.5px solid color-mix(in oklab, var(--dbk-color-warning) 80%, transparent);
+  border-radius: calc(var(--dbk-node-radius) + 6px);
+  background: repeating-linear-gradient(
+    -45deg,
+    color-mix(in oklab, var(--dbk-color-warning) 32%, transparent) 0 7px,
+    transparent 7px 16px
+  );
+  background-size: 22.6px 22.6px;
+  animation: rallyStripes 2.4s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes rallyStripes {
+  to {
+    background-position: 22.6px 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas :global(.react-flow__node).rally::before {
+    animation: none;
+  }
+}
+
 /* The node component draws its own box. */
 .canvas :global(.react-flow__node-system) {
   padding: 0;
