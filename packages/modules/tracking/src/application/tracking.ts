@@ -94,6 +94,68 @@ export class ListMapCharacters {
   }
 }
 
+/** A character tracked on a map, for the map's managers: whose it is and since when. */
+export interface MapTrackedCharacter extends CharacterPresenceDto {
+  since: number;
+}
+
+/**
+ * The map's characters page (Wanderer's, for managers): every character tracked on the map with
+ * the account it belongs to, and taking someone else's character off the map.
+ */
+export class ManageMapTracking {
+  constructor(
+    private readonly deps: {
+      tracking: TrackingRepository;
+      access: MapAccess;
+      events: EventLog;
+      uow: UnitOfWork;
+      clock: Clock;
+    },
+  ) {}
+
+  async list(actor: Actor | null, mapId: string): Promise<MapTrackedCharacter[]> {
+    await requireMapRole(this.deps.access, actor, mapId, 'manager');
+    const tracked = await this.deps.tracking.listTrackedOnMap(mapId);
+    const presence = new Map(
+      (await this.deps.tracking.listPresence(tracked.map((t) => t.characterId))).map((p) => [
+        p.characterId,
+        p,
+      ]),
+    );
+    return tracked
+      .map((t) => ({
+        ...(presence.get(t.characterId) ?? blankPresence(t.characterId, t.since)),
+        accountId: t.accountId,
+        since: t.since,
+      }))
+      .sort((a, b) => a.accountId.localeCompare(b.accountId) || a.name.localeCompare(b.name));
+  }
+
+  /** Stops tracking a character on the map, whoever it belongs to (managers). Its owner may track it again. */
+  async untrack(actor: Actor | null, mapId: string, characterId: number): Promise<void> {
+    await requireMapRole(this.deps.access, actor, mapId, 'manager');
+    await this.deps.uow.transaction(async () => {
+      const entry = (await this.deps.tracking.listTrackedOnMap(mapId)).find(
+        (t) => t.characterId === characterId,
+      );
+      if (!entry) throw new NotFoundError('Character');
+      await this.deps.tracking.setTracked(entry, false);
+      const stored = await this.deps.tracking.getPresence(characterId);
+      await this.deps.events.append([
+        newEvent({
+          stream: mapStream(mapId),
+          type: 'character.untracked',
+          actor: actorRef(actor!),
+          data: { characterId },
+          occurredAt: this.deps.clock.now(),
+          before: stored ?? { characterId },
+        }),
+      ]);
+    });
+  }
+}
+
 export function blankPresence(characterId: number, now: number): CharacterPresence {
   return {
     characterId,

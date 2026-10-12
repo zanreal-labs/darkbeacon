@@ -266,6 +266,19 @@ export class RealtimeHub {
       }
       source = resolved;
       project = (event) => view.project(parsed.id, event, stream);
+    } else if (parsed) {
+      // Per-follower filters (offline characters for managers only...), with the actor as it is
+      // now: re-checks update `connection.actor`.
+      const filters = this.options.registry.eventFilters(parsed.kind);
+      if (filters.length > 0)
+        project = async (event) => {
+          let shown: DomainEvent | null = event;
+          for (const filter of filters) {
+            if (!shown) break;
+            shown = await filter(connection.actor, parsed.id, shown);
+          }
+          return shown;
+        };
     }
     this.drop(connection, stream);
     const sub = new Subscription(stream, connection, sinceSeq ?? 0, source, project);

@@ -28,3 +28,4 @@ export * from './map-export.js';
 export * from './map-api.js';
 export * from './wanderer-compat.js';
 export * from './identity-admin.js';
+export * from './map-characters.js';

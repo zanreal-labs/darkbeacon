@@ -1831,6 +1831,25 @@ export const routes = {
     }),
   },
 
+  /** The map's characters page (managers): every tracked character by person; untrack any. */
+  mapCharacters: {
+    list: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/tracking/characters',
+      auth: 'account',
+      scope: { resource: 'tracking', action: 'read' },
+      mapRole: 'manager',
+      response: z.array(dto.MapTrackedCharacterDto),
+    }),
+    untrack: route({
+      method: 'DELETE',
+      path: '/api/maps/:mapId/tracking/characters/:characterId',
+      auth: 'account',
+      scope: { resource: 'tracking', action: 'write' },
+      mapRole: 'manager',
+    }),
+  },
+
   /** More on webhooks. */
   webhookSecrets: {
     /** A new signing secret, shown once; the old one stops working at once. */

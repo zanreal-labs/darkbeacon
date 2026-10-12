@@ -15,6 +15,7 @@ import { EventConsumers } from '../../platform/event-consumers.js';
 import { MaintenanceMode } from '../../platform/maintenance.js';
 import { APP_CONFIG, EVENT_BUS, OBSERVABILITY } from '../../platform/tokens.js';
 import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
+import { OfflineVisibility } from './offline-visibility.js';
 
 /**
  * Starts the ESI poller, runs auto-mapping and the cleanups after deleted maps and characters
@@ -37,13 +38,18 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
     @Inject(EventConsumers) private readonly consumers: EventConsumers,
     @Inject(EVENT_BUS) private readonly bus: EventBus,
     @Inject(MaintenanceMode) private readonly maintenance: MaintenanceMode,
+    @Inject(OfflineVisibility) private readonly offline: OfflineVisibility,
     @Optional() @Inject(OBSERVABILITY) private readonly telemetry?: DomainTelemetry | null,
   ) {}
 
   onModuleInit(): void {
-    this.registry.registerSnapshot('map', async (mapId) => ({
-      characters: await this.listCharacters.forMap(mapId),
+    this.registry.registerSnapshot('map', async (mapId, actor) => ({
+      characters: await this.offline.filterList(actor, mapId, await this.listCharacters.forMap(mapId)),
     }));
+    // Offline characters for managers only, on maps that ask for it.
+    this.registry.registerEventFilter('map', (actor, mapId, event) =>
+      this.offline.filterEvent(actor, mapId, event),
+    );
     this.consumers.register({
       name: 'auto-mapping',
       streams: ['map'],
@@ -67,7 +73,16 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
           await this.cleanup.forgetCharacter(event.data.characterId);
       },
     });
-    this.unsubscribe = this.bus.subscribe(() => this.poller.recheckAccess(), { types: ['access.*'] });
+    const unsubscribeAccess = this.bus.subscribe(() => this.poller.recheckAccess(), { types: ['access.*'] });
+    // The offline option and roles are cached briefly; changes read them again at once.
+    const unsubscribeSettings = this.bus.subscribe(
+      (event) => this.offline.forget(event.stream.slice('map:'.length)),
+      { types: ['map.settings_changed', 'access.*'] },
+    );
+    this.unsubscribe = () => {
+      unsubscribeAccess();
+      unsubscribeSettings();
+    };
     this.maintenance.register({
       name: 'tracking',
       resume: (restored) => {

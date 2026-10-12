@@ -22,6 +22,7 @@ import { ActorResolverRegistry, bearerToken, ClientIp, CurrentActor, sameOrigin 
 import { ZodPipe } from '../platform/http.js';
 import { APP_CONFIG, EVENT_LOG } from '../platform/tokens.js';
 import { RealtimeHub } from './realtime.hub.js';
+import { RealtimeRegistry } from './realtime.registry.js';
 import { SseStreams, sseFrame } from './sse.js';
 
 /**
@@ -38,6 +39,7 @@ export class EventsController {
     @Inject(EVENT_LOG) private readonly log: EventLog,
     @Inject(SseStreams) private readonly sse: SseStreams,
     @Inject(ActorResolverRegistry) private readonly actors: ActorResolverRegistry,
+    @Inject(RealtimeRegistry) private readonly registry: RealtimeRegistry,
     @Inject(APP_CONFIG) config: AppConfig,
   ) {
     this.publicOrigin = new URL(config.publicUrl).origin;
@@ -54,7 +56,16 @@ export class EventsController {
     const [head, oldest] = await Promise.all([this.log.headSeq(stream), this.log.oldestSeq(stream)]);
     const read = await this.log.readSince(stream, query.sinceSeq, query.limit);
     const types = query.types;
-    const events: DomainEvent[] = types?.length ? read.filter((e) => matchesFilter(e, { types })) : read;
+    const events: DomainEvent[] = [];
+    for (const raw of read) {
+      // The same per-follower filters as on the WebSocket (offline characters for managers only...).
+      let event: DomainEvent | null = raw;
+      for (const filter of this.registry.eventFilters('map')) {
+        if (!event) break;
+        event = await filter(actor, mapId, event);
+      }
+      if (event && (!types?.length || matchesFilter(event, { types }))) events.push(event);
+    }
     const nextSeq = read.at(-1)?.seq ?? Math.min(query.sinceSeq, head);
     return {
       events,
