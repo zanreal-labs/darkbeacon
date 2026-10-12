@@ -6,6 +6,8 @@ import type {
   ConnectionRepository,
   MapRepository,
   MapSystem,
+  Passage,
+  PassageRepository,
   Signature,
   SignatureRepository,
   SystemRepository,
@@ -51,6 +53,7 @@ export interface MappingTables {
     dangerous: number;
     bubbled: string;
     eol_at: number | null;
+    mass_status_at: number | null;
     created_at: number;
     updated_at: number;
     /** min(source, target) and max(source, target): unique per map. */
@@ -70,12 +73,25 @@ export interface MappingTables {
     created_at: number;
     updated_at: number;
   };
+  map_connection_passages: {
+    id: string;
+    map_id: string;
+    connection_id: string;
+    character_id: number;
+    ship_type_id: number | null;
+    mass: number | null;
+    from_system: number;
+    to_system: number;
+    occurred_at: number;
+    event_id: string;
+  };
 }
 
 type MapRow = MappingTables['maps'];
 type SystemRow = MappingTables['map_systems'];
 type ConnectionRow = MappingTables['map_connections'];
 type SignatureRow = MappingTables['map_signatures'];
+type PassageRow = MappingTables['map_connection_passages'];
 
 abstract class Repository {
   constructor(private readonly database: Database) {}
@@ -308,6 +324,65 @@ export class KyselySignatureRepository extends Repository implements SignatureRe
   }
 }
 
+export class KyselyPassageRepository extends Repository implements PassageRepository {
+  async insert(mapId: string, passage: Passage, eventId: string): Promise<boolean> {
+    const row = await this.db
+      .insertInto('map_connection_passages')
+      .values({
+        id: passage.id,
+        map_id: mapId,
+        connection_id: passage.connectionId,
+        character_id: passage.characterId,
+        ship_type_id: passage.shipTypeId,
+        mass: passage.mass,
+        from_system: passage.from,
+        to_system: passage.to,
+        occurred_at: passage.occurredAt,
+        event_id: eventId,
+      })
+      .onConflict((oc) => oc.column('event_id').doNothing())
+      .returning('id')
+      .executeTakeFirst();
+    return row !== undefined;
+  }
+
+  async listForMap(mapId: string): Promise<Passage[]> {
+    const rows = await this.db
+      .selectFrom('map_connection_passages')
+      .selectAll()
+      .where('map_id', '=', mapId)
+      .orderBy('occurred_at')
+      .orderBy('id')
+      .execute();
+    return rows.map(passageFromRow);
+  }
+
+  async listForConnection(mapId: string, connectionId: string): Promise<Passage[]> {
+    const rows = await this.db
+      .selectFrom('map_connection_passages')
+      .selectAll()
+      .where('map_id', '=', mapId)
+      .where('connection_id', '=', connectionId)
+      .orderBy('occurred_at', 'desc')
+      .orderBy('id', 'desc')
+      .execute();
+    return rows.map(passageFromRow);
+  }
+}
+
+function passageFromRow(row: PassageRow): Passage {
+  return {
+    id: row.id,
+    connectionId: row.connection_id,
+    characterId: Number(row.character_id),
+    shipTypeId: row.ship_type_id == null ? null : Number(row.ship_type_id),
+    mass: row.mass == null ? null : Number(row.mass),
+    from: Number(row.from_system),
+    to: Number(row.to_system),
+    occurredAt: Number(row.occurred_at),
+  };
+}
+
 function signatureConflict(eveId: string) {
   return (error: unknown): never => {
     if (isUniqueViolation(error)) throw new ConflictError(`Signature ${eveId} already exists`);
@@ -392,6 +467,7 @@ function connectionToRow(c: Connection): ConnectionRow {
     dangerous: bool.encode(c.dangerous),
     bubbled: c.bubbled,
     eol_at: c.eolAt,
+    mass_status_at: c.massStatusAt ?? null,
     created_at: c.createdAt,
     updated_at: c.updatedAt,
     pair_low: Math.min(c.source, c.target),
@@ -413,6 +489,7 @@ function connectionFromRow(row: ConnectionRow): Connection {
     dangerous: bool.decode(row.dangerous),
     bubbled: row.bubbled as Connection['bubbled'],
     eolAt: row.eol_at == null ? null : Number(row.eol_at),
+    massStatusAt: row.mass_status_at == null ? null : Number(row.mass_status_at),
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
   };

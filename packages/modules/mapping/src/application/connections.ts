@@ -40,6 +40,7 @@ export class ConnectionUseCases extends MappingUseCases {
         dangerous: false,
         bubbled: 'none',
         eolAt: null,
+        massStatusAt: null,
         createdAt: now,
         updatedAt: now,
       };
@@ -54,7 +55,10 @@ export class ConnectionUseCases extends MappingUseCases {
     });
   }
 
-  /** Time, mass, size, type, mass-saved, dangerous and bubbled. Marking EOL stamps `eolAt`. */
+  /**
+   * Time, mass, size, type, mass-saved, dangerous and bubbled. Marking EOL stamps `eolAt`; setting
+   * the mass status stamps `massStatusAt`, from when mass estimates count passages.
+   */
   async update(
     actor: Actor | null,
     mapId: string,
@@ -69,6 +73,7 @@ export class ConnectionUseCases extends MappingUseCases {
       const now = this.ports.clock.now();
       const next: Connection = { ...current, ...patch, updatedAt: now };
       if (patch.timeStatus) next.eolAt = patch.timeStatus === 'eol' ? (current.eolAt ?? now) : null;
+      if (patch.massStatus && patch.massStatus !== current.massStatus) next.massStatusAt = now;
       await this.ports.connections.update(next);
       events.add('connection.updated', next);
       return next;

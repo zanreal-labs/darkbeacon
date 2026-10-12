@@ -1,6 +1,12 @@
 import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post, Put } from '@nestjs/common';
 import type { Actor } from '@darkbeacon/core';
-import { ConnectionUseCases, MapUseCases, SignatureUseCases, SystemUseCases } from '@darkbeacon/mapping';
+import {
+  ConnectionIntelQuery,
+  ConnectionUseCases,
+  MapUseCases,
+  SignatureUseCases,
+  SystemUseCases,
+} from '@darkbeacon/mapping';
 import {
   AddConnectionRequest,
   AddSignatureRequest,
@@ -119,7 +125,24 @@ export class SystemsController {
 
 @Controller()
 export class ConnectionsController {
-  constructor(@Inject(ConnectionUseCases) private readonly connections: ConnectionUseCases) {}
+  constructor(
+    @Inject(ConnectionUseCases) private readonly connections: ConnectionUseCases,
+    @Inject(ConnectionIntelQuery) private readonly intel: ConnectionIntelQuery,
+  ) {}
+
+  @Get(nestPath(routes.connections.intel.path))
+  list(@CurrentActor() actor: Actor | null, @Param('mapId') mapId: string) {
+    return this.intel.list(actor, mapId);
+  }
+
+  @Get(nestPath(routes.connections.passages.path))
+  passages(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Param('connectionId') connectionId: string,
+  ) {
+    return this.intel.passages(actor, mapId, connectionId);
+  }
 
   @Post(nestPath(routes.connections.add.path))
   add(

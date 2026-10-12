@@ -13,6 +13,7 @@
     { "path": "packages/modules/tracking" },
     { "path": "packages/modules/notifications" },
     { "path": "packages/modules/plugins" },
+    { "path": "packages/modules/routing" },
     { "path": "apps/server" },
     { "path": "plugins/discord-notify" },
     { "path": "plugins/sample-widget" }

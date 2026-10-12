@@ -4,6 +4,7 @@ export * from './identity.js';
 export * from './mapping.js';
 export * from './notifications.js';
 export * from './plugins.js';
+export * from './routing.js';
 export * from './themes.js';
 export * from './tracking.js';
 export * from './universe.js';

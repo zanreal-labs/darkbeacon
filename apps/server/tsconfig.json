@@ -20,6 +20,7 @@
     { "path": "../../packages/modules/mapping" },
     { "path": "../../packages/modules/tracking" },
     { "path": "../../packages/modules/notifications" },
-    { "path": "../../packages/modules/plugins" }
+    { "path": "../../packages/modules/plugins" },
+    { "path": "../../packages/modules/routing" }
   ]
 }

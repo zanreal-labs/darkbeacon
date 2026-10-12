@@ -44,14 +44,59 @@ export function loadUniverseData(file = UNIVERSE_DATA_FILE): UniverseData {
   return JSON.parse(readFileSync(file, 'utf8')) as UniverseData;
 }
 
+/** Static wormhole types and the effect of one wormhole system. */
+export interface WormholeSystemFacts {
+  statics?: string[];
+  effect?: string | null;
+}
+
+/** A wormhole type (`D845`) with its dogma attributes from the SDE; null where it has none (K162). */
+export interface WormholeTypeData {
+  code: string;
+  typeId: number;
+  /** SDE wormhole class id of the destination (as `whClass`); -1 for region-bound types. */
+  targetClass: number | null;
+  /** Lifetime in minutes. */
+  maxStableTimeMinutes: number | null;
+  /** Total mass (kg) the wormhole lets through before it collapses (the game varies it by ±10 %). */
+  maxStableMass: number | null;
+  /** Heaviest single ship (kg) that may jump. */
+  maxJumpMass: number | null;
+  /** Mass (kg) it regains per regeneration cycle. */
+  massRegeneration: number | null;
+  targetDistribution: number | null;
+}
+
+/** A class of hulls and the mass range of its published ships (kg). */
+export interface HullClassData {
+  id:
+    | 'frigate'
+    | 'destroyer'
+    | 'cruiser'
+    | 'battlecruiser'
+    | 'industrial'
+    | 'battleship'
+    | 'industrialCommand'
+    | 'freighter'
+    | 'capital';
+  minMass: number;
+  maxMass: number;
+}
+
 /**
- * Wormhole facts the SDE does not carry in a usable form: the static wormhole types of a system
- * and its effect. Keyed by solar system id; systems that are not listed have neither (as far as
- * the dataset knows).
+ * Wormhole facts: wormhole types (SDE dogma), hull classes and ship masses (SDE), and per wormhole
+ * system its static wormhole types (a statics table, see `docs/decisions.md`) and effect (SDE
+ * secondary suns). Systems keyed by solar system id; systems that are not listed have neither.
+ * `types`, `hullClasses` and `shipMasses` are optional so a hand-written file with only systems
+ * still loads.
  */
 export interface WormholeData {
   source: string;
-  systems: Record<string, { statics?: string[]; effect?: string | null }>;
+  types?: WormholeTypeData[];
+  hullClasses?: HullClassData[];
+  /** Ship type id -> hull mass in kg. */
+  shipMasses?: Record<string, number>;
+  systems: Record<string, WormholeSystemFacts>;
 }
 
 export const WORMHOLE_DATA_FILE = fileURLToPath(new URL('../data/wormholes.json', import.meta.url));

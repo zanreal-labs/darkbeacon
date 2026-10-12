@@ -8,6 +8,7 @@ import {
   UniverseLookupQuery,
   UniverseSearchQuery,
   type UniverseSystemDto,
+  type WormholeCatalogDto,
 } from '@darkbeacon/shared';
 import { z } from 'zod';
 import { StaticUniverseCatalog } from '../../adapters/universe/static-universe-catalog.js';
@@ -36,6 +37,12 @@ export class UniverseController {
   ): UniverseSystemDto[] {
     requireAccount(actor);
     return query.ids.flatMap((id) => this.catalog.getSystem(id) ?? []);
+  }
+
+  @Get(nestPath(routes.universe.wormholes.path))
+  wormholes(@CurrentActor() actor: Actor | null): WormholeCatalogDto {
+    requireAccount(actor);
+    return { types: this.catalog.wormholeTypes(), hullClasses: this.catalog.hullClasses() };
   }
 
   @Get(nestPath(routes.universe.getSystem.path))

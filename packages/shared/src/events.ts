@@ -4,6 +4,7 @@ import type { AccessRuleDto } from './dto/access.js';
 import type { InstanceRole } from './dto/identity.js';
 import type { PluginDto } from './dto/plugins.js';
 import type { ConnectionDto, LabelDto, MapDto, MapSystemDto, SignatureDto } from './dto/mapping.js';
+import type { HubDto, MapExitDto } from './dto/routing.js';
 import type { CharacterPresenceDto } from './dto/tracking.js';
 
 export const DomainEventSchema = z.object({
@@ -37,7 +38,19 @@ export interface EventPayloads {
   'connection.added': ConnectionDto;
   'connection.updated': ConnectionDto;
   'connection.removed': { id: string };
-  'connection.passage': { connectionId: string; characterId: number; shipTypeId: number | null };
+  /**
+   * A tracked character jumped through a connection on the map. `mass` (hull mass in kg, null for
+   * unknown ships), `from`, `to` and `passageId` were added later and are optional for readers.
+   */
+  'connection.passage': {
+    connectionId: string;
+    characterId: number;
+    shipTypeId: number | null;
+    mass?: number | null;
+    from?: number;
+    to?: number;
+    passageId?: string;
+  };
   'signature.added': SignatureDto;
   'signature.updated': SignatureDto;
   'signature.removed': { id: string; solarSystemId: number };
@@ -56,6 +69,10 @@ export interface EventPayloads {
   /** Last event of a map stream: the map and everything on it is gone. */
   'map.removed': { id: string };
   'labels.changed': { labels: LabelDto[] };
+  /** The chain's exits changed (recomputed after connection and system changes). */
+  'routes.exits_changed': { exits: MapExitDto[] };
+  /** The map's own hubs were replaced (manager+). */
+  'routes.hubs_changed': { hubs: HubDto[] };
   'ping.created': PingDto;
   'ping.removed': { id: string };
   'access.rule_added': AccessRuleDto;
@@ -97,6 +114,8 @@ export const EVENT_TYPES = [
   'map.created',
   'map.removed',
   'labels.changed',
+  'routes.exits_changed',
+  'routes.hubs_changed',
   'ping.created',
   'ping.removed',
   'access.rule_added',

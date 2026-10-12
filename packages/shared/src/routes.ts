@@ -146,6 +146,13 @@ export const routes = {
       query: dto.UniverseLookupQuery,
       response: z.array(dto.UniverseSystemDto),
     }),
+    /** Every wormhole type with its SDE attributes, and the hull classes "fits" refers to. */
+    wormholes: route({
+      method: 'GET',
+      path: '/api/universe/wormholes',
+      auth: 'account',
+      response: dto.WormholeCatalogDto,
+    }),
   },
 
   maps: {
@@ -244,6 +251,87 @@ export const routes = {
       path: '/api/maps/:mapId/connections/:connectionId',
       auth: 'account',
       mapRole: 'member',
+    }),
+    /** The connections panel: every visible connection with type, mass and time estimates, most urgent first. */
+    intel: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/connections/intel',
+      auth: 'account',
+      mapRole: 'viewer',
+      response: z.array(dto.ConnectionIntelDto),
+    }),
+    /** Ships recorded going through a connection, newest first. */
+    passages: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/connections/:connectionId/passages',
+      auth: 'account',
+      mapRole: 'viewer',
+      response: z.array(dto.PassageDto),
+    }),
+  },
+
+  routing: {
+    /** A route over stargates and the map's chain. */
+    route: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/route',
+      auth: 'account',
+      mapRole: 'viewer',
+      query: dto.RouteQuery,
+      response: dto.RouteDto,
+    }),
+    /** Ways out of the chain with the nearest hub and jumps. */
+    exits: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/exits',
+      auth: 'account',
+      mapRole: 'viewer',
+      query: dto.ExitsQuery,
+      response: dto.MapExitsDto,
+    }),
+    hubs: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/hubs',
+      auth: 'account',
+      mapRole: 'viewer',
+      response: dto.HubsDto,
+    }),
+    setMapHubs: route({
+      method: 'PUT',
+      path: '/api/maps/:mapId/hubs',
+      auth: 'account',
+      mapRole: 'manager',
+      body: dto.SetHubsRequest,
+      response: z.array(dto.HubDto),
+    }),
+    /** Jumps from one system to every hub of the viewer, nearest first. */
+    hubDistances: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/hubs/distances',
+      auth: 'account',
+      mapRole: 'viewer',
+      query: dto.HubDistancesQuery,
+      response: z.array(dto.HubDistanceDto),
+    }),
+    personalHubs: route({
+      method: 'GET',
+      path: '/api/accounts/me/hubs',
+      auth: 'account',
+      response: z.array(dto.HubDto),
+    }),
+    setPersonalHubs: route({
+      method: 'PUT',
+      path: '/api/accounts/me/hubs',
+      auth: 'account',
+      body: dto.SetHubsRequest,
+      response: z.array(dto.HubDto),
+    }),
+    /** Sets the in-game destination or adds a waypoint (ESI, `esi-ui.write_waypoint.v1`). */
+    waypoint: route({
+      method: 'POST',
+      path: '/api/accounts/me/characters/:characterId/waypoint',
+      auth: 'account',
+      body: dto.WaypointRequest,
     }),
   },
 

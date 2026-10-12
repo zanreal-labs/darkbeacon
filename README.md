@@ -85,7 +85,7 @@ dc run --rm dev pnpm test          # vitest; DB tests run on SQLite and Postgres
 dc run --rm dev pnpm test:pg       # Postgres only
 dc run --rm dev pnpm build         # server/packages to dist, the web app to apps/web/.next/standalone
 dc run --rm dev pnpm format        # prettier --write
-dc run --rm dev pnpm --filter @darkbeacon/sde universe   # rebuild universe.json from CCP's SDE (~100 MB download)
+dc run --rm dev pnpm --filter @darkbeacon/sde data   # rebuild universe.json and wormholes.json (~100 MB SDE download)
 
 dc up app                          # API (watch mode) + `next dev` behind it, DEMO_MODE=true
 dc port app 3000                   # the random loopback port of the app (pages, API and /ws)
@@ -109,10 +109,12 @@ apps/web               Next.js app (App Router, Cache Components, React Flow, Ta
 packages/core          ids, Result, Clock, DomainEvent envelope, authorization, errors, core ports
 packages/db            Kysely factory (SQLite/Postgres), Database = UnitOfWork, migrations/<module>/
 packages/shared        zod DTOs, REST routes (routes.ts), WebSocket protocol, event catalogue
-packages/modules/*     identity, access, mapping, tracking, notifications, plugins (domain/application/ports)
+packages/modules/*     identity, access, mapping, tracking, notifications, plugins, routing
+                       (domain/application/ports)
 packages/plugin-sdk    plugin manifest, PluginContext, web slots
 packages/theme-sdk     theme tokens, built-in themes, CSS generator
-packages/sde           SDE builder and the committed universe dataset (systems, regions, gates)
+packages/sde           SDE builder and the committed datasets: universe (systems, regions, gates) and wormholes
+                       (types, hull classes, ship masses, statics and effects per wormhole system)
 plugins/*              first-party plugins (plugin-sdk only)
 ```
 
@@ -158,3 +160,16 @@ plugins/*              first-party plugins (plugin-sdk only)
    installed by identity through `ActorResolverRegistry.use(...)`.
 
 Imports across those lines are checked by `pnpm lint` (`tools/eslint/boundaries.js`).
+
+## Credits
+
+- Game data: EVE Online and all related material are the property of CCP hf. Systems, stargates, wormhole
+  types, ship masses and wormhole system effects are built from CCP's
+  [Static Data Export](https://developers.eveonline.com/static-data); live data comes from
+  [ESI](https://developers.eveonline.com/api-explorer).
+- Static wormholes of each wormhole system: the statics table of
+  [WormholeSystems](https://github.com/WormholeSystems/WormholeSystems) (MIT, Copyright (c) 2025
+  WormholeSystems), pinned to a commit in `packages/sde/src/cli.ts`; its licence ships next to the data in
+  `packages/sde/data/wormholes.LICENSE`.
+- Game rules (wormhole lifetimes and mass, security rounding, faction police) follow the
+  [EVE University wiki](https://wiki.eveuniversity.org/); see `docs/decisions.md` for the pages used.

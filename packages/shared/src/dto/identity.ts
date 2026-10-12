@@ -24,6 +24,8 @@ export const CharacterDto = z.object({
   /** False when the stored EVE token no longer works and the character must be re-linked. */
   tokenValid: z.boolean(),
   linkedAt: Timestamp,
+  /** The character's EVE grant allows setting the in-game destination (`esi-ui.write_waypoint.v1`). */
+  canSetWaypoints: z.boolean().optional(),
 });
 export type CharacterDto = z.infer<typeof CharacterDto>;
 

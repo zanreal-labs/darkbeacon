@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { DomainEventSchema } from './events.js';
 import type { CharacterPresenceDto } from './dto/tracking.js';
 import type { ConnectionDto, MapDto, MapSystemDto, SignatureDto } from './dto/mapping.js';
+import type { MapExitDto } from './dto/routing.js';
 
 /**
  * WebSocket protocol at /ws. Commands go over REST; their results arrive here as events.
@@ -62,4 +63,6 @@ export interface MapSnapshot {
   connections?: ConnectionDto[];
   signatures?: SignatureDto[];
   characters?: CharacterPresenceDto[];
+  /** Ways out of the chain (shortest mode, trade and map hubs); see `routes.exits_changed`. */
+  exits?: MapExitDto[];
 }
