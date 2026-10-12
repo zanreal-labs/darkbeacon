@@ -2,7 +2,13 @@
 
 import { useState } from 'react';
 import { ArrowRight } from 'lucide-react';
-import { jumpMass, type ConnectionDto, type MassMode, type PassageDirection } from '@darkbeacon/shared';
+import {
+  jumpMass,
+  type ConnectionDto,
+  type FitMassDto,
+  type MassMode,
+  type PassageDirection,
+} from '@darkbeacon/shared';
 import { ApiError } from '../../lib/api';
 import {
   Button,
@@ -17,6 +23,7 @@ import {
   useToast,
 } from '../../ui';
 import { usePassageCommands, useShipCatalog } from './data';
+import { FitPaste } from './FitPaste';
 import { formatTonnes } from './format';
 import { ShipPicker, type ShipOption } from './ShipPicker';
 import styles from './connection.module.css';
@@ -52,12 +59,22 @@ export function LogJumpDialog({
   const [customTonnes, setCustomTonnes] = useState('');
   const [count, setCount] = useState('1');
   const [note, setNote] = useState('');
+  const [byFit, setByFit] = useState(false);
+  const [fit, setFit] = useState<{ text: string; mass: FitMassDto } | null>(null);
 
-  const facts = ship?.ship;
+  const weighed = byFit ? fit?.mass : undefined;
+  const facts = weighed ? weighed.ship : byFit ? undefined : ship?.ship;
   const custom = Number(customTonnes.replace(/\s/g, '')) * 1000;
   const times = Math.min(20, Math.max(1, Math.round(Number(count)) || 1));
-  const mass =
-    catalog.data && (facts || mode === 'custom')
+  const mass = weighed
+    ? mode === 'custom'
+      ? Number.isFinite(custom) && custom > 0
+        ? custom
+        : null
+      : mode === 'hot'
+        ? weighed.hot
+        : weighed.cold
+    : catalog.data && (facts || mode === 'custom')
       ? jumpMass(
           facts,
           {
@@ -80,19 +97,26 @@ export function LogJumpDialog({
     setCustomTonnes('');
     setCount('1');
     setNote('');
+    setByFit(false);
+    setFit(null);
   };
 
   const submit = async () => {
     if (!facts || mass === null) return;
     try {
+      // A fit's weight is its own (plates and all): it goes in as a custom mass, named in the note.
+      const fitNote = weighed
+        ? `${mode === 'hot' ? 'Hot' : 'Cold'} fit${weighed.name ? ` ${weighed.name}` : ''}`
+        : '';
+      const text = [fitNote, note.trim()].filter(Boolean).join(' · ');
       await commands.log.mutateAsync({
         shipTypeId: facts.id,
         direction,
-        massMode: mode,
-        ...(mode === 'custom' ? { mass } : {}),
-        ...(mode !== 'custom' && higgs && facts.higgs ? { higgs: true } : {}),
-        ...(mode !== 'custom' && entangler && facts.entangler ? { entangler: true } : {}),
-        ...(note.trim() ? { note: note.trim() } : {}),
+        massMode: weighed ? 'custom' : mode,
+        ...(weighed || mode === 'custom' ? { mass } : {}),
+        ...(!weighed && mode !== 'custom' && higgs && facts.higgs ? { higgs: true } : {}),
+        ...(!weighed && mode !== 'custom' && entangler && facts.entangler ? { entangler: true } : {}),
+        ...(text ? { note: text.slice(0, 200) } : {}),
         count: times,
       });
       toast({
@@ -146,9 +170,24 @@ export function LogJumpDialog({
         }
       >
         <div className={styles.form}>
-          <Field label="Ship">
-            <ShipPicker value={ship} onChange={setShip} suggested={catalog.data?.suggested} />
-          </Field>
+          {byFit ? (
+            <FitPaste onWeighed={setFit} />
+          ) : (
+            <Field label="Ship">
+              <ShipPicker value={ship} onChange={setShip} suggested={catalog.data?.suggested} />
+            </Field>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            className={styles.switchSource}
+            onClick={() => {
+              setByFit((b) => !b);
+              setFit(null);
+            }}
+          >
+            {byFit ? 'Pick a ship instead' : 'Weigh a pasted fit instead (plates and all)'}
+          </Button>
           <Field label="Direction">
             <Segmented
               aria-label="Direction"
@@ -177,13 +216,15 @@ export function LogJumpDialog({
           <Field
             label="Mass"
             hint={
-              mode === 'hot'
-                ? facts?.propMass
-                  ? `Prop module running: +${formatTonnes(facts.propMass)}`
-                  : 'This ship has no prop module slot: hot is the hull'
-                : mode === 'cold'
-                  ? 'The hull, prop module off'
-                  : 'What the ship weighed, plates and all'
+              weighed && mode !== 'custom'
+                ? `The fit ${mode}: ${formatTonnes(mode === 'hot' ? weighed.hot : weighed.cold)}`
+                : mode === 'hot'
+                  ? facts?.propMass
+                    ? `Prop module running: +${formatTonnes(facts.propMass)}`
+                    : 'This ship has no prop module slot: hot is the hull'
+                  : mode === 'cold'
+                    ? 'The hull, prop module off'
+                    : 'What the ship weighed, plates and all'
             }
           >
             <Segmented
@@ -208,6 +249,7 @@ export function LogJumpDialog({
               />
             </Field>
           ) : (
+            !weighed &&
             (facts?.higgs || facts?.entangler) && (
               <div className={styles.checks}>
                 {facts.higgs && (

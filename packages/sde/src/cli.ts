@@ -7,6 +7,7 @@ import {
   formatWormholes,
   MASS_MODULE_GROUPS,
   parseStaticsCsv,
+  SUBSYSTEM_CATEGORY_ID,
   SHIP_CATEGORY_ID,
   WORMHOLE_GROUP_ID,
   WORMHOLE_SDE_FILES,
@@ -79,6 +80,10 @@ const secondarySuns = read<RawSecondarySun>(WORMHOLE_SDE_FILES.secondarySuns);
 const beacons = new Set(secondarySuns.map((s) => s.effectBeaconTypeID));
 const shipGroups = new Set(groups.filter((g) => g.categoryID === SHIP_CATEGORY_ID).map((g) => g._key));
 const moduleGroups = new Set<number>(Object.values(MASS_MODULE_GROUPS));
+// Armour plates and subsystems change a fitted ship's mass too (pasted fits).
+for (const g of groups) {
+  if (g.categoryID === SUBSYSTEM_CATEGORY_ID || g.name.en === 'Armor Plate') moduleGroups.add(g._key);
+}
 const wanted = (groupId: number) =>
   groupId === WORMHOLE_GROUP_ID || shipGroups.has(groupId) || moduleGroups.has(groupId);
 const types = text(WORMHOLE_SDE_FILES.types)

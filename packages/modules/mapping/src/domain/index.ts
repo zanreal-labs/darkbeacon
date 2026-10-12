@@ -1,4 +1,5 @@
 export * from './bookmark-numbers.js';
+export * from './fit.js';
 export * from './intel.js';
 export * from './lifetime.js';
 export * from './map.js';

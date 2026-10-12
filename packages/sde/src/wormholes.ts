@@ -1,4 +1,5 @@
 import type {
+  FitItemData,
   HullClassData,
   MassModifierData,
   PropSizeData,
@@ -30,6 +31,9 @@ export const MASS_MODULE_GROUPS = {
   /** Zero-Point Mass Entangler. */
   massEntangler: 2008,
 } as const;
+
+/** The SDE inventory category of subsystems (strategic cruisers add their mass). */
+export const SUBSYSTEM_CATEGORY_ID = 32;
 
 /** Strategic cruisers take their slots from subsystems, so the hull lists no mid slots. */
 const STRATEGIC_CRUISER_GROUP_ID = 963;
@@ -221,6 +225,7 @@ export function buildWormholes(input: WormholeInput): WormholeData {
   });
 
   const { ships, massModifiers } = shipFacts(input, groups, dogma, classOfGroup);
+  const fitItems = fitItemFacts(input, groups, dogma);
 
   const typeNames = new Map(input.types.map((t) => [t._key, t.name.en ?? '']));
   const systems: Record<string, WormholeSystemFacts> = {};
@@ -247,11 +252,39 @@ export function buildWormholes(input: WormholeInput): WormholeData {
     shipMasses,
     ships,
     massModifiers,
+    fitItems,
     systems: sortedSystems,
   };
 }
 
 type Dogma = Map<number, Map<number, number>>;
+
+/**
+ * Published modules with a `massAddition` or a `massBonusPercentage`, and subsystems with their
+ * own mass: what a pasted fit needs to weigh the ship. Sorted by name.
+ */
+function fitItemFacts(input: WormholeInput, groups: Map<number, RawGroup>, dogma: Dogma): FitItemData[] {
+  const items: FitItemData[] = [];
+  for (const type of input.types) {
+    if (!type.published || !type.name.en) continue;
+    const group = groups.get(type.groupID);
+    if (group?.categoryID === SUBSYSTEM_CATEGORY_ID) {
+      if (type.mass) items.push({ name: type.name.en, add: type.mass });
+      continue;
+    }
+    const attrs = dogma.get(type._key);
+    const add = attrs?.get(MASS_ATTRIBUTES.massAddition) ?? 0;
+    const percent = attrs?.get(MASS_ATTRIBUTES.massBonusPercentage) ?? 0;
+    if (!add && !percent) continue;
+    items.push({
+      name: type.name.en,
+      ...(add ? { add } : {}),
+      ...(percent ? { percent } : {}),
+      ...(type.groupID === MASS_MODULE_GROUPS.propulsion ? { prop: true as const } : {}),
+    });
+  }
+  return items.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+}
 
 /**
  * Published ships (name, group, prop size, rig slots, whether the mass entangler fits) and the
@@ -403,6 +436,7 @@ export function formatWormholes(data: WormholeData): string {
     `  "shipMasses": {\n${entries(data.shipMasses ?? {})}\n  },`,
     `  "ships": [\n${lines(data.ships ?? [])}\n  ],`,
     `  "massModifiers": ${JSON.stringify(data.massModifiers ?? null)},`,
+    `  "fitItems": [\n${lines(data.fitItems ?? [])}\n  ],`,
     `  "systems": {\n${entries(data.systems)}\n  }`,
     '}',
     '',

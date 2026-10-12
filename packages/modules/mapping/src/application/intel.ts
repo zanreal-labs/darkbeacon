@@ -1,4 +1,4 @@
-import { newId, NotFoundError, type Actor } from '@darkbeacon/core';
+import { newId, NotFoundError, ValidationError, type Actor } from '@darkbeacon/core';
 import {
   jumpMass,
   RollPlanRequest,
@@ -6,6 +6,7 @@ import {
   type RollCrewShipDto,
   type RollPlanDto,
 } from '@darkbeacon/shared';
+import { fitMass } from '../domain/fit.js';
 import { byUrgency, connectionIntel } from '../domain/intel.js';
 import type { Connection, Passage, Signature } from '../domain/map.js';
 import { planRoll, type RollShip } from '../domain/rolling.js';
@@ -58,19 +59,23 @@ export class ConnectionIntelQuery extends MappingUseCases {
     const crew: RollCrewShipDto[] = [];
     const ships: RollShip[] = [];
     for (const wanted of body.ships) {
-      const ship = universe.ship(wanted.shipTypeId);
+      const weighed = wanted.fit ? fitMass(wanted.fit, universe) : null;
+      if (wanted.fit && !weighed) throw new ValidationError('Not a fit this server knows');
+      const ship = weighed?.ship ?? universe.ship(wanted.shipTypeId);
       if (!ship) throw new NotFoundError('Ship');
       // A Higgs Anchor is a rig: always on. The mass entangler is a module: on going out (cold),
       // off coming back hot with the prop module running.
-      const cold = jumpMass(
-        ship,
-        { massMode: 'cold', higgs: wanted.higgs, entangler: wanted.entangler },
-        modifiers,
-      )!;
-      const hot = jumpMass(ship, { massMode: 'hot', higgs: wanted.higgs }, modifiers)!;
+      // A fit's masses include its plates and rigs; the entangler is switched on going out.
+      const entangled = wanted.entangler && ship.entangler ? 1 + modifiers.entanglerPercent / 100 : 1;
+      const cold = weighed
+        ? Math.round(weighed.cold * entangled)
+        : jumpMass(ship, { massMode: 'cold', higgs: wanted.higgs, entangler: wanted.entangler }, modifiers)!;
+      const hot = weighed
+        ? weighed.hot
+        : jumpMass(ship, { massMode: 'hot', higgs: wanted.higgs }, modifiers)!;
       const name = [
-        ship.name,
-        ...(wanted.higgs && ship.higgs ? ['Higgs'] : []),
+        weighed?.name ? `${ship.name} (${weighed.name})` : ship.name,
+        ...(!weighed && wanted.higgs && ship.higgs ? ['Higgs'] : []),
         ...(wanted.entangler && ship.entangler ? ['entangler'] : []),
       ].join(' + ');
       crew.push({ shipTypeId: ship.id, name, cold, hot, tooHeavy: limit !== null && cold > limit });

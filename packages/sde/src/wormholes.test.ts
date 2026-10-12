@@ -177,6 +177,13 @@ describe('buildWormholes', () => {
     });
   });
 
+  it('lists the items that change a fitted ship’s mass, by name', () => {
+    expect(data.fitItems).toContainEqual({ name: '500MN Microwarpdrive I', add: 50_000_000, prop: true });
+    expect(data.fitItems).toContainEqual({ name: 'Large Higgs Anchor I', percent: 100 });
+    expect(data.fitItems).toContainEqual({ name: 'Zero-Point Mass Entangler', percent: -80 });
+    expect(data.fitItems?.some((i) => i.name.includes('Abyssal'))).toBe(false);
+  });
+
   it('refuses prop modules of one size that add different masses', () => {
     const broken: WormholeInput = {
       ...input,
@@ -273,6 +280,12 @@ describe('committed wormhole dataset', () => {
     expect(ship('Odysseus')?.entangler).toBe(true);
     expect(ship('Tengu')?.propSize).toBe('medium');
     expect(ship('Charon')?.propSize).toBeNull();
+    const item = (name: string) => wormholes.fitItems?.find((i) => i.name === name);
+    expect(item('1600mm Rolled Tungsten Compact Plates')).toEqual({
+      name: '1600mm Rolled Tungsten Compact Plates',
+      add: 3_500_000,
+    });
+    expect(item('Tengu Defensive - Covert Reconfiguration')?.add).toBe(1_400_000);
     expect(wormholes.massModifiers).toEqual({
       prop: { small: 500_000, medium: 5_000_000, large: 50_000_000, capital: 500_000_000 },
       higgsPercent: 100,

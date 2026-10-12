@@ -354,6 +354,14 @@ export const routes = {
       auth: 'account',
       response: dto.ShipCatalogDto,
     }),
+    /** A pasted fit (EFT) weighed cold and hot. */
+    fitMass: route({
+      method: 'POST',
+      path: '/api/universe/ships/fit-mass',
+      auth: 'account',
+      body: dto.FitMassRequest,
+      response: dto.FitMassDto,
+    }),
     getShip: route({
       method: 'GET',
       path: '/api/universe/ships/:shipTypeId',

@@ -1,13 +1,27 @@
-import { Controller, Get, Global, Inject, Logger, Module, Param, Query } from '@nestjs/common';
-import { NotFoundError, requireAccount, type Actor } from '@darkbeacon/core';
-import type { UniverseCatalog } from '@darkbeacon/mapping';
+import {
+  Body,
+  Controller,
+  Get,
+  Global,
+  HttpCode,
+  Inject,
+  Logger,
+  Module,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
+import { NotFoundError, requireAccount, ValidationError, type Actor } from '@darkbeacon/core';
+import { fitMass, type UniverseCatalog } from '@darkbeacon/mapping';
 import {
   EveId,
+  FitMassRequest,
   nestPath,
   routes,
   ShipSearchQuery,
   UniverseLookupQuery,
   UniverseSearchQuery,
+  type FitMassDto,
   type ShipCatalogDto,
   type ShipTypeDto,
   type UniverseSystemDto,
@@ -65,6 +79,18 @@ export class UniverseController {
       modifiers: this.catalog.massModifiers(),
       suggested: SUGGESTED_SHIPS.flatMap((id) => this.catalog.ship(id) ?? []),
     };
+  }
+
+  @Post(nestPath(routes.universe.fitMass.path))
+  @HttpCode(200)
+  weighFit(
+    @CurrentActor() actor: Actor | null,
+    @Body(new ZodPipe(FitMassRequest)) body: FitMassRequest,
+  ): FitMassDto {
+    requireAccount(actor);
+    const weighed = fitMass(body.fit, this.catalog);
+    if (!weighed) throw new ValidationError('Not a fit this server knows: paste it as the game copies it');
+    return weighed;
   }
 
   @Get(nestPath(routes.universe.getShip.path))

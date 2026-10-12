@@ -222,6 +222,17 @@ setupMockServer(
   }),
   http.get(routes.universe.shipCatalog.path, () => HttpResponse.json(catalog)),
   http.get(routes.universe.searchShips.path, () => HttpResponse.json([megathron])),
+  http.post(routes.universe.fitMass.path, () =>
+    HttpResponse.json({
+      ship: megathron,
+      name: 'Roller',
+      cold: 203_800_000,
+      hot: 303_800_000,
+      prop: '500MN Y-T8 Compact Microwarpdrive',
+      counted: ['1600mm Rolled Tungsten Compact Plates', 'Large Higgs Anchor I'],
+      higgs: true,
+    }),
+  ),
 );
 
 const mapDto: MapDto = {
@@ -343,6 +354,33 @@ describe('the connection sidebar', () => {
       expect(logged).toEqual([{ shipTypeId: 641, direction: 'targetToSource', massMode: 'hot', count: 2 }]),
     );
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Log a jump' })).toBeNull());
+  });
+
+  it('logs a jump weighed from a pasted fit, as a custom mass', async () => {
+    const user = userEvent.setup();
+    view();
+    const sidebar = await openConnection();
+    await user.click(within(sidebar).getByRole('button', { name: 'Log a jump' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Log a jump' });
+    await user.click(within(dialog).getByRole('button', { name: /pasted fit/ }));
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Fit' }), {
+      target: { value: '[Megathron, Roller]\nLarge Higgs Anchor I' },
+    });
+    expect(await within(dialog).findByText(/203 800 t cold, 303 800 t hot/)).toBeTruthy();
+    await user.click(within(dialog).getByRole('radio', { name: 'Hot' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Log jump' }));
+    await waitFor(() =>
+      expect(logged).toEqual([
+        {
+          shipTypeId: 641,
+          direction: 'sourceToTarget',
+          massMode: 'custom',
+          mass: 303_800_000,
+          note: 'Hot fit Roller',
+          count: 1,
+        },
+      ]),
+    );
   });
 
   it('plans a roll with the ships the crew picks', async () => {

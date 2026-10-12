@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import type { UniverseCatalog, UniverseSystem } from '@darkbeacon/mapping';
+import type { FitItem, UniverseCatalog, UniverseSystem } from '@darkbeacon/mapping';
 import {
   destinationOfClass,
   HULL_CLASS_LABEL,
@@ -35,6 +35,8 @@ export class StaticUniverseCatalog implements UniverseCatalog {
   /** Ships with lower-cased names, sorted by name, for search. */
   private readonly shipsByName: Array<{ key: string; ship: ShipTypeDto }>;
   private readonly modifiers: MassModifiersDto;
+  private readonly shipNames = new Map<string, ShipTypeDto>();
+  private readonly fitItems = new Map<string, FitItem>();
 
   constructor(data: UniverseData, wormholes: WormholeData = { source: 'none', systems: {} }) {
     const regions = new Map(data.regions.map((r) => [r.id, r.name]));
@@ -80,6 +82,8 @@ export class StaticUniverseCatalog implements UniverseCatalog {
         entangler: ship.entangler,
       });
     }
+    for (const ship of this.ships.values()) this.shipNames.set(ship.name.toLowerCase(), ship);
+    for (const item of wormholes.fitItems ?? []) this.fitItems.set(item.name.toLowerCase(), item);
     this.shipsByName = [...this.ships.values()]
       .map((ship) => ({ key: ship.name.toLowerCase(), ship }))
       .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
@@ -110,7 +114,8 @@ export class StaticUniverseCatalog implements UniverseCatalog {
         wormholes.hullClasses &&
         wormholes.shipMasses &&
         wormholes.ships &&
-        wormholes.massModifiers
+        wormholes.massModifiers &&
+        wormholes.fitItems
       )
     ) {
       const base = loadWormholeData(WORMHOLE_DATA_FILE);
@@ -121,6 +126,7 @@ export class StaticUniverseCatalog implements UniverseCatalog {
         shipMasses: wormholes.shipMasses ?? base.shipMasses,
         ships: wormholes.ships ?? base.ships,
         massModifiers: wormholes.massModifiers ?? base.massModifiers,
+        fitItems: wormholes.fitItems ?? base.fitItems,
       };
     }
     const catalog = new StaticUniverseCatalog(loadUniverseData(file), wormholes);
@@ -198,6 +204,14 @@ export class StaticUniverseCatalog implements UniverseCatalog {
 
   massModifiers(): MassModifiersDto {
     return this.modifiers;
+  }
+
+  shipByName(name: string): ShipTypeDto | null {
+    return this.shipNames.get(name.trim().toLowerCase()) ?? null;
+  }
+
+  fitItem(name: string): FitItem | null {
+    return this.fitItems.get(name.trim().toLowerCase()) ?? null;
   }
 
   private typeDto(type: WormholeTypeData): WormholeTypeDto {

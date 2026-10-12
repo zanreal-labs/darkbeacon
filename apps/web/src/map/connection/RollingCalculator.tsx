@@ -5,6 +5,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ArrowRight, Hourglass, Plus, Trash2, TriangleAlert } from 'lucide-react';
 import type {
   ConnectionIntelDto,
+  FitMassDto,
   MassRange,
   RollPlanDto,
   RollStepDto,
@@ -31,6 +32,7 @@ import {
   ROLL_HEADLINE as HEADLINE,
   ROLL_TEXT as TEXT,
 } from './format';
+import { FitPaste } from './FitPaste';
 import { shipIcon, ShipPicker, type ShipOption } from './ShipPicker';
 import styles from './connection.module.css';
 
@@ -39,6 +41,8 @@ interface CrewEntry {
   higgs: boolean;
   entangler: boolean;
   count: number;
+  /** A pasted fit: its masses come from the fit (plates, rigs and all). */
+  fit?: { text: string; name: string | null };
 }
 
 const tonnesText = (kg: number) => String(Math.round(kg / 1000));
@@ -75,6 +79,8 @@ export function RollingCalculator({
   const [override, setOverride] = useState(false);
   const [minText, setMinText] = useState('');
   const [maxText, setMaxText] = useState('');
+  const [pasting, setPasting] = useState(false);
+  const [fit, setFit] = useState<{ text: string; mass: FitMassDto } | null>(null);
 
   const estimate = intel?.mass.range ?? null;
   useEffect(() => {
@@ -99,6 +105,7 @@ export function RollingCalculator({
         ...(c.higgs ? { higgs: true } : {}),
         ...(c.entangler ? { entangler: true } : {}),
         count: c.count,
+        ...(c.fit ? { fit: c.fit.text } : {}),
       })),
       ...(known ? { remaining: known } : {}),
     }),
@@ -118,7 +125,7 @@ export function RollingCalculator({
     setPicking(null);
     if (!option) return;
     setCrew((c) => {
-      const at = c.findIndex((e) => e.ship.id === option.ship.id);
+      const at = c.findIndex((e) => e.ship.id === option.ship.id && !e.fit);
       if (at >= 0) return c.map((e, i) => (i === at ? { ...e, count: Math.min(5, e.count + 1) } : e));
       return [...c, { ship: option.ship, higgs: false, entangler: option.ship.entangler, count: 1 }];
     });
@@ -149,12 +156,13 @@ export function RollingCalculator({
             {crew.length > 0 && (
               <ul className={styles.crewList}>
                 {crew.map((entry, i) => {
-                  const facts = result?.crew.find((c) => c.shipTypeId === entry.ship.id);
+                  const facts = result?.crew[i];
                   return (
-                    <li key={entry.ship.id} className={styles.crewRow}>
+                    <li key={`${entry.ship.id}:${entry.fit?.text ?? ''}`} className={styles.crewRow}>
                       <img src={shipIcon(entry.ship.id)} alt="" width={24} height={24} />
                       <span className={styles.crewName}>
                         {entry.ship.name}
+                        {entry.fit && ` (${entry.fit.name ?? 'fit'})`}
                         {facts && (
                           <span className={styles.muted}>
                             {' '}
@@ -163,7 +171,7 @@ export function RollingCalculator({
                         )}
                         {facts?.tooHeavy && <span className={styles.danger}> too heavy</span>}
                       </span>
-                      {entry.ship.higgs && (
+                      {entry.ship.higgs && !entry.fit && (
                         <Checkbox
                           checked={entry.higgs}
                           onCheckedChange={(on) => change(i, { higgs: on === true })}
@@ -202,7 +210,7 @@ export function RollingCalculator({
                 })}
               </ul>
             )}
-            {crew.length < 8 && (
+            {crew.length < 8 && !pasting && (
               <div className={styles.addShip}>
                 <Plus aria-hidden className={styles.addIcon} />
                 <ShipPicker
@@ -212,6 +220,47 @@ export function RollingCalculator({
                   aria-label="Add a ship"
                 />
               </div>
+            )}
+            {crew.length < 8 && pasting && (
+              <>
+                <FitPaste onWeighed={setFit} />
+                <Button
+                  size="sm"
+                  icon={<Plus />}
+                  disabled={!fit}
+                  className={styles.switchSource}
+                  onClick={() => {
+                    if (!fit) return;
+                    setCrew((c) => [
+                      ...c,
+                      {
+                        ship: fit.mass.ship,
+                        higgs: false,
+                        entangler: fit.mass.ship.entangler,
+                        count: 1,
+                        fit: { text: fit.text, name: fit.mass.name },
+                      },
+                    ]);
+                    setFit(null);
+                    setPasting(false);
+                  }}
+                >
+                  {fit ? `Add ${fit.mass.ship.name}` : 'Add the fit'}
+                </Button>
+              </>
+            )}
+            {crew.length < 8 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className={styles.switchSource}
+                onClick={() => {
+                  setPasting((p) => !p);
+                  setFit(null);
+                }}
+              >
+                {pasting ? 'Pick ships by name instead' : 'Add a pasted fit (plates and all)'}
+              </Button>
             )}
           </section>
 

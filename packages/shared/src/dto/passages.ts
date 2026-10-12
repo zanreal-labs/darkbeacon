@@ -65,6 +65,26 @@ export const ShipCatalogDto = z.object({
 });
 export type ShipCatalogDto = z.infer<typeof ShipCatalogDto>;
 
+/** POST /api/universe/ships/fit-mass: a fit as the game copies it (EFT). */
+export const FitMassRequest = z.strictObject({ fit: z.string().trim().min(3).max(20_000) });
+export type FitMassRequest = z.infer<typeof FitMassRequest>;
+
+/** A pasted fit weighed: hull, plates and subsystems, Higgs Anchor; hot with its largest prop module. */
+export const FitMassDto = z.object({
+  ship: ShipTypeDto,
+  /** The fit's own name (`[Megathron, Roller]`). */
+  name: z.string().nullable(),
+  cold: z.number(),
+  hot: z.number(),
+  /** The prop module hot counts, if any. */
+  prop: z.string().nullable(),
+  /** The fitted items that changed its mass. */
+  counted: z.array(z.string()),
+  /** A Higgs Anchor is fitted (already in both masses). */
+  higgs: z.boolean(),
+});
+export type FitMassDto = z.infer<typeof FitMassDto>;
+
 // --- Passages ---------------------------------------------------------------------------------
 
 /** `tracked`: a tracked character's jump; `manual`: logged by hand ("Log a jump"). */
@@ -192,6 +212,8 @@ export const RollShipRequest = z.strictObject({
   higgs: z.boolean().optional(),
   entangler: z.boolean().optional(),
   count: z.number().int().min(1).max(5).default(1),
+  /** The ship's fit (EFT): its cold and hot masses then come from the fit (plates and all). */
+  fit: z.string().max(20_000).optional(),
 });
 export type RollShipRequest = z.input<typeof RollShipRequest>;
 

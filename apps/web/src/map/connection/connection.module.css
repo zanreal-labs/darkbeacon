@@ -617,3 +617,8 @@
     overflow-x: auto;
   }
 }
+
+.switchSource {
+  justify-self: start;
+  margin-top: -8px;
+}

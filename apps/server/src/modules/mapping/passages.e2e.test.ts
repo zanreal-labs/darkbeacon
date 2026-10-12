@@ -5,6 +5,7 @@ import { describeEachDialect } from '@darkbeacon/db/testing';
 import type {
   ConnectionDto,
   ConnectionIntelDto,
+  FitMassDto,
   MapDto,
   MapShareDto,
   MapSnapshot,
@@ -85,6 +86,17 @@ describeEachDialect('passages, rolling and the sweeper over HTTP', (t) => {
     expect(catalog.modifiers).toMatchObject({ higgsPercent: 100, entanglerPercent: -80 });
     expect(catalog.suggested.map((s) => s.name)).toContain('Orca');
 
+    const fit =
+      '[Megathron, Roller]\n1600mm Rolled Tungsten Compact Plates\n500MN Y-T8 Compact Microwarpdrive\nLarge Higgs Anchor I';
+    const weighed = await alice.call<FitMassDto>('POST', '/api/universe/ships/fit-mass', { fit });
+    expect(weighed).toMatchObject({
+      ship: { id: MEGATHRON },
+      cold: 203_800_000,
+      hot: 303_800_000,
+      higgs: true,
+    });
+    expect(await alice.status('POST', '/api/universe/ships/fit-mass', { fit: 'not a fit' })).toBe(400);
+
     const map = await alice.call<MapDto>('POST', '/api/maps', { name: 'Chain' });
     for (const id of [C3, C2]) await alice.call('POST', `/api/maps/${map.id}/systems`, { solarSystemId: id });
     const hole = await alice.call<ConnectionDto>('POST', `/api/maps/${map.id}/connections`, {
@@ -92,6 +104,18 @@ describeEachDialect('passages, rolling and the sweeper over HTTP', (t) => {
       target: C3,
     });
     const at = `/api/maps/${map.id}/connections/${hole.id}`;
+    const fitted = await alice.call<RollPlanDto>('POST', `${at}/roll-plan`, {
+      ships: [{ shipTypeId: MEGATHRON, fit }],
+    });
+    expect(fitted.crew).toEqual([
+      {
+        shipTypeId: MEGATHRON,
+        name: 'Megathron (Roller)',
+        cold: 203_800_000,
+        hot: 303_800_000,
+        tooHeavy: false,
+      },
+    ]);
     const logged = await alice.call<PassageDto[]>('POST', `${at}/passages`, {
       shipTypeId: MEGATHRON,
       direction: 'sourceToTarget',

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { jumpMass, type MassModifiersDto, type RollStepDto, type ShipMassFacts } from '@darkbeacon/shared';
+import { fitMass, parseFit, weighFit, type FitItem } from './fit.js';
 import { countedPassages, fitsThrough, possibleStatuses, remainingMassRange } from './mass.js';
 import { planRoll, type RollShip } from './rolling.js';
 
@@ -288,5 +289,87 @@ describe('rolling plan', () => {
     expect(plan).toMatchObject({ result: 'risky', reason: 'check' });
     expect(plan.steps).toHaveLength(10);
     expect(plan.steps.at(-1)!.shows).toEqual(['fresh']);
+  });
+});
+
+describe('pasted fits', () => {
+  const FIT = `[Megathron, Roller]
+1600mm Rolled Tungsten Compact Plates
+1600mm Rolled Tungsten Compact Plates
+Damage Control II
+[Empty Low slot]
+
+500MN Y-T8 Compact Microwarpdrive
+100MN Afterburner II /OFFLINE
+
+Large Higgs Anchor I
+
+Hammerhead II x5
+Nanite Repair Paste x100`;
+  const ITEMS: Record<string, FitItem> = {
+    '1600mm rolled tungsten compact plates': {
+      name: '1600mm Rolled Tungsten Compact Plates',
+      add: 3_500_000,
+    },
+    '500mn y-t8 compact microwarpdrive': {
+      name: '500MN Y-T8 Compact Microwarpdrive',
+      add: 50_000_000,
+      prop: true,
+    },
+    '100mn afterburner ii': { name: '100MN Afterburner II', add: 50_000_000, prop: true },
+    'large higgs anchor i': { name: 'Large Higgs Anchor I', percent: 100 },
+  };
+
+  it('reads the ship and the fitted items, without cargo, drones, empty slots or offline modules', () => {
+    expect(parseFit(FIT)).toEqual({
+      shipName: 'Megathron',
+      fitName: 'Roller',
+      items: [
+        '1600mm Rolled Tungsten Compact Plates',
+        '1600mm Rolled Tungsten Compact Plates',
+        'Damage Control II',
+        '500MN Y-T8 Compact Microwarpdrive',
+        'Large Higgs Anchor I',
+      ],
+    });
+    expect(parseFit('Megathron')).toBeNull();
+  });
+
+  it('weighs plates always, the largest prop module hot, and a Higgs Anchor on everything', () => {
+    expect(
+      weighFit({ mass: 98_400_000 }, [
+        ITEMS['1600mm rolled tungsten compact plates']!,
+        ITEMS['500mn y-t8 compact microwarpdrive']!,
+        ITEMS['large higgs anchor i']!,
+      ]),
+    ).toEqual({ cold: 2 * 101_900_000, hot: 2 * 151_900_000, prop: '500MN Y-T8 Compact Microwarpdrive' });
+    // A mass entangler is switched on by hand: not part of the fit's weight.
+    expect(
+      weighFit({ mass: 15_400_000 }, [{ name: 'Zero-Point Mass Entangler', percent: -80 }]),
+    ).toMatchObject({
+      cold: 15_400_000,
+    });
+  });
+
+  it('weighs a pasted fit with the catalog', () => {
+    const megathron = {
+      ...MEGATHRON,
+      id: 641,
+      name: 'Megathron',
+      group: 'Battleship',
+      hullClass: 'battleship' as const,
+      propSize: 'large' as const,
+    };
+    const weighed = fitMass(FIT, {
+      shipByName: (name) => (name.toLowerCase() === 'megathron' ? megathron : null),
+      fitItem: (name) => ITEMS[name.toLowerCase()] ?? null,
+    });
+    expect(weighed).toMatchObject({
+      name: 'Roller',
+      cold: 2 * (98_400_000 + 7_000_000),
+      hot: 2 * (98_400_000 + 7_000_000 + 50_000_000),
+      higgs: true,
+    });
+    expect(fitMass('[Titan, x]', { shipByName: () => null, fitItem: () => null })).toBeNull();
   });
 });

@@ -114,6 +114,18 @@ export interface MassModifierData {
 }
 
 /**
+ * A fitted item that changes a ship's jump mass, by its name as fits (EFT) write it: armour plates
+ * and prop modules add `add` kg (`massAddition`; a prop module only while it runs, `prop`),
+ * subsystems add their own mass, Higgs Anchors and the mass entangler scale it by `percent`.
+ */
+export interface FitItemData {
+  name: string;
+  add?: number;
+  percent?: number;
+  prop?: true;
+}
+
+/**
  * Wormhole facts: wormhole types (SDE dogma), hull classes and ship masses (SDE), and per wormhole
  * system its static wormhole types (a statics table, see `docs/decisions.md`) and effect (SDE
  * secondary suns). Systems keyed by solar system id; systems that are not listed have neither.
@@ -129,6 +141,8 @@ export interface WormholeData {
   /** Published ships by name, for pickers. */
   ships?: ShipData[];
   massModifiers?: MassModifierData;
+  /** Items that change a fitted ship's mass, for pasted fits. */
+  fitItems?: FitItemData[];
   systems: Record<string, WormholeSystemFacts>;
 }
 

@@ -5,6 +5,7 @@ import type {
   UniverseSystemDto,
   WormholeTypeDto,
 } from '@darkbeacon/shared';
+import type { FitItem } from '../domain/fit.js';
 
 export type UniverseSystem = UniverseSystemDto;
 
@@ -29,4 +30,8 @@ export interface UniverseCatalog {
   searchShips(query: string, limit: number): ShipTypeDto[];
   /** What prop modules, Higgs Anchors and the mass entangler do to a ship's mass (SDE dogma). */
   massModifiers(): MassModifiersDto;
+  /** A published ship by its exact name (case-insensitive), for pasted fits. */
+  shipByName(name: string): ShipTypeDto | null;
+  /** An item that changes a fitted ship's mass, by its exact name (case-insensitive). */
+  fitItem(name: string): FitItem | null;
 }
