@@ -187,6 +187,12 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
   'ping.removed': { op: 'delete', entity: byId('ping'), refs: (d, b) => ref('system', b?.solarSystemId) },
   'access.rule_added': { op: 'create', entity: byId('accessRule'), ignore: ['createdAt', 'mapId'] },
   'access.rule_removed': { op: 'delete', entity: byId('accessRule'), ignore: ['createdAt', 'mapId'] },
+  'access.sharing_changed': {
+    op: 'update',
+    entity: byId('mapSharing', 'mapId'),
+    refs: (d) => ref('map', d.mapId),
+    ignore: ['mapId'],
+  },
   'access.role_changed': {
     op: 'update',
     entity: byId('account', 'accountId'),
@@ -263,6 +269,27 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
     }),
     refs: (d) => ref('map', d.mapId),
     state: (d) => asFields(d.values) ?? {},
+  },
+  'api_key.created': {
+    op: 'create',
+    entity: byId('apiKey'),
+    refs: (d) => ref('account', d.ownerAccountId),
+  },
+  'api_key.updated': {
+    op: 'update',
+    entity: byId('apiKey'),
+    refs: (d) => ref('account', d.ownerAccountId),
+  },
+  'api_key.rotated': {
+    op: 'activity',
+    entity: byId('apiKey'),
+    refs: (d) => ref('account', d.ownerAccountId),
+    activity: () => ({ secret: change('old', 'new') }),
+  },
+  'api_key.revoked': {
+    op: 'delete',
+    entity: byId('apiKey'),
+    refs: (d) => ref('account', d.ownerAccountId),
   },
 };
 

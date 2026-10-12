@@ -3,7 +3,7 @@ import { EveId, Id, Timestamp } from './common.js';
 
 /** Who made a change, as it was when the change was made (names are not updated later). */
 export const AuditActorDto = z.object({
-  kind: z.enum(['account', 'apiToken', 'system', 'plugin']),
+  kind: z.enum(['account', 'apiToken', 'public', 'system', 'plugin']),
   id: z.string(),
   /** The person behind the change: the account, or the owner of the character that moved. */
   accountId: Id.nullable(),
@@ -16,9 +16,11 @@ export type AuditActorDto = z.infer<typeof AuditActorDto>;
 
 /** How the change reached the server. */
 export const AuditChannelDto = z.object({
-  kind: z.enum(['web', 'api', 'plugin', 'system']),
-  /** API token id, plugin id or the system process (`auto-mapping`, `tracking`, `identity`, ...). */
+  kind: z.enum(['web', 'api', 'mcp', 'plugin', 'system']),
+  /** API key id, plugin id or the system process (`auto-mapping`, `tracking`, `identity`, ...). */
   id: z.string().nullable(),
+  /** The API key's name when the change was made (`api` and `mcp`). */
+  name: z.string().nullable().optional(),
 });
 export type AuditChannelDto = z.infer<typeof AuditChannelDto>;
 

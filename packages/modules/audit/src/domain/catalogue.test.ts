@@ -117,6 +117,30 @@ const webhook = {
  * updates and removals, what it passes as `before`. A new event type does not compile until it
  * has a sample here, and the test below fails unless its audit record is complete.
  */
+const apiKey = {
+  id: 'k1',
+  kind: 'pat',
+  name: 'Bot',
+  scopes: ['maps:read'],
+  readOnly: true,
+  expiresAt: null,
+  allowedIps: [],
+  rateLimitPerMinute: null,
+  ownerAccountId: 'a',
+  instanceRole: null,
+  mapGrants: [],
+  allMapsRole: null,
+};
+const sharing = {
+  mapId: 'm',
+  enabled: false,
+  slug: null,
+  scopes: ['topology', 'connectionStatus'],
+  noindex: true,
+  mcpMode: 'authenticated',
+  regenerated: false,
+};
+
 const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
   'system.added': { data: system },
   'system.updated': { data: { ...system, status: 'hostile' }, before: system },
@@ -167,6 +191,7 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
   'ping.removed': { data: { id: 'p1' }, before: { id: 'p1', solarSystemId: 31000005, message: 'Help' } },
   'access.rule_added': { data: rule },
   'access.rule_removed': { data: { id: 'r1' }, before: rule },
+  'access.sharing_changed': { data: { ...sharing, enabled: true }, before: sharing },
   'access.role_changed': {
     data: { accountId: 'b', role: 'admin' },
     before: { accountId: 'b', role: 'user' },
@@ -194,6 +219,10 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
     data: { pluginId: 'discord-notify', mapId: null, values: { username: 'Beacon' } },
     before: { pluginId: 'discord-notify', mapId: null, values: { username: 'Darkbeacon' } },
   },
+  'api_key.created': { data: apiKey },
+  'api_key.updated': { data: { ...apiKey, name: 'Bot 2' }, before: apiKey },
+  'api_key.rotated': { data: { id: 'k1', name: 'Bot', kind: 'pat', ownerAccountId: 'a' } },
+  'api_key.revoked': { data: { id: 'k1', name: 'Bot', kind: 'pat', ownerAccountId: 'a' }, before: apiKey },
 };
 
 const facts = { accountId: 'a', accountName: 'Alice', characterId: 9, characterName: 'Alice Main' };
