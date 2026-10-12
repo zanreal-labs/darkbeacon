@@ -83,11 +83,41 @@ export interface HullClassData {
   maxMass: number;
 }
 
+/** Propulsion module sizes: 1MN AB / 5MN MWD, 10MN / 50MN, 100MN / 500MN, 10000MN / 50000MN. */
+export type PropSizeData = 'small' | 'medium' | 'large' | 'capital';
+
+/** A published ship (SDE): what "log a jump" and the rolling planner pick from. */
+export interface ShipData {
+  id: number;
+  name: string;
+  /** SDE inventory group name ("Battleship"). */
+  group: string;
+  /** Hull class for "which ships fit", null for groups outside them (capsules, shuttles...). */
+  hull: HullClassData['id'] | null;
+  /** The propulsion module size it fits (by rig size), null when it has no mid slots. */
+  propSize: PropSizeData | null;
+  /** It has rig slots, so a Higgs Anchor fits. */
+  rigs: boolean;
+  /** A Zero-Point Mass Entangler fits it. */
+  entangler: boolean;
+}
+
+/**
+ * What changes a ship's mass when it jumps, from SDE dogma: `massAddition` (796) of active
+ * afterburners and microwarpdrives per size (every meta level of a size adds the same), and
+ * `massBonusPercentage` (1131) of the Higgs Anchor rigs (+100) and the Zero-Point Mass Entangler (-80).
+ */
+export interface MassModifierData {
+  prop: Record<PropSizeData, number>;
+  higgsPercent: number;
+  entanglerPercent: number;
+}
+
 /**
  * Wormhole facts: wormhole types (SDE dogma), hull classes and ship masses (SDE), and per wormhole
  * system its static wormhole types (a statics table, see `docs/decisions.md`) and effect (SDE
  * secondary suns). Systems keyed by solar system id; systems that are not listed have neither.
- * `types`, `hullClasses` and `shipMasses` are optional so a hand-written file with only systems
+ * `types`, `hullClasses`, `shipMasses`, `ships` and `massModifiers` are optional so a hand-written file with only systems
  * still loads.
  */
 export interface WormholeData {
@@ -96,6 +126,9 @@ export interface WormholeData {
   hullClasses?: HullClassData[];
   /** Ship type id -> hull mass in kg. */
   shipMasses?: Record<string, number>;
+  /** Published ships by name, for pickers. */
+  ships?: ShipData[];
+  massModifiers?: MassModifierData;
   systems: Record<string, WormholeSystemFacts>;
 }
 

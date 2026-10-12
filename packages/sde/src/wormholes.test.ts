@@ -5,6 +5,7 @@ import {
   formatWormholes,
   parseCsv,
   parseStaticsCsv,
+  MASS_ATTRIBUTES as M,
   WORMHOLE_ATTRIBUTES as A,
   type WormholeInput,
 } from './wormholes.js';
@@ -16,6 +17,10 @@ const input: WormholeInput = {
     { _key: 25, categoryID: 6, name: { en: 'Frigate' } },
     { _key: 420, categoryID: 6, name: { en: 'Destroyer' } },
     ...[26, 419, 28, 27, 941, 513, 485].map((g) => ({ _key: g, categoryID: 6, name: { en: `G${g}` } })),
+    { _key: 894, categoryID: 6, name: { en: 'Heavy Interdiction Cruiser' } },
+    { _key: 46, categoryID: 7, name: { en: 'Propulsion Module' } },
+    { _key: 1308, categoryID: 7, name: { en: 'Rig Anchor' } },
+    { _key: 2008, categoryID: 7, name: { en: 'Mass Entanglers' } },
   ],
   types: [
     { _key: 30695, groupID: 988, name: { en: 'Wormhole D845' } },
@@ -33,6 +38,23 @@ const input: WormholeInput = {
       mass: g * 1_000_000,
       published: true,
     })),
+    { _key: 11995, groupID: 894, name: { en: 'Onyx' }, mass: 15_400_000, published: true },
+    { _key: 641, groupID: 27, name: { en: 'Megathron' }, mass: 98_400_000, published: true },
+    { _key: 20185, groupID: 513, name: { en: 'Charon' }, mass: 960_000_000, published: true },
+    ...(
+      [
+        [439, '1MN Afterburner I', 500_000],
+        [440, '5MN Microwarpdrive II', 500_000],
+        [12056, '10MN Afterburner I', 5_000_000],
+        [12054, '500MN Microwarpdrive I', 50_000_000],
+        [12066, '100MN Afterburner I', 50_000_000],
+        [41236, '50000MN Microwarpdrive I', 500_000_000],
+        [47745, '500MN Abyssal Microwarpdrive', null],
+      ] as const
+    ).map(([key, name]) => ({ _key: key, groupID: 46, name: { en: name }, published: true })),
+    { _key: 34306, groupID: 1308, name: { en: 'Large Higgs Anchor I' }, published: true },
+    { _key: 34266, groupID: 1308, name: { en: 'Small Higgs Anchor I' }, published: true },
+    { _key: 49099, groupID: 2008, name: { en: 'Zero-Point Mass Entangler' }, published: true },
     { _key: 30575, groupID: 995, name: { en: 'Black Hole' } },
     { _key: 30845, groupID: 920, name: { en: 'Class 1 Black Hole Effects' } },
     { _key: 30849, groupID: 920, name: { en: 'Class 1 Wolf Rayet Effects' } },
@@ -50,6 +72,43 @@ const input: WormholeInput = {
       ],
     },
     { _key: 30667, dogmaAttributes: [{ attributeID: A.targetSystemClass, value: 8 }] },
+    ...(
+      [
+        [439, 500_000],
+        [440, 500_000],
+        [12056, 5_000_000],
+        [12054, 50_000_000],
+        [12066, 50_000_000],
+        [41236, 500_000_000],
+      ] as const
+    ).map(([key, value]) => ({ _key: key, dogmaAttributes: [{ attributeID: M.massAddition, value }] })),
+    { _key: 34306, dogmaAttributes: [{ attributeID: M.massBonusPercentage, value: 100 }] },
+    { _key: 34266, dogmaAttributes: [{ attributeID: M.massBonusPercentage, value: 100 }] },
+    {
+      _key: 49099,
+      dogmaAttributes: [
+        { attributeID: M.massBonusPercentage, value: -80 },
+        { attributeID: 1298, value: 894 },
+        { attributeID: 1302, value: 89607 },
+      ],
+    },
+    {
+      _key: 11995,
+      dogmaAttributes: [
+        { attributeID: M.medSlots, value: 6 },
+        { attributeID: M.rigSlots, value: 2 },
+        { attributeID: M.rigSize, value: 2 },
+      ],
+    },
+    {
+      _key: 641,
+      dogmaAttributes: [
+        { attributeID: M.medSlots, value: 4 },
+        { attributeID: M.rigSlots, value: 3 },
+        { attributeID: M.rigSize, value: 3 },
+      ],
+    },
+    { _key: 20185, dogmaAttributes: [{ attributeID: M.rigSize, value: 4 }] },
   ],
   secondarySuns: [
     { solarSystemID: 31000001, typeID: 30575, effectBeaconTypeID: 30845 },
@@ -92,6 +151,40 @@ describe('buildWormholes', () => {
     });
     expect(data.hullClasses?.find((h) => h.id === 'destroyer')?.maxMass).toBe(1_650_000);
     expect(data.shipMasses).toMatchObject({ 587: 1_067_000, 99999: 9_000_000 });
+  });
+
+  it('reads published ships with their prop size, rigs and whether the mass entangler fits', () => {
+    expect(data.ships?.find((s) => s.name === 'Megathron')).toEqual({
+      id: 641,
+      name: 'Megathron',
+      group: 'G27',
+      hull: 'battleship',
+      propSize: 'large',
+      rigs: true,
+      entangler: false,
+    });
+    expect(data.ships?.find((s) => s.name === 'Onyx')).toMatchObject({ propSize: 'medium', entangler: true });
+    // A freighter has no mid slots: no prop module, no rigs.
+    expect(data.ships?.find((s) => s.name === 'Charon')).toMatchObject({ propSize: null, rigs: false });
+    expect(data.ships?.some((s) => s.name === 'Unreleased')).toBe(false);
+  });
+
+  it('reads what prop modules, Higgs Anchors and the mass entangler do to mass', () => {
+    expect(data.massModifiers).toEqual({
+      prop: { small: 500_000, medium: 5_000_000, large: 50_000_000, capital: 500_000_000 },
+      higgsPercent: 100,
+      entanglerPercent: -80,
+    });
+  });
+
+  it('refuses prop modules of one size that add different masses', () => {
+    const broken: WormholeInput = {
+      ...input,
+      typeDogma: input.typeDogma.map((d) =>
+        d._key === 440 ? { _key: 440, dogmaAttributes: [{ attributeID: M.massAddition, value: 1 }] } : d,
+      ),
+    };
+    expect(() => buildWormholes(broken)).toThrow(/small propulsion modules add different masses/);
   });
 
   it('takes statics from the table and effects from the effect beacons', () => {
@@ -167,6 +260,24 @@ describe('committed wormhole dataset', () => {
     expect(wormholes.systems[31000399]).toEqual({ statics: ['B274', 'O477'], effect: 'magnetar' });
     expect(wormholes.systems[31001924]).toEqual({ statics: ['D364'], effect: 'pulsar' });
     expect(wormholes.systems[31000220]).toEqual({ statics: ['N110'], effect: 'blackHole' });
+  });
+
+  it('knows ship and prop masses (SDE build 3586130)', () => {
+    const ship = (name: string) => wormholes.ships?.find((s) => s.name === name);
+    expect(ship('Megathron')).toMatchObject({ id: 641, propSize: 'large', rigs: true, entangler: false });
+    expect(wormholes.shipMasses?.[641]).toBe(98_400_000);
+    expect(ship('Orca')).toMatchObject({ propSize: 'large', hull: 'industrialCommand' });
+    expect(wormholes.shipMasses?.[28606]).toBe(150_000_000);
+    for (const hic of ['Onyx', 'Broadsword', 'Devoter', 'Phobos'])
+      expect(ship(hic), hic).toMatchObject({ propSize: 'medium', entangler: true });
+    expect(ship('Odysseus')?.entangler).toBe(true);
+    expect(ship('Tengu')?.propSize).toBe('medium');
+    expect(ship('Charon')?.propSize).toBeNull();
+    expect(wormholes.massModifiers).toEqual({
+      prop: { small: 500_000, medium: 5_000_000, large: 50_000_000, capital: 500_000_000 },
+      higgsPercent: 100,
+      entanglerPercent: -80,
+    });
   });
 
   it('knows the D845 numbers', () => {
