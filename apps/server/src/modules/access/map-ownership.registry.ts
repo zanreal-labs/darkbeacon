@@ -11,6 +11,7 @@ export class MapOwnershipRegistry implements MapOwnership {
   private ownership: MapOwnership = {
     ownerOf: () => Promise.resolve(null),
     mapsOwnedBy: () => Promise.resolve([]),
+    allMaps: () => Promise.resolve([]),
   };
 
   use(ownership: MapOwnership): void {
@@ -23,5 +24,9 @@ export class MapOwnershipRegistry implements MapOwnership {
 
   mapsOwnedBy(accountId: string): Promise<string[]> {
     return this.ownership.mapsOwnedBy(accountId);
+  }
+
+  allMaps(): Promise<string[]> {
+    return this.ownership.allMaps?.() ?? Promise.resolve([]);
   }
 }

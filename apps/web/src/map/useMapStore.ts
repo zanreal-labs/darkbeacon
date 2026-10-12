@@ -173,6 +173,8 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto) {
           status: 'unknown',
           description: '',
           labelIds: [],
+          systemLabelIds: [],
+          customLabel: null,
           locked: false,
           visible: true,
           createdAt: now,

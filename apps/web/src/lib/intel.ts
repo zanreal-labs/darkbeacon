@@ -37,18 +37,25 @@ export interface MapIntel {
  * stream's `intel` messages; a `kill.reported` event makes its system pulse and refreshes the kill
  * lists. Reloaded after a reconnect (messages sent meanwhile are lost) and every few minutes.
  */
-export function useMapIntel(mapId: string): MapIntel {
+export function useMapIntel(mapId: string, publicToken?: string, enabled = true): MapIntel {
   const client = useRealtime();
   const queryClient = useQueryClient();
   const status = useConnectionStatus();
   const [pulses, setPulses] = useState<ReadonlyMap<number, number>>(new Map());
   const query = useQuery({
+    enabled,
     queryKey: intelKey(mapId),
-    queryFn: () => api<MapIntelDto>(buildPath(routes.intel.map.path, { mapId })),
+    queryFn: () =>
+      api<MapIntelDto>(
+        publicToken
+          ? buildPath(routes.intel.publicMap.path, { token: publicToken })
+          : buildPath(routes.intel.map.path, { mapId }),
+      ),
     refetchInterval: 5 * 60_000,
     staleTime: 30_000,
   });
-  const stream = `map:${mapId}`;
+  // A public view follows its link's stream, which carries the same intel and kills.
+  const stream = publicToken ? `public:${publicToken}` : `map:${mapId}`;
 
   useEffect(
     () =>
@@ -66,8 +73,9 @@ export function useMapIntel(mapId: string): MapIntel {
   );
 
   useEffect(() => {
-    if (status === 'open') void queryClient.invalidateQueries({ queryKey: intelKey(mapId), exact: true });
-  }, [status, mapId, queryClient]);
+    if (status === 'open' && enabled)
+      void queryClient.invalidateQueries({ queryKey: intelKey(mapId), exact: true });
+  }, [status, mapId, queryClient, enabled]);
 
   useStream(stream, (message) => {
     if (message.op !== 'event' || !isEventOfType(message.event, 'kill.reported')) return;
@@ -127,8 +135,9 @@ export function useMapKills(mapId: string, filter: KillsFilter, enabled = true) 
 }
 
 /** The signed-in account's standings (its characters' contacts), id -> -10..+10. */
-export function useStandings(): ReadonlyMap<number, number> {
+export function useStandings(enabled = true): ReadonlyMap<number, number> {
   const query = useQuery({
+    enabled,
     queryKey: ['standings'],
     queryFn: () => api<StandingsDto>(routes.intel.standings.path),
     staleTime: 10 * 60_000,

@@ -104,3 +104,57 @@ export const WORMHOLE_DATA_FILE = fileURLToPath(new URL('../data/wormholes.json'
 export function loadWormholeData(file = WORMHOLE_DATA_FILE): WormholeData {
   return JSON.parse(readFileSync(file, 'utf8')) as WormholeData;
 }
+
+/**
+ * Known space for the jump planner's map (`data/kspace.json`), columnar: index `i` of every
+ * `systems` array describes one system. Coordinates are the SDE's in light years (y is "up"; the
+ * top-down map draws x and z). `gates` lists stargates as index pairs `i, j` with `i < j`.
+ */
+export interface KspaceData {
+  version: 1;
+  source: string;
+  regions: Array<{ id: number; name: string }>;
+  systems: {
+    id: number[];
+    name: string[];
+    /** Index into `regions`. */
+    region: number[];
+    /** True security status. */
+    security: number[];
+    x: number[];
+    y: number[];
+    z: number[];
+    /** Bits of `KSPACE_FLAGS` (see kspace.ts). */
+    flags: number[];
+  };
+  gates: number[];
+  /** Published ships with a jump drive. */
+  ships: JumpShipData[];
+}
+
+/** A ship with a jump drive, from its SDE type and dogma attributes. */
+export interface JumpShipData {
+  typeId: number;
+  name: string;
+  /** SDE inventory group (30 Titan, 902 Jump Freighter, ...). */
+  group: number;
+  /** Base jump range in light years, before Jump Drive Calibration. */
+  rangeLy: number;
+  /** Isotopes per light year, before skills. */
+  fuelPerLy: number;
+  isotope: 'helium' | 'hydrogen' | 'nitrogen' | 'oxygen';
+  /** Share of the distance that counts for jump fatigue (1 for most hulls). */
+  fatigueMultiplier: number;
+  /** Hull mass in kg. */
+  mass: number;
+  /** Bridge fuel factor per kg bridged (titans and black ops), else null. */
+  portalMassFactor: number | null;
+}
+
+export const KSPACE_DATA_FILE = fileURLToPath(new URL('../data/kspace.json', import.meta.url));
+
+export function loadKspaceData(file = KSPACE_DATA_FILE): KspaceData {
+  return JSON.parse(readFileSync(file, 'utf8')) as KspaceData;
+}
+
+export { KSPACE_FLAGS, METERS_PER_LY, ZARZAKH_ID } from './kspace.js';

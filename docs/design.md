@@ -146,10 +146,12 @@ and danger, `status-warning` amber for pings and stars, `status-friendly` green 
   towards it), or the faction's short name in NPC null-sec (`Sansha`); never in wormholes, high- or
   low-sec. Full names are in its tooltip.
 - A new kill rings the node once, softly (no badge that stays; none with reduced motion).
-- Nothing else on the node: tag, notes and the rest are in the tooltip and the side panel. Every
+- Nothing else on the node: notes and the rest are in the tooltip and the side panel. Every
   element of rows 1 and 2 is in the invisible sizers, so every node keeps the same width.
-- Above the node, left-aligned with its left edge: the map labels (a small coloured square and the
-  label's name, `■ Staging`), then the bookmark code (`ABC-123`, a click copies it).
+- Above the node, left-aligned with its left edge, in this order: the system's Labels (`WH1`, plain
+  bold text in a neutral frame), its custom label (`bait`, the same), the bookmark code (`ABC-123`,
+  grey mono, a click copies it) and its Tags (`Staging`, framed in the tag's muted colour). All are
+  the same 14 px chips; nodes keep one width.
 - Below an exit system, left-aligned: the nearest hub and its jumps (`Jita 4j`), followed by a small
   square in the colour of the space the whole route runs through (high-sec green, low-sec orange,
   null-sec red) only when it runs through one kind of space; a mixed route shows no square. The
@@ -178,7 +180,8 @@ its samples with the same functions as the edge, and a test checks that every st
 The small mono tag above a system: by default the signature of the wormhole that leads into it from
 its parent (`ABC-123`); a click copies it. Templates mix text with `{sig} {sig3} {chainIndex}
 {destClass} {type} {size} {mass} {eol} {tempName}`; managers set the map default, everyone may pick
-their own (Map settings → Bookmark labels, or the bookmark button on the map). A temporary name wins
+their own (Map settings → Bookmark labels, or the bookmark button on the map); `{labels}` adds the
+system's Labels and custom label. A temporary name wins
 unless the template places `{tempName}` itself. The chain is walked from the home system;
 `{chainIndex}` is the depth and the order among siblings (`1a`, `1b`, `2a`).
 
@@ -195,8 +198,9 @@ unless the template places `{tempName}` itself. The chain is walked from the hom
   handle (peek shows the header, then half and full).
 - The header carries what is needed at a glance: the designation pill (the node's), the name and
   custom name, region › constellation, the kind of space ("Class 3 wormhole", "High-sec 0.82"),
-  the effect (its summary on hover) and the statics as plain text (`D845 HS`), the tag and the
-  lock. The System section edits status, labels, names, tag and notes in place (saved on Enter or
+  the effect (its summary on hover) and the statics as plain text (`D845 HS`) and the lock. The
+  System section edits status, Labels with the custom label (one row), Tags, names and notes in
+  place (saved on Enter or
   leaving the field) and links out to zKillboard, Dotlan and Anoikis; Set destination is its
   action.
 - Under the header's place line, who holds the system with the logo ("Held by Goonswarm Federation
@@ -215,10 +219,38 @@ unless the template places `{tempName}` itself. The chain is walked from the hom
 - Local lists the tracked characters in the system (portrait, name, ship), yours first and
   highlighted; tracking your characters is the section's action.
 - Context menus are short lists (at most about eight items, one line each with an icon and a key
-  hint) with submenus for choices (`Status ▸`, `Labels ▸`, `Mass ▸`, `Time ▸`...), never settings
+  hint) with submenus for choices (`Status ▸`, `Labels ▸`, `Tags ▸`, `Mass ▸`, `Time ▸`...), never settings
   panels with chips or switches.
 - Other people on the map are arrow cursors with a name tag in their colour; the top bar says
   `Live · 3 on this map`. No avatar circles for presence.
+
+## The jump planner
+
+The one place Darkbeacon goes further than Wanderer: `/jump` (the rail's orbit icon, under the map)
+is a map of all known space for planning a capital's jump route, a jump freighter's or a titan's,
+from A to B.
+
+- The map is the in-game star map seen from above: every system a dot in its security colour (the
+  game's palette, as on the pills), Pochven and Zarzakh in the special-space colour, stargates as
+  faint lines, region names when zoomed out and system names when zoomed in. Drag to pan, scroll or
+  pinch to zoom; it stays at 60 frames a second on a laptop.
+- A system under the pointer shows a card: name, security, region, how far it is from the start
+  and whether a jump can land there ("High-sec: no cynos"). A click pins the card with its actions:
+  Start here, Destination, Avoid. Right-click does the same.
+- The controls are a panel docked on the left (a bottom sheet on phones, folded at first): hull and
+  ship, start and destination (search, or from the map), the three skills, route options (finish
+  over stargates, stop at NPC stations, outlaw, keep fatigue under, fatigue now, avoid, Ansiblex
+  bridges, bridged mass), then the route.
+- The answer comes first: "3 jumps 20.19 ly", then fuel in the ship's isotope, fatigue at the end
+  and the waiting; then the legs, each with the system's security pill, light years, fuel, wait and
+  fatigue. Hovering a leg shows the range around its start on the map; a click flies there.
+- The range (light years with the chosen Jump Drive Calibration) is a dashed disk around the start;
+  until there is a route, systems a jump cannot reach from it are dimmed.
+- Copy route gives plain lines for fleet chat (`1. Jump 9.95 ly to Ahbazon (0.4, Genesis),
+industrial cyno, 31,524 fuel`); Set waypoints puts the stops into the game for a character whose
+  EVE grant allows it.
+- The address holds the start, destination and ship by name (`/jump?from=…&to=…&ship=Ark`), so a
+  route can be linked. `/` searches, Esc clears.
 
 ## Server data built for glancing
 

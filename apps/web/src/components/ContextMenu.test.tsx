@@ -19,9 +19,13 @@ function items(spy = vi.fn()): MenuItem[] {
     {
       kind: 'submenu',
       label: 'Labels',
-      items: [{ kind: 'check', label: 'Scouted', checked: false, onSelect: () => spy('scouted') }],
+      items: [
+        { kind: 'input', label: 'Custom label', value: '', onSubmit: (v) => spy(`custom:${v}`) },
+        { kind: 'separator' },
+        { kind: 'check', label: 'WH1', checked: false, onSelect: () => spy('wh1') },
+      ],
     },
-    { kind: 'input', label: 'Tag', value: '', onSubmit: (v) => spy(`tag:${v}`) },
+    { kind: 'input', label: 'Rename', value: '', onSubmit: (v) => spy(`rename:${v}`) },
     { kind: 'action', label: 'Copy name', onSelect: () => spy('copy') },
     { kind: 'separator' },
     { kind: 'action', label: 'Remove from map', danger: true, onSelect: () => spy('remove') },
@@ -45,7 +49,7 @@ describe('ContextMenu', () => {
       within(root)
         .getAllByRole('menuitem')
         .map((b) => b.textContent),
-    ).toEqual(['StatusUnknown', 'Labels', 'Tag…', 'Copy name', 'Remove from map']);
+    ).toEqual(['StatusUnknown', 'Labels', 'Rename…', 'Copy name', 'Remove from map']);
     expect(
       within(root)
         .getByRole('menuitem', { name: /Status/ })
@@ -75,8 +79,8 @@ describe('ContextMenu', () => {
   it('selecting a radio runs it and closes the menu; checks in submenus keep it open', async () => {
     const { spy, onClose } = open();
     await userEvent.click(screen.getByRole('menuitem', { name: 'Labels' }));
-    await userEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Scouted' }));
-    expect(spy).toHaveBeenCalledWith('scouted');
+    await userEvent.click(screen.getByRole('menuitemcheckbox', { name: 'WH1' }));
+    expect(spy).toHaveBeenCalledWith('wh1');
     expect(onClose).not.toHaveBeenCalled();
 
     await userEvent.click(screen.getByRole('menuitem', { name: /Status/ }));
@@ -122,16 +126,26 @@ describe('ContextMenu', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it('edits a tag inline: Enter saves, Escape goes back to the row', async () => {
+  it('edits a name inline: Enter saves, Escape goes back to the row', async () => {
     const { spy, onClose } = open();
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Tag…' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Rename…' }));
     await userEvent.keyboard('{Escape}');
     expect(screen.queryByRole('textbox')).toBeNull();
     expect(onClose).not.toHaveBeenCalled();
 
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Tag…' }));
-    await userEvent.type(screen.getByRole('textbox', { name: 'Tag' }), ' C3a {Enter}');
-    expect(spy).toHaveBeenCalledWith('tag:C3a');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Rename…' }));
+    await userEvent.type(screen.getByRole('textbox', { name: 'Rename' }), ' Home {Enter}');
+    expect(spy).toHaveBeenCalledWith('rename:Home');
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('edits a field inside a submenu: the custom label of Labels', async () => {
+    const { spy, onClose } = open();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Labels' }));
+    const labels = screen.getByRole('menu', { name: 'Labels' });
+    await userEvent.click(within(labels).getByRole('menuitem', { name: 'Custom label…' }));
+    await userEvent.type(screen.getByRole('textbox', { name: 'Custom label' }), 'bait{Enter}');
+    expect(spy).toHaveBeenCalledWith('custom:bait');
     expect(onClose).toHaveBeenCalledOnce();
   });
 

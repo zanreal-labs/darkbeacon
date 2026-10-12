@@ -58,6 +58,8 @@ export interface ChainMapInfo {
   kind: MapKind;
   /** Name of the instance it is on; null for this one. */
   instanceName: string | null;
+  /** The map's Labels (WH1, WH2...), for showing merged ones by name; absent for none. */
+  systemLabels?: ReadonlyArray<{ id: string; name: string }>;
 }
 
 /** Finds sources by origin. Only `local` origins exist today; remote instances plug in here later. */
@@ -118,6 +120,7 @@ export interface ChainLayoutRepository {
 export interface LocalFields {
   /** Null: the merged notes show. */
   notes: string | null;
+  /** The system's Tags on the composite. */
   labelIds: string[];
   locked: boolean;
 }

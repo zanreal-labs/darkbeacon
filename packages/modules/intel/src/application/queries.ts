@@ -145,6 +145,21 @@ export class IntelQueries {
     return { kills: kills.map((k) => killDto(k, book)) };
   }
 
+  /**
+   * A system's newest killmails (public game data, for agents and public views; maps read theirs
+   * through `mapKills`). Only systems on some map have killmails.
+   */
+  async recentKills(systemId: number, hours: number, limit: number): Promise<KillmailDto[]> {
+    const kills = await this.deps.repo.kills(systemId, this.deps.clock.now() - hours * HOUR, limit);
+    const book = await this.deps.names.lookup(kills.flatMap(killmailIds), kills.flatMap(tickerIds));
+    return kills.map((k) => killDto(k, book));
+  }
+
+  /** Intel of systems a public link shows (public game data; the caller resolved the link). */
+  async publicIntel(systemIds: readonly number[]): Promise<MapIntelDto> {
+    return { systems: await this.intelFor(systemIds), live: this.deps.live() };
+  }
+
   /** The node's facts of these systems. */
   async intelFor(systemIds: readonly number[]): Promise<SystemIntelDto[]> {
     if (systemIds.length === 0) return [];

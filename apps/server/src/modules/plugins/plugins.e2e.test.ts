@@ -30,7 +30,9 @@ describeEachDialect('plugins and themes over HTTP', (t) => {
       secretKey: 'x'.repeat(32),
     };
     app = await createApp(config, { database: t.db, logger: false });
-    app.get(ActorResolverRegistry).use(async (req) => actors[String(req.headers.authorization)] ?? null);
+    app
+      .get(ActorResolverRegistry)
+      .use(async (req) => actors[`Bearer ${String(req.headers['x-test-actor'])}`] ?? null);
     await app.listen({ port: 0, host: '127.0.0.1' });
     base = `http://127.0.0.1:${(app.getHttpServer().address() as AddressInfo).port}`;
   });
@@ -43,7 +45,7 @@ describeEachDialect('plugins and themes over HTTP', (t) => {
     const response = await fetch(`${base}${path}`, {
       method,
       headers: {
-        ...(as ? { authorization: `Bearer ${as}` } : {}),
+        ...(as ? { 'x-test-actor': as } : {}),
         ...(body instanceof Buffer
           ? { 'content-type': 'application/gzip' }
           : body !== undefined

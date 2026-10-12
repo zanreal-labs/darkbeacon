@@ -13,10 +13,13 @@ export function NodeKills({
   mapId,
   solarSystemId,
   kills,
+  list = true,
 }: {
   mapId: string;
   solarSystemId: number;
   kills: number;
+  /** List the killmails on hover (needs map access; public views show the count alone). */
+  list?: boolean;
 }) {
   if (kills <= 0) return null;
   const heat = killHeat(kills);
@@ -24,7 +27,13 @@ export function NodeKills({
     <Tooltip
       side="bottom"
       align="end"
-      content={<NodeKillList mapId={mapId} solarSystemId={solarSystemId} count={kills} />}
+      content={
+        list ? (
+          <NodeKillList mapId={mapId} solarSystemId={solarSystemId} count={kills} />
+        ) : (
+          `${kills} kill${kills === 1 ? '' : 's'} in the last hour`
+        )
+      }
     >
       <button
         type="button"

@@ -11,6 +11,7 @@ import {
   standingTone,
   statusFromStanding,
   type SystemIntelDto,
+  type SystemLabelDto,
   type UniverseSystemDto,
 } from '@darkbeacon/shared';
 import { cssVar } from '@darkbeacon/theme-sdk';
@@ -37,8 +38,10 @@ export interface SystemNodeData extends Record<string, unknown> {
   system: MapSystemDto;
   /** Static data; undefined while loading. */
   info: UniverseSystemDto | undefined;
-  /** The system's labels, resolved from the map's label list (shown above the node). */
-  labels: LabelDto[];
+  /** The system's Labels (WH1...), resolved from the map's list in its order (first above the node). */
+  systemLabels: SystemLabelDto[];
+  /** The system's Tags, resolved from the map's list (last above the node). */
+  tags: LabelDto[];
   /** Tracked characters currently in the system. */
   characters: number;
   /** Bookmark label above the system (see `bookmarkLabel` in shared); null for none. */
@@ -56,6 +59,8 @@ export interface SystemNodeData extends Record<string, unknown> {
   standing?: number | null;
   /** A kill just came in: the node rings softly for a moment. */
   pulse?: boolean;
+  /** Whether hovering the kills may list the killmails (not on public views). */
+  killList?: boolean;
 }
 
 export type SystemNodeType = Node<SystemNodeData, 'system'>;
@@ -103,7 +108,6 @@ export function systemTooltip(
     );
   if (intel && intel.kills1h > 0) lines.push(`Kills in the last hour: ${intel.kills1h}`);
   if (info?.statics.length) lines.push(`Statics: ${info.statics.join(', ')}`);
-  if (system.tag) lines.push(`Tag: ${system.tag}`);
   if (system.locked) lines.push('Locked');
   if (!system.visible) lines.push('Hidden from the map');
   if (system.description.trim()) lines.push(`Notes: ${system.description.trim().slice(0, 200)}`);
@@ -156,15 +160,30 @@ function StaticsList({ statics }: { statics: readonly string[] }) {
 
 /**
  * The one system node, built for a glance: a neutral box whose 3 px border carries the status;
- * the designation pill and the name, the pilot count; the statics. The bookmark code and labels
- * sit above it, the nearest hub of an exit below it. Everything else is in the tooltip.
+ * the designation pill and the name, the pilot count; the statics. Above it, left to right: its
+ * Labels, its custom label, the bookmark code and its Tags; the nearest hub of an exit below it.
+ * Everything else is in the tooltip.
  */
 export const SystemNode = memo(function SystemNode({
   data,
   selected,
   isConnectable,
 }: NodeProps<SystemNodeType>) {
-  const { system, info, labels, characters, mapId, bookmark, hub, mine, intel, standing, pulse } = data;
+  const {
+    system,
+    info,
+    systemLabels,
+    tags,
+    characters,
+    mapId,
+    bookmark,
+    hub,
+    mine,
+    intel,
+    standing,
+    pulse,
+    killList,
+  } = data;
   const toast = useToast();
   const name = nodeName(system, info);
   // A status someone set wins; an unmarked system takes one from the holder's standing.
@@ -207,6 +226,24 @@ export const SystemNode = memo(function SystemNode({
       ))}
 
       <div className={styles.above}>
+        {(systemLabels.length > 0 || system.customLabel) && (
+          <ul className={styles.labels} aria-label="Labels">
+            {systemLabels.map((l) => (
+              <li
+                key={l.id}
+                className={styles.systemLabel}
+                title={l.description ? `${l.name}: ${l.description}` : `Label ${l.name}`}
+              >
+                {l.name}
+              </li>
+            ))}
+            {system.customLabel && (
+              <li className={styles.systemLabel} data-custom title={`Custom label ${system.customLabel}`}>
+                {system.customLabel}
+              </li>
+            )}
+          </ul>
+        )}
         {bookmark && (
           <button
             type="button"
@@ -217,16 +254,16 @@ export const SystemNode = memo(function SystemNode({
             {bookmark}
           </button>
         )}
-        {labels.length > 0 && (
-          <ul className={styles.labels} aria-label="Labels">
-            {labels.map((l) => (
+        {tags.length > 0 && (
+          <ul className={styles.labels} aria-label="Tags">
+            {tags.map((t) => (
               <li
-                key={l.id}
+                key={t.id}
                 className={styles.label}
-                style={{ '--label-color': l.color } as CSSProperties}
-                title={l.description ? `${l.name}: ${l.description}` : l.name}
+                style={{ '--label-color': t.color } as CSSProperties}
+                title={t.description ? `${t.name}: ${t.description}` : t.name}
               >
-                {l.name}
+                {t.name}
               </li>
             ))}
           </ul>
@@ -267,7 +304,12 @@ export const SystemNode = memo(function SystemNode({
           <span className={styles.name}>{name}</span>
           <EffectDot effect={info?.effect} />
           <span className={styles.end}>
-            <NodeKills mapId={mapId} solarSystemId={system.solarSystemId} kills={intel?.kills1h ?? 0} />
+            <NodeKills
+              mapId={mapId}
+              solarSystemId={system.solarSystemId}
+              kills={intel?.kills1h ?? 0}
+              list={killList !== false}
+            />
             {characters > 0 && (
               <span
                 className={styles.pilots}

@@ -141,6 +141,8 @@ export function applyMapEvent(state: MapState, event: TypedEvent): MapState {
       return { ...state, exits: event.data.exits };
     case 'labels.changed':
       return state.map ? { ...state, map: { ...state.map, labels: event.data.labels } } : state;
+    case 'system_labels.changed':
+      return state.map ? { ...state, map: { ...state.map, systemLabels: event.data.systemLabels } } : state;
     default:
       return state;
   }

@@ -2,6 +2,10 @@ import { readFileSync } from 'node:fs';
 import {
   Controller,
   Get,
+  Global,
+  HttpException,
+  Optional,
+  Res,
   Inject,
   Injectable,
   Logger,
@@ -12,6 +16,7 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import {
+  NotFoundError,
   parseStream,
   type Actor,
   type Clock,
@@ -31,7 +36,9 @@ import {
 import { AccountService, CharacterService } from '@darkbeacon/identity';
 import type { MappingPorts } from '@darkbeacon/mapping';
 import type { DomainTelemetry } from '@darkbeacon/observability';
-import { EveId, MapKillsQuery, nestPath, routes } from '@darkbeacon/shared';
+import { MapPublishing } from '@darkbeacon/publishing';
+import { EveId, MapKillsQuery, nestPath, routes, type MapIntelDto } from '@darkbeacon/shared';
+import type { FastifyReply } from 'fastify';
 import { z } from 'zod';
 import {
   EsiActivitySource,
@@ -51,7 +58,8 @@ import {
 import { R2z2KillFeed, ZkillHistory } from '../../adapters/intel/zkill-http.js';
 import type { StaticUniverseCatalog } from '../../adapters/universe/static-universe-catalog.js';
 import type { AppConfig } from '../../config/config.js';
-import { CurrentActor } from '../../platform/actor.js';
+import { ClientIp, CurrentActor } from '../../platform/actor.js';
+import { LIMITS, RateLimiter } from '../../platform/rate-limiter.js';
 import { ZodPipe } from '../../platform/http.js';
 import {
   APP_CONFIG,
@@ -151,6 +159,34 @@ export class IntelController {
   }
 }
 
+/** `GET /api/public/maps/:token/intel`: public data of the systems a public link shows. */
+@Controller()
+export class PublicIntelController {
+  constructor(
+    @Inject(IntelQueries) private readonly queries: IntelQueries,
+    @Inject(RateLimiter) private readonly limiter: RateLimiter,
+    @Optional() @Inject(MapPublishing) private readonly publishing?: MapPublishing | null,
+  ) {}
+
+  @Get(nestPath(routes.intel.publicMap.path))
+  async map(
+    @Param('token') token: string,
+    @ClientIp() ip: string | null,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<MapIntelDto> {
+    const limit = this.limiter.take(`public:${ip ?? 'unknown'}`, LIMITS.publicReads);
+    if (!limit.ok) {
+      reply.header('retry-after', String(limit.retryAfterSeconds));
+      throw new HttpException('Too many requests; slow down', 429);
+    }
+    reply.header('cache-control', 'no-store');
+    const access = this.publishing ? await this.publishing.resolve(token) : null;
+    if (!access || !this.publishing) throw new NotFoundError('Public map');
+    const view = await this.publishing.view(access);
+    return this.queries.publicIntel(view.snapshot.systems.map((s) => s.solarSystemId));
+  }
+}
+
 /** Every few seconds whatever job is due; systems added to or removed from maps re-scope the feed. */
 const TICK_MS = 5_000;
 const SYSTEMS_DEBOUNCE_MS = 1_000;
@@ -209,9 +245,10 @@ export class IntelRuntime implements OnModuleInit, OnModuleDestroy {
  * names from ESI; `GET /api/maps/:mapId/intel`, `.../intel/systems/:id`, `.../kills`, pushes to
  * the maps' viewers and `kill.reported` events.
  */
+@Global()
 @Module({
   imports: [MappingModule],
-  controllers: [IntelController],
+  controllers: [IntelController, PublicIntelController],
   providers: [
     { provide: INTEL_LIVE, useFactory: (): LiveFlag => ({ current: () => false }) },
     {

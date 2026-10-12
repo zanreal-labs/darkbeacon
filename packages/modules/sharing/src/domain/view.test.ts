@@ -41,6 +41,19 @@ function setup() {
 }
 
 describe('merged view', () => {
+  it('shows merged Labels as the map’s own of the same name, and the custom label as it is', () => {
+    const { merge, ctx } = setup();
+    merge.apply('ro', [
+      present('system', String(J1), 1, { systemLabels: s(['wh2', 'B'], 2), customLabel: s('bait', 2) }),
+    ]);
+    const own = { ...ctx, systemLabels: [{ id: 'mine-2', name: 'WH2' }] };
+    const [j1] = entitiesOf(merge, refId('system', String(J1)), own);
+    expect(j1!.dto).toMatchObject({ systemLabelIds: ['mine-2'], customLabel: 'bait' });
+    // A map without Labels shows none; the custom label still shows.
+    const [bare] = entitiesOf(merge, refId('system', String(J1)), ctx);
+    expect(bare!.dto).toMatchObject({ systemLabelIds: [], customLabel: 'bait' });
+  });
+
   it('builds systems with the map’s own layout, the merged fields and provenance', () => {
     const { merge, ctx } = setup();
     merge.apply('ro', [

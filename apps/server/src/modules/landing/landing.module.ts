@@ -51,6 +51,8 @@ export class LandingController {
       loginMethod,
       discordRoles: loginMethod === 'discord',
       discordBot,
+      publicMaps: settings.publicMaps ?? true,
+      mcpMode: settings.mcpMode ?? 'off',
     };
   }
 }

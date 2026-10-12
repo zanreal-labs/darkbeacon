@@ -9,7 +9,9 @@ import {
   WORMHOLE_DESTINATION_LABEL,
   WORMHOLE_EFFECTS,
   wormholeDestination,
+  CUSTOM_LABEL_MAX,
   type LabelDto,
+  type SystemLabelDto,
   type MapSystemDto,
   type UniverseSystemDto,
   type WormholeEffect,
@@ -149,7 +151,6 @@ export function SystemIdentity({
           {custom || realName}
         </h2>
         {custom && <span className={styles.realName}>{realName}</span>}
-        {system.tag && <span className={styles.tag}>{system.tag}</span>}
         <span className={styles.identityActions}>
           {can.edit ? (
             <IconButton
@@ -320,11 +321,12 @@ export function SetDestination({ solarSystemId, name }: { solarSystemId: number;
   );
 }
 
-/** Status, labels, names, tag, notes and links of the selected system: dense, edited in place. */
+/** Status, Labels, Tags, names, notes and links of the selected system: dense, edited in place. */
 export function SystemDetails({
   system,
   info,
   labels,
+  systemLabels = [],
   can,
   store,
   activity,
@@ -333,7 +335,10 @@ export function SystemDetails({
 }: {
   system: MapSystemDto;
   info: UniverseSystemDto | undefined;
+  /** The map's Tags (`labels` in the data). */
   labels: LabelDto[];
+  /** The map's Labels (WH1...), in order. */
+  systemLabels?: readonly SystemLabelDto[];
   can: MapPermissions;
   store: Store;
   activity?: SystemActivity;
@@ -350,13 +355,22 @@ export function SystemDetails({
   }, [focusToken, focusedRef]);
   const id = system.solarSystemId;
   const update = store.updateSystem;
-  const shownLabels = can.edit ? labels : labels.filter((l) => system.labelIds.includes(l.id));
-  const toggleLabel = (labelId: string) => {
-    const on = system.labelIds.includes(labelId);
+  const shownTags = can.edit ? labels : labels.filter((l) => system.labelIds.includes(l.id));
+  const toggleTag = (tagId: string) => {
+    const on = system.labelIds.includes(tagId);
     void update(id, {
-      labelIds: on ? system.labelIds.filter((x) => x !== labelId) : [...system.labelIds, labelId],
+      labelIds: on ? system.labelIds.filter((x) => x !== tagId) : [...system.labelIds, tagId],
     });
   };
+  const onLabels = system.systemLabelIds.filter((l) => systemLabels.some((x) => x.id === l));
+  const shownLabels = can.edit ? systemLabels : systemLabels.filter((l) => onLabels.includes(l.id));
+  const toggleLabel = (labelId: string) => {
+    const on = onLabels.includes(labelId);
+    void update(id, {
+      systemLabelIds: on ? onLabels.filter((x) => x !== labelId) : [...onLabels, labelId],
+    });
+  };
+  const showLabels = can.edit || shownLabels.length > 0 || !!system.customLabel;
 
   return (
     <div className={styles.details}>
@@ -380,25 +394,63 @@ export function SystemDetails({
           )}
         </dd>
 
-        {shownLabels.length > 0 && (
+        {showLabels && (
           <>
             <dt>Labels</dt>
             <dd className={styles.labelChips} role="group" aria-label="Labels">
-              {shownLabels.map((l) => {
-                const on = system.labelIds.includes(l.id);
+              {shownLabels.map((l) => (
+                <button
+                  key={l.id}
+                  type="button"
+                  className={styles.systemLabelChip}
+                  aria-pressed={onLabels.includes(l.id)}
+                  disabled={!can.edit}
+                  title={l.description || undefined}
+                  onClick={() => toggleLabel(l.id)}
+                >
+                  {l.name}
+                </button>
+              ))}
+              {can.edit ? (
+                <span className={styles.customLabel}>
+                  <InlineText
+                    label="Custom label"
+                    value={system.customLabel ?? ''}
+                    placeholder="Custom label"
+                    maxLength={CUSTOM_LABEL_MAX}
+                    onCommit={(customLabel) => void update(id, { customLabel })}
+                  />
+                </span>
+              ) : (
+                system.customLabel && (
+                  <span className={styles.systemLabelChip} data-custom aria-label="Custom label">
+                    {system.customLabel}
+                  </span>
+                )
+              )}
+            </dd>
+          </>
+        )}
+
+        {shownTags.length > 0 && (
+          <>
+            <dt>Tags</dt>
+            <dd className={styles.labelChips} role="group" aria-label="Tags">
+              {shownTags.map((t) => {
+                const on = system.labelIds.includes(t.id);
                 return (
                   <button
-                    key={l.id}
+                    key={t.id}
                     type="button"
                     className={styles.labelChip}
                     aria-pressed={on}
                     disabled={!can.edit}
-                    title={l.description || undefined}
-                    style={{ '--label-color': l.color } as CSSProperties}
-                    onClick={() => toggleLabel(l.id)}
+                    title={t.description || undefined}
+                    style={{ '--label-color': t.color } as CSSProperties}
+                    onClick={() => toggleTag(t.id)}
                   >
                     <span className={styles.labelSwatch} />
-                    {l.name}
+                    {t.name}
                   </button>
                 );
               })}
@@ -427,17 +479,6 @@ export function SystemDetails({
                 placeholder="Add one for this chain"
                 maxLength={64}
                 onCommit={(temporaryName) => void update(id, { temporaryName })}
-              />
-            </dd>
-            <dt>Tag</dt>
-            <dd>
-              <InlineText
-                label="Tag"
-                mono
-                value={system.tag ?? ''}
-                placeholder="Add a tag"
-                maxLength={16}
-                onCommit={(tag) => void update(id, { tag })}
               />
             </dd>
           </>
