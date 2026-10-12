@@ -10,6 +10,7 @@ export const MAP_SETTINGS_SECTIONS = [
   'sharing',
   'labels',
   'bookmarks',
+  'signatures',
   'discord',
   'webhooks',
   'danger',

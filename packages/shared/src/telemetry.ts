@@ -85,6 +85,7 @@ export const TelemetrySection = z.enum([
   'webhooks',
   'danger',
   'backups',
+  'signatures',
 ]);
 /** Map panels (the widget dock); `plugin` for any plugin widget. */
 export const TelemetryPanel = z.enum([
