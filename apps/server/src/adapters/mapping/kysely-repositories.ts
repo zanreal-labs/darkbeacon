@@ -305,6 +305,17 @@ export class KyselySignatureRepository extends Repository implements SignatureRe
       .catch(signatureConflict(signature.eveId));
   }
 
+  async insertMany(signatures: readonly Signature[]): Promise<void> {
+    for (let i = 0; i < signatures.length; i += 200) {
+      const chunk = signatures.slice(i, i + 200);
+      await this.db
+        .insertInto('map_signatures')
+        .values(chunk.map(signatureToRow))
+        .execute()
+        .catch(signatureConflict(chunk.map((s) => s.eveId).join(', ')));
+    }
+  }
+
   async update(signature: Signature): Promise<void> {
     const { id, map_id, ...row } = signatureToRow(signature);
     await this.db

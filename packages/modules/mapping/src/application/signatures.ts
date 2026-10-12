@@ -131,6 +131,7 @@ export class SignatureUseCases extends MappingUseCases {
       );
       const now = this.ports.clock.now();
       const result: PasteSignaturesResult = { added: 0, updated: 0, removed: 0, skipped: parsed.skipped };
+      const added: Signature[] = [];
 
       for (const found of parsed.signatures) {
         const current = existing.get(found.eveId);
@@ -149,7 +150,7 @@ export class SignatureUseCases extends MappingUseCases {
             createdAt: now,
             updatedAt: now,
           };
-          await this.ports.signatures.insert(signature);
+          added.push(signature);
           events.add('signature.added', signature);
           result.added++;
           continue;
@@ -163,6 +164,8 @@ export class SignatureUseCases extends MappingUseCases {
         events.add('signature.updated', next, current);
         result.updated++;
       }
+      // A 200-line paste is one insert, not 200 round trips.
+      await this.ports.signatures.insertMany(added);
 
       if (request.mode === 'replace' && parsed.signatures.length > 0) {
         for (const stale of existing.values()) {

@@ -367,6 +367,29 @@ describeEachDialect('mapping use cases', (t) => {
     await expect(signatures.remove(eve, map.id, list[0]!.id)).rejects.toMatchObject({ code: 'forbidden' });
   });
 
+  it('adds a 200-line paste at once, every signature with its event', async () => {
+    await systems.add(bob, map.id, { solarSystemId: SYSTEMS.c2 });
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const ids = Array.from(
+      { length: 200 },
+      (_, i) => `${letters[i % 26]}${letters[Math.floor(i / 26)]}X-${String(i).padStart(3, '0')}`,
+    );
+    const seq = await head();
+    const result = await signatures.paste(bob, map.id, SYSTEMS.c2, {
+      text: ids
+        .map((id) => `${id}\tCosmic Signature\tWormhole\tUnstable Wormhole\t100.0%\t4.32 AU`)
+        .join('\n'),
+      mode: 'merge',
+    });
+    expect(result).toMatchObject({ added: 200, updated: 0 });
+    expect((await signatures.list(bob, map.id, SYSTEMS.c2)).map((s) => s.eveId).sort()).toEqual(
+      [...ids].sort(),
+    );
+    const events = await eventsSince(seq);
+    expect(events).toHaveLength(200);
+    expect(events.every(([type]) => type === 'signature.added')).toBe(true);
+  });
+
   it('deletes a map with everything on it', async () => {
     await systems.add(bob, map.id, { solarSystemId: SYSTEMS.c2 });
     await systems.add(bob, map.id, { solarSystemId: SYSTEMS.c5 });
