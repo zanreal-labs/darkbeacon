@@ -9,6 +9,7 @@ import {
   readAll,
   readComment,
   readConnection,
+  readPassage,
   readSignature,
   readStructure,
   readSystem,
@@ -48,7 +49,7 @@ const USER_AGENT = 'Darkbeacon-import (+https://github.com/darkbeacon; reads one
 const RETRIES_5XX = 2;
 const RETRIES_429 = 3;
 const MAX_PAGES = 200;
-const PAGE = { signatures: 200, comments: 100 };
+const PAGE = { signatures: 200, comments: 100, passages: 200 };
 
 /**
  * Reads a map from a Wanderer instance over its public API with the map's API key (Bearer).
@@ -122,9 +123,33 @@ export class WandererHttpSource implements MapImportSource {
 
     onStep?.('comments');
     dump.comments = readAll(
-      await this.jsonApiAll(api, '/api/v1/map_system_comments', PAGE.comments, warn, 'System comments'),
+      await this.jsonApiAll(
+        api,
+        '/api/v1/map_system_comments',
+        PAGE.comments,
+        warn,
+        'System comments',
+        'character',
+      ),
       readComment,
       'comments',
+      dump.rejected,
+    );
+
+    // Wanderer's documented API counts passages per connection only; an instance that lists them
+    // one by one (JSON:API `map_chain_passages`) gives pilot, ship and time too.
+    onStep?.('passages');
+    dump.passages = readAll(
+      await this.jsonApiAll(
+        api,
+        '/api/v1/map_chain_passages',
+        PAGE.passages,
+        () => undefined,
+        'Passages',
+        'character',
+      ),
+      readPassage,
+      'passages',
       dump.rejected,
     );
 
@@ -232,9 +257,11 @@ export class WandererHttpSource implements MapImportSource {
     limit: number,
     warn: (m: string) => void,
     what: string,
+    include?: string,
   ): Promise<unknown[]> {
     const out: unknown[] = [];
-    let next: string | null = `${path}?page[limit]=${limit}&page[offset]=0`;
+    const query = include ? `include=${include}&` : '';
+    let next: string | null = `${path}?${query}page[limit]=${limit}&page[offset]=0`;
     for (let page = 0; next && page < MAX_PAGES; page++) {
       const answer = await this.get(api, next);
       if (answer.status !== 200) {
@@ -246,12 +273,15 @@ export class WandererHttpSource implements MapImportSource {
       }
       const body = isRow(answer.body) ? answer.body : {};
       const data = Array.isArray(body.data) ? body.data : [];
-      for (const resource of data) out.push(flatten(resource));
+      const included = Array.isArray(body.included) ? body.included : [];
+      for (const resource of data) out.push(flatten(resource, included));
       const link = isRow(body.links) ? text(body.links.next) : null;
       if (link) next = sameOriginPath(api, link);
       else
         next =
-          data.length >= limit ? `${path}?page[limit]=${limit}&page[offset]=${(page + 1) * limit}` : null;
+          data.length >= limit
+            ? `${path}?${query}page[limit]=${limit}&page[offset]=${(page + 1) * limit}`
+            : null;
     }
     return out;
   }
@@ -448,16 +478,29 @@ function dataList(body: unknown): unknown[] {
   return isRow(body) && Array.isArray(body.data) ? body.data : [];
 }
 
-function flatten(resource: unknown): unknown {
+/**
+ * A JSON:API resource as a flat row: its attributes with `id`, `system_id` from the `system`
+ * relationship, and `character` (name, eve_id) from an included character.
+ */
+function flatten(resource: unknown, included: readonly unknown[] = []): unknown {
   if (!isRow(resource)) return resource;
   const attributes = isRow(resource.attributes) ? resource.attributes : {};
   const relationships = isRow(resource.relationships) ? resource.relationships : {};
-  const system =
-    isRow(relationships.system) && isRow(relationships.system.data) ? relationships.system.data : null;
+  const related = (name: string) => {
+    const rel = relationships[name];
+    return isRow(rel) && isRow(rel.data) ? rel.data : null;
+  };
+  const system = related('system');
+  const characterRef = related('character');
+  const character = characterRef
+    ? included.find((i) => isRow(i) && i.type === characterRef.type && i.id === characterRef.id)
+    : undefined;
+  const characterAttributes = isRow(character) && isRow(character.attributes) ? character.attributes : null;
   return {
     id: resource.id,
     ...attributes,
     ...(system && !attributes.system_id ? { system_id: system.id } : {}),
+    ...(characterAttributes && !attributes.character ? { character: characterAttributes } : {}),
   };
 }
 

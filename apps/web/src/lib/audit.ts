@@ -81,6 +81,10 @@ const FIELD_LABELS: Record<string, string> = {
   exits: 'Exits',
   hubs: 'Hubs',
   dangerous: 'Dangerous',
+  note: 'Note',
+  lifetime: 'Lifetime left',
+  kind: 'Kind',
+  custom: 'Custom entry',
   bubbled: 'Bubbled',
   eveId: 'Signature',
   group: 'Group',
@@ -156,6 +160,7 @@ function value(field: string, v: unknown, names: AuditNames): string {
     const p = v as { x: number; y: number };
     return `${Math.round(p.x)}, ${Math.round(p.y)}`;
   }
+  if (field === 'lifetime' && typeof v === 'object') return `under ${(v as { mark?: string }).mark ?? '?'}`;
   if (field === 'settings' && typeof v === 'object') {
     const scopes = (v as { scopes?: string[] }).scopes;
     return scopes?.length ? scopes.map(titleCase).join(', ') : '—';

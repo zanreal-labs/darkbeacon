@@ -21,12 +21,22 @@ export type SystemWrite = Partial<
 export type ConnectionWrite = Partial<
   Pick<
     ConnectionDto,
-    'type' | 'timeStatus' | 'massStatus' | 'shipSize' | 'dangerous' | 'bubbled' | 'eolAt' | 'massStatusAt'
+    | 'type'
+    | 'timeStatus'
+    | 'massStatus'
+    | 'shipSize'
+    | 'dangerous'
+    | 'bubbled'
+    | 'eolAt'
+    | 'massStatusAt'
+    | 'locked'
+    | 'note'
+    | 'lifetime'
   >
 >;
 
 export type SignatureWrite = Partial<
-  Pick<SignatureDto, 'group' | 'type' | 'name' | 'description' | 'connectionId'>
+  Pick<SignatureDto, 'group' | 'type' | 'name' | 'description' | 'connectionId' | 'kind' | 'custom'>
 >;
 
 /** What to do with one imported object. `written` is what Wanderer has, kept as the next base. */
@@ -100,7 +110,17 @@ export function decideSystem(
   return outcome(patch, wanderer, conflicts);
 }
 
-const CONNECTION_FIELDS = ['type', 'timeStatus', 'massStatus', 'shipSize', 'dangerous', 'bubbled'] as const;
+const CONNECTION_FIELDS = [
+  'type',
+  'timeStatus',
+  'massStatus',
+  'shipSize',
+  'dangerous',
+  'bubbled',
+  'locked',
+  'note',
+  'lifetime',
+] as const;
 
 /**
  * A connection: created with Wanderer's states and times, or merged. Default states (normal,
@@ -116,17 +136,27 @@ export function decideConnection(
   const wanderer: Required<ConnectionWrite> = { ...planned.fields };
   if (!here) return { action: 'create', write: wanderer, written: wanderer, conflicts: [] };
   const { patch, conflicts } = mergeFields<ConnectionWrite>({
-    here: pick(here, CONNECTION_FIELDS),
+    // Fields a connection here may lack read as their defaults.
+    here: {
+      ...pick(here, CONNECTION_FIELDS),
+      locked: here.locked ?? false,
+      note: here.note ?? '',
+      lifetime: here.lifetime ?? null,
+    },
     wanderer,
     base: base ? { ...wanderer, ...base } : null,
     hereAt: here.updatedAt,
     wandererAt: planned.remoteUpdatedAt,
     fields: CONNECTION_FIELDS,
+    joined: ['note'],
     blank: (field, value) =>
       (field === 'timeStatus' && value === 'normal') ||
       (field === 'massStatus' && value === 'fresh') ||
       (field === 'dangerous' && value === false) ||
-      (field === 'bubbled' && value === 'none'),
+      (field === 'bubbled' && value === 'none') ||
+      (field === 'locked' && value === false) ||
+      (field === 'note' && value === '') ||
+      (field === 'lifetime' && value === null),
   });
   if (patch.timeStatus === 'eol') patch.eolAt = wanderer.eolAt;
   if (patch.timeStatus === 'normal') patch.eolAt = null;
@@ -134,7 +164,7 @@ export function decideConnection(
   return outcome(patch, wanderer, conflicts);
 }
 
-const SIGNATURE_FIELDS = ['group', 'type', 'name', 'description', 'connectionId'] as const;
+const SIGNATURE_FIELDS = ['group', 'type', 'name', 'description', 'connectionId', 'kind', 'custom'] as const;
 
 /** A signature: created, or merged (notes joined, a link here never cut by Wanderer). */
 export function decideSignature(
@@ -146,7 +176,7 @@ export function decideSignature(
   const wanderer: Required<SignatureWrite> = { ...planned.fields, connectionId };
   if (!here) return { action: 'create', write: wanderer, written: wanderer, conflicts: [] };
   const { patch, conflicts } = mergeFields<SignatureWrite>({
-    here: pick(here, SIGNATURE_FIELDS),
+    here: { ...pick(here, SIGNATURE_FIELDS), kind: here.kind ?? 'signature', custom: here.custom ?? false },
     wanderer,
     base: base ? { ...wanderer, ...base } : null,
     hereAt: here.updatedAt,
@@ -154,7 +184,11 @@ export function decideSignature(
     fields: SIGNATURE_FIELDS,
     joined: ['description'],
     protect: here.connectionId ? { connectionId: 'Linked here' } : {},
-    blank: (field, value) => value === null || value === '' || (field === 'group' && value === 'unknown'),
+    blank: (field, value) =>
+      value === null ||
+      value === '' ||
+      (field === 'group' && value === 'unknown') ||
+      (field === 'custom' && value === false),
   });
   // A link makes it a wormhole; the use case does the same.
   if (patch.connectionId) delete patch.group;

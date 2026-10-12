@@ -37,6 +37,9 @@ const CONNECTION_FIELDS = [
   'massSaved',
   'dangerous',
   'bubbled',
+  'note',
+  'locked',
+  'lifetime',
 ] as const satisfies ReadonlyArray<keyof UpdateConnectionRequest>;
 const SIGNATURE_FIELDS = [
   'eveId',
@@ -135,7 +138,12 @@ export class MappingReverter implements ChangeReverter {
           await this.uc.numbers.setNumber(actor, mapId, id, number.before);
           return;
         }
-        await this.uc.connections.update(actor, mapId, id, this.backPatch(diff, current, CONNECTION_FIELDS));
+        await this.uc.connections.update(
+          actor,
+          mapId,
+          id,
+          connectionBackPatch(this.backPatch(diff, current, CONNECTION_FIELDS)),
+        );
         return;
       }
       case 'connection.removed': {
@@ -149,7 +157,7 @@ export class MappingReverter implements ChangeReverter {
           target: before.target,
           ...(before.type ? { type: before.type } : {}),
         });
-        const restore = pick(before, CONNECTION_FIELDS);
+        const restore = connectionBackPatch(pick(before, CONNECTION_FIELDS));
         await this.uc.connections.update(actor, mapId, added.id, restore);
         return;
       }
@@ -228,6 +236,21 @@ export class MappingReverter implements ChangeReverter {
     if (Object.keys(patch).length === 0) throw new ConflictError('Nothing to revert');
     return patch;
   }
+}
+
+/**
+ * A connection's earlier values as an update: fields it did not have yet go back to their
+ * defaults, and a lifetime mark is set again by its mark (the time is that of the revert).
+ */
+function connectionBackPatch(values: Record<string, unknown>): UpdateConnectionRequest {
+  const out: Record<string, unknown> = { ...values };
+  if ('note' in out && out.note === undefined) out.note = '';
+  if ('locked' in out && out.locked === undefined) out.locked = false;
+  if ('lifetime' in out) {
+    const lifetime = out.lifetime as { mark?: string } | null | undefined;
+    out.lifetime = lifetime?.mark ?? null;
+  }
+  return out as UpdateConnectionRequest;
 }
 
 function pick<T extends object, K extends keyof T>(

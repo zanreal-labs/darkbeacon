@@ -29,7 +29,7 @@ import type { WandererMapDump } from '../domain/wanderer.js';
 import type { ImportJobRecord } from '../ports/repositories.js';
 import type { WandererApiRequest } from '../ports/source.js';
 import type { ImportingDeps } from './deps.js';
-import { assess, emptyOutcomes, LinkIndex, type TargetState } from './planner.js';
+import { assess, characterNames, emptyOutcomes, LinkIndex, type TargetState } from './planner.js';
 import type { ImportRunner } from './runner.js';
 import { accessEntries, sourceKey, toJobDto, toSyncDto } from './views.js';
 
@@ -133,6 +133,7 @@ export class ImportService {
     const { plan: placed } = translate(job.dump, {
       systemName: (id) => this.deps.universe.systemName(id),
       layoutScale: typeof scale === 'number' ? scale : null,
+      characterName: await characterNames(job.dump, this.deps.names),
     });
     const { outcome, conflicts } = assess(
       placed,

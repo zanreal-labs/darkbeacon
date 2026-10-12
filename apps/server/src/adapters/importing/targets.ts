@@ -85,6 +85,10 @@ export class MappingChainTarget implements ChainTarget {
     return this.mapping.imports.putSignature(...args);
   }
 
+  putPassage(...args: Parameters<ChainTarget['putPassage']>) {
+    return this.mapping.imports.putPassage(...args);
+  }
+
   ensureLabels(...args: Parameters<ChainTarget['ensureLabels']>) {
     return this.mapping.imports.ensureLabels(...args);
   }

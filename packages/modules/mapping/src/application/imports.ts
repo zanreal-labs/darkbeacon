@@ -9,7 +9,14 @@ import {
   type SignatureDto,
 } from '@darkbeacon/shared';
 import type { Connection, MapSystem, Signature } from '../domain/map.js';
-import { changes, defaultShipSize, defined, validateLabels } from '../domain/rules.js';
+import {
+  changes,
+  compactConnection,
+  compactSignature,
+  defaultShipSize,
+  defined,
+  validateLabels,
+} from '../domain/rules.js';
 import { MappingUseCases, type EventBatch } from './base.js';
 import { renumberBookmarks } from './bookmark-numbers.js';
 import { removeConnection } from './systems.js';
@@ -43,12 +50,24 @@ export type ImportedConnectionFields = Partial<
     | 'bubbled'
     | 'eolAt'
     | 'massStatusAt'
+    | 'locked'
+    | 'note'
+    | 'lifetime'
   >
 >;
 
 export type ImportedSignatureFields = Partial<
-  Pick<SignatureDto, 'group' | 'type' | 'name' | 'description' | 'connectionId'>
+  Pick<SignatureDto, 'group' | 'type' | 'name' | 'description' | 'connectionId' | 'kind' | 'custom'>
 >;
+
+/** A ship another mapper saw go through a connection. */
+export interface ImportedPassage {
+  source: number;
+  target: number;
+  characterId: number;
+  shipTypeId: number | null;
+  occurredAt: number;
+}
 
 export type ImportOutcome = 'created' | 'updated' | 'unchanged';
 
@@ -150,11 +169,12 @@ export class ChainImportUseCases extends MappingUseCases {
   ): Promise<{ connection: Connection; outcome: ImportOutcome }> {
     const who = await this.authorizeEdit(actor, mapId);
     if (pair.source === pair.target) throw new ValidationError('A system cannot connect to itself');
-    const { eolAt, massStatusAt, ...rest } = fields;
+    const { eolAt, massStatusAt, lifetime, ...rest } = fields;
     const patch: ImportedConnectionFields = {
-      ...defined(UpdateConnectionRequest.parse(rest)),
+      ...defined(UpdateConnectionRequest.omit({ lifetime: true }).parse(rest)),
       ...(eolAt !== undefined ? { eolAt } : {}),
       ...(massStatusAt !== undefined ? { massStatusAt } : {}),
+      ...(lifetime !== undefined ? { lifetime } : {}),
     };
     return this.write(who, mapId, async (events) => {
       await this.visibleSystem(mapId, pair.source);
@@ -202,6 +222,9 @@ export class ChainImportUseCases extends MappingUseCases {
         updatedAt: now,
       };
       connection.updatedAt = changeTime(connection.createdAt, changedAt, now);
+      // Defaults stay absent, as for connections made by hand.
+      for (const key of ['locked', 'note', 'lifetime'] as const)
+        if (!(key in compactConnection(connection))) delete connection[key];
       if (connection.timeStatus === 'normal') connection.eolAt = null;
       else if (connection.eolAt === null) connection.eolAt = now;
       if (!(await this.ports.connections.insert(connection))) {
@@ -239,6 +262,8 @@ export class ChainImportUseCases extends MappingUseCases {
         type: checked.type,
         name: checked.name,
         description: checked.description,
+        kind: checked.kind,
+        custom: checked.custom,
       }),
       ...(connectionId !== undefined ? { connectionId } : {}),
     };
@@ -282,9 +307,52 @@ export class ChainImportUseCases extends MappingUseCases {
         updatedAt: now,
       };
       signature.updatedAt = changeTime(signature.createdAt, changedAt, now);
+      const compact = compactSignature(signature);
+      if (!('kind' in compact)) delete signature.kind;
+      if (!('custom' in compact)) delete signature.custom;
       await this.ports.signatures.insert(signature);
       if (system.visible) events.add('signature.added', signature);
       return { signature, outcome: 'created' as const };
+    });
+  }
+
+  /**
+   * Records a passage another mapper saw, under its stable id there (`externalId`), so the same
+   * passage is recorded once however often it is imported. The hull mass comes from the SDE, as
+   * for passages recorded here. Skipped (false) when the map does not connect the two systems.
+   */
+  async putPassage(
+    actor: Actor | null,
+    mapId: string,
+    passage: ImportedPassage,
+    externalId: string,
+  ): Promise<'created' | 'unchanged' | 'skipped'> {
+    const who = await this.authorizeEdit(actor, mapId);
+    return this.write(who, mapId, async (events) => {
+      const connection = await this.ports.connections.findBetween(mapId, passage.source, passage.target);
+      if (!connection) return 'skipped';
+      const record = {
+        id: newId(),
+        connectionId: connection.id,
+        characterId: passage.characterId,
+        shipTypeId: passage.shipTypeId,
+        mass: passage.shipTypeId === null ? null : this.ports.universe.shipMass(passage.shipTypeId),
+        from: passage.source,
+        to: passage.target,
+        occurredAt: Math.min(passage.occurredAt, this.ports.clock.now()),
+      };
+      // The id marks it as imported and keeps it unique (the table's event id).
+      if (!(await this.ports.passages.insert(mapId, record, `import:${externalId}`))) return 'unchanged';
+      events.add('connection.passage', {
+        connectionId: connection.id,
+        characterId: record.characterId,
+        shipTypeId: record.shipTypeId,
+        mass: record.mass,
+        from: record.from,
+        to: record.to,
+        passageId: record.id,
+      });
+      return 'created';
     });
   }
 

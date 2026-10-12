@@ -61,6 +61,14 @@ export function connectionFields(request: UpdateConnectionRequest): Record<strin
     massSaved: request.massSaved,
     dangerous: request.dangerous,
     bubbled,
+    note: request.note,
+    locked: request.locked,
+    lifetime:
+      request.lifetime === undefined
+        ? undefined
+        : request.lifetime === null
+          ? null
+          : { mark: request.lifetime },
   });
 }
 
@@ -79,6 +87,7 @@ export function signatureFields(request: UpdateSignatureRequest): Record<string,
     type: request.type,
     name: request.name,
     notes: request.description,
+    kind: request.kind,
     link,
   });
 }

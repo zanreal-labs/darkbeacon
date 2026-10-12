@@ -6,7 +6,8 @@
 // Map API key: map.json `apiKey`; the "Officers" ACL needs its own key (`acls[].key`).
 // FAKE_WANDERER_RATE_LIMIT=n answers every n-th request with 429 (Retry-After: 1).
 // FAKE_WANDERER_LEGACY_SIGNATURES=off answers 404 for /api/maps/:slug/signatures, so readers
-// fall back to the paginated JSON:API route.
+// fall back to the paginated JSON:API route. Passages one by one (`/api/v1/map_chain_passages`)
+// stand for an instance that offers them; Wanderer's documented API counts them only.
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -35,6 +36,7 @@ export function loadMap(file = fileURLToPath(new URL('./map.json', import.meta.u
     signatures: raw.signatures.map(stamp),
     structures: raw.structures.map(stamp),
     comments: raw.comments.map(stamp),
+    passages: (raw.passages ?? []).map(stamp),
   };
 }
 
@@ -62,6 +64,27 @@ export function createFakeWanderer(map, options = {}) {
       links: { self: `${base}?page[offset]=${offset}`, ...(next ? { next } : {}) },
       meta: { total: rows.length },
     };
+  };
+
+  // `include=character`: the characters the page refers to, as JSON:API `included`.
+  const withCharacters = (url, body, rows) => {
+    if (url.searchParams.get('include') !== 'character') return body;
+    const ids = new Set(body.data.map((d) => d.relationships.character.data.id));
+    const names = new Map(map.characters.map((c) => [c.eve_id, c.name]));
+    const included = [];
+    for (const row of rows) {
+      const id = `char-${row.character_eve_id}`;
+      if (!ids.has(id) || included.some((i) => i.id === id)) continue;
+      included.push({
+        id,
+        type: 'characters',
+        attributes: {
+          eve_id: row.character_eve_id,
+          name: row.character_name ?? names.get(row.character_eve_id) ?? null,
+        },
+      });
+    }
+    return { ...body, included };
   };
 
   return createServer((req, res) => {
@@ -139,21 +162,36 @@ export function createFakeWanderer(map, options = {}) {
             map_id: map.map.id,
           })),
         });
-      case '/api/v1/map_system_comments':
-        return json(
-          res,
-          200,
-          page(
-            url,
-            map.comments.map((c) => ({
-              id: c.id,
-              type: 'map_system_comments',
-              attributes: { text: c.text, inserted_at: c.inserted_at, updated_at: c.inserted_at },
-              relationships: { system: { data: { type: 'map_systems', id: c.system_uuid } } },
-            })),
-            '/api/v1/map_system_comments',
-          ),
+      case '/api/v1/map_system_comments': {
+        const body = page(
+          url,
+          map.comments.map((c) => ({
+            id: c.id,
+            type: 'map_system_comments',
+            attributes: { text: c.text, inserted_at: c.inserted_at, updated_at: c.inserted_at },
+            relationships: {
+              system: { data: { type: 'map_systems', id: c.system_uuid } },
+              character: { data: { type: 'characters', id: `char-${c.character_eve_id}` } },
+            },
+          })),
+          '/api/v1/map_system_comments',
         );
+        return json(res, 200, withCharacters(url, body, map.comments));
+      }
+      case '/api/v1/map_chain_passages': {
+        if (options.passages === false) return json(res, 404, { error: 'Not found' });
+        const body = page(
+          url,
+          map.passages.map(({ id, character_eve_id, ...attributes }) => ({
+            id,
+            type: 'map_chain_passages',
+            attributes,
+            relationships: { character: { data: { type: 'characters', id: `char-${character_eve_id}` } } },
+          })),
+          '/api/v1/map_chain_passages',
+        );
+        return json(res, 200, withCharacters(url, body, map.passages));
+      }
       case '/api/v1/map_system_signatures':
         return json(
           res,

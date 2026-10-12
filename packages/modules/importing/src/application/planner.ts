@@ -20,9 +20,38 @@ import {
 import type { FieldConflict } from '../domain/merge.js';
 import { pairKey, type ImportPlan } from '../domain/translate.js';
 import type { ImportLinkRecord } from '../ports/repositories.js';
+import type { EveNames } from '../ports/target.js';
+import type { WandererMapDump } from '../domain/wanderer.js';
+
+/**
+ * Names of the characters who added structures and wrote comments (ESI), for the titled blocks
+ * in the system notes; unknown ids give no name.
+ */
+export async function characterNames(
+  dump: WandererMapDump,
+  names: EveNames,
+): Promise<(eveId: string) => string | null> {
+  const ids = new Set<number>();
+  for (const s of dump.structures) if (s.characterEveId) ids.add(Number(s.characterEveId));
+  for (const c of dump.comments) if (c.authorEveId && !c.authorName) ids.add(Number(c.authorEveId));
+  const valid = [...ids].filter((id) => Number.isSafeInteger(id) && id > 0);
+  const found = valid.length > 0 ? await names.describe(valid) : new Map();
+  return (eveId) => {
+    const name = found.get(Number(eveId));
+    return name && name.category === 'character' ? name.name : null;
+  };
+}
 
 /** The kinds an import reports on, in the order it writes them. */
-export const KINDS = ['labels', 'systems', 'connections', 'signatures', 'access', 'settings'] as const;
+export const KINDS = [
+  'labels',
+  'systems',
+  'connections',
+  'signatures',
+  'passages',
+  'access',
+  'settings',
+] as const;
 export type ImportKind = (typeof KINDS)[number];
 
 export function emptyOutcome(): ImportOutcomeDto {
@@ -149,6 +178,14 @@ export function assess(
     count(outcome.signatures!, decision.action);
     for (const c of decision.conflicts) conflicts.push(conflict('signature', planned.name, c, labelName));
   }
+
+  // Passages are recorded once by their Wanderer id; ones recorded before count as unchanged then.
+  outcome.passages!.created += plan.passages.filter((p) =>
+    linkedPairs.has(pairKey(p.source, p.target)),
+  ).length;
+  outcome.passages!.skipped += plan.passages.filter(
+    (p) => !linkedPairs.has(pairKey(p.source, p.target)),
+  ).length;
 
   if (options.includeAccess && state.rules) {
     const rules = new Map(state.rules.map((r) => [`${r.subjectKind}:${r.subjectId}`, r]));

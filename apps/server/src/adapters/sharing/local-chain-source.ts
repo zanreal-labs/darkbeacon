@@ -32,6 +32,7 @@ import {
   type UpdateSignatureRequest,
   type UpdateSystemRequest,
 } from '@darkbeacon/shared';
+import { LifetimeMark } from '@darkbeacon/shared';
 import {
   pairKey,
   parsePair,
@@ -336,6 +337,8 @@ export class LocalChainSource implements ChainSource {
     if (fields.type !== undefined) request.type = fields.type as string | null;
     if (fields.name !== undefined) request.name = fields.name as string | null;
     if (typeof fields.notes === 'string') request.description = fields.notes;
+    if (fields.kind === 'signature' || fields.kind === 'anomaly' || fields.kind === 'other')
+      request.kind = fields.kind;
     if (fields.link === null) request.connectionId = null;
     else if (typeof fields.link === 'string') {
       // This map may not have that connection; then the link stays as it is here.
@@ -466,6 +469,9 @@ function connectionEntry(c: Connection, times: FieldTimes, linked: readonly Sign
     massSaved: stamp(c.massSaved, at(times, 'massSaved', born)),
     dangerous: stamp(c.dangerous, at(times, 'dangerous', born)),
     bubbled: stamp(bubbledByEnd(c), at(times, 'bubbled', born)),
+    lifetime: stamp(c.lifetime ?? null, at(times, 'lifetime', born)),
+    note: stamp(c.note ?? '', at(times, 'note', born)),
+    locked: stamp(c.locked ?? false, at(times, 'locked', born)),
   };
   if (typed.length > 0) {
     const first = typed.sort((a, b) => a.at - b.at)[0]!;
@@ -490,6 +496,8 @@ function signatureEntry(s: Signature, times: FieldTimes, pairs: ReadonlyMap<stri
         s.connectionId ? (pairs.get(s.connectionId) ?? null) : null,
         at(times, 'connectionId', born),
       ),
+      kind: stamp(s.kind ?? 'signature', at(times, 'kind', born)),
+      custom: stamp(s.custom ?? false, at(times, 'custom', born)),
     },
   };
 }
@@ -536,6 +544,14 @@ function connectionRequest(f: Record<string, unknown>, current: Connection): Upd
   if (typeof f.massSaved === 'boolean') r.massSaved = f.massSaved;
   if (typeof f.dangerous === 'boolean') r.dangerous = f.dangerous;
   if (typeof f.bubbled === 'string') r.bubbled = bubbledToDirection(f.bubbled, current);
+  if (typeof f.note === 'string') r.note = f.note;
+  if (typeof f.locked === 'boolean') r.locked = f.locked;
+  if (f.lifetime === null) r.lifetime = null;
+  else if (f.lifetime && typeof f.lifetime === 'object') {
+    const mark = (f.lifetime as { mark?: unknown }).mark;
+    if (typeof mark === 'string' && (LifetimeMark.options as readonly string[]).includes(mark))
+      r.lifetime = mark as LifetimeMark;
+  }
   return r;
 }
 

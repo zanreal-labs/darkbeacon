@@ -100,6 +100,60 @@ await page.keyboard.press('f');
 await page.waitForTimeout(800);
 await shot('07-map-fit');
 
+step('every kind of intel came over: anomalies, custom entries, locks, notes, lifetimes, passages');
+const id = await mapId();
+const snapshot = await (
+  await page.request.get(`${BASE}/api/streams/${encodeURIComponent(`map:${id}`)}/snapshot`)
+).json();
+const { connections, signatures } = snapshot.data;
+assert.ok(
+  signatures.some((x) => x.kind === 'anomaly'),
+  'anomalies',
+);
+assert.ok(
+  signatures.some((x) => x.kind === 'other'),
+  'other scanner rows',
+);
+assert.ok(
+  signatures.some((x) => x.custom && x.eveId === 'TOWER-1'),
+  'custom entries',
+);
+assert.ok(
+  connections.some((c) => c.locked),
+  'a locked connection',
+);
+assert.ok(
+  connections.some((c) => c.note),
+  'connection notes',
+);
+for (const mark of ['1h', '4h', '4.5h', '16h', '24h', '48h'])
+  assert.ok(
+    connections.some((c) => c.lifetime?.mark === mark),
+    `lifetime ${mark}`,
+  );
+let passages = 0;
+for (const c of connections)
+  passages += (await (await page.request.get(`${BASE}/api/maps/${id}/connections/${c.id}/passages`)).json())
+    .length;
+assert.equal(passages, 5, 'passages');
+
+step('the sidebar shows connections with their padlock and the anomalies fold');
+await page.locator('.react-flow__node', { hasText: 'Farm' }).first().click();
+await page.getByRole('region', { name: 'Connections' }).waitFor({ timeout: 15_000 });
+await page.getByRole('button', { name: /Anomalies and other results/ }).click();
+await page.waitForTimeout(400);
+await shot('07b-sidebar-farm');
+// The locked hole (Thera to EC-P8R): select its far end once the sidebar is closed and the chain fits.
+await page.keyboard.press('Escape');
+await page.keyboard.press('f');
+await page.waitForTimeout(800);
+await page.locator('.react-flow__node', { hasText: 'EC-P8R' }).first().click();
+await page
+  .getByRole('region', { name: 'Connections' })
+  .getByRole('button', { name: /Unlock the connection/ })
+  .waitFor({ timeout: 15_000 });
+await shot('07c-sidebar-locked-connection');
+
 step('the map settings show the sync');
 await page.goto(`${BASE}/m/home-chain?settings=import`, { waitUntil: 'networkidle' });
 await page.getByText('Syncing from Wanderer').waitFor({ timeout: 15_000 });

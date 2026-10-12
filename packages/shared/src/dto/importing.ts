@@ -80,6 +80,8 @@ export const ImportCountsDto = z.object({
   hiddenSystems: z.number().int(),
   connections: z.number().int(),
   signatures: z.number().int(),
+  /** Passages with pilot and ship (sources that list them one by one). Optional: older jobs lack it. */
+  passages: z.number().int().optional(),
   structures: z.number().int(),
   comments: z.number().int(),
   labels: z.number().int(),

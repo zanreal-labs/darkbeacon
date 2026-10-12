@@ -39,6 +39,9 @@ const CONNECTION_FIELDS: ReadonlyArray<[keyof ConnectionDto, (after: ConnectionD
   ['bubbled', () => 'bubble'],
   ['dangerous', () => 'dangerous'],
   ['massSaved', () => 'mass_saved'],
+  ['locked', () => 'lock'],
+  ['note', () => 'note'],
+  ['lifetime', () => 'lifetime'],
 ];
 
 const record = (value: unknown): Record<string, unknown> | null =>
@@ -104,7 +107,9 @@ export function featureEvents(event: ObservedEvent, context: AuditContext): Feat
       const after = data as ConnectionDto | null;
       const before = record(event.before) as ConnectionDto | null;
       if (!after || !before) return [];
-      return CONNECTION_FIELDS.filter(([key]) => before[key] !== after[key]).map(([, field]) => ({
+      return CONNECTION_FIELDS.filter(
+        ([key]) => JSON.stringify(before[key] ?? null) !== JSON.stringify(after[key] ?? null),
+      ).map(([, field]) => ({
         event: 'connection_updated',
         props: { field: field(after), source },
         accountId,

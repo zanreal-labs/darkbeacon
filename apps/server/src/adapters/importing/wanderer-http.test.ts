@@ -76,9 +76,14 @@ describe('WandererHttpSource against a fake Wanderer', () => {
       'signatures',
       'structures',
       'comments',
+      'passages',
       'access',
       'map',
     ]);
+    // Comment authors come with the comments (JSON:API include), passages one by one.
+    expect(dump.comments[0]).toMatchObject({ authorName: 'CCP Bartender', authorEveId: '2112625428' });
+    expect(dump.passages).toHaveLength(5);
+    expect(dump.passages![0]).toMatchObject({ characterEveId: 2112625428, shipTypeId: 605 });
     expect(fake.log.some((l) => l.startsWith('GET /api/map/systems?slug=home-chain&all=true'))).toBe(true);
 
     const withKey = await source.read(

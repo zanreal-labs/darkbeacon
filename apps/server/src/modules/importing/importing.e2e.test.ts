@@ -100,7 +100,12 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
       source: { kind: 'wanderer-api', slug: 'home-chain', name: 'Home Chain' },
     });
     expect(preview.counts).toMatchObject({ systems: 28, hiddenSystems: 2, structures: 4, comments: 3 });
-    expect(preview.report.some((l) => l.bucket === 'dropped' && /Cosmic anomaly/.test(l.what))).toBe(true);
+    // Anomalies, other scanner rows and custom entries come over too.
+    expect(preview.report.some((l) => l.bucket === 'mapped' && /anomaly/.test(l.what))).toBe(true);
+    expect(preview.report.filter((l) => l.bucket === 'dropped').map((l) => l.what)).toEqual(
+      expect.not.arrayContaining([expect.stringMatching(/anomal|Lock|custom|note|Passage/i)]),
+    );
+    expect(preview.counts.passages).toBe(5);
     // ACL members with the names ESI gives now; the Officers ACL needs its own key.
     const ccp = preview.access.find((a) => a.subjectId === '109299958')!;
     expect(ccp).toMatchObject({
@@ -145,7 +150,7 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
     expect(map.connections).toHaveLength(preview.counts.connections);
     const home = map.systems.find((s) => s.solarSystemId === 31002531)!;
     expect(home).toMatchObject({ customName: 'Home sweet home', tag: 'HQ', status: 'home', locked: true });
-    expect(home.description).toContain('Fortizar “Home Fort” · Wormhole Rescue Ltd [RESQ]');
+    expect(home.description).toContain('Structure: Fortizar “Home Fort”\nOwner: Wormhole Rescue Ltd [RESQ]');
     expect(home.description).toContain('Neut Loki on d-scan');
     // Changes carry Wanderer's times (the field times maps merging this one compare).
     const wandererHome = wanderer.map.systems.find((x) => x.solar_system_id === 31002531)!;
@@ -156,6 +161,7 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
       'Label B',
       'Looking for',
       'Rolled',
+      'Secondary',
       'Staging',
     ]);
     expect(map.map.settings.scopes).toEqual(['wormhole']);
@@ -171,6 +177,36 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
     )!;
     expect(kept.createdAt).toBe(Date.parse(String(first.inserted_at)));
     expect(map.signatures.filter((s) => s.connectionId).length).toBeGreaterThan(10);
+    // 1:1 intel: anomalies, other scanner rows, custom entries; notes, locks, lifetimes; passages.
+    const wSig = wanderer.map.signatures;
+    const kindOf = (eveId: string) => map.signatures.find((x) => x.eveId === eveId);
+    for (const w of wSig.filter((x) => x.kind === 'Cosmic Anomaly'))
+      expect(kindOf(String(w.eve_id).toUpperCase())?.kind).toBe('anomaly');
+    expect(kindOf('TOWER-1')).toMatchObject({ custom: true, name: 'Our Raitaru, moon 3' });
+    expect(kindOf('AB-12')).toMatchObject({ custom: true, group: 'data' });
+    expect(map.signatures.find((x) => x.kind === 'other')).toMatchObject({
+      type: 'Structure',
+      name: 'Astrahus',
+    });
+    const pairOf = (w: { solar_system_source: number; solar_system_target: number }) =>
+      map.connections.find(
+        (c) =>
+          (c.source === w.solar_system_source && c.target === w.solar_system_target) ||
+          (c.source === w.solar_system_target && c.target === w.solar_system_source),
+      );
+    for (const w of wanderer.map.connections) {
+      const here = pairOf(w);
+      if (!here) continue;
+      expect(here.locked ?? false, 'locked').toBe(w.locked === true);
+      if (typeof w.custom_info === 'string') expect(here.note).toContain(w.custom_info);
+      const marks = ['', '1h', '4h', '4.5h', '16h', '24h', '48h'];
+      if (Number(w.time_status) > 0) expect(here.lifetime?.mark).toBe(marks[Number(w.time_status)]);
+    }
+    const passages = await owner.json<Array<{ characterId: number; shipTypeId: number | null }>>(
+      `/api/maps/${mapId}/connections/${pairOf(wanderer.map.connections[0]!)!.id}/passages`,
+    );
+    expect(passages.map((p) => p.shipTypeId).sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([605, 22456]);
+    expect(home.description).toContain('Comment by Scout Alt');
     // Imported wormholes are numbered like any other ({n} of the bookmark labels).
     expect(map.connections.filter((c) => c.type === 'wormhole' && c.bookmarkNumber).length).toBeGreaterThan(
       10,
@@ -208,11 +244,9 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
     const body = (await report.json()) as {
       importedExtra: Array<{ kind: string; extra: Record<string, unknown> }>;
     };
-    expect(
-      body.importedExtra.some(
-        (x) => x.kind === 'connection' && x.extra.customInfo === 'Rolled once, second roll pending',
-      ),
-    ).toBe(true);
+    expect(body.importedExtra.some((x) => x.kind === 'connection' && x.extra.countOfPassage === 7)).toBe(
+      true,
+    );
   });
 
   it('runs again without duplicates, merging field by field and never deleting unless asked', async () => {

@@ -31,7 +31,9 @@ describe('Wanderer export files', () => {
       linkedTo: SYS.c2,
       fields: { type: 'O477' },
     });
-    expect(plan.systems.find((s) => s.solarSystemId === SYS.c2)?.fields.description).toContain('- Empty C2');
+    expect(plan.systems.find((s) => s.solarSystemId === SYS.c2)?.fields.description).toContain(
+      'Comment (Wanderer)\nEmpty C2',
+    );
     expect(plan.labels.map((l) => l.name)).toEqual(['Exit']);
     // Rows without times count as changed when the file was exported.
     expect(plan.systems[0]!.remoteUpdatedAt).toBe(dump.readAt);

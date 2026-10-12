@@ -172,6 +172,29 @@ export type ShipSize = z.infer<typeof ShipSize>;
 export const Bubbled = z.enum(['none', 'source', 'target', 'both']);
 export type Bubbled = z.infer<typeof Bubbled>;
 
+/**
+ * How much life a hole had left when someone looked: "less than N hours". `1h` and `4h` are end of
+ * life; `4.5h` is the whole life of small holes; `16h`, `24h` and `48h` are the lifetimes of the
+ * longer-lived holes (48 h only for a few C6 statics). The same marks Wanderer offers.
+ */
+export const LifetimeMark = z.enum(['1h', '4h', '4.5h', '16h', '24h', '48h']);
+export type LifetimeMark = z.infer<typeof LifetimeMark>;
+export const LIFETIME_MARK_HOURS: Record<LifetimeMark, number> = {
+  '1h': 1,
+  '4h': 4,
+  '4.5h': 4.5,
+  '16h': 16,
+  '24h': 24,
+  '48h': 48,
+};
+
+/** When a connection's lifetime was marked and with what: it expires before `at` + the mark's hours. */
+export const ConnectionLifetimeDto = z.object({ mark: LifetimeMark, at: Timestamp });
+export type ConnectionLifetimeDto = z.infer<typeof ConnectionLifetimeDto>;
+
+/** Longest connection note. */
+export const CONNECTION_NOTE_MAX = 2000;
+
 export const ConnectionDto = z.object({
   id: Id,
   mapId: Id,
@@ -198,6 +221,15 @@ export const ConnectionDto = z.object({
    */
   bookmarkNumber: z.number().int().positive().nullable().optional(),
   bookmarkParent: EveId.nullable().optional(),
+  /**
+   * Locked connections are changed and removed by managers only, never by auto-mapping. Absent
+   * means unlocked.
+   */
+  locked: z.boolean().optional(),
+  /** Free text about the hole (who rolled it, what is behind it). Absent means none. */
+  note: z.string().max(CONNECTION_NOTE_MAX).optional(),
+  /** The last lifetime mark ("less than 16 h left") and when it was set; absent or null: none. */
+  lifetime: ConnectionLifetimeDto.nullable().optional(),
   createdAt: Timestamp,
   updatedAt: Timestamp,
   /** On maps that merge other maps only. */
@@ -220,7 +252,15 @@ export const UpdateConnectionRequest = ConnectionDto.pick({
   massSaved: true,
   dangerous: true,
   bubbled: true,
-}).partial();
+})
+  .extend({
+    /** Managers only. */
+    locked: z.boolean(),
+    note: z.string().max(CONNECTION_NOTE_MAX),
+    /** A new mark is stamped with the time it was set; null clears it. */
+    lifetime: LifetimeMark.nullable(),
+  })
+  .partial();
 export type UpdateConnectionRequest = z.infer<typeof UpdateConnectionRequest>;
 
 export const SignatureGroup = z.enum(['unknown', 'wormhole', 'combat', 'relic', 'data', 'gas', 'ore']);
@@ -229,17 +269,37 @@ export type SignatureGroup = z.infer<typeof SignatureGroup>;
 /** In-game signature id such as `ABC-123`. */
 export const SignatureEveId = z.string().regex(/^[A-Z]{3}-\d{3}$/, 'expected ABC-123');
 
+/** The id of a custom entry (one someone wrote, not the scanner's): any short text. */
+export const CustomSignatureId = z.string().trim().min(1).max(32);
+
+/** True when `id` is a scanner id (`ABC-123`). */
+export function isScannerSignatureId(id: string): boolean {
+  return /^[A-Z]{3}-\d{3}$/.test(id);
+}
+
+/**
+ * What a scan result is: a cosmic signature (probed down), a cosmic anomaly (on the scanner at
+ * once) or anything else the scanner lists (ships, structures, deployables, drones).
+ */
+export const SignatureKind = z.enum(['signature', 'anomaly', 'other']);
+export type SignatureKind = z.infer<typeof SignatureKind>;
+
 export const SignatureDto = z.object({
   id: Id,
   mapId: Id,
   solarSystemId: EveId,
-  eveId: SignatureEveId,
+  /** `ABC-123`, or any short text for a custom entry. */
+  eveId: z.string().min(1).max(32),
   group: SignatureGroup,
   /** Wormhole type code (e.g. `B274`) or site type. */
   type: z.string().nullable(),
   name: z.string().nullable(),
   description: z.string(),
   connectionId: Id.nullable(),
+  /** Absent means a cosmic signature. */
+  kind: SignatureKind.optional(),
+  /** Someone wrote it (its id need not be the scanner's). Absent means false. */
+  custom: z.boolean().optional(),
   createdAt: Timestamp,
   updatedAt: Timestamp,
   /** On maps that merge other maps only. */
@@ -247,19 +307,29 @@ export const SignatureDto = z.object({
 });
 export type SignatureDto = z.infer<typeof SignatureDto>;
 
-export const AddSignatureRequest = z.object({
-  eveId: SignatureEveId,
-  group: SignatureGroup.optional(),
-  type: z.string().trim().max(64).nullable().optional(),
-  name: z.string().trim().max(128).nullable().optional(),
-  description: z.string().max(2000).optional(),
-});
+export const AddSignatureRequest = z
+  .object({
+    eveId: CustomSignatureId,
+    group: SignatureGroup.optional(),
+    type: z.string().trim().max(64).nullable().optional(),
+    name: z.string().trim().max(128).nullable().optional(),
+    description: z.string().max(2000).optional(),
+    kind: SignatureKind.optional(),
+    /** A custom entry: its id may be any short text. */
+    custom: z.boolean().optional(),
+  })
+  .refine((r) => r.custom === true || isScannerSignatureId(r.eveId), {
+    message: 'expected ABC-123 (or mark the entry as custom)',
+    path: ['eveId'],
+  });
 export type AddSignatureRequest = z.infer<typeof AddSignatureRequest>;
 
 export const UpdateSignatureRequest = z
   .object({
-    eveId: SignatureEveId,
+    /** Checked against the entry: scanner entries keep `ABC-123` ids. */
+    eveId: CustomSignatureId,
     group: SignatureGroup,
+    kind: SignatureKind,
     type: z.string().trim().max(64).nullable(),
     name: z.string().trim().max(128).nullable(),
     description: z.string().max(2000),

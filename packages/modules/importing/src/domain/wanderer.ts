@@ -15,6 +15,11 @@ export interface WandererMapDump {
   signatures: WandererSignature[];
   structures: WandererStructure[];
   comments: WandererComment[];
+  /**
+   * Ships seen going through connections, when the source has them one by one (an export file's
+   * `passages`, or an instance that offers them over JSON:API). Older stored dumps lack it.
+   */
+  passages?: WandererPassage[];
   acls: WandererAcl[];
   /** Wanderer map hubs (solar system ids), from the settings export. */
   hubs: number[];
@@ -101,6 +106,9 @@ export interface WandererStructure {
   status: string | null;
   endTime: number | null;
   notes: string | null;
+  /** Who added it. */
+  characterEveId: string | null;
+  insertedAt: number | null;
   updatedAt: number | null;
 }
 
@@ -109,6 +117,19 @@ export interface WandererComment {
   solarSystemId: number | null;
   text: string;
   insertedAt: number | null;
+  /** Who wrote it, when the source says (a name, or a character id to look up). */
+  authorName: string | null;
+  authorEveId: string | null;
+}
+
+export interface WandererPassage {
+  /** Wanderer's id of the passage; null in files that have none. */
+  id: string | null;
+  source: number;
+  target: number;
+  characterEveId: number;
+  shipTypeId: number | null;
+  at: number | null;
 }
 
 export interface WandererAcl {
@@ -306,6 +327,8 @@ export function readStructure(row: unknown): WandererStructure | null {
     status: text(row.status),
     endTime: time(row.end_time),
     notes: text(row.notes),
+    characterEveId: text(row.character_eve_id),
+    insertedAt: time(row.inserted_at),
     updatedAt: time(row.updated_at),
   };
   return structure.solarSystemId !== null || structure.systemUuid !== null ? structure : null;
@@ -323,11 +346,37 @@ export function readComment(row: unknown): WandererComment | null {
   const relationships = isRow(row.relationships) ? row.relationships : null;
   const system = relationships && isRow(relationships.system) ? relationships.system : null;
   const systemData = system && isRow(system.data) ? system.data : null;
+  const character = isRow(attributes.character) ? attributes.character : null;
   return {
     systemUuid: text(attributes.system_id) ?? (systemData ? text(systemData.id) : null),
     solarSystemId: eveIdNumber(attributes.solar_system_id),
     text: commentText,
     insertedAt: time(attributes.inserted_at),
+    authorName: text(attributes.character_name) ?? (character ? text(character.name) : null),
+    authorEveId: text(attributes.character_eve_id) ?? (character ? text(character.eve_id) : null),
+  };
+}
+
+/**
+ * A passage: `solar_system_source_id`/`solar_system_target_id` (or `source`/`target`), the
+ * character (`character_eve_id`, or `character.eve_id`), `ship_type_id` and when.
+ */
+export function readPassage(row: unknown): WandererPassage | null {
+  if (!isRow(row)) return null;
+  const attributes = isRow(row.attributes) ? { id: row.id, ...row.attributes } : row;
+  const source = eveIdNumber(attributes.solar_system_source_id) ?? eveIdNumber(attributes.source);
+  const target = eveIdNumber(attributes.solar_system_target_id) ?? eveIdNumber(attributes.target);
+  const character = isRow(attributes.character) ? attributes.character : null;
+  const characterEveId =
+    eveIdNumber(attributes.character_eve_id) ?? (character ? eveIdNumber(character.eve_id) : null);
+  if (source === null || target === null || source === target || characterEveId === null) return null;
+  return {
+    id: text(attributes.id),
+    source,
+    target,
+    characterEveId,
+    shipTypeId: eveIdNumber(attributes.ship_type_id),
+    at: time(attributes.inserted_at) ?? time(attributes.at),
   };
 }
 
@@ -379,6 +428,7 @@ export function emptyDump(source: ImportSourceDto, readAt: number): WandererMapD
     signatures: [],
     structures: [],
     comments: [],
+    passages: [],
     acls: [],
     hubs: [],
     labelNames: {},

@@ -13,7 +13,7 @@ import type { ConnectionWrite, SignatureWrite, SystemWrite } from '../domain/dec
 import { pairKey, translate, type ImportPlan } from '../domain/translate.js';
 import type { ImportJobRecord, ImportLinkRecord, ImportSyncRecord } from '../ports/repositories.js';
 import type { ImportingDeps } from './deps.js';
-import { emptyOutcomes, labelIdsFor, LinkIndex, type ImportKind } from './planner.js';
+import { characterNames, emptyOutcomes, labelIdsFor, LinkIndex, type ImportKind } from './planner.js';
 import { auditChannel, importStream, sourceKey, toJobDto } from './views.js';
 
 /** Phases of a job, in order. A resumed job starts again at the phase it was in. */
@@ -23,6 +23,7 @@ const PHASES = [
   'systems',
   'connections',
   'signatures',
+  'passages',
   'access',
   'settings',
   'removals',
@@ -168,6 +169,7 @@ export class ImportRunner {
     const { plan } = translate(r.dump, {
       systemName: (id) => deps.universe.systemName(id),
       layoutScale: typeof savedScale === 'number' ? savedScale : null,
+      characterName: await characterNames(r.dump, deps.names),
     });
     if (typeof savedScale !== 'number')
       await this.link(mapId, key, 'setting', 'layout', 'layout', plan.layoutScale, null);
@@ -179,6 +181,7 @@ export class ImportRunner {
       plan.systems.length +
       plan.connections.length +
       plan.signatures.length +
+      plan.passages.length +
       (accessWanted ? plan.access.length : 0) +
       1;
     const out = r.outcome;
@@ -351,6 +354,21 @@ export class ImportRunner {
             } else step('signatures', 'unchanged');
             await this.link(mapId, key, 'signature', planned.key, localId!, decision.written, planned.extra);
           });
+        });
+      }
+    }
+
+    // Passages ----------------------------------------------------------------------------------
+    if (reached('passages')) {
+      await job.phase('passages');
+      for (const planned of plan.passages) {
+        this.check(r.id);
+        await this.item(job, 'passages', 'A passage', async () => {
+          const outcome = await deps.target.putPassage(actor, mapId, planned, `${key}:${planned.key}`);
+          step(
+            'passages',
+            outcome === 'created' ? 'created' : outcome === 'unchanged' ? 'unchanged' : 'skipped',
+          );
         });
       }
     }

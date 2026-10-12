@@ -1,6 +1,7 @@
 import {
   classLabel,
   destinationOfClass,
+  LIFETIME_MARK_HOURS,
   wormholeDestination,
   type ConnectionIntelDto,
   type ConnectionSideDto,
@@ -121,6 +122,8 @@ export function connectionIntel(input: IntelInput): ConnectionIntelDto {
   const bounds: number[] = [];
   if (isWormhole && type?.lifetimeHours) bounds.push(firstSeenAt + type.lifetimeHours * HOUR);
   if (isWormhole && c.timeStatus === 'eol') bounds.push((c.eolAt ?? c.updatedAt) + EOL_WINDOW_MS);
+  // A lifetime mark ("less than 16 h left") bounds it from when it was set.
+  if (isWormhole && c.lifetime) bounds.push(c.lifetime.at + LIFETIME_MARK_HOURS[c.lifetime.mark] * HOUR);
   const expiresBy = bounds.length > 0 ? Math.min(...bounds) : null;
   const remainingMs = expiresBy === null ? null : Math.max(0, expiresBy - now);
 

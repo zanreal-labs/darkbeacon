@@ -26,6 +26,9 @@ export const ConnectionField = z.enum([
   'bubble',
   'dangerous',
   'mass_saved',
+  'lock',
+  'note',
+  'lifetime',
 ]);
 export type ConnectionField = z.infer<typeof ConnectionField>;
 

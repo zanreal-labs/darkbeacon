@@ -5,6 +5,7 @@ import {
   readAclMember,
   readAll,
   readComment,
+  readPassage,
   readConnection,
   readSignature,
   readStructure,
@@ -304,6 +305,23 @@ export function signaturesAnswer() {
         group: 'Wormhole',
         linked_system_id: SYS.jita,
       },
+      {
+        ...base,
+        id: 's9',
+        solar_system_id: SYS.c5,
+        eve_id: 'STU-555',
+        kind: 'Structure',
+        group: null,
+        name: 'Astrahus',
+      },
+      {
+        ...base,
+        id: 's10',
+        solar_system_id: SYS.c5,
+        eve_id: 'VWX-666',
+        group: 'Wormhole',
+        custom_info: '{"time_status":4,"destType":"C5"}',
+      },
     ],
   };
 }
@@ -351,7 +369,11 @@ export function commentsAnswer() {
       {
         id: 'cm1',
         type: 'map_system_comments',
-        attributes: { text: 'Neut Loki on d-scan', inserted_at: '2026-10-11T19:00:00Z' },
+        attributes: {
+          text: 'Neut Loki on d-scan',
+          inserted_at: '2026-10-11T19:00:00Z',
+          character: { name: 'Scout Alt', eve_id: '2116161001' },
+        },
         relationships: {
           system: { data: { type: 'map_systems', id: 'aaaaaaaa-0000-4000-8000-000000000001' } },
         },
@@ -403,6 +425,22 @@ export function apiDump(readAt = Date.parse('2026-10-12T09:00:00Z')): WandererMa
     error: null,
   }));
   dump.acls.push({ id: 'acl-officers', name: 'Officers', members: null, error: null });
+  dump.passages = readAll(
+    [
+      {
+        id: 'p-1',
+        solar_system_source_id: SYS.home,
+        solar_system_target_id: SYS.c2,
+        character_eve_id: '2112625428',
+        ship_type_id: 605,
+        inserted_at: '2026-10-12T07:00:00Z',
+      },
+      { id: 'p-2', solar_system_source_id: SYS.home, solar_system_target_id: SYS.hs },
+    ],
+    readPassage,
+    'passages',
+    {},
+  );
   dump.hubs = [SYS.jita];
   dump.trackedCharacters = 3;
   return dump;

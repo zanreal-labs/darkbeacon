@@ -278,6 +278,7 @@ const COUNT_LABELS: Array<[keyof ImportCountsDto, string]> = [
   ['hiddenSystems', 'Hidden systems'],
   ['connections', 'Connections'],
   ['signatures', 'Signatures'],
+  ['passages', 'Passages'],
   ['structures', 'Structures'],
   ['comments', 'Comments'],
   ['labels', 'Labels'],
@@ -307,7 +308,7 @@ function PreviewCard({ job }: { job: ImportJobDto }) {
           {COUNT_LABELS.map(([key, label]) => (
             <div key={key} className={styles.count}>
               <dt>{label}</dt>
-              <dd>{job.counts[key]}</dd>
+              <dd>{job.counts[key] ?? 0}</dd>
             </div>
           ))}
         </dl>
@@ -419,6 +420,7 @@ const KINDS: Array<[string, string]> = [
   ['systems', 'Systems'],
   ['connections', 'Connections'],
   ['signatures', 'Signatures'],
+  ['passages', 'Passages'],
   ['labels', 'Labels'],
   ['access', 'Access rules'],
   ['settings', 'Settings'],
@@ -674,6 +676,7 @@ const PHASES: Record<string, string> = {
   systems: 'Systems',
   connections: 'Connections',
   signatures: 'Signatures',
+  passages: 'Passages',
   access: 'Access rules',
   settings: 'Settings',
   removals: 'Removing what Wanderer removed',

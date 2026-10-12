@@ -4,10 +4,12 @@ import type {
   ImportCountsDto,
   ImportReportLineDto,
   MapScope,
+  LifetimeMark,
   MassStatus,
   Position,
   ShipSize,
   SignatureGroup,
+  SignatureKind,
   SystemStatus,
   TimeStatus,
 } from '@darkbeacon/shared';
@@ -69,6 +71,9 @@ export interface ConnectionFields {
   bubbled: Bubbled;
   eolAt: number | null;
   massStatusAt: number | null;
+  locked: boolean;
+  note: string;
+  lifetime: { mark: LifetimeMark; at: number } | null;
 }
 
 export interface PlannedConnection {
@@ -88,6 +93,19 @@ export interface SignatureFields {
   type: string | null;
   name: string | null;
   description: string;
+  kind: SignatureKind;
+  custom: boolean;
+}
+
+/** A ship seen going through a connection. */
+export interface PlannedPassage {
+  /** Wanderer's passage id, or `<pair>:<character>:<time>`. */
+  key: string;
+  source: number;
+  target: number;
+  characterId: number;
+  shipTypeId: number | null;
+  occurredAt: number;
 }
 
 export interface PlannedSignature {
@@ -111,6 +129,7 @@ export interface ImportPlan {
   systems: PlannedSystem[];
   connections: PlannedConnection[];
   signatures: PlannedSignature[];
+  passages: PlannedPassage[];
   access: PlannedAccessRule[];
   hubs: number[];
   /** Auto-mapping scopes from the Wanderer map scope; null when unknown. */
@@ -124,6 +143,8 @@ export interface TranslateContext {
   systemName(solarSystemId: number): string | null;
   /** The factor to spread positions by, when an earlier import chose one. */
   layoutScale?: number | null;
+  /** A character's name (ESI), for who added a structure or wrote a comment; null when unknown. */
+  characterName?(eveId: string): string | null;
 }
 
 export interface Translation {
@@ -152,9 +173,17 @@ const STATUS: Record<string, { status: SystemStatus; label?: string; approx?: st
   friendly: { status: 'friendly' },
   warning: { status: 'warning' },
   targetprimary: { status: 'target' },
-  targetsecondary: { status: 'target', approx: 'Target (secondary) became Target' },
-  dangerousprimary: { status: 'hostile', approx: 'Dangerous became Hostile' },
-  dangeroussecondary: { status: 'hostile', approx: 'Dangerous (secondary) became Hostile' },
+  targetsecondary: {
+    status: 'target',
+    label: 'Secondary',
+    approx: 'Target (secondary) became Target with a "Secondary" label',
+  },
+  dangerousprimary: { status: 'hostile' },
+  dangeroussecondary: {
+    status: 'hostile',
+    label: 'Secondary',
+    approx: 'Dangerous (secondary) became Hostile with a "Secondary" label',
+  },
   lookingfor: { status: 'unknown', label: 'Looking for', approx: 'Looking for became a label' },
   home: { status: 'home' },
   // Older API answers and examples use plain words.
@@ -182,8 +211,8 @@ const SHIP_SIZES: Record<number, { size: ShipSize; approx?: string }> = {
   0: { size: 'small' },
   1: { size: 'medium' },
   2: { size: 'large' },
-  3: { size: 'xlarge', approx: 'Freighter size became XL' },
-  4: { size: 'xlarge' },
+  3: { size: 'xlarge' },
+  4: { size: 'capital' },
 };
 
 const CONNECTION_TYPES: Record<number, ConnectionType> = { 0: 'wormhole', 1: 'gate', 2: 'bridge' };
@@ -191,8 +220,18 @@ const MASS: Record<number, MassStatus> = { 0: 'fresh', 1: 'reduced', 2: 'critica
 const BUBBLED: Record<number, Bubbled> = { 0: 'none', 1: 'source', 2: 'target', 3: 'both' };
 
 const HOUR = 3_600_000;
-/** Wanderer's time codes 1-3 are marks of a hole near its end: hours left when it was marked. */
-const EOL_HOURS_LEFT: Record<number, number> = { 1: 1, 2: 4, 3: 4.5 };
+/**
+ * Wanderer's time codes: "less than N hours left" when it was marked (its UI says so for each).
+ * 1 h and 4 h are end of life; the others say how long a younger hole may live at most.
+ */
+const LIFETIME_CODES: Record<number, LifetimeMark> = {
+  1: '1h',
+  2: '4h',
+  3: '4.5h',
+  4: '16h',
+  5: '24h',
+  6: '48h',
+};
 
 const SIGNATURE_GROUPS: Record<string, SignatureGroup> = {
   wormhole: 'wormhole',
@@ -214,6 +253,7 @@ const SCOPES: Record<string, MapScope[]> = {
 };
 
 const LIMITS = {
+  connectionNote: 2000,
   customName: 64,
   temporaryName: 64,
   tag: 16,
@@ -224,6 +264,7 @@ const LIMITS = {
   label: 32,
 };
 const SIGNATURE_ID = /^[A-Z]{3}-\d{3}$/;
+const CUSTOM_ID_MAX = 32;
 
 // ---- translation --------------------------------------------------------------------------------
 
@@ -300,6 +341,7 @@ export function translate(dump: WandererMapDump, context: TranslateContext): Tra
       comments.get(system.solarSystemId) ?? [],
       report,
       name,
+      (eveId) => context.characterName?.(eveId) ?? null,
     );
     const fields: SystemFields = {
       position,
@@ -379,7 +421,10 @@ export function translate(dump: WandererMapDump, context: TranslateContext): Tra
     const solarSystemId =
       signature.solarSystemId ??
       (signature.systemUuid ? (systemsByUuid.get(signature.systemUuid) ?? null) : null);
-    const eveId = signature.eveId.trim().toUpperCase();
+    const scannerId = signature.eveId.trim().toUpperCase();
+    // Ids that are not the scanner's (`ABC-123`) are entries someone wrote: kept as custom.
+    const custom = !SIGNATURE_ID.test(scannerId);
+    const eveId = custom ? signature.eveId.trim().slice(0, CUSTOM_ID_MAX) : scannerId;
     const where = solarSystemId ? nameOf(solarSystemId) : '?';
     const name = `${eveId} in ${where}`;
     if (!solarSystemId || !onMap.has(solarSystemId)) {
@@ -391,37 +436,61 @@ export function translate(dump: WandererMapDump, context: TranslateContext): Tra
       );
       continue;
     }
-    const kind = (signature.kind ?? 'cosmic signature').toLowerCase().replace(/[_\s]+/g, ' ');
-    if (kind !== 'cosmic signature') {
-      report.dropped(
-        'signature',
-        `${titleCase(kind)} entries`,
-        'Darkbeacon keeps cosmic signatures only (anomalies, ships and structures are not scanned sites)',
-        name,
-      );
-      continue;
-    }
-    if (!SIGNATURE_ID.test(eveId)) {
-      report.dropped(
-        'signature',
-        'Signature without a full id',
-        'Darkbeacon needs the whole ABC-123 id',
-        name,
-      );
-      continue;
-    }
+    if (custom && signature.eveId.trim().length > CUSTOM_ID_MAX)
+      report.approximated('signature', 'Custom id cut to 32 characters', 'Darkbeacon keeps up to 32', name);
     const key = `${solarSystemId}:${eveId}`;
     if (sigKeys.has(key)) continue;
     sigKeys.add(key);
-    signatures.push(translateSignature(signature, key, solarSystemId, eveId, name, dump.readAt, report));
+    signatures.push(
+      translateSignature(signature, key, solarSystemId, eveId, custom, name, dump.readAt, report),
+    );
   }
   linkSignatures(signatures, pairs, wormholeTypes, report, nameOf);
+  // A type no signature carries is written in the connection's note, so it is not lost.
   for (const [key, code] of wormholeTypes) {
-    report.dropped(
+    const connection = connections.find((c) => c.key === key);
+    if (!connection) continue;
+    connection.fields.note = [connection.fields.note, `Wormhole type: ${code}`].filter(Boolean).join('\n');
+    report.approximated(
       'connection',
-      'Wormhole type of a connection without a signature',
-      'Darkbeacon keeps the wormhole type on the signature, and no signature leads through this connection',
-      `${code} ${key}`,
+      'Wormhole type kept in the connection note',
+      'No signature leads through the connection, and Darkbeacon keeps wormhole types on signatures',
+      `${code} ${connection.name}`,
+    );
+  }
+
+  // Passages -----------------------------------------------------------------------------------
+  const passages: PlannedPassage[] = [];
+  const withDetails = new Set<string>();
+  for (const passage of dump.passages ?? []) {
+    const key = pairKey(passage.source, passage.target);
+    if (!pairs.has(key)) {
+      report.dropped(
+        'passage',
+        'Passage through a connection that is not imported',
+        'Its connection is not on the map',
+      );
+      continue;
+    }
+    withDetails.add(key);
+    passages.push({
+      key: passage.id ?? `${key}:${passage.characterEveId}:${passage.at ?? 0}`,
+      source: passage.source,
+      target: passage.target,
+      characterId: passage.characterEveId,
+      shipTypeId: passage.shipTypeId,
+      occurredAt: passage.at ?? dump.readAt,
+    });
+    report.mapped('passage', 'Passage with pilot and ship');
+  }
+  for (const connection of dump.connections) {
+    const key = pairKey(connection.source, connection.target);
+    if (!connection.countOfPassage || withDetails.has(key) || !pairs.has(key)) continue;
+    report.dropped(
+      'passage',
+      `Passage count without details (${connection.countOfPassage})`,
+      "Wanderer's API says how many ships passed, not who, in what or when; a bare count cannot feed mass estimates. It is kept in the import record",
+      `${nameOf(connection.source)} ↔ ${nameOf(connection.target)}`,
     );
   }
 
@@ -471,6 +540,7 @@ export function translate(dump: WandererMapDump, context: TranslateContext): Tra
     systems,
     connections,
     signatures,
+    passages,
     access,
     hubs,
     scopes,
@@ -481,6 +551,7 @@ export function translate(dump: WandererMapDump, context: TranslateContext): Tra
     hiddenSystems: systems.filter((s) => !s.fields.visible).length,
     connections: connections.length,
     signatures: signatures.length,
+    passages: passages.length,
     structures: dump.structures.length,
     comments: dump.comments.length,
     labels: plan.labels.length,
@@ -521,41 +592,29 @@ function systemStatus(
   return found;
 }
 
-/** Notes, then the structures and comments Wanderer kept about the system, as one text. */
+/**
+ * Notes, then one titled block per structure and per comment Wanderer kept about the system
+ * (who added it and when), as one text that reads well on its own.
+ */
 function composeDescription(
   system: WandererSystem,
   structures: WandererStructure[],
   comments: WandererComment[],
   report: ReportBuilder,
   name: string,
+  characterName: (eveId: string) => string | null,
 ): string {
   const parts: string[] = [];
   if (system.description) parts.push(system.description.trim());
-  if (structures.length > 0) {
-    parts.push(['Structures (from Wanderer):', ...structures.map(structureLine)].join('\n'));
-    for (let i = 0; i < structures.length; i++)
-      report.approximated(
-        'structure',
-        'Structure kept in the system notes',
-        'Darkbeacon has no structure list yet',
-        name,
-      );
+  const byTime = <T extends { insertedAt: number | null }>(list: T[]) =>
+    [...list].sort((a, b) => (a.insertedAt ?? 0) - (b.insertedAt ?? 0));
+  for (const structure of byTime(structures)) {
+    parts.push(structureBlock(structure, characterName));
+    report.mapped('structure', 'Structure, as a titled block in the system notes', name);
   }
-  if (comments.length > 0) {
-    const sorted = [...comments].sort((a, b) => (a.insertedAt ?? 0) - (b.insertedAt ?? 0));
-    parts.push(
-      [
-        'Comments (from Wanderer):',
-        ...sorted.map((c) => `- ${c.insertedAt ? `${day(c.insertedAt)}: ` : ''}${oneLine(c.text)}`),
-      ].join('\n'),
-    );
-    for (let i = 0; i < comments.length; i++)
-      report.approximated(
-        'comment',
-        'Comment kept in the system notes',
-        'Darkbeacon has no comment thread per system',
-        name,
-      );
+  for (const comment of byTime(comments)) {
+    parts.push(commentBlock(comment, characterName));
+    report.mapped('comment', 'Comment, as a titled block in the system notes', name);
   }
   const text = parts.join('\n\n');
   if (text.length > LIMITS.description) {
@@ -570,15 +629,41 @@ function composeDescription(
   return text;
 }
 
-function structureLine(s: WandererStructure): string {
-  const what = [s.type, s.name ? `“${s.name}”` : null].filter(Boolean).join(' ') || 'Structure';
+/** `Added by Jane, 2026-10-11 (Wanderer)`, as much of it as is known. */
+function byline(
+  verb: string,
+  eveId: string | null,
+  knownName: string | null,
+  at: number | null,
+  characterName: (eveId: string) => string | null,
+): string {
+  const who = knownName ?? (eveId ? characterName(eveId) : null);
+  const parts = [who ? `${verb} by ${who}` : verb, at ? moment(at) : null].filter(Boolean);
+  return `${parts.join(', ')} (Wanderer)`;
+}
+
+function structureBlock(s: WandererStructure, characterName: (eveId: string) => string | null): string {
+  const title = [s.type ?? 'Structure', s.name ? `“${s.name}”` : null].filter(Boolean).join(' ');
   const owner = s.ownerName
     ? `${s.ownerName}${s.ownerTicker ? ` [${s.ownerTicker}]` : ''}`
     : s.ownerTicker
       ? `[${s.ownerTicker}]`
       : null;
-  const state = [s.status, s.endTime ? `until ${moment(s.endTime)}` : null].filter(Boolean).join(' ');
-  return `- ${[what, owner, state || null].filter(Boolean).join(' · ')}${s.notes ? ` — ${oneLine(s.notes)}` : ''}`;
+  const lines = [`Structure: ${title}`];
+  if (owner) lines.push(`Owner: ${owner}`);
+  if (s.status || s.endTime)
+    lines.push(
+      `Status: ${[s.status, s.endTime ? `timer ends ${moment(s.endTime)}` : null].filter(Boolean).join(', ')}`,
+    );
+  if (s.notes) lines.push(`Notes: ${s.notes.trim()}`);
+  lines.push(byline('Added', s.characterEveId, null, s.insertedAt ?? s.updatedAt, characterName));
+  return lines.join('\n');
+}
+
+function commentBlock(c: WandererComment, characterName: (eveId: string) => string | null): string {
+  return [byline('Comment', c.authorEveId, c.authorName, c.insertedAt, characterName), c.text.trim()].join(
+    '\n',
+  );
 }
 
 function translateConnection(
@@ -601,53 +686,42 @@ function translateConnection(
       'Unknown ship size',
       name,
     );
-  else if (size.approx)
-    report.approximated('connection', size.approx, 'Darkbeacon has one size above battleships', name);
   const mass = MASS[c.massStatus ?? 0];
   if (!mass)
     report.approximated('connection', `Mass code ${c.massStatus} became Fresh`, 'Unknown mass status', name);
 
   let timeStatus: TimeStatus = 'normal';
   let eolAt: number | null = null;
-  const code = c.timeStatus ?? 0;
-  if (EOL_HOURS_LEFT[code] !== undefined) {
-    timeStatus = 'eol';
-    // Darkbeacon counts EOL as "less than 4 h left from eolAt"; Wanderer marks how much was left.
+  let lifetime: ConnectionFields['lifetime'] = null;
+  const mark = LIFETIME_CODES[c.timeStatus ?? 0];
+  if (mark) {
     const markedAt = updatedAt ?? readAt;
-    eolAt = markedAt - (4 - Math.min(4, EOL_HOURS_LEFT[code]!)) * HOUR;
-    report.mapped('connection', 'End of life, with the time it was marked', name);
+    lifetime = { mark, at: markedAt };
+    report.mapped('connection', `Lifetime mark "less than ${mark}" with the time it was set`, name);
     if (updatedAt === null)
       report.approximated(
         'connection',
-        'End of life counted from the import',
-        'Wanderer did not say when it was marked',
+        'Lifetime mark counted from the import',
+        'Wanderer did not say when it was set',
         name,
       );
-  } else if (code >= 4) {
-    report.approximated(
-      'connection',
-      `Lifetime mark "${({ 4: '16 h', 5: '24 h', 6: '48 h' } as Record<number, string>)[code] ?? code}" dropped`,
-      "Darkbeacon works a hole's lifetime out from its wormhole type and when it was found",
-      name,
-    );
+    if (mark === '1h' || mark === '4h') {
+      timeStatus = 'eol';
+      // Darkbeacon counts EOL as "less than 4 h left from eolAt"; Wanderer marks how much was left.
+      eolAt = markedAt - (mark === '1h' ? 3 : 0) * HOUR;
+    }
+  } else if (c.timeStatus) {
+    report.approximated('connection', `Time code ${c.timeStatus} became Normal`, 'Unknown time code', name);
   }
   const dangerous = c.dangerous ?? false;
   const bubbled = BUBBLED[c.bubbled ?? 0] ?? 'none';
-  if (c.locked)
-    report.dropped('connection', 'Lock on a connection', 'Darkbeacon locks systems, not connections', name);
+  if (c.locked) report.mapped('connection', 'Lock', name);
+  let note = '';
   if (c.customInfo) {
-    extra.customInfo = c.customInfo;
-    report.dropped(
-      'connection',
-      'Connection note (custom info)',
-      'Darkbeacon connections have no note; it is kept in the import record',
-      name,
-    );
+    note = c.customInfo.trim().slice(0, LIMITS.connectionNote);
+    report.mapped('connection', 'Note (custom info)', name);
   }
-  if (c.countOfPassage) {
-    extra.countOfPassage = c.countOfPassage;
-    report.dropped('connection', 'Passage count', 'Darkbeacon records passages per pilot from now on', name);
-  }
+  if (c.countOfPassage) extra.countOfPassage = c.countOfPassage;
   report.mapped(
     'connection',
     type === 'gate' ? 'Gate' : type === 'bridge' ? 'Jump bridge' : 'Wormhole',
@@ -668,6 +742,9 @@ function translateConnection(
       bubbled,
       eolAt,
       massStatusAt: (mass ?? 'fresh') !== 'fresh' ? (updatedAt ?? readAt) : null,
+      locked: c.locked,
+      note,
+      lifetime,
     },
     createdAt: c.insertedAt,
     remoteUpdatedAt: updatedAt ?? readAt,
@@ -680,11 +757,18 @@ function translateSignature(
   key: string,
   solarSystemId: number,
   eveId: string,
+  custom: boolean,
   name: string,
   readAt: number,
   report: ReportBuilder,
 ): PlannedSignature {
   const extra: Record<string, unknown> = {};
+  const kindText = (s.kind ?? 'cosmic signature')
+    .toLowerCase()
+    .replace(/[_\s]+/g, ' ')
+    .trim();
+  const kind: SignatureKind =
+    kindText === 'cosmic signature' ? 'signature' : kindText === 'cosmic anomaly' ? 'anomaly' : 'other';
   const rawGroup = (s.group ?? '')
     .toLowerCase()
     .replace(/[_-]+/g, ' ')
@@ -699,6 +783,8 @@ function translateSignature(
       name,
     );
   let type = s.type ? s.type.trim() : null;
+  // Other scanner rows (ships, structures...) keep what the scanner called them as their type.
+  if (kind === 'other' && !type) type = titleCase(kindText);
   // "Wormhole" as a type says nothing the group does not; a code (K162, C247) is the type.
   if (type && /^wormhole$/i.test(type)) type = null;
   if (type && /^[A-Z]\d{3}$/i.test(type)) type = type.toUpperCase();
@@ -716,6 +802,17 @@ function translateSignature(
   if (s.customInfo) {
     const info = parseInfo(s.customInfo);
     if (info) extra.customInfo = info;
+    // A linked hole's marks are the connection's; an unlinked one keeps them in words.
+    const marks = s.linkedSystemId === null ? infoNotes(info) : null;
+    if (marks) {
+      notes.push(marks);
+      report.approximated(
+        'signature',
+        'Marks of an unlinked hole kept in the description',
+        'Darkbeacon keeps time, mass and destination on the connection, and there is none yet',
+        name,
+      );
+    }
   }
   if (s.characterEveId) extra.scannedBy = s.characterEveId;
   let description = notes.join('\n');
@@ -728,7 +825,15 @@ function translateSignature(
       name,
     );
   }
-  report.mapped('signature', `${titleCase(group ?? 'unknown')} signature`, name);
+  report.mapped(
+    'signature',
+    kind === 'signature'
+      ? `${titleCase(group ?? 'unknown')} signature${custom ? ' (custom entry)' : ''}`
+      : kind === 'anomaly'
+        ? `${titleCase(group ?? 'unknown')} anomaly`
+        : `Other scanner result (${type ?? 'unknown'})${custom ? ', custom entry' : ''}`,
+    name,
+  );
   return {
     key,
     solarSystemId,
@@ -739,6 +844,8 @@ function translateSignature(
       type: type ? type.slice(0, LIMITS.sigType) : null,
       name: s.name ? s.name.slice(0, LIMITS.sigName) : null,
       description,
+      kind,
+      custom,
     },
     linkedTo: s.linkedSystemId,
     createdAt: s.insertedAt,
@@ -858,6 +965,22 @@ function cut(
   return trimmed.slice(0, max);
 }
 
+/** Wanderer's marks on a signature (`custom_info`) in words, for an unlinked hole. */
+function infoNotes(info: unknown): string | null {
+  if (!info || typeof info !== 'object') return null;
+  const i = info as Record<string, unknown>;
+  const parts: string[] = [];
+  const mark = typeof i.time_status === 'number' ? LIFETIME_CODES[i.time_status] : undefined;
+  if (mark) parts.push(`less than ${mark} left`);
+  const mass = typeof i.mass_status === 'number' ? MASS[i.mass_status] : undefined;
+  if (mass && mass !== 'fresh') parts.push(`mass ${mass}`);
+  if (typeof i.destType === 'string' && i.destType) parts.push(`leads to ${i.destType}`);
+  if (typeof i.k162Type === 'string' && i.k162Type) parts.push(`K162 from ${i.k162Type}`);
+  if (i.isCrit === true) parts.push('critical');
+  if (i.isBubbled === true) parts.push('bubbled');
+  return parts.length > 0 ? `Wanderer marks: ${parts.join(', ')}` : null;
+}
+
 function parseInfo(text: string): unknown {
   try {
     const parsed: unknown = JSON.parse(text);
@@ -867,7 +990,5 @@ function parseInfo(text: string): unknown {
   }
 }
 
-const oneLine = (s: string) => s.replace(/\s+/g, ' ').trim();
 const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const moment = (ms: number) => `${new Date(ms).toISOString().slice(0, 16).replace('T', ' ')} UTC`;

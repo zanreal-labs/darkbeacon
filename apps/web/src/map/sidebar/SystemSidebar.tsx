@@ -18,6 +18,7 @@ import type { SlotEntry } from '../../plugins/registry';
 import { IconButton } from '../../ui';
 import type { MapState } from '../mapState';
 import type { MapStore } from '../useMapStore';
+import { ConnectionsSection } from './ConnectionsSection';
 import { LocalSection, TrackMenu, usePresence } from './LocalSection';
 import { SidebarSection } from './SidebarSection';
 import {
@@ -81,7 +82,10 @@ interface Props {
   labels: LabelDto[];
   state: Pick<MapState, 'signatures' | 'connections' | 'characters' | 'has'>;
   can: MapPermissions;
-  store: Pick<MapStore, 'updateSystem' | 'pasteSignatures' | 'updateSignature' | 'removeSignature' | 'seed'>;
+  store: Pick<
+    MapStore,
+    'updateSystem' | 'pasteSignatures' | 'updateSignature' | 'removeSignature' | 'seed' | 'updateConnection'
+  >;
   myCharacters: CharacterDto[];
   plugins: readonly SlotEntry<'widget'>[];
   /** Shown, or hidden with the top bar's toggle while the system stays selected. */
@@ -250,6 +254,9 @@ export function SystemSidebar({
 
   const signatures = [...state.signatures.values()].filter((s) => s.solarSystemId === id);
   const here = [...state.characters.values()].filter((c) => c.solarSystemId === id);
+  const connectionCount = [...state.connections.values()].filter(
+    (c) => c.source === id || c.target === id,
+  ).length;
   const mine = new Set(myCharacters.map((c) => c.id));
   const tracked = new Set([...state.characters.values()].map((c) => c.characterId));
   const name = info?.name ?? 'this system';
@@ -363,6 +370,22 @@ export function SystemSidebar({
             can={can}
             store={store}
             paste={paste}
+            onSelectSystem={onSelectSystem}
+          />
+        </SidebarSection>
+        <SidebarSection
+          id="connections"
+          title="Connections"
+          count={connectionCount}
+          collapsed={!!collapsed.connections}
+          onToggle={toggle}
+        >
+          <ConnectionsSection
+            solarSystemId={id}
+            connections={state.connections}
+            universe={universe}
+            can={can}
+            store={store}
             onSelectSystem={onSelectSystem}
           />
         </SidebarSection>

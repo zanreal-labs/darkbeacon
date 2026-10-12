@@ -3,7 +3,8 @@ import { apiDump, SYS, systemName } from '../test-support.js';
 import { translate, type ImportPlan } from '../domain/translate.js';
 import { readLabels, readSystem, time } from '../domain/wanderer.js';
 
-const run = () => translate(apiDump(), { systemName });
+const characterName = (eveId: string) => (eveId === '2112625428' ? 'CCP Bartender' : null);
+const run = () => translate(apiDump(), { systemName, characterName });
 const system = (plan: ImportPlan, id: number) => plan.systems.find((s) => s.solarSystemId === id)!;
 const connection = (plan: ImportPlan, a: number, b: number) =>
   plan.connections.find((c) => (c.source === a && c.target === b) || (c.source === b && c.target === a));
@@ -55,11 +56,19 @@ describe('translating a Wanderer map', () => {
     expect(home.remoteUpdatedAt).toBe(Date.parse('2026-10-12T08:30:15.123Z'));
     // Structures and comments become part of the notes.
     expect(home.fields.description).toContain('Our home. Rolling on Tuesdays.');
-    expect(home.fields.description).toContain('Structures (from Wanderer):');
+    // One titled block per structure and comment, with who and when.
     expect(home.fields.description).toContain(
-      'Fortizar “Home Fort” · Wormhole Rescue Ltd [RESQ] · online — Fuel until November',
+      [
+        'Structure: Fortizar “Home Fort”',
+        'Owner: Wormhole Rescue Ltd [RESQ]',
+        'Status: online',
+        'Notes: Fuel until November',
+        'Added by CCP Bartender, 2026-10-10 12:00 UTC (Wanderer)',
+      ].join('\n'),
     );
-    expect(home.fields.description).toContain('Comments (from Wanderer):\n- 2026-10-11: Neut Loki on d-scan');
+    expect(home.fields.description).toContain(
+      'Comment by Scout Alt, 2026-10-11 19:00 UTC (Wanderer)\nNeut Loki on d-scan',
+    );
     // Labels: built-in A and 1, and the custom label, as map labels.
     const names = home.fields.labelKeys.map((k) => plan.labels.find((l) => l.key === k)!.name);
     expect(names).toEqual(['Label A', 'Label 1', 'Staging']);
@@ -103,6 +112,10 @@ describe('translating a Wanderer map', () => {
       // "EOL 4h" marked at updated_at: Darkbeacon's 4 hours start then.
       eolAt: readAt,
       massStatusAt: readAt,
+      locked: false,
+      // Wanderer's custom info is the connection's note.
+      note: 'Rolled once',
+      lifetime: { mark: '4h', at: readAt },
     });
     const critical = connection(plan, SYS.home, SYS.c5)!;
     expect(critical.fields).toMatchObject({
@@ -111,25 +124,45 @@ describe('translating a Wanderer map', () => {
       dangerous: true,
       bubbled: 'target',
       timeStatus: 'eol',
+      lifetime: { mark: '1h', at: readAt },
+      // No signature carries its U210: the note keeps it.
+      note: 'Wormhole type: U210',
     });
     // "EOL 1h": three of Darkbeacon's four hours were gone when it was marked.
     expect(critical.fields.eolAt).toBe(readAt - 3 * 3_600_000);
+    // "24 h" is a lifetime mark, not end of life; the lock comes over.
     expect(connection(plan, SYS.c2, SYS.hs)?.fields).toMatchObject({
       timeStatus: 'normal',
       shipSize: 'medium',
+      locked: true,
+      lifetime: { mark: '24h', at: readAt },
     });
+    expect(connection(plan, SYS.jita, SYS.perimeter)?.fields.shipSize).toBe('capital');
     expect(connection(plan, SYS.jita, SYS.perimeter)?.fields.type).toBe('gate');
     expect(plan.connections.filter((c) => c.key === `${SYS.jita}-${SYS.perimeter}`)).toHaveLength(1);
     // A connection to a hidden system cannot exist here.
     expect(connection(plan, SYS.c2, SYS.c1)).toBeUndefined();
-    expect(connection(plan, SYS.home, SYS.c2)?.extra).toEqual({
-      customInfo: 'Rolled once',
-      countOfPassage: 4,
-    });
+    expect(connection(plan, SYS.home, SYS.c2)?.extra).toEqual({ countOfPassage: 4 });
 
-    expect(line(report, 'approximated', /Freighter size became XL/)?.count).toBe(1);
-    expect(line(report, 'approximated', /Lifetime mark "24 h" dropped/)).toBeDefined();
-    expect(line(report, 'dropped', /Lock on a connection/)).toBeDefined();
+    expect(line(report, 'mapped', /Lifetime mark "less than 24h"/)).toBeDefined();
+    expect(line(report, 'mapped', /^Lock$/)).toBeDefined();
+    expect(line(report, 'mapped', /Note \(custom info\)/)).toBeDefined();
+    // Passages: one by one where the source has them; a bare count is reported with why.
+    expect(plan.passages).toEqual([
+      {
+        key: 'p-1',
+        source: SYS.home,
+        target: SYS.c2,
+        characterId: 2112625428,
+        shipTypeId: 605,
+        occurredAt: Date.parse('2026-10-12T07:00:00Z'),
+      },
+    ]);
+    expect(line(report, 'dropped', /Passage count without details/)).toBeUndefined();
+    const counted = translate({ ...apiDump(), passages: [] }, { systemName }).report;
+    expect(line(counted, 'dropped', /Passage count without details \(4\)/)?.why).toMatch(
+      /how many ships passed/,
+    );
     expect(line(report, 'dropped', /Connection to a hidden system/)).toBeDefined();
     expect(line(report, 'dropped', /Second connection/)).toBeDefined();
   });
@@ -152,21 +185,32 @@ describe('translating a Wanderer map', () => {
       type: null,
       name: 'Forgotten Perimeter Coronation Platform',
       description: 'Hacked half',
+      kind: 'signature',
+      custom: false,
     });
     expect(signature(plan, 'GHI-111')?.fields.group).toBe('gas');
     expect(signature(plan, 'OPQ-333')).toMatchObject({ solarSystemId: SYS.c1, fields: { group: 'ore' } });
-    expect(signature(plan, 'JKL-222')).toBeUndefined();
-    expect(signature(plan, 'MN-1')).toBeUndefined();
+    // Anomalies and every other scanner row come over by kind; ids that are not the scanner's
+    // are custom entries.
+    expect(signature(plan, 'JKL-222')?.fields).toMatchObject({ kind: 'anomaly', group: 'combat' });
+    expect(signature(plan, 'MN-1')?.fields).toMatchObject({ kind: 'signature', custom: true, group: 'data' });
+    expect(signature(plan, 'STU-555')?.fields).toMatchObject({
+      kind: 'other',
+      type: 'Structure',
+      name: 'Astrahus',
+    });
+    expect(signature(plan, 'VWX-666')?.fields.description).toBe(
+      'Wanderer marks: less than 16h left, leads to C5',
+    );
     // Leads to Jita, but nothing connects the two here.
     expect(signature(plan, 'RST-444')?.linkedTo).toBeNull();
 
-    expect(line(report, 'dropped', /Cosmic anomaly entries/)?.examples).toEqual(['JKL-222 in J130026']);
-    expect(line(report, 'dropped', /without a full id/)).toBeDefined();
+    expect(line(report, 'mapped', /Combat anomaly/)?.examples).toEqual(['JKL-222 in J130026']);
+    expect(line(report, 'mapped', /Data signature \(custom entry\)/)).toBeDefined();
     expect(line(report, 'dropped', /Link to a system without a connection/)).toBeDefined();
-    // U210 on home ↔ C5 has no signature to keep it.
-    expect(
-      line(report, 'dropped', /Wormhole type of a connection without a signature/)?.examples[0],
-    ).toContain('U210');
+    expect(line(report, 'approximated', /Wormhole type kept in the connection note/)?.examples[0]).toContain(
+      'U210',
+    );
   });
 
   it('turns ACL members into one access rule per subject', () => {

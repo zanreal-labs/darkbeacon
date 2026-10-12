@@ -76,3 +76,25 @@ export function changes<T extends object>(current: T, patch: Partial<T>): boolea
 export function defined<T extends object>(patch: T): Partial<T> {
   return Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) as Partial<T>;
 }
+
+/**
+ * A connection without the fields at their defaults (unlocked, no note, no lifetime mark), so
+ * one that never had them reads, compares and stamps the same as before they existed.
+ */
+export function compactConnection<T extends { locked?: boolean; note?: string; lifetime?: unknown }>(
+  c: T,
+): T {
+  const out = { ...c };
+  if (!out.locked) delete out.locked;
+  if (!out.note) delete out.note;
+  if (out.lifetime == null) delete out.lifetime;
+  return out;
+}
+
+/** A scan result without the fields at their defaults (a cosmic signature, not custom). */
+export function compactSignature<T extends { kind?: string; custom?: boolean }>(s: T): T {
+  const out = { ...s };
+  if (!out.kind || out.kind === 'signature') delete out.kind;
+  if (!out.custom) delete out.custom;
+  return out;
+}

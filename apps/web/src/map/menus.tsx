@@ -4,6 +4,7 @@ import {
   Bubbled,
   buildPath,
   ConnectionType,
+  LifetimeMark,
   MassStatus,
   routes,
   ShipSize,
@@ -20,6 +21,7 @@ import {
   CircleDashed,
   CircleDot,
   Clock,
+  Hourglass,
   Copy,
   EyeOff,
   LocateFixed,
@@ -315,7 +317,9 @@ export function connectionMenu(ctx: ConnectionMenuContext): MenuItem[] {
 
   const state: MenuItem[] = [];
   const flags: MenuItem[] = [];
-  if (can.edit) {
+  const locked = c.locked ?? false;
+  // A locked connection is changed by managers only; others see it as it is.
+  if (can.edit && (!locked || can.manage)) {
     if (wormhole) {
       state.push(
         {
@@ -349,6 +353,18 @@ export function connectionMenu(ctx: ConnectionMenuContext): MenuItem[] {
               },
             }),
             (timeStatus) => update({ timeStatus }),
+          ),
+        },
+        {
+          kind: 'submenu',
+          label: 'Lifetime left',
+          icon: <Hourglass />,
+          hint: c.lifetime ? `< ${c.lifetime.mark}` : undefined,
+          items: radios(
+            ['none', ...LifetimeMark.options] as const,
+            c.lifetime?.mark ?? 'none',
+            (v) => ({ label: v === 'none' ? 'Not marked' : `Less than ${v}` }),
+            (v) => update({ lifetime: v === 'none' ? null : v }),
           ),
         },
         {
@@ -407,18 +423,26 @@ export function connectionMenu(ctx: ConnectionMenuContext): MenuItem[] {
         onSelect: () => update({ massSaved: !c.massSaved }),
       });
   }
+  if (can.manage)
+    flags.push({
+      kind: 'action',
+      label: locked ? 'Unlock' : 'Lock',
+      icon: locked ? <LockOpen /> : <Lock />,
+      onSelect: () => update({ locked: !locked }),
+    });
   flags.push(...more(ctx.plugins, (close) => ({ mapId: ctx.mapId, connectionId: c.id, close })));
-  const remove: MenuItem[] = can.edit
-    ? [
-        {
-          kind: 'action',
-          label: 'Remove connection',
-          icon: <Trash2 />,
-          danger: true,
-          onSelect: () => void store.removeConnection(c.id),
-        },
-      ]
-    : [];
+  const remove: MenuItem[] =
+    can.edit && (!locked || can.manage)
+      ? [
+          {
+            kind: 'action',
+            label: 'Remove connection',
+            icon: <Trash2 />,
+            danger: true,
+            onSelect: () => void store.removeConnection(c.id),
+          },
+        ]
+      : [];
   return groups(state, flags, remove);
 }
 

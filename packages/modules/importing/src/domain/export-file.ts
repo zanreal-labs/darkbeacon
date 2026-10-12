@@ -6,6 +6,7 @@ import {
   readAll,
   readComment,
   readConnection,
+  readPassage,
   readSignature,
   readStructure,
   readSystem,
@@ -62,6 +63,7 @@ export function readExportFile(document: unknown, fileName: string | null, now: 
   dump.signatures = readAll(body.signatures, readSignature, 'signatures', dump.rejected);
   dump.structures = readAll(body.structures, readStructure, 'structures', dump.rejected);
   dump.comments = readAll(body.comments, readComment, 'comments', dump.rejected);
+  dump.passages = readAll(body.passages, readPassage, 'passages', dump.rejected);
   dump.hubs = Array.isArray(body.hubs)
     ? body.hubs.map(int).filter((id): id is number => id !== null && id > 0)
     : [];

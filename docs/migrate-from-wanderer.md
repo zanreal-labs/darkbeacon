@@ -58,43 +58,54 @@ Darkbeacon is written from scratch; it only speaks Wanderer's published API and 
 
 ## What migrates
 
-| Wanderer                                                                                  | Darkbeacon                                                                                                                                                                          |
-| ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Systems: position, custom name, temporary name, tag, notes, locked, shown or hidden       | The same fields. Hidden systems come over hidden, with their notes and signatures. Positions are spread to fit Darkbeacon's larger systems (once; later pulls keep the same scale). |
-| Status: unknown, friendly, warning, home, target (primary)                                | The same status.                                                                                                                                                                    |
-| Status: target (secondary), dangerous (primary and secondary)                             | Target, Hostile (close to it).                                                                                                                                                      |
-| Status: looking for                                                                       | Unknown, with a "Looking for" label.                                                                                                                                                |
-| Labels (A, B, C, 1, 2, 3, the map's own labels, a system's custom label)                  | Map labels with those names, on the same systems.                                                                                                                                   |
-| Connections: wormhole, gate, bridge                                                       | Wormhole, gate, bridge.                                                                                                                                                             |
-| Mass: more than half, less than half, critical                                            | Fresh, reduced, critical; the time it was set counts for mass estimates.                                                                                                            |
-| Time: EOL 1 h, 4 h, 4.5 h                                                                 | End of life, timed so the hours left match what Wanderer showed when it was marked.                                                                                                 |
-| Ship size: frigate, medium, large, freight, capital                                       | Frigate (`F`), medium, large, XL (freight becomes XL).                                                                                                                              |
-| Dangerous, bubbled (source, target, both)                                                 | The same.                                                                                                                                                                           |
-| When a connection was found                                                               | Kept, so lifetimes count from Wanderer's first sighting.                                                                                                                            |
-| Signatures (cosmic signatures, every group), names, notes, wormhole types, linked systems | Signatures; one that leads to a system the map connects is linked to that connection. A connection's wormhole type goes to its signature.                                           |
-| Structures (type, name, owner, status, timer, notes)                                      | Listed in the system's notes ("Structures (from Wanderer)").                                                                                                                        |
-| System comments                                                                           | Listed in the system's notes ("Comments (from Wanderer)"), with their dates.                                                                                                        |
-| ACL members: characters, corporations, alliances                                          | Access rules on the map by EVE id (see [Access](#access)).                                                                                                                          |
-| Map scope (wormholes, stargates, all, none)                                               | Auto-mapping scopes.                                                                                                                                                                |
-| Map hubs (settings export)                                                                | Map hubs (up to 20).                                                                                                                                                                |
+Everything a Wanderer map holds comes over 1:1. Where Darkbeacon had no place for something, it has one now
+(connection notes, locks and lifetime marks; anomalies and other scanner results; custom entries).
 
-## What does not migrate
+| Wanderer                                                                            | Darkbeacon                                                                                                                                                                          |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Systems: position, custom name, temporary name, tag, notes, locked, shown or hidden | The same fields. Hidden systems come over hidden, with their notes and signatures. Positions are spread to fit Darkbeacon's larger systems (once; later pulls keep the same scale). |
+| Status: unknown, friendly, warning, home, target, dangerous                         | Unknown, friendly, warning, home, target, hostile.                                                                                                                                  |
+| Status: target (secondary), dangerous (secondary)                                   | Target or hostile, with a "Secondary" label.                                                                                                                                        |
+| Status: looking for                                                                 | Unknown, with a "Looking for" label.                                                                                                                                                |
+| Labels (A, B, C, 1, 2, 3, the map's own labels, a system's custom label)            | Map labels with those names, on the same systems.                                                                                                                                   |
+| Connections: wormhole, gate, bridge                                                 | Wormhole, gate, bridge.                                                                                                                                                             |
+| Mass: more than half, less than half, critical                                      | Fresh, reduced, critical; the time it was set counts for mass estimates.                                                                                                            |
+| Time marks: less than 1 h, 4 h, 4.5 h, 16 h, 24 h, 48 h left                        | The connection's lifetime mark with the time it was set (the time left and the hover card count from it); 1 h and 4 h are also end of life.                                         |
+| Ship size: frigate, medium, large, freight, capital                                 | Frigate, medium, large, freighter (XL), capital.                                                                                                                                    |
+| Dangerous, bubbled (source, target, both)                                           | The same.                                                                                                                                                                           |
+| Locked connections                                                                  | Locked connections: only map managers change or remove them, auto-mapping never does.                                                                                               |
+| Connection custom info                                                              | The connection's note. A wormhole type that no signature carries is added to it ("Wormhole type: U210").                                                                            |
+| When a connection was found, when anything last changed                             | Kept: lifetimes count from Wanderer's first sighting, and shared chains weigh changes by Wanderer's own times.                                                                      |
+| Cosmic signatures (every group), names, notes, wormhole types, linked systems       | Signatures; one that leads to a system the map connects is linked to that connection. A connection's wormhole type goes to its signature.                                           |
+| Cosmic anomalies and other scanner rows (ships, structures, deployables, drones)    | Scan results of kind anomaly or other, in the signatures section under "Anomalies and other results".                                                                               |
+| Custom signatures (ids that are not `ABC-123`, entries someone wrote)               | Custom entries with their own id.                                                                                                                                                   |
+| Marks on an unlinked signature (time, mass, where it leads)                         | Written in its description ("Wanderer marks: less than 16h left, leads to C5").                                                                                                     |
+| The bookmark name of a signature                                                    | Written in its description ("Bookmark: 1a"); Darkbeacon names bookmarks from the map's template.                                                                                    |
+| Passages one by one (pilot, ship, time), where the source lists them                | Passages of the connection, with the ship's hull mass from the SDE; recorded once however often you import.                                                                         |
+| Structures (type, name, owner, status, timer, notes, who added it)                  | One titled block per structure in the system's notes ("Structure: Fortizar “Home Fort”", owner, status and timer, notes, who added it and when).                                    |
+| System comments                                                                     | One titled block per comment in the system's notes ("Comment by Jane, 2026-10-11 18:00 UTC (Wanderer)").                                                                            |
+| ACL members: characters, corporations, alliances                                    | Access rules on the map by EVE id (see [Access](#access)).                                                                                                                          |
+| Map scope (wormholes, stargates, all, none)                                         | Auto-mapping scopes.                                                                                                                                                                |
+| Map hubs (settings export)                                                          | Map hubs (up to 20).                                                                                                                                                                |
 
-- **Tracked characters and user settings.** Each pilot signs in with EVE and links their characters here.
-- **Cosmic anomalies, ships, structures and other non-signature scanner rows** (Darkbeacon keeps cosmic
-  signatures only) and signatures without a full `ABC-123` id.
-- **Lifetime marks of 16, 24 and 48 hours**: Darkbeacon works a hole's lifetime out from its wormhole type
-  and when it was found.
-- **Locks on connections** (Darkbeacon locks systems), **connection notes** (`custom_info`) and **passage
-  counts**: kept in the import record and the downloadable report (`importedExtra`), not on the map.
-- **The bookmark name of a signature** goes into the signature's description ("Bookmark: …").
-- **Connections to hidden systems** (a hidden system has no connections here) and a second connection
-  between the same two systems.
-- **Kills, routes, webhooks, map subscriptions and licences.**
+## What does not migrate, and why
+
+- **Tracked characters and user settings.** Each pilot signs in with EVE and links their characters here;
+  tracking starts again live.
+- **Passage counts without details.** Wanderer's documented API says how many ships went through a
+  connection, not who, in what or when. A bare count cannot feed mass estimates (they need the hull), so it
+  is kept in the import record and the downloadable report (`importedExtra`). Where an instance or an export
+  file lists passages one by one, they come over as passages.
+- **Connections to hidden systems** and a second connection between the same two systems: a hidden system
+  has no connections in either mapper, and a pair of systems has one connection.
+- **Kills.** They are zKillboard data that Darkbeacon reads live for the systems on the map.
+- **Routes, webhooks, map subscriptions and licences.** They are settings of the Wanderer service, not of the
+  chain; set up webhooks and Discord notifications again in the map's settings.
+- **The map's description.** Darkbeacon maps have none; the report shows it.
 - **ACLs whose members the map key cannot read**, unless you give their ACL API keys.
-- The map's description.
 
-The mapping report of every import lists exactly what was approximated and left out, with examples.
+The mapping report of every import lists exactly what came over, what was approximated and what was left out,
+with examples.
 
 ## Merging
 
@@ -174,6 +185,13 @@ Wanderer's API and formats as documented by the Wanderer team, read for interope
 - [User Guide: Characters & ACL API Endpoints](https://wanderer.ltd/news/acl-api) and the access lists guide
   ([GitHub](https://github.com/wanderer-industries/wanderer/blob/main/priv/posts/2024/08-04-access-lists-guide.md)):
   ACL roles admin, manager, member, viewer, blocked.
+- Connection time marks: Wanderer's lifetime selector
+  ([`WdLifetimeSelector.tsx`](https://github.com/wanderer-industries/wanderer/blob/main/assets/js/hooks/Mapper/components/ui-kit/WdLifetimeSelector.tsx))
+  describes each code as "less than N hours remaining" (1, 4, 4.5, 16, 24, 48 h; 4.5 h the life of small
+  holes, 48 h only a few C6 statics), set on the connection's `time_status`; the time it was set is the
+  connection's `updated_at`. Scanner kinds and groups as its signature types name them (`Cosmic Signature`,
+  `Cosmic Anomaly`, `Structure`, `Ship`...). Passages one by one are not part of Wanderer's documented API;
+  instances or files that list them are read in the shape of its `map_chain_passages` resource.
 - Value codes (system status 0-8, connection type, mass, time and ship size codes, labels as JSON with
   `customLabel` and `labels`) as Wanderer's API schemas describe them
   ([swagger at `/swaggerui`](https://wanderer.ltd/swaggerui), resources in

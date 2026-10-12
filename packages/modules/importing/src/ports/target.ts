@@ -61,6 +61,19 @@ export interface ChainTarget {
     createdAt?: number,
     changedAt?: number,
   ): Promise<{ signature: SignatureDto; outcome: WriteOutcome }>;
+  /** Records a passage once per `externalId`; `skipped` when the map does not connect the pair. */
+  putPassage(
+    actor: Actor,
+    mapId: string,
+    passage: {
+      source: number;
+      target: number;
+      characterId: number;
+      shipTypeId: number | null;
+      occurredAt: number;
+    },
+    externalId: string,
+  ): Promise<'created' | 'unchanged' | 'skipped'>;
   ensureLabels(actor: Actor, mapId: string, labels: ReadonlyArray<Omit<LabelDto, 'id'>>): Promise<LabelDto[]>;
   setScopes(actor: Actor, mapId: string, scopes: MapScope[]): Promise<void>;
   hideSystem(actor: Actor, mapId: string, solarSystemId: number): Promise<void>;
