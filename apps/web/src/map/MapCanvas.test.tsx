@@ -55,6 +55,7 @@ describe('MapCanvas read-only (public view)', () => {
                 state={chain()}
                 loaded
                 labels={[]}
+                systemLabels={[]}
                 universe={universe}
                 can={mapPermissions('viewer')}
                 store={store}

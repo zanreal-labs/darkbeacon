@@ -13,6 +13,8 @@ export function systemFixture(solarSystemId: number, extra: Partial<MapSystemDto
     status: 'unknown',
     description: '',
     labelIds: [],
+    systemLabelIds: [],
+    customLabel: null,
     locked: false,
     visible: true,
     createdAt: 1,

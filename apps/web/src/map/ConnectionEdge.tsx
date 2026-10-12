@@ -15,12 +15,29 @@ import { edgeInnerStyle, edgeOuterStyle, edgeVisual, SHIP_SIZE_TEXT, type EdgeVi
 import { floatingEnds, type Point, type Rect } from './geometry';
 import styles from './ConnectionEdge.module.css';
 
+/** What went through a connection since its mass was last marked, for the hover card. */
+export interface ConnectionTraffic {
+  passages: number;
+  /** kg */
+  passed: number;
+}
+
 export interface ConnectionEdgeData extends Record<string, unknown> {
   mapId: string;
   connection: ConnectionDto;
   /** Names of the two ends, for the tooltip. */
   sourceName?: string;
   targetName?: string;
+  traffic?: ConnectionTraffic;
+}
+
+/** "3 jumps counted, 445 200 t". */
+export function trafficLine(traffic: ConnectionTraffic | undefined): string | null {
+  if (!traffic || traffic.passages === 0) return null;
+  const tonnes = Math.round(traffic.passed / 1000)
+    .toLocaleString('en-US')
+    .replace(/,/g, ' ');
+  return `${traffic.passages} jump${traffic.passages === 1 ? '' : 's'} counted, ${tonnes} t`;
 }
 
 export type ConnectionEdgeType = Edge<ConnectionEdgeData, 'connection'>;
@@ -77,6 +94,7 @@ function EdgeDetails({ data, visual, at }: { data: ConnectionEdgeData; visual: E
     ...visual.bubbles.map((end) => `Bubbled on the ${name(end)} side`),
     ...(c.type === 'wormhole' && c.massStatus === 'fresh' ? ['Mass fresh: over 50 % left'] : []),
     ...(c.type === 'wormhole' && c.timeStatus === 'normal' ? ['Lifetime normal'] : []),
+    ...(c.type === 'wormhole' && trafficLine(data.traffic) ? [trafficLine(data.traffic)!] : []),
   ];
   return (
     <div
@@ -117,8 +135,16 @@ export const ConnectionEdge = memo(function ConnectionEdge({
   const c = data.connection;
   const visual = edgeVisual(c, now);
   const inner = edgeInnerStyle(visual);
-  const { from, to } = floatingEnds(rectOf(sourceNode), rectOf(targetNode));
-  const path = `M ${from.x},${from.y} L ${to.x},${to.y}`;
+  const sourceRect = rectOf(sourceNode);
+  const targetRect = rectOf(targetNode);
+  const { from, to } = floatingEnds(sourceRect, targetRect);
+  // The line runs from centre to centre, under the opaque cards, so its layers of different
+  // widths never show a stepped cut where it meets a card; the label and bubbles still use the
+  // points on the borders.
+  const centre = (r: Rect) => ({ x: r.x + r.width / 2, y: r.y + r.height / 2 });
+  const a = centre(sourceRect);
+  const b = centre(targetRect);
+  const path = `M ${a.x},${a.y} L ${b.x},${b.y}`;
   const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
   const bubbles = visual.bubbles.map((end) => ({
     end,

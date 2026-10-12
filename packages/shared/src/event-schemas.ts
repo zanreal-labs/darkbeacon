@@ -2,7 +2,15 @@ import { z } from 'zod';
 import { AccessRuleDto } from './dto/access.js';
 import { EveId, Id, Timestamp } from './dto/common.js';
 import { InstanceRole } from './dto/identity.js';
-import { ConnectionDto, LabelDto, MapDto, MapSystemDto, SignatureDto } from './dto/mapping.js';
+import {
+  ConnectionDto,
+  LabelDto,
+  MapDto,
+  MapSystemDto,
+  SignatureDto,
+  SystemLabelDto,
+} from './dto/mapping.js';
+import { MassMode, PassageSource } from './dto/passages.js';
 import { PluginDto } from './dto/plugins.js';
 import { HubDto, MapExitDto } from './dto/routing.js';
 import { McpMode } from './dto/publishing.js';
@@ -10,6 +18,22 @@ import { MapShareDto, MapSourceDto } from './dto/sharing.js';
 import { CharacterPresenceDto } from './dto/tracking.js';
 import type { EventType } from './events.js';
 import { shareScope } from './share-scope.js';
+
+/** A passage as events carry it (`PassageEventData`); manual passages have no character. */
+const PassageEventSchema = z.object({
+  connectionId: Id,
+  characterId: EveId.nullable(),
+  shipTypeId: EveId.nullable(),
+  mass: z.number().nullable().optional(),
+  from: EveId.optional(),
+  to: EveId.optional(),
+  passageId: Id.optional(),
+  source: PassageSource.optional(),
+  massMode: MassMode.optional(),
+  higgs: z.boolean().optional(),
+  entangler: z.boolean().optional(),
+  note: z.string().nullable().optional(),
+});
 
 /**
  * `data` of every event type, as schemas for the API description (webhooks, the WebSocket
@@ -24,15 +48,9 @@ export const EVENT_DATA_SCHEMAS: Record<EventType, z.ZodType> = {
   'connection.added': ConnectionDto,
   'connection.updated': ConnectionDto,
   'connection.removed': z.object({ id: Id }),
-  'connection.passage': z.object({
-    connectionId: Id,
-    characterId: EveId,
-    shipTypeId: EveId.nullable(),
-    mass: z.number().nullable().optional(),
-    from: EveId.optional(),
-    to: EveId.optional(),
-    passageId: Id.optional(),
-  }),
+  'connection.passage': PassageEventSchema,
+  'connection.passage_updated': PassageEventSchema.extend({ passageId: Id }),
+  'connection.passage_removed': z.object({ passageId: Id, connectionId: Id }),
   'signature.added': SignatureDto,
   'signature.updated': SignatureDto,
   'signature.removed': z.object({ id: Id, solarSystemId: EveId }),
@@ -50,6 +68,7 @@ export const EVENT_DATA_SCHEMAS: Record<EventType, z.ZodType> = {
   'map.created': MapDto,
   'map.removed': z.object({ id: Id }),
   'labels.changed': z.object({ labels: z.array(LabelDto) }),
+  'system_labels.changed': z.object({ systemLabels: z.array(SystemLabelDto) }),
   'map.share.offered': MapShareDto,
   'map.share.accepted': MapShareDto,
   'map.share.changed': MapShareDto,

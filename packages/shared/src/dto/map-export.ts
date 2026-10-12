@@ -9,6 +9,7 @@ import {
   MapSystemDto,
   SignatureDto,
   Slug,
+  SystemLabelDto,
 } from './mapping.js';
 
 /**
@@ -51,6 +52,8 @@ export const MapExportDocument = z.object({
     kind: MapKind.optional(),
     settings: MapSettings,
     labels: z.array(LabelDto).max(64),
+    /** The map's Labels (WH1, A, B...); Tags are `labels`. */
+    systemLabels: z.array(SystemLabelDto).max(32).default([]),
   }),
   systems: z.array(ExportedSystem).max(10_000),
   connections: z.array(ExportedConnection).max(20_000),
@@ -102,6 +105,7 @@ export const MapSettingsExportDocument = z.object({
   exportedAt: Timestamp,
   settings: MapSettings,
   labels: z.array(LabelDto).max(64),
+  systemLabels: z.array(SystemLabelDto).max(32).default([]),
 });
 export type MapSettingsExportDocument = z.infer<typeof MapSettingsExportDocument>;
 

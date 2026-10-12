@@ -1,6 +1,12 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { AccountService, DemoLogin, type SignedIn } from '@darkbeacon/identity';
-import { ConnectionUseCases, MapUseCases, SignatureUseCases, SystemUseCases } from '@darkbeacon/mapping';
+import {
+  ConnectionUseCases,
+  MapUseCases,
+  PassageUseCases,
+  SignatureUseCases,
+  SystemUseCases,
+} from '@darkbeacon/mapping';
 import { AsyncAuditScope } from '../../platform/audit.js';
 import { SharingUseCases } from '@darkbeacon/sharing';
 import { seedDemoAlliance } from './demo-alliance.js';
@@ -23,6 +29,7 @@ export class DemoService {
     @Inject(SystemUseCases) private readonly systems: SystemUseCases,
     @Inject(ConnectionUseCases) private readonly connections: ConnectionUseCases,
     @Inject(SignatureUseCases) private readonly signatures: SignatureUseCases,
+    @Inject(PassageUseCases) private readonly passages: PassageUseCases,
     @Inject(AsyncAuditScope) private readonly audit: AsyncAuditScope,
     @Inject(SharingUseCases) private readonly sharing: SharingUseCases,
   ) {}
@@ -46,7 +53,7 @@ export class DemoService {
       const demoMapId = await this.audit.run(
         { channel: { kind: 'system', id: 'demo' }, origin: undefined },
         async () => {
-          const id = await seedDemoChain(actor, mapping);
+          const id = await seedDemoChain(actor, { ...mapping, passages: this.passages });
           // Two corporations' maps and the alliance chain merging them (shares between maps).
           await seedDemoAlliance(actor, mapping, this.sharing);
           return id;

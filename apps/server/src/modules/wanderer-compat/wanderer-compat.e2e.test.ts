@@ -38,6 +38,8 @@ describeEachDialect('Wanderer-compatible API', (t) => {
       tag: 'H',
       customName: 'Home',
       labelIds: ['l1'],
+      systemLabelIds: ['wh1'],
+      customLabel: 'bait',
     });
     const hole = (
       await s.call('POST', `${base}/connections`, alice, { source: SYSTEMS.c2, target: SYSTEMS.c5 })
@@ -83,7 +85,7 @@ describeEachDialect('Wanderer-compatible API', (t) => {
       visible: true,
       position_x: 10,
       position_y: 21,
-      labels: JSON.stringify({ customLabel: '', labels: ['B'] }),
+      labels: JSON.stringify({ customLabel: 'bait', labels: ['WH1'] }),
     });
     expect(home.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(home.inserted_at).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z$/);

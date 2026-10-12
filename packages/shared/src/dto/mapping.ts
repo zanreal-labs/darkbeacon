@@ -26,6 +26,11 @@ export type MapSettings = z.infer<typeof MapSettings>;
 
 export const Color = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'expected #rrggbb');
 
+/**
+ * A **Tag** of the map (Staging, Sites, Hostile, Exit): a named, coloured marker with a description,
+ * set on systems through `MapSystemDto.labelIds`. Called "labels" in the data for history's sake;
+ * everything users see says Tags (see docs/decisions.md).
+ */
 export const LabelDto = z.object({
   id: Id,
   name: z.string().trim().min(1).max(32),
@@ -33,6 +38,28 @@ export const LabelDto = z.object({
   description: z.string().max(500).default(''),
 });
 export type LabelDto = z.infer<typeof LabelDto>;
+
+/**
+ * A **Label** of the map (WH1, WH2, A, B...): a short neutral text marker, as in Wanderer, set on
+ * systems through `MapSystemDto.systemLabelIds`. Managers keep the list; the description says what
+ * a short name stands for.
+ */
+export const SystemLabelDto = z.object({
+  id: Id,
+  name: z.string().trim().min(1).max(8),
+  description: z.string().trim().max(120).default(''),
+});
+export type SystemLabelDto = z.infer<typeof SystemLabelDto>;
+
+/** The Labels every new map starts with. Ids are only unique within a map, so they can be fixed. */
+export const DEFAULT_SYSTEM_LABELS: readonly SystemLabelDto[] = [
+  { id: 'wh1', name: 'WH1', description: '' },
+  { id: 'wh2', name: 'WH2', description: '' },
+  { id: 'wh3', name: 'WH3', description: '' },
+];
+
+/** Longest custom label of a system: a word, like "bait" or "scout". */
+export const CUSTOM_LABEL_MAX = 16;
 
 export const Slug = z
   .string()
@@ -54,7 +81,10 @@ export const MapDto = z.object({
   kind: MapKind.optional(),
   ownerAccountId: Id,
   settings: MapSettings,
+  /** The map's Tags. */
   labels: z.array(LabelDto),
+  /** The map's Labels (WH1, WH2...). */
+  systemLabels: z.array(SystemLabelDto),
   createdAt: Timestamp,
   updatedAt: Timestamp,
   /** Shown on the maps page under the name. Optional: maps from before it existed lack it. */
@@ -94,9 +124,13 @@ export const UpdateMapRequest = z.object({
 });
 export type UpdateMapRequest = z.infer<typeof UpdateMapRequest>;
 
-/** PUT /api/maps/:mapId/labels replaces the whole list (manager+). */
+/** PUT /api/maps/:mapId/labels replaces the whole list of Tags (manager+). */
 export const SetLabelsRequest = z.object({ labels: z.array(LabelDto).max(64) });
 export type SetLabelsRequest = z.infer<typeof SetLabelsRequest>;
+
+/** PUT /api/maps/:mapId/system-labels replaces the whole list of Labels, in order (manager+). */
+export const SetSystemLabelsRequest = z.object({ systemLabels: z.array(SystemLabelDto).max(32) });
+export type SetSystemLabelsRequest = z.infer<typeof SetSystemLabelsRequest>;
 
 /**
  * Where a merged object comes from: the maps holding it and whose write is newest. Only on maps that
@@ -135,11 +169,17 @@ export const MapSystemDto = z.object({
   position: Position,
   customName: z.string().nullable(),
   temporaryName: z.string().nullable(),
+  /** Free-text tag of old; kept for compatibility, no longer shown or edited (Tags replace it). */
   tag: z.string().nullable(),
   status: SystemStatus,
   /** Markdown. */
   description: z.string(),
+  /** The system's Tags (ids of `MapDto.labels`). */
   labelIds: z.array(Id),
+  /** The system's Labels (ids of `MapDto.systemLabels`). */
+  systemLabelIds: z.array(Id),
+  /** One free-text label of the system ("bait"), shown after its Labels; null for none. */
+  customLabel: z.string().nullable(),
   locked: z.boolean(),
   /** Hidden systems keep their intel; nothing routes to them. */
   visible: z.boolean(),
@@ -162,6 +202,8 @@ export const UpdateSystemRequest = z
     status: SystemStatus,
     description: z.string().max(10_000),
     labelIds: z.array(Id).max(16),
+    systemLabelIds: z.array(Id).max(32),
+    customLabel: z.string().trim().max(CUSTOM_LABEL_MAX).nullable(),
     locked: z.boolean(),
     visible: z.boolean(),
   })

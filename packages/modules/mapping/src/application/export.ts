@@ -62,6 +62,7 @@ export class MapTransfer extends MappingUseCases {
     const now = this.ports.clock.now();
     const slug = options.slug ?? (await this.availableSlug(document.map.slug));
     const labels = new Set(document.map.labels.map((l) => l.id));
+    const systemLabels = new Set(document.map.systemLabels.map((l) => l.id));
     const map: ChainMap = {
       id: newId(),
       slug,
@@ -71,6 +72,7 @@ export class MapTransfer extends MappingUseCases {
       ownerAccountId: account.id,
       settings: document.map.settings,
       labels: document.map.labels,
+      systemLabels: document.map.systemLabels,
       createdAt: now,
       updatedAt: now,
     };
@@ -90,6 +92,7 @@ export class MapTransfer extends MappingUseCases {
           ...s,
           mapId: map.id,
           labelIds: s.labelIds.filter((id) => labels.has(id)),
+          systemLabelIds: (s.systemLabelIds ?? []).filter((id) => systemLabels.has(id)),
           createdAt: now,
           updatedAt: now,
         };
@@ -162,6 +165,7 @@ export class MapTransfer extends MappingUseCases {
       exportedAt: this.ports.clock.now(),
       settings: map.settings,
       labels: map.labels,
+      systemLabels: map.systemLabels,
     };
   }
 
@@ -178,6 +182,7 @@ export class MapTransfer extends MappingUseCases {
       const updated = await maps.update(who, mapId, { settings: document.settings });
       if (!withLabels) return updated;
       await maps.setLabels(who, mapId, document.labels);
+      await maps.setSystemLabels(who, mapId, document.systemLabels);
       return this.load(mapId);
     });
   }
@@ -206,6 +211,7 @@ export class MapTransfer extends MappingUseCases {
         ...(map.kind ? { kind: map.kind } : {}),
         settings: map.settings,
         labels: map.labels,
+        systemLabels: map.systemLabels,
       },
       systems: systems.map(strip),
       connections: connections.map(strip),

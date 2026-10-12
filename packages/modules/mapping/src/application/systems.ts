@@ -36,6 +36,8 @@ export class SystemUseCases extends MappingUseCases {
         status: 'unknown',
         description: '',
         labelIds: [],
+        systemLabelIds: [],
+        customLabel: null,
         locked: false,
         visible: true,
         createdAt: now,
@@ -66,6 +68,12 @@ export class SystemUseCases extends MappingUseCases {
       if (patch.locked !== undefined && patch.locked !== current.locked)
         await this.authorize(who, mapId, 'manager');
       if (patch.labelIds) await this.checkLabels(mapId, patch.labelIds);
+      if (patch.systemLabelIds) {
+        patch.systemLabelIds = [...new Set(patch.systemLabelIds)];
+        await this.checkSystemLabels(mapId, patch.systemLabelIds);
+      }
+      // An empty custom label is none.
+      if (patch.customLabel !== undefined) patch.customLabel = patch.customLabel?.trim() || null;
       if (!changes(current, patch)) return current;
 
       const staysLocked = current.locked && (patch.locked ?? true);
@@ -142,7 +150,14 @@ export class SystemUseCases extends MappingUseCases {
     const map = await this.ports.maps.findById(mapId);
     const known = new Set(map?.labels.map((l) => l.id));
     const unknown = labelIds.filter((id) => !known.has(id));
-    if (unknown.length > 0) throw new ValidationError('Unknown label', { labelIds: unknown });
+    if (unknown.length > 0) throw new ValidationError('Unknown tag', { labelIds: unknown });
+  }
+
+  private async checkSystemLabels(mapId: string, systemLabelIds: string[]): Promise<void> {
+    const map = await this.ports.maps.findById(mapId);
+    const known = new Set(map?.systemLabels.map((l) => l.id));
+    const unknown = systemLabelIds.filter((id) => !known.has(id));
+    if (unknown.length > 0) throw new ValidationError('Unknown label', { systemLabelIds: unknown });
   }
 }
 

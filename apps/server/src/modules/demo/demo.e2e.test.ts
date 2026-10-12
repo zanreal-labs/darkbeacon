@@ -5,6 +5,7 @@ import type {
   MapSnapshot,
   MapSummaryDto,
   MeDto,
+  PassageDto,
   SignatureDto,
   StreamSnapshotDto,
 } from '@darkbeacon/shared';
@@ -67,6 +68,16 @@ describeEachDialect('demo mode over HTTP', (t) => {
     for (const part of parts) Object.assign(snapshot, await part(demo.id, { kind: 'plugin', id: 't' }));
     expect(snapshot.systems).toHaveLength(8);
     expect(snapshot.map.labels.map((l) => l.name)).toEqual(['Staging', 'Sites', 'Hostile', 'Exit']);
+    // Labels: the default WH1 to WH3 on the three holes out of home, and one custom label.
+    expect(snapshot.map.systemLabels.map((l) => l.name)).toEqual(['WH1', 'WH2', 'WH3']);
+    const labelled = (name: string) => {
+      const id = snapshot.map.systemLabels.find((l) => l.name === name)!.id;
+      return snapshot.systems.filter((s) => s.systemLabelIds.includes(id)).map((s) => s.solarSystemId);
+    };
+    expect([labelled('WH1'), labelled('WH2'), labelled('WH3')]).toEqual([[30001376], [30002537], [31000399]]);
+    expect(
+      snapshot.systems.filter((s) => s.customLabel).map((s) => [s.solarSystemId, s.customLabel]),
+    ).toEqual([[30001376, 'bait']]);
     const c = snapshot.connections;
     expect(c).toHaveLength(7);
     expect(c.some((x) => x.timeStatus === 'eol')).toBe(true);
@@ -76,6 +87,18 @@ describeEachDialect('demo mode over HTTP', (t) => {
     expect(c.some((x) => x.type === 'gate')).toBe(true);
     const signatures = snapshot.signatures as SignatureDto[];
     expect(signatures.filter((s) => s.connectionId !== null).length).toBeGreaterThanOrEqual(5);
+
+    // A rolling crew's jumps, logged by hand: a Megathron and an Orca through the high-sec static.
+    const d845 = c.find((x) => x.source === 31002531 && x.target === 30001376)!;
+    const passages = (
+      await request('GET', `/api/maps/${demo.id}/connections/${d845.id}/passages`, first.cookie)
+    ).body as PassageDto[];
+    expect(passages.map((p) => [p.shipName, p.massMode, p.source])).toEqual([
+      ['Orca', 'hot', 'manual'],
+      ['Orca', 'cold', 'manual'],
+      ['Megathron', 'hot', 'manual'],
+      ['Megathron', 'cold', 'manual'],
+    ]);
 
     // The alliance chain merges both corporations' maps: one node per system, the later mass wins.
     const alliance = {} as Required<MapSnapshot>;

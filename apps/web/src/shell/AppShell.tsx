@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Suspense, type ReactElement, type ReactNode } from 'react';
-import { Map as MapIcon, Shield, UserRound } from 'lucide-react';
+import { Map as MapIcon, Orbit, Shield, UserRound } from 'lucide-react';
 import { PluginsProvider } from '../plugins/PluginSlot';
 import { Skeleton, Tooltip } from '../ui';
 import { Breadcrumbs } from './Trail';
@@ -79,6 +79,8 @@ export const MAPS_NAV: NavItem = {
   end: true,
   also: ['/m/', '/maps'],
 };
+/** The jump planner: its own map, of all known space. */
+export const JUMP_NAV: NavItem = { href: '/jump', label: 'Jump planner', icon: <Orbit /> };
 export const ADMIN_NAV: NavItem = { href: '/admin', label: 'Admin', icon: <Shield /> };
 export const ACCOUNT_NAV: NavItem = { href: '/account', label: 'Account', icon: <UserRound /> };
 
@@ -117,6 +119,7 @@ export function AppShell({
             <Suspense fallback={null}>
               <MapSettingsRailButton />
             </Suspense>
+            <RailLink item={JUMP_NAV} />
             {adminRail}
           </nav>
           <header className={styles.topbar}>
@@ -137,6 +140,7 @@ export function AppShell({
           </main>
           <nav className={styles.tabbar} aria-label="Main">
             <TabLink item={MAPS_NAV} />
+            <TabLink item={{ ...JUMP_NAV, label: 'Jumps' }} />
             {adminTab}
             <TabLink item={ACCOUNT_NAV} />
           </nav>

@@ -7,6 +7,7 @@ import {
   bookmarkClassLabel,
   bookmarkLabel,
   renderBookmarkTemplate,
+  systemLabelsText,
 } from './dto/bookmarks.js';
 import type { ConnectionDto, MapSystemDto, SignatureDto } from './dto/mapping.js';
 
@@ -20,6 +21,8 @@ const system = (id: number, extra: Partial<MapSystemDto> = {}): MapSystemDto => 
   status: 'unknown',
   description: '',
   labelIds: [],
+  systemLabelIds: [],
+  customLabel: null,
   locked: false,
   visible: true,
   createdAt: id,
@@ -137,6 +140,26 @@ describe('bookmarkChain', () => {
     expect(bookmarkLabel('{sig}', chain.get(1)!)).toBeNull();
     expect(bookmarkLabel('{sig}', { ...chain.get(3)!, tempName: '' })).toBeNull();
     expect(bookmarkLabel('{chainIndex} {destClass}', { ...chain.get(3)!, tempName: '' })).toBe('1b C3');
+  });
+
+  it("offers {labels}: the system's Labels in the map's order, then its custom label", () => {
+    const labelled = bookmarkChain({
+      systems: [
+        system(1, { status: 'home' }),
+        system(2, { systemLabelIds: ['b', 'a'], customLabel: 'bait' }),
+      ],
+      connections: [connection('a', 1, 2)],
+      signatures: [signature(1, 'ABC-123', 'a', null)],
+      classOf: () => 'C3',
+      systemLabels: [
+        { id: 'a', name: 'WH1', description: '' },
+        { id: 'b', name: 'WH2', description: '' },
+      ],
+    });
+    expect(labelled.get(2)!.labels).toBe('WH1 WH2 bait');
+    expect(bookmarkLabel('{labels} {sig3}', labelled.get(2)!)).toBe('WH1 WH2 bait ABC');
+    expect(systemLabelsText({ systemLabelIds: ['a'], customLabel: null })).toBe('');
+    expect(BookmarkTemplate.parse('{labels} {sig}')).toBe('{labels} {sig}');
   });
 
   it('starts a part of the map without a home at its oldest system and skips hidden ones', () => {

@@ -8,6 +8,7 @@ import type {
   ShareScope,
 } from '@darkbeacon/shared';
 import type { ChainCommand } from '../domain/commands.js';
+import type { ChainPassage } from '../domain/passages.js';
 import type { Share } from '../domain/shares.js';
 import type { ViewEntity, ViewKind } from '../domain/view.js';
 
@@ -48,6 +49,11 @@ export interface ChainSource {
    * the change reports (a scanner paste's counts), else nothing.
    */
   write(command: ChainCommand, context: ChainWriteContext): Promise<unknown>;
+  /**
+   * Passages through the hole between a pair (`<low>-<high>`), newest first: none unless `scopes`
+   * share connection status; pilots only with characters. Passages stay with the source.
+   */
+  passages(key: string, scopes: readonly ShareScope[] | 'all'): Promise<ChainPassage[]>;
 }
 
 /** The map behind an origin, by name: null when it is gone (or unreachable). */
@@ -58,6 +64,8 @@ export interface ChainMapInfo {
   kind: MapKind;
   /** Name of the instance it is on; null for this one. */
   instanceName: string | null;
+  /** The map's Labels (WH1, WH2...), for showing merged ones by name; absent for none. */
+  systemLabels?: ReadonlyArray<{ id: string; name: string }>;
 }
 
 /** Finds sources by origin. Only `local` origins exist today; remote instances plug in here later. */
@@ -118,6 +126,7 @@ export interface ChainLayoutRepository {
 export interface LocalFields {
   /** Null: the merged notes show. */
   notes: string | null;
+  /** The system's Tags on the composite. */
   labelIds: string[];
   locked: boolean;
 }

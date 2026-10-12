@@ -92,8 +92,15 @@ export function featureEvents(event: ObservedEvent, context: AuditContext): Feat
         accountId,
       }));
     }
+    case 'connection.passage':
+      return one('passage_logged', {
+        source: data?.source ?? 'tracked',
+        mode: data?.massMode ?? 'cold',
+      });
     case 'labels.changed':
       return one('labels_changed');
+    case 'system_labels.changed':
+      return one('system_labels_changed');
     case 'ping.created':
       return one('ping_created');
     case 'access.rule_added':

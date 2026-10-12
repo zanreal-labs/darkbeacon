@@ -33,6 +33,8 @@ export function projectSystem(system: MapSystemDto, scopes: Scopes): MapSystemDt
     status: intel ? system.status : 'unknown',
     description: intel ? system.description : '',
     labelIds: [],
+    systemLabelIds: has(scopes, 'labels') ? system.systemLabelIds : [],
+    customLabel: has(scopes, 'labels') ? system.customLabel : null,
     locked: false,
     visible: system.visible,
     createdAt: system.createdAt,

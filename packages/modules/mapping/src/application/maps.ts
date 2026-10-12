@@ -13,14 +13,16 @@ import {
 import {
   DEFAULT_BOOKMARK_NUMBERING,
   type AdminMapDto,
+  DEFAULT_SYSTEM_LABELS,
   type BookmarkNumbering,
   type CreateMapRequest,
   type LabelDto,
   type MapSummaryDto,
+  type SystemLabelDto,
   type UpdateMapRequest,
 } from '@darkbeacon/shared';
 import type { ChainMap } from '../domain/map.js';
-import { changes, slugify, validateLabels } from '../domain/rules.js';
+import { changes, slugify, validateLabels, validateSystemLabels } from '../domain/rules.js';
 import { MappingUseCases, type EventBatch } from './base.js';
 import { renumberBookmarks } from './bookmark-numbers.js';
 
@@ -72,6 +74,7 @@ export class MapUseCases extends MappingUseCases {
       ownerAccountId: account.id,
       settings: { scopes: ['wormhole'] },
       labels: [],
+      systemLabels: DEFAULT_SYSTEM_LABELS.map((l) => ({ ...l })),
       createdAt: now,
       updatedAt: now,
     };
@@ -123,8 +126,8 @@ export class MapUseCases extends MappingUseCases {
   }
 
   /**
-   * Replaces the label list (manager+). Systems lose the labels that no longer exist; hidden
-   * systems are updated silently.
+   * Replaces the Tags (`labels` in the data, manager+). Systems lose the tags that no longer
+   * exist; hidden systems are updated silently.
    */
   async setLabels(actor: Actor | null, mapId: string, labels: LabelDto[]): Promise<LabelDto[]> {
     const who = await this.authorize(actor, mapId, 'manager');
@@ -145,6 +148,36 @@ export class MapUseCases extends MappingUseCases {
         if (next.visible) events.add('system.updated', next, system);
       }
       return labels;
+    });
+  }
+
+  /**
+   * Replaces the Labels (WH1, WH2..., manager+); their order is the order systems show them in.
+   * Systems lose the labels that no longer exist; hidden systems are updated silently.
+   */
+  async setSystemLabels(
+    actor: Actor | null,
+    mapId: string,
+    systemLabels: SystemLabelDto[],
+  ): Promise<SystemLabelDto[]> {
+    const who = await this.authorize(actor, mapId, 'manager');
+    validateSystemLabels(systemLabels);
+    return this.write(who, mapId, async (events) => {
+      const current = await this.load(mapId);
+      if (!changes(current, { systemLabels })) return current.systemLabels;
+      const now = this.ports.clock.now();
+      await this.ports.maps.update({ ...current, systemLabels, updatedAt: now });
+      events.add('system_labels.changed', { systemLabels }, { systemLabels: current.systemLabels });
+
+      const kept = new Set(systemLabels.map((l) => l.id));
+      for (const system of await this.ports.systems.list(mapId)) {
+        const systemLabelIds = system.systemLabelIds.filter((id) => kept.has(id));
+        if (systemLabelIds.length === system.systemLabelIds.length) continue;
+        const next = { ...system, systemLabelIds, updatedAt: now };
+        await this.ports.systems.update(next);
+        if (next.visible) events.add('system.updated', next, system);
+      }
+      return systemLabels;
     });
   }
 

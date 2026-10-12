@@ -283,7 +283,7 @@ export class WandererCompatController {
     if (!allowed) throw new WandererError(401, 'Unauthorized (invalid token for map)');
     const { data } = await this.hub.readSnapshot(stream, actor);
     const snapshot = data as MapSnapshot;
-    const labels = new Map((snapshot.map?.labels ?? []).map((l) => [l.id, l]));
+    const labels = new Map((snapshot.map?.systemLabels ?? []).map((l) => [l.id, l]));
     const ctx: FormatContext = {
       mapId,
       labels,

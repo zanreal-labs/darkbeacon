@@ -134,13 +134,17 @@ export class MapPublishing {
   /** What the public page shows, read as the public actor and cut down by the projection. */
   async view(access: PublicAccess): Promise<PublicView> {
     const { seq, data } = await this.deps.snapshots.read(access.actor, access.share.mapId);
-    const map = data.map as { id: string; name: string } | undefined;
+    const map = data.map as
+      | { id: string; name: string; systemLabels?: { id: string; name: string; description: string }[] }
+      | undefined;
     return {
       map: {
         id: access.share.mapId,
         name: map?.name ?? 'Map',
         // Label definitions and assignments are the map's own, like in shares between maps.
         labels: [],
+        // Labels (WH1, WH2...) travel with the `labels` scope, names and descriptions only.
+        systemLabels: access.scopes.has('labels') ? (map?.systemLabels ?? []) : [],
         scopes: access.share.scopes,
         noindex: access.share.noindex,
       },

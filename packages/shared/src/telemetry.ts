@@ -71,7 +71,15 @@ export function viewportBucket(width: number): ViewportBucket {
  * Pages of the signed-in app. Public maps (`/p/<token>`) are never reported: their viewers have no
  * account and gave no consent.
  */
-export const TelemetryPage = z.enum(['map', 'maps', 'account', 'admin', 'map_settings', 'oauth_consent']);
+export const TelemetryPage = z.enum([
+  'map',
+  'maps',
+  'account',
+  'admin',
+  'map_settings',
+  'oauth_consent',
+  'jump',
+]);
 /** Tabs of the admin page and of a map's settings. */
 export const TelemetrySection = z.enum([
   'instance',
@@ -81,6 +89,7 @@ export const TelemetrySection = z.enum([
   'audit',
   'general',
   'labels',
+  'tags',
   'bookmarks',
   'access',
   'sharing',
@@ -108,6 +117,7 @@ export const ContextMenuAction = z.enum([
   // systems
   'status',
   'labels',
+  'tags',
   'edit',
   'hidden',
   'locked',

@@ -4,9 +4,9 @@ import type {
   AccessRuleDto,
   CharacterPresenceDto,
   ConnectionDto,
-  LabelDto,
   MapSystemDto,
   SignatureDto,
+  SystemLabelDto,
   SystemStatus,
 } from '@darkbeacon/shared';
 
@@ -106,18 +106,24 @@ export function ulidOf(uuid: string): string {
 
 export const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
-/** The labels column as Wanderer's map UI stores it: JSON of a custom label and label codes. */
-function labelsOf(system: MapSystemDto, labels: ReadonlyMap<string, LabelDto>): string | null {
-  if (system.labelIds.length === 0) return null;
-  const names = system.labelIds.map((id) => labels.get(id)?.name).filter((n): n is string => !!n);
-  return JSON.stringify({ customLabel: '', labels: names });
+/**
+ * The labels column as Wanderer's map UI stores it: JSON of the custom label and the Labels (WH1,
+ * A, B...); Darkbeacon's Labels are Wanderer's, with their names instead of its codes.
+ */
+function labelsOf(system: MapSystemDto, labels: ReadonlyMap<string, SystemLabelDto>): string | null {
+  const ids = system.systemLabelIds ?? [];
+  const custom = system.customLabel ?? '';
+  if (ids.length === 0 && !custom) return null;
+  const names = ids.map((id) => labels.get(id)?.name).filter((n): n is string => !!n);
+  return JSON.stringify({ customLabel: custom, labels: names });
 }
 
 export interface FormatContext {
   mapId: string;
   /** Static name of a solar system (`J123456`); null when unknown. */
   systemName(solarSystemId: number): string | null;
-  labels: ReadonlyMap<string, LabelDto>;
+  /** The map's Labels (`MapDto.systemLabels`). */
+  labels: ReadonlyMap<string, SystemLabelDto>;
 }
 
 export function wandererSystem(system: MapSystemDto, ctx: FormatContext) {

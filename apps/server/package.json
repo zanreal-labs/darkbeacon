@@ -18,6 +18,7 @@
     "@darkbeacon/core": "workspace:*",
     "@darkbeacon/db": "workspace:*",
     "@darkbeacon/identity": "workspace:*",
+    "@darkbeacon/jumps": "workspace:*",
     "@darkbeacon/mapping": "workspace:*",
     "@darkbeacon/notifications": "workspace:*",
     "@darkbeacon/oauth": "workspace:*",

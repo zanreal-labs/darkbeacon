@@ -7,6 +7,7 @@ import {
   ConnectionUseCases,
   MapPreferenceUseCases,
   MapUseCases,
+  PassageUseCases,
   SignatureUseCases,
   SystemUseCases,
 } from '@darkbeacon/mapping';
@@ -16,18 +17,22 @@ import {
   AddSystemRequest,
   CreateMapRequest,
   EveId,
+  LogPassagesRequest,
   MoveSystemsRequest,
   nestPath,
   PasteSignaturesRequest,
   RenumberBookmarksRequest,
+  RollPlanRequest,
   routes,
   SetBookmarkNumberingRequest,
   SetBookmarkNumberRequest,
   SetBookmarkTemplateRequest,
   SetLabelsRequest,
+  SetSystemLabelsRequest,
   UpdateConnectionRequest,
   UpdateMapPreferencesRequest,
   UpdateMapRequest,
+  UpdatePassageRequest,
   UpdateSignatureRequest,
   UpdateSystemRequest,
 } from '@darkbeacon/shared';
@@ -97,6 +102,15 @@ export class MapsController {
     @Body(new ZodPipe(SetLabelsRequest)) body: SetLabelsRequest,
   ) {
     return this.maps.setLabels(actor, mapId, body.labels);
+  }
+
+  @Put(nestPath(routes.maps.setSystemLabels.path))
+  setSystemLabels(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Body(new ZodPipe(SetSystemLabelsRequest)) body: SetSystemLabelsRequest,
+  ) {
+    return this.maps.setSystemLabels(actor, mapId, body.systemLabels);
   }
 
   @Put(nestPath(routes.maps.setBookmarkTemplate.path))
@@ -232,6 +246,7 @@ export class ConnectionsController {
   constructor(
     @Inject(ConnectionUseCases) private readonly connections: ConnectionUseCases,
     @Inject(ConnectionIntelQuery) private readonly intel: ConnectionIntelQuery,
+    @Inject(PassageUseCases) private readonly passageLog: PassageUseCases,
     @Inject(MergedWriteRouter) private readonly merged: MergedWriteRouter,
   ) {}
 
@@ -240,13 +255,87 @@ export class ConnectionsController {
     return this.intel.list(actor, mapId);
   }
 
+  @Get(nestPath(routes.connections.intelOne.path))
+  one(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Param('connectionId') connectionId: string,
+  ) {
+    return this.intel.one(actor, mapId, connectionId);
+  }
+
+  @Post(nestPath(routes.connections.rollPlan.path))
+  @HttpCode(200)
+  rollPlan(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Param('connectionId') connectionId: string,
+    @Body(new ZodPipe(RollPlanRequest)) body: RollPlanRequest,
+  ) {
+    return this.intel.rollPlan(actor, mapId, connectionId, body);
+  }
+
   @Get(nestPath(routes.connections.passages.path))
   passages(
     @CurrentActor() actor: Actor | null,
     @Param('mapId') mapId: string,
     @Param('connectionId') connectionId: string,
   ) {
-    return this.intel.passages(actor, mapId, connectionId);
+    return this.passageLog.list(actor, mapId, connectionId);
+  }
+
+  /** On a merged map the jump goes to the source that takes new objects and holds the hole. */
+  @Post(nestPath(routes.connections.logPassages.path))
+  async logPassages(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Param('connectionId') connectionId: string,
+    @Body(new ZodPipe(LogPassagesRequest)) body: LogPassagesRequest,
+  ) {
+    return (
+      (await this.merged.route(
+        mapId,
+        (w) => w.logPassages(actor, mapId, connectionId, body),
+        () => this.passageLog.log(actor, mapId, connectionId, body),
+      )) ?? []
+    );
+  }
+
+  @Post(nestPath(routes.connections.resetPassages.path))
+  @HttpCode(204)
+  async resetPassages(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Param('connectionId') connectionId: string,
+  ): Promise<void> {
+    await this.merged.route(
+      mapId,
+      (w) => w.resetPassages(actor, mapId, connectionId),
+      () => this.passageLog.resetCounter(actor, mapId, connectionId),
+    );
+  }
+
+  /** Passages are changed where they were recorded; a merged map shows them read-only. */
+  @Patch(nestPath(routes.connections.updatePassage.path))
+  updatePassage(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Param('connectionId') connectionId: string,
+    @Param('passageId') passageId: string,
+    @Body(new ZodPipe(UpdatePassageRequest)) body: UpdatePassageRequest,
+  ) {
+    return this.passageLog.update(actor, mapId, connectionId, passageId, body);
+  }
+
+  @Delete(nestPath(routes.connections.removePassage.path))
+  @HttpCode(204)
+  async removePassage(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Param('connectionId') connectionId: string,
+    @Param('passageId') passageId: string,
+  ): Promise<void> {
+    await this.passageLog.remove(actor, mapId, connectionId, passageId);
   }
 
   @Post(nestPath(routes.connections.add.path))

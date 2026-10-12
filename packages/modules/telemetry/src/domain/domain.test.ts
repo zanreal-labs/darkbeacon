@@ -151,6 +151,31 @@ describe('feature events', () => {
     ).toEqual(['eol', 'mass']);
   });
 
+  it('count passages by how they were recorded, never which ship or pilot', () => {
+    const tracked = featureEvents(
+      {
+        type: 'connection.passage',
+        actor: { kind: 'system', id: 'mapping' },
+        data: { connectionId: 'c1', characterId: 90000001, shipTypeId: 641, mass: 98_400_000 },
+      },
+      {},
+    );
+    expect(tracked).toEqual([
+      { event: 'passage_logged', props: { source: 'tracked', mode: 'cold' }, accountId: null },
+    ]);
+    const manual = featureEvents(
+      {
+        type: 'connection.passage',
+        actor: by,
+        data: { connectionId: 'c1', characterId: null, shipTypeId: 28606, source: 'manual', massMode: 'hot' },
+      },
+      { channel: { kind: 'web' } },
+    );
+    expect(manual[0]?.props).toEqual({ source: 'manual', mode: 'hot' });
+    expect(JSON.stringify([...tracked, ...manual])).not.toMatch(/641|28606|90000001/);
+    for (const e of [...tracked, ...manual]) expect(validateTelemetryEvent(e.event, e.props).ok).toBe(true);
+  });
+
   it('count a revert as one history revert', () => {
     expect(featureEvents({ type: 'system.added', actor: by, data: {} }, { revertOf: 'e1' })).toEqual([
       { event: 'history_reverted', props: {}, accountId: 'acc-1' },
@@ -196,7 +221,42 @@ describe('request features', () => {
       }),
     ).toEqual({ event: 'signatures_pasted', props: { added: '6-10', updated: '0', removed: '1' } });
     expect(
+      requestFeature({
+        method: 'POST',
+        path: '/api/maps/:mapId/connections/:connectionId/roll-plan',
+        query: {},
+        body: { ships: [{ shipTypeId: 641 }] },
+        response: { result: 'risky', reason: 'strand', steps: [] },
+      }),
+    ).toEqual({ event: 'roll_planned', props: { result: 'risky' } });
+    expect(validateTelemetryEvent('roll_planned', { result: 'ok' }).ok).toBe(true);
+    expect(validateTelemetryEvent('roll_planned', { result: 'J123456' }).ok).toBe(false);
+    expect(
       requestFeature({ method: 'GET', path: '/api/maps', query: {}, body: undefined, response: [] }),
     ).toBeNull();
+  });
+
+  it('count planned jump routes by hull and legs, never by system', () => {
+    const feature = requestFeature({
+      method: 'POST',
+      path: '/api/jumps/plan',
+      query: {},
+      body: { shipTypeId: 28850, origin: 30002813, destination: 30003504 },
+      response: { ship: { hull: 'jump_freighter', name: 'Ark' }, route: { legs: [{}, {}, {}] } },
+    });
+    expect(feature).toEqual({ event: 'jump_planned', props: { hull: 'jump_freighter', legs: '2-5' } });
+    expect(validateTelemetryEvent(feature!.event, feature!.props)).toEqual({
+      ok: true,
+      props: feature!.props,
+    });
+    expect(
+      requestFeature({
+        method: 'POST',
+        path: '/api/jumps/plan',
+        query: {},
+        body: {},
+        response: { ship: { hull: 'titan' }, route: null },
+      }),
+    ).toEqual({ event: 'jump_planned', props: { hull: 'titan', legs: '0' } });
   });
 });
