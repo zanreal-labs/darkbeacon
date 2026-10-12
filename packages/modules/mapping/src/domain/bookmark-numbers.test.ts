@@ -156,6 +156,8 @@ describe('bookmark numbers', () => {
       status: 'unknown',
       description: '',
       labelIds: [],
+      systemLabelIds: [],
+      customLabel: null,
       locked: false,
       visible: true,
       createdAt: id,

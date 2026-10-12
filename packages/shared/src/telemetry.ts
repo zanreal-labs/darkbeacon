@@ -77,6 +77,7 @@ export const TelemetrySection = z.enum([
   'audit',
   'general',
   'labels',
+  'tags',
   'bookmarks',
   'access',
   'sharing',
@@ -100,6 +101,7 @@ export const ContextMenuAction = z.enum([
   // systems
   'status',
   'labels',
+  'tags',
   'edit',
   'hidden',
   'locked',
