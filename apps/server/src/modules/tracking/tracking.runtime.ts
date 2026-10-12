@@ -5,13 +5,16 @@ import {
   type OnModuleDestroy,
   type OnModuleInit,
 } from '@nestjs/common';
-import type { EventBus } from '@darkbeacon/core';
+import type { EventBus, Leadership } from '@darkbeacon/core';
 import { isEventOfType } from '@darkbeacon/shared';
 import { AutoMapper, ListMapCharacters, TrackingCleanup, TrackingPoller } from '@darkbeacon/tracking';
 import type { AppConfig } from '../../config/config.js';
 import { EventConsumers } from '../../platform/event-consumers.js';
-import { APP_CONFIG, EVENT_BUS } from '../../platform/tokens.js';
+import { APP_CONFIG, EVENT_BUS, LEADERSHIP } from '../../platform/tokens.js';
 import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
+
+/** How often the poller looks for characters that are due (a tick only reads memory). */
+const TICK_MS = 250;
 
 /**
  * Starts the ESI poller, runs auto-mapping and the cleanups after deleted maps and characters
@@ -32,6 +35,7 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
     @Inject(TrackingCleanup) private readonly cleanup: TrackingCleanup,
     @Inject(EventConsumers) private readonly consumers: EventConsumers,
     @Inject(EVENT_BUS) private readonly bus: EventBus,
+    @Inject(LEADERSHIP) private readonly leadership: Leadership,
   ) {}
 
   onModuleInit(): void {
@@ -75,7 +79,10 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
   onApplicationBootstrap(): void {
     // Tests drive the poller themselves.
     if (this.config.env !== 'test') {
-      this.timer = setInterval(() => void this.poller.tick(), 1000).unref();
+      // One replica polls ESI (the leader); the others see its events.
+      this.timer = setInterval(() => {
+        if (this.leadership.isLeader()) void this.poller.tick();
+      }, TICK_MS).unref();
     }
   }
 

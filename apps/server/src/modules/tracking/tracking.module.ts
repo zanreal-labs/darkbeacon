@@ -42,11 +42,12 @@ import { TrackingRuntime } from './tracking.runtime.js';
 export const TRACKING_REPOSITORY = 'TrackingRepository';
 export const ESI_GATEWAY = 'EsiGateway';
 /**
- * ESI requests per second the poller may send, over all characters: about 700 online characters
- * at 0.42 requests a second each (location and ship every 5 s, online every 60 s). See
- * docs/scaling.md for the arithmetic.
+ * ESI requests per second the poller may send, over all characters: about 1,100 online
+ * characters at 0.42 requests a second each (location and ship every 5 s, online every 60 s)
+ * next to 1,000 offline ones (online every 60 s). Beyond that every character is polled a little
+ * less often, maps someone has open first. See docs/scaling.md for the arithmetic.
  */
-export const ESI_REQUESTS_PER_SECOND = 300;
+export const ESI_REQUESTS_PER_SECOND = 500;
 
 const { version } = JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')) as {
   version: string;

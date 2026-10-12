@@ -128,23 +128,41 @@ export class TrackingPoller {
     // Viewed maps first, then the longest overdue.
     due.sort((a, b) => Number(b.viewed) - Number(a.viewed) || a.dueAt - b.dueAt);
 
-    const started: Array<Promise<void>> = [];
-    for (const { id, entries } of due) {
-      if (this.inflight.size >= this.options.concurrency) break;
-      const cost = this.requestsFor(this.stateOf(id, now), now);
-      if (this.deps.budget && !this.deps.budget.tryTake(cost)) break;
-      this.inflight.add(id);
-      started.push(
-        this.poll(id, entries, now)
+    // Workers take the next due character as soon as they finish one, so throughput follows
+    // ESI's answer times, not the tick rate; together with earlier ticks' workers they never
+    // poll more than `concurrency` characters at once.
+    let stop = false;
+    const take = (): (typeof due)[number] | null => {
+      while (!stop && due.length > 0) {
+        const next = due.shift()!;
+        if (this.inflight.has(next.id)) continue;
+        // A later tick's worker may have polled it meanwhile.
+        const state = this.stateOf(next.id, now);
+        if (Math.min(state.nextLocationAt, state.nextOnlineAt) > this.deps.clock.now()) continue;
+        const cost = this.requestsFor(this.stateOf(next.id, now), now);
+        if (this.deps.budget && !this.deps.budget.tryTake(cost)) {
+          stop = true;
+          return null;
+        }
+        this.inflight.add(next.id);
+        return next;
+      }
+      return null;
+    };
+    const worker = async () => {
+      for (let next = take(); next; next = take()) {
+        const { id, entries } = next;
+        await this.poll(id, entries, now)
           .catch((error: unknown) => {
             const state = this.stateOf(id, now);
             state.nextLocationAt = state.nextOnlineAt = now + POLL_INTERVALS.noToken;
             this.deps.onError?.(error, id);
           })
-          .finally(() => this.inflight.delete(id)),
-      );
-    }
-    await Promise.all(started);
+          .finally(() => this.inflight.delete(id));
+      }
+    };
+    const workers = Math.min(Math.max(0, this.options.concurrency - this.inflight.size), due.length);
+    await Promise.all(Array.from({ length: workers }, worker));
   }
 
   /** Map access changed somewhere: check owners and the tracking accounts' roles again on the next tick. */

@@ -291,14 +291,22 @@ describe('TrackingPoller', () => {
       await poller.tick();
       expect(poller.polling).toBe(1);
       expect(release).toHaveLength(1);
+      expect(esi.count('online')).toBe(0);
+      // Done with the first, the same worker goes on with the next one due.
+      release.shift()!();
+      await vi.waitFor(() => expect(release).toHaveLength(1));
+      expect(poller.polling).toBe(1);
       release.shift()!();
       await first;
-      const second = poller.tick();
-      await vi.waitFor(() => expect(release).toHaveLength(1));
-      release.shift()!();
-      await second;
       expect(poller.polling).toBe(0);
       expect(esi.count('online')).toBe(2);
+    });
+
+    it('gets through every due character in one tick, however low the concurrency', async () => {
+      poller = make({}, { concurrency: 1 });
+      await poller.tick();
+      expect(esi.count('online')).toBe(2);
+      expect(esi.count('location')).toBe(2);
     });
 
     it('does not touch the database when ESI says nothing changed', async () => {
