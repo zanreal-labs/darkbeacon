@@ -38,6 +38,8 @@ interface ConsumerTables extends EventTables {
 }
 
 const PAGE = 200;
+/** Events a consumer handles in one transaction (one at a time again when a batch fails). */
+const BATCH = 25;
 /** Catch-up interval besides the bus wake-ups (missed wake-ups, retries after failures). */
 const POLL_MS = 5_000;
 /** An event a consumer keeps failing on is skipped after this many tries, so it cannot block the stream. */
@@ -45,7 +47,10 @@ const MAX_TRIES = 5;
 
 /**
  * Runs the registered consumers over `event_log`, the outbox: modules register in
- * `onModuleInit`, consumers start once the application is up. The EventBus only wakes them.
+ * `onModuleInit`, consumers start once the application is up. The EventBus only wakes them:
+ * an event wakes the consumers that want it, for its stream only; every POLL_MS all consumers
+ * catch up on every stream (missed wake-ups, retries). Events are handled in small batches, one
+ * transaction each.
  */
 @Injectable()
 export class EventConsumers implements OnApplicationBootstrap, OnModuleDestroy {
@@ -55,7 +60,10 @@ export class EventConsumers implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly failures = new Map<string, number>();
   private readonly logger = new Logger('EventConsumers');
   private running: Promise<void> | null = null;
+  /** A full catch-up is asked for. */
   private again = false;
+  /** Streams with new events per consumer that wants them, since the last run. */
+  private pending = new Map<EventConsumer, Set<string>>();
   private stopped = true;
   private timer: NodeJS.Timeout | undefined;
   private unsubscribe: (() => void) | undefined;
@@ -97,7 +105,7 @@ export class EventConsumers implements OnApplicationBootstrap, OnModuleDestroy {
       this.ready.add(consumer);
     }
     this.stopped = false;
-    this.unsubscribe = this.bus.subscribe(() => void this.wake());
+    this.unsubscribe = this.bus.subscribe((event) => void this.notify(event));
     this.timer = setInterval(() => void this.wake(), POLL_MS).unref();
     await this.wake();
   }
@@ -111,22 +119,44 @@ export class EventConsumers implements OnApplicationBootstrap, OnModuleDestroy {
 
   /** Lets every consumer catch up; resolves once they have (calls during a run join it). */
   wake(): Promise<void> {
-    if (this.stopped) return Promise.resolve();
-    if (this.running) {
-      this.again = true;
-      return this.running;
+    this.again = true;
+    return this.run();
+  }
+
+  /** A new event: the consumers that want it catch up on its stream. */
+  private notify(event: DomainEvent): Promise<void> {
+    const kind = event.stream === INSTANCE_STREAM ? INSTANCE_STREAM : event.stream.split(':')[0];
+    let any = false;
+    for (const consumer of this.ready) {
+      if (!consumer.streams.includes(kind!)) continue;
+      if (!matchesFilter(event, consumer.types ? { types: consumer.types } : undefined)) continue;
+      let streams = this.pending.get(consumer);
+      if (!streams) this.pending.set(consumer, (streams = new Set()));
+      streams.add(event.stream);
+      any = true;
     }
+    return any ? this.run() : Promise.resolve();
+  }
+
+  private run(): Promise<void> {
+    if (this.stopped) return Promise.resolve();
+    if (this.running) return this.running;
     this.running = (async () => {
-      do {
+      while (!this.stopped && (this.again || this.pending.size > 0)) {
+        const full = this.again;
+        const pending = this.pending;
         this.again = false;
+        this.pending = new Map();
         for (const consumer of [...this.consumers]) {
           if (this.stopped) return;
           if (!this.ready.has(consumer)) continue;
-          await this.drain(consumer).catch((error: unknown) =>
-            this.logger.error(`${consumer.name}: ${message(error)}`),
+          const streams = full ? null : pending.get(consumer);
+          if (!full && !streams) continue;
+          await (streams ? this.drainStreams(consumer, streams) : this.drain(consumer)).catch(
+            (error: unknown) => this.logger.error(`${consumer.name}: ${message(error)}`),
           );
         }
-      } while (this.again && !this.stopped);
+      }
     })().finally(() => (this.running = null));
     return this.running;
   }
@@ -190,6 +220,23 @@ export class EventConsumers implements OnApplicationBootstrap, OnModuleDestroy {
     }
   }
 
+  /** Catches up on these streams only (they just got events this consumer wants). */
+  private async drainStreams(consumer: EventConsumer, streams: ReadonlySet<string>): Promise<void> {
+    const rows = await this.db
+      .selectFrom('event_stream')
+      .leftJoin('event_consumer_offset as o', (join) =>
+        join.onRef('o.stream', '=', 'event_stream.stream').on('o.consumer', '=', consumer.name),
+      )
+      .select(['event_stream.stream', 'event_stream.head_seq', 'o.seq'])
+      .where('event_stream.stream', 'in', [...streams])
+      .execute();
+    for (const { stream, head_seq, seq } of rows) {
+      if (this.stopped) return;
+      if (Number(head_seq) > Number(seq ?? 0))
+        await this.drainStream(consumer, stream, Number(seq ?? 0), Number(head_seq));
+    }
+  }
+
   private async drainStream(
     consumer: EventConsumer,
     stream: string,
@@ -204,16 +251,53 @@ export class EventConsumers implements OnApplicationBootstrap, OnModuleDestroy {
         await this.save(consumer, stream, head);
         return;
       }
-      for (const event of events) {
+      const wanted = events.filter((event) =>
+        matchesFilter(event, consumer.types ? { types: consumer.types } : undefined),
+      );
+      for (let i = 0; i < wanted.length; i += BATCH) {
         if (this.stopped) return;
-        const wanted = matchesFilter(event, consumer.types ? { types: consumer.types } : undefined);
-        // A failed event is retried on the next wake-up; the rest of the stream waits for it.
-        if (wanted && !(await this.handle(consumer, event))) return;
+        const batch = wanted.slice(i, i + BATCH);
+        if (await this.handleBatch(consumer, batch)) continue;
+        // Something in the batch failed: one at a time, so only the failing event waits.
+        for (const event of batch) {
+          if (this.stopped) return;
+          // A failed event is retried on the next wake-up; the rest of the stream waits for it.
+          if (!(await this.handle(consumer, event))) return;
+        }
       }
       offset = events.at(-1)!.seq;
       // Moves past the events this consumer ignores (handled ones saved their own seq).
       await this.save(consumer, stream, offset);
     }
+  }
+
+  /**
+   * Handles several events in one transaction that also moves the cursor past the last one.
+   * False when any of them failed; nothing of the batch is kept then.
+   */
+  private async handleBatch(consumer: EventConsumer, events: readonly DomainEvent[]): Promise<boolean> {
+    if (events.length < 2) return false;
+    let after: Array<() => Promise<void>>;
+    try {
+      after = await this.database.transaction(async () => {
+        const work: Array<() => Promise<void>> = [];
+        for (const event of events) {
+          const next = await consumer.handle(event);
+          if (next) work.push(next);
+        }
+        await this.save(consumer, events.at(-1)!.stream, events.at(-1)!.seq);
+        return work;
+      });
+    } catch {
+      return false;
+    }
+    for (const event of events) this.failures.delete(`${consumer.name}:${event.id}`);
+    for (const work of after) {
+      work().catch((error: unknown) =>
+        this.logger.error(`${consumer.name} after a batch: ${message(error)}`),
+      );
+    }
+    return true;
   }
 
   /** Handles one event and moves the cursor in the same transaction. False: retry later. */

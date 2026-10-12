@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { ManualClock, newEvent, type DomainEvent } from '@darkbeacon/core';
 import type { Database } from '@darkbeacon/db';
 import { describeEachDialect } from '@darkbeacon/db/testing';
@@ -80,5 +80,53 @@ describeEachDialect('EventConsumers', (t) => {
     await append('map:a', 'connection.removed');
     await runner.wake();
     expect(await log.headSeq('map:side-effect')).toBe(2);
+  });
+
+  it('handles events in batches, and one at a time around a failing one', async () => {
+    const { log, append, start } = setup(t.db);
+    let calls = 0;
+    const batched = recorder('batched', {
+      types: ['connection.*'],
+      handle: async (event) => {
+        calls++;
+        await append('map:side-effect');
+        if (event.seq === 10) throw new Error('nope');
+      },
+    });
+    const runner = await start(batched.consumer);
+    // Committed in one transaction, so the bus wakes the consumer once for all of them.
+    await log.append(
+      Array.from({ length: 30 }, () =>
+        newEvent({
+          stream: 'map:a',
+          type: 'connection.added',
+          actor: { kind: 'system', id: 't' },
+          data: {},
+          occurredAt: 1,
+        }),
+      ),
+    );
+    await runner.wake();
+    // The first batch (1-25) failed and rolled back; 1-9 then committed one by one, 10 waits.
+    expect(await log.headSeq('map:side-effect')).toBe(9);
+    for (let i = 0; i < 5; i++) await runner.wake();
+    // 10 was skipped after five tries; 11-30 went through.
+    expect(await log.headSeq('map:side-effect')).toBe(29);
+    const before = calls;
+    await runner.wake();
+    expect(calls).toBe(before);
+  });
+
+  it('wakes only the consumers that want an event', async () => {
+    const { append, start } = setup(t.db);
+    const instance = recorder('instance-only', { streams: ['instance'] });
+    const connections = recorder('connections', { types: ['connection.*'] });
+    await start(instance.consumer, connections.consumer);
+    await append('map:a', 'connection.added');
+    await append('instance', 'access.role_changed');
+    await vi.waitFor(() => {
+      expect(instance.seen).toEqual(['instance#1']);
+      expect(connections.seen).toEqual(['map:a#1']);
+    });
   });
 });
