@@ -99,7 +99,8 @@ export function useSystemsClipboard(options: Options) {
       ].filter(Boolean);
       toast({
         title: result.added.length > 0 ? `Pasted ${n}` : 'Nothing new to paste',
-        description: notes.length > 0 ? `${notes.join('; ')}.` : undefined,
+        description:
+          notes.length > 0 ? `${notes.join('; ').replace(/^./, (c) => c.toUpperCase())}.` : undefined,
         tone: result.added.length > 0 ? 'success' : 'info',
         duration: 3000,
       });

@@ -66,6 +66,7 @@ import { track } from '../lib/telemetry';
 import { useMapSettings } from '../lib/useMapSettings';
 import { BookmarkLabelSettings } from '../map/BookmarkSettings';
 import { CanvasSettings } from '../map/canvas/CanvasSettings';
+import { ClipboardRoles } from '../map/clipboard/ClipboardRoles';
 import { MapHistory } from '../map/history/MapHistory';
 import { BridgesSettings, RoutesSettings } from '../map/routes/RoutingSettings';
 import { PluginSlot } from '../plugins/PluginSlot';
@@ -251,6 +252,7 @@ const SECTIONS: readonly Section[] = [
     render: (map, can) => (
       <Pane>
         <MapTransferSection map={map} can={can} />
+        <ClipboardRoles map={map} />
       </Pane>
     ),
   },
