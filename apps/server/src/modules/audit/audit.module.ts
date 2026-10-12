@@ -4,14 +4,18 @@ import { isInstanceAdmin, type Clock, type MapAccess } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
 import {
   BookmarkNumberUseCases,
+  CommentUseCases,
   ConnectionUseCases,
   MapUseCases,
   SignatureUseCases,
+  StructureUseCases,
   SystemUseCases,
   type MappingPorts,
 } from '@darkbeacon/mapping';
 import { KyselyAuditStore } from '../../adapters/audit/kysely-audit-store.js';
 import { MappingReverter } from '../../adapters/audit/mapping-reverter.js';
+import { IntelReverter } from '../../adapters/audit/intel-reverter.js';
+import { KyselyStructureRepository } from '../../adapters/mapping/kysely-intel.js';
 import { AsyncAuditScope } from '../../platform/audit.js';
 import { CLOCK, MAP_ACCESS } from '../../platform/tokens.js';
 import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
@@ -48,6 +52,9 @@ export class AuditModule implements OnModuleInit {
     @Inject(ConnectionUseCases) private readonly connections: ConnectionUseCases,
     @Inject(SignatureUseCases) private readonly signatures: SignatureUseCases,
     @Inject(BookmarkNumberUseCases) private readonly numbers: BookmarkNumberUseCases,
+    @Inject(CommentUseCases) private readonly comments: CommentUseCases,
+    @Inject(StructureUseCases) private readonly structures: StructureUseCases,
+    @Inject(Database) private readonly database: Database,
   ) {}
 
   onModuleInit(): void {
@@ -59,6 +66,10 @@ export class AuditModule implements OnModuleInit {
         signatures: this.signatures,
         numbers: this.numbers,
       }),
+    );
+    const structures = new KyselyStructureRepository(this.database);
+    this.trail.registerReverter(
+      new IntelReverter(this.comments, this.structures, (mapId, id) => structures.findById(mapId, id)),
     );
     // The instance audit can be followed live by instance admins only.
     this.realtime.registerStream('audit', {
