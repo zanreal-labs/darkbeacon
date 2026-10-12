@@ -50,6 +50,9 @@ export class FakeNetwork {
     'esi-location.read_ship_type.v1',
     'esi-location.read_online.v1',
     'esi-search.search_structures.v1',
+    'esi-characters.read_contacts.v1',
+    'esi-corporations.read_contacts.v1',
+    'esi-alliances.read_contacts.v1',
   ];
   /** What ESI knows by id: names, categories, tickers (for search, /universe/names and /ids). */
   readonly esiEntities = new Map<number, { name: string; category: string; ticker?: string }>();
