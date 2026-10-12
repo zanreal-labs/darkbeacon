@@ -31,8 +31,12 @@ describe('Wanderer export files', () => {
       linkedTo: SYS.c2,
       fields: { type: 'O477' },
     });
-    expect(plan.systems.find((s) => s.solarSystemId === SYS.c2)?.fields.description).toContain(
-      'Comment (Wanderer)\nEmpty C2',
+    // Comments come over as comments, not as notes.
+    expect(plan.comments).toEqual([
+      expect.objectContaining({ solarSystemId: SYS.c2, text: 'Empty C2', author: null }),
+    ]);
+    expect(plan.systems.find((s) => s.solarSystemId === SYS.c2)?.fields.description).not.toContain(
+      'Empty C2',
     );
     // The file's own label list is the map's Labels; the system's tag a Tag.
     expect(plan.systemLabels.map((l) => [l.id, l.name])).toEqual([['x1', 'Exit']]);

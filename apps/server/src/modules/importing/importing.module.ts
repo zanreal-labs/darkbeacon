@@ -21,6 +21,8 @@ import {
 } from '@darkbeacon/importing';
 import {
   ChainImportUseCases,
+  CommentUseCases,
+  StructureUseCases,
   ConnectionUseCases,
   MapUseCases,
   SignatureUseCases,
@@ -185,6 +187,8 @@ export class ImportingRuntime implements OnModuleInit, OnApplicationBootstrap, O
         uow: UnitOfWork,
         clock: Clock,
         audit: AsyncAuditScope,
+        comments: CommentUseCases,
+        structures: StructureUseCases,
       ): ImportingDeps => {
         const box = new SecretBox(config.secretKey, 'wanderer-import');
         const deps: ImportingDeps = {
@@ -195,7 +199,7 @@ export class ImportingRuntime implements OnModuleInit, OnApplicationBootstrap, O
             ),
           },
           target: new MappingChainTarget(
-            { maps, systems, connections, signatures, imports },
+            { maps, systems, connections, signatures, imports, comments, structures },
             access,
             hubs,
             routes,
@@ -240,6 +244,8 @@ export class ImportingRuntime implements OnModuleInit, OnApplicationBootstrap, O
         UNIT_OF_WORK,
         CLOCK,
         AsyncAuditScope,
+        CommentUseCases,
+        StructureUseCases,
       ],
     },
     {

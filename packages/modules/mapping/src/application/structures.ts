@@ -182,6 +182,51 @@ export class StructureUseCases extends MappingUseCases {
     });
   }
 
+  /**
+   * A structure from another mapper (an import), with who added it and when. `existingId`: the one
+   * an earlier import wrote; when it is still there it takes these fields, else it is added again.
+   */
+  async importStructure(
+    actor: Actor | null,
+    mapId: string,
+    input: Omit<Structure, 'id' | 'mapId' | 'createdBy' | 'updatedBy' | 'createdAt' | 'updatedAt'> & {
+      author: AuthorDto | null;
+      createdAt: number | null;
+      changedAt: number | null;
+    },
+    existingId: string | null,
+  ): Promise<{ structure: Structure; outcome: 'created' | 'updated' | 'unchanged' }> {
+    const who = await this.authorizeEdit(actor, mapId);
+    const { author, createdAt, changedAt, ...fields } = input;
+    const wanted = { ...fields, endsAt: timed(fields.status, fields.endsAt) };
+    return this.write(who, mapId, async (events) => {
+      await this.visibleSystem(mapId, input.solarSystemId);
+      const existing = existingId ? await this.ports.structures.findById(mapId, existingId) : null;
+      if (existing) {
+        const { solarSystemId: _s, typeId: _t, typeName: _n, ...patch } = wanted;
+        if (!changes(existing, patch)) return { structure: existing, outcome: 'unchanged' as const };
+        const next: Structure = { ...existing, ...patch, updatedAt: changedAt ?? this.ports.clock.now() };
+        await this.ports.structures.update(next);
+        events.add('structure.updated', next, existing);
+        return { structure: next, outcome: 'updated' as const };
+      }
+      await this.roomFor(mapId, input.solarSystemId, 1);
+      const now = this.ports.clock.now();
+      const structure: Structure = {
+        id: newId(),
+        mapId,
+        ...wanted,
+        createdBy: author,
+        updatedBy: author,
+        createdAt: createdAt ?? now,
+        updatedAt: changedAt ?? createdAt ?? now,
+      };
+      await this.ports.structures.insert(structure);
+      events.add('structure.added', structure);
+      return { structure, outcome: 'created' as const };
+    });
+  }
+
   /** Puts a removed structure back as it was (the revert of a removal). */
   async restore(actor: Actor | null, mapId: string, structure: Structure): Promise<Structure> {
     const who = await this.authorizeEdit(actor, mapId);

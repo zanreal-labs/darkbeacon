@@ -50,6 +50,8 @@ export const KINDS = [
   'connections',
   'signatures',
   'passages',
+  'structures',
+  'comments',
   'access',
   'settings',
 ] as const;
@@ -209,6 +211,18 @@ export function assess(
   outcome.passages!.skipped += plan.passages.filter(
     (p) => !linkedPairs.has(pairKey(p.source, p.target)),
   ).length;
+
+  // Structures and comments: new ones are added; ones imported before change only when Wanderer did.
+  for (const planned of plan.structures) {
+    const link = links.get('structure', planned.key);
+    if (!link) outcome.structures!.created++;
+    else if (JSON.stringify(link.written) !== JSON.stringify(planned.fields)) outcome.structures!.updated++;
+    else outcome.structures!.unchanged++;
+  }
+  for (const planned of plan.comments) {
+    if (links.get('comment', planned.key)) outcome.comments!.unchanged++;
+    else outcome.comments!.created++;
+  }
 
   if (options.includeAccess && state.rules) {
     const rules = new Map(state.rules.map((r) => [`${r.subjectKind}:${r.subjectId}`, r]));

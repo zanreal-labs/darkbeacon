@@ -1,5 +1,7 @@
 import {
+  COMMENT_MAX_LENGTH,
   MAP_DESCRIPTION_MAX,
+  TIMED_STRUCTURE_STATUSES,
   type Bubbled,
   type ConnectionType,
   type ImportCountsDto,
@@ -11,6 +13,7 @@ import {
   type ShipSize,
   type SignatureGroup,
   type SignatureKind,
+  type StructureStatus,
   type SystemStatus,
   type TimeStatus,
 } from '@darkbeacon/shared';
@@ -18,14 +21,7 @@ import { planAccess, type PlannedAccessRule } from './acl.js';
 import { spreadLayout } from './layout.js';
 import { ReportBuilder } from './report.js';
 import { planWebhooks, type PlannedWebhook } from './webhooks.js';
-import type {
-  WandererComment,
-  WandererConnection,
-  WandererMapDump,
-  WandererSignature,
-  WandererStructure,
-  WandererSystem,
-} from './wanderer.js';
+import type { WandererConnection, WandererMapDump, WandererSignature, WandererSystem } from './wanderer.js';
 
 // ---- the plan: Darkbeacon-shaped data, keyed by stable external ids ------------------------------
 
@@ -138,6 +134,46 @@ export interface PlannedSignature {
   extra: Record<string, unknown> | null;
 }
 
+/** Who wrote a comment or added a structure in Wanderer. */
+export interface PlannedAuthor {
+  characterId: number | null;
+  name: string;
+}
+
+/** A comment on a system, as Wanderer kept it (who and when included). */
+export interface PlannedComment {
+  /** Wanderer's id, or `<system>:<time>:<text hash>` for sources without one. */
+  key: string;
+  solarSystemId: number;
+  /** For reports: the system's name. */
+  name: string;
+  text: string;
+  author: PlannedAuthor | null;
+  createdAt: number | null;
+}
+
+export interface StructureFields {
+  typeId: number | null;
+  typeName: string;
+  name: string;
+  owner: { id: number | null; name: string; ticker: string | null } | null;
+  status: StructureStatus;
+  endsAt: number | null;
+  notes: string;
+}
+
+/** A structure in a system, with its owner and timer. */
+export interface PlannedStructure {
+  /** Wanderer's id, or `<system>:<type>:<name>` for sources without one. */
+  key: string;
+  solarSystemId: number;
+  name: string;
+  fields: StructureFields;
+  author: PlannedAuthor | null;
+  createdAt: number | null;
+  remoteUpdatedAt: number | null;
+}
+
 export interface ImportPlan {
   mapName: string;
   mapSlug: string | null;
@@ -149,6 +185,9 @@ export interface ImportPlan {
   connections: PlannedConnection[];
   signatures: PlannedSignature[];
   passages: PlannedPassage[];
+  /** Comments and structures, as Darkbeacon comments and structures (not notes). */
+  comments: PlannedComment[];
+  structures: PlannedStructure[];
   access: PlannedAccessRule[];
   hubs: number[];
   /** Auto-mapping scopes from the Wanderer map scope; null when unknown. */
@@ -330,8 +369,6 @@ export function translate(dump: WandererMapDump, context: TranslateContext): Tra
     }
     kept.push(system);
   }
-  const structures = groupBySystem(dump.structures, systemsByUuid);
-  const comments = groupBySystem(dump.comments, systemsByUuid);
   const placed = kept.filter((s) => s.position);
   const layout = context.layoutScale
     ? { positions: placed.map((s) => scaled(s.position!, context.layoutScale!)), scale: context.layoutScale }
@@ -371,14 +408,7 @@ export function translate(dump: WandererMapDump, context: TranslateContext): Tra
       position = { x: 0, y: 360 * 3 + unplaced++ * 150 };
       report.approximated('system', 'No position', 'Placed below the chain', name);
     }
-    const description = composeDescription(
-      system,
-      structures.get(system.solarSystemId) ?? [],
-      comments.get(system.solarSystemId) ?? [],
-      report,
-      name,
-      (eveId) => context.characterName?.(eveId) ?? null,
-    );
+    const description = cut(system.description, LIMITS.description, 'system', 'Notes', report, name) ?? '';
     const fields: SystemFields = {
       position,
       customName: cut(system.customName, LIMITS.customName, 'system', 'Name', report, name),
@@ -531,21 +561,89 @@ export function translate(dump: WandererMapDump, context: TranslateContext): Tra
     );
   }
 
-  // Structures and comments that found no system ------------------------------------------------
+  // Structures and comments -----------------------------------------------------------------------
+  const authorOf = (eveId: string | null, knownName: string | null): PlannedAuthor | null => {
+    const characterId = eveId && /^\d+$/.test(eveId) ? Number(eveId) : null;
+    const name = knownName ?? (eveId ? (context.characterName?.(eveId) ?? null) : null);
+    return name || characterId ? { characterId, name: name ?? `Character ${eveId}` } : null;
+  };
+  const plannedStructures: PlannedStructure[] = [];
+  const structureKeys = new Set<string>();
   for (const s of dump.structures) {
     const id = s.solarSystemId ?? (s.systemUuid ? systemsByUuid.get(s.systemUuid) : undefined);
-    if (!id || !onMap.has(id))
+    if (!id || !onMap.has(id)) {
       report.dropped(
         'structure',
         'Structure of a system that is not imported',
         'Its system is not on the map',
         s.name ?? undefined,
       );
+      continue;
+    }
+    const systemName = nameOf(id);
+    const typeName = s.type?.trim() || 'Structure';
+    const structureName = cut(s.name, 100, 'structure', 'Name', report, systemName) ?? typeName;
+    const key = s.id ?? `${id}:${s.typeId ?? typeName}:${structureName}`;
+    if (structureKeys.has(key)) continue;
+    structureKeys.add(key);
+    const status = structureStatus(s.status, report, systemName);
+    const owner =
+      s.ownerName || s.ownerTicker
+        ? {
+            id: s.ownerId,
+            name: (s.ownerName ?? s.ownerTicker ?? '').slice(0, 100),
+            ticker: s.ownerTicker?.slice(0, 10) ?? null,
+          }
+        : null;
+    if (s.endTime && !TIMED_STRUCTURE_STATUSES.includes(status))
+      report.dropped(
+        'structure',
+        'Timer of a structure that is not anchoring or reinforced',
+        'Only those run against a timer',
+        systemName,
+      );
+    plannedStructures.push({
+      key,
+      solarSystemId: id,
+      name: systemName,
+      fields: {
+        typeId: s.typeId && /^\d+$/.test(s.typeId) ? Number(s.typeId) : null,
+        typeName: typeName.slice(0, 100),
+        name: structureName,
+        owner,
+        status,
+        endsAt: TIMED_STRUCTURE_STATUSES.includes(status) ? s.endTime : null,
+        notes: cut(s.notes, 2000, 'structure', 'Notes', report, systemName) ?? '',
+      },
+      author: authorOf(s.characterEveId, null),
+      createdAt: s.insertedAt ?? s.updatedAt,
+      remoteUpdatedAt: s.updatedAt ?? dump.readAt,
+    });
+    report.mapped('structure', 'Structure, with its owner and timer', systemName);
   }
+  const plannedComments: PlannedComment[] = [];
+  const commentKeys = new Set<string>();
   for (const c of dump.comments) {
     const id = c.solarSystemId ?? (c.systemUuid ? systemsByUuid.get(c.systemUuid) : undefined);
-    if (!id || !onMap.has(id))
+    if (!id || !onMap.has(id)) {
       report.dropped('comment', 'Comment on a system that is not imported', 'Its system is not on the map');
+      continue;
+    }
+    const systemName = nameOf(id);
+    const text = cut(c.text, COMMENT_MAX_LENGTH, 'comment', 'Comment', report, systemName);
+    if (!text) continue;
+    const key = c.id ?? `${id}:${c.insertedAt ?? 0}:${hashText(c.text)}`;
+    if (commentKeys.has(key)) continue;
+    commentKeys.add(key);
+    plannedComments.push({
+      key,
+      solarSystemId: id,
+      name: systemName,
+      text,
+      author: authorOf(c.authorEveId, c.authorName),
+      createdAt: c.insertedAt,
+    });
+    report.mapped('comment', 'Comment, with who wrote it and when', systemName);
   }
 
   // Access, settings ---------------------------------------------------------------------------
@@ -583,6 +681,8 @@ export function translate(dump: WandererMapDump, context: TranslateContext): Tra
     connections,
     signatures,
     passages,
+    comments: plannedComments,
+    structures: plannedStructures,
     access,
     hubs,
     scopes,
@@ -596,8 +696,8 @@ export function translate(dump: WandererMapDump, context: TranslateContext): Tra
     connections: connections.length,
     signatures: signatures.length,
     passages: passages.length,
-    structures: dump.structures.length,
-    comments: dump.comments.length,
+    structures: plannedStructures.length,
+    comments: plannedComments.length,
     labels: plan.systemLabels.length,
     tags: plan.labels.length,
     accessRules: access.length,
@@ -636,80 +736,6 @@ function systemStatus(
   }
   if (found.approx) report.approximated('system', found.approx, 'Darkbeacon has fewer statuses', name);
   return found;
-}
-
-/**
- * Notes, then one titled block per structure and per comment Wanderer kept about the system
- * (who added it and when), as one text that reads well on its own.
- */
-function composeDescription(
-  system: WandererSystem,
-  structures: WandererStructure[],
-  comments: WandererComment[],
-  report: ReportBuilder,
-  name: string,
-  characterName: (eveId: string) => string | null,
-): string {
-  const parts: string[] = [];
-  if (system.description) parts.push(system.description.trim());
-  const byTime = <T extends { insertedAt: number | null }>(list: T[]) =>
-    [...list].sort((a, b) => (a.insertedAt ?? 0) - (b.insertedAt ?? 0));
-  for (const structure of byTime(structures)) {
-    parts.push(structureBlock(structure, characterName));
-    report.mapped('structure', 'Structure, as a titled block in the system notes', name);
-  }
-  for (const comment of byTime(comments)) {
-    parts.push(commentBlock(comment, characterName));
-    report.mapped('comment', 'Comment, as a titled block in the system notes', name);
-  }
-  const text = parts.join('\n\n');
-  if (text.length > LIMITS.description) {
-    report.approximated(
-      'system',
-      'Notes cut to 10 000 characters',
-      'Darkbeacon keeps up to 10 000 characters of notes',
-      name,
-    );
-    return `${text.slice(0, LIMITS.description - 1)}…`;
-  }
-  return text;
-}
-
-/** `Added by Jane, 2026-10-11 (Wanderer)`, as much of it as is known. */
-function byline(
-  verb: string,
-  eveId: string | null,
-  knownName: string | null,
-  at: number | null,
-  characterName: (eveId: string) => string | null,
-): string {
-  const who = knownName ?? (eveId ? characterName(eveId) : null);
-  const parts = [who ? `${verb} by ${who}` : verb, at ? moment(at) : null].filter(Boolean);
-  return `${parts.join(', ')} (Wanderer)`;
-}
-
-function structureBlock(s: WandererStructure, characterName: (eveId: string) => string | null): string {
-  const title = [s.type ?? 'Structure', s.name ? `“${s.name}”` : null].filter(Boolean).join(' ');
-  const owner = s.ownerName
-    ? `${s.ownerName}${s.ownerTicker ? ` [${s.ownerTicker}]` : ''}`
-    : s.ownerTicker
-      ? `[${s.ownerTicker}]`
-      : null;
-  const lines = [`Structure: ${title}`];
-  if (owner) lines.push(`Owner: ${owner}`);
-  if (s.status || s.endTime)
-    lines.push(
-      `Status: ${[s.status, s.endTime ? `timer ends ${moment(s.endTime)}` : null].filter(Boolean).join(', ')}`,
-    );
-  if (s.notes) lines.push(`Notes: ${s.notes.trim()}`);
-  lines.push(byline('Added', s.characterEveId, null, s.insertedAt ?? s.updatedAt, characterName));
-  return lines.join('\n');
-}
-
-function commentBlock(c: WandererComment, characterName: (eveId: string) => string | null): string {
-  return [byline('Comment', c.authorEveId, c.authorName, c.insertedAt, characterName), c.text.trim()].join(
-    '\n',
-  );
 }
 
 function translateConnection(
@@ -1004,19 +1030,29 @@ function normalLabelId(id: string): string {
   return /^l[abc123]$/.test(id) ? id.slice(1) : id;
 }
 
-function groupBySystem<T extends { solarSystemId: number | null; systemUuid: string | null }>(
-  items: readonly T[],
-  byUuid: Map<string, number>,
-): Map<number, T[]> {
-  const out = new Map<number, T[]>();
-  for (const item of items) {
-    const id = item.solarSystemId ?? (item.systemUuid ? byUuid.get(item.systemUuid) : undefined);
-    if (!id) continue;
-    let list = out.get(id);
-    if (!list) out.set(id, (list = []));
-    list.push(item);
-  }
-  return out;
+const STRUCTURE_STATUSES: Record<string, StructureStatus> = {
+  powered: 'powered',
+  online: 'powered',
+  anchoring: 'anchoring',
+  unanchoring: 'unanchoring',
+  lowpower: 'lowPower',
+  abandoned: 'abandoned',
+  reinforced: 'reinforced',
+};
+
+function structureStatus(value: string | null, report: ReportBuilder, name: string): StructureStatus {
+  if (!value) return 'powered';
+  const found = STRUCTURE_STATUSES[value.toLowerCase().replace(/[\s_-]+/g, '')];
+  if (found) return found;
+  report.approximated('structure', `Status "${value}" became Powered`, 'Darkbeacon has no such status', name);
+  return 'powered';
+}
+
+/** A short stable hash of a text, for keys of rows the source gives no id. */
+function hashText(text: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
+  return (h >>> 0).toString(36);
 }
 
 function cut(
@@ -1060,4 +1096,3 @@ function parseInfo(text: string): unknown {
 }
 
 const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-const moment = (ms: number) => `${new Date(ms).toISOString().slice(0, 16).replace('T', ' ')} UTC`;

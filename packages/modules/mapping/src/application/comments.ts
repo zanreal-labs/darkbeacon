@@ -1,5 +1,5 @@
 import { ConflictError, NotFoundError, newId, type Actor } from '@darkbeacon/core';
-import type { AddCommentRequest } from '@darkbeacon/shared';
+import { COMMENT_MAX_LENGTH, type AddCommentRequest } from '@darkbeacon/shared';
 import type { Comment } from '../domain/map.js';
 import type { CommentRepository } from '../ports/index.js';
 import { MappingUseCases, type MappingPorts } from './base.js';
@@ -71,6 +71,36 @@ export class CommentUseCases extends MappingUseCases {
       });
       await this.ports.comments.delete(mapId, commentId);
       events.add('comment.removed', { id: comment.id, solarSystemId: comment.solarSystemId }, comment);
+    });
+  }
+
+  /**
+   * A comment from another mapper (an import): written as its author wrote it and when. With
+   * `existingId` (what an earlier import wrote) still there, nothing changes; comments are not
+   * edited, and one removed here comes back only if the import runs again.
+   */
+  async importComment(
+    actor: Actor | null,
+    mapId: string,
+    comment: Pick<Comment, 'solarSystemId' | 'text' | 'author'> & { createdAt: number | null },
+    existingId: string | null,
+  ): Promise<{ comment: Comment; outcome: 'created' | 'unchanged' }> {
+    const who = await this.authorizeEdit(actor, mapId);
+    return this.write(who, mapId, async (events) => {
+      const existing = existingId ? await this.ports.comments.findById(mapId, existingId) : null;
+      if (existing) return { comment: existing, outcome: 'unchanged' as const };
+      await this.visibleSystem(mapId, comment.solarSystemId);
+      const created: Comment = {
+        id: newId(),
+        mapId,
+        solarSystemId: comment.solarSystemId,
+        text: comment.text.trim().slice(0, COMMENT_MAX_LENGTH),
+        author: comment.author,
+        createdAt: comment.createdAt ?? this.ports.clock.now(),
+      };
+      await this.ports.comments.insert(created);
+      events.add('comment.added', created);
+      return { comment: created, outcome: 'created' as const };
     });
   }
 

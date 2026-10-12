@@ -66,21 +66,25 @@ describe('translating a Wanderer map', () => {
     ]);
     expect(home.createdAt).toBe(Date.parse('2026-10-10T12:00:00Z'));
     expect(home.remoteUpdatedAt).toBe(Date.parse('2026-10-12T08:30:15.123Z'));
-    // Structures and comments become part of the notes.
-    expect(home.fields.description).toContain('Our home. Rolling on Tuesdays.');
-    // One titled block per structure and comment, with who and when.
-    expect(home.fields.description).toContain(
-      [
-        'Structure: Fortizar “Home Fort”',
-        'Owner: Wormhole Rescue Ltd [RESQ]',
-        'Status: online',
-        'Notes: Fuel until November',
-        'Added by CCP Bartender, 2026-10-10 12:00 UTC (Wanderer)',
-      ].join('\n'),
-    );
-    expect(home.fields.description).toContain(
-      'Comment by Scout Alt, 2026-10-11 19:00 UTC (Wanderer)\nNeut Loki on d-scan',
-    );
+    // The notes stay the notes; structures and comments are their own objects, with who and when.
+    expect(home.fields.description).toBe('Our home. Rolling on Tuesdays.');
+    expect(plan.structures.find((s) => s.fields.name === 'Home Fort')).toMatchObject({
+      solarSystemId: SYS.home,
+      fields: {
+        typeId: 35833,
+        typeName: 'Fortizar',
+        owner: { name: 'Wormhole Rescue Ltd', ticker: 'RESQ' },
+        status: 'powered',
+        notes: 'Fuel until November',
+      },
+      author: { name: 'CCP Bartender' },
+      createdAt: Date.parse('2026-10-10T12:00:00Z'),
+    });
+    expect(plan.comments.find((c) => c.text.startsWith('Neut Loki'))).toMatchObject({
+      solarSystemId: SYS.home,
+      author: { name: 'Scout Alt' },
+      createdAt: Date.parse('2026-10-11T19:00:00Z'),
+    });
     // Wanderer's tag becomes a Tag of that name (neutral grey).
     const tags = home.fields.labelKeys.map((k) => plan.labels.find((l) => l.key === k)!);
     expect(tags.map((t) => [t.name, t.color])).toEqual([['HQ', '#6b7280']]);
