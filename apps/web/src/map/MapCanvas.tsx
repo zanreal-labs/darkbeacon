@@ -68,6 +68,8 @@ export function MapCanvas({
     () => ({
       padding: { top: '72px', left: '48px', bottom: '48px', right: `${coveredRight + 48}px` } as const,
       maxZoom: 1.25,
+      // On phones a whole chain would be unreadably small; keep systems legible and let people pan.
+      minZoom: typeof window !== 'undefined' && window.matchMedia?.('(max-width: 760px)').matches ? 0.6 : 0.2,
     }),
     [coveredRight],
   );

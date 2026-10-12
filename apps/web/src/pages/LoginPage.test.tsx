@@ -33,7 +33,7 @@ describe('LoginPage', () => {
     const discord = await screen.findByRole('link', { name: 'Continue with Discord' });
     expect(discord.getAttribute('href')).toBe('/api/auth/discord/login?returnTo=%2Fm%2Fhome');
     expect(screen.queryByRole('textbox')).toBeNull();
-    expect(screen.getByText(/linked after you sign in, through EVE SSO/)).toBeTruthy();
+    expect(screen.getByText(/link your EVE characters with EVE SSO/)).toBeTruthy();
   });
 
   it('tells the admin what to configure when Discord is missing', async () => {

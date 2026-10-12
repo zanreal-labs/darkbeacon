@@ -290,6 +290,7 @@
 
 .emptyDescription {
   max-width: 380px;
+  text-wrap: balance;
   color: var(--ww-color-text-muted);
 }
 

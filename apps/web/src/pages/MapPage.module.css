@@ -10,18 +10,36 @@
   z-index: 7;
   top: var(--ww-space-3);
   left: var(--ww-space-3);
-  right: calc(320px + 2 * var(--ww-space-3));
+  right: var(--ww-space-3);
   display: flex;
   align-items: center;
   gap: var(--ww-space-2);
   pointer-events: none;
 }
 
+/* The closed dock floats in the top-right corner; keep clear of it. */
+.topbar:not([data-dock]) {
+  right: 300px;
+}
+
+.topbar[data-dock] {
+  right: calc(360px + var(--ww-space-3));
+}
+
 .topbar > * {
   pointer-events: auto;
 }
 
-.status {
+.spacer {
+  flex: 1;
+  pointer-events: none !important;
+}
+
+.toolButton {
+  box-shadow: var(--ww-shadow-medium);
+}
+
+.saving {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -30,45 +48,64 @@
   border: 1px solid var(--ww-color-border);
   border-radius: 999px;
   background: var(--ww-color-surface);
+  box-shadow: var(--ww-shadow-small);
   color: var(--ww-color-text-muted);
   font-size: var(--ww-font-size-small);
   white-space: nowrap;
 }
 
-.dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--ww-color-danger);
-}
-
-.status[data-status='open'] .dot {
-  background: var(--ww-color-success);
-}
-
-.status[data-status='connecting'] .dot {
-  background: var(--ww-color-warning);
-}
-
-.notice,
-.empty {
+.center {
   position: absolute;
   z-index: 5;
-  top: 64px;
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: min(480px, calc(100% - 32px));
-  margin: 0;
-  padding: var(--ww-space-2) var(--ww-space-3);
-  border: 1px solid var(--ww-color-border);
-  border-radius: var(--ww-radius);
-  background: var(--ww-color-surface);
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ww-space-2);
   color: var(--ww-color-text-muted);
-  text-align: center;
+  pointer-events: none;
 }
 
-.empty {
-  top: 40%;
+/* Empty map and errors: a card in the middle of the visible canvas. */
+.overlayCard {
+  position: absolute;
+  z-index: 5;
+  top: 50%;
+  left: 50%;
+  width: min(440px, calc(100% - 32px));
+  border: 1px solid var(--ww-color-border);
+  border-radius: var(--ww-radius-large);
+  background: var(--ww-color-surface);
+  box-shadow: var(--ww-shadow-large);
+  transform: translate(-50%, -50%);
+}
+
+.overlayCard[data-dock] {
+  left: calc(50% - 180px);
+}
+
+.streamError {
+  position: absolute;
+  z-index: 8;
+  top: 60px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: var(--ww-space-2);
+  max-width: min(480px, calc(100% - 32px));
+  padding: var(--ww-space-2) var(--ww-space-3);
+  border: 1px solid color-mix(in oklab, var(--ww-color-danger) 40%, var(--ww-color-border));
+  border-radius: var(--ww-radius);
+  background: color-mix(in oklab, var(--ww-color-danger) 8%, var(--ww-color-surface));
+  box-shadow: var(--ww-shadow-medium);
+  transform: translateX(-50%);
+}
+
+.streamError svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--ww-color-danger);
 }
 
 .notices {
@@ -76,35 +113,65 @@
   z-index: 30;
   left: 50%;
   bottom: var(--ww-space-4);
-  transform: translateX(-50%);
   display: grid;
   gap: var(--ww-space-2);
+  width: min(420px, calc(100% - 32px));
   margin: 0;
   padding: 0;
   list-style: none;
-  width: min(420px, calc(100% - 32px));
+  transform: translateX(-50%);
 }
 
 .toast {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--ww-space-2);
   padding: var(--ww-space-2) var(--ww-space-2) var(--ww-space-2) var(--ww-space-3);
-  border: 1px solid var(--ww-color-danger);
-  border-radius: var(--ww-radius);
+  border: 1px solid var(--ww-color-border);
+  border-radius: var(--ww-radius-large);
   background: var(--ww-color-surface-raised);
+  box-shadow: var(--ww-shadow-large);
   color: var(--ww-color-text);
-  box-shadow: 0 6px 18px rgb(0 0 0 / 0.15);
+  animation: toastIn var(--ww-motion-normal) var(--ww-motion-easing);
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.toastIcon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--ww-color-danger);
+}
+
+.toastText {
+  flex: 1;
+  min-width: 0;
 }
 
 @media (max-width: 760px) {
-  .topbar {
+  .topbar,
+  .topbar:not([data-dock]),
+  .topbar[data-dock] {
     right: var(--ww-space-3);
   }
 
   .topbar > :first-child {
     flex: 1;
+  }
+
+  .spacer {
+    display: none;
+  }
+
+  .overlayCard,
+  .overlayCard[data-dock] {
+    left: 50%;
   }
 
   .notices {

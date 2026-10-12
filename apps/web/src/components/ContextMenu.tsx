@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { Check } from 'lucide-react';
 import styles from './ContextMenu.module.css';
 
 export type MenuItem =
-  | { kind: 'action'; label: string; onSelect(): void; danger?: boolean }
-  | { kind: 'toggle'; label: string; checked: boolean; onSelect(): void }
+  | { kind: 'action'; label: string; onSelect(): void; danger?: boolean; icon?: ReactNode; shortcut?: string }
+  | { kind: 'toggle'; label: string; checked: boolean; onSelect(): void; icon?: ReactNode }
   | {
       kind: 'choice';
       label: string;
@@ -11,6 +12,13 @@ export type MenuItem =
       /** `color` is any CSS colour, usually `var(--ww-...)`. */
       options: { value: string; label: string; color?: string }[];
       onSelect(value: string): void;
+    }
+  | {
+      /** Several options on or off at once (labels). */
+      kind: 'multi';
+      label: string;
+      options: { value: string; label: string; color?: string; checked: boolean; title?: string }[];
+      onToggle(value: string): void;
     }
   | { kind: 'separator' }
   | { kind: 'custom'; key: string; render(close: () => void): ReactNode };
@@ -30,8 +38,8 @@ export interface ContextMenuProps {
 export function ContextMenu({ title, x, y, items, onClose }: ContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<CSSProperties>({ left: x, top: y, visibility: 'hidden' });
-  // Actions get the same indent as toggles so labels line up.
-  const hasToggles = items.some((i) => i.kind === 'toggle');
+  // Actions get the same indent as toggles and icons so labels line up.
+  const hasLeading = items.some((i) => (i.kind === 'toggle' || i.kind === 'action') && i.icon !== undefined);
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -76,6 +84,7 @@ export function ContextMenu({ title, x, y, items, onClose }: ContextMenuProps) {
     <>
       <div className={styles.backdrop} />
       <div ref={ref} role="menu" aria-label={title} className={styles.menu} style={pos}>
+        <div className={styles.grabber} aria-hidden />
         {title && <div className={styles.title}>{title}</div>}
         {items.map((item, i) => {
           switch (item.kind) {
@@ -96,8 +105,9 @@ export function ContextMenu({ title, x, y, items, onClose }: ContextMenuProps) {
                     onClose();
                   }}
                 >
-                  {hasToggles && <span className={styles.check} />}
-                  {item.label}
+                  {hasLeading && <span className={styles.lead}>{item.icon}</span>}
+                  <span className={styles.itemLabel}>{item.label}</span>
+                  {item.shortcut && <kbd className={styles.shortcut}>{item.shortcut}</kbd>}
                 </button>
               );
             case 'toggle':
@@ -110,8 +120,9 @@ export function ContextMenu({ title, x, y, items, onClose }: ContextMenuProps) {
                   className={styles.item}
                   onClick={item.onSelect}
                 >
-                  <span className={styles.check}>{item.checked ? '✓' : ''}</span>
-                  {item.label}
+                  {hasLeading && <span className={styles.lead}>{item.icon}</span>}
+                  <span className={styles.itemLabel}>{item.label}</span>
+                  <span className={styles.switch} data-on={item.checked || undefined} aria-hidden />
                 </button>
               );
             case 'choice':
@@ -130,6 +141,34 @@ export function ContextMenu({ title, x, y, items, onClose }: ContextMenuProps) {
                         onClick={() => item.onSelect(o.value)}
                       >
                         {o.color && <span className={styles.dot} />}
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            case 'multi':
+              return (
+                <div key={i} className={styles.choice} role="group" aria-label={item.label}>
+                  <span className={styles.choiceLabel}>{item.label}</span>
+                  <div className={styles.options}>
+                    {item.options.map((o) => (
+                      <button
+                        key={o.value}
+                        type="button"
+                        role="menuitemcheckbox"
+                        aria-checked={o.checked}
+                        title={o.title}
+                        className={styles.option}
+                        data-multi
+                        style={o.color ? ({ '--option-color': o.color } as CSSProperties) : undefined}
+                        onClick={() => item.onToggle(o.value)}
+                      >
+                        {o.checked ? (
+                          <Check className={styles.tick} />
+                        ) : (
+                          o.color && <span className={styles.swatch} />
+                        )}
                         {o.label}
                       </button>
                     ))}

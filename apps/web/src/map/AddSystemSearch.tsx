@@ -2,9 +2,10 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { routes, type UniverseSystemDto } from '@wormwright/shared';
 import { cssVar } from '@wormwright/theme-sdk';
-import { Icon } from '../components/Icon';
+import { Search } from 'lucide-react';
 import { api } from '../lib/api';
 import { systemClass } from '../lib/universe';
+import { Kbd } from '../ui';
 import styles from './AddSystemSearch.module.css';
 
 interface Props {
@@ -31,6 +32,19 @@ export function AddSystemSearch({ onMap, onPick, focusToken = 0, placeholder = '
   useEffect(() => {
     if (focusToken > 0) inputRef.current?.focus();
   }, [focusToken]);
+
+  // `/` focuses the search from anywhere on the map, like most dense tools.
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      e.preventDefault();
+      inputRef.current?.focus();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
 
   const results = useQuery({
     queryKey: ['universe-search', query],
@@ -67,12 +81,10 @@ export function AddSystemSearch({ onMap, onPick, focusToken = 0, placeholder = '
 
   return (
     <div className={styles.search}>
-      <span className={styles.icon}>
-        <Icon name="search" />
-      </span>
+      <Search className={styles.icon} aria-hidden />
       <input
         ref={inputRef}
-        className={`input ${styles.input}`}
+        className={styles.input}
         type="search"
         role="combobox"
         aria-expanded={showList}
@@ -87,11 +99,16 @@ export function AddSystemSearch({ onMap, onPick, focusToken = 0, placeholder = '
         }}
         onKeyDown={onKeyDown}
       />
+      {!text && (
+        <span className={styles.hint} aria-hidden>
+          <Kbd>/</Kbd>
+        </span>
+      )}
       {showList && (
         <ul id={listId} role="listbox" className={styles.results}>
           {items.length === 0 && (
             <li className={styles.empty}>
-              {results.isFetching || query !== text.trim() ? 'Searching…' : 'No match.'}
+              {results.isFetching || query !== text.trim() ? 'Searching…' : 'No system by that name.'}
             </li>
           )}
           {items.map((s, i) => {
@@ -111,7 +128,8 @@ export function AddSystemSearch({ onMap, onPick, focusToken = 0, placeholder = '
                   {cls.label}
                 </span>
                 <span className={styles.name}>{s.name}</span>
-                <span className={styles.region}>{onMap.has(s.id) ? 'on map' : s.regionName}</span>
+                <span className={styles.region}>{s.regionName}</span>
+                {onMap.has(s.id) && <span className={styles.onMap}>On map</span>}
               </li>
             );
           })}

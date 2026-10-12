@@ -10,6 +10,7 @@ import {
   type MapSystemDto,
 } from '@wormwright/shared';
 import { cssVar } from '@wormwright/theme-sdk';
+import { AlertTriangle, Copy, EyeOff, Lock, PencilLine, PiggyBank, Trash2 } from 'lucide-react';
 import type { MenuItem } from '../components/ContextMenu';
 import type { MapPermissions } from '../lib/roles';
 import { SlotItem } from '../plugins/PluginSlot';
@@ -59,22 +60,36 @@ export function systemMenu(ctx: SystemMenuContext): MenuItem[] {
       options: statusOptions,
       onSelect: (status) => void store.updateSystem(id, { status: status as SystemStatus }),
     });
-    for (const label of ctx.labels) {
-      const on = system.labelIds.includes(label.id);
+    if (ctx.labels.length > 0) {
       items.push({
-        kind: 'toggle',
-        label: `Label: ${label.name}`,
-        checked: on,
-        onSelect: () =>
+        kind: 'multi',
+        label: 'Labels',
+        options: ctx.labels.map((l) => ({
+          value: l.id,
+          label: l.name,
+          color: l.color,
+          checked: system.labelIds.includes(l.id),
+          title: l.description || undefined,
+        })),
+        onToggle: (labelId) => {
+          const on = system.labelIds.includes(labelId);
           void store.updateSystem(id, {
-            labelIds: on ? system.labelIds.filter((l) => l !== label.id) : [...system.labelIds, label.id],
-          }),
+            labelIds: on ? system.labelIds.filter((l) => l !== labelId) : [...system.labelIds, labelId],
+          });
+        },
       });
     }
-    items.push({ kind: 'action', label: 'Edit name, tag and notes…', onSelect: ctx.onEdit });
+    items.push({ kind: 'separator' });
+    items.push({
+      kind: 'action',
+      label: 'Edit name, tag and notes…',
+      icon: <PencilLine />,
+      onSelect: ctx.onEdit,
+    });
     items.push({
       kind: 'toggle',
       label: 'Hidden',
+      icon: <EyeOff />,
       checked: !system.visible,
       onSelect: () => void store.updateSystem(id, { visible: !system.visible }),
     });
@@ -83,6 +98,7 @@ export function systemMenu(ctx: SystemMenuContext): MenuItem[] {
     items.push({
       kind: 'toggle',
       label: 'Locked',
+      icon: <Lock />,
       checked: system.locked,
       onSelect: () => void store.updateSystem(id, { locked: !system.locked }),
     });
@@ -90,6 +106,7 @@ export function systemMenu(ctx: SystemMenuContext): MenuItem[] {
   items.push({
     kind: 'action',
     label: 'Copy name',
+    icon: <Copy />,
     onSelect: () => void navigator.clipboard?.writeText(ctx.name).catch(() => {}),
   });
   pushPlugins(items, ctx.plugins, (close) => ({ mapId: ctx.mapId, solarSystemId: id, close }));
@@ -98,6 +115,7 @@ export function systemMenu(ctx: SystemMenuContext): MenuItem[] {
     items.push({
       kind: 'action',
       label: 'Remove from map',
+      icon: <Trash2 />,
       danger: true,
       onSelect: () => void store.removeSystem(id),
     });
@@ -158,15 +176,18 @@ export function connectionMenu(ctx: ConnectionMenuContext): MenuItem[] {
         { none: 'None', source: 'Source', target: 'Target', both: 'Both' },
         (bubbled) => update({ bubbled }),
       ),
+      { kind: 'separator' },
       {
         kind: 'toggle',
         label: 'Dangerous',
+        icon: <AlertTriangle />,
         checked: c.dangerous,
         onSelect: () => update({ dangerous: !c.dangerous }),
       },
       {
         kind: 'toggle',
         label: 'Mass saved',
+        icon: <PiggyBank />,
         checked: c.massSaved,
         onSelect: () => update({ massSaved: !c.massSaved }),
       },
@@ -178,6 +199,7 @@ export function connectionMenu(ctx: ConnectionMenuContext): MenuItem[] {
     items.push({
       kind: 'action',
       label: 'Remove connection',
+      icon: <Trash2 />,
       danger: true,
       onSelect: () => void store.removeConnection(c.id),
     });

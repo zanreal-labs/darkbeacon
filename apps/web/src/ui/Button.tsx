@@ -61,7 +61,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   if (asChild) {
     return (
       <Slot.Root ref={ref} className={classes} {...rest}>
-        {children}
+        {icon}
+        <Slot.Slottable>{children}</Slot.Slottable>
+        {trailingIcon}
       </Slot.Root>
     );
   }
@@ -90,6 +92,8 @@ export interface IconButtonProps extends Omit<ButtonProps, 'icon' | 'trailingIco
   /** Accessible name, also shown as a tooltip. */
   label: string;
   icon: ReactNode;
+  /** With `asChild`: the element (e.g. a router <Link>) that becomes the button. */
+  children?: ReactNode;
   /** Set false when a surrounding element already explains the button. */
   tooltip?: boolean;
 }

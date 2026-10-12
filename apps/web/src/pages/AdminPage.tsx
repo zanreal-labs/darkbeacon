@@ -1,5 +1,6 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Crown, MoreHorizontal, Package, Palette, Plus, Puzzle, Server, Trash2, Users } from 'lucide-react';
 import {
   buildPath,
   routes,
@@ -13,48 +14,100 @@ import {
 } from '@wormwright/shared';
 import { api, ApiError } from '../lib/api';
 import { meKey, useMe } from '../lib/session';
+import { relativeTime } from '../lib/time';
+import { useTabParam } from '../lib/useTabParam';
 import { PluginSlot } from '../plugins/PluginSlot';
+import { useBreadcrumbs } from '../shell/breadcrumbs';
 import { ThemePicker } from '../theme/ThemePicker';
 import { useTheme } from '../theme/ThemeProvider';
-import styles from './pages.module.css';
+import {
+  Avatar,
+  Badge,
+  Button,
+  Callout,
+  Card,
+  CardBody,
+  CardFooter,
+  CardHeader,
+  ConfirmDialog,
+  EmptyState,
+  ErrorState,
+  Field,
+  IconButton,
+  Input,
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuTrigger,
+  Page,
+  PageHeader,
+  Select,
+  Skeleton,
+  SkeletonRows,
+  Stack,
+  Switch,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+  useToast,
+} from '../ui';
+import styles from './settings.module.css';
 
 const TABS = [
-  { id: 'instance', title: 'Instance' },
-  { id: 'roles', title: 'Roles' },
-  { id: 'plugins', title: 'Plugins' },
-  { id: 'themes', title: 'Themes' },
+  { id: 'instance', title: 'Instance', icon: <Server /> },
+  { id: 'people', title: 'People', icon: <Users /> },
+  { id: 'plugins', title: 'Plugins', icon: <Puzzle /> },
+  { id: 'themes', title: 'Themes', icon: <Palette /> },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
 
 const errorText = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback);
 
 export function AdminPage() {
-  const [tab, setTab] = useState<TabId>('instance');
-  return (
-    <section className={styles.page}>
-      <div className={styles.header}>
-        <h1>Admin</h1>
-      </div>
-      <div className={styles.tabs} role="tablist">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.id}
-            className={styles.tab}
-            onClick={() => setTab(t.id)}
-          >
-            {t.title}
-          </button>
-        ))}
-      </div>
-      {tab === 'instance' && <InstanceTab />}
-      {tab === 'roles' && <RolesTab />}
-      {tab === 'plugins' && <PluginsTab />}
-      {tab === 'themes' && <ThemesTab />}
-    </section>
+  useBreadcrumbs([{ label: 'Admin' }]);
+  const [tab, setTab] = useTabParam<TabId>(
+    TABS.map((t) => t.id),
+    'instance',
   );
+  return (
+    <Page width={880}>
+      <PageHeader
+        title="Admin"
+        description="Settings for this instance, the people on it, plugins and themes."
+      />
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList className={styles.tabs} aria-label="Admin sections">
+          {TABS.map((t) => (
+            <TabsTrigger key={t.id} value={t.id} icon={t.icon}>
+              {t.title}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <TabsContent value="instance">
+          <InstanceTab />
+        </TabsContent>
+        <TabsContent value="people">
+          <PeopleTab />
+        </TabsContent>
+        <TabsContent value="plugins">
+          <PluginsTab />
+        </TabsContent>
+        <TabsContent value="themes">
+          <ThemesTab />
+        </TabsContent>
+      </Tabs>
+    </Page>
+  );
+}
+
+// ---- Instance ---------------------------------------------------------------------------------
+
+function useInstanceSettings() {
+  return useQuery({
+    queryKey: ['admin-settings'],
+    queryFn: () => api<InstanceSettingsDto>(routes.admin.settings.path),
+  });
 }
 
 function InstanceTab() {
@@ -62,27 +115,44 @@ function InstanceTab() {
     queryKey: ['health'],
     queryFn: () => api<{ status: string; version: string; database: string }>(routes.health.path),
   });
+  const fact = (label: string, value: ReactNode) => (
+    <div className={styles.fact}>
+      <dt>{label}</dt>
+      <dd>{health.isPending ? <Skeleton width="60%" height={14} /> : value}</dd>
+    </div>
+  );
   return (
-    <>
-      <div className={styles.section}>
-        <h2>Instance</h2>
-        {health.data && (
-          <ul className={styles.rows}>
-            <li className={styles.row}>
-              <span className={styles.grow}>Version</span>
-              <code>{health.data.version}</code>
-            </li>
-            <li className={styles.row}>
-              <span className={styles.grow}>Database</span>
-              <code>{health.data.database}</code>
-            </li>
-          </ul>
-        )}
-      </div>
+    <Stack>
+      <Card>
+        <CardHeader title="This instance" description="What is running and where it keeps its data." />
+        <CardBody>
+          {health.isError ? (
+            <ErrorState compact error={health.error} onRetry={() => void health.refetch()} />
+          ) : (
+            <dl className={styles.facts}>
+              {fact(
+                'Status',
+                <Badge tone={health.data?.status === 'ok' ? 'success' : 'warning'} dot>
+                  {health.data?.status === 'ok' ? 'Healthy' : (health.data?.status ?? '')}
+                </Badge>,
+              )}
+              {fact('Version', <span className="mono">{health.data?.version}</span>)}
+              {fact(
+                'Database',
+                health.data?.database === 'postgres'
+                  ? 'PostgreSQL'
+                  : health.data?.database === 'sqlite'
+                    ? 'SQLite'
+                    : health.data?.database,
+              )}
+            </dl>
+          )}
+        </CardBody>
+      </Card>
       <DiscordAdminSettings />
       <WebhookSettings />
       <PluginSlot slot="settingsPage" props={{ mapId: null }} />
-    </>
+    </Stack>
   );
 }
 
@@ -91,10 +161,8 @@ const idList = (text: string) => text.split(/[\s,]+/).filter(Boolean);
 
 function DiscordAdminSettings() {
   const queryClient = useQueryClient();
-  const settings = useQuery({
-    queryKey: ['admin-settings'],
-    queryFn: () => api<InstanceSettingsDto>(routes.admin.settings.path),
-  });
+  const toast = useToast();
+  const settings = useInstanceSettings();
   const [draft, setDraft] = useState<{ guild: string; roles: string } | null>(null);
   const save = useMutation({
     mutationFn: (body: { adminGuildId: string | null; adminRoleIds: string[] }) =>
@@ -102,56 +170,70 @@ function DiscordAdminSettings() {
     onSuccess: (data) => {
       queryClient.setQueryData(['admin-settings'], data);
       setDraft(null);
+      toast({ title: 'Discord admin roles saved', tone: 'success' });
     },
   });
-  if (!settings.data) return null;
   const value = draft ?? {
-    guild: settings.data.adminGuildId ?? '',
-    roles: settings.data.adminRoleIds.join(', '),
+    guild: settings.data?.adminGuildId ?? '',
+    roles: settings.data?.adminRoleIds.join(', ') ?? '',
   };
   const submit = (e: FormEvent) => {
     e.preventDefault();
     save.mutate({ adminGuildId: value.guild.trim() || null, adminRoleIds: idList(value.roles) });
   };
   return (
-    <form className={styles.section} onSubmit={submit} aria-label="Discord admin roles">
-      <h2>Admins from Discord</h2>
-      <p className="muted">
-        Members holding one of these roles on this Discord server become instance admins at their next login.
-      </p>
-      <div className={styles.inline}>
-        <label className={`field ${styles.field}`}>
-          <span>Discord server id</span>
-          <input
-            className="input"
-            inputMode="numeric"
-            value={value.guild}
-            onChange={(e) => setDraft({ ...value, guild: e.target.value })}
-          />
-        </label>
-        <label className={`field ${styles.field}`}>
-          <span>Role ids</span>
-          <input
-            className="input"
-            value={value.roles}
-            onChange={(e) => setDraft({ ...value, roles: e.target.value })}
-          />
-        </label>
-        <button type="submit" className="btn btn-primary" disabled={save.isPending || !draft}>
-          Save
-        </button>
-      </div>
-      {save.error && <p className="error">{errorText(save.error, 'Could not save the settings.')}</p>}
-    </form>
+    <Card>
+      <form onSubmit={submit} aria-label="Discord admin roles">
+        <CardHeader
+          title="Admins from Discord"
+          description="Members holding one of these roles on this Discord server become instance admins when they next sign in."
+        />
+        <CardBody>
+          <div className={styles.grid}>
+            <Field
+              label="Discord server id"
+              error={save.error ? errorText(save.error, 'Could not save.') : undefined}
+            >
+              <Input
+                mono
+                inputMode="numeric"
+                placeholder="e.g. 81384788765712384"
+                disabled={!settings.data}
+                value={value.guild}
+                onChange={(e) => setDraft({ ...value, guild: e.target.value })}
+              />
+            </Field>
+            <Field label="Role ids" hint="Separate several with commas.">
+              <Input
+                mono
+                placeholder="Role id, role id"
+                disabled={!settings.data}
+                value={value.roles}
+                onChange={(e) => setDraft({ ...value, roles: e.target.value })}
+              />
+            </Field>
+          </div>
+        </CardBody>
+        <CardFooter>
+          <span className={styles.footerNote}>Discord roles only ever add admin, never remove it.</span>
+          {draft && (
+            <Button variant="ghost" onClick={() => setDraft(null)}>
+              Discard
+            </Button>
+          )}
+          <Button type="submit" variant="primary" loading={save.isPending} disabled={!draft}>
+            Save
+          </Button>
+        </CardFooter>
+      </form>
+    </Card>
   );
 }
 
 function WebhookSettings() {
   const queryClient = useQueryClient();
-  const settings = useQuery({
-    queryKey: ['admin-settings'],
-    queryFn: () => api<InstanceSettingsDto>(routes.admin.settings.path),
-  });
+  const toast = useToast();
+  const settings = useInstanceSettings();
   const save = useMutation({
     mutationFn: (webhooksToPrivateNetworks: boolean) =>
       api<InstanceSettingsDto>(routes.admin.updateSettings.path, {
@@ -159,32 +241,325 @@ function WebhookSettings() {
         json: { webhooksToPrivateNetworks },
       }),
     onSuccess: (data) => queryClient.setQueryData(['admin-settings'], data),
+    onError: (error) =>
+      toast({ title: 'Could not save', description: errorText(error, 'Try again.'), tone: 'danger' }),
   });
-  if (!settings.data) return null;
   return (
-    <div className={styles.section}>
-      <h2>Webhooks</h2>
-      <label className="field" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        <input
-          type="checkbox"
-          checked={settings.data.webhooksToPrivateNetworks}
-          disabled={save.isPending}
-          onChange={(e) => save.mutate(e.target.checked)}
+    <Card>
+      <CardHeader title="Webhooks" description="Where map webhooks may send events." />
+      <CardBody>
+        <Switch
+          checked={settings.data?.webhooksToPrivateNetworks ?? false}
+          disabled={!settings.data || save.isPending}
+          onCheckedChange={(on) => save.mutate(on)}
+          label="Allow webhooks to private networks"
+          description="Off by default: webhooks cannot reach this server, its local network or cloud metadata addresses. Turn it on only if every map admin may send requests into your network."
         />
-        Allow webhooks to private networks
-      </label>
-      <p className="muted">
-        Off by default: webhooks cannot reach this server, its local network or cloud metadata addresses. Turn
-        it on only if every map admin may send requests into your network.
-      </p>
-      {save.error && <p className="error">{errorText(save.error, 'Could not save the settings.')}</p>}
-    </div>
+      </CardBody>
+    </Card>
+  );
+}
+
+// ---- People -----------------------------------------------------------------------------------
+
+const ROLE_OPTIONS = [
+  { value: 'user', label: 'User' },
+  { value: 'admin', label: 'Admin' },
+];
+
+function PeopleTab() {
+  const me = useMe();
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const [handover, setHandover] = useState<AdminAccountDto | null>(null);
+  const accounts = useQuery({
+    queryKey: ['admin-accounts'],
+    queryFn: () => api<AdminAccountDto[]>(routes.admin.accounts.path),
+  });
+  const setRole = useMutation({
+    mutationFn: ({ accountId, role }: { accountId: string; role: UpdateInstanceRoleRequest['role'] }) =>
+      api<AdminAccountDto>(buildPath(routes.admin.setInstanceRole.path, { accountId }), {
+        method: 'PUT',
+        json: { role },
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-accounts'] }),
+    onError: (error) =>
+      toast({
+        title: 'Could not change the role',
+        description: errorText(error, 'Try again.'),
+        tone: 'danger',
+      }),
+  });
+  const transfer = useMutation({
+    mutationFn: (accountId: string) =>
+      api<void>(routes.admin.transferOwnership.path, { method: 'POST', json: { accountId } }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-accounts'] });
+      void queryClient.invalidateQueries({ queryKey: meKey });
+      toast({ title: 'Ownership handed over', tone: 'success' });
+    },
+    onError: (error) =>
+      toast({ title: 'Could not hand over', description: errorText(error, 'Try again.'), tone: 'danger' }),
+  });
+  const isOwner = me.data?.account.instanceRole === 'owner';
+  const myId = me.data?.account.id;
+
+  return (
+    <Card>
+      <CardHeader
+        title="People"
+        description="Everyone who has signed in. Admins manage this panel and plugins; the owner role can only be handed over."
+      />
+      <CardBody flush>
+        {accounts.isPending ? (
+          <SkeletonRows count={3} />
+        ) : accounts.isError ? (
+          <ErrorState compact error={accounts.error} onRetry={() => void accounts.refetch()} />
+        ) : (
+          <ul className={styles.list}>
+            {accounts.data.map((a) => (
+              <li key={a.id} className={`${styles.item} ${styles.itemCenter}`}>
+                <Avatar src={a.avatarUrl} name={a.name} size={32} />
+                <div className={styles.rowBody}>
+                  <div className={styles.rowTitle}>
+                    {a.name}
+                    {a.id === myId && <Badge variant="outline">You</Badge>}
+                  </div>
+                  <div className={styles.rowMeta}>
+                    {a.discordId ? 'Discord' : 'Local account'}
+                    {a.lastSeenAt ? ` · seen ${relativeTime(a.lastSeenAt)}` : ' · never seen'}
+                  </div>
+                </div>
+                <div className={styles.rowActions}>
+                  {a.instanceRole === 'owner' ? (
+                    <Badge tone="accent" icon={<Crown />}>
+                      Owner
+                    </Badge>
+                  ) : (
+                    <Select
+                      size="sm"
+                      aria-label={`Role of ${a.name}`}
+                      value={a.instanceRole}
+                      options={ROLE_OPTIONS}
+                      disabled={setRole.isPending || a.id === myId}
+                      onValueChange={(role) =>
+                        setRole.mutate({ accountId: a.id, role: role as UpdateInstanceRoleRequest['role'] })
+                      }
+                    />
+                  )}
+                  {isOwner && a.instanceRole !== 'owner' ? (
+                    <Menu>
+                      <MenuTrigger asChild>
+                        <IconButton size="sm" label={`More for ${a.name}`} icon={<MoreHorizontal />} />
+                      </MenuTrigger>
+                      <MenuContent>
+                        <MenuItem icon={<Crown />} onSelect={() => setHandover(a)}>
+                          Make owner…
+                        </MenuItem>
+                      </MenuContent>
+                    </Menu>
+                  ) : (
+                    isOwner && <span style={{ width: 26 }} />
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardBody>
+      <ConfirmDialog
+        open={handover !== null}
+        onOpenChange={(open) => !open && setHandover(null)}
+        title={`Make ${handover?.name ?? ''} the owner?`}
+        description="You become an admin. Only the new owner can hand it back."
+        confirmLabel="Hand over ownership"
+        tone="danger"
+        onConfirm={() => handover && transfer.mutateAsync(handover.id)}
+      />
+    </Card>
+  );
+}
+
+// ---- Plugins ----------------------------------------------------------------------------------
+
+function PluginsTab() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const key = ['admin-plugins'];
+  const plugins = useQuery({ queryKey: key, queryFn: () => api<PluginDto[]>(routes.plugins.list.path) });
+  const [source, setSource] = useState('');
+  const [removing, setRemoving] = useState<PluginDto | null>(null);
+  const refresh = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: key }),
+      queryClient.invalidateQueries({ queryKey: ['web-plugins'] }),
+      queryClient.invalidateQueries({ queryKey: ['admin-catalog'] }),
+    ]);
+  const failed = (title: string) => (error: unknown) =>
+    toast({ title, description: errorText(error, 'Try again.'), tone: 'danger' });
+  const install = useMutation({
+    mutationFn: (src: string) =>
+      api<PluginDto>(routes.plugins.install.path, { method: 'POST', json: { source: src } }),
+    onSuccess: (p) => {
+      setSource('');
+      void refresh();
+      toast({ title: `${p.name} installed`, description: 'Review it, then switch it on.', tone: 'success' });
+    },
+    onError: failed('Could not install'),
+  });
+  const toggle = useMutation({
+    mutationFn: (p: PluginDto) =>
+      api<PluginDto>(buildPath(routes.plugins.setEnabled.path, { pluginId: p.id }), {
+        method: 'PUT',
+        json: { enabled: !p.enabled },
+      }),
+    onSuccess: refresh,
+    onError: failed('Could not switch the plugin'),
+  });
+  const uninstall = useMutation({
+    mutationFn: (id: string) =>
+      api<void>(buildPath(routes.plugins.uninstall.path, { pluginId: id }), { method: 'DELETE' }),
+    onSuccess: refresh,
+    onError: failed('Could not uninstall'),
+  });
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (source.trim()) install.mutate(source.trim());
+  };
+
+  return (
+    <Stack>
+      <Card>
+        <CardHeader
+          title="Installed plugins"
+          description="New plugins start switched off. Switching applies at once; a new version reloads the plugin."
+        />
+        <CardBody flush>
+          {plugins.isPending ? (
+            <SkeletonRows count={2} avatar={false} />
+          ) : plugins.isError ? (
+            <ErrorState compact error={plugins.error} onRetry={() => void plugins.refetch()} />
+          ) : plugins.data.length === 0 ? (
+            <EmptyState
+              compact
+              icon={<Puzzle />}
+              title="No plugins yet"
+              description="Install one shipped with this server below, or any package from npm."
+            />
+          ) : (
+            <ul className={styles.list}>
+              {plugins.data.map((p) => (
+                <li key={p.id} className={styles.item}>
+                  <span className={styles.subjectIcon} aria-hidden>
+                    <Puzzle />
+                  </span>
+                  <div className={styles.rowBody}>
+                    <div className={styles.rowTitle}>
+                      {p.name}
+                      <span className={`${styles.version} mono`}>{p.version}</span>
+                      {p.enabled ? (
+                        <Badge tone="success" dot>
+                          On
+                        </Badge>
+                      ) : (
+                        <Badge>Off</Badge>
+                      )}
+                    </div>
+                    {p.description && <div className={styles.rowMeta}>{p.description}</div>}
+                    <div className={styles.chips} aria-label="Permissions">
+                      {p.ports.map((port) => (
+                        <Badge key={port} variant="outline" tone={port === 'db' ? 'danger' : 'neutral'}>
+                          {port}
+                        </Badge>
+                      ))}
+                      {p.events.length > 0 && (
+                        <Badge variant="outline" title={p.events.join(', ')}>
+                          {p.events.length} event{p.events.length === 1 ? '' : 's'}
+                        </Badge>
+                      )}
+                    </div>
+                    {(p.ports.includes('db') || p.error) && (
+                      <div className={styles.rowNotes}>
+                        {p.ports.includes('db') && (
+                          <Callout tone="warning" title="Full database access">
+                            This plugin can read and change every table, including sessions and tokens. Switch
+                            it on only if you trust its author.
+                          </Callout>
+                        )}
+                        {p.error && (
+                          <Callout tone="danger" title="Switched off after errors">
+                            {p.error}
+                          </Callout>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className={styles.rowActions}>
+                    <Switch
+                      checked={p.enabled}
+                      disabled={toggle.isPending}
+                      onCheckedChange={() => toggle.mutate(p)}
+                      label={<span className="sr-only">Enable {p.name}</span>}
+                    />
+                    <IconButton
+                      size="sm"
+                      variant="danger-ghost"
+                      label={`Uninstall ${p.name}`}
+                      icon={<Trash2 />}
+                      onClick={() => setRemoving(p)}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardBody>
+      </Card>
+
+      <Catalogue kind="plugin" onInstalled={() => void refresh()} />
+
+      <Card>
+        <form onSubmit={submit} aria-label="Install plugin">
+          <CardHeader
+            title="Install from npm"
+            description="A package name with an optional exact version or tag."
+          />
+          <CardBody>
+            <div className={styles.inline}>
+              <Field label="Package">
+                <Input
+                  mono
+                  value={source}
+                  onChange={(e) => setSource(e.target.value)}
+                  placeholder="wormwright-plugin-example@1.0.0"
+                />
+              </Field>
+              <Button type="submit" icon={<Plus />} loading={install.isPending} disabled={!source.trim()}>
+                Install
+              </Button>
+            </div>
+          </CardBody>
+        </form>
+      </Card>
+
+      <ConfirmDialog
+        open={removing !== null}
+        onOpenChange={(open) => !open && setRemoving(null)}
+        title={`Uninstall ${removing?.name ?? ''}?`}
+        description="Its files are removed. Tables it created and its settings stay, so installing it again picks up where it left off."
+        confirmLabel="Uninstall"
+        tone="danger"
+        onConfirm={() => removing && uninstall.mutateAsync(removing.id)}
+      />
+    </Stack>
   );
 }
 
 /** Packages shipped with the server, installable with one click. */
 function Catalogue({ kind, onInstalled }: { kind: CatalogEntryDto['kind']; onInstalled: () => void }) {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const catalog = useQuery({
     queryKey: ['admin-catalog'],
     queryFn: () => api<CatalogEntryDto[]>(routes.plugins.catalog.path),
@@ -199,233 +574,67 @@ function Catalogue({ kind, onInstalled }: { kind: CatalogEntryDto['kind']; onIns
       void queryClient.invalidateQueries({ queryKey: ['admin-catalog'] });
       onInstalled();
     },
+    onError: (error) =>
+      toast({ title: 'Could not install', description: errorText(error, 'Try again.'), tone: 'danger' }),
   });
   const entries = catalog.data?.filter((e) => e.kind === kind) ?? [];
-  if (entries.length === 0) return null;
+  if (catalog.isPending || entries.length === 0) return null;
   return (
-    <>
-      <h3>Shipped with this server</h3>
-      <ul className={styles.rows}>
-        {entries.map((e) => (
-          <li key={e.source} className={styles.row}>
-            <span className={styles.grow}>
-              <strong>{e.name}</strong> <span className="muted">{e.version}</span>
-              {e.description && <div className="muted">{e.description}</div>}
-            </span>
-            <button
-              type="button"
-              className="btn btn-small"
-              disabled={install.isPending || e.installedVersion === e.version}
-              onClick={() => install.mutate(e.source)}
-            >
-              {e.installedVersion === null
-                ? 'Install'
-                : e.installedVersion === e.version
-                  ? 'Installed'
-                  : 'Update'}
-            </button>
-          </li>
-        ))}
-      </ul>
-      {install.error && <p className="error">{errorText(install.error, 'Could not install.')}</p>}
-    </>
-  );
-}
-
-function RolesTab() {
-  const me = useMe();
-  const queryClient = useQueryClient();
-  const accounts = useQuery({
-    queryKey: ['admin-accounts'],
-    queryFn: () => api<AdminAccountDto[]>(routes.admin.accounts.path),
-  });
-  const setRole = useMutation({
-    mutationFn: ({ accountId, role }: { accountId: string; role: UpdateInstanceRoleRequest['role'] }) =>
-      api<AdminAccountDto>(buildPath(routes.admin.setInstanceRole.path, { accountId }), {
-        method: 'PUT',
-        json: { role },
-      }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-accounts'] }),
-  });
-  const transfer = useMutation({
-    mutationFn: (accountId: string) =>
-      api<void>(routes.admin.transferOwnership.path, { method: 'POST', json: { accountId } }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['admin-accounts'] });
-      void queryClient.invalidateQueries({ queryKey: meKey });
-    },
-  });
-  const isOwner = me.data?.account.instanceRole === 'owner';
-  const error = setRole.error ?? transfer.error ?? accounts.error;
-
-  return (
-    <div className={styles.section}>
-      <h2>Roles</h2>
-      <p className="muted">Admins manage this panel and plugins. The owner role can only be handed over.</p>
-      {accounts.isPending && <p className="muted">Loading…</p>}
-      <ul className={styles.rows}>
-        {accounts.data?.map((a) => (
-          <li key={a.id} className={styles.row}>
-            {a.avatarUrl ? (
-              <img className={styles.avatar} src={a.avatarUrl} alt="" />
-            ) : (
-              <span className={styles.avatar} />
-            )}
-            <span className={styles.grow}>
-              <strong>{a.name}</strong>
-              {a.lastSeenAt && (
-                <div className="muted">Last seen {new Date(a.lastSeenAt).toLocaleString()}</div>
-              )}
-            </span>
-            {a.instanceRole === 'owner' ? (
-              <span className={styles.pill}>owner</span>
-            ) : (
-              <select
-                className="input"
-                aria-label={`Role of ${a.name}`}
-                value={a.instanceRole}
-                disabled={setRole.isPending || a.id === me.data?.account.id}
-                onChange={(e) =>
-                  setRole.mutate({
-                    accountId: a.id,
-                    role: e.target.value as UpdateInstanceRoleRequest['role'],
-                  })
-                }
-              >
-                <option value="user">user</option>
-                <option value="admin">admin</option>
-              </select>
-            )}
-            {isOwner && a.instanceRole !== 'owner' && (
-              <button
-                type="button"
-                className="btn btn-small btn-ghost"
-                onClick={() => {
-                  if (window.confirm(`Make ${a.name} the owner? You become an admin.`)) transfer.mutate(a.id);
-                }}
-              >
-                Make owner
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
-      {error && <p className="error">{errorText(error, 'Something went wrong.')}</p>}
-    </div>
-  );
-}
-
-function PluginsTab() {
-  const queryClient = useQueryClient();
-  const key = ['admin-plugins'];
-  const plugins = useQuery({ queryKey: key, queryFn: () => api<PluginDto[]>(routes.plugins.list.path) });
-  const [source, setSource] = useState('');
-  const refresh = () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: key }),
-      queryClient.invalidateQueries({ queryKey: ['web-plugins'] }),
-    ]);
-  const install = useMutation({
-    mutationFn: (src: string) =>
-      api<PluginDto>(routes.plugins.install.path, { method: 'POST', json: { source: src } }),
-    onSuccess: () => {
-      setSource('');
-      void refresh();
-    },
-  });
-  const toggle = useMutation({
-    mutationFn: (p: PluginDto) =>
-      api<PluginDto>(buildPath(routes.plugins.setEnabled.path, { pluginId: p.id }), {
-        method: 'PUT',
-        json: { enabled: !p.enabled },
-      }),
-    onSuccess: refresh,
-  });
-  const uninstall = useMutation({
-    mutationFn: (id: string) =>
-      api<void>(buildPath(routes.plugins.uninstall.path, { pluginId: id }), { method: 'DELETE' }),
-    onSuccess: refresh,
-  });
-  const error = install.error ?? toggle.error ?? uninstall.error ?? plugins.error;
-
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    if (source.trim()) install.mutate(source.trim());
-  };
-
-  return (
-    <div className={styles.section}>
-      <h2>Plugins</h2>
-      <p className="muted">
-        Installing a new version restarts the server. Enabling and disabling apply at once.
-      </p>
-      {plugins.data?.length === 0 && <p className="muted">No plugins installed.</p>}
-      <ul className={styles.rows}>
-        {plugins.data?.map((p) => (
-          <li key={p.id} className={styles.row}>
-            <span className={styles.grow}>
-              <strong>{p.name}</strong> <span className="muted">{p.version}</span>
-              <div className="muted">
-                Ports: {p.ports.join(', ') || 'none'}. Events: {p.events.join(', ') || 'none'}.
-              </div>
-              {p.ports.includes('db') && (
-                <div className="error">
-                  Full database access: this plugin can read and change every table, including sessions and
-                  tokens. Enable it only if you trust its author.
+    <Card>
+      <CardHeader
+        title="Shipped with this server"
+        description={
+          kind === 'plugin'
+            ? 'First-party plugins, ready to install.'
+            : 'First-party themes, ready to install.'
+        }
+      />
+      <CardBody flush>
+        <ul className={styles.list}>
+          {entries.map((e) => {
+            const current = e.installedVersion === e.version;
+            return (
+              <li key={e.source} className={styles.item}>
+                <span className={styles.subjectIcon} aria-hidden>
+                  {kind === 'plugin' ? <Package /> : <Palette />}
+                </span>
+                <div className={styles.rowBody}>
+                  <div className={styles.rowTitle}>
+                    {e.name}
+                    <span className={`${styles.version} mono`}>{e.version}</span>
+                  </div>
+                  {e.description && <div className={styles.rowMeta}>{e.description}</div>}
                 </div>
-              )}
-              {p.error && <div className="error">{p.error}</div>}
-            </span>
-            <label className="field" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <input
-                type="checkbox"
-                checked={p.enabled}
-                disabled={toggle.isPending}
-                onChange={() => toggle.mutate(p)}
-              />
-              Enabled
-            </label>
-            <button
-              type="button"
-              className="btn btn-small btn-danger"
-              disabled={uninstall.isPending}
-              onClick={() => {
-                if (window.confirm(`Uninstall ${p.name}?`)) uninstall.mutate(p.id);
-              }}
-            >
-              Uninstall
-            </button>
-          </li>
-        ))}
-      </ul>
-      <form
-        className={styles.inline}
-        onSubmit={submit}
-        style={{ marginTop: 'var(--ww-space-3)' }}
-        aria-label="Install plugin"
-      >
-        <label className={`field ${styles.field}`}>
-          <span>npm package or .tgz URL</span>
-          <input
-            className="input"
-            value={source}
-            onChange={(e) => setSource(e.target.value)}
-            placeholder="wormwright-plugin-…"
-          />
-        </label>
-        <button type="submit" className="btn btn-primary" disabled={install.isPending || !source.trim()}>
-          Install
-        </button>
-      </form>
-      <Catalogue kind="plugin" onInstalled={() => void refresh()} />
-      {error && <p className="error">{errorText(error, 'Something went wrong.')}</p>}
-    </div>
+                <div className={styles.rowActions}>
+                  {current ? (
+                    <Badge tone="success">Installed</Badge>
+                  ) : (
+                    <Button
+                      size="sm"
+                      loading={install.isPending && install.variables === e.source}
+                      disabled={install.isPending}
+                      onClick={() => install.mutate(e.source)}
+                    >
+                      {e.installedVersion === null ? 'Install' : `Update from ${e.installedVersion}`}
+                    </Button>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </CardBody>
+    </Card>
   );
 }
+
+// ---- Themes -----------------------------------------------------------------------------------
 
 function ThemesTab() {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const { refresh: refreshThemes } = useTheme();
+  const [removing, setRemoving] = useState<ThemeDto | null>(null);
   const themes = useQuery({
     queryKey: ['admin-themes'],
     queryFn: () => api<ThemesDto>(routes.themes.list.path),
@@ -437,60 +646,110 @@ function ThemesTab() {
   const setDefault = useMutation({
     mutationFn: (themeId: string) =>
       api<ThemesDto>(routes.themes.setDefault.path, { method: 'PUT', json: { themeId } }),
-    onSuccess: changed,
+    onSuccess: () => {
+      changed();
+      toast({ title: 'Default theme saved', tone: 'success' });
+    },
+    onError: (error) =>
+      toast({ title: 'Could not save', description: errorText(error, 'Try again.'), tone: 'danger' }),
   });
   const uninstall = useMutation({
     mutationFn: (t: ThemeDto) =>
       api<void>(buildPath(routes.themes.uninstall.path, { themeId: t.id }), { method: 'DELETE' }),
     onSuccess: changed,
+    onError: (error) =>
+      toast({ title: 'Could not uninstall', description: errorText(error, 'Try again.'), tone: 'danger' }),
   });
-  const error = setDefault.error ?? uninstall.error;
+  const options = [
+    { value: 'system', label: 'System (follows each computer)' },
+    ...(themes.data?.themes.map((t) => ({ value: t.id, label: t.name })) ?? []),
+  ];
+  const installed = themes.data?.themes.filter((t) => !t.builtIn) ?? [];
+
   return (
-    <div className={styles.section}>
-      <h2>Themes</h2>
-      {themes.data && (
-        <label className="field">
-          <span>Default for everyone who has not picked a theme</span>
-          <select
-            className="input"
-            value={themes.data.defaultThemeId}
-            disabled={setDefault.isPending}
-            onChange={(e) => setDefault.mutate(e.target.value)}
-          >
-            <option value="system">System (follows each computer)</option>
-            {themes.data.themes.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      <ul className={styles.rows}>
-        {themes.data?.themes
-          .filter((t) => !t.builtIn)
-          .map((t) => (
-            <li key={t.id} className={styles.row}>
-              <span className={styles.grow}>
-                <strong>{t.name}</strong> <span className="muted">{t.version}</span>
-              </span>
-              <button
-                type="button"
-                className="btn btn-small btn-danger"
-                disabled={uninstall.isPending}
-                onClick={() => {
-                  if (window.confirm(`Uninstall ${t.name}?`)) uninstall.mutate(t);
-                }}
-              >
-                Uninstall
-              </button>
-            </li>
-          ))}
-      </ul>
+    <Stack>
+      <Card>
+        <CardHeader
+          title="Default theme"
+          description="For everyone who has not picked a theme. System follows each computer's light or dark mode."
+        />
+        <CardBody>
+          <Field label="Theme">
+            <Select
+              value={themes.data?.defaultThemeId}
+              options={options}
+              disabled={!themes.data || setDefault.isPending}
+              onValueChange={(id) => setDefault.mutate(id)}
+            />
+          </Field>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Installed themes"
+          description="Theme packages change colours and sizes, never features."
+        />
+        <CardBody flush>
+          {themes.isPending ? (
+            <SkeletonRows count={2} avatar={false} />
+          ) : installed.length === 0 ? (
+            <EmptyState
+              compact
+              icon={<Palette />}
+              title="Only the built-in themes"
+              description="Light, Dark and High contrast are always there. Install more below."
+            />
+          ) : (
+            <ul className={styles.list}>
+              {installed.map((t) => (
+                <li key={t.id} className={`${styles.item} ${styles.itemCenter}`}>
+                  <span
+                    className={styles.subjectIcon}
+                    style={{ background: t.tokens['color-bg'], color: t.tokens['color-accent'] }}
+                    aria-hidden
+                  >
+                    <Palette />
+                  </span>
+                  <div className={styles.rowBody}>
+                    <div className={styles.rowTitle}>
+                      {t.name}
+                      {t.version && <span className={`${styles.version} mono`}>{t.version}</span>}
+                    </div>
+                    <div className={styles.rowMeta}>{t.colorScheme === 'dark' ? 'Dark' : 'Light'}</div>
+                  </div>
+                  <IconButton
+                    size="sm"
+                    variant="danger-ghost"
+                    label={`Uninstall ${t.name}`}
+                    icon={<Trash2 />}
+                    onClick={() => setRemoving(t)}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardBody>
+      </Card>
+
       <Catalogue kind="theme" onInstalled={changed} />
-      {error && <p className="error">{errorText(error, 'Something went wrong.')}</p>}
-      <h3>Your theme</h3>
-      <ThemePicker />
-    </div>
+
+      <Card>
+        <CardHeader title="Your theme" description="Just for you, saved to your account." />
+        <CardBody>
+          <ThemePicker />
+        </CardBody>
+      </Card>
+
+      <ConfirmDialog
+        open={removing !== null}
+        onOpenChange={(open) => !open && setRemoving(null)}
+        title={`Uninstall ${removing?.name ?? ''}?`}
+        description="People who picked it fall back to the default theme."
+        confirmLabel="Uninstall"
+        tone="danger"
+        onConfirm={() => removing && uninstall.mutateAsync(removing)}
+      />
+    </Stack>
   );
 }

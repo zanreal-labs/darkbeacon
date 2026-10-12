@@ -31,28 +31,33 @@
 }
 
 .chip {
-  padding: 0 4px;
+  padding: 0 5px;
   border: 1px solid var(--ww-color-border);
-  border-radius: 3px;
-  background: var(--ww-color-surface);
+  border-radius: 999px;
+  background: var(--ww-color-surface-raised);
   color: var(--ww-color-text-muted);
   font-size: 10px;
-  line-height: 14px;
   font-weight: 600;
+  line-height: 15px;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  box-shadow: var(--ww-shadow-small);
 }
 
 .chip[data-kind='eol'] {
-  color: var(--ww-edge-time-eol);
-  border-color: var(--ww-edge-time-eol);
+  border-color: color-mix(in oklab, var(--ww-edge-time-eol) 55%, transparent);
+  background: color-mix(in oklab, var(--ww-edge-time-eol) 14%, var(--ww-color-surface-raised));
+  color: color-mix(in oklab, var(--ww-edge-time-eol) 72%, var(--ww-color-text));
 }
 
 .chip[data-kind='reduced'] {
-  color: var(--ww-edge-mass-reduced);
-  border-color: var(--ww-edge-mass-reduced);
+  border-color: color-mix(in oklab, var(--ww-edge-mass-reduced) 55%, transparent);
+  background: color-mix(in oklab, var(--ww-edge-mass-reduced) 14%, var(--ww-color-surface-raised));
+  color: color-mix(in oklab, var(--ww-edge-mass-reduced) 72%, var(--ww-color-text));
 }
 
 .chip[data-kind='critical'] {
-  color: var(--ww-edge-mass-critical);
-  border-color: var(--ww-edge-mass-critical);
+  border-color: color-mix(in oklab, var(--ww-edge-mass-critical) 55%, transparent);
+  background: color-mix(in oklab, var(--ww-edge-mass-critical) 14%, var(--ww-color-surface-raised));
+  color: color-mix(in oklab, var(--ww-edge-mass-critical) 72%, var(--ww-color-text));
 }

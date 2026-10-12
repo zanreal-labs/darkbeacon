@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router';
-import { ChevronRight, Map as MapIcon, Shield, UserRound } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Map as MapIcon, Shield, UserRound } from 'lucide-react';
 import type { MeDto } from '@wormwright/shared';
 import { useConnectionStatus, useRealtime } from '../lib/RealtimeProvider';
 import { isInstanceAdmin, useDemoMode } from '../lib/session';
@@ -55,8 +55,15 @@ function routeCrumbs(pathname: string): Crumb[] {
 function Breadcrumbs() {
   const { pathname } = useLocation();
   const items = useBreadcrumbItems() ?? routeCrumbs(pathname);
+  // Phones show only the current page, with a back link to its parent.
+  const parent = items.length > 1 ? items[items.length - 2] : undefined;
   return (
-    <nav aria-label="Breadcrumb" className={styles.breadcrumbs}>
+    <nav aria-label="Breadcrumb" className={styles.breadcrumbs} data-nested={parent?.to ? '' : undefined}>
+      {parent?.to && (
+        <Link to={parent.to} className={styles.back} aria-label={`Back to ${parent.label}`}>
+          <ChevronLeft aria-hidden />
+        </Link>
+      )}
       <ol>
         {items.map((c, i) => {
           const last = i === items.length - 1;
@@ -94,6 +101,9 @@ export function AppShell({ me, children }: { me: MeDto; children: ReactNode }) {
   const admin = isInstanceAdmin(me);
   const accountId = me.account.id;
   const lastAccount = useRef<string | null>(null);
+  const { pathname } = useLocation();
+  // The map is a full-screen tool; on phones its own dock replaces the tab bar.
+  const immersive = /^\/m\/[^/]+\/?$/.test(pathname);
 
   // The socket authenticates with the session cookie at connect time; reconnect when it changes.
   // The account's own theme choice is read again at the same moment.
@@ -114,7 +124,7 @@ export function AppShell({ me, children }: { me: MeDto; children: ReactNode }) {
   return (
     <PluginsProvider enabled>
       <BreadcrumbProvider>
-        <div className={styles.shell}>
+        <div className={styles.shell} data-immersive={immersive || undefined}>
           <a href="#main" className={styles.skip}>
             Skip to content
           </a>
@@ -140,7 +150,7 @@ export function AppShell({ me, children }: { me: MeDto; children: ReactNode }) {
               <Tooltip content="Demo mode: everyone who opens this instance shares one demo account.">
                 <span tabIndex={0} className={styles.demo}>
                   <Badge tone="warning" dot>
-                    Demo mode
+                    Demo<span className={styles.demoWord}> mode</span>
                   </Badge>
                 </span>
               </Tooltip>

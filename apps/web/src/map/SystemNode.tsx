@@ -2,7 +2,7 @@ import { memo, type CSSProperties } from 'react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import type { LabelDto, MapSystemDto, UniverseSystemDto } from '@wormwright/shared';
 import { cssVar } from '@wormwright/theme-sdk';
-import { Icon } from '../components/Icon';
+import { EyeOff, Lock, StickyNote, Users } from 'lucide-react';
 import { systemClass } from '../lib/universe';
 import { PluginSlot } from '../plugins/PluginSlot';
 import styles from './SystemNode.module.css';
@@ -70,9 +70,21 @@ export const SystemNode = memo(function SystemNode({
         <span className={styles.name}>{name}</span>
         {system.tag && <span className={styles.tag}>{system.tag}</span>}
         <span className={styles.icons}>
-          {system.description.trim() && <Icon name="note" size={12} title="Has a description" />}
-          {system.locked && <Icon name="lock" size={12} title="Locked" />}
-          {!system.visible && <Icon name="eyeOff" size={12} title="Hidden" />}
+          {system.description.trim() && (
+            <span role="img" aria-label="Has a description" title="Has notes">
+              <StickyNote aria-hidden />
+            </span>
+          )}
+          {system.locked && (
+            <span role="img" aria-label="Locked" title="Locked">
+              <Lock aria-hidden />
+            </span>
+          )}
+          {!system.visible && (
+            <span role="img" aria-label="Hidden" title="Hidden">
+              <EyeOff aria-hidden />
+            </span>
+          )}
         </span>
       </div>
       {(subtitle || characters > 0) && (
@@ -80,7 +92,7 @@ export const SystemNode = memo(function SystemNode({
           <span className={styles.subtitle}>{subtitle}</span>
           {characters > 0 && (
             <span className={styles.characters} title={`${characters} tracked here`}>
-              <Icon name="users" size={11} />
+              <Users aria-hidden />
               {characters}
             </span>
           )}

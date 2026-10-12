@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Rocket, UsersRound } from 'lucide-react';
 import {
   buildPath,
   routes,
@@ -9,6 +10,7 @@ import {
 } from '@wormwright/shared';
 import { api, ApiError } from '../../lib/api';
 import type { MapPermissions } from '../../lib/roles';
+import { Callout, CharacterAvatar, EmptyState, Switch } from '../../ui';
 import { seedCharacters } from '../mapState';
 import type { MapStore } from '../useMapStore';
 import styles from './widgets.module.css';
@@ -26,6 +28,7 @@ interface Props {
 /** Tracked characters: who is in the selected system, everyone else below, and your tracking switches. */
 export function LocalWidget({ mapId, selected, characters, universe, myCharacters, can, store }: Props) {
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState<number | null>(null);
   const presence = useQuery({
     queryKey: ['presence', mapId],
     queryFn: () => api<CharacterPresenceDto[]>(buildPath(routes.tracking.characters.path, { mapId })),
@@ -43,6 +46,7 @@ export function LocalWidget({ mapId, selected, characters, universe, myCharacter
 
   const setTracking = async (characterId: number, on: boolean) => {
     setError(null);
+    setPending(characterId);
     try {
       await api(buildPath(routes.tracking.set.path, { mapId }), {
         method: 'PUT',
@@ -51,59 +55,108 @@ export function LocalWidget({ mapId, selected, characters, universe, myCharacter
       await presence.refetch();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not change tracking');
+    } finally {
+      setPending(null);
     }
   };
 
-  const row = (c: CharacterPresenceDto) => (
-    <li key={c.characterId} className={styles.character} data-online={c.online}>
-      <span className={styles.onlineDot} title={c.online ? 'Online' : 'Offline'} />
-      <span className={styles.ellipsis}>{c.name}</span>
-      <span className="muted">{c.shipName ?? ''}</span>
-      {selected !== c.solarSystemId && c.solarSystemId !== null && (
-        <span className="muted">{universe.get(c.solarSystemId)?.name ?? c.solarSystemId}</span>
-      )}
-    </li>
-  );
+  const row = (c: CharacterPresenceDto) => {
+    const where =
+      c.solarSystemId !== null ? (universe.get(c.solarSystemId)?.name ?? String(c.solarSystemId)) : null;
+    return (
+      <li key={c.characterId} className={styles.pilot} data-online={c.online}>
+        <span className={styles.pilotAvatar}>
+          <CharacterAvatar id={c.characterId} name={c.name} size={28} />
+          <span className={styles.onlineDot} title={c.online ? 'Online' : 'Offline'} />
+        </span>
+        <span className={styles.pilotMain}>
+          <span className={styles.pilotName}>{c.name}</span>
+          <span className={styles.pilotMeta}>{c.shipName ?? (c.online ? 'Ship unknown' : 'Offline')}</span>
+        </span>
+        {where && selected !== c.solarSystemId && (
+          <span className={`${styles.pilotWhere} mono`}>{where}</span>
+        )}
+      </li>
+    );
+  };
 
   return (
     <div className={styles.widget}>
-      <h4 className={styles.subhead}>In this system</h4>
-      {selected === null ? (
-        <p className="muted">Select a system.</p>
-      ) : here.length === 0 ? (
-        <p className="muted">Nobody tracked here.</p>
-      ) : (
-        <ul className={styles.list}>{here.map(row)}</ul>
+      {characters.length > 0 && (
+        <section className={styles.section} aria-label="In this system">
+          <h3 className={styles.sectionTitle}>
+            In this system
+            {here.length > 0 && <span className={styles.sectionCount}>{here.length}</span>}
+          </h3>
+          {selected === null ? (
+            <p className={styles.quiet}>Select a system to see who is there.</p>
+          ) : here.length === 0 ? (
+            <p className={styles.quiet}>Nobody tracked is here.</p>
+          ) : (
+            <ul className={styles.pilots}>{here.map(row)}</ul>
+          )}
+        </section>
       )}
 
       {elsewhere.length > 0 && (
-        <>
-          <h4 className={styles.subhead}>Elsewhere</h4>
-          <ul className={styles.list}>{elsewhere.map(row)}</ul>
-        </>
+        <section className={styles.section} aria-label="Elsewhere">
+          <h3 className={styles.sectionTitle}>
+            Elsewhere
+            <span className={styles.sectionCount}>{elsewhere.length}</span>
+          </h3>
+          <ul className={styles.pilots}>{elsewhere.map(row)}</ul>
+        </section>
+      )}
+
+      {characters.length === 0 && (
+        <EmptyState
+          compact
+          icon={<UsersRound />}
+          title="Nobody is tracked"
+          description="Track your characters below and the map follows them as they jump."
+        />
       )}
 
       {can.edit && myCharacters.length > 0 && (
-        <>
-          <h4 className={styles.subhead}>Track my characters</h4>
-          <ul className={styles.list}>
+        <section className={styles.section} aria-label="Track my characters">
+          <h3 className={styles.sectionTitle}>Track my characters</h3>
+          <ul className={styles.trackList}>
             {myCharacters.map((c) => (
-              <li key={c.id}>
-                <label className={styles.check}>
-                  <input
-                    type="checkbox"
-                    checked={tracked.has(c.id)}
-                    disabled={!c.tokenValid}
-                    onChange={(e) => void setTracking(c.id, e.target.checked)}
-                  />
-                  {c.name}
-                  {!c.tokenValid && <span className="error"> (re-link needed)</span>}
-                </label>
+              <li key={c.id} className={styles.trackRow}>
+                <CharacterAvatar id={c.id} name={c.name} size={28} />
+                <span className={styles.pilotMain}>
+                  <span className={styles.pilotName}>{c.name}</span>
+                  <span className={styles.pilotMeta} data-tone={c.tokenValid ? undefined : 'danger'}>
+                    {!c.tokenValid
+                      ? 'Sign-in expired: link it again on your account page'
+                      : tracked.has(c.id)
+                        ? 'Tracked on this map'
+                        : 'Not tracked'}
+                  </span>
+                </span>
+                <Switch
+                  checked={tracked.has(c.id)}
+                  disabled={!c.tokenValid || pending === c.id}
+                  onCheckedChange={(on) => void setTracking(c.id, on)}
+                  label={<span className="sr-only">Track {c.name}</span>}
+                />
               </li>
             ))}
           </ul>
-          {error && <p className="error">{error}</p>}
-        </>
+          {error && (
+            <Callout tone="danger" title="Tracking did not change">
+              {error}
+            </Callout>
+          )}
+        </section>
+      )}
+
+      {can.edit && myCharacters.length === 0 && (
+        <section className={styles.section}>
+          <Callout tone="neutral" icon={<Rocket />} title="Link a character to track it">
+            Add your EVE characters on the account page, then switch tracking on here.
+          </Callout>
+        </section>
       )}
     </div>
   );

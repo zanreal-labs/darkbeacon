@@ -1,6 +1,24 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  ArrowUpRight,
+  Building2,
+  Copy,
+  Flag,
+  Hash,
+  KeyRound,
+  Lock,
+  Plus,
+  Send,
+  Settings2,
+  ShieldCheck,
+  Tags,
+  Trash2,
+  UserRound,
+  Webhook,
+  X,
+} from 'lucide-react';
 import {
   AccessSubjectKind,
   buildPath,
@@ -9,18 +27,60 @@ import {
   routes,
   type AccessRuleDto,
   type CreateAccessRuleRequest,
+  type CreatedWebhookDto,
   type LabelDto,
   type MapDto,
   type MapSummaryDto,
   type UpdateMapRequest,
+  type WebhookDeliveryDto,
+  type WebhookDto,
 } from '@wormwright/shared';
-import { Icon } from '../components/Icon';
 import { api, ApiError } from '../lib/api';
 import { mapPermissions } from '../lib/roles';
+import { relativeTime } from '../lib/time';
+import { useTabParam } from '../lib/useTabParam';
+import { PluginSlot } from '../plugins/PluginSlot';
 import { useBreadcrumbs } from '../shell/breadcrumbs';
-import styles from './pages.module.css';
+import {
+  Avatar,
+  Badge,
+  Button,
+  Callout,
+  Card,
+  CardBody,
+  CardFooter,
+  CardHeader,
+  Checkbox,
+  ConfirmDialog,
+  corporationLogoUrl,
+  characterPortraitUrl,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  EmptyState,
+  ErrorState,
+  Field,
+  IconButton,
+  Input,
+  Page,
+  PageHeader,
+  Select,
+  Skeleton,
+  SkeletonRows,
+  Stack,
+  Switch,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+  Tooltip,
+  useToast,
+} from '../ui';
+import styles from './settings.module.css';
 
 const errorText = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback);
+
+type TabId = 'general' | 'labels' | 'access' | 'webhooks';
 
 export function MapSettingsPage() {
   const { slug = '' } = useParams();
@@ -39,24 +99,103 @@ export function MapSettingsPage() {
     { label: map.data?.name ?? slug, to: `/m/${slug}` },
     { label: 'Settings' },
   ]);
-  if (map.isPending || maps.isPending) return <p className={`${styles.page} muted`}>Loading…</p>;
-  if (!map.data) return <p className={`${styles.page} error`}>This map is not available.</p>;
-  const can = mapPermissions(maps.data?.find((m) => m.id === map.data.id)?.role);
+  const can = mapPermissions(maps.data?.find((m) => m.id === map.data?.id)?.role);
+  const tabs: { id: TabId; title: string; icon: ReactNode; show: boolean }[] = [
+    { id: 'general', title: 'General', icon: <Settings2 />, show: can.admin },
+    { id: 'labels', title: 'Labels', icon: <Tags />, show: can.manage },
+    { id: 'access', title: 'Access', icon: <ShieldCheck />, show: can.admin },
+    { id: 'webhooks', title: 'Webhooks', icon: <Webhook />, show: can.admin },
+  ];
+  const visible = tabs.filter((t) => t.show);
+  const [tab, setTab] = useTabParam<TabId>(
+    visible.map((t) => t.id),
+    visible[0]?.id ?? 'labels',
+  );
+
+  if (map.isPending || maps.isPending) {
+    return (
+      <Page width={880} aria-busy="true">
+        <Skeleton width={220} height={24} />
+        <Skeleton width={320} height={14} style={{ marginTop: 10 }} />
+        <Skeleton width="100%" height={36} style={{ margin: '32px 0 24px' }} />
+        <Skeleton width="100%" height={220} radius={10} />
+      </Page>
+    );
+  }
+  if (map.isError) {
+    const missing = map.error instanceof ApiError && map.error.status === 404;
+    return (
+      <Page width={880}>
+        {missing ? (
+          <EmptyState
+            icon={<Lock />}
+            title="This map is not available"
+            description={`There is no map “${slug}”, or you cannot see it.`}
+            actions={
+              <Button asChild>
+                <Link to="/">Back to maps</Link>
+              </Button>
+            }
+          />
+        ) : (
+          <ErrorState
+            title="Settings could not be loaded"
+            error={map.error}
+            onRetry={() => void map.refetch()}
+          />
+        )}
+      </Page>
+    );
+  }
   if (!can.manage) return <Navigate to={`/m/${slug}`} replace />;
 
   return (
-    <section className={styles.page}>
-      <div className={styles.header}>
-        <h1>{map.data.name} · settings</h1>
-        <Link to={`/m/${map.data.slug}`} className="btn">
-          Open map
-        </Link>
-      </div>
-      {can.admin && <GeneralSettings map={map.data} />}
-      <LabelSettings map={map.data} />
-      {can.admin && <AccessRules map={map.data} />}
-      {can.admin && <DeleteMap map={map.data} />}
-    </section>
+    <Page width={880}>
+      <PageHeader
+        title={map.data.name}
+        description={
+          <>
+            Map settings · <span className="mono">/m/{map.data.slug}</span>
+          </>
+        }
+        actions={
+          <Button asChild trailingIcon={<ArrowUpRight />}>
+            <Link to={`/m/${map.data.slug}`}>Open map</Link>
+          </Button>
+        }
+      />
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList className={styles.tabs} aria-label="Map settings sections">
+          {visible.map((t) => (
+            <TabsTrigger key={t.id} value={t.id} icon={t.icon}>
+              {t.title}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        {can.admin && (
+          <TabsContent value="general">
+            <Stack>
+              <GeneralSettings map={map.data} />
+              <PluginSlot slot="settingsPage" props={{ mapId: map.data.id }} />
+              <DeleteMap map={map.data} />
+            </Stack>
+          </TabsContent>
+        )}
+        <TabsContent value="labels">
+          <LabelSettings key={map.data.id} map={map.data} />
+        </TabsContent>
+        {can.admin && (
+          <TabsContent value="access">
+            <AccessRules map={map.data} />
+          </TabsContent>
+        )}
+        {can.admin && (
+          <TabsContent value="webhooks">
+            <Webhooks map={map.data} />
+          </TabsContent>
+        )}
+      </Tabs>
+    </Page>
   );
 }
 
@@ -68,25 +207,34 @@ function useMapUpdated() {
   };
 }
 
-const SCOPE_LABEL: Record<MapScope, string> = {
-  wormhole: 'Wormhole space',
-  high: 'High-sec',
-  low: 'Low-sec',
-  null: 'Null-sec',
-  pochven: 'Pochven',
+// ---- General ----------------------------------------------------------------------------------
+
+const SCOPES: Record<MapScope, { label: string; hint: string }> = {
+  wormhole: { label: 'Wormhole space', hint: 'J-space, Thera and the shattered systems' },
+  high: { label: 'High-sec', hint: 'Security 0.5 and above' },
+  low: { label: 'Low-sec', hint: 'Security 0.1 to 0.4' },
+  null: { label: 'Null-sec', hint: 'Security 0.0 and below' },
+  pochven: { label: 'Pochven', hint: 'Triglavian space' },
 };
 
 function GeneralSettings({ map }: { map: MapDto }) {
   const navigate = useNavigate();
+  const toast = useToast();
   const updated = useMapUpdated();
   const [name, setName] = useState(map.name);
   const [slug, setSlug] = useState(map.slug);
   const [scopes, setScopes] = useState<MapScope[]>(map.settings.scopes);
+  const dirty =
+    name.trim() !== map.name ||
+    slug !== map.slug ||
+    scopes.length !== map.settings.scopes.length ||
+    scopes.some((s) => !map.settings.scopes.includes(s));
   const save = useMutation({
     mutationFn: (body: UpdateMapRequest) =>
       api<MapDto>(buildPath(routes.maps.update.path, { mapId: map.id }), { method: 'PATCH', json: body }),
     onSuccess: (next) => {
       updated(next);
+      toast({ title: 'Map settings saved', tone: 'success' });
       if (next.slug !== map.slug) void navigate(`/m/${next.slug}/settings`, { replace: true });
     },
   });
@@ -97,63 +245,167 @@ function GeneralSettings({ map }: { map: MapDto }) {
   };
 
   return (
-    <form className={styles.section} onSubmit={submit} aria-label="General">
-      <h2>General</h2>
-      <div className={styles.inline}>
-        <label className={`field ${styles.field}`}>
-          <span>Name</span>
-          <input
-            className="input"
-            required
-            maxLength={64}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </label>
-        <label className={`field ${styles.field}`}>
-          <span>Address: /m/{slug}</span>
-          <input
-            className="input"
-            required
-            minLength={2}
-            maxLength={48}
-            pattern="[a-z0-9]+(-[a-z0-9]+)*"
-            value={slug}
-            onChange={(e) => setSlug(e.target.value)}
-          />
-        </label>
-      </div>
-      <fieldset className={styles.section} style={{ marginTop: 'var(--ww-space-3)' }}>
-        <legend className="muted">Auto-mapping adds systems in</legend>
-        <div className={styles.inline}>
-          {MapScope.options.map((s) => (
-            <label key={s} className="field" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <input
-                type="checkbox"
-                checked={scopes.includes(s)}
-                onChange={(e) => setScopes(e.target.checked ? [...scopes, s] : scopes.filter((x) => x !== s))}
-              />
-              {SCOPE_LABEL[s]}
-            </label>
-          ))}
-        </div>
-      </fieldset>
-      <div className={styles.inline} style={{ marginTop: 'var(--ww-space-3)' }}>
-        <button type="submit" className="btn btn-primary" disabled={save.isPending}>
-          Save
-        </button>
-        {save.isSuccess && <span className="muted">Saved.</span>}
-        {save.error && <span className="error">{errorText(save.error, 'Could not save.')}</span>}
-      </div>
-    </form>
+    <Card>
+      <form onSubmit={submit} aria-label="General">
+        <CardHeader title="General" description="The map's name, its address and what auto-mapping adds." />
+        <CardBody>
+          <div className={styles.formStack}>
+            <div className={styles.grid}>
+              <Field label="Name">
+                <Input required maxLength={64} value={name} onChange={(e) => setName(e.target.value)} />
+              </Field>
+              <Field
+                label="Address"
+                hint="Changing it breaks old links."
+                error={save.error ? errorText(save.error, 'Could not save.') : undefined}
+              >
+                <Input
+                  mono
+                  required
+                  minLength={2}
+                  maxLength={48}
+                  pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                  icon={
+                    <span className="mono subtle" style={{ paddingLeft: 4 }}>
+                      /m/
+                    </span>
+                  }
+                  value={slug}
+                  onChange={(e) => setSlug(e.target.value)}
+                />
+              </Field>
+            </div>
+            <fieldset style={{ border: 0, margin: 0, padding: 0, display: 'grid', gap: 'var(--ww-space-2)' }}>
+              <legend
+                className="muted"
+                style={{
+                  fontSize: 'var(--ww-font-size-small)',
+                  fontWeight: 500,
+                  marginBottom: 'var(--ww-space-2)',
+                }}
+              >
+                Auto-mapping adds systems in
+              </legend>
+              <div className={styles.grid} style={{ gap: 'var(--ww-space-3)' }}>
+                {MapScope.options.map((s) => (
+                  <Checkbox
+                    key={s}
+                    checked={scopes.includes(s)}
+                    onCheckedChange={(on) => setScopes(on ? [...scopes, s] : scopes.filter((x) => x !== s))}
+                    label={SCOPES[s].label}
+                    description={SCOPES[s].hint}
+                  />
+                ))}
+              </div>
+            </fieldset>
+          </div>
+        </CardBody>
+        <CardFooter>
+          {dirty && (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setName(map.name);
+                setSlug(map.slug);
+                setScopes(map.settings.scopes);
+              }}
+            >
+              Discard
+            </Button>
+          )}
+          <Button type="submit" variant="primary" loading={save.isPending} disabled={!dirty}>
+            Save changes
+          </Button>
+        </CardFooter>
+      </form>
+    </Card>
   );
 }
 
-const newLabel = (): LabelDto => ({ id: crypto.randomUUID(), name: '', color: '#5b93f0', description: '' });
+function DeleteMap({ map }: { map: MapDto }) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState('');
+  const remove = useMutation({
+    mutationFn: () => api<void>(buildPath(routes.maps.remove.path, { mapId: map.id }), { method: 'DELETE' }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['maps'] });
+      void navigate('/', { replace: true });
+    },
+  });
+  return (
+    <Card className={styles.danger}>
+      <CardHeader
+        title="Delete this map"
+        description="Removes the map with its systems, connections, signatures, access rules and webhooks, for everyone. This cannot be undone."
+        actions={
+          <Button variant="danger" icon={<Trash2 />} onClick={() => setOpen(true)}>
+            Delete map
+          </Button>
+        }
+      />
+      <div style={{ height: 'var(--ww-space-4)' }} />
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) setTyped('');
+        }}
+      >
+        <DialogContent
+          title={`Delete ${map.name}?`}
+          description="Everyone loses this map at once. Type its name to confirm."
+          width={440}
+          footer={
+            <>
+              <DialogClose asChild>
+                <Button variant="ghost">Cancel</Button>
+              </DialogClose>
+              <Button
+                variant="danger"
+                loading={remove.isPending}
+                disabled={typed !== map.name}
+                onClick={() => remove.mutate()}
+              >
+                Delete map
+              </Button>
+            </>
+          }
+        >
+          <Field
+            label="Map name"
+            error={remove.error ? errorText(remove.error, 'Could not delete the map.') : undefined}
+          >
+            <Input
+              autoFocus
+              placeholder={map.name}
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+            />
+          </Field>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
+
+// ---- Labels -----------------------------------------------------------------------------------
+
+const PALETTE = ['#38c6d6', '#3fbf7f', '#eba23b', '#f05252', '#7b93ff', '#b98cf5', '#f472b6', '#94a3b8'];
+const newLabel = (n: number): LabelDto => ({
+  id: crypto.randomUUID(),
+  name: '',
+  color: PALETTE[n % PALETTE.length]!,
+  description: '',
+});
 
 function LabelSettings({ map }: { map: MapDto }) {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [labels, setLabels] = useState<LabelDto[]>(map.labels);
+  const [saved, setSaved] = useState<LabelDto[]>(map.labels);
+  const dirty = JSON.stringify(labels) !== JSON.stringify(saved);
   const save = useMutation({
     mutationFn: (list: LabelDto[]) =>
       api<LabelDto[]>(buildPath(routes.maps.setLabels.path, { mapId: map.id }), {
@@ -162,7 +414,9 @@ function LabelSettings({ map }: { map: MapDto }) {
       }),
     onSuccess: (list) => {
       setLabels(list);
+      setSaved(list);
       queryClient.setQueryData(['map', map.slug], { ...map, labels: list });
+      toast({ title: 'Labels saved', tone: 'success' });
     },
   });
   const change = (id: string, patch: Partial<LabelDto>) =>
@@ -174,73 +428,146 @@ function LabelSettings({ map }: { map: MapDto }) {
   };
 
   return (
-    <form className={styles.section} onSubmit={submit} aria-label="Labels">
-      <h2>Labels</h2>
-      <p className="muted">Shown on systems. The description appears when someone hovers the label.</p>
-      {labels.map((l) => (
-        <div key={l.id} className={styles.labelRow}>
-          <input
-            type="color"
-            className={styles.color}
-            aria-label="Colour"
-            value={l.color}
-            onChange={(e) => change(l.id, { color: e.target.value })}
-          />
-          <input
-            className="input"
-            aria-label="Label name"
-            placeholder="Name"
-            maxLength={32}
-            value={l.name}
-            onChange={(e) => change(l.id, { name: e.target.value })}
-          />
-          <input
-            className="input"
-            aria-label="Description"
-            placeholder="Description"
-            maxLength={500}
-            value={l.description}
-            onChange={(e) => change(l.id, { description: e.target.value })}
-          />
-          <button
-            type="button"
-            className="btn btn-ghost btn-small"
-            aria-label={`Remove label ${l.name}`}
-            onClick={() => setLabels((ls) => ls.filter((x) => x.id !== l.id))}
-          >
-            <Icon name="close" size={12} />
-          </button>
-        </div>
-      ))}
-      <div className={styles.inline} style={{ marginTop: 'var(--ww-space-2)' }}>
-        <button
-          type="button"
-          className="btn"
-          onClick={() => setLabels((ls) => [...ls, newLabel()])}
-          disabled={labels.length >= 64}
-        >
-          <Icon name="plus" size={12} /> Add label
-        </button>
-        <button type="submit" className="btn btn-primary" disabled={save.isPending}>
-          Save labels
-        </button>
-        {save.isSuccess && <span className="muted">Saved.</span>}
-        {save.error && <span className="error">{errorText(save.error, 'Could not save the labels.')}</span>}
-      </div>
-    </form>
+    <Card>
+      <form onSubmit={submit} aria-label="Labels">
+        <CardHeader
+          title="Labels"
+          description="Tags for systems, like Staging or Sites. The description shows when someone hovers the label."
+          actions={
+            <Button
+              size="sm"
+              icon={<Plus />}
+              onClick={() => setLabels((ls) => [...ls, newLabel(ls.length)])}
+              disabled={labels.length >= 64}
+            >
+              Add label
+            </Button>
+          }
+        />
+        <CardBody flush>
+          {labels.length === 0 ? (
+            <EmptyState
+              compact
+              icon={<Tags />}
+              title="No labels yet"
+              description="Add a few to mark staging systems, sites or exits on the map."
+            />
+          ) : (
+            <div>
+              {labels.map((l) => (
+                <div key={l.id} className={styles.labelRow}>
+                  <Tooltip content="Colour">
+                    <label className={styles.swatch} style={{ background: l.color }}>
+                      <input
+                        type="color"
+                        aria-label={`Colour of ${l.name || 'new label'}`}
+                        value={l.color}
+                        onChange={(e) => change(l.id, { color: e.target.value })}
+                        style={{ opacity: 0 }}
+                      />
+                    </label>
+                  </Tooltip>
+                  <Input
+                    aria-label="Label name"
+                    placeholder="Name"
+                    maxLength={32}
+                    value={l.name}
+                    onChange={(e) => change(l.id, { name: e.target.value })}
+                  />
+                  <Input
+                    aria-label="Description"
+                    placeholder="Description (optional)"
+                    maxLength={500}
+                    value={l.description}
+                    onChange={(e) => change(l.id, { description: e.target.value })}
+                  />
+                  <IconButton
+                    size="sm"
+                    label={`Remove label ${l.name || 'new label'}`}
+                    icon={<X />}
+                    onClick={() => setLabels((ls) => ls.filter((x) => x.id !== l.id))}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </CardBody>
+        <CardFooter>
+          {labels.some((l) => l.name.trim()) && (
+            <span className={styles.footerNote}>
+              <span className={styles.preview}>
+                {labels
+                  .filter((l) => l.name.trim())
+                  .map((l) => (
+                    <span
+                      key={l.id}
+                      className={styles.labelPreview}
+                      style={{ '--label-color': l.color } as CSSProperties}
+                    >
+                      {l.name}
+                    </span>
+                  ))}
+              </span>
+            </span>
+          )}
+          {save.error && <span className="error">{errorText(save.error, 'Could not save the labels.')}</span>}
+          {dirty && (
+            <Button variant="ghost" onClick={() => setLabels(saved)}>
+              Discard
+            </Button>
+          )}
+          <Button type="submit" variant="primary" loading={save.isPending} disabled={!dirty}>
+            Save labels
+          </Button>
+        </CardFooter>
+      </form>
+    </Card>
   );
 }
 
-const SUBJECT_LABEL: Record<AccessSubjectKind, string> = {
-  discordRole: 'Discord role',
-  character: 'Character',
-  corporation: 'Corporation',
-  alliance: 'Alliance',
-  account: 'Account',
+// ---- Access -----------------------------------------------------------------------------------
+
+const SUBJECT: Record<
+  AccessSubjectKind,
+  { label: string; icon: ReactNode; idLabel: string; placeholder: string }
+> = {
+  corporation: {
+    label: 'Corporation',
+    icon: <Building2 />,
+    idLabel: 'Corporation id',
+    placeholder: '98000001',
+  },
+  alliance: { label: 'Alliance', icon: <Flag />, idLabel: 'Alliance id', placeholder: '99000001' },
+  character: { label: 'Character', icon: <UserRound />, idLabel: 'Character id', placeholder: '2112000001' },
+  discordRole: {
+    label: 'Discord role',
+    icon: <Hash />,
+    idLabel: 'Role id',
+    placeholder: '81384788765712384',
+  },
+  account: { label: 'Account', icon: <KeyRound />, idLabel: 'Account id', placeholder: 'Account id' },
 };
+
+const ROLE_HINT: Record<MapRole, string> = {
+  viewer: 'Viewer: sees the map',
+  member: 'Member: maps systems and signatures',
+  manager: 'Manager: also locks systems and edits labels',
+  admin: 'Admin: also settings, access and webhooks',
+  blocked: 'Blocked: refused',
+};
+
+function subjectImage(rule: AccessRuleDto): string | null {
+  const id = Number(rule.subjectId);
+  if (!Number.isSafeInteger(id)) return null;
+  if (rule.subjectKind === 'corporation') return corporationLogoUrl(id, 64);
+  if (rule.subjectKind === 'alliance') return `https://images.evetech.net/alliances/${id}/logo?size=64`;
+  if (rule.subjectKind === 'character') return characterPortraitUrl(id, 64);
+  return null;
+}
 
 function AccessRules({ map }: { map: MapDto }) {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const key = ['access-rules', map.id];
   const rules = useQuery({
     queryKey: key,
@@ -252,6 +579,7 @@ function AccessRules({ map }: { map: MapDto }) {
     guildId: null,
     role: 'member',
   });
+  const [removing, setRemoving] = useState<AccessRuleDto | null>(null);
   const add = useMutation({
     mutationFn: (body: CreateAccessRuleRequest) =>
       api<AccessRuleDto>(buildPath(routes.access.add.path, { mapId: map.id }), {
@@ -267,6 +595,12 @@ function AccessRules({ map }: { map: MapDto }) {
     mutationFn: (ruleId: string) =>
       api<void>(buildPath(routes.access.remove.path, { mapId: map.id, ruleId }), { method: 'DELETE' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: key }),
+    onError: (error) =>
+      toast({
+        title: 'Could not remove the rule',
+        description: errorText(error, 'Try again.'),
+        tone: 'danger',
+      }),
   });
 
   const submit = (e: FormEvent) => {
@@ -277,126 +611,519 @@ function AccessRules({ map }: { map: MapDto }) {
       guildId: draft.subjectKind === 'discordRole' ? draft.guildId?.trim() || null : null,
     });
   };
+  const subject = SUBJECT[draft.subjectKind];
 
   return (
-    <div className={styles.section}>
-      <h2>Access</h2>
-      <p className="muted">
-        The highest matching rule wins. A blocked character or account is refused regardless of other rules.
-      </p>
-      {rules.data?.length === 0 && <p className="muted">Only the owner can see this map.</p>}
-      <ul className={styles.rows}>
-        {rules.data?.map((r) => (
-          <li key={r.id} className={styles.row}>
-            <span className={styles.pill}>{SUBJECT_LABEL[r.subjectKind]}</span>
-            <span className={styles.grow}>
-              <code>{r.subjectId}</code>
-              {r.guildId && <span className="muted"> in guild {r.guildId}</span>}
-            </span>
-            <strong>{r.role}</strong>
-            <button
-              type="button"
-              className="btn btn-ghost btn-small"
-              aria-label="Remove rule"
-              onClick={() => remove.mutate(r.id)}
-            >
-              <Icon name="close" size={12} />
-            </button>
-          </li>
-        ))}
-      </ul>
-      <form
-        className={styles.inline}
-        onSubmit={submit}
-        aria-label="Add access rule"
-        style={{ marginTop: 'var(--ww-space-3)' }}
-      >
-        <label className={`field ${styles.field}`}>
-          <span>Who</span>
-          <select
-            className="input"
-            value={draft.subjectKind}
-            onChange={(e) => setDraft({ ...draft, subjectKind: e.target.value as AccessSubjectKind })}
-          >
-            {AccessSubjectKind.options.map((k) => (
-              <option key={k} value={k}>
-                {SUBJECT_LABEL[k]}
-              </option>
-            ))}
-          </select>
-        </label>
-        {draft.subjectKind === 'discordRole' && (
-          <label className={`field ${styles.field}`}>
-            <span>Guild id</span>
-            <input
-              className="input"
-              required
-              value={draft.guildId ?? ''}
-              onChange={(e) => setDraft({ ...draft, guildId: e.target.value })}
+    <Stack>
+      <Card>
+        <CardHeader
+          title="Who can open this map"
+          description="The highest matching rule wins. A blocked character or account is refused whatever else matches."
+        />
+        <CardBody flush>
+          {rules.isPending ? (
+            <SkeletonRows count={2} />
+          ) : rules.isError ? (
+            <ErrorState compact error={rules.error} onRetry={() => void rules.refetch()} />
+          ) : rules.data.length === 0 ? (
+            <EmptyState
+              compact
+              icon={<Lock />}
+              title="Only you can see this map"
+              description="Add a rule below to let your corporation, alliance or a Discord role in."
             />
-          </label>
-        )}
-        <label className={`field ${styles.field}`}>
-          <span>{draft.subjectKind === 'discordRole' ? 'Role id' : 'Id'}</span>
-          <input
-            className="input"
-            required
-            value={draft.subjectId}
-            onChange={(e) => setDraft({ ...draft, subjectId: e.target.value })}
-          />
-        </label>
-        <label className={`field ${styles.field}`}>
-          <span>Map role</span>
-          <select
-            className="input"
-            value={draft.role}
-            onChange={(e) => setDraft({ ...draft, role: e.target.value as MapRole })}
-          >
-            {MapRole.options.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button type="submit" className="btn btn-primary" disabled={add.isPending}>
-          Add rule
-        </button>
-      </form>
-      {(add.error ?? remove.error ?? rules.error) && (
-        <p className="error">
-          {errorText(add.error ?? remove.error ?? rules.error, 'Something went wrong.')}
-        </p>
+          ) : (
+            <ul className={styles.list}>
+              {rules.data.map((r) => {
+                const image = subjectImage(r);
+                return (
+                  <li key={r.id} className={`${styles.item} ${styles.itemCenter}`}>
+                    {image ? (
+                      <Avatar src={image} name={SUBJECT[r.subjectKind].label} size={32} shape="rounded" />
+                    ) : (
+                      <span className={styles.subjectIcon} aria-hidden>
+                        {SUBJECT[r.subjectKind].icon}
+                      </span>
+                    )}
+                    <div className={styles.rowBody}>
+                      <div className={styles.rowTitle}>
+                        <span className="mono">{r.subjectId}</span>
+                      </div>
+                      <div className={styles.rowMeta}>
+                        {SUBJECT[r.subjectKind].label}
+                        {r.guildId && (
+                          <>
+                            {' '}
+                            on server <span className="mono">{r.guildId}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className={styles.rowActions}>
+                      <Badge
+                        tone={
+                          r.role === 'blocked'
+                            ? 'danger'
+                            : r.role === 'admin' || r.role === 'manager'
+                              ? 'accent'
+                              : 'neutral'
+                        }
+                      >
+                        {r.role}
+                      </Badge>
+                      <IconButton
+                        size="sm"
+                        variant="danger-ghost"
+                        label="Remove rule"
+                        icon={<Trash2 />}
+                        onClick={() => setRemoving(r)}
+                      />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <form onSubmit={submit} aria-label="Add access rule">
+          <CardHeader title="Add a rule" description="Ids are the numbers EVE and Discord use, not names." />
+          <CardBody>
+            <div className={styles.grid}>
+              <Field label="Who">
+                <Select
+                  value={draft.subjectKind}
+                  options={AccessSubjectKind.options.map((k) => ({
+                    value: k,
+                    label: SUBJECT[k].label,
+                    icon: SUBJECT[k].icon,
+                  }))}
+                  onValueChange={(k) => setDraft({ ...draft, subjectKind: k as AccessSubjectKind })}
+                />
+              </Field>
+              {draft.subjectKind === 'discordRole' && (
+                <Field label="Discord server id">
+                  <Input
+                    mono
+                    required
+                    inputMode="numeric"
+                    value={draft.guildId ?? ''}
+                    onChange={(e) => setDraft({ ...draft, guildId: e.target.value })}
+                  />
+                </Field>
+              )}
+              <Field
+                label={subject.idLabel}
+                error={add.error ? errorText(add.error, 'Could not add the rule.') : undefined}
+              >
+                <Input
+                  mono
+                  required
+                  placeholder={subject.placeholder}
+                  value={draft.subjectId}
+                  onChange={(e) => setDraft({ ...draft, subjectId: e.target.value })}
+                />
+              </Field>
+              <Field label="Map role" hint={ROLE_HINT[draft.role]}>
+                <Select
+                  value={draft.role}
+                  options={MapRole.options.map((r) => ({
+                    value: r,
+                    label: r[0]!.toUpperCase() + r.slice(1),
+                  }))}
+                  onValueChange={(r) => setDraft({ ...draft, role: r as MapRole })}
+                />
+              </Field>
+            </div>
+          </CardBody>
+          <CardFooter>
+            <Button
+              type="submit"
+              variant="primary"
+              icon={<Plus />}
+              loading={add.isPending}
+              disabled={!draft.subjectId.trim()}
+            >
+              Add rule
+            </Button>
+          </CardFooter>
+        </form>
+      </Card>
+
+      <ConfirmDialog
+        open={removing !== null}
+        onOpenChange={(open) => !open && setRemoving(null)}
+        title="Remove this rule?"
+        description="People who got in only through it lose access at once."
+        confirmLabel="Remove rule"
+        tone="danger"
+        onConfirm={() => removing && remove.mutateAsync(removing.id)}
+      />
+    </Stack>
+  );
+}
+
+// ---- Webhooks ---------------------------------------------------------------------------------
+
+const EVENT_GROUPS = [
+  { value: 'system.*', label: 'Systems', hint: 'Added, changed, removed' },
+  { value: 'connection.*', label: 'Connections', hint: 'Added, changed, removed, passages' },
+  { value: 'signature.*', label: 'Signatures', hint: 'Added, changed, removed' },
+  { value: 'character.*', label: 'Characters', hint: 'Jumps, ships, online' },
+  { value: 'labels.changed', label: 'Labels', hint: 'The label list changed' },
+  { value: 'map.*', label: 'Map', hint: 'Settings changed' },
+  { value: 'access.*', label: 'Access', hint: 'Rules and roles' },
+  { value: 'ping.*', label: 'Pings', hint: 'Created and removed' },
+] as const;
+
+function eventsLabel(events: readonly string[]): string[] {
+  if (events.includes('*')) return ['All events'];
+  return events.map((e) => EVENT_GROUPS.find((g) => g.value === e)?.label ?? e);
+}
+
+function Webhooks({ map }: { map: MapDto }) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const key = ['webhooks', map.id];
+  const hooks = useQuery({
+    queryKey: key,
+    queryFn: () => api<WebhookDto[]>(buildPath(routes.webhooks.list.path, { mapId: map.id })),
+  });
+  const [creating, setCreating] = useState(false);
+  const [created, setCreated] = useState<CreatedWebhookDto | null>(null);
+  const [removing, setRemoving] = useState<WebhookDto | null>(null);
+  const failed = (title: string) => (error: unknown) =>
+    toast({ title, description: errorText(error, 'Try again.'), tone: 'danger' });
+  const toggle = useMutation({
+    mutationFn: (w: WebhookDto) =>
+      api<WebhookDto>(buildPath(routes.webhooks.update.path, { mapId: map.id, webhookId: w.id }), {
+        method: 'PATCH',
+        json: { enabled: !w.enabled },
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: key }),
+    onError: failed('Could not switch the webhook'),
+  });
+  const remove = useMutation({
+    mutationFn: (w: WebhookDto) =>
+      api<void>(buildPath(routes.webhooks.remove.path, { mapId: map.id, webhookId: w.id }), {
+        method: 'DELETE',
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: key }),
+    onError: failed('Could not delete the webhook'),
+  });
+
+  return (
+    <Stack>
+      {created && (
+        <Callout tone="success" title="Webhook created. Copy its signing secret now">
+          <div style={{ display: 'grid', gap: 'var(--ww-space-2)', marginTop: 'var(--ww-space-1)' }}>
+            It is shown only once. Use it to check the <code>x-wormwright-signature</code> header.
+            <SecretValue value={created.secret} />
+            <div>
+              <Button size="sm" variant="ghost" onClick={() => setCreated(null)}>
+                I saved it
+              </Button>
+            </div>
+          </div>
+        </Callout>
       )}
+      <Card>
+        <CardHeader
+          title="Webhooks"
+          description="Send chosen map events to another service as signed JSON, with retries."
+          actions={
+            <Button size="sm" icon={<Plus />} onClick={() => setCreating(true)}>
+              Add webhook
+            </Button>
+          }
+        />
+        <CardBody flush>
+          {hooks.isPending ? (
+            <SkeletonRows count={2} avatar={false} />
+          ) : hooks.isError ? (
+            <ErrorState compact error={hooks.error} onRetry={() => void hooks.refetch()} />
+          ) : hooks.data.length === 0 ? (
+            <EmptyState
+              compact
+              icon={<Webhook />}
+              title="No webhooks"
+              description="Post jumps, new signatures or connection changes to a bot or a Discord relay."
+              actions={
+                <Button icon={<Plus />} onClick={() => setCreating(true)}>
+                  Add webhook
+                </Button>
+              }
+            />
+          ) : (
+            <ul className={styles.list}>
+              {hooks.data.map((w) => (
+                <WebhookRow
+                  key={w.id}
+                  map={map}
+                  hook={w}
+                  onToggle={() => toggle.mutate(w)}
+                  onRemove={() => setRemoving(w)}
+                />
+              ))}
+            </ul>
+          )}
+        </CardBody>
+      </Card>
+      <CreateWebhookDialog
+        map={map}
+        open={creating}
+        onOpenChange={setCreating}
+        onCreated={(hook) => {
+          setCreated(hook);
+          void queryClient.invalidateQueries({ queryKey: key });
+        }}
+      />
+      <ConfirmDialog
+        open={removing !== null}
+        onOpenChange={(open) => !open && setRemoving(null)}
+        title="Delete this webhook?"
+        description="Deliveries stop at once and its delivery log is removed."
+        confirmLabel="Delete webhook"
+        tone="danger"
+        onConfirm={() => removing && remove.mutateAsync(removing)}
+      />
+    </Stack>
+  );
+}
+
+function SecretValue({ value }: { value: string }) {
+  const toast = useToast();
+  return (
+    <div className={styles.secret}>
+      <code className="mono">{value}</code>
+      <IconButton
+        size="sm"
+        label="Copy secret"
+        icon={<Copy />}
+        onClick={() =>
+          void navigator.clipboard
+            ?.writeText(value)
+            .then(() => toast({ title: 'Secret copied', tone: 'success' }))
+            .catch(() => {})
+        }
+      />
     </div>
   );
 }
 
-function DeleteMap({ map }: { map: MapDto }) {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const remove = useMutation({
-    mutationFn: () => api<void>(buildPath(routes.maps.remove.path, { mapId: map.id }), { method: 'DELETE' }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['maps'] });
-      void navigate('/', { replace: true });
+const DELIVERY_TONE = { delivered: 'success', failed: 'danger', pending: 'warning' } as const;
+
+function WebhookRow({
+  map,
+  hook,
+  onToggle,
+  onRemove,
+}: {
+  map: MapDto;
+  hook: WebhookDto;
+  onToggle(): void;
+  onRemove(): void;
+}) {
+  const toast = useToast();
+  const [showLog, setShowLog] = useState(false);
+  const deliveries = useQuery({
+    queryKey: ['webhook-deliveries', hook.id],
+    queryFn: () =>
+      api<WebhookDeliveryDto[]>(
+        buildPath(routes.webhooks.deliveries.path, { mapId: map.id, webhookId: hook.id }),
+      ),
+    enabled: showLog,
+  });
+  const test = useMutation({
+    mutationFn: () =>
+      api<WebhookDeliveryDto>(buildPath(routes.webhooks.test.path, { mapId: map.id, webhookId: hook.id }), {
+        method: 'POST',
+      }),
+    onSuccess: (d) => {
+      toast(
+        d.status === 'delivered'
+          ? {
+              title: 'Test delivered',
+              description: `The endpoint answered ${d.responseCode}.`,
+              tone: 'success',
+            }
+          : {
+              title: 'Test failed',
+              description: d.error ?? `The endpoint answered ${d.responseCode}.`,
+              tone: 'danger',
+            },
+      );
+      if (showLog) void deliveries.refetch();
     },
+    onError: (error) =>
+      toast({ title: 'Test failed', description: errorText(error, 'Try again.'), tone: 'danger' }),
   });
   return (
-    <div className={styles.section}>
-      <h2>Delete map</h2>
-      <p className="muted">Removes the map, its systems, connections and signatures for everyone.</p>
-      <button
-        type="button"
-        className="btn btn-danger"
-        disabled={remove.isPending}
-        onClick={() => {
-          if (window.prompt(`Type the map name (${map.name}) to delete it.`) === map.name) remove.mutate();
-        }}
+    <li className={styles.item}>
+      <span className={styles.subjectIcon} aria-hidden>
+        <Webhook />
+      </span>
+      <div className={styles.rowBody}>
+        <div className={styles.url} title={hook.url}>
+          {hook.url}
+        </div>
+        <div className={styles.chips}>
+          {eventsLabel(hook.events).map((e) => (
+            <Badge key={e} variant="outline">
+              {e}
+            </Badge>
+          ))}
+        </div>
+        <div>
+          <Button size="sm" variant="ghost" onClick={() => setShowLog((s) => !s)} style={{ marginLeft: -8 }}>
+            {showLog ? 'Hide deliveries' : 'Recent deliveries'}
+          </Button>
+        </div>
+        {showLog &&
+          (deliveries.isPending ? (
+            <Skeleton width="80%" height={12} />
+          ) : deliveries.data && deliveries.data.length > 0 ? (
+            <ul className={styles.deliveries}>
+              {deliveries.data.slice(0, 10).map((d) => (
+                <li key={d.id} className={styles.delivery}>
+                  <Badge tone={DELIVERY_TONE[d.status]} dot>
+                    {d.status}
+                  </Badge>
+                  <span className="mono" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {d.eventType}
+                  </span>
+                  <span className="mono muted">{d.responseCode ?? '—'}</span>
+                  <span className="subtle">{relativeTime(d.createdAt)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted" style={{ fontSize: 'var(--ww-font-size-small)' }}>
+              Nothing sent yet.
+            </p>
+          ))}
+      </div>
+      <div className={styles.rowActions}>
+        <Button size="sm" icon={<Send />} loading={test.isPending} onClick={() => test.mutate()}>
+          Test
+        </Button>
+        <Switch
+          checked={hook.enabled}
+          onCheckedChange={onToggle}
+          label={<span className="sr-only">Deliver to {hook.url}</span>}
+        />
+        <IconButton
+          size="sm"
+          variant="danger-ghost"
+          label="Delete webhook"
+          icon={<Trash2 />}
+          onClick={onRemove}
+        />
+      </div>
+    </li>
+  );
+}
+
+function CreateWebhookDialog({
+  map,
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  map: MapDto;
+  open: boolean;
+  onOpenChange(open: boolean): void;
+  onCreated(hook: CreatedWebhookDto): void;
+}) {
+  const [url, setUrl] = useState('');
+  const [events, setEvents] = useState<string[]>(['system.*', 'connection.*']);
+  const create = useMutation({
+    mutationFn: () =>
+      api<CreatedWebhookDto>(buildPath(routes.webhooks.create.path, { mapId: map.id }), {
+        method: 'POST',
+        json: { url: url.trim(), events },
+      }),
+    onSuccess: (hook) => {
+      onCreated(hook);
+      change(false);
+    },
+  });
+  const change = (next: boolean) => {
+    if (!next) {
+      setUrl('');
+      setEvents(['system.*', 'connection.*']);
+      create.reset();
+    }
+    onOpenChange(next);
+  };
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    create.mutate();
+  };
+  return (
+    <Dialog open={open} onOpenChange={change}>
+      <DialogContent
+        title="Add webhook"
+        description="Events are posted as JSON and signed with a secret you get next."
+        width={520}
       >
-        Delete this map
-      </button>
-      {remove.error && <p className="error">{errorText(remove.error, 'Could not delete the map.')}</p>}
-    </div>
+        <form id="new-webhook" onSubmit={submit} className={styles.formStack}>
+          <Field
+            label="Endpoint URL"
+            error={create.error ? errorText(create.error, 'Could not add the webhook.') : undefined}
+          >
+            <Input
+              mono
+              required
+              type="url"
+              autoFocus
+              placeholder="https://example.com/hooks/wormwright"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+            />
+          </Field>
+          <fieldset style={{ border: 0, margin: 0, padding: 0 }}>
+            <legend
+              className="muted"
+              style={{
+                fontSize: 'var(--ww-font-size-small)',
+                fontWeight: 500,
+                marginBottom: 'var(--ww-space-2)',
+              }}
+            >
+              Events
+            </legend>
+            <div className={styles.eventPicker}>
+              {EVENT_GROUPS.map((g) => (
+                <Checkbox
+                  key={g.value}
+                  checked={events.includes(g.value)}
+                  onCheckedChange={(on) =>
+                    setEvents((list) => (on ? [...list, g.value] : list.filter((x) => x !== g.value)))
+                  }
+                  label={g.label}
+                  description={g.hint}
+                />
+              ))}
+            </div>
+          </fieldset>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--ww-space-2)' }}>
+            <DialogClose asChild>
+              <Button variant="ghost">Cancel</Button>
+            </DialogClose>
+            <Button
+              type="submit"
+              variant="primary"
+              loading={create.isPending}
+              disabled={!url.trim() || events.length === 0}
+            >
+              Add webhook
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -9,10 +9,21 @@ import {
   type MapSummaryDto,
   type UniverseSystemDto,
 } from '@wormwright/shared';
+import {
+  AlertTriangle,
+  Info,
+  Lock,
+  MousePointerClick,
+  Plus,
+  Puzzle,
+  Radar,
+  Settings,
+  UsersRound,
+  Waypoints,
+  X,
+} from 'lucide-react';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
-import { Icon } from '../components/Icon';
 import { api, ApiError } from '../lib/api';
-import { useConnectionStatus } from '../lib/RealtimeProvider';
 import { mapPermissions } from '../lib/roles';
 import { useMe } from '../lib/session';
 import { useUniverseSystems } from '../lib/universe';
@@ -28,6 +39,7 @@ import { SystemInfoWidget } from '../map/widgets/SystemInfoWidget';
 import { WidgetDock, type DockTab } from '../map/widgets/WidgetDock';
 import { SlotItem, useSlot } from '../plugins/PluginSlot';
 import { useBreadcrumbs } from '../shell/breadcrumbs';
+import { Button, EmptyState, ErrorState, IconButton, Spinner } from '../ui';
 import styles from './MapPage.module.css';
 
 export function MapPage() {
@@ -44,14 +56,41 @@ export function MapPage() {
   });
   useBreadcrumbs([{ label: 'Maps', to: '/' }, { label: map.data?.name ?? slug }]);
 
-  if (map.isPending) return <p className={styles.notice}>Loading map…</p>;
+  if (map.isPending) {
+    return (
+      <div className={styles.page}>
+        <div className={styles.center} role="status">
+          <Spinner label="Loading map" />
+          <span>Loading map…</span>
+        </div>
+      </div>
+    );
+  }
   if (map.isError) {
     const missing = map.error instanceof ApiError && map.error.status === 404;
     return (
-      <p className={styles.notice}>
-        {missing ? `There is no map “${slug}”, or you cannot see it.` : 'The map could not be loaded.'}{' '}
-        <Link to="/">Back to maps</Link>
-      </p>
+      <div className={styles.page}>
+        <div className={styles.overlayCard}>
+          {missing ? (
+            <EmptyState
+              icon={<Lock />}
+              title="Map not found"
+              description={`There is no map “${slug}”, or you have no access to it. Ask its admin to add you.`}
+              actions={
+                <Button asChild variant="primary">
+                  <Link to="/">Back to maps</Link>
+                </Button>
+              }
+            />
+          ) : (
+            <ErrorState
+              title="The map could not be loaded"
+              error={map.error}
+              onRetry={() => void map.refetch()}
+            />
+          )}
+        </div>
+      </div>
     );
   }
   const role = maps.data?.find((m) => m.id === map.data.id)?.role ?? 'viewer';
@@ -74,7 +113,6 @@ function MapView({ map, role }: { map: MapDto; role: MapSummaryDto['role'] }) {
   const me = useMe();
   const rf = useReactFlow();
   const can = mapPermissions(role);
-  const status = useConnectionStatus();
   const [selected, setSelected] = useState<number | null>(null);
   const [dock, setDock] = useState(() => ({
     tab: 'system',
@@ -136,8 +174,12 @@ function MapView({ map, role }: { map: MapDto; role: MapSummaryDto['role'] }) {
     if (target.kind === 'connection') {
       const connection = state.connections.get(target.connectionId);
       if (!connection) return null;
+      const end = (id: number) => {
+        const sys = state.systems.get(id);
+        return sys ? systemDisplayName(sys, universe.get(id)) : String(id);
+      };
       return {
-        title: 'Connection',
+        title: `${end(connection.source)} ↔ ${end(connection.target)}`,
         items: connectionMenu({ mapId: map.id, connection, can, store, plugins: connectionPlugins }),
       };
     }
@@ -147,6 +189,7 @@ function MapView({ map, role }: { map: MapDto; role: MapSummaryDto['role'] }) {
         {
           kind: 'action',
           label: 'Add a system here…',
+          icon: <Plus />,
           onSelect: () => {
             setAddAt(target.flow);
             setFocus((f) => ({ ...f, search: f.search + 1 }));
@@ -175,7 +218,7 @@ function MapView({ map, role }: { map: MapDto; role: MapSummaryDto['role'] }) {
     if (system) return { x: system.position.x + 240, y: system.position.y };
     const bounds = document.querySelector('.react-flow')?.getBoundingClientRect();
     if (!bounds) return { x: 0, y: 0 };
-    const panel = dock.open && bounds.width > 760 ? 340 : 0;
+    const panel = dock.open && bounds.width > 760 ? 360 : 0;
     return rf.screenToFlowPosition({
       x: bounds.left + (bounds.width - panel) / 2,
       y: bounds.top + bounds.height / 2,
@@ -183,11 +226,22 @@ function MapView({ map, role }: { map: MapDto; role: MapSummaryDto['role'] }) {
   };
 
   const characters = [...state.characters.values()];
+  const signatureCount = system
+    ? [...state.signatures.values()].filter((s) => s.solarSystemId === system.solarSystemId).length
+    : 0;
+  const nothingSelected = (
+    <EmptyState
+      compact
+      icon={<MousePointerClick />}
+      title="No system selected"
+      description="Click a system on the map to see its details. Right-click it for quick actions."
+    />
+  );
   const tabs: DockTab[] = [
     {
       id: 'system',
       title: 'System',
-      icon: 'info',
+      icon: <Info />,
       render: () =>
         system ? (
           <SystemInfoWidget
@@ -199,13 +253,14 @@ function MapView({ map, role }: { map: MapDto; role: MapSummaryDto['role'] }) {
             focusToken={focus.name}
           />
         ) : (
-          <p className="muted">Select a system on the map.</p>
+          nothingSelected
         ),
     },
     {
       id: 'signatures',
       title: 'Signatures',
-      icon: 'signal',
+      icon: <Radar />,
+      count: signatureCount,
       render: () =>
         system ? (
           <SignaturesWidget
@@ -220,13 +275,14 @@ function MapView({ map, role }: { map: MapDto; role: MapSummaryDto['role'] }) {
             store={store}
           />
         ) : (
-          <p className="muted">Select a system to see its signatures.</p>
+          nothingSelected
         ),
     },
     {
       id: 'local',
       title: 'Local',
-      icon: 'users',
+      icon: <UsersRound />,
+      count: characters.filter((c) => c.online).length,
       render: () => (
         <LocalWidget
           mapId={map.id}
@@ -242,7 +298,7 @@ function MapView({ map, role }: { map: MapDto; role: MapSummaryDto['role'] }) {
     ...widgetPlugins.map((entry): DockTab => ({
       id: entry.key,
       title: entry.title,
-      icon: 'puzzle',
+      icon: <Puzzle />,
       render: () => <SlotItem entry={entry} props={{ mapId: map.id }} />,
     })),
   ];
@@ -260,10 +316,10 @@ function MapView({ map, role }: { map: MapDto; role: MapSummaryDto['role'] }) {
         onSelect={setSelected}
         focus={focusNode}
         onMenu={openMenu}
-        coveredRight={dock.open && wide ? 340 : 0}
+        coveredRight={dock.open && wide ? 360 : 0}
       />
 
-      <div className={styles.topbar}>
+      <div className={styles.topbar} data-dock={dock.open && wide ? 'open' : undefined}>
         {can.edit && (
           <AddSystemSearch
             onMap={onMap}
@@ -272,31 +328,62 @@ function MapView({ map, role }: { map: MapDto; role: MapSummaryDto['role'] }) {
             placeholder={addAt ? 'Add a system at the pointer…' : undefined}
           />
         )}
-        <div className={styles.status} data-status={status} role="status" title="Realtime connection">
-          <span className={styles.dot} />
-          {status === 'open'
-            ? store.pendingCount > 0
-              ? 'Saving…'
-              : 'Live'
-            : status === 'connecting'
-              ? 'Connecting…'
-              : 'Offline'}
-        </div>
-        {can.admin && (
-          <Link to={`/m/${map.slug}/settings`} className="btn btn-small" aria-label="Map settings">
-            <Icon name="settings" size={13} />
-          </Link>
+        {store.pendingCount > 0 && (
+          <span className={styles.saving} role="status">
+            <Spinner label="Saving" />
+            Saving…
+          </span>
+        )}
+        <span className={styles.spacer} />
+        {can.manage && (
+          <IconButton
+            asChild
+            variant="secondary"
+            className={styles.toolButton}
+            label="Map settings"
+            icon={<Settings />}
+          >
+            <Link to={`/m/${map.slug}/settings`} />
+          </IconButton>
         )}
       </div>
 
       {store.loaded && state.systems.size === 0 && (
-        <p className={styles.empty}>
-          {can.edit
-            ? 'This map is empty. Search for a system above, or track a character to map as you fly.'
-            : 'This map is empty.'}
-        </p>
+        <div className={styles.overlayCard} data-dock={dock.open && wide ? 'open' : undefined}>
+          <EmptyState
+            icon={<Waypoints />}
+            title="This map is empty"
+            description={
+              can.edit
+                ? 'Search for a system to start the chain, or track a character and the map follows as you jump.'
+                : 'Nobody has mapped anything here yet.'
+            }
+            actions={
+              can.edit && (
+                <Button
+                  variant="primary"
+                  icon={<Plus />}
+                  onClick={() => setFocus((f) => ({ ...f, search: f.search + 1 }))}
+                >
+                  Add a system
+                </Button>
+              )
+            }
+          />
+        </div>
       )}
-      {store.streamError && <p className={styles.notice}>{store.streamError}</p>}
+      {!store.loaded && (
+        <div className={styles.center} role="status">
+          <Spinner label="Loading systems" />
+          <span>Loading systems…</span>
+        </div>
+      )}
+      {store.streamError && (
+        <div className={styles.streamError} role="alert">
+          <AlertTriangle aria-hidden />
+          {store.streamError}
+        </div>
+      )}
 
       <WidgetDock
         tabs={tabs}
@@ -308,15 +395,15 @@ function MapView({ map, role }: { map: MapDto; role: MapSummaryDto['role'] }) {
       <ul className={styles.notices} aria-live="polite">
         {store.notices.map((n) => (
           <li key={n.id} className={styles.toast}>
-            <span>{n.message}</span>
-            <button
-              type="button"
-              className="btn btn-ghost btn-small"
-              aria-label="Dismiss"
+            <AlertTriangle className={styles.toastIcon} aria-hidden />
+            <span className={styles.toastText}>{n.message}</span>
+            <IconButton
+              size="sm"
+              label="Dismiss"
+              tooltip={false}
+              icon={<X />}
               onClick={() => store.dismiss(n.id)}
-            >
-              <Icon name="close" size={12} />
-            </button>
+            />
           </li>
         ))}
       </ul>

@@ -11,7 +11,7 @@
   --xy-connectionline-stroke: var(--ww-edge-selected);
   --xy-connectionline-stroke-width: var(--ww-edge-width);
   --xy-controls-button-background-color: var(--ww-color-surface);
-  --xy-controls-button-background-color-hover: var(--ww-color-surface-raised);
+  --xy-controls-button-background-color-hover: var(--ww-color-surface-hover);
   --xy-controls-button-color: var(--ww-color-text);
   --xy-controls-button-color-hover: var(--ww-color-text);
   --xy-controls-button-border-color: var(--ww-color-border);
@@ -30,13 +30,28 @@
 }
 
 .canvas :global(.react-flow__controls) {
+  margin: var(--ww-space-3);
   border: 1px solid var(--ww-color-border);
   border-radius: var(--ww-radius);
+  box-shadow: var(--ww-shadow-medium);
   overflow: hidden;
 }
 
 .canvas :global(.react-flow__controls-button) {
+  width: 28px;
+  height: 28px;
+  padding: 6px;
   border-bottom-color: var(--ww-color-border);
+}
+
+.canvas :global(.react-flow__controls-button svg) {
+  max-width: 11px;
+  max-height: 11px;
+  fill: var(--ww-color-text-muted);
+}
+
+.canvas :global(.react-flow__controls-button:hover svg) {
+  fill: var(--ww-color-text);
 }
 
 @media (max-width: 760px) {

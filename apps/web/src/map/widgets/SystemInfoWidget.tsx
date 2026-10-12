@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
+import { Lock } from 'lucide-react';
 import type {
   LabelDto,
   MapSystemDto,
@@ -9,6 +10,7 @@ import type {
 import { cssVar } from '@wormwright/theme-sdk';
 import type { MapPermissions } from '../../lib/roles';
 import { systemClass } from '../../lib/universe';
+import { Button, Field, Input, Select, StatusDot, Textarea } from '../../ui';
 import { statusOptions } from '../menus';
 import type { MapStore } from '../useMapStore';
 import styles from './widgets.module.css';
@@ -24,6 +26,29 @@ interface Props {
 }
 
 const blankToNull = (v: string) => (v.trim() === '' ? null : v.trim());
+
+const STATUS_SELECT = statusOptions.map((o) => ({
+  value: o.value,
+  label: o.label,
+  icon: (
+    <span className={styles.statusDot} style={{ background: o.color ?? 'var(--ww-color-border-strong)' }} />
+  ),
+}));
+
+/** Security with two decimals, coloured like the class label. */
+function SystemFacts({ info }: { info: UniverseSystemDto }) {
+  return (
+    <p className={styles.facts}>
+      <span>{info.regionName}</span>
+      <span aria-hidden>·</span>
+      <span>{info.constellationName}</span>
+      <span aria-hidden>·</span>
+      <span className="tabular" style={{ color: cssVar(systemClass(info).token) }} title="Security status">
+        {info.security.toFixed(2)}
+      </span>
+    </p>
+  );
+}
 
 export function SystemInfoWidget({ system, info, labels, can, store, focusToken }: Props) {
   const cls = systemClass(info);
@@ -64,121 +89,134 @@ export function SystemInfoWidget({ system, info, labels, can, store, focusToken 
     if (dirty) void store.updateSystem(system.solarSystemId, patch);
   };
 
+  const realName = info?.name ?? String(system.solarSystemId);
+  const shownName = system.customName || system.temporaryName;
+  const toggleLabel = (id: string) => {
+    const on = system.labelIds.includes(id);
+    void store.updateSystem(system.solarSystemId, {
+      labelIds: on ? system.labelIds.filter((x) => x !== id) : [...system.labelIds, id],
+    });
+  };
+
   return (
     <div className={styles.widget}>
-      <div className={styles.headline}>
-        <span style={{ color: cssVar(cls.token), fontWeight: 700 }}>{cls.label}</span>
-        <strong>{info?.name ?? system.solarSystemId}</strong>
-      </div>
-      {info && (
-        <p className={styles.meta}>
-          {info.regionName} · {info.constellationName} · sec {info.security.toFixed(2)}
-        </p>
-      )}
+      <header className={styles.systemHeader}>
+        <div className={styles.titleRow}>
+          <span className={styles.classChip} style={{ '--chip-color': cssVar(cls.token) } as CSSProperties}>
+            {cls.label}
+          </span>
+          <h2 className={styles.systemName}>{shownName || realName}</h2>
+          {system.tag && <span className={`${styles.tag} mono`}>{system.tag}</span>}
+          {system.locked && (
+            <span className={styles.lock} title="Locked">
+              <Lock aria-label="Locked" />
+            </span>
+          )}
+        </div>
+        {shownName && <p className={`${styles.realName} mono`}>{realName}</p>}
+        {info && <SystemFacts info={info} />}
+      </header>
 
       {can.edit ? (
-        <form className={styles.form} onSubmit={submit}>
-          <label className="field">
-            <span>Status</span>
-            <select
-              className="input"
+        <form className={styles.form} onSubmit={submit} aria-label="System details">
+          <Field label="Status">
+            <Select
               value={system.status}
-              onChange={(e) =>
-                void store.updateSystem(system.solarSystemId, { status: e.target.value as SystemStatus })
+              options={STATUS_SELECT}
+              onValueChange={(status) =>
+                void store.updateSystem(system.solarSystemId, { status: status as SystemStatus })
               }
-            >
-              {statusOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
+            />
+          </Field>
+          {labels.length > 0 && (
+            <div className={styles.fieldGroup} role="group" aria-label="Labels">
+              <span className={styles.groupLabel}>Labels</span>
+              <div className={styles.labelChips}>
+                {labels.map((l) => {
+                  const on = system.labelIds.includes(l.id);
+                  return (
+                    <button
+                      key={l.id}
+                      type="button"
+                      className={styles.labelChip}
+                      aria-pressed={on}
+                      title={l.description || undefined}
+                      style={{ '--label-color': l.color } as CSSProperties}
+                      onClick={() => toggleLabel(l.id)}
+                    >
+                      <span className={styles.labelSwatch} />
+                      {l.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div className={styles.pair}>
-            <label className="field">
-              <span>Custom name</span>
-              <input
+            <Field label="Custom name">
+              <Input
                 ref={nameRef}
-                className="input"
                 maxLength={64}
+                placeholder={realName}
                 value={draft.customName}
                 onChange={(e) => setDraft({ ...draft, customName: e.target.value })}
               />
-            </label>
-            <label className="field">
-              <span>Tag</span>
-              <input
-                className="input"
+            </Field>
+            <Field label="Tag">
+              <Input
+                mono
                 maxLength={16}
+                placeholder="A1"
                 value={draft.tag}
                 onChange={(e) => setDraft({ ...draft, tag: e.target.value })}
               />
-            </label>
+            </Field>
           </div>
-          <label className="field">
-            <span>Temporary name</span>
-            <input
-              className="input"
+          <Field label="Temporary name" hint="For the current chain only, e.g. a bookmark name.">
+            <Input
               maxLength={64}
               value={draft.temporaryName}
               onChange={(e) => setDraft({ ...draft, temporaryName: e.target.value })}
             />
-          </label>
-          <label className="field">
-            <span>Notes</span>
-            <textarea
-              className="input"
-              rows={4}
+          </Field>
+          <Field label="Notes">
+            <Textarea
+              rows={5}
               maxLength={10_000}
+              placeholder="Statics, structures, who lives here…"
               value={draft.description}
               onChange={(e) => setDraft({ ...draft, description: e.target.value })}
             />
-          </label>
-          {labels.length > 0 && (
-            <fieldset className={styles.labels}>
-              <legend>Labels</legend>
-              {labels.map((l) => {
-                const on = system.labelIds.includes(l.id);
-                return (
-                  <label key={l.id} title={l.description || undefined} className={styles.labelToggle}>
-                    <input
-                      type="checkbox"
-                      checked={on}
-                      onChange={() =>
-                        void store.updateSystem(system.solarSystemId, {
-                          labelIds: on
-                            ? system.labelIds.filter((x) => x !== l.id)
-                            : [...system.labelIds, l.id],
-                        })
-                      }
-                    />
-                    <span className={styles.swatch} style={{ background: l.color }} />
-                    {l.name}
-                  </label>
-                );
-              })}
-            </fieldset>
-          )}
-          <div className={styles.actions}>
-            <button type="submit" className="btn btn-primary btn-small" disabled={!dirty}>
-              Save
-            </button>
-            {dirty && (
-              <button
-                type="button"
-                className="btn btn-ghost btn-small"
-                onClick={() => setDraft(draftOf(system))}
-              >
+          </Field>
+          {dirty && (
+            <div className={styles.saveBar}>
+              <span className={styles.saveHint}>Unsaved changes</span>
+              <Button size="sm" variant="ghost" onClick={() => setDraft(draftOf(system))}>
                 Discard
-              </button>
-            )}
-          </div>
+              </Button>
+              <Button size="sm" type="submit" variant="primary">
+                Save
+              </Button>
+            </div>
+          )}
         </form>
       ) : (
-        <>
-          {system.tag && <p>Tag: {system.tag}</p>}
-          <p className={styles.notes}>{system.description || <span className="muted">No notes.</span>}</p>
-        </>
+        <div className={styles.readOnly}>
+          {system.status !== 'unknown' && (
+            <span className={styles.statusLine}>
+              <StatusDot
+                color={statusOptions.find((o) => o.value === system.status)?.color ?? 'transparent'}
+              />
+              {statusOptions.find((o) => o.value === system.status)?.label}
+            </span>
+          )}
+          <div className={styles.fieldGroup}>
+            <span className={styles.groupLabel}>Notes</span>
+            <p className={styles.notes}>
+              {system.description || <span className="subtle">No notes yet.</span>}
+            </p>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -1,0 +1,287 @@
+/* Shared layout for the admin and map settings pages. */
+
+.tabs {
+  margin-bottom: var(--ww-space-5);
+}
+
+/* Key / value facts (version, database). */
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--ww-space-3);
+  margin: 0;
+}
+
+.fact {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--ww-space-3);
+  border: 1px solid var(--ww-color-border);
+  border-radius: var(--ww-radius);
+  background: var(--ww-color-bg-subtle);
+}
+
+.fact dt {
+  color: var(--ww-color-text-subtle);
+  font-size: var(--ww-font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.fact dd {
+  margin: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Fields side by side, stacking on phones. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--ww-space-4);
+}
+
+.formStack {
+  display: grid;
+  gap: var(--ww-space-4);
+}
+
+/* A form row whose button lines up with the inputs. */
+.inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--ww-space-3);
+}
+
+.inline > :not(button) {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.footerNote {
+  margin-right: auto;
+  color: var(--ww-color-text-muted);
+  font-size: var(--ww-font-size-small);
+}
+
+.rowActions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--ww-space-2);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ww-space-1);
+  margin-top: var(--ww-space-1);
+}
+
+.rowNotes {
+  display: grid;
+  gap: var(--ww-space-2);
+  margin-top: var(--ww-space-2);
+}
+
+.rowBody {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.rowTitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ww-space-2);
+  font-weight: 500;
+}
+
+.rowMeta {
+  color: var(--ww-color-text-muted);
+  font-size: var(--ww-font-size-small);
+}
+
+.version {
+  color: var(--ww-color-text-subtle);
+  font-size: var(--ww-font-size-small);
+}
+
+.danger {
+  border-color: color-mix(in oklab, var(--ww-color-danger) 35%, var(--ww-color-border));
+}
+
+/* A row inside a card body list, top-aligned for multi-line content. */
+.item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ww-space-3);
+  padding: var(--ww-space-3) var(--ww-space-4);
+  border-top: 1px solid var(--ww-color-border);
+}
+
+.item:first-child {
+  border-top: 0;
+}
+
+.itemCenter {
+  align-items: center;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.subjectIcon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--ww-radius);
+  background: var(--ww-color-surface-hover);
+  color: var(--ww-color-text-muted);
+}
+
+.subjectIcon svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Labels editor. */
+.labelRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 2fr) auto;
+  align-items: center;
+  gap: var(--ww-space-2);
+  padding: var(--ww-space-2) var(--ww-space-4);
+  border-top: 1px solid var(--ww-color-border);
+}
+
+.labelRow:first-child {
+  border-top: 0;
+}
+
+.swatch {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  overflow: hidden;
+  border: 1px solid var(--ww-color-border);
+  border-radius: var(--ww-radius);
+  box-shadow: var(--ww-shadow-small);
+  cursor: pointer;
+}
+
+.swatch input {
+  position: absolute;
+  inset: -8px;
+  width: calc(100% + 16px);
+  height: calc(100% + 16px);
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ww-space-1);
+}
+
+.labelPreview {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 6px;
+  border-radius: var(--ww-radius-small);
+  background: color-mix(in oklab, var(--label-color) 16%, transparent);
+  color: var(--ww-color-text);
+  font-size: var(--ww-font-size-xs);
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.labelPreview::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--label-color);
+}
+
+.secret {
+  display: flex;
+  align-items: center;
+  gap: var(--ww-space-2);
+  padding: var(--ww-space-2) var(--ww-space-3);
+  border: 1px solid var(--ww-color-border);
+  border-radius: var(--ww-radius);
+  background: var(--ww-color-bg-subtle);
+  font-size: var(--ww-font-size-small);
+  word-break: break-all;
+}
+
+.secret code {
+  flex: 1;
+}
+
+.eventPicker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--ww-space-2);
+}
+
+.deliveries {
+  margin: var(--ww-space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--ww-font-size-small);
+}
+
+.delivery {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--ww-space-2);
+  padding: 6px 0;
+  border-top: 1px dashed var(--ww-color-border);
+}
+
+.url {
+  overflow: hidden;
+  font-family: var(--ww-font-family-mono);
+  font-size: var(--ww-font-size-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .labelRow {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .labelRow > :nth-child(3) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .item {
+    flex-wrap: wrap;
+    padding: var(--ww-space-3);
+  }
+
+  .rowActions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

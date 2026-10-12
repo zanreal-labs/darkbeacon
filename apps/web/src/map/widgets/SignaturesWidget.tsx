@@ -1,5 +1,6 @@
 import { useEffect, useState, type ClipboardEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { CheckCircle2, ClipboardPaste, Radar, X } from 'lucide-react';
 import {
   buildPath,
   routes,
@@ -7,9 +8,10 @@ import {
   type PasteSignaturesResult,
   type SignatureDto,
 } from '@wormwright/shared';
-import { Icon } from '../../components/Icon';
 import { api } from '../../lib/api';
 import type { MapPermissions } from '../../lib/roles';
+import { shortAge } from '../../lib/time';
+import { Button, Checkbox, EmptyState, IconButton, Kbd, Skeleton } from '../../ui';
 import { seedSignatures } from '../mapState';
 import type { MapStore } from '../useMapStore';
 import styles from './widgets.module.css';
@@ -24,12 +26,15 @@ interface Props {
   store: Pick<MapStore, 'pasteSignatures' | 'updateSignature' | 'removeSignature' | 'seed'>;
 }
 
-function age(ms: number, now = Date.now()): string {
-  const minutes = Math.max(0, Math.floor((now - ms) / 60_000));
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  return hours < 48 ? `${hours}h` : `${Math.floor(hours / 24)}d`;
-}
+const GROUP_LABEL: Record<SignatureGroup, string> = {
+  unknown: 'Unknown',
+  wormhole: 'Wormhole',
+  combat: 'Combat',
+  relic: 'Relic',
+  data: 'Data',
+  gas: 'Gas',
+  ore: 'Ore',
+};
 
 function summary(r: PasteSignaturesResult): string {
   const parts = [`${r.added} added`, `${r.updated} updated`];
@@ -37,6 +42,8 @@ function summary(r: PasteSignaturesResult): string {
   if (r.skipped.length) parts.push(`${r.skipped.length} lines skipped`);
   return parts.join(', ');
 }
+
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
 export function SignaturesWidget({ mapId, solarSystemId, signatures, streamed, can, store }: Props) {
   const [replace, setReplace] = useState(false);
@@ -74,39 +81,49 @@ export function SignaturesWidget({ mapId, solarSystemId, signatures, streamed, c
   };
 
   const sorted = [...signatures].sort((a, b) => a.eveId.localeCompare(b.eveId));
+  const canReadClipboard =
+    typeof navigator !== 'undefined' && 'clipboard' in navigator && 'readText' in navigator.clipboard;
 
   return (
     <div className={styles.widget}>
       {can.edit && (
-        <div className={styles.paste}>
-          <textarea
-            className={`input ${styles.pasteArea}`}
-            aria-label="Paste probe scanner results"
-            placeholder="Copy the probe scanner rows in game, then paste here (Ctrl+V)"
-            rows={2}
-            value=""
-            onChange={() => {}}
-            onPaste={onPaste}
-            disabled={busy}
-          />
+        <div className={styles.section}>
+          <label className={styles.pasteZone} data-busy={busy || undefined}>
+            <ClipboardPaste aria-hidden />
+            <span className={styles.pasteText}>
+              <strong>Paste probe scanner results</strong>
+              <span>
+                Select the rows in game, copy, click here and press <Kbd>{isMac ? '⌘' : 'Ctrl'}</Kbd>{' '}
+                <Kbd>V</Kbd>
+              </span>
+            </span>
+            <textarea
+              className={styles.pasteArea}
+              aria-label="Paste probe scanner results"
+              rows={1}
+              value=""
+              onChange={() => {}}
+              onPaste={onPaste}
+              disabled={busy}
+            />
+          </label>
           <div className={styles.pasteRow}>
-            {'clipboard' in navigator && 'readText' in navigator.clipboard && (
-              <button
-                type="button"
-                className="btn btn-small"
+            <Checkbox checked={replace} onCheckedChange={setReplace} label="Remove missing" />
+            {canReadClipboard && (
+              <Button
+                size="sm"
+                variant="ghost"
+                icon={<ClipboardPaste />}
+                loading={busy}
                 onClick={() => void fromClipboard()}
-                disabled={busy}
               >
-                <Icon name="paste" size={12} /> Paste from clipboard
-              </button>
+                From clipboard
+              </Button>
             )}
-            <label className={styles.check}>
-              <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} />
-              Remove missing
-            </label>
           </div>
           {result && (
             <p className={styles.result} role="status">
+              <CheckCircle2 aria-hidden />
               {summary(result)}
             </p>
           )}
@@ -114,56 +131,78 @@ export function SignaturesWidget({ mapId, solarSystemId, signatures, streamed, c
       )}
 
       {sorted.length === 0 ? (
-        <p className="muted">{listed.isLoading ? 'Loading…' : 'No signatures.'}</p>
+        listed.isLoading ? (
+          <div className={styles.section} aria-busy="true">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} height={14} width={`${90 - i * 15}%`} style={{ marginBottom: 10 }} />
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            compact
+            icon={<Radar />}
+            title="No signatures"
+            description={
+              can.edit ? 'Paste the probe scanner window to add them.' : 'Nobody has scanned here yet.'
+            }
+          />
+        )
       ) : (
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>ID</th>
-              <th>Group</th>
-              <th>Type / name</th>
-              <th title="Age">Age</th>
+              <th scope="col">ID</th>
+              <th scope="col">Group</th>
+              <th scope="col">Name</th>
+              <th scope="col" title="Age" className={styles.num}>
+                Age
+              </th>
               {can.edit && <th aria-label="Actions" />}
             </tr>
           </thead>
           <tbody>
             {sorted.map((s) => (
               <tr key={s.id} data-group={s.group}>
-                <td className={styles.mono}>{s.eveId}</td>
+                <td className={`${styles.sigId} mono`}>{s.eveId}</td>
                 <td>
                   {can.edit ? (
-                    <select
-                      className={styles.inlineSelect}
-                      aria-label={`Group of ${s.eveId}`}
-                      value={s.group}
-                      onChange={(e) =>
-                        void store.updateSignature(s.id, { group: e.target.value as SignatureGroup })
-                      }
-                    >
-                      {SignatureGroup.options.map((g) => (
-                        <option key={g} value={g}>
-                          {g}
-                        </option>
-                      ))}
-                    </select>
+                    <span className={styles.groupSelect}>
+                      <select
+                        className={styles.inlineSelect}
+                        aria-label={`Group of ${s.eveId}`}
+                        value={s.group}
+                        onChange={(e) =>
+                          void store.updateSignature(s.id, { group: e.target.value as SignatureGroup })
+                        }
+                      >
+                        {SignatureGroup.options.map((g) => (
+                          <option key={g} value={g}>
+                            {GROUP_LABEL[g]}
+                          </option>
+                        ))}
+                      </select>
+                    </span>
                   ) : (
-                    s.group
+                    GROUP_LABEL[s.group]
                   )}
                 </td>
-                <td className={styles.ellipsis} title={s.description || undefined}>
-                  {[s.type, s.name].filter(Boolean).join(' · ') || <span className="muted">—</span>}
+                <td
+                  className={styles.ellipsis}
+                  title={[s.type, s.name, s.description].filter(Boolean).join(' · ') || undefined}
+                >
+                  {[s.type, s.name].filter(Boolean).join(' · ') || <span className="subtle">—</span>}
                 </td>
-                <td className="muted">{age(s.createdAt)}</td>
+                <td className={`${styles.num} mono subtle`}>{shortAge(s.createdAt)}</td>
                 {can.edit && (
-                  <td>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-small"
-                      aria-label={`Remove ${s.eveId}`}
+                  <td className={styles.actionCell}>
+                    <IconButton
+                      size="sm"
+                      tooltip={false}
+                      className={styles.rowRemove}
+                      label={`Remove ${s.eveId}`}
+                      icon={<X />}
                       onClick={() => void store.removeSignature(s.id)}
-                    >
-                      <Icon name="close" size={12} />
-                    </button>
+                    />
                   </td>
                 )}
               </tr>

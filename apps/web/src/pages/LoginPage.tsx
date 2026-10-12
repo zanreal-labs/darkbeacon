@@ -119,7 +119,7 @@ export function LoginPage() {
           )}
 
           {providers.data && (
-            <p className={styles.note}>Your EVE characters are linked after you sign in, through EVE SSO.</p>
+            <p className={styles.note}>You link your EVE characters with EVE SSO once you are in.</p>
           )}
         </div>
       </main>
