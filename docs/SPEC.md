@@ -47,6 +47,7 @@ packages/modules/notifications  notifier port + webhook delivery
 packages/modules/plugins        plugin registry, manifest validation, enable/disable state
 packages/modules/routing        routes over stargates and the chain, hubs, chain exits, in-game waypoints
 packages/modules/audit          audit records of events, histories, reverts, hash chain check
+packages/modules/sharing        shares between maps, composite maps, merging several maps' chains
 packages/db            Kysely factory, dialect switch, migration runner; migrations in migrations/<module>/
 packages/shared        zod schemas, DTOs and the WebSocket protocol shared by server and web
 packages/plugin-sdk    public plugin contract: manifest type, PluginContext (exposed ports), web slots
@@ -92,7 +93,8 @@ interface DomainEvent<T = unknown> {
   the client, rollback on rejection).
 - Event catalogue v1: `system.added|updated|removed`, `connection.added|updated|removed|passage`,
   `signature.added|updated|removed`, `character.moved|jumped|ship_changed|online_changed`,
-  `map.settings_changed`, `labels.changed`, `ping.created|removed`, `access.rule_added|rule_removed|role_changed`.
+  `map.settings_changed`, `labels.changed`, `ping.created|removed`, `access.rule_added|rule_removed|role_changed`,
+  `map.share.offered|accepted|changed|revoked`, `map.sources_changed`.
 - Webhooks: per map, chosen event types, HMAC-SHA256 signature header, retries with backoff, delivery log.
 - Retention of `event_log` configurable (default: keep everything; the log is the audit trail).
 - Audit trail: every event is stored with who (account, character in use, names), how (web, API token,
@@ -133,6 +135,22 @@ interface DomainEvent<T = unknown> {
 - Tracking: poll ESI location/ship every 5 s and online every 60 s only for characters tracked on a map, honour
   `Expires`/`ETag` and the `X-Ratelimit-*` headers; emit `character.*` events; auto-mapping (add system,
   add connection on jump) is a subscriber of those events, respecting map scopes.
+
+## Sharing and composite maps
+
+- A map's admin shares it with another map (`read` or `read-write`, with scopes from `shareScope`:
+  topology, connection status, signatures, intel, characters, bookmark labels); the target's admin
+  accepts (consent), either side revokes; audited as `map.share.*` on both maps' streams.
+- A composite map has no objects of its own and merges the maps shared with it (an alliance chain);
+  a standard map may merge shared maps too. Viewers of a merged map gain no access to its sources.
+- Merge: systems by solar system id, connections by unordered pair (+ wormhole type when known),
+  signatures by system and code; every field last-writer-wins by its own change time; deletions
+  are tombstones. Positions are the merged map's own layout. Provenance (source maps, newest change)
+  shows in one line in the sidebar, never on the canvas.
+- Merged changes are published on the merged map's own stream with its own seq; edits on a merged
+  map write through to read-write sources only, never past the share's scopes.
+- Sources sit behind the `ChainSource` port in a wire-ready delta format (stable keys, stamped
+  fields, tombstones, scopes cut at the source), so a map on another instance can be a source later.
 
 ## Plugins (native)
 
