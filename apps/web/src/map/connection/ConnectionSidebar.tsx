@@ -292,7 +292,7 @@ function ConnectionDetails({
         {intel?.maxJumpMass ? (
           <span>
             {formatTonnes(intel.maxJumpMass)}
-            {fits && <span className={styles.muted}> · up to {fits.toLowerCase()}</span>}
+            {fits && <span className={styles.muted}> · fits {fits}</span>}
           </span>
         ) : (
           <span className={styles.muted}>{SHIP_SIZE_TEXT[c.shipSize]}</span>

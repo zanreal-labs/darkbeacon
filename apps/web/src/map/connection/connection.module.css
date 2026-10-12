@@ -475,7 +475,7 @@
 
 .step {
   display: grid;
-  grid-template-columns: 22px minmax(120px, 1.3fr) 40px 96px minmax(0, 2fr) auto;
+  grid-template-columns: 22px minmax(110px, 1.2fr) 36px 92px minmax(0, 2fr) 172px;
   gap: 8px;
   align-items: center;
   min-height: 32px;
@@ -600,6 +600,11 @@
 @media (max-width: 760px) {
   .step {
     grid-template-columns: 18px minmax(0, 1fr) 36px auto;
+  }
+
+  .stepFlags {
+    grid-column: 2 / -1;
+    justify-content: flex-start;
   }
 
   .stepLeft,

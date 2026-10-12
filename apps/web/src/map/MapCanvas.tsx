@@ -422,6 +422,26 @@ export function MapCanvas({
     if (dx > 0 || dy > 0) void rf.setViewport({ x: x - dx, y: y - dy, zoom }, { duration: 250 });
   }, [coveredRight, coveredBottom, selectedId, rf]);
 
+  // The same for a selected connection: its middle stays out from under the panel.
+  const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
+  useEffect(() => {
+    const box = canvasRef.current?.getBoundingClientRect();
+    const edge = selectedEdge === null ? undefined : rf.getEdge(selectedEdge);
+    const a = edge ? rf.getNode(edge.source) : undefined;
+    const b = edge ? rf.getNode(edge.target) : undefined;
+    if (!box || !a || !b || (coveredRight === 0 && coveredBottom === 0)) return;
+    const { x, y, zoom } = rf.getViewport();
+    const mid = (n: typeof a) => ({
+      x: n.position.x + (n.measured?.width ?? 230) / 2,
+      y: n.position.y + (n.measured?.height ?? 90) / 2,
+    });
+    const px = x + ((mid(a).x + mid(b).x) / 2) * zoom;
+    const py = y + ((mid(a).y + mid(b).y) / 2) * zoom;
+    const dx = Math.max(0, px - (box.width - coveredRight - 80));
+    const dy = Math.max(0, py - (box.height - coveredBottom - 80));
+    if (dx > 0 || dy > 0) void rf.setViewport({ x: x - dx, y: y - dy, zoom }, { duration: 250 });
+  }, [coveredRight, coveredBottom, selectedEdge, rf]);
+
   const [legend, setLegendState] = useState(false);
   useEffect(() => {
     // After hydration: the server cannot know this browser's choice.
@@ -538,6 +558,7 @@ export function MapCanvas({
     setSelectedId(selected.length === 1 ? selected[0]!.id : null);
     // A click on a connection selects it alone; the sidebar then shows the connection.
     const edge = selected.length === 0 && edgesSelected.length === 1 ? edgesSelected[0]!.id : null;
+    setSelectedEdge(edge);
     if (edge && !edge.startsWith('pending:')) {
       onSelectConnection?.(edge);
       return;

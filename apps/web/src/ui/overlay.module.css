@@ -193,7 +193,8 @@
   }
 }
 
-.close {
+/* Two classes: the button's own `position: relative` must not win, whichever stylesheet loads last. */
+.dialog .close {
   position: absolute;
   top: var(--dbk-space-3);
   right: var(--dbk-space-3);

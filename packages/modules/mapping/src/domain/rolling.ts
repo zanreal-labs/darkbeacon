@@ -116,7 +116,9 @@ export function planRoll(input: RollInput): RollOutcome {
       const last = pick(safe, (s) => [-back(s), out(s)]);
       const fillers = safe.filter((s) => used + out(s) + back(s) + out(last) < remaining.min);
       if (closing.length > 0) ship = pick(closing, (s) => [out(s)]);
-      else if (fillers.length > 0) ship = pick(fillers, (s) => [-(out(s) + back(s))]);
+      // Another pilot's trip first (no waiting for polarization), the largest one.
+      else if (fillers.length > 0)
+        ship = pick(fillers, (s) => [Number(s.index === lastShip), -(out(s) + back(s))]);
       else ship = last;
     } else {
       // Every jump out may now close the hole; one that surely would is never planned.
