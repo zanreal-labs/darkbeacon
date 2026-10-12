@@ -6,6 +6,7 @@ export * from './discord-notify.js';
 export * from './identity.js';
 export * from './mapping.js';
 export * from './notifications.js';
+export * from './passages.js';
 export * from './plugins.js';
 export * from './routing.js';
 export * from './themes.js';

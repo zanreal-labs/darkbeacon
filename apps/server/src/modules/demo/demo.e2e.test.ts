@@ -5,6 +5,7 @@ import type {
   MapSnapshot,
   MapSummaryDto,
   MeDto,
+  PassageDto,
   SignatureDto,
   StreamSnapshotDto,
 } from '@darkbeacon/shared';
@@ -86,6 +87,18 @@ describeEachDialect('demo mode over HTTP', (t) => {
     expect(c.some((x) => x.type === 'gate')).toBe(true);
     const signatures = snapshot.signatures as SignatureDto[];
     expect(signatures.filter((s) => s.connectionId !== null).length).toBeGreaterThanOrEqual(5);
+
+    // A rolling crew's jumps, logged by hand: a Megathron and an Orca through the high-sec static.
+    const d845 = c.find((x) => x.source === 31002531 && x.target === 30001376)!;
+    const passages = (
+      await request('GET', `/api/maps/${demo.id}/connections/${d845.id}/passages`, first.cookie)
+    ).body as PassageDto[];
+    expect(passages.map((p) => [p.shipName, p.massMode, p.source])).toEqual([
+      ['Orca', 'hot', 'manual'],
+      ['Orca', 'cold', 'manual'],
+      ['Megathron', 'hot', 'manual'],
+      ['Megathron', 'cold', 'manual'],
+    ]);
 
     // The alliance chain merges both corporations' maps: one node per system, the later mass wins.
     const alliance = {} as Required<MapSnapshot>;

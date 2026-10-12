@@ -97,13 +97,19 @@ export interface MappingTables {
     id: string;
     map_id: string;
     connection_id: string;
-    character_id: number;
+    character_id: number | null;
     ship_type_id: number | null;
     mass: number | null;
     from_system: number;
     to_system: number;
     occurred_at: number;
-    event_id: string;
+    event_id: string | null;
+    source: string;
+    mass_mode: string;
+    higgs: number;
+    entangler: number;
+    note: string | null;
+    created_by: string | null;
   };
 }
 
@@ -383,25 +389,47 @@ export class KyselySignatureRepository extends Repository implements SignatureRe
 }
 
 export class KyselyPassageRepository extends Repository implements PassageRepository {
-  async insert(mapId: string, passage: Passage, eventId: string): Promise<boolean> {
+  async insert(mapId: string, passage: Passage, eventId: string | null): Promise<boolean> {
     const row = await this.db
       .insertInto('map_connection_passages')
-      .values({
-        id: passage.id,
-        map_id: mapId,
-        connection_id: passage.connectionId,
-        character_id: passage.characterId,
-        ship_type_id: passage.shipTypeId,
-        mass: passage.mass,
-        from_system: passage.from,
-        to_system: passage.to,
-        occurred_at: passage.occurredAt,
-        event_id: eventId,
-      })
+      .values(passageToRow(mapId, passage, eventId))
       .onConflict((oc) => oc.column('event_id').doNothing())
       .returning('id')
       .executeTakeFirst();
     return row !== undefined;
+  }
+
+  async findById(mapId: string, id: string): Promise<Passage | null> {
+    const row = await this.db
+      .selectFrom('map_connection_passages')
+      .selectAll()
+      .where('map_id', '=', mapId)
+      .where('id', '=', id)
+      .executeTakeFirst();
+    return row ? passageFromRow(row) : null;
+  }
+
+  async update(mapId: string, passage: Passage): Promise<void> {
+    await this.db
+      .updateTable('map_connection_passages')
+      .set({
+        mass: passage.mass,
+        mass_mode: passage.massMode,
+        higgs: bool.encode(passage.higgs),
+        entangler: bool.encode(passage.entangler),
+        note: passage.note,
+      })
+      .where('map_id', '=', mapId)
+      .where('id', '=', passage.id)
+      .execute();
+  }
+
+  async delete(mapId: string, id: string): Promise<void> {
+    await this.db
+      .deleteFrom('map_connection_passages')
+      .where('map_id', '=', mapId)
+      .where('id', '=', id)
+      .execute();
   }
 
   async listForMap(mapId: string): Promise<Passage[]> {
@@ -514,12 +542,39 @@ function passageFromRow(row: PassageRow): Passage {
   return {
     id: row.id,
     connectionId: row.connection_id,
-    characterId: Number(row.character_id),
+    characterId: row.character_id == null ? null : Number(row.character_id),
     shipTypeId: row.ship_type_id == null ? null : Number(row.ship_type_id),
     mass: row.mass == null ? null : Number(row.mass),
     from: Number(row.from_system),
     to: Number(row.to_system),
     occurredAt: Number(row.occurred_at),
+    source: row.source === 'manual' ? 'manual' : 'tracked',
+    massMode: row.mass_mode === 'hot' || row.mass_mode === 'custom' ? row.mass_mode : 'cold',
+    higgs: bool.decode(row.higgs),
+    entangler: bool.decode(row.entangler),
+    note: row.note,
+    createdBy: row.created_by,
+  };
+}
+
+function passageToRow(mapId: string, p: Passage, eventId: string | null): PassageRow {
+  return {
+    id: p.id,
+    map_id: mapId,
+    connection_id: p.connectionId,
+    character_id: p.characterId,
+    ship_type_id: p.shipTypeId,
+    mass: p.mass,
+    from_system: p.from,
+    to_system: p.to,
+    occurred_at: p.occurredAt,
+    event_id: eventId,
+    source: p.source,
+    mass_mode: p.massMode,
+    higgs: bool.encode(p.higgs),
+    entangler: bool.encode(p.entangler),
+    note: p.note,
+    created_by: p.createdBy,
   };
 }
 

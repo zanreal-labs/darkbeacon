@@ -3,7 +3,8 @@ import type {
   MapDto,
   MapPreferencesDto,
   MapSystemDto,
-  PassageDto,
+  MassMode,
+  PassageSource,
   SignatureDto,
 } from '@darkbeacon/shared';
 
@@ -12,7 +13,27 @@ export type ChainMap = MapDto;
 export type MapSystem = MapSystemDto;
 export type Connection = ConnectionDto;
 export type Signature = SignatureDto;
-export type Passage = PassageDto;
+
+/** A ship that went through a connection: a tracked character's jump or one logged by hand. */
+export interface Passage {
+  id: string;
+  connectionId: string;
+  /** Null for passages logged by hand. */
+  characterId: number | null;
+  shipTypeId: number | null;
+  /** Mass the jump put on the hole (kg); null when the ship is unknown. */
+  mass: number | null;
+  from: number;
+  to: number;
+  occurredAt: number;
+  source: PassageSource;
+  massMode: MassMode;
+  higgs: boolean;
+  entangler: boolean;
+  note: string | null;
+  /** The account that logged it by hand; null for tracked jumps. */
+  createdBy: string | null;
+}
 
 /** One account's own view of a map; not an event, nobody else sees it. */
 export interface MapPreferences extends MapPreferencesDto {
