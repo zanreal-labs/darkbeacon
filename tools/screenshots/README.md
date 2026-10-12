@@ -16,7 +16,13 @@ docker run --rm --network dbk-shots --ipc=host -v "$PWD":/work -w /tmp \
   -e BASE=http://dbk-demo:3000 -e LOGIN_BASE=http://dbk-login:3000 \
   mcr.microsoft.com/playwright:v1.55.0-noble \
   sh -c 'npm i --no-audit --no-fund playwright@1.55.0 >/dev/null && cp /work/tools/screenshots/shoot.mjs . && node shoot.mjs'
+
+docker rm -f dbk-demo dbk-login && docker network rm dbk-shots
 ```
+
+Every navigation waits for the network to go idle, so the page is hydrated before the tool clicks
+anything; shots use reduced motion. Besides the screens it takes close-ups of nodes and an edge, the
+dock tabs, the context menus and the connection legend.
 
 `ONLY=<regex>` limits the run to some scenes (`signin`, `maps`, `map`, `map-settings`, `admin`,
 `account`, `not-found`); `SIZES` and `SCHEMES` take comma separated lists.

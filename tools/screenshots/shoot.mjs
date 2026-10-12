@@ -44,13 +44,26 @@ async function scene(name, fn) {
   }
 }
 
+/**
+ * Opens a page and waits until it is interactive: the server streams the HTML in, and clicks
+ * before React hydrated it would do nothing.
+ */
+async function open(page, url) {
+  await page.goto(url);
+  await page.waitForLoadState('networkidle');
+}
+
 async function tabsOf(page, scope = 'main') {
   return page.locator(`${scope} [role="tablist"]`).first().locator('[role="tab"]');
 }
 
 async function waitForMap(page) {
   await page.waitForSelector('.react-flow__node', { timeout: 15_000 });
-  // Fit-view and fonts.
+  // The first fit waits for React Flow to measure the nodes; then fonts.
+  await page.waitForFunction(() => {
+    const t = globalThis.document.querySelector('.react-flow__viewport')?.style.transform ?? '';
+    return t !== '' && t !== 'translate(0px, 0px) scale(1)';
+  });
   await settle(page, 700);
 }
 
@@ -77,6 +90,7 @@ async function run() {
         const login = await browser.newContext({
           viewport,
           colorScheme: scheme,
+          reducedMotion: 'reduce',
           deviceScaleFactor: phone ? 2 : 1,
         });
         const p = await login.newPage();
@@ -84,7 +98,7 @@ async function run() {
           // The demo instance shows its sign-in page to someone who signed out of the demo.
           await login.addCookies([{ name: 'dbk_demo_out', value: '1', url: BASE }]);
         }
-        await p.goto(`${LOGIN_BASE ?? BASE}/login`);
+        await open(p, `${LOGIN_BASE ?? BASE}/login`);
         await p
           .getByRole('button', { name: /discord|explore the demo/i })
           .or(p.getByRole('link', { name: /discord/i }))
@@ -96,14 +110,14 @@ async function run() {
       });
 
       await scene('maps', async () => {
-        await page.goto(`${BASE}/`);
+        await open(page, `${BASE}/`);
         await page.getByText('Demo chain').first().waitFor({ timeout: 15_000 });
         await settle(page);
         await s('maps');
       });
 
       await scene('map', async () => {
-        await page.goto(`${BASE}/m/${MAP}`);
+        await open(page, `${BASE}/m/${MAP}`);
         await waitForMap(page);
         await s('map');
 
@@ -117,10 +131,10 @@ async function run() {
         const box = await home.boundingBox();
         if (box) {
           const clip = {
-            x: Math.max(0, box.x - 60),
-            y: Math.max(0, box.y - 120),
-            width: Math.min(560, viewport.width - Math.max(0, box.x - 60)),
-            height: 320,
+            x: Math.max(0, box.x - 80),
+            y: Math.max(0, box.y - 140),
+            width: Math.min(640, viewport.width - Math.max(0, box.x - 80)),
+            height: 380,
           };
           await s('map-closeup-nodes', { clip, scale: 'device' });
         }
@@ -180,6 +194,14 @@ async function run() {
           });
         }
 
+        // The connection legend, open over the canvas.
+        await page.getByRole('button', { name: 'Show the legend' }).click();
+        await page.mouse.move(viewport.width / 2, 10);
+        await settle(page);
+        await s('map-legend');
+        await page.getByRole('button', { name: 'Hide the legend' }).click();
+        await settle(page, 200);
+
         const pane = page.locator('.react-flow__pane');
         const paneBox = await pane.boundingBox();
         if (paneBox) {
@@ -191,7 +213,7 @@ async function run() {
       });
 
       await scene('map-settings', async () => {
-        await page.goto(`${BASE}/m/${MAP}/settings`);
+        await open(page, `${BASE}/m/${MAP}/settings`);
         const tabs = await tabsOf(page);
         await tabs.first().waitFor({ timeout: 15_000 });
         await settle(page);
@@ -207,7 +229,7 @@ async function run() {
       });
 
       await scene('admin', async () => {
-        await page.goto(`${BASE}/admin`);
+        await open(page, `${BASE}/admin`);
         const tabs = await tabsOf(page);
         await tabs.first().waitFor({ timeout: 15_000 });
         await settle(page);
@@ -223,14 +245,14 @@ async function run() {
       });
 
       await scene('account', async () => {
-        await page.goto(`${BASE}/account`);
+        await open(page, `${BASE}/account`);
         await page.getByRole('heading', { level: 1 }).first().waitFor({ timeout: 15_000 });
         await settle(page, 600);
         await s('account', { fullPage: true });
       });
 
       await scene('not-found', async () => {
-        await page.goto(`${BASE}/m/no-such-map`);
+        await open(page, `${BASE}/m/no-such-map`);
         await settle(page, 1200);
         await s('map-missing');
       });
