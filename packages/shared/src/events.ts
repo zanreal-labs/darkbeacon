@@ -7,6 +7,7 @@ import type { ConnectionDto, LabelDto, MapDto, MapSystemDto, SignatureDto } from
 import type { HubDto, MapExitDto } from './dto/routing.js';
 import type { CharacterPresenceDto } from './dto/tracking.js';
 import type { MapShareDto, MapSourceDto } from './dto/sharing.js';
+import type { KillmailDto } from './dto/intel.js';
 
 export const DomainEventSchema = z.object({
   id: z.string(),
@@ -89,6 +90,11 @@ export interface EventPayloads {
   'routes.hubs_changed': { hubs: HubDto[] };
   'ping.created': PingDto;
   'ping.removed': { id: string };
+  /**
+   * A ship or pod was destroyed in a system the map shows (zKillboard's live feed, fresh kills
+   * only); on every map showing it, from the system actor `intel`.
+   */
+  'kill.reported': KillmailDto;
   'access.rule_added': AccessRuleDto;
   'access.rule_removed': { id: string };
   /** Instance stream: an account's instance role changed. */
@@ -137,6 +143,7 @@ export const EVENT_TYPES = [
   'routes.hubs_changed',
   'ping.created',
   'ping.removed',
+  'kill.reported',
   'access.rule_added',
   'access.rule_removed',
   'access.role_changed',

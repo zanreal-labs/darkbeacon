@@ -911,6 +911,7 @@ const EVENT_GROUPS = [
   { value: 'map.*', label: 'Map', hint: 'Settings changed' },
   { value: 'access.*', label: 'Access', hint: 'Rules and roles' },
   { value: 'ping.*', label: 'Pings', hint: 'Created and removed' },
+  { value: 'kill.*', label: 'Kills', hint: 'Ships and pods destroyed in the chain' },
 ] as const;
 
 function eventsLabel(events: readonly string[]): string[] {

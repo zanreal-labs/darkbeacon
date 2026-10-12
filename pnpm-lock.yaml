@@ -59,6 +59,9 @@ importers:
       '@darkbeacon/identity':
         specifier: workspace:*
         version: link:../../packages/modules/identity
+      '@darkbeacon/intel':
+        specifier: workspace:*
+        version: link:../../packages/modules/intel
       '@darkbeacon/mapping':
         specifier: workspace:*
         version: link:../../packages/modules/mapping
@@ -358,6 +361,15 @@ importers:
       zod:
         specifier: ^4.6.5
         version: 4.6.5
+
+  packages/modules/intel:
+    dependencies:
+      '@darkbeacon/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@darkbeacon/shared':
+        specifier: workspace:*
+        version: link:../../shared
 
   packages/modules/mapping:
     dependencies:

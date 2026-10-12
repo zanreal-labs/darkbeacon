@@ -46,6 +46,7 @@ packages/modules/tracking       ESI polling -> character events, auto-mapping su
 packages/modules/notifications  notifier port + webhook delivery
 packages/modules/plugins        plugin registry, manifest validation, enable/disable state
 packages/modules/routing        routes over stargates and the chain, hubs, chain exits, in-game waypoints
+packages/modules/intel          system intel: sovereignty, hourly kills and jumps, killmails, who is active
 packages/modules/audit          audit records of events, histories, reverts, hash chain check
 packages/modules/sharing        shares between maps, composite maps, merging several maps' chains
 packages/modules/telemetry      anonymous product telemetry: allow-list, pseudonymous ids, opt-outs, heartbeat
@@ -97,7 +98,7 @@ interface DomainEvent<T = unknown> {
 - Event catalogue v1: `system.added|updated|removed`, `connection.added|updated|removed|passage`,
   `signature.added|updated|removed`, `character.moved|jumped|ship_changed|online_changed`,
   `map.settings_changed`, `labels.changed`, `ping.created|removed`, `access.rule_added|rule_removed|role_changed`,
-  `map.share.offered|accepted|changed|revoked`, `map.sources_changed`.
+  `map.share.offered|accepted|changed|revoked`, `map.sources_changed`, `kill.reported`.
 - Webhooks: per map, chosen event types, HMAC-SHA256 signature header, retries with backoff, delivery log.
 - Retention of `event_log` configurable (default: keep everything; the log is the audit trail).
 - Audit trail: every event is stored with who (account, character in use, names), how (web, API token,

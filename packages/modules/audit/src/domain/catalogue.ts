@@ -206,6 +206,17 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
     state: (d) => ({ hubs: Array.isArray(d.hubs) ? d.hubs.map((hub: Fields) => str(hub.name)) : [] }),
   },
   'ping.created': { op: 'create', entity: byId('ping'), refs: (d) => ref('system', d.solarSystemId) },
+  // Kills in the chain come from zKillboard, not from anyone on the map: activity in the system's history.
+  'kill.reported': {
+    op: 'activity',
+    entity: byId('kill'),
+    refs: (d) => ref('system', d.solarSystemId),
+    activity: (d) => {
+      const victim = asFields(d.victim);
+      const ship = asFields(victim?.ship);
+      return { kill: change(null, ship?.name ?? 'ship') };
+    },
+  },
   'ping.removed': { op: 'delete', entity: byId('ping'), refs: (d, b) => ref('system', b?.solarSystemId) },
   'access.rule_added': { op: 'create', entity: byId('accessRule'), ignore: ['createdAt', 'mapId'] },
   'access.rule_removed': { op: 'delete', entity: byId('accessRule'), ignore: ['createdAt', 'mapId'] },

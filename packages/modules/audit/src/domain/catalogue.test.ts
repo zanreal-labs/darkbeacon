@@ -191,6 +191,25 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
     data: { id: 'p1', solarSystemId: 31000005, message: 'Help', createdBy: 'a', createdAt: 1 },
   },
   'ping.removed': { data: { id: 'p1' }, before: { id: 'p1', solarSystemId: 31000005, message: 'Help' } },
+  'kill.reported': {
+    data: {
+      id: 123,
+      solarSystemId: 31000005,
+      time: 1,
+      value: 1_000_000,
+      npc: false,
+      solo: false,
+      victim: {
+        character: null,
+        corporation: null,
+        alliance: null,
+        ship: { id: 670, name: 'Capsule', ticker: null },
+      },
+      finalBlow: null,
+      attackerCount: 2,
+      attackers: [],
+    },
+  },
   'access.rule_added': { data: rule },
   'access.rule_removed': { data: { id: 'r1' }, before: rule },
   'access.role_changed': {

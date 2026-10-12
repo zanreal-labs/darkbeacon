@@ -141,6 +141,24 @@ export class RealtimeHub {
     return this.connections.size;
   }
 
+  /** Ids of the streams of a kind (`map`) someone follows right now. */
+  followed(kind: string): string[] {
+    return [...this.byStream.keys()].flatMap((stream) => {
+      const parsed = parseStream(stream);
+      return parsed?.kind === kind ? [parsed.id] : [];
+    });
+  }
+
+  /**
+   * Sends an ephemeral message (not an event: no seq, never stored or replayed) to everyone who
+   * follows the stream, so it reaches exactly those the stream's authorization lets in.
+   */
+  broadcast(stream: string, message: Extract<ServerMessage, { op: 'intel' }>): void {
+    for (const sub of this.byStream.get(stream) ?? []) {
+      if (sub.active) sub.connection.send(message);
+    }
+  }
+
   close(): void {
     clearInterval(this.recheckTimer);
     this.unsubscribeBus();

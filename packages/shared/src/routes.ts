@@ -975,6 +975,34 @@ export const routes = {
     }),
     uninstall: route({ method: 'DELETE', path: '/api/admin/themes/:themeId', auth: 'admin' }),
   },
+
+  intel: {
+    /** Sovereignty and kills of the last hour of every system on the map. */
+    map: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/intel',
+      auth: 'account',
+      mapRole: 'viewer',
+      response: dto.MapIntelDto,
+    }),
+    /** One system on the map: hourly figures, recent killmails and who is active there. */
+    system: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/intel/systems/:solarSystemId',
+      auth: 'account',
+      mapRole: 'viewer',
+      response: dto.SystemActivityDto,
+    }),
+    /** Killmails of the map's visible systems (or some of them), newest first. */
+    kills: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/kills',
+      auth: 'account',
+      mapRole: 'viewer',
+      query: dto.MapKillsQuery,
+      response: dto.MapKillsDto,
+    }),
+  },
 } as const;
 
 type PathParams<P extends string> = P extends `${string}:${infer Name}/${infer Rest}`

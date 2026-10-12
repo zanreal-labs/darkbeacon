@@ -17,6 +17,7 @@
     "@darkbeacon/core": "workspace:*",
     "@darkbeacon/db": "workspace:*",
     "@darkbeacon/identity": "workspace:*",
+    "@darkbeacon/intel": "workspace:*",
     "@darkbeacon/mapping": "workspace:*",
     "@darkbeacon/notifications": "workspace:*",
     "@darkbeacon/observability": "workspace:*",
