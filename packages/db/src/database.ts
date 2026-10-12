@@ -6,6 +6,7 @@ import { Kysely, PostgresDialect, SqliteDialect, type Transaction } from 'kysely
 import pg from 'pg';
 import type { UnitOfWork } from '@darkbeacon/core';
 import { migrateToLatest } from './migrator.js';
+import { SplitSqliteDialect } from './sqlite-split.js';
 
 export type Dialect = 'sqlite' | 'postgres';
 
@@ -25,6 +26,11 @@ export interface DatabaseOptions {
 export interface TransactionOptions {
   /** Postgres only; SQLite transactions are always serializable. */
   isolation?: 'repeatable read' | 'serializable';
+  /**
+   * Only reads (snapshots). On a SQLite file it runs on a read connection of its own, so it
+   * neither waits for nor holds up writers; on Postgres it is a READ ONLY transaction.
+   */
+  readOnly?: boolean;
 }
 
 interface Scope {
@@ -48,6 +54,8 @@ export class Database implements UnitOfWork {
     readonly dialect: Dialect,
     /** Postgres schema this handle works in, when not the default. */
     readonly schema?: string,
+    /** SQLite files: a read-only connection for read-only transactions. */
+    private readonly snapshots?: Kysely<unknown>,
   ) {}
 
   /** The open transaction inside `transaction()`, the root handle outside. */
@@ -63,9 +71,11 @@ export class Database implements UnitOfWork {
   async transaction<T>(work: () => Promise<T>, options: TransactionOptions = {}): Promise<T> {
     if (this.scope.getStore()) return work();
     const afterCommit: Array<() => void> = [];
-    let builder = this.kysely.transaction();
+    const root = options.readOnly && this.snapshots ? this.snapshots : this.kysely;
+    let builder = root.transaction();
     if (options.isolation && this.dialect === 'postgres')
       builder = builder.setIsolationLevel(options.isolation);
+    if (options.readOnly && this.dialect === 'postgres') builder = builder.setAccessMode('read only');
     const result = await builder.execute((trx) => this.scope.run({ trx, afterCommit }, work));
     for (const hook of afterCommit) {
       try {
@@ -95,8 +105,9 @@ export class Database implements UnitOfWork {
       .execute();
   }
 
-  close(): Promise<void> {
-    return this.kysely.destroy();
+  async close(): Promise<void> {
+    await this.snapshots?.destroy();
+    await this.kysely.destroy();
   }
 }
 
@@ -110,13 +121,61 @@ export async function createDatabase(options: DatabaseOptions = {}): Promise<Dat
   if (isPostgresUrl(options.url)) return createPostgres(options.url, options);
 
   const filename = options.filename ?? join(options.dataDir ?? '/data', 'app.db');
-  if (filename !== ':memory:') mkdirSync(dirname(filename), { recursive: true });
-  const sqlite = new SQLite(filename);
-  sqlite.pragma('journal_mode = WAL');
-  sqlite.pragma('synchronous = NORMAL');
+  if (filename === ':memory:') {
+    // One connection: a second one would open another, empty, database.
+    return new Database(
+      new Kysely({ dialect: new SqliteDialect({ database: openSqlite(filename) }) }),
+      'sqlite',
+    );
+  }
+  mkdirSync(dirname(filename), { recursive: true });
+  const writer = openSqlite(filename);
+  // WAL lets readers work next to the writer, each seeing the last commit.
+  const reader = openSqlite(filename, { readonly: true });
+  const snapshots = openSqlite(filename, { readonly: true });
+  return new Database(
+    new Kysely({ dialect: new SplitSqliteDialect(writer, reader) }),
+    'sqlite',
+    undefined,
+    new Kysely({ dialect: new SqliteDialect({ database: snapshots }) }),
+  );
+}
+
+function openSqlite(filename: string, options: { readonly?: boolean } = {}): SQLite.Database {
+  const sqlite = new SQLite(filename, options);
+  if (!options.readonly) {
+    sqlite.pragma('journal_mode = WAL');
+    sqlite.pragma('synchronous = NORMAL');
+  }
   sqlite.pragma('foreign_keys = ON');
   sqlite.pragma('busy_timeout = 5000');
-  return new Database(new Kysely({ dialect: new SqliteDialect({ database: sqlite }) }), 'sqlite');
+  cachePreparedStatements(sqlite);
+  return sqlite;
+}
+
+/**
+ * Kysely prepares every query again; preparing costs about as much as running a small query.
+ * Statements are kept per SQL text (the most recently used `max`) and reused. A statement still
+ * iterating a streamed query is busy, and gets a fresh one instead.
+ */
+export function cachePreparedStatements(sqlite: SQLite.Database, max = 1000): void {
+  const cache = new Map<string, SQLite.Statement>();
+  const prepare = sqlite.prepare.bind(sqlite);
+  sqlite.prepare = ((source: string) => {
+    const cached = cache.get(source);
+    if (cached && !cached.busy) {
+      // Most recently used last, so the oldest goes first.
+      cache.delete(source);
+      cache.set(source, cached);
+      return cached;
+    }
+    const statement = prepare(source);
+    if (!cached) {
+      cache.set(source, statement);
+      if (cache.size > max) cache.delete(cache.keys().next().value!);
+    }
+    return statement;
+  }) as typeof sqlite.prepare;
 }
 
 async function createPostgres(url: string, options: DatabaseOptions): Promise<Database> {

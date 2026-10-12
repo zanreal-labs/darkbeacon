@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import pg from 'pg';
 import { afterEach, beforeEach, describe } from 'vitest';
 import { createDatabase, type Database, type Dialect } from './database.js';
@@ -26,12 +29,22 @@ export interface TestDatabase {
   dispose(): Promise<void>;
 }
 
-/** A fresh, migrated database: in-memory SQLite, or a throwaway schema on TEST_DATABASE_URL. */
+/**
+ * A fresh, migrated database: a SQLite file in a temporary directory (as in production: a write
+ * and read connections), or a throwaway schema on TEST_DATABASE_URL.
+ */
 export async function createTestDatabase(dialect: Dialect): Promise<TestDatabase> {
   if (dialect === 'sqlite') {
-    const db = await createDatabase({ filename: ':memory:' });
+    const dir = mkdtempSync(join(tmpdir(), 'dbk-test-'));
+    const db = await createDatabase({ filename: join(dir, 'app.db') });
     await db.migrate();
-    return { db, dispose: () => db.close() };
+    return {
+      db,
+      dispose: async () => {
+        await db.close();
+        rmSync(dir, { recursive: true, force: true });
+      },
+    };
   }
   const url = process.env.TEST_DATABASE_URL;
   if (!url) throw new Error('TEST_DATABASE_URL is not set');
