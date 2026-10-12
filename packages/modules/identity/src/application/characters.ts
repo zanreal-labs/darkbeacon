@@ -241,6 +241,16 @@ export class CharacterService {
     return this.deps.characters.listForAccount(accountId);
   }
 
+  /** Linked characters by id, with their corporation and alliance; unknown ids are left out. */
+  async linked(characterIds: readonly number[]): Promise<LinkedCharacter[]> {
+    const found: LinkedCharacter[] = [];
+    for (const id of new Set(characterIds)) {
+      const character = await this.deps.characters.findById(id);
+      if (character) found.push(character);
+    }
+    return found;
+  }
+
   /** Name and owner account of a linked character (CharacterTokenSource of tracking). */
   async character(characterId: number): Promise<{ name: string; accountId: string } | null> {
     const character = await this.deps.characters.findById(characterId);

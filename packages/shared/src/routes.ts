@@ -1568,6 +1568,89 @@ export const routes = {
     }),
   },
 
+  /**
+   * Wanderer's legacy public map API, answered from Darkbeacon data so bots written for Wanderer
+   * keep working (read-only; Wanderer's JSON shapes and errors, not Darkbeacon's). The Bearer
+   * token is a Darkbeacon API key reaching the map with read scopes; the map is `?map_id=` (an
+   * id) or `?slug=`, or the `:mapId` segment (an id or a slug). The use cases check the key's map
+   * role and the controller its scope per resource, so the routes themselves ask for nothing.
+   */
+  wandererCompat: {
+    systems: route({
+      method: 'GET',
+      path: '/api/map/systems',
+      auth: 'account',
+      scope: 'none',
+      summary: 'Wanderer-compatible: visible systems and connections of a map',
+      response: dto.WandererSystemsDto,
+    }),
+    system: route({
+      method: 'GET',
+      path: '/api/map/system',
+      auth: 'account',
+      scope: 'none',
+      summary: 'Wanderer-compatible: one system by `id` (solar system id)',
+      response: dto.WandererSystemResponseDto,
+    }),
+    connections: route({
+      method: 'GET',
+      path: '/api/map/connections',
+      auth: 'account',
+      scope: 'none',
+      summary: 'Wanderer-compatible: connections of a map',
+      response: dto.WandererConnectionsDto,
+    }),
+    characters: route({
+      method: 'GET',
+      path: '/api/map/characters',
+      auth: 'account',
+      scope: 'none',
+      summary: 'Wanderer-compatible: tracked characters of a map',
+      response: dto.WandererTrackedCharactersDto,
+    }),
+    userCharacters: route({
+      method: 'GET',
+      path: '/api/map/user_characters',
+      auth: 'account',
+      scope: 'none',
+      summary: 'Wanderer-compatible: characters on a map grouped by person',
+      response: dto.WandererUserCharactersDto,
+    }),
+    mapSystems: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/systems',
+      auth: 'account',
+      scope: 'none',
+      summary: 'Wanderer-compatible: systems and connections (`:mapId` may be a slug)',
+      response: dto.WandererSystemsDto,
+    }),
+    mapConnections: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/connections',
+      auth: 'account',
+      scope: 'none',
+      summary: 'Wanderer-compatible: connections, optionally by `solar_system_source`/`_target`',
+      response: dto.WandererConnectionsDto,
+    }),
+    mapTrackedCharacters: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/tracked-characters',
+      auth: 'account',
+      scope: 'none',
+      summary: 'Wanderer-compatible: tracked characters (`:mapId` may be a slug)',
+      response: dto.WandererTrackedCharactersDto,
+    }),
+    /** Wanderer's SSE stream: `events=` names, `last_event_id=` (a ULID) backfill, a `connected` frame first. */
+    eventsStream: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/events/stream',
+      auth: 'account',
+      scope: 'none',
+      summary: 'Wanderer-compatible: Server-Sent Events with Wanderer event names',
+      contentType: 'text/event-stream',
+    }),
+  },
+
   /** Integration helpers: batches, connections by their systems, events since a seq, SSE. */
   mapApi: {
     /** Systems and connections added or changed in one transaction (all or nothing). */
