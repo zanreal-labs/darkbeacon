@@ -99,6 +99,8 @@ export const TelemetrySection = z.enum([
   'webhooks',
   'danger',
   'backups',
+  'routes',
+  'bridges',
   'import',
   /** Admin, API access (service keys, public maps and AI agents switches). */
   'api',

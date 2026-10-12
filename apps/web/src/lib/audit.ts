@@ -90,6 +90,11 @@ const FIELD_LABELS: Record<string, string> = {
   mass: 'Ship mass',
   exits: 'Exits',
   hubs: 'Hubs',
+  wayHome: 'Way home',
+  thera: 'Thera and Turnur in routes',
+  added: 'Added',
+  updated: 'Changed',
+  removed: 'Removed',
   dangerous: 'Dangerous',
   note: 'Note',
   lifetime: 'Lifetime left',
@@ -498,6 +503,12 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
       return read("updated the chain's exits", 'map');
     case 'routes.hubs_changed':
       return read(`changed the hubs of ${mapName}`, 'map');
+    case 'routes.bridges_changed':
+      return read(`changed the jump bridges of ${mapName}`, 'map');
+    case 'routes.settings_changed':
+      return read(`changed the route settings of ${mapName}`, 'map');
+    case 'routes.way_home_changed':
+      return read('updated the way home', 'map');
     case 'system.added':
       return read(entry.diff.visible ? `put ${system} back on the map` : `added ${system}`, 'map');
     case 'system.updated':

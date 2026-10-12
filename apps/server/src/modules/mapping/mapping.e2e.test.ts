@@ -188,8 +188,11 @@ describeEachDialect('mapping over HTTP and WebSocket', (t) => {
 
     // Restoring the hidden system publishes it with the intel it kept.
     await call('POST', systems, 'alice', { solarSystemId: SYSTEMS.c5 });
-    await vi.waitFor(() => expect(messages.filter((m) => m.op === 'event')).toHaveLength(2));
-    const live = messages.filter((m) => m.op === 'event').map((m) => m.event);
+    // Routing's recomputed exits arrive on their own time (debounced); they are not what changed.
+    const changes = () =>
+      messages.flatMap((m) => (m.op === 'event' && !m.event.type.startsWith('routes.') ? [m.event] : []));
+    await vi.waitFor(() => expect(changes()).toHaveLength(2));
+    const live = changes();
     expect(live.map((e) => e.type)).toEqual(['system.added', 'signature.added']);
     expect((live[0]!.data as MapSystemDto).solarSystemId).toBe(SYSTEMS.c5);
 

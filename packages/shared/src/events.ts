@@ -14,6 +14,8 @@ import type {
 } from './dto/mapping.js';
 import type { MassMode, PassageSource } from './dto/passages.js';
 import type { HubDto, MapExitDto } from './dto/routing.js';
+import type { BridgeDto } from './dto/bridges.js';
+import type { MapRoutingSettingsDto, WayHomeDto } from './dto/route-panel.js';
 import type { CharacterPresenceDto } from './dto/tracking.js';
 import type { MapShareDto, MapSourceDto } from './dto/sharing.js';
 import type { KillmailDto } from './dto/intel.js';
@@ -151,6 +153,12 @@ export interface EventPayloads {
   /** Instance stream: a plugin was installed, upgraded, enabled, disabled or failed. */
   'plugin.updated': PluginDto;
   'plugin.removed': { id: string };
+  /** The map's Ansiblex jump bridges changed: added (`added`), flagged or removed (by id). */
+  'routes.bridges_changed': { added: BridgeDto[]; updated: BridgeDto[]; removed: string[] };
+  /** The map's own routing settings changed (manager+). */
+  'routes.settings_changed': MapRoutingSettingsDto;
+  /** The way home from each hub to the map's home system changed. */
+  'routes.way_home_changed': WayHomeDto;
   /** Map stream: an import from Wanderer started writing into this map. */
   'import.started': { jobId: string; source: ImportSourceDto; mode: 'new' | 'merge' };
   /** Map stream: an import finished (`done`), failed or was cancelled, with what it did per kind. */
@@ -217,6 +225,9 @@ export const EVENT_TYPES = [
   'character.unlinked',
   'plugin.updated',
   'plugin.removed',
+  'routes.bridges_changed',
+  'routes.settings_changed',
+  'routes.way_home_changed',
   'import.started',
   'import.finished',
   'import.sync_changed',

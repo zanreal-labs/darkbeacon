@@ -31,9 +31,16 @@ export const EVE_CONTACT_SCOPES = [
 ] as const;
 
 /**
+ * Lets the app read the structures of the character's corporation (its Ansiblex jump bridges);
+ * ESI also wants the in-game Station_Manager role for it.
+ */
+export const CORPORATION_STRUCTURES_SCOPE = 'esi-corporations.read_structures.v1';
+
+/**
  * ESI scopes requested when linking a character: location, ship and online status for tracking,
- * the autopilot waypoints for routes, search for the name pickers and contacts for standings.
- * Characters linked before a scope was added lack it until they are linked again.
+ * the autopilot waypoints for routes, search for the name pickers, contacts for standings and
+ * corporation structures for jump bridges. Characters linked before a scope was added lack it
+ * until they are linked again.
  */
 export const EVE_SCOPES: readonly string[] = [
   'esi-location.read_location.v1',
@@ -42,6 +49,7 @@ export const EVE_SCOPES: readonly string[] = [
   WAYPOINT_SCOPE,
   EVE_SEARCH_SCOPE,
   ...EVE_CONTACT_SCOPES,
+  CORPORATION_STRUCTURES_SCOPE,
 ];
 
 /** How many recently opened maps an account remembers. */

@@ -24,6 +24,7 @@ import { MapCanvas, type FocusRequest, type MenuTarget } from '../map/MapCanvas'
 import type { HolderStanding } from '../map/menus/intel';
 import { freeSpot } from '../map/geometry';
 import { connectionMenu, paneMenu, systemMenu } from '../map/menus';
+import { useHubMenu } from '../map/routes/api';
 import { ConnectionSidebar } from '../map/connection/ConnectionSidebar';
 import { useConnectionIntel, useLivePassages, useMapIntel } from '../map/connection/data';
 import { LogJumpDialog } from '../map/connection/LogJumpDialog';
@@ -156,6 +157,7 @@ export function MapView({
   const systemPlugins = useSlot('systemContextMenu', map.id);
   const connectionPlugins = useSlot('connectionContextMenu', map.id);
   const widgetPlugins = useSlot('widget', map.id);
+  const hubMenu = useHubMenu(map.id, can.edit, toast);
 
   // Tags (`labels` in the data) and Labels (WH1...) of the map.
   const labels = (state.map ?? map).labels;
@@ -231,6 +233,7 @@ export function MapView({
           characters: me.data?.characters,
           notify: toast,
           onManageLabels: () => settings.show('labels'),
+          routes: hubMenu,
           onManageTags: () => settings.show('tags'),
           ...holderOf(sys.solarSystemId),
         }),

@@ -26,6 +26,7 @@ import {
   Lock,
   Network,
   Plus,
+  Route,
   Send,
   Settings2,
   ShieldCheck,
@@ -34,6 +35,7 @@ import {
   TriangleAlert,
   Type,
   UserRound,
+  Waypoints,
   Webhook,
   X,
 } from 'lucide-react';
@@ -75,6 +77,7 @@ import { relativeTime } from '../lib/time';
 import { track } from '../lib/telemetry';
 import { useMapSettings } from '../lib/useMapSettings';
 import { BookmarkLabelSettings } from '../map/BookmarkSettings';
+import { BridgesSettings, RoutesSettings } from '../map/routes/RoutingSettings';
 import { PluginSlot } from '../plugins/PluginSlot';
 import {
   Avatar,
@@ -180,6 +183,26 @@ const SECTIONS: readonly Section[] = [
     render: (map, can) => (
       <Pane>
         <BookmarkLabelSettings key={map.id} map={map} canManage={can.manage} canEdit={can.edit} />
+      </Pane>
+    ),
+  },
+  {
+    id: 'routes',
+    title: 'Routes',
+    icon: <Route />,
+    render: (map, can) => (
+      <Pane>
+        <RoutesSettings map={map} can={can} />
+      </Pane>
+    ),
+  },
+  {
+    id: 'bridges',
+    title: 'Bridges',
+    icon: <Waypoints />,
+    render: (map) => (
+      <Pane>
+        <BridgesSettings key={map.id} map={map} />
       </Pane>
     ),
   },

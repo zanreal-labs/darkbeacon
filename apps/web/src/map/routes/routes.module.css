@@ -1,0 +1,258 @@
+/*
+ * The routes section of the system sidebar and the route strips: dense rows, one per hub, the
+ * jump count in a fixed column and the systems on the way as small marks.
+ */
+
+.routes {
+  display: grid;
+  gap: 8px;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.bar > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.options {
+  margin: -2px 0 0;
+  overflow: hidden;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list {
+  display: grid;
+  gap: 1px;
+  margin: 0 -8px;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 7.5em) 3ch minmax(0, 1fr);
+  column-gap: 6px;
+  align-items: center;
+  min-height: 26px;
+  padding: 2px 8px 2px 4px;
+  border-radius: var(--dbk-radius);
+}
+
+.row:hover,
+.row:focus-within {
+  background: var(--dbk-color-surface-hover);
+}
+
+.rowMenu {
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: var(--dbk-radius-small);
+  background: none;
+  color: var(--dbk-color-text-subtle);
+  cursor: pointer;
+  opacity: 0.55;
+}
+
+.row:hover .rowMenu,
+.rowMenu:focus-visible {
+  opacity: 1;
+}
+
+.rowMenu:hover {
+  background: var(--dbk-color-surface-active);
+  color: var(--dbk-color-text);
+}
+
+.rowMenu:focus-visible {
+  outline: 2px solid var(--dbk-color-focus);
+  outline-offset: -1px;
+}
+
+.rowMenu svg {
+  width: 13px;
+  height: 13px;
+}
+
+.name {
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dbk-color-text);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.name[data-on-map] {
+  cursor: pointer;
+}
+
+.name[data-on-map]:hover {
+  color: var(--dbk-color-accent-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.name:focus-visible {
+  outline: 2px solid var(--dbk-color-focus);
+  outline-offset: 1px;
+  border-radius: 2px;
+}
+
+.kind {
+  margin-left: 4px;
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-xs);
+  font-weight: 400;
+}
+
+.jumps {
+  color: var(--dbk-color-text);
+  font-family: var(--dbk-font-family-mono);
+  font-size: var(--dbk-font-size-small);
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.none {
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-small);
+  font-style: italic;
+}
+
+/* ---- The strip ---- */
+
+.strip {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  align-items: center;
+  min-width: 0;
+  padding: 2px 0;
+}
+
+.step {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  border: 0;
+  border-radius: 1px;
+  background: var(--step-color);
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.step[data-shape='round'] {
+  border-radius: 40%;
+}
+
+.step[data-shape='triangle'] {
+  border-radius: 0;
+  clip-path: polygon(50% 0, 0 100%, 100% 100%);
+}
+
+/* Off the stargates: a jump bridge or an EVE-Scout hole gets a ring in the accent colour. */
+.step[data-via='bridge'],
+.step[data-via='ansiblex'],
+.step[data-via='eve-scout'] {
+  box-shadow:
+    0 0 0 1px var(--dbk-color-surface),
+    0 0 0 2px var(--dbk-color-accent);
+}
+
+.strip[data-hovering] .step:not([data-active]) {
+  opacity: 0.3;
+}
+
+.step:focus-visible {
+  outline: 2px solid var(--dbk-color-focus);
+  outline-offset: 1px;
+}
+
+.stepTip {
+  position: absolute;
+  z-index: 4;
+  display: grid;
+  gap: 1px;
+  min-width: max-content;
+  padding: 5px 8px;
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+  background: var(--dbk-color-surface-raised);
+  box-shadow: var(--dbk-shadow-medium);
+  color: var(--dbk-color-text);
+  font-size: var(--dbk-font-size-small);
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 6px));
+}
+
+.stepTipClass {
+  font-family: var(--dbk-font-family-mono);
+  font-size: var(--dbk-font-size-xs);
+  font-weight: 700;
+  /* The palette is the game's, light on dark: an outline keeps it readable on light themes. */
+  text-shadow: 0 0 1px rgb(0 0 0 / 0.6);
+}
+
+.stepTipName {
+  font-weight: 600;
+}
+
+.stepTipRegion {
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-xs);
+}
+
+/* ---- Adding a hub ---- */
+
+.add {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.add > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.hint {
+  margin: 0;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+}
+
+.stations {
+  grid-column: 2 / -1;
+  overflow: hidden;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .step {
+    transition: none;
+  }
+}

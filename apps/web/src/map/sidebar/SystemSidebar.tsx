@@ -16,6 +16,7 @@ import { IconButton } from '../../ui';
 import type { MapState } from '../mapState';
 import type { MapStore } from '../useMapStore';
 import { ActivitySection, SystemHolder } from './ActivitySection';
+import { RoutesSidebarSection } from '../routes/RoutesSection';
 import { ConnectionsSection } from './ConnectionsSection';
 import { KillsSection, KillsSettingsMenu, useKillsSettings } from './KillsSection';
 import { LocalSection, TrackMenu, usePresence } from './LocalSection';
@@ -256,6 +257,16 @@ export function SystemSidebar({
       >
         <LocalSection here={here} mine={mine} />
       </SidebarSection>
+      <RoutesSidebarSection
+        mapId={mapId}
+        solarSystemId={id}
+        can={can}
+        myCharacters={myCharacters}
+        onMap={new Set(universe.keys())}
+        onSelectSystem={onSelectSystem}
+        collapsed={!!collapsed.routes}
+        onToggle={toggle}
+      />
       {plugins.map((entry) => (
         <SidebarSection
           key={entry.key}

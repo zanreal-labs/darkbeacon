@@ -3,7 +3,7 @@ import { cleanup, render, type RenderOptions } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw/http';
 import { setupServer } from 'msw/node';
-import { routes } from '@darkbeacon/shared';
+import { DEFAULT_ROUTE_PREFERENCES, routes } from '@darkbeacon/shared';
 import type { ReactElement, ReactNode } from 'react';
 import { RealtimeClient } from '../lib/realtime';
 import { RealtimeProvider } from '../lib/RealtimeProvider';
@@ -54,7 +54,20 @@ export function installFlowMocks(size = { width: 160, height: 60 }) {
 export function setupMockServer(...handlers: Parameters<typeof setupServer>) {
   // ThemeProvider asks for installed themes; without them it keeps the built-in ones.
   const themes = http.get(routes.themes.list.path, () => new HttpResponse(null, { status: 404 }));
-  const server = setupServer(...handlers, themes);
+  // The routes section asks for the viewer's route options, hubs and routes; none by default.
+  const routing = [
+    http.get(routes.routing.preferences.path, () => HttpResponse.json(DEFAULT_ROUTE_PREFERENCES)),
+    http.get(routes.routing.hubs.path, () => HttpResponse.json({ trade: [], map: [], personal: [] })),
+    http.get(routes.routing.hubRoutes.path, ({ request }) =>
+      HttpResponse.json({
+        from: Number(new URL(request.url).searchParams.get('from')),
+        mode: 'shortest',
+        routes: [],
+        limit: 20,
+      }),
+    ),
+  ];
+  const server = setupServer(...handlers, themes, ...routing);
   beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
   afterEach(() => server.resetHandlers());
   afterAll(() => server.close());
