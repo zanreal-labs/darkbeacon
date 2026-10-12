@@ -100,6 +100,8 @@ export const TelemetrySection = z.enum([
   'danger',
   'backups',
   'signatures',
+  'routes',
+  'bridges',
   'import',
   /** Admin, API access (service keys, public maps and AI agents switches). */
   'api',
@@ -151,6 +153,11 @@ export const TELEMETRY_WEB_EVENTS = {
   theme_used: z.strictObject({ theme: TelemetryThemeId, scheme: z.enum(['light', 'dark']) }),
   /** Once per page load: the kind of screen and how long until the app could be used. */
   app_loaded: z.strictObject({ viewport: ViewportBucket, tti: TtiBucket }),
+  /** The time window of the system sidebar's Activity or Kills section was changed. */
+  activity_viewed: z.strictObject({
+    section: z.enum(['activity', 'kills']),
+    window: z.enum(['1h', '4h', '12h', '24h', '7d']),
+  }),
 } as const;
 
 export type TelemetryWebEventName = keyof typeof TELEMETRY_WEB_EVENTS;

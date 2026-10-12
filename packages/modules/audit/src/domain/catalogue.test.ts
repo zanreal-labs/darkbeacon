@@ -309,6 +309,25 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
     data: { id: 'p1', solarSystemId: 31000005, message: 'Help', createdBy: 'a', createdAt: 1 },
   },
   'ping.removed': { data: { id: 'p1' }, before: { id: 'p1', solarSystemId: 31000005, message: 'Help' } },
+  'kill.reported': {
+    data: {
+      id: 123,
+      solarSystemId: 31000005,
+      time: 1,
+      value: 1_000_000,
+      npc: false,
+      solo: false,
+      victim: {
+        character: null,
+        corporation: null,
+        alliance: null,
+        ship: { id: 670, name: 'Capsule', ticker: null },
+      },
+      finalBlow: null,
+      attackerCount: 2,
+      attackers: [],
+    },
+  },
   'access.rule_added': { data: rule },
   'access.rule_removed': { data: { id: 'r1' }, before: rule },
   'access.public_link_changed': { data: { ...sharing, enabled: true }, before: sharing },
@@ -317,6 +336,21 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
     before: { accountId: 'b', role: 'user' },
   },
   'access.account_changed': { data: { accountId: 'b' } },
+  'routes.bridges_changed': {
+    data: {
+      added: [{ id: 'b1', a: { name: '1DQ1-A' }, b: { name: 'UALX-3' } }],
+      updated: [],
+      removed: ['b0'],
+    },
+  },
+  'routes.settings_changed': { data: { thera: false }, before: { thera: true } },
+  'routes.way_home_changed': {
+    data: {
+      home: { solarSystemId: 31002531, name: 'J014348' },
+      routes: [{ hub: { name: 'Jita' }, jumps: 7, mouth: { name: 'Tama' } }],
+    },
+    before: { home: null, routes: [] },
+  },
   'character.unlinked': { data: { characterId: 9 } },
   'plugin.updated': { data: { ...plugin, enabled: true }, before: plugin },
   'plugin.removed': { data: { id: 'p' }, before: plugin },

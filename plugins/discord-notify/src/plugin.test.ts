@@ -131,7 +131,7 @@ describeEachDialect('discord-notify plugin', (t) => {
       metrics: { delivery: (channel: string, outcome: string) => deliveries.push(`${channel}:${outcome}`) },
     } as unknown as PluginContext<'maps' | 'universe' | 'db' | 'discord' | 'clock'>;
 
-    app = new DiscordNotify(ctx, { fetch: fetchFn as typeof fetch, tickMs: 3_600_000, kills: false });
+    app = new DiscordNotify(ctx, { fetch: fetchFn as typeof fetch, tickMs: 3_600_000 });
     app.start();
     const call = async (method: string, suffix: string, body?: unknown, mapRole: string | null = 'admin') => {
       const route = routes.find((r) => r.method === method && r.path === `/maps/:mapId${suffix}`)!;
@@ -316,24 +316,51 @@ describeEachDialect('discord-notify plugin', (t) => {
     expect((s.posts[0]!.embeds as unknown[]).length).toBe(1);
   });
 
-  it('posts the way home when exits change, and forgets a deleted map', async () => {
+  it('posts the way home after ten quiet minutes, once per change, and forgets a deleted map', async () => {
     const s = await setup();
     await s.call('PUT', '', {
       target: { kind: 'webhook', url: HOOK },
       kinds: { ...ALL, connections: false },
     });
+    const hub = (name: string) => ({ solarSystemId: 30000142, name, security: 0.9, kind: 'map', near: null });
+    const wayHome = (jumps: number) => ({
+      home: { solarSystemId: 31000001, name: 'J100001' },
+      routes: [
+        {
+          hub: hub('Jita'),
+          jumps,
+          mouth: { solarSystemId: 30002537, name: 'Amamake', security: 0.4 },
+          space: 'low',
+          viaEveScout: false,
+        },
+      ],
+    });
+    await s.emit('routes.way_home_changed', wayHome(7));
+    s.advance(5 * 60_000);
+    await s.app.digests();
+    await s.app.flush();
+    expect(s.posts).toHaveLength(0);
+    // The chain changes again: the quiet period starts over.
     await s.emit('connection.added', connection('c1', 31000001, 30002537));
+    s.advance(6 * 60_000);
+    await s.app.digests();
+    expect((await s.state()).status.pending).toBe(0);
+    s.advance(5 * 60_000);
     await s.app.digests();
     s.advance(10_000);
     await s.app.flush();
     expect((s.posts[0]!.embeds as Array<{ title: string; description: string }>)[0]).toMatchObject({
-      title: 'Way home: 1 exit to known space',
+      title: 'Way home to J100001 (C3)',
+      description: expect.stringMatching(/^\*\*Jita\*\*: 7J via \[Amamake\]\(.+\) \(low\/null only\)$/),
     });
-    // Nothing changed: no second digest.
-    await s.emit('connection.updated', connection('c1', 31000001, 30002537));
+    // The same way home again: nothing new to say.
+    await s.emit('routes.way_home_changed', wayHome(7));
     s.advance(20 * 60_000);
     await s.app.digests();
     expect((await s.state()).status.pending).toBe(0);
+    // The test button posts it anyway.
+    expect((await s.call('POST', '/test-way-home')).body).toEqual({ ok: true, error: null });
+    expect(s.posts).toHaveLength(2);
 
     await s.emit('map.removed', { id: 'm1' });
     expect(await s.state()).toMatchObject({ target: null, status: { lastSentAt: null } });

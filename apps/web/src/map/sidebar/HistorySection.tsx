@@ -13,7 +13,7 @@ import { relativeTime } from '../../lib/time';
 import { Button, IconButton, Skeleton, useToast } from '../../ui';
 import { SidebarSection } from './SidebarSection';
 import styles from './sidebar.module.css';
-import own from './intel.module.css';
+import own from './records.module.css';
 
 /**
  * What happened in the system, newest first: the system itself, its signatures, the connections

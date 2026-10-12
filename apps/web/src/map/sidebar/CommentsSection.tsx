@@ -11,7 +11,7 @@ import { CharacterAvatar, ConfirmDialog, IconButton, Kbd, Skeleton, useToast } f
 import { SidebarSection } from './SidebarSection';
 import { useSystemList } from './useSystemList';
 import styles from './sidebar.module.css';
-import own from './intel.module.css';
+import own from './records.module.css';
 
 const newestFirst = (a: CommentDto, b: CommentDto) => b.createdAt - a.createdAt || b.id.localeCompare(a.id);
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);

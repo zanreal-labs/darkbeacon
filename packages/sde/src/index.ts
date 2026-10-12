@@ -153,6 +153,47 @@ export function loadWormholeData(file = WORMHOLE_DATA_FILE): WormholeData {
 }
 
 /**
+ * NPC stations of known space and the places Routes By looks for, built by
+ * `pnpm --filter @darkbeacon/sde data` (see `src/stations.ts`). `stations` rows are
+ * `[station id, solar system id, name]`; `places` lists station ids per kind.
+ */
+export interface StationData {
+  source: string;
+  stations: Array<[number, number, string]>;
+  places: {
+    securityOffice: number[];
+    blueLoot: number[];
+    redLoot: number[];
+    tradeHubs: number[];
+  };
+}
+
+export const STATION_DATA_FILE = fileURLToPath(new URL('../data/stations.json', import.meta.url));
+
+export function loadStationData(file = STATION_DATA_FILE): StationData {
+  return JSON.parse(readFileSync(file, 'utf8')) as StationData;
+}
+
+/**
+ * Known-space systems the Triglavian invasion changed for good, by outcome: `edencom` (fortress
+ * and EDENCOM minor victory), `triglavian` (Triglavian minor victory), `final` (taken into
+ * Pochven). Not in the SDE or ESI; listed by https://kybernaut.space/invasions (linked from
+ * https://wiki.eveuniversity.org/EDENCOM_systems).
+ */
+export interface InvasionData {
+  source: string;
+  edencom: number[];
+  triglavian: number[];
+  final: number[];
+}
+
+export const INVASION_DATA_FILE = fileURLToPath(new URL('../data/invasions.json', import.meta.url));
+
+export function loadInvasionData(file = INVASION_DATA_FILE): InvasionData {
+  return JSON.parse(readFileSync(file, 'utf8')) as InvasionData;
+}
+
+/**
  * Known space for the jump planner's map (`data/kspace.json`), columnar: index `i` of every
  * `systems` array describes one system. Coordinates are the SDE's in light years (y is "up"; the
  * top-down map draws x and z). `gates` lists stargates as index pairs `i, j` with `i < j`.
@@ -205,3 +246,5 @@ export function loadKspaceData(file = KSPACE_DATA_FILE): KspaceData {
 }
 
 export { KSPACE_FLAGS, METERS_PER_LY, ZARZAKH_ID } from './kspace.js';
+
+export * from './flags.js';

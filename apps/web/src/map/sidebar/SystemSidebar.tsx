@@ -15,7 +15,10 @@ import type { SlotEntry } from '../../plugins/registry';
 import { IconButton } from '../../ui';
 import type { MapState } from '../mapState';
 import type { MapStore } from '../useMapStore';
+import { ActivitySection, SystemHolder } from './ActivitySection';
+import { RoutesSidebarSection } from '../routes/RoutesSection';
 import { ConnectionsSection } from './ConnectionsSection';
+import { KillsSection, KillsSettingsMenu, useKillsSettings } from './KillsSection';
 import { LocalSection, TrackMenu, usePresence } from './LocalSection';
 import { SidebarSection } from './SidebarSection';
 import { SidebarShell } from './SidebarShell';
@@ -101,6 +104,7 @@ export function SystemSidebar({
   const id = system.solarSystemId;
 
   const paste = useSignaturePaste(id, store);
+  const [killSettings, setKillSettings] = useKillsSettings(mapId);
   const presence = usePresence(mapId, store);
 
   // Ctrl+V on the map or in the sidebar, but never into a field someone is typing in.
@@ -151,6 +155,7 @@ export function SystemSidebar({
           store={store}
           onClose={onClose}
           dragHandle={handle}
+          holder={<SystemHolder mapId={mapId} solarSystemId={id} />}
         />
       )}
     >
@@ -243,6 +248,25 @@ export function SystemSidebar({
           onSelectSystem={onSelectSystem}
         />
       </SidebarSection>
+      <SidebarSection id="activity" title="Activity" collapsed={!!collapsed.activity} onToggle={toggle}>
+        <ActivitySection key={id} mapId={mapId} solarSystemId={id} />
+      </SidebarSection>
+      <SidebarSection
+        id="kills"
+        title="Kills"
+        collapsed={!!collapsed.kills}
+        onToggle={toggle}
+        action={
+          <KillsSettingsMenu
+            settings={killSettings}
+            update={setKillSettings}
+            solarSystemId={id}
+            systemName={name}
+          />
+        }
+      >
+        <KillsSection mapId={mapId} solarSystemId={id} settings={killSettings} universe={universe} />
+      </SidebarSection>
       <SidebarSection
         id="local"
         title="Local"
@@ -262,6 +286,16 @@ export function SystemSidebar({
       >
         <LocalSection here={here} mine={mine} />
       </SidebarSection>
+      <RoutesSidebarSection
+        mapId={mapId}
+        solarSystemId={id}
+        can={can}
+        myCharacters={myCharacters}
+        onMap={new Set(universe.keys())}
+        onSelectSystem={onSelectSystem}
+        collapsed={!!collapsed.routes}
+        onToggle={toggle}
+      />
       <HistorySection
         key={`history:${id}`}
         mapId={mapId}

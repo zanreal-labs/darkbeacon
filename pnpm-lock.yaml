@@ -65,6 +65,9 @@ importers:
       '@darkbeacon/importing':
         specifier: workspace:*
         version: link:../../packages/modules/importing
+      '@darkbeacon/intel':
+        specifier: workspace:*
+        version: link:../../packages/modules/intel
       '@darkbeacon/jumps':
         specifier: workspace:*
         version: link:../../packages/modules/jumps
@@ -403,6 +406,15 @@ importers:
       zod:
         specifier: ^4.6.5
         version: 4.6.5
+
+  packages/modules/intel:
+    dependencies:
+      '@darkbeacon/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@darkbeacon/shared':
+        specifier: workspace:*
+        version: link:../../shared
 
   packages/modules/jumps:
     dependencies:

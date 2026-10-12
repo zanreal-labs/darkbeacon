@@ -246,6 +246,17 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
     state: (d) => ({ hubs: Array.isArray(d.hubs) ? d.hubs.map((hub: Fields) => str(hub.name)) : [] }),
   },
   'ping.created': { op: 'create', entity: byId('ping'), refs: (d) => ref('system', d.solarSystemId) },
+  // Kills in the chain come from zKillboard, not from anyone on the map: activity in the system's history.
+  'kill.reported': {
+    op: 'activity',
+    entity: byId('kill'),
+    refs: (d) => ref('system', d.solarSystemId),
+    activity: (d) => {
+      const victim = asFields(d.victim);
+      const ship = asFields(victim?.ship);
+      return { kill: change(null, ship?.name ?? 'ship') };
+    },
+  },
   'ping.removed': { op: 'delete', entity: byId('ping'), refs: (d, b) => ref('system', b?.solarSystemId) },
   'access.rule_added': { op: 'create', entity: byId('accessRule'), ignore: ['createdAt', 'mapId'] },
   'access.rule_removed': { op: 'delete', entity: byId('accessRule'), ignore: ['createdAt', 'mapId'] },
@@ -269,6 +280,32 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
   },
   'plugin.updated': { op: 'update', entity: byId('plugin'), ignore: ['installedAt'] },
   'plugin.removed': { op: 'delete', entity: byId('plugin'), ignore: ['installedAt'] },
+  'routes.bridges_changed': {
+    op: 'activity',
+    entity: () => ({ kind: 'bridges', id: 'map' }),
+    activity: (d) => {
+      const pair = (b: Fields) => `${str(asFields(b.a)?.name)} » ${str(asFields(b.b)?.name)}`;
+      const list = (key: string) => (Array.isArray(d[key]) ? (d[key] as Fields[]) : []);
+      const diff: FieldDiff = {};
+      if (list('added').length > 0) diff.added = change(null, list('added').map(pair));
+      if (list('updated').length > 0) diff.updated = change(null, list('updated').map(pair));
+      if (list('removed').length > 0) diff.removed = change(null, list('removed').length);
+      return diff;
+    },
+  },
+  'routes.settings_changed': { op: 'update', entity: () => ({ kind: 'routingSettings', id: 'map' }) },
+  'routes.way_home_changed': {
+    op: 'update',
+    entity: () => ({ kind: 'wayHome', id: 'map' }),
+    state: (d) => ({
+      wayHome: Array.isArray(d.routes)
+        ? d.routes.map(
+            (r: Fields) =>
+              `${str(asFields(r.hub)?.name)} ${str(r.jumps)}j via ${str(asFields(r.mouth)?.name)}`,
+          )
+        : [],
+    }),
+  },
   'import.started': {
     op: 'activity',
     entity: byId('import', 'jobId'),

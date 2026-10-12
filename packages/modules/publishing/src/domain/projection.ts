@@ -175,6 +175,9 @@ export function projectEvent(event: DomainEvent, scopes: Scopes, stream: string)
     case 'character.moved':
     case 'character.ship_changed':
       return has(scopes, 'characters') ? forward(d) : null;
+    case 'kill.reported':
+      // zKillboard's public killmails of a system the view shows; nothing of the map in them.
+      return forward(event.data);
     case 'routes.exits_changed':
       return forward({ exits: asArray<MapExitDto>(d.exits).map((e) => projectExit(e, scopes)) });
     case 'map.removed':

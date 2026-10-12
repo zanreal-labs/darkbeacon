@@ -245,6 +245,17 @@ describe('public projection', () => {
     expect(leaks(projectEvent(event('routes.exits_changed', { exits: [exit] }), s, 'public:tok'))).toEqual(
       [],
     );
+    // Killmails are zKillboard's public data about the system: forwarded as they are.
+    const kill = {
+      id: 1,
+      solarSystemId: 31000005,
+      victim: { ship: { id: 670, name: 'Capsule', ticker: null } },
+    };
+    expect(projectEvent(event('kill.reported', kill), s, 'public:tok')).toMatchObject({
+      stream: 'public:tok',
+      actor: { kind: 'system', id: 'darkbeacon' },
+      data: kill,
+    });
   });
 
   it('normalizes scopes and narrows the MCP reach', () => {

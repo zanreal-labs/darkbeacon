@@ -71,7 +71,55 @@ describe('system menu', () => {
     expect(rows(system('viewer').items)).toEqual(['Copy name']);
     const withPilot = system('viewer', {}, { characters: [pilot(1, 'Ayla Vex')] }).items;
     expect(rows(withPilot)).toEqual(['Set destination', 'Copy name']);
-    expect(rows(sub(withPilot, 'Set destination'))).toEqual(['Set destination', 'Add waypoint']);
+    expect(rows(sub(withPilot, 'Set destination'))).toEqual([
+      'Set destination',
+      'Add waypoint',
+      'Add waypoint first',
+    ]);
+  });
+
+  it('toggles map hubs for members and own hubs for everyone', () => {
+    const toggle = vi.fn();
+    const hubs = {
+      trade: [],
+      map: [{ solarSystemId: 31000005, name: 'J123456', security: -1, kind: 'map' as const, near: null }],
+      personal: [],
+    };
+    const viewer = system('viewer', {}, { routes: { hubs, canEdit: false, toggle } }).items;
+    expect(rows(viewer)).toEqual(['My hub', 'Copy name']);
+    const member = system('member', {}, { routes: { hubs, canEdit: true, toggle } }).items;
+    const mapHub = member.find((i) => i.kind === 'check' && i.label === 'Map hub');
+    if (mapHub?.kind !== 'check') throw new Error('Map hub');
+    expect(mapHub.checked).toBe(true);
+    mapHub.onSelect();
+    expect(toggle).toHaveBeenCalledWith('map', { solarSystemId: 31000005, name: 'J123456' }, false);
+  });
+
+  it('lets anyone set their own standing towards the holder, and go back to their contacts', () => {
+    const set: Array<number | null> = [];
+    const holder = (standing: number | null, overridden: boolean) => ({
+      holder: { id: 1354830081, name: 'Goonswarm Federation', ticker: 'CONDI' },
+      standing,
+      overridden,
+      set: (v: number | null) => void set.push(v),
+    });
+    const items = system('viewer', {}, { holder: holder(5, false) }).items;
+    expect(rows(items)).toEqual(['Standing towards [CONDI]', 'Copy name']);
+    const choices = sub(items, 'Standing towards [CONDI]');
+    expect(rows(choices)).toEqual([
+      'Excellent (+10)',
+      'Good (+5)',
+      'Neutral (0)',
+      'Bad (-5)',
+      'Terrible (-10)',
+    ]);
+    pick(choices, 'Terrible (-10)');
+    const overridden = sub(
+      system('viewer', {}, { holder: holder(-10, true) }).items,
+      'Standing towards [CONDI]',
+    );
+    pick(overridden, 'Use my contacts again');
+    expect(set).toEqual([-10, null]);
   });
 
   it('keeps the member top level short: details in submenus, remove last', () => {
@@ -188,13 +236,11 @@ describe('system menu', () => {
         characters: [pilot(1, 'Ayla Vex'), pilot(2, 'Bren Tal'), pilot(3, 'No Scope', false)],
       },
     );
-    expect(rows(sub(items, 'Set destination'))).toEqual([
-      'Ayla Vex',
+    expect(rows(sub(items, 'Set destination'))).toEqual(['All characters', '—', 'Ayla Vex', 'Bren Tal']);
+    expect(rows(sub(sub(items, 'Set destination'), 'Bren Tal'))).toEqual([
       'Set destination',
       'Add waypoint',
-      'Bren Tal',
-      'Set destination',
-      'Add waypoint',
+      'Add waypoint first',
     ]);
   });
 

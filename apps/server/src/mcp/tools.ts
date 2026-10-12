@@ -17,6 +17,7 @@ import type {
   SystemUseCases,
   UniverseCatalog,
 } from '@darkbeacon/mapping';
+import type { IntelQueries } from '@darkbeacon/intel';
 import type { RouteQueries } from '@darkbeacon/routing';
 import type { MapPublishing, PublicAccess } from '@darkbeacon/publishing';
 import {
@@ -32,10 +33,12 @@ import {
   scopesAllow,
   type CharacterPresenceDto,
   type ConnectionDto,
+  type KillmailDto,
   type MapExitDto,
   type MapSystemDto,
   type ScopeRequirement,
   type SignatureDto,
+  type SystemIntelDto,
 } from '@darkbeacon/shared';
 import { z } from 'zod';
 import type { MergedWriteRouter } from '../modules/mapping/merged-writes.js';
@@ -76,6 +79,8 @@ export interface McpDeps {
   merged: MergedWriteRouter;
   /** Public maps; without the publishing module anonymous agents see nothing. */
   publishing: MapPublishing | null;
+  /** Sovereignty, hourly activity and killmails (public game data); absent without the intel module. */
+  systemIntel?: IntelQueries | null;
 }
 
 /** A map as a tool sees it: who reads it, and how much of it the caller may see. */
@@ -95,6 +100,32 @@ interface MapView {
 }
 
 class ToolError extends Error {}
+
+function intelLines(intel: SystemIntelDto): string[] {
+  const lines: string[] = [];
+  const sov = intel.sovereignty;
+  if (sov)
+    lines.push(
+      sov.kind === 'faction'
+        ? `faction space: ${sov.holder.name ?? sov.holder.id}`
+        : `held by ${sov.holder.name ?? sov.holder.id}${sov.holder.ticker ? ` [${sov.holder.ticker}]` : ''}`,
+    );
+  else if (intel.regionHolder)
+    lines.push(
+      `unclaimed; region held by ${intel.regionHolder.holder.name ?? intel.regionHolder.holder.id} (${intel.regionHolder.held}/${intel.regionHolder.total})`,
+    );
+  lines.push(
+    `last hour: ${intel.kills1h} kills${intel.npcKills1h === null ? '' : `, ${intel.npcKills1h} NPC kills`}${intel.jumps1h === null ? '' : `, ${intel.jumps1h} jumps`}`,
+  );
+  return lines;
+}
+
+function killLine(k: KillmailDto): string {
+  const group = k.victim.alliance ?? k.victim.corporation;
+  const attacker = k.attackers[0]?.alliance ?? k.attackers[0]?.corporation;
+  const when = new Date(k.time).toISOString().slice(0, 16).replace('T', ' ');
+  return `${when} ${k.victim.ship?.name ?? 'ship'}${group?.ticker ? ` [${group.ticker}]` : ''} by ${attacker?.ticker ? `[${attacker.ticker}]` : (attacker?.name ?? 'NPCs')} (${k.attackerCount}), ${k.value === null ? '?' : `${Math.round(k.value / 1e6)}M`} ISK https://zkillboard.com/kill/${k.id}/`;
+}
 
 /** A write on a map that merges others lands on the maps holding the object; it shows up shortly. */
 const MERGED = '(written to the maps this one merges)';
@@ -355,7 +386,7 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
     {
       title: 'System intel',
       description:
-        'Class, security, region, statics with destinations, wormhole effect; on a map also status, notes, signatures and pilots where the caller may see them. Kills are not tracked by Darkbeacon.',
+        'Class, security, region, statics with destinations, wormhole effect, who holds it, kills, NPC kills and jumps of the last hour and the newest killmails (of systems on any map); on a map also status, notes, signatures and pilots where the caller may see them.',
       inputSchema: z.object({ system: SystemArg, map: MapArg.optional() }),
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
@@ -373,6 +404,13 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
         );
       }
       if (info.effect) lines.push(`effect ${info.effect}`);
+      if (deps.systemIntel) {
+        // Public game data (ESI, zKillboard), the same for every caller.
+        const [intel] = await deps.systemIntel.intelFor([id]);
+        if (intel) lines.push(...intelLines(intel));
+        const kills = await deps.systemIntel.recentKills(id, 24, 5);
+        if (kills.length) lines.push('Killmails, last 24h:', ...kills.map((k) => `- ${killLine(k)}`));
+      }
       if (map) {
         const view = await loadMap(map);
         const onMap = view.systems.find((s) => s.solarSystemId === id);

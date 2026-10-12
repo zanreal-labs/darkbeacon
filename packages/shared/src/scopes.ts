@@ -55,7 +55,7 @@ export const SCOPE_MAP_ROLE: Record<MapScopeResource, Record<ScopeAction, MapRol
   systems: { read: 'viewer', write: 'member', manage: 'manager' },
   connections: { read: 'viewer', write: 'member', manage: null },
   signatures: { read: 'viewer', write: 'member', manage: null },
-  routes: { read: 'viewer', write: 'manager', manage: null },
+  routes: { read: 'viewer', write: 'member', manage: null },
   tracking: { read: 'viewer', write: 'member', manage: null },
   audit: { read: 'viewer', write: 'member', manage: null },
   webhooks: { read: null, write: null, manage: 'admin' },
@@ -69,12 +69,14 @@ export const SCOPE_RESOURCE_LABELS: Record<ScopeResource | 'admin', string> = {
     'Systems on the map, with their comments and structures (write: add, move, edit, notes; manage: lock)',
   connections: 'Connections with mass and time status',
   signatures: 'Signatures (write: add, paste, edit, remove)',
-  routes: 'Routes, exits and hubs (write: map hubs)',
+  routes:
+    "Routes, exits, hubs and jump bridges (write: map hubs; managers also the map's jump bridges and routing settings)",
   tracking: 'Tracked characters and their positions (write: track own characters)',
   audit: 'History of the map (write: revert a change)',
   webhooks: 'Webhooks of the map',
   access: 'Access rules of the map',
-  account: 'Own account (read: profile, landing; write: main character, default map, hubs)',
+  account:
+    'Own account (read: profile, landing, route options; write: main character, default map, hubs, route options, waypoints)',
   universe: 'Static game data (systems, wormhole types)',
   admin: 'Instance administration (instance admins only)',
 };

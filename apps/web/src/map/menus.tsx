@@ -2,12 +2,10 @@
 
 import {
   Bubbled,
-  buildPath,
   ConnectionType,
   CUSTOM_LABEL_MAX,
   LifetimeMark,
   MassStatus,
-  routes,
   ShipSize,
   SystemStatus,
   TimeStatus,
@@ -16,7 +14,6 @@ import {
   type LabelDto,
   type MapSystemDto,
   type SystemLabelDto,
-  type WaypointRequest,
 } from '@darkbeacon/shared';
 import { cssVar } from '@darkbeacon/theme-sdk';
 import {
@@ -29,9 +26,7 @@ import {
   LocateFixed,
   Lock,
   LockOpen,
-  MapPinPlus,
   Maximize,
-  Navigation,
   PencilLine,
   PiggyBank,
   Plus,
@@ -45,17 +40,18 @@ import {
   Weight,
 } from 'lucide-react';
 import type { MenuItem } from '../components/ContextMenu';
-import { api, ApiError } from '../lib/api';
 import type { MapPermissions } from '../lib/roles';
 import { SlotItem } from '../plugins/PluginSlot';
 import type { SlotEntry } from '../plugins/registry';
 import type { ToastInput } from '../ui';
 import { SHIP_SIZE_LABEL } from './ConnectionEdge';
+import { hubMenu, waypointMenu, type HubMenuContext } from './menus/routes';
 import { passageMenuItems } from './menus/passages';
 import { STATUS_LABEL } from './nodeFacts';
 import type { MapStore } from './useMapStore';
 import { connectionSignatureItems, paneSignatureItems } from './menus/signatures';
 import { signaturePrefs } from './signatures/prefs';
+import { holderStandingMenu, type HolderStanding } from './menus/intel';
 
 /*
  * The map's context menus. Short top levels with the details in submenus; only what the user
@@ -109,8 +105,12 @@ export interface SystemMenuContext {
   notify?: Notify;
   /** Opens the map's Labels settings (managers). */
   onManageLabels?(): void;
+  /** The map's and the viewer's hubs, for the hub toggles. */
+  routes?: HubMenuContext;
   /** Opens the map's Tags settings (managers). */
   onManageTags?(): void;
+  /** The alliance holding the system and the viewer's standing towards it (system intel). */
+  holder?: HolderStanding;
 }
 
 /** "WH1" or "WH1 — Static to high-sec": the name alone is often a letter or two. */
@@ -266,33 +266,11 @@ export function systemMenu(ctx: SystemMenuContext): MenuItem[] {
     });
   }
 
-  const go: MenuItem[] = [];
-  const pilots = (ctx.characters ?? []).filter((c) => c.canSetWaypoints && c.tokenValid);
-  if (pilots.length > 0) {
-    const route = (c: CharacterDto): MenuItem[] => [
-      {
-        kind: 'action',
-        label: 'Set destination',
-        icon: <Navigation />,
-        onSelect: () => void setWaypoint(c, id, ctx.name, 'destination', ctx.notify),
-      },
-      {
-        kind: 'action',
-        label: 'Add waypoint',
-        icon: <MapPinPlus />,
-        onSelect: () => void setWaypoint(c, id, ctx.name, 'waypoint', ctx.notify),
-      },
-    ];
-    go.push({
-      kind: 'submenu',
-      label: 'Set destination',
-      icon: <Navigation />,
-      items:
-        pilots.length === 1
-          ? route(pilots[0]!)
-          : pilots.flatMap((c): MenuItem[] => [{ kind: 'label', label: c.name }, ...route(c)]),
-    });
-  }
+  const go: MenuItem[] = [
+    ...waypointMenu(ctx.characters, { solarSystemId: id, name: ctx.name }, ctx.notify),
+    ...hubMenu(ctx.routes, { solarSystemId: id, name: ctx.name }),
+    ...(ctx.holder ? [holderStandingMenu(ctx.holder)] : []),
+  ];
   go.push({
     kind: 'action',
     label: 'Copy name',
@@ -318,32 +296,6 @@ export function systemMenu(ctx: SystemMenuContext): MenuItem[] {
         ]
       : [];
   return groups(edit, go, remove);
-}
-
-async function setWaypoint(
-  character: CharacterDto,
-  solarSystemId: number,
-  name: string,
-  mode: WaypointRequest['mode'],
-  notify?: Notify,
-) {
-  try {
-    await api<void>(buildPath(routes.routing.waypoint.path, { characterId: String(character.id) }), {
-      method: 'POST',
-      json: { solarSystemId, mode } satisfies WaypointRequest,
-    });
-    notify?.({
-      title: mode === 'destination' ? `Destination set to ${name}` : `${name} added as a waypoint`,
-      description: character.name,
-      tone: 'success',
-    });
-  } catch (error) {
-    notify?.({
-      title: mode === 'destination' ? 'Could not set the destination' : 'Could not add the waypoint',
-      description: error instanceof ApiError ? error.message : undefined,
-      tone: 'danger',
-    });
-  }
 }
 
 export interface ConnectionMenuContext {

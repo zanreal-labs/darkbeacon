@@ -49,6 +49,9 @@
       "path": "../../packages/modules/routing"
     },
     {
+      "path": "../../packages/modules/intel"
+    },
+    {
       "path": "../../packages/modules/jumps"
     },
     {

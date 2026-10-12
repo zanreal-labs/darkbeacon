@@ -58,6 +58,20 @@ describe('route engine on the real universe', () => {
     expect(jumps(S.jita, S.jita)).toBe(0);
   });
 
+  it('never routes through Zarzakh, although ESI routes do', () => {
+    // GET https://esi.evetech.net/route/30002086/30003841/ answers Turnur, Zarzakh, Alsavoinon
+    // (2026-10-12), but a ship entering Zarzakh by gate may only leave by that gate for 6 hours.
+    const turnur = 30002086;
+    const alsavoinon = 30003841;
+    const zarzakh = 30100000;
+    expect(universe.gateNeighbours(zarzakh)).toEqual([30001041, 30001269, turnur, alsavoinon]);
+    const route = path(turnur, alsavoinon, 'shortest');
+    expect(route.length - 1).toBeGreaterThan(2);
+    expect(route.map((s) => s.id)).not.toContain(zarzakh);
+    expect(jumps(turnur, zarzakh)).toBe(1);
+    expect(jumps(zarzakh, alsavoinon)).toBe(1);
+  });
+
   it('keeps high-sec only routes in high-sec and they are never shorter', () => {
     const route = path(S.jita, S.amarr, 'highsec');
     // The fewest jumps through true security >= 0.45 only (an independent breadth-first search over
@@ -103,6 +117,7 @@ const pilots: PilotDirectory = {
   securityStatus: async () => -5,
   scopes: async () => [],
   accessToken: async () => null,
+  charactersOf: async () => [],
 };
 
 describeEachDialect('routing over a map', (t) => {

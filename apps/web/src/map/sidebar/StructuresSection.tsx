@@ -29,7 +29,7 @@ import { SidebarSection } from './SidebarSection';
 import { ownerOf, StructureEditor, type StructureDraft } from './StructureEditor';
 import { useSystemList } from './useSystemList';
 import styles from './sidebar.module.css';
-import own from './intel.module.css';
+import own from './records.module.css';
 
 const byAdded = (a: StructureDto, b: StructureDto) => a.createdAt - b.createdAt || a.id.localeCompare(b.id);
 

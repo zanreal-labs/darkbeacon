@@ -14,10 +14,13 @@ import type {
 } from './dto/mapping.js';
 import type { MassMode, PassageSource } from './dto/passages.js';
 import type { HubDto, MapExitDto } from './dto/routing.js';
+import type { BridgeDto } from './dto/bridges.js';
+import type { MapRoutingSettingsDto, WayHomeDto } from './dto/route-panel.js';
 import type { CharacterPresenceDto } from './dto/tracking.js';
 import type { MapShareDto, MapSourceDto } from './dto/sharing.js';
 import type { CommentDto } from './dto/comments.js';
 import type { StructureDto } from './dto/structures.js';
+import type { KillmailDto } from './dto/intel.js';
 import type { McpMode } from './dto/publishing.js';
 import type { ShareScope } from './share-scope.js';
 
@@ -119,6 +122,11 @@ export interface EventPayloads {
   'routes.hubs_changed': { hubs: HubDto[] };
   'ping.created': PingDto;
   'ping.removed': { id: string };
+  /**
+   * A ship or pod was destroyed in a system the map shows (zKillboard's live feed, fresh kills
+   * only); on every map showing it, from the system actor `intel`.
+   */
+  'kill.reported': KillmailDto;
   'access.rule_added': AccessRuleDto;
   'access.rule_removed': { id: string };
   /**
@@ -153,6 +161,12 @@ export interface EventPayloads {
   'structure.added': StructureDto;
   'structure.updated': StructureDto;
   'structure.removed': { id: string; solarSystemId: number };
+  /** The map's Ansiblex jump bridges changed: added (`added`), flagged or removed (by id). */
+  'routes.bridges_changed': { added: BridgeDto[]; updated: BridgeDto[]; removed: string[] };
+  /** The map's own routing settings changed (manager+). */
+  'routes.settings_changed': MapRoutingSettingsDto;
+  /** The way home from each hub to the map's home system changed. */
+  'routes.way_home_changed': WayHomeDto;
   /** Map stream: an import from Wanderer started writing into this map. */
   'import.started': { jobId: string; source: ImportSourceDto; mode: 'new' | 'merge' };
   /** Map stream: an import finished (`done`), failed or was cancelled, with what it did per kind. */
@@ -210,6 +224,7 @@ export const EVENT_TYPES = [
   'routes.hubs_changed',
   'ping.created',
   'ping.removed',
+  'kill.reported',
   'access.rule_added',
   'access.rule_removed',
   'access.public_link_changed',
@@ -223,6 +238,9 @@ export const EVENT_TYPES = [
   'structure.added',
   'structure.updated',
   'structure.removed',
+  'routes.bridges_changed',
+  'routes.settings_changed',
+  'routes.way_home_changed',
   'import.started',
   'import.finished',
   'import.sync_changed',
