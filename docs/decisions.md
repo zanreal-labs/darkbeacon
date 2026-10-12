@@ -21,7 +21,7 @@ Choices made where `docs/SPEC.md` is silent. One line each; newest at the bottom
 - Every Nest constructor parameter uses an explicit `@Inject(token)`, so DI never depends on emitted decorator metadata (tests run through Vite).
 - REST paths live in `packages/shared/src/routes.ts`; Nest uses the global prefix `api` and controllers declare `nestPath(routes.x.y.path)`.
 - `MapAccess` (role of an actor on a map) is a core port implemented by the access module; `requireMapRole` reports maps the actor cannot view as not found so ids do not leak.
-- Map role resolution: a `blocked` rule on a character or account wins; otherwise the highest granting role; otherwise `blocked` if only blocks matched.
+- Map role resolution follows Wanderer (`check_characters_access`): a `blocked` rule on a character or account wins; a `blocked` rule on a corporation, alliance or Discord role beats every rule on a group, so only character and account grants get past it (none left means `blocked`); otherwise the highest granting role.
 - Instance owners and admins are treated like any account on maps unless the access module decides otherwise.
 - Cross-module needs are ports owned by the consumer (`AccessSubjectsSource`, `MapOwnership`, `CharacterTokenSource`) and composed in `apps/server/src/adapters/`.
 - Without `SECRET_KEY` the server generates one and keeps it in `DATA_DIR/secret.key`, so a bare `docker run` works.
@@ -50,7 +50,7 @@ Choices made where `docs/SPEC.md` is silent. One line each; newest at the bottom
 - ESI affiliation is `POST https://esi.evetech.net/characters/affiliation` with `X-Compatibility-Date: 2020-01-01`.
 - Demo and named local accounts have no Discord id and are found by name; fake characters get a stable id from 3 900 000 000 up, corporation 1000169 by default and no ESI token.
 - System and plugin actors are admin on existing maps; API tokens hold their fixed role on their one map.
-- One access rule per map and subject (Discord role ids are global, so the guild is not part of the key); a block on a corporation, alliance or Discord role loses against any grant.
+- One access rule per map and subject (Discord role ids are global, so the guild is not part of the key); a block on a corporation, alliance or Discord role beats every group grant (see map role resolution).
 - Instance settings live in `instance_setting` (key -> JSON), by default no admin guild; edited through `GET/PATCH /api/admin/settings`. The default theme is not one of them: the themes module owns it (`PUT /api/admin/themes/default`).
 - Map ownership reaches access through `MapOwnershipRegistry.use()` from the mapping module (a constructor dependency would be a DI cycle); until then access sees no maps.
 - Outgoing HTTP goes through the `HTTP_FETCH` platform token so tests fake Discord, EVE SSO and ESI at the network edge.
@@ -317,3 +317,4 @@ Choices made where `docs/SPEC.md` is silent. One line each; newest at the bottom
 - Bookmark numbers (`{n}`) stored on connections belong to their source maps and are not shared: a merged map counts `{n}` in the browser in the map's numbering order over the merged chain, the manual order and "Renumber now" are hidden on composites, and setting or renumbering numbers on a merged map is refused (409).
 - Backups and restores need nothing extra: the sharing tables are in the database file; while a restore runs, sharing pauses (`MaintenanceMode` participant), and after it forgets what it kept in memory and builds every merged map from the restored data.
 - Provenance never names accounts, only maps (and instances).
+- Block precedence was corrected to Wanderer's (it used to let any grant beat a corporation or alliance block, so a blocked spy corporation inside a member alliance got in). The Wanderer importer (`feat/import-wanderer`, `importing/src/domain/acl.ts` `planAccess`) must follow it when it lands: a subject blocked in any ACL becomes one `blocked` rule whatever its kind (not only characters), and a corporation or alliance block is reported as mapped 1:1, no longer as an approximation.

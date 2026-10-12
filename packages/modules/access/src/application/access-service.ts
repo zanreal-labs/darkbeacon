@@ -21,8 +21,9 @@ export interface AccessServiceDeps {
  * The authorization service every module uses for maps (the core `MapAccess` port).
  *
  * - The map owner is always admin.
- * - Otherwise access rules decide: a block on one of the account's characters or on the account
- *   wins, then the highest granted role, then `blocked` if only blocks matched.
+ * - Otherwise access rules decide, as in Wanderer: a block on one of the account's characters or
+ *   on the account wins; a block on a corporation, alliance or Discord role beats every group
+ *   grant, so only character and account grants get past it; else the highest granted role.
  * - API tokens hold a fixed role on one map; system and plugin actors act as admin.
  * - Instance owners and admins get no implicit map access.
  */

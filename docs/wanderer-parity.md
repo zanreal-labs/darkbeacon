@@ -320,7 +320,7 @@ Licensing and billing are N/A for a self-hosted single-alliance instance. Map ex
 
 | Feature | What Wanderer does | Darkbeacon status | Gap to close | Priority | Size |
 |---|---|---|---|---|---|
-| Block semantics | A corp or alliance block beats every corp/alliance grant; only a character grant gets past it | **Divergent**: a corp/alliance block loses to any grant | Make corp/alliance blocks beat non-character grants (and import accordingly) | P0 | S |
+| Block semantics | A corp or alliance block beats every corp/alliance grant; only a character grant gets past it | Done: same precedence (`resolveMapRole`); a Discord-role block counts as a group block, an account rule as a character | Importer must map group blocks 1:1 (see `docs/decisions.md`) | P0 | S |
 | Maps list page | Cards with name, description, scope art, ACL tags, tracked count; links to characters, audit, settings, edit, delete | Partial: name, role, default star, last opened, settings (`screens/HomePage.tsx`) | Description, online count, links to history and characters | P1 | S |
 | Create map | Name, slug, description, owner character, scopes, only-tracked, default ACL, attach ACLs | Done for name, address and composite (`HomePage.tsx`, `mapping/application/maps.ts#create`) | Per-option gaps below | P0 | — |
 | Map slug | Editable, unique, suffix on clash | Done (`maps.ts`) | — | P0 | — |
