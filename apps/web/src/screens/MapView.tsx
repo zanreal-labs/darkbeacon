@@ -21,6 +21,7 @@ import { AddSystemSearch } from '../map/AddSystemSearch';
 import { MapCanvas, type FocusRequest, type MenuTarget } from '../map/MapCanvas';
 import { freeSpot } from '../map/geometry';
 import { connectionMenu, paneMenu, systemMenu } from '../map/menus';
+import { useHubMenu } from '../map/routes/api';
 import { systemDisplayName } from '../map/SystemNode';
 import { useMapStore } from '../map/useMapStore';
 import { SystemSidebar } from '../map/sidebar/SystemSidebar';
@@ -80,6 +81,7 @@ export function MapView({
   const systemPlugins = useSlot('systemContextMenu', map.id);
   const connectionPlugins = useSlot('connectionContextMenu', map.id);
   const widgetPlugins = useSlot('widget', map.id);
+  const hubMenu = useHubMenu(map.id, can.edit, toast);
 
   const labels = (state.map ?? map).labels;
   const ids = useMemo(() => [...state.systems.keys()], [state.systems]);
@@ -122,6 +124,7 @@ export function MapView({
           characters: me.data?.characters,
           notify: toast,
           onManageLabels: () => settings.show('labels'),
+          routes: hubMenu,
         }),
       };
     }

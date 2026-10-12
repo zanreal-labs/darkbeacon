@@ -64,7 +64,28 @@ describe('system menu', () => {
     expect(rows(system('viewer').items)).toEqual(['Copy name']);
     const withPilot = system('viewer', {}, { characters: [pilot(1, 'Ayla Vex')] }).items;
     expect(rows(withPilot)).toEqual(['Set destination', 'Copy name']);
-    expect(rows(sub(withPilot, 'Set destination'))).toEqual(['Set destination', 'Add waypoint']);
+    expect(rows(sub(withPilot, 'Set destination'))).toEqual([
+      'Set destination',
+      'Add waypoint',
+      'Add waypoint first',
+    ]);
+  });
+
+  it('toggles map hubs for members and own hubs for everyone', () => {
+    const toggle = vi.fn();
+    const hubs = {
+      trade: [],
+      map: [{ solarSystemId: 31000005, name: 'J123456', security: -1, kind: 'map' as const, near: null }],
+      personal: [],
+    };
+    const viewer = system('viewer', {}, { routes: { hubs, canEdit: false, toggle } }).items;
+    expect(rows(viewer)).toEqual(['My hub', 'Copy name']);
+    const member = system('member', {}, { routes: { hubs, canEdit: true, toggle } }).items;
+    const mapHub = member.find((i) => i.kind === 'check' && i.label === 'Map hub');
+    if (mapHub?.kind !== 'check') throw new Error('Map hub');
+    expect(mapHub.checked).toBe(true);
+    mapHub.onSelect();
+    expect(toggle).toHaveBeenCalledWith('map', { solarSystemId: 31000005, name: 'J123456' }, false);
   });
 
   it('keeps the member top level short: details in submenus, remove last', () => {
@@ -135,13 +156,11 @@ describe('system menu', () => {
         characters: [pilot(1, 'Ayla Vex'), pilot(2, 'Bren Tal'), pilot(3, 'No Scope', false)],
       },
     );
-    expect(rows(sub(items, 'Set destination'))).toEqual([
-      'Ayla Vex',
+    expect(rows(sub(items, 'Set destination'))).toEqual(['All characters', '—', 'Ayla Vex', 'Bren Tal']);
+    expect(rows(sub(sub(items, 'Set destination'), 'Bren Tal'))).toEqual([
       'Set destination',
       'Add waypoint',
-      'Bren Tal',
-      'Set destination',
-      'Add waypoint',
+      'Add waypoint first',
     ]);
   });
 
