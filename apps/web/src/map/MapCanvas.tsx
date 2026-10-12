@@ -176,15 +176,22 @@ export function MapCanvas({
 
   const template =
     preferences.bookmarkTemplate ?? state.map?.settings.bookmarkTemplate ?? DEFAULT_BOOKMARK_TEMPLATE;
+  // `{n}` in the viewer's own order is counted here; in the map's order it is the shared number.
+  const mapOrder = state.map?.settings.bookmarkNumbering?.order ?? 'found';
+  const ownOrder =
+    preferences.bookmarkOrder && preferences.bookmarkOrder !== mapOrder
+      ? preferences.bookmarkOrder
+      : undefined;
   const bookmarks = useMemo(() => {
     const chain = bookmarkChain({
       systems: [...state.systems.values()],
       connections: [...state.connections.values()],
       signatures: [...state.signatures.values()],
       classOf: (id) => bookmarkClassLabel(universe.get(id)),
+      order: ownOrder,
     });
     return new Map([...chain].map(([id, vars]) => [id, bookmarkLabel(template, vars)]));
-  }, [state.systems, state.connections, state.signatures, universe, template]);
+  }, [state.systems, state.connections, state.signatures, universe, template, ownOrder]);
 
   // Store -> React Flow, keeping what React Flow owns: measurements, selection, a drag in progress.
   useEffect(() => {
