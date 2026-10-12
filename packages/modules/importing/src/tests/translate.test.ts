@@ -256,7 +256,10 @@ describe('translating a Wanderer map', () => {
     // In two ACLs: the stronger role wins.
     expect(rule('character:2116161001')).toMatchObject({ role: 'manager', acls: ['Corp', 'Allies'] });
     expect(rule('character:2116161002')).toMatchObject({ role: 'blocked' });
-    expect(rule('corporation:98000002')?.note).toMatch(/yields to any grant/);
+    // Blocks come over 1:1: a corporation block beats every group grant in Darkbeacon too.
+    expect(rule('corporation:98000002')?.note).toMatch(/only a character grant gets past it/);
+    expect(line(report, 'mapped', /Corporation as blocked/)).toBeDefined();
+    expect(line(report, 'approximated', /Block on a corporation/)).toBeUndefined();
     expect(rule('character:2116161009')).toBeUndefined();
     expect(line(report, 'dropped', /Role “owner”/)).toBeDefined();
     expect(line(report, 'dropped', /Members of the ACL “Officers”/)).toBeDefined();

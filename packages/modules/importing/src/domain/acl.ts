@@ -32,9 +32,10 @@ export const ROLE_MAP: Record<string, MapRole> = {
 const RANK: Record<MapRole, number> = { blocked: -1, viewer: 0, member: 1, manager: 2, admin: 3 };
 
 /**
- * One rule per subject from every ACL of the map. A subject in several ACLs gets the strongest
- * role; a block on a character beats any grant (as in Darkbeacon, where it is decisive), while a
- * block on a corporation or alliance yields to grants from other ACLs.
+ * One rule per subject from every ACL of the map. A subject blocked in any ACL stays blocked, as
+ * in Wanderer, whatever its kind; otherwise the strongest role wins. Darkbeacon resolves blocks
+ * the way Wanderer does (a block on a corporation or alliance beats every group grant, only a
+ * character grant gets past it), so blocks come over 1:1.
  */
 export function planAccess(acls: readonly WandererAcl[], report: ReportBuilder): PlannedAccessRule[] {
   const rules = new Map<string, PlannedAccessRule>();
@@ -72,12 +73,11 @@ export function planAccess(acls: readonly WandererAcl[], report: ReportBuilder):
       }
       existing.acls.push(acl.name);
       existing.wandererName ??= member.name;
-      const decisiveBlock =
-        member.kind === 'character' && (role === 'blocked' || existing.role === 'blocked');
-      const next = decisiveBlock ? 'blocked' : RANK[role] > RANK[existing.role] ? role : existing.role;
+      const blocked = role === 'blocked' || existing.role === 'blocked';
+      const next = blocked ? 'blocked' : RANK[role] > RANK[existing.role] ? role : existing.role;
       if (next !== existing.role || existing.role !== role) {
-        existing.note = decisiveBlock
-          ? 'Blocked in one ACL: a block on a character beats every grant'
+        existing.note = blocked
+          ? 'Blocked in one ACL: a block beats every grant of the same subject'
           : `In several ACLs; the strongest role (${next}) wins`;
       }
       existing.role = next;
@@ -89,20 +89,9 @@ export function planAccess(acls: readonly WandererAcl[], report: ReportBuilder):
       RANK[b.role] - RANK[a.role] || a.subjectKind.localeCompare(b.subjectKind) || a.key.localeCompare(b.key),
   );
   for (const rule of out) {
-    if (rule.role === 'blocked' && rule.subjectKind !== 'character') {
-      rule.note ??= 'A block on a corporation or alliance yields to any grant in Darkbeacon';
-      report.approximated(
-        'access',
-        'Block on a corporation or alliance',
-        'In Darkbeacon it yields to a grant from another rule',
-        rule.wandererName ?? rule.key,
-      );
-    } else
-      report.mapped(
-        'access',
-        `${titleCase(rule.subjectKind)} as ${rule.role}`,
-        rule.wandererName ?? rule.key,
-      );
+    if (rule.role === 'blocked' && rule.subjectKind !== 'character')
+      rule.note ??= 'Beats every corporation and alliance grant; only a character grant gets past it';
+    report.mapped('access', `${titleCase(rule.subjectKind)} as ${rule.role}`, rule.wandererName ?? rule.key);
   }
   return out;
 }
