@@ -171,6 +171,16 @@ plugins/*              first-party plugins (plugin-sdk only)
 
 Imports across those lines are checked by `pnpm lint` (`tools/eslint/boundaries.js`).
 
+## Support the project
+
+Darkbeacon is built and maintained in my spare time, for free, for everyone who lives in wormhole space.
+If it saves your fleet a few jumps and you would like to say thanks, you can send ISK in game to
+**`Z4NR34L`**. Every donation, however small, goes into keeping the project alive and growing.
+
+Donations are entirely voluntary: they buy no features, no priority and no special access, and every
+instance works the same whether its users donate or not. Bug reports, ideas and pull requests help just as
+much.
+
 ## Credits
 
 - Game data: EVE Online and all related material are the property of CCP hf. Systems, stargates, wormhole
