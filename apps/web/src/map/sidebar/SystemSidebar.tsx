@@ -18,6 +18,7 @@ import type { SlotEntry } from '../../plugins/registry';
 import { IconButton } from '../../ui';
 import type { MapState } from '../mapState';
 import type { MapStore } from '../useMapStore';
+import { RoutesSidebarSection } from '../routes/RoutesSection';
 import { LocalSection, TrackMenu, usePresence } from './LocalSection';
 import { SidebarSection } from './SidebarSection';
 import {
@@ -385,6 +386,16 @@ export function SystemSidebar({
         >
           <LocalSection here={here} mine={mine} />
         </SidebarSection>
+        <RoutesSidebarSection
+          mapId={mapId}
+          solarSystemId={id}
+          can={can}
+          myCharacters={myCharacters}
+          onMap={new Set(universe.keys())}
+          onSelectSystem={onSelectSystem}
+          collapsed={!!collapsed.routes}
+          onToggle={toggle}
+        />
         {plugins.map((entry) => (
           <SidebarSection
             key={entry.key}
