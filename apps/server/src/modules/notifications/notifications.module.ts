@@ -125,6 +125,7 @@ function every(ms: number, work: () => Promise<unknown>, logger: Logger): () => 
         webhooks: KyselyWebhookRepository,
         clock: Clock,
         settings: InstanceSettingsService,
+        events: EventLog,
         telemetry?: DomainTelemetry | null,
       ) => {
         const http = new HttpWebhookSender({
@@ -133,12 +134,19 @@ function every(ms: number, work: () => Promise<unknown>, logger: Logger): () => 
         const sender = telemetry
           ? countingDeliveries(http, (ok) => telemetry.notificationDelivered('webhook', ok))
           : http;
-        return new WebhookDispatcher({ webhooks, sender, clock });
+        return new WebhookDispatcher({
+          webhooks,
+          sender,
+          clock,
+          events,
+          enabled: async () => (await settings.current()).webhooksEnabled ?? true,
+        });
       },
       inject: [
         KyselyWebhookRepository,
         CLOCK,
         InstanceSettingsService,
+        EVENT_LOG,
         { token: OBSERVABILITY, optional: true },
       ],
     },

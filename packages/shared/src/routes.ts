@@ -1651,6 +1651,20 @@ export const routes = {
     }),
   },
 
+  /** More on webhooks. */
+  webhookSecrets: {
+    /** A new signing secret, shown once; the old one stops working at once. */
+    rotate: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/webhooks/:webhookId/rotate-secret',
+      auth: 'account',
+      scope: { resource: 'webhooks', action: 'manage' },
+      mapRole: 'admin',
+      status: 200,
+      response: dto.CreatedWebhookDto,
+    }),
+  },
+
   /** Integration helpers: batches, connections by their systems, events since a seq, SSE. */
   mapApi: {
     /** Systems and connections added or changed in one transaction (all or nothing). */
