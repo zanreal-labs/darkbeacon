@@ -133,12 +133,21 @@ and danger, `status-warning` amber for pings and stars, `status-friendly` green 
   side stripe. Selection is an accent outline outside the border.
 - Row 1: a solid, fixed-width designation pill first, the class (`C1`-`C6`, `Thera`, `C13`, Drifter
   and Pochven names) or the security (`0.8`, `0.4`, `-0.4`, `-1.0`) in its EVE colour as the pill's
-  background with dark bold monospace text; then the name (15 px semibold); the pilot count on the
-  right, in the accent colour when I am there.
+  background with dark bold monospace text; then the name (15 px semibold) and, for a wormhole with
+  an effect, a 9 px square in the effect's colour (`effect-*` tokens; its name is in the tooltip). On
+  the right: the kills of the last hour (a skull and the number, muted, only when above zero, amber
+  from 5 and red from 20; hovering lists the killmails), then the pilot count, in the accent colour
+  when I am there.
 - Row 2: the statics as plain text, the hole type in the normal text colour (white in dark themes)
   and monospace, the destination (`HS`, `LS`, `NS`, `C1`-`C6`) in its colour right after it:
-  `D845 HS`. No chips, no borders.
-- Nothing else on the node: region, effect, tag, notes and lock are in the tooltip and the side panel.
+  `D845 HS`. No chips, no borders. Known space without a custom name shows its region there instead
+  (Pochven: the constellation), muted. The bottom-right corner holds the lock and who holds the
+  system: the alliance ticker `[CONDI]` in small muted monospace (coloured by the viewer's standing
+  towards it), or the faction's short name in NPC null-sec (`Sansha`); never in wormholes, high- or
+  low-sec. Full names are in its tooltip.
+- A new kill rings the node once, softly (no badge that stays; none with reduced motion).
+- Nothing else on the node: tag, notes and the rest are in the tooltip and the side panel. Every
+  element of rows 1 and 2 is in the invisible sizers, so every node keeps the same width.
 - Above the node, left-aligned with its left edge: the map labels (a small coloured square and the
   label's name, `■ Staging`), then the bookmark code (`ABC-123`, a click copies it).
 - Below an exit system, left-aligned: the nearest hub and its jumps (`Jita 4j`), followed by a small
@@ -181,7 +190,7 @@ unless the template places `{tempName}` itself. The chain is walked from the hom
   by dragging its left edge, width remembered) and hidden while nothing is selected; the close
   button clears the selection, a toggle in the top bar hides it and keeps the selection. No tabs:
   it shows everything at once, stacked: the system's header (always in view), System, Signatures,
-  Local and plugin widgets. Each section has a compact header (title, count, at most one action)
+  Activity, Kills, Local and plugin widgets. Each section has a compact header (title, count, at most one action)
   and folds; folded sections stay folded. Phones get the same content in a bottom sheet with a
   handle (peek shows the header, then half and full).
 - The header carries what is needed at a glance: the designation pill (the node's), the name and
@@ -189,7 +198,17 @@ unless the template places `{tempName}` itself. The chain is walked from the hom
   the effect (its summary on hover) and the statics as plain text (`D845 HS`), the tag and the
   lock. The System section edits status, labels, names, tag and notes in place (saved on Enter or
   leaving the field) and links out to zKillboard, Dotlan and Anoikis; Set destination is its
-  action. Kills and jumps show there once an intel source provides them.
+  action.
+- Under the header's place line, who holds the system with the logo ("Held by Goonswarm Federation
+  [CONDI]", "Faction space: Sansha's Nation"; for unclaimed null-sec the region's holder with
+  held/total).
+- Activity: kills, NPC kills and jumps of the last hour with the last 24 hours as small bars and a
+  day total, then "Who flies here": alliances (or corporations without one) from the system's
+  killmails over 1 h, 24 h or 7 d, kills and losses, links to zKillboard and EVE Who.
+- Kills: the killmails, newest first (ship icon, ship and the victim's ticker, "by [ATK] +3", ISK in
+  green, how long ago, a link to zKillboard). Its one action is a menu: this system or every system
+  on the map, only wormhole systems, the last 4, 12 or 24 hours, and systems left out of "every
+  system"; the choices stay in this browser per map.
 - Signatures are a table (id, group, type or name with where a wormhole leads, age), edited in
   place. Ctrl+V anywhere outside a text field pastes probe scanner results into the selected
   system; a toast says "3 new / 1 updated".

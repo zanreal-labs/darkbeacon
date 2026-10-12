@@ -8,6 +8,7 @@ import {
   wormholeDestination,
   type LabelDto,
   type MapSystemDto,
+  type SystemIntelDto,
   type UniverseSystemDto,
 } from '@darkbeacon/shared';
 import { cssVar } from '@darkbeacon/theme-sdk';
@@ -24,6 +25,7 @@ import {
   type NearestHub,
 } from './nodeFacts';
 import { builtNodeNameSizers } from './node-sizers';
+import { EffectDot, NodeKills, NodeKillsSizer, NodeSovereignty, type StandingTone } from './NodeIntel';
 import { destinationToken } from './WormholeFacts';
 import styles from './SystemNode.module.css';
 
@@ -42,6 +44,12 @@ export interface SystemNodeData extends Record<string, unknown> {
   hub?: NearestHub | null;
   /** One of the viewer's own characters is here: the pilot count is in the accent colour. */
   mine?: boolean;
+  /** Sovereignty and kills of the last hour (system intel); undefined while loading. */
+  intel?: SystemIntelDto;
+  /** How the viewer stands towards the holder (contacts), for the sovereignty ticker's colour. */
+  standing?: StandingTone;
+  /** A kill just came in: the node rings softly for a moment. */
+  pulse?: boolean;
 }
 
 export type SystemNodeType = Node<SystemNodeData, 'system'>;
@@ -63,8 +71,18 @@ export function nodeName(system: MapSystemDto, info: UniverseSystemDto | undefin
   return system.customName || info?.name || String(system.solarSystemId);
 }
 
+/** K-space and Pochven: where the node names the region (wormholes show their statics instead). */
+function isKnownSpace(info: UniverseSystemDto): boolean {
+  const c = info.whClass;
+  return !(c !== null && ((c >= 1 && c <= 6) || (c >= 12 && c <= 18)));
+}
+
 /** Everything the node leaves out, for its tooltip. */
-export function systemTooltip(system: MapSystemDto, info: UniverseSystemDto | undefined): string {
+export function systemTooltip(
+  system: MapSystemDto,
+  info: UniverseSystemDto | undefined,
+  intel?: SystemIntelDto,
+): string {
   const name = nodeName(system, info);
   const lines = [name === info?.name || !info ? name : `${name} (${info.name})`];
   if (system.temporaryName) lines.push(`Temporary name: ${system.temporaryName}`);
@@ -73,6 +91,11 @@ export function systemTooltip(system: MapSystemDto, info: UniverseSystemDto | un
   lines.push(`Status: ${STATUS_LABEL[system.status]}`);
   if (info?.effect)
     lines.push(`${WORMHOLE_EFFECTS[info.effect].name}: ${WORMHOLE_EFFECTS[info.effect].summary}`);
+  if (intel?.sovereignty?.holder.name)
+    lines.push(
+      `${intel.sovereignty.kind === 'faction' ? 'Faction space' : 'Sovereignty'}: ${intel.sovereignty.holder.name}`,
+    );
+  if (intel && intel.kills1h > 0) lines.push(`Kills in the last hour: ${intel.kills1h}`);
   if (info?.statics.length) lines.push(`Statics: ${info.statics.join(', ')}`);
   if (system.tag) lines.push(`Tag: ${system.tag}`);
   if (system.locked) lines.push('Locked');
@@ -129,7 +152,7 @@ export const SystemNode = memo(function SystemNode({
   selected,
   isConnectable,
 }: NodeProps<SystemNodeType>) {
-  const { system, info, labels, characters, mapId, bookmark, hub, mine } = data;
+  const { system, info, labels, characters, mapId, bookmark, hub, mine, intel, standing, pulse } = data;
   const toast = useToast();
   const name = nodeName(system, info);
 
@@ -149,8 +172,9 @@ export const SystemNode = memo(function SystemNode({
       data-selected={selected || undefined}
       data-hidden={!system.visible || undefined}
       data-status={system.status}
+      data-pulse={pulse || undefined}
       style={{ '--node-status': cssVar(STATUS_BORDER[system.status]) } as CSSProperties}
-      title={systemTooltip(system, info)}
+      title={systemTooltip(system, info, intel)}
     >
       {SIDES.map((side) => (
         <Handle
@@ -210,34 +234,50 @@ export const SystemNode = memo(function SystemNode({
               </span>
             ))}
           </span>
-          <span className={`${styles.pilots} ${styles.sizer}`}>
-            <Users aria-hidden />
-            99
+          <span className={`${styles.effectSizer} ${styles.sizer}`} />
+          <span className={styles.end}>
+            <NodeKillsSizer className={styles.sizer} />
+            <span className={`${styles.pilots} ${styles.sizer}`}>
+              <Users aria-hidden />
+              99
+            </span>
           </span>
         </div>
         <div className={`${styles.row} ${styles.fill}`}>
           <PillContent info={info} />
           <span className={styles.name}>{name}</span>
-          {characters > 0 && (
-            <span
-              className={styles.pilots}
-              data-mine={mine || undefined}
-              title={`${characters} tracked pilot${characters === 1 ? '' : 's'} here${mine ? ', you among them' : ''}`}
-            >
-              <Users aria-hidden />
-              {characters}
-            </span>
-          )}
+          <EffectDot effect={info?.effect} />
+          <span className={styles.end}>
+            <NodeKills mapId={mapId} solarSystemId={system.solarSystemId} kills={intel?.kills1h ?? 0} />
+            {characters > 0 && (
+              <span
+                className={styles.pilots}
+                data-mine={mine || undefined}
+                title={`${characters} tracked pilot${characters === 1 ? '' : 's'} here${mine ? ', you among them' : ''}`}
+              >
+                <Users aria-hidden />
+                {characters}
+              </span>
+            )}
+          </span>
         </div>
       </div>
 
       <div className={`${styles.line} ${styles.fill}`}>
         <StaticsText statics={info?.statics ?? []} />
-        {system.locked && (
-          <span className={styles.lock} title="Locked: cannot be moved or removed" data-locked>
-            <Lock aria-label="Locked" />
+        {info && !system.customName && isKnownSpace(info) && (
+          <span className={styles.region} title={`${info.regionName} › ${info.constellationName}`}>
+            {info.whClass === 25 ? info.constellationName : info.regionName}
           </span>
         )}
+        <span className={styles.corner}>
+          {system.locked && (
+            <span className={styles.lock} title="Locked: cannot be moved or removed" data-locked>
+              <Lock aria-label="Locked" />
+            </span>
+          )}
+          <NodeSovereignty intel={intel} standing={standing} />
+        </span>
       </div>
 
       {hub && (

@@ -125,6 +125,7 @@ export function SystemIdentity({
   store,
   onClose,
   dragHandle,
+  holder,
 }: {
   system: MapSystemDto;
   info: UniverseSystemDto | undefined;
@@ -133,6 +134,8 @@ export function SystemIdentity({
   onClose(): void;
   /** The phone sheet's handle, above the name. */
   dragHandle?: ReactNode;
+  /** Who holds the system (intel), under where it is. */
+  holder?: ReactNode;
 }) {
   const realName = info?.name ?? 'Unknown system';
   const custom = system.customName || system.temporaryName;
@@ -172,6 +175,7 @@ export function SystemIdentity({
           <span className={styles.space}>{spaceText(info)}</span>
         </p>
       )}
+      {holder}
       {info && (info.effect || info.statics.length > 0) && (
         <div className={styles.wormhole}>
           {info.effect && <Effect effect={info.effect} />}

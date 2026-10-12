@@ -1,0 +1,117 @@
+/* Kills of the last hour: a skull and the count, muted; amber when busy, red when very busy. */
+.kills {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dbk-color-text-muted);
+  font: inherit;
+  font-size: var(--map-text-secondary, 13px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 22px;
+  cursor: help;
+}
+
+.kills svg {
+  width: 13px;
+  height: 13px;
+}
+
+.kills[data-heat='hot'] {
+  color: var(--dbk-status-warning);
+}
+
+.kills[data-heat='very-hot'] {
+  color: var(--dbk-status-hostile);
+}
+
+.kills:focus-visible {
+  outline: 2px solid var(--dbk-color-focus);
+  outline-offset: 1px;
+  border-radius: 3px;
+}
+
+.killList {
+  display: grid;
+  gap: 4px;
+  max-width: 320px;
+  font-size: 12px;
+}
+
+.killList ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.killList li {
+  display: grid;
+  grid-template-columns: 2.6em minmax(0, 1fr) auto 3.4em;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.killListTitle {
+  margin: 0;
+  font-weight: 700;
+}
+
+.killListMuted,
+.killTime,
+.killGroup {
+  margin: 0;
+  color: var(--dbk-color-text-muted);
+}
+
+.killTime,
+.killValue,
+.killGroup {
+  font-family: var(--dbk-font-family-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.killShip {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.killValue {
+  text-align: right;
+}
+
+/* Sovereignty in the bottom-right corner: small, muted, monospace ticker. */
+.sov {
+  flex: none;
+  margin-left: auto;
+  color: var(--dbk-color-text-muted);
+  font-family: var(--dbk-font-family-mono);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.sov[data-kind='faction'] {
+  font-family: inherit;
+  font-weight: 500;
+}
+
+.sov[data-standing]:not([data-standing='neutral']) {
+  font-weight: 800;
+}
+
+/* The wormhole effect: a small square after the name. */
+.effect {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
