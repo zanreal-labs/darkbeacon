@@ -4,6 +4,30 @@
   margin-bottom: var(--dbk-space-2);
 }
 
+/* Something on another tab needs an admin (a failed backup). */
+.notice {
+  margin-bottom: var(--dbk-space-4);
+}
+
+.noticeLink {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.tabAlert {
+  width: 7px;
+  height: 7px;
+  margin-left: 2px;
+  border-radius: 50%;
+  background: var(--dbk-color-danger);
+}
+
 /* Key / value facts (version, database). */
 .facts {
   display: grid;

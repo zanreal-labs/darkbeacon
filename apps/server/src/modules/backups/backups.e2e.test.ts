@@ -225,13 +225,18 @@ describe('maintenance mode [sqlite file]', () => {
     const base = `127.0.0.1:${(app.getHttpServer().address() as AddressInfo).port}`;
     try {
       const owner = new Browser(base);
-      await owner.json('/api/auth/dev', { method: 'POST', json: { name: 'owner', character: { name: 'O' } } });
+      await owner.json('/api/auth/dev', {
+        method: 'POST',
+        json: { name: 'owner', character: { name: 'O' } },
+      });
       const maintenance = app.get(MaintenanceMode);
       await maintenance.enter('test');
 
       const write = await owner.request('/api/maps', { method: 'POST', json: { name: 'Nope' } });
       expect(write.status).toBe(503);
-      expect(await write.json()).toMatchObject({ error: { code: 'unavailable', details: { maintenance: true } } });
+      expect(await write.json()).toMatchObject({
+        error: { code: 'unavailable', details: { maintenance: true } },
+      });
       expect((await owner.request('/api/maps')).status).toBe(200);
       expect((await owner.request(B)).status).toBe(200);
       const socket = new WebSocket(`ws://${base}/ws`, { headers: { cookie: owner.cookieHeader } });

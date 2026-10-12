@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowUpRight,
   Crown,
+  DatabaseBackup,
   MessageSquare,
   MoreHorizontal,
   Package,
@@ -78,6 +79,7 @@ import {
   useToast,
 } from '../ui';
 import { AuditTab } from './AuditTab';
+import { BackupsTab, useBackupStatus } from './BackupsTab';
 import styles from './settings.module.css';
 
 const TABS = [
@@ -85,6 +87,7 @@ const TABS = [
   { id: 'people', title: 'People', icon: <Users /> },
   { id: 'plugins', title: 'Plugins', icon: <Puzzle /> },
   { id: 'themes', title: 'Themes', icon: <Palette /> },
+  { id: 'backups', title: 'Backups', icon: <DatabaseBackup /> },
   { id: 'audit', title: 'Audit', icon: <ScrollText /> },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
@@ -92,7 +95,8 @@ type TabId = (typeof TABS)[number]['id'];
 const errorText = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback);
 
 const TITLE = 'Admin';
-const DESCRIPTION = 'Settings for this instance, the people on it, plugins, themes and what changed.';
+const DESCRIPTION =
+  'Settings for this instance, the people on it, plugins, themes, backups and what changed.';
 
 /** Query keys of the data the server renders the first tab with. */
 export const adminKeys = {
@@ -118,14 +122,33 @@ export function AdminPage() {
     TABS.map((t) => t.id),
     'instance',
   );
+  const backups = useBackupStatus();
+  const failing = backups.data?.failing ? backups.data.lastFailure : null;
   return (
     <Page width={880}>
       <PageHeader title={TITLE} description={DESCRIPTION} />
+      {failing && tab !== 'backups' && (
+        <div className={styles.notice}>
+          <Callout
+            tone="danger"
+            role="alert"
+            title={`The last ${failing.operation === 'restore' ? 'restore' : 'backup'} failed ${relativeTime(failing.at)}`}
+          >
+            {failing.message}{' '}
+            <button type="button" className={styles.noticeLink} onClick={() => setTab('backups')}>
+              Open Backups
+            </button>
+          </Callout>
+        </div>
+      )}
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className={styles.tabs} aria-label="Admin sections">
           {TABS.map((t) => (
             <TabsTrigger key={t.id} value={t.id} icon={t.icon}>
               {t.title}
+              {t.id === 'backups' && failing && (
+                <span className={styles.tabAlert} role="img" aria-label="needs attention" />
+              )}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -140,6 +163,9 @@ export function AdminPage() {
         </TabsContent>
         <TabsContent value="themes">
           <ThemesTab />
+        </TabsContent>
+        <TabsContent value="backups">
+          <BackupsTab />
         </TabsContent>
         <TabsContent value="audit">
           <AuditTab settingsKey={adminKeys.settings} />
