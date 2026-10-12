@@ -3,7 +3,9 @@ import { pathToFileURL } from 'node:url';
 import { Logger } from '@nestjs/common';
 import {
   AUDIT_STREAM,
+  actorRef,
   ForbiddenError,
+  newEvent,
   INSTANCE_STREAM,
   mapStream,
   parseStream,
@@ -20,8 +22,11 @@ import {
   MANIFEST_FILE,
   eventAllowed,
   parseManifest,
+  type DiscordBotPort,
+  type DurableConsumer,
   type MapReader,
   type Notification,
+  type PluginConfigChange,
   type Notifier,
   type PluginContext,
   type PluginHttpRequest,
@@ -45,9 +50,10 @@ import {
   type PluginSettingsSchemas,
   type PluginSettingsValues,
 } from '@darkbeacon/plugins';
-import type { MapSnapshot } from '@darkbeacon/shared';
+import { redactSecrets, type MapSnapshot } from '@darkbeacon/shared';
 import { readJson } from './installer.js';
 import { manifestPath } from './manifest-file.js';
+import type { EventConsumer } from '../platform/event-consumers.js';
 import type { PluginCommandRegistry } from './plugin-commands.js';
 import { runPluginMigrations } from './plugin-migrations.js';
 
@@ -63,6 +69,14 @@ export class PluginPortProviders {
     here(stream: string): PresenceSummary[];
     onChange(listener: (stream: string, here: PresenceSummary[]) => void): () => void;
   } | null = null;
+  /** The instance's Discord bot (identity sets it). */
+  discord: DiscordBotPort | null = null;
+}
+
+/** What the host needs of the durable event consumers (`EventConsumers`). */
+export interface DurableConsumers {
+  register(consumer: EventConsumer): void;
+  unregister(name: string): void;
 }
 
 export interface PluginHostDeps {
@@ -79,6 +93,12 @@ export interface PluginHostDeps {
   commands: PluginCommandRegistry;
   providers: PluginPortProviders;
   pluginDir(id: string): string;
+  /** Durable consumers for `ctx.consume`; without them it throws (tests that do not need it). */
+  consumers?: DurableConsumers;
+  /** `ctx.instance.publicUrl`. */
+  publicUrl?: string;
+  /** `ctx.secrets`: a sealing box per plugin (keyed from SECRET_KEY). */
+  secrets?: (pluginId: string) => { seal(text: string): string; open(sealed: string): string | null };
   logger?: (pluginId: string) => PluginLogger;
   /** Failures in a row (handlers, routes, notifiers) after which a plugin is disabled. Default 5. */
   failureThreshold?: number;
@@ -112,6 +132,8 @@ const PROVIDABLE = new Set(['notifier']);
  * failing is unloaded and disabled with the reason, which the admin panel shows.
  */
 export class PluginHost {
+  /** Who called each plugin route request, for `ctx.audit` (never trusted from the plugin). */
+  private readonly callers = new WeakMap<PluginHttpRequest, Actor | null>();
   private readonly loaded = new Map<string, LoadedPlugin>();
   /** Serializes load/unload so overlapping syncs of one plugin cannot interleave. */
   private queue: Promise<unknown> = Promise.resolve();
@@ -185,7 +207,9 @@ export class PluginHost {
       try {
         const mapRole = mapId !== undefined && caller ? await this.deps.access.roleOf(caller, mapId) : null;
         const accountId = caller?.kind === 'account' ? caller.id : null;
-        const response = await compiled.route.handler({ ...request, method, params, accountId, mapRole });
+        const req: PluginHttpRequest = { ...request, method, params, accountId, mapRole };
+        this.callers.set(req, caller);
+        const response = await compiled.route.handler(req);
         loaded.failures = 0;
         return response;
       } catch (error) {
@@ -194,6 +218,33 @@ export class PluginHost {
       }
     }
     return null;
+  }
+
+  /** `plugin.settings_changed` on the audit stream, as the person who called the route. */
+  private async configChanged(
+    loaded: LoadedPlugin,
+    request: PluginHttpRequest,
+    change: PluginConfigChange,
+  ): Promise<void> {
+    if (!this.callers.has(request))
+      throw new Error('audit.configChanged needs the request of a plugin route');
+    const caller = this.callers.get(request) ?? null;
+    const pluginId = loaded.plugin.id;
+    const values = (v: Record<string, unknown>) => ({
+      pluginId,
+      mapId: change.mapId,
+      values: redactSecrets(v),
+    });
+    await this.deps.log.append([
+      newEvent({
+        stream: AUDIT_STREAM,
+        type: 'plugin.settings_changed',
+        actor: caller ? actorRef(caller) : { kind: 'plugin', id: pluginId },
+        data: values(change.after),
+        ...(change.before ? { before: values(change.before) } : {}),
+        occurredAt: this.deps.clock.now(),
+      }),
+    ]);
   }
 
   private serial<T>(work: () => Promise<T>): Promise<T> {
@@ -301,6 +352,9 @@ export class PluginHost {
       ports,
       on: (type: string, handler: (event: DomainEvent) => void | Promise<void>) =>
         this.subscribe(loaded, type, handler),
+      consume: (consumer: DurableConsumer) => this.consume(loaded, consumer),
+      instance: Object.freeze({ publicUrl: this.deps.publicUrl ?? 'http://localhost:3000' }),
+      secrets: this.secretsFor(id),
       commands: { run: (name: string, input: unknown) => this.deps.commands.run(actor, name, input) },
       settings: {
         get: <T>() => this.settings(id, null) as Promise<T>,
@@ -308,6 +362,10 @@ export class PluginHost {
       },
       logger: loaded.logger,
       http: { route: (route: PluginRoute) => this.addRoute(loaded, route) },
+      audit: Object.freeze({
+        configChanged: (request: PluginHttpRequest, change: PluginConfigChange) =>
+          this.configChanged(loaded, request, change),
+      }),
       provide: (port: string, adapter: Notifier) => this.provide(loaded, port, adapter),
     });
   }
@@ -337,6 +395,15 @@ export class PluginHost {
         db: () => database.db(),
         transaction: (work) => database.transaction(work),
       }),
+      discord: () => ({
+        available: async () => (await providers.discord?.available()) ?? false,
+        channelLabel: async (guildId, channelId) =>
+          (await providers.discord?.channelLabel(guildId, channelId)) ?? null,
+        send: (channelId, message) => {
+          if (!providers.discord) throw new Error('No Discord bot on this server');
+          return providers.discord.send(channelId, message);
+        },
+      }),
       presence: () => this.presenceReader(loaded),
     };
   }
@@ -364,6 +431,58 @@ export class PluginHost {
         return unsubscribe;
       },
     };
+  }
+
+  private secretsFor(id: string): PluginContext['secrets'] {
+    const box = this.deps.secrets?.(id);
+    return Object.freeze({
+      seal: (text: string) => {
+        if (!box) throw new Error('Secrets are not available to plugins on this server');
+        return box.seal(text);
+      },
+      open: (sealed: string) => box?.open(sealed) ?? null,
+    });
+  }
+
+  /**
+   * A durable consumer for the plugin (`ctx.consume`): read from the event log with its own
+   * cursor (`plugin:<id>:<name>`), map events only, from maps the plugin is not switched off on.
+   * A failing handler counts as a plugin failure and the event is retried by the consumers.
+   */
+  private consume(loaded: LoadedPlugin, consumer: DurableConsumer): () => void {
+    const consumers = this.deps.consumers;
+    if (!consumers) throw new Error('Durable consumers are not available on this server');
+    for (const type of consumer.events) {
+      if (!eventAllowed(loaded.manifest.events, type)) {
+        throw new ForbiddenError(`"${type}" is not among the events in ${MANIFEST_FILE}`);
+      }
+    }
+    if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(consumer.name))
+      throw new Error(`invalid consumer name ${consumer.name}`);
+    const name = `plugin:${loaded.plugin.id}:${consumer.name}`;
+    consumers.register({
+      name,
+      streams: ['map'],
+      types: consumer.events,
+      handle: async (event) => {
+        if (loaded.stopped || !isActiveOn(loaded.plugin, mapIdOf(event))) return;
+        try {
+          await consumer.handle(event);
+          loaded.failures = 0;
+        } catch (error) {
+          this.fail(loaded, error, `consuming ${event.type}`);
+          throw error;
+        }
+      },
+    });
+    let stopped = false;
+    const stop = () => {
+      if (stopped) return;
+      stopped = true;
+      consumers.unregister(name);
+    };
+    loaded.cleanups.push(stop);
+    return stop;
   }
 
   private mapReader(loaded: LoadedPlugin): MapReader {

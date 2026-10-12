@@ -1,5 +1,7 @@
 export * from './access.js';
 export * from './common.js';
+export * from './directory.js';
+export * from './discord-notify.js';
 export * from './identity.js';
 export * from './mapping.js';
 export * from './notifications.js';

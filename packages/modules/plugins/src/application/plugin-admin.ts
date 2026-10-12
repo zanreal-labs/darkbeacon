@@ -52,6 +52,28 @@ export interface PluginAdminDeps {
 const LOADER: ActorRef = { kind: 'system', id: 'plugin-loader' };
 /** The core itself, when it cleans up after a deleted map. */
 const CLEANUP: ActorRef = { kind: 'system', id: 'plugins' };
+/** The core itself, when it installs a plugin that ships with the server. */
+const BUNDLED: ActorRef = { kind: 'system', id: 'bundled-plugins' };
+
+/** Which bundled plugins this instance has seen, so an uninstalled one is not brought back. */
+export interface BundledPluginMarks {
+  seen(id: string): Promise<boolean>;
+  mark(id: string, at: number): Promise<void>;
+}
+
+/** True when `candidate` is a higher semver (major.minor.patch) than `current`. */
+export function newerVersion(candidate: string, current: string): boolean {
+  const parts = (v: string) =>
+    v
+      .split(/[-+]/)[0]!
+      .split('.')
+      .map((n) => Number(n) || 0);
+  const [a, b] = [parts(candidate), parts(current)];
+  for (let i = 0; i < 3; i++) {
+    if ((a[i] ?? 0) !== (b[i] ?? 0)) return (a[i] ?? 0) > (b[i] ?? 0);
+  }
+  return false;
+}
 
 /** Admin use cases of the plugin registry. Changes are published as `plugin.*` instance events. */
 export class PluginAdmin {
@@ -76,21 +98,58 @@ export class PluginAdmin {
     return entries.map((e) => ({ ...e, installedVersion: installed.get(`${e.kind}:${e.id}`) ?? null }));
   }
 
+  /**
+   * Plugins that ship with the server and are on by default (discord-notify): installed and
+   * enabled the first time the server starts with them, upgraded when the server ships a newer
+   * version. An admin who uninstalls one keeps it uninstalled (`marks` remembers it was seen).
+   * Returns the ids it installed or upgraded.
+   */
+  async ensureBundled(names: readonly string[], marks: BundledPluginMarks): Promise<string[]> {
+    const catalog = await this.deps.installer.catalog();
+    const changed: string[] = [];
+    for (const name of names) {
+      const entry = catalog.find((e) => e.kind === 'plugin' && e.source === `catalog:${name}`);
+      if (!entry) continue;
+      const existing = await this.deps.plugins.findById(entry.id);
+      if (existing) {
+        await marks.mark(entry.id, this.deps.clock.now());
+        if (!newerVersion(entry.version, existing.manifest.version)) continue;
+      } else if (await marks.seen(entry.id)) {
+        continue;
+      }
+      const dto = await this.installAs(BUNDLED, { kind: 'catalog', name }, (plugin, isNew) =>
+        isNew ? setPluginEnabled(plugin, true) : plugin,
+      );
+      await marks.mark(dto.id, this.deps.clock.now());
+      changed.push(dto.id);
+    }
+    return changed;
+  }
+
   /** Installs or upgrades a plugin. The loader picks the new code up through `PluginHost.sync`. */
   async install(actor: Actor | null, source: PackageSource): Promise<PluginDto> {
     const admin = requireInstanceRole(actor, 'admin');
+    return this.installAs(actorRef(admin), source, (plugin) => plugin);
+  }
+
+  private async installAs(
+    actor: ActorRef,
+    source: PackageSource,
+    adjust: (plugin: InstalledPlugin, isNew: boolean) => InstalledPlugin,
+  ): Promise<PluginDto> {
     const staged = await this.deps.installer.stage(source);
     try {
       if (staged.kind !== 'plugin')
         throw new ValidationError('This package is a theme; install it as a theme');
       const existing = await this.deps.plugins.findById(staged.manifest.id);
       const now = this.deps.clock.now();
-      const plugin = existing
-        ? upgradePlugin(existing, staged.manifest, now)
-        : newInstalledPlugin(staged.manifest, now);
+      const plugin = adjust(
+        existing ? upgradePlugin(existing, staged.manifest, now) : newInstalledPlugin(staged.manifest, now),
+        !existing,
+      );
       await this.deps.uow.transaction(async () => {
         await this.deps.plugins.save(plugin);
-        await this.publish(plugin, actorRef(admin), existing);
+        await this.publish(plugin, actor, existing);
         // Last, so a failed database write leaves the previous version in place.
         await this.deps.installer.commit(staged);
       });

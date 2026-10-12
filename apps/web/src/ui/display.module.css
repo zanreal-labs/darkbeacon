@@ -163,6 +163,10 @@
   padding: var(--dbk-space-2) 0;
 }
 
+/*
+ * Actions of a card, right-aligned under a divider, on the card's own surface (no second band
+ * colour; see docs/design.md, "Cards").
+ */
 .cardFooter {
   display: flex;
   flex-wrap: wrap;
@@ -171,8 +175,11 @@
   gap: var(--dbk-space-2);
   padding: var(--dbk-space-3) var(--dbk-space-4);
   border-top: 1px solid var(--dbk-color-border);
-  background: var(--dbk-color-bg-subtle);
-  border-radius: 0 0 var(--dbk-radius-large) var(--dbk-radius-large);
+}
+
+/* A header with nothing under it (a card that is only a title and its actions). */
+.cardHeader:last-child {
+  padding-bottom: var(--dbk-space-4);
 }
 
 /* ---- List rows inside cards ---- */

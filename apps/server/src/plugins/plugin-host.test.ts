@@ -22,6 +22,8 @@ import {
   tempDir,
   writeFiles,
 } from './packages.test-support.js';
+import { SecretBox } from '../adapters/identity/secret-box.js';
+import { EventConsumers } from '../platform/event-consumers.js';
 import { PluginCommandRegistry } from './plugin-commands.js';
 import { PluginHost, PluginPortProviders } from './plugin-host.js';
 import { FilePluginSettingsSchemas } from './settings-schemas.js';
@@ -40,6 +42,7 @@ describeEachDialect('PluginHost', (t) => {
   let commands: PluginCommandRegistry;
   let uc: PluginAdmin;
   let host: PluginHost;
+  let consumers: EventConsumers;
 
   beforeEach(() => {
     delete (globalThis as { __dbkPlugins?: unknown }).__dbkPlugins;
@@ -47,6 +50,7 @@ describeEachDialect('PluginHost', (t) => {
     clock = new ManualClock();
     bus = new InProcessEventBus(() => undefined);
     log = new KyselyEventLog(t.db, bus);
+    consumers = new EventConsumers(t.db, log, bus, clock);
     plugins = new KyselyPluginRepository(t.db);
     notifiers = new NotifierRegistry();
     commands = new PluginCommandRegistry();
@@ -80,11 +84,19 @@ describeEachDialect('PluginHost', (t) => {
       pluginDir: (id) => installer.pluginDir(id),
       logger: () => quiet,
       failureThreshold: 3,
+      consumers,
+      publicUrl: 'https://beacon.example',
+      secrets: (id) => new SecretBox('s'.repeat(32), `plugin:${id}`),
     });
+  });
+
+  beforeEach(async () => {
+    await consumers.onApplicationBootstrap();
   });
 
   afterEach(async () => {
     await host.stop();
+    await consumers.onModuleDestroy();
   });
 
   /** Puts a plugin on disk and in the registry, enabled unless said otherwise. */
@@ -120,6 +132,29 @@ describeEachDialect('PluginHost', (t) => {
     expect(host.isLoaded('off')).toBe(false);
     expect(fixtureLogs().fx).toMatchObject({ registered: 1, ports: ['clock', 'events'], instance: 0 });
     expect(fixtureLogs().off).toBeUndefined();
+  });
+
+  it('gives plugins durable consumers, the public URL and their own secrets', async () => {
+    (globalThis as { __dbkPlugins?: Record<string, unknown> }).__dbkPlugins = { fx: { durable: [] } };
+    await put('fx');
+    await host.start();
+    const state = (
+      globalThis as unknown as {
+        __dbkPlugins: Record<string, { durable: string[]; publicUrl: string; sealed: boolean }>;
+      }
+    ).__dbkPlugins.fx!;
+    expect(state).toMatchObject({ publicUrl: 'https://beacon.example', sealed: true });
+    await vi.waitFor(async () => {
+      await emit('system.added', 'm1');
+      await consumers.wake();
+      expect(state.durable).toContain('system.added@map:m1');
+    });
+    // Stopped with the plugin: events after the unload are not handled by it.
+    await host.stop();
+    const before = state.durable.length;
+    await emit('system.added', 'm1');
+    await consumers.wake();
+    expect(state.durable).toHaveLength(before);
   });
 
   it('refuses event subscriptions the manifest does not declare', async () => {
@@ -212,6 +247,24 @@ describeEachDialect('PluginHost', (t) => {
     await uc.setEnabled(admin, 'fx', false, 'm1');
     await host.sync('fx');
     expect(await host.handleHttp('fx', 'GET', '/maps/m1', alice, request)).toBeNull();
+  });
+
+  it('records configuration changes of plugin routes as the caller, with secrets fingerprinted', async () => {
+    await put('fx');
+    await host.start();
+    const alice: Actor = { kind: 'account', id: 'alice', instanceRole: 'user' };
+    expect(await host.handleHttp('fx', 'PUT', '/maps/m1/config', alice, { query: {}, body: null })).toEqual({
+      body: { ok: true },
+    });
+    const events = await log.readSince('audit:instance', 0, 10);
+    const change = events.find((e) => e.type === 'plugin.settings_changed')!;
+    expect(change.actor).toEqual({ kind: 'account', id: 'alice' });
+    expect(change.data).toMatchObject({ pluginId: 'fx', mapId: 'm1', values: { level: 2 } });
+    expect(JSON.stringify(change.data)).not.toContain('secret-token');
+    // A request the plugin made up is refused: the person is never taken from the plugin.
+    expect(await host.handleHttp('fx', 'POST', '/forge', alice, { query: {}, body: null })).toEqual({
+      body: { forged: false },
+    });
   });
 
   it('runs plugin migrations once and lets the plugin use its tables', async () => {

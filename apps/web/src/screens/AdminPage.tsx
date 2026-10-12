@@ -3,7 +3,9 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  ArrowUpRight,
   Crown,
+  MessageSquare,
   MoreHorizontal,
   Package,
   Palette,
@@ -12,22 +14,30 @@ import {
   ScrollText,
   Server,
   Trash2,
+  UserRound,
   Users,
+  X,
 } from 'lucide-react';
 import {
   buildPath,
   routes,
   type AdminAccountDto,
   type CatalogEntryDto,
+  type DiscordBotDto,
   type HealthDto,
   type InstanceSettingsDto,
   type PluginDto,
   type ThemeDto,
   type ThemesDto,
   type UpdateInstanceRoleRequest,
+  type UpdateInstanceSettingsRequest,
 } from '@darkbeacon/shared';
+import { discordKeys, GuildSelect, RoleSelect, useDiscordRoles } from '../components/pickers';
+import { accountImageOf } from '../lib/account';
 import { api, ApiError } from '../lib/api';
-import { meKey, useMe } from '../lib/session';
+import { useInstance, useMaps } from '../lib/maps';
+import { instanceKey } from '../lib/session-keys';
+import { meKey, providersKey, useMe, useProviders } from '../lib/session';
 import { relativeTime } from '../lib/time';
 import { useTabParam } from '../lib/useTabParam';
 import { PluginSlot } from '../plugins/PluginSlot';
@@ -43,6 +53,7 @@ import {
   CardBody,
   CardFooter,
   CardHeader,
+  ChoiceGroup,
   ConfirmDialog,
   EmptyState,
   ErrorState,
@@ -84,7 +95,11 @@ const TITLE = 'Admin';
 const DESCRIPTION = 'Settings for this instance, the people on it, plugins, themes and what changed.';
 
 /** Query keys of the data the server renders the first tab with. */
-export const adminKeys = { settings: ['admin-settings'], health: ['health'] } as const;
+export const adminKeys = {
+  settings: ['admin-settings'],
+  health: ['health'],
+  bot: ['admin-discord-bot'],
+} as const;
 
 /** The admin page as it looks while its data streams in. */
 export function AdminPageSkeleton() {
@@ -143,7 +158,25 @@ function useInstanceSettings() {
   });
 }
 
+function useSaveSettings(success?: string) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  return useMutation({
+    mutationFn: (body: UpdateInstanceSettingsRequest) =>
+      api<InstanceSettingsDto>(routes.admin.updateSettings.path, { method: 'PATCH', json: body }),
+    onSuccess: (data) => {
+      queryClient.setQueryData(adminKeys.settings, data);
+      void queryClient.invalidateQueries({ queryKey: providersKey });
+      void queryClient.invalidateQueries({ queryKey: instanceKey });
+      if (success) toast({ title: success, tone: 'success' });
+    },
+    onError: (error) =>
+      toast({ title: 'Could not save', description: errorText(error, 'Try again.'), tone: 'danger' }),
+  });
+}
+
 function InstanceTab() {
+  const providers = useProviders();
   const health = useQuery({
     queryKey: adminKeys.health,
     queryFn: () => api<HealthDto>(routes.health.path),
@@ -182,101 +215,296 @@ function InstanceTab() {
           )}
         </CardBody>
       </Card>
-      <DiscordAdminSettings />
+      <SignInSettings />
+      <DefaultMapSettings />
+      <DiscordBotSettings />
+      {providers.data?.loginMethod === 'discord' && <DiscordAdminSettings />}
       <WebhookSettings />
       <PluginSlot slot="settingsPage" props={{ mapId: null }} />
     </Stack>
   );
 }
 
-/** Ids as typed in a text field: comma or space separated. */
-const idList = (text: string) => text.split(/[\s,]+/).filter(Boolean);
-
-function DiscordAdminSettings() {
-  const queryClient = useQueryClient();
-  const toast = useToast();
-  const settings = useInstanceSettings();
-  const [draft, setDraft] = useState<{ guild: string; roles: string } | null>(null);
-  const save = useMutation({
-    mutationFn: (body: { adminGuildId: string | null; adminRoleIds: string[] }) =>
-      api<InstanceSettingsDto>(routes.admin.updateSettings.path, { method: 'PATCH', json: body }),
-    onSuccess: (data) => {
-      queryClient.setQueryData(['admin-settings'], data);
-      setDraft(null);
-      toast({ title: 'Discord admin roles saved', tone: 'success' });
-    },
-  });
-  const value = draft ?? {
-    guild: settings.data?.adminGuildId ?? '',
-    roles: settings.data?.adminRoleIds.join(', ') ?? '',
-  };
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    save.mutate({ adminGuildId: value.guild.trim() || null, adminRoleIds: idList(value.roles) });
-  };
+function SignInSettings() {
+  const providers = useProviders();
+  const save = useSaveSettings('Sign-in saved');
+  const discord = providers.data?.discord ?? false;
   return (
     <Card>
-      <form onSubmit={submit} aria-label="Discord admin roles">
-        <CardHeader
-          title="Admins from Discord"
-          description="Members holding one of these roles on this Discord server become instance admins when they next sign in."
+      <CardHeader
+        title="How people sign in"
+        description="One way in for everyone. Accounts made either way keep working when you switch."
+      />
+      <CardBody>
+        <ChoiceGroup
+          aria-label="Sign-in method"
+          value={providers.data?.loginMethod}
+          disabled={!providers.data || save.isPending}
+          onValueChange={(loginMethod) => save.mutate({ loginMethod: loginMethod as 'discord' | 'eve' })}
+          options={[
+            {
+              value: 'eve',
+              label: 'EVE Online',
+              icon: <UserRound />,
+              description:
+                'Sign in with a character. A new character gets its own account; characters added while signed in join it.',
+            },
+            {
+              value: 'discord',
+              label: 'Discord',
+              icon: <MessageSquare />,
+              disabled: !discord,
+              description: discord
+                ? 'Sign in with Discord, then link EVE characters. Discord roles can grant map access and admin.'
+                : 'Not configured on this server (DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET).',
+            },
+          ]}
         />
+      </CardBody>
+    </Card>
+  );
+}
+
+const NO_MAP = '__none__';
+
+function DefaultMapSettings() {
+  const settings = useInstanceSettings();
+  const maps = useMaps();
+  const save = useSaveSettings('Default map saved');
+  return (
+    <Card>
+      <CardHeader
+        title="Default map"
+        description="Opens first for everyone who can see it and has not starred a map of their own."
+      />
+      <CardBody>
+        <Field label="Map">
+          <Select
+            value={settings.data && maps.data ? (settings.data.defaultMapId ?? NO_MAP) : undefined}
+            disabled={!settings.data || !maps.data || save.isPending}
+            placeholder="Loading maps…"
+            options={[
+              { value: NO_MAP, label: 'None: the map each person used last' },
+              ...(maps.data ?? []).map((m) => ({ value: m.id, label: m.name })),
+            ]}
+            onValueChange={(id) => save.mutate({ defaultMapId: id === NO_MAP ? null : id })}
+          />
+        </Field>
+      </CardBody>
+    </Card>
+  );
+}
+
+function DiscordBotSettings() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const [token, setToken] = useState('');
+  const [removing, setRemoving] = useState(false);
+  const bot = useQuery({
+    queryKey: adminKeys.bot,
+    queryFn: () => api<DiscordBotDto>(routes.admin.discordBot.path),
+  });
+  const changed = (data: DiscordBotDto | null) => {
+    if (data) queryClient.setQueryData(adminKeys.bot, data);
+    else void queryClient.invalidateQueries({ queryKey: adminKeys.bot });
+    void queryClient.invalidateQueries({ queryKey: instanceKey });
+    void queryClient.invalidateQueries({ queryKey: discordKeys.guilds });
+  };
+  const connect = useMutation({
+    mutationFn: () =>
+      api<DiscordBotDto>(routes.admin.setDiscordBot.path, { method: 'PUT', json: { token: token.trim() } }),
+    onSuccess: (data) => {
+      setToken('');
+      changed(data);
+      toast({ title: `${data.name ?? 'The bot'} is connected`, tone: 'success' });
+    },
+  });
+  const remove = useMutation({
+    mutationFn: () => api<void>(routes.admin.removeDiscordBot.path, { method: 'DELETE' }),
+    onSuccess: () => changed(null),
+    onError: (error) =>
+      toast({ title: 'Could not disconnect', description: errorText(error, 'Try again.'), tone: 'danger' }),
+  });
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (token.trim()) connect.mutate();
+  };
+
+  return (
+    <Card>
+      <CardHeader
+        title="Discord bot"
+        description="Optional. With a bot, servers, roles and channels are picked from lists, and map notifications can post to a channel without a webhook."
+      />
+      {bot.isPending ? (
         <CardBody>
-          <div className={styles.grid}>
+          <Skeleton height={36} />
+        </CardBody>
+      ) : bot.data?.configured ? (
+        <>
+          <CardBody>
+            <div className={styles.botRow}>
+              <Avatar src={bot.data.avatarUrl} name={bot.data.name ?? 'Bot'} size={36} />
+              <div className={styles.rowBody}>
+                <div className={styles.rowTitle}>
+                  {bot.data.name}
+                  {bot.data.error ? (
+                    <Badge tone="danger" dot>
+                      Not working
+                    </Badge>
+                  ) : (
+                    <Badge tone="success" dot>
+                      Connected
+                    </Badge>
+                  )}
+                </div>
+                <div className={styles.rowMeta}>
+                  {bot.data.error ??
+                    'Add it to every Discord server whose roles or channels you want to use.'}
+                </div>
+              </div>
+            </div>
+          </CardBody>
+          <CardFooter>
+            <Button onClick={() => setRemoving(true)}>Disconnect</Button>
+            {bot.data.inviteUrl && (
+              <Button asChild variant="primary" trailingIcon={<ArrowUpRight />}>
+                <a href={bot.data.inviteUrl} target="_blank" rel="noreferrer">
+                  Add to a server
+                </a>
+              </Button>
+            )}
+          </CardFooter>
+        </>
+      ) : (
+        <form onSubmit={submit} aria-label="Connect a Discord bot">
+          <CardBody>
             <Field
-              label="Discord server id"
-              error={save.error ? errorText(save.error, 'Could not save.') : undefined}
+              label="Bot token"
+              hint="Discord developer portal, your application, Bot, Reset token. It is stored encrypted and never shown again."
+              error={connect.error ? errorText(connect.error, 'Could not connect the bot.') : undefined}
             >
               <Input
-                mono
-                inputMode="numeric"
-                placeholder="e.g. 81384788765712384"
-                disabled={!settings.data}
-                value={value.guild}
-                onChange={(e) => setDraft({ ...value, guild: e.target.value })}
+                type="password"
+                autoComplete="off"
+                placeholder="Paste the token"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
               />
             </Field>
-            <Field label="Role ids" hint="Separate several with commas.">
-              <Input
-                mono
-                placeholder="Role id, role id"
+          </CardBody>
+          <CardFooter>
+            <Button type="submit" variant="primary" loading={connect.isPending} disabled={!token.trim()}>
+              Connect bot
+            </Button>
+          </CardFooter>
+        </form>
+      )}
+      <ConfirmDialog
+        open={removing}
+        onOpenChange={setRemoving}
+        title="Disconnect the bot?"
+        description="Map notifications posting through it stop, and Discord lists are no longer available. Webhooks keep working."
+        confirmLabel="Disconnect bot"
+        tone="danger"
+        onConfirm={() => remove.mutateAsync()}
+      />
+    </Card>
+  );
+}
+
+function DiscordAdminSettings() {
+  const settings = useInstanceSettings();
+  const instance = useInstance();
+  const save = useSaveSettings('Discord admin roles saved');
+  const [draft, setDraft] = useState<{ guild: string | null; roles: string[] } | null>(null);
+  const value = draft ?? {
+    guild: settings.data?.adminGuildId ?? null,
+    roles: settings.data?.adminRoleIds ?? [],
+  };
+  const roles = useDiscordRoles(value.guild);
+  const bot = instance.data?.discordBot ?? false;
+  const roleName = (id: string) => roles.data?.find((r) => r.id === id)?.name;
+
+  return (
+    <Card>
+      <CardHeader
+        title="Admins from Discord"
+        description="Members holding one of these roles on this Discord server become instance admins when they next sign in. Roles only ever add admin, never remove it."
+      />
+      <CardBody>
+        {!bot ? (
+          <Callout tone="neutral" title="Connect the Discord bot first">
+            The server and its roles are picked from the bot's lists, so add the bot above.
+          </Callout>
+        ) : (
+          <div className={styles.grid}>
+            <Field label="Discord server">
+              <GuildSelect
+                value={value.guild}
                 disabled={!settings.data}
-                value={value.roles}
-                onChange={(e) => setDraft({ ...value, roles: e.target.value })}
+                onChange={(guild) => setDraft({ guild, roles: guild === value.guild ? value.roles : [] })}
+              />
+            </Field>
+            <Field label="Add a role">
+              <RoleSelect
+                guildId={value.guild}
+                value={null}
+                onChange={(roleId) =>
+                  setDraft({
+                    ...value,
+                    roles: value.roles.includes(roleId) ? value.roles : [...value.roles, roleId],
+                  })
+                }
               />
             </Field>
           </div>
-        </CardBody>
-        <CardFooter>
-          <span className={styles.footerNote}>Discord roles only ever add admin, never remove it.</span>
-          {draft && (
-            <Button variant="ghost" onClick={() => setDraft(null)}>
-              Discard
-            </Button>
-          )}
-          <Button type="submit" variant="primary" loading={save.isPending} disabled={!draft}>
-            Save
+        )}
+        {value.roles.length > 0 && (
+          <div className={styles.chips} aria-label="Admin roles">
+            {value.roles.map((id) => (
+              <Badge key={id} variant="outline">
+                @{roleName(id) ?? (roles.isPending ? '…' : 'Deleted role')}
+                <button
+                  type="button"
+                  className={styles.chipRemove}
+                  aria-label={`Remove ${roleName(id) ?? 'role'}`}
+                  onClick={() => setDraft({ ...value, roles: value.roles.filter((r) => r !== id) })}
+                >
+                  <X />
+                </button>
+              </Badge>
+            ))}
+          </div>
+        )}
+      </CardBody>
+      <CardFooter>
+        {draft && (
+          <Button variant="ghost" onClick={() => setDraft(null)}>
+            Discard
           </Button>
-        </CardFooter>
-      </form>
+        )}
+        <Button
+          variant="primary"
+          loading={save.isPending}
+          disabled={!draft}
+          onClick={() =>
+            save.mutate(
+              { adminGuildId: value.guild, adminRoleIds: value.guild ? value.roles : [] },
+              { onSuccess: () => setDraft(null) },
+            )
+          }
+        >
+          Save
+        </Button>
+      </CardFooter>
     </Card>
   );
 }
 
 function WebhookSettings() {
-  const queryClient = useQueryClient();
-  const toast = useToast();
   const settings = useInstanceSettings();
-  const save = useMutation({
-    mutationFn: (webhooksToPrivateNetworks: boolean) =>
-      api<InstanceSettingsDto>(routes.admin.updateSettings.path, {
-        method: 'PATCH',
-        json: { webhooksToPrivateNetworks },
-      }),
-    onSuccess: (data) => queryClient.setQueryData(['admin-settings'], data),
-    onError: (error) =>
-      toast({ title: 'Could not save', description: errorText(error, 'Try again.'), tone: 'danger' }),
-  });
+  const save = useSaveSettings();
   return (
     <Card>
       <CardHeader title="Webhooks" description="Where map webhooks may send events." />
@@ -284,7 +512,7 @@ function WebhookSettings() {
         <Switch
           checked={settings.data?.webhooksToPrivateNetworks ?? false}
           disabled={!settings.data || save.isPending}
-          onCheckedChange={(on) => save.mutate(on)}
+          onCheckedChange={(on) => save.mutate({ webhooksToPrivateNetworks: on })}
           label="Allow webhooks to private networks"
           description="Off by default: webhooks cannot reach this server, its local network or cloud metadata addresses. Turn it on only if every map admin may send requests into your network."
         />
@@ -304,6 +532,7 @@ function PeopleTab() {
   const me = useMe();
   const queryClient = useQueryClient();
   const toast = useToast();
+  const eveMode = useProviders().data?.loginMethod === 'eve';
   const [handover, setHandover] = useState<AdminAccountDto | null>(null);
   const accounts = useQuery({
     queryKey: ['admin-accounts'],
@@ -352,14 +581,14 @@ function PeopleTab() {
           <ul className={styles.list}>
             {accounts.data.map((a) => (
               <li key={a.id} className={`${styles.item} ${styles.itemCenter}`}>
-                <Avatar src={a.avatarUrl} name={a.name} size={32} />
+                <Avatar src={accountImageOf(a)} name={a.name} size={32} />
                 <div className={styles.rowBody}>
                   <div className={styles.rowTitle}>
                     {a.name}
                     {a.id === myId && <Badge variant="outline">You</Badge>}
                   </div>
                   <div className={styles.rowMeta}>
-                    {a.discordId ? 'Discord' : 'Local account'}
+                    {a.discordId ? 'Discord' : eveMode ? 'EVE Online' : 'Local account'}
                     {a.lastSeenAt ? ` · seen ${relativeTime(a.lastSeenAt)}` : ' · never seen'}
                   </div>
                 </div>
@@ -420,6 +649,16 @@ function PluginsTab() {
   const toast = useToast();
   const key = ['admin-plugins'];
   const plugins = useQuery({ queryKey: key, queryFn: () => api<PluginDto[]>(routes.plugins.list.path) });
+  // First-party plugins at the version shipped here: their database use is the server's own.
+  const catalog = useQuery({
+    queryKey: ['admin-catalog'],
+    queryFn: () => api<CatalogEntryDto[]>(routes.plugins.catalog.path),
+  });
+  const shipped = new Set(
+    (catalog.data ?? [])
+      .filter((e) => e.kind === 'plugin' && e.installedVersion === e.version)
+      .map((e) => e.id),
+  );
   const [source, setSource] = useState('');
   const [removing, setRemoving] = useState<PluginDto | null>(null);
   const refresh = () =>
@@ -466,7 +705,7 @@ function PluginsTab() {
       <Card>
         <CardHeader
           title="Installed plugins"
-          description="New plugins start switched off. Switching applies at once; a new version reloads the plugin."
+          description="Plugins you install start switched off; the ones shipped with this server start on. Switching applies at once; a new version reloads the plugin."
         />
         <CardBody flush>
           {plugins.isPending ? (
@@ -502,7 +741,11 @@ function PluginsTab() {
                     {p.description && <div className={styles.rowMeta}>{p.description}</div>}
                     <div className={styles.chips} aria-label="Permissions">
                       {p.ports.map((port) => (
-                        <Badge key={port} variant="outline" tone={port === 'db' ? 'danger' : 'neutral'}>
+                        <Badge
+                          key={port}
+                          variant="outline"
+                          tone={port === 'db' && !shipped.has(p.id) ? 'danger' : 'neutral'}
+                        >
                           {port}
                         </Badge>
                       ))}
@@ -512,9 +755,9 @@ function PluginsTab() {
                         </Badge>
                       )}
                     </div>
-                    {(p.ports.includes('db') || p.error) && (
+                    {((p.ports.includes('db') && !shipped.has(p.id)) || p.error) && (
                       <div className={styles.rowNotes}>
-                        {p.ports.includes('db') && (
+                        {p.ports.includes('db') && !shipped.has(p.id) && (
                           <Callout tone="warning" title="Full database access">
                             This plugin can read and change every table, including sessions and tokens. Switch
                             it on only if you trust its author.
@@ -537,7 +780,6 @@ function PluginsTab() {
                     />
                     <IconButton
                       size="sm"
-                      variant="danger-ghost"
                       label={`Uninstall ${p.name}`}
                       icon={<Trash2 />}
                       onClick={() => setRemoving(p)}
@@ -753,7 +995,6 @@ function ThemesTab() {
                   </div>
                   <IconButton
                     size="sm"
-                    variant="danger-ghost"
                     label={`Uninstall ${t.name}`}
                     icon={<Trash2 />}
                     onClick={() => setRemoving(t)}

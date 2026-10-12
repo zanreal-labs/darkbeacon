@@ -14,8 +14,9 @@ import {
   type UnitOfWork,
 } from '@darkbeacon/core';
 import type { AccessRuleDto, CreateAccessRuleRequest, EventPayloads } from '@darkbeacon/shared';
-import { parseSubject, toAccessRuleDto, type AccessRule } from '../domain/access-rule.js';
+import { parseSubject, subjectKey, toAccessRuleDto, type AccessRule } from '../domain/access-rule.js';
 import type { AccessRuleRepository } from '../ports/access-rule-repository.js';
+import type { AccessSubjectDirectory, SubjectDescription } from '../ports/access-subjects.js';
 
 export interface AccessRulesDeps {
   rules: AccessRuleRepository;
@@ -23,6 +24,8 @@ export interface AccessRulesDeps {
   uow: UnitOfWork;
   events: EventLog;
   clock: Clock;
+  /** Names for the rules list; without it subjects stay undescribed. */
+  directory?: AccessSubjectDirectory;
 }
 
 /** Managing the access rules of a map (map admins only). */
@@ -31,7 +34,16 @@ export class AccessRules {
 
   async list(actor: Actor | null, mapId: string): Promise<AccessRuleDto[]> {
     await requireMapRole(this.deps.access, actor, mapId, 'admin');
-    return (await this.deps.rules.listForMap(mapId)).map(toAccessRuleDto);
+    return this.described((await this.deps.rules.listForMap(mapId)).map(toAccessRuleDto));
+  }
+
+  /** Fills in `subject` (names) where the directory knows them; a failing lookup leaves them out. */
+  private async described(rules: AccessRuleDto[]): Promise<AccessRuleDto[]> {
+    if (!this.deps.directory || rules.length === 0) return rules;
+    const names = await this.deps.directory
+      .describe(rules.map((r) => ({ kind: r.subjectKind, id: r.subjectId, guildId: r.guildId })))
+      .catch(() => new Map<string, SubjectDescription>());
+    return rules.map((r) => ({ ...r, subject: names.get(subjectKey(r.subjectKind, r.subjectId)) ?? null }));
   }
 
   async add(actor: Actor | null, mapId: string, request: CreateAccessRuleRequest): Promise<AccessRuleDto> {
@@ -41,27 +53,31 @@ export class AccessRules {
       throw new ValidationError(`Invalid subject: ${subject.error}`);
     }
     const author = actor!;
-    return this.deps.uow.transaction(async () => {
-      const existing = await this.deps.rules.listForMap(mapId);
-      if (
-        existing.some((r) => r.subjectKind === request.subjectKind && r.subjectId === subject.value.subjectId)
-      ) {
-        throw new ConflictError('This map already has a rule for that subject; remove it first');
-      }
-      const rule: AccessRule = {
-        id: newId(),
-        mapId,
-        subjectKind: request.subjectKind,
-        ...subject.value,
-        role: request.role,
-        createdAt: this.deps.clock.now(),
-        createdBy: author.id,
-      };
-      await this.deps.rules.insert(rule);
-      const dto = toAccessRuleDto(rule);
-      await this.append(author, mapId, 'access.rule_added', dto);
-      return dto;
-    });
+    return this.deps.uow
+      .transaction(async () => {
+        const existing = await this.deps.rules.listForMap(mapId);
+        if (
+          existing.some(
+            (r) => r.subjectKind === request.subjectKind && r.subjectId === subject.value.subjectId,
+          )
+        ) {
+          throw new ConflictError('This map already has a rule for that subject; remove it first');
+        }
+        const rule: AccessRule = {
+          id: newId(),
+          mapId,
+          subjectKind: request.subjectKind,
+          ...subject.value,
+          role: request.role,
+          createdAt: this.deps.clock.now(),
+          createdBy: author.id,
+        };
+        await this.deps.rules.insert(rule);
+        const dto = toAccessRuleDto(rule);
+        await this.append(author, mapId, 'access.rule_added', dto);
+        return dto;
+      })
+      .then(async (dto) => (await this.described([dto]))[0]!);
   }
 
   async remove(actor: Actor | null, mapId: string, ruleId: string): Promise<void> {

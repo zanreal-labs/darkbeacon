@@ -1,0 +1,44 @@
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr));
+  gap: var(--dbk-space-5);
+}
+
+/* Each column carries its own theme tokens, so it needs its own background. */
+.column {
+  min-width: 0;
+  padding: var(--dbk-space-4);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius-large);
+  background: var(--dbk-color-bg);
+  color: var(--dbk-color-text);
+}
+
+.scheme {
+  font-size: var(--dbk-font-size-large);
+}
+
+.wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dbk-space-3);
+  margin-bottom: var(--dbk-space-3);
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--dbk-space-4);
+  margin-bottom: var(--dbk-space-4);
+}
+
+.callouts {
+  margin-top: var(--dbk-space-3);
+}
+
+.footerNote {
+  margin-right: auto;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+}

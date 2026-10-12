@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowUpRight,
+  Bell,
   Building2,
   Copy,
   Flag,
@@ -22,6 +23,18 @@ import {
   Webhook,
   X,
 } from 'lucide-react';
+import {
+  AccountPicker,
+  BotHint,
+  EvePicker,
+  GuildSelect,
+  RoleSelect,
+  type AccountOption,
+  type EveOption,
+} from '../components/pickers';
+import { useInstance } from '../lib/maps';
+import { useMe } from '../lib/session';
+import { DiscordNotifications } from './MapNotifications';
 import {
   AccessSubjectKind,
   buildPath,
@@ -43,7 +56,6 @@ import { mapPermissions } from '../lib/roles';
 import { relativeTime } from '../lib/time';
 import { useTabParam } from '../lib/useTabParam';
 import { PluginSlot } from '../plugins/PluginSlot';
-import { useBreadcrumbs } from '../shell/breadcrumbs';
 import {
   Avatar,
   Badge,
@@ -55,8 +67,6 @@ import {
   CardHeader,
   Checkbox,
   ConfirmDialog,
-  corporationLogoUrl,
-  characterPortraitUrl,
   Dialog,
   DialogClose,
   DialogContent,
@@ -84,7 +94,7 @@ import styles from './settings.module.css';
 
 const errorText = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback);
 
-type TabId = 'general' | 'labels' | 'access' | 'webhooks';
+type TabId = 'general' | 'labels' | 'access' | 'notifications';
 
 /** Map settings while they load (also the server's Suspense fallback). */
 export function MapSettingsSkeleton() {
@@ -110,17 +120,12 @@ export function MapSettingsPage({ slug }: { slug: string }) {
     queryFn: () => api<MapSummaryDto[]>(routes.maps.list.path),
     retry: false,
   });
-  useBreadcrumbs([
-    { label: 'Maps', to: '/maps' },
-    { label: map.data?.name ?? slug, to: `/m/${slug}` },
-    { label: 'Settings' },
-  ]);
   const can = mapPermissions(maps.data?.find((m) => m.id === map.data?.id)?.role);
   const tabs: { id: TabId; title: string; icon: ReactNode; show: boolean }[] = [
     { id: 'general', title: 'General', icon: <Settings2 />, show: can.admin },
     { id: 'labels', title: 'Labels', icon: <Tags />, show: can.manage },
     { id: 'access', title: 'Access', icon: <ShieldCheck />, show: can.admin },
-    { id: 'webhooks', title: 'Webhooks', icon: <Webhook />, show: can.admin },
+    { id: 'notifications', title: 'Notifications', icon: <Bell />, show: can.admin },
   ];
   const visible = tabs.filter((t) => t.show);
   const [tab, setTab] = useTabParam<TabId>(
@@ -140,7 +145,7 @@ export function MapSettingsPage({ slug }: { slug: string }) {
             description={`There is no map “${slug}”, or you cannot see it.`}
             actions={
               <Button asChild>
-                <Link href="/maps">Back to maps</Link>
+                <Link href="/maps">All maps</Link>
               </Button>
             }
           />
@@ -160,11 +165,7 @@ export function MapSettingsPage({ slug }: { slug: string }) {
     <Page width={880}>
       <PageHeader
         title={map.data.name}
-        description={
-          <>
-            Map settings · <span className="mono">/m/{map.data.slug}</span>
-          </>
-        }
+        description="Map settings"
         actions={
           <Button asChild trailingIcon={<ArrowUpRight />}>
             <Link href={`/m/${map.data.slug}`}>Open map</Link>
@@ -197,8 +198,11 @@ export function MapSettingsPage({ slug }: { slug: string }) {
           </TabsContent>
         )}
         {can.admin && (
-          <TabsContent value="webhooks">
-            <Webhooks map={map.data} />
+          <TabsContent value="notifications">
+            <Stack>
+              <DiscordNotifications map={map.data} />
+              <Webhooks map={map.data} />
+            </Stack>
           </TabsContent>
         )}
       </Tabs>
@@ -350,11 +354,10 @@ function DeleteMap({ map }: { map: MapDto }) {
         description="Removes the map with its systems, connections, signatures, access rules and webhooks, for everyone. This cannot be undone."
         actions={
           <Button variant="danger" icon={<Trash2 />} onClick={() => setOpen(true)}>
-            Delete map
+            Delete map…
           </Button>
         }
       />
-      <div style={{ height: 'var(--dbk-space-4)' }} />
       <Dialog
         open={open}
         onOpenChange={(next) => {
@@ -536,58 +539,75 @@ function LabelSettings({ map }: { map: MapDto }) {
 
 // ---- Access -----------------------------------------------------------------------------------
 
-const SUBJECT: Record<
-  AccessSubjectKind,
-  { label: string; icon: ReactNode; idLabel: string; placeholder: string }
-> = {
-  corporation: {
-    label: 'Corporation',
-    icon: <Building2 />,
-    idLabel: 'Corporation id',
-    placeholder: '98000001',
-  },
-  alliance: { label: 'Alliance', icon: <Flag />, idLabel: 'Alliance id', placeholder: '99000001' },
-  character: { label: 'Character', icon: <UserRound />, idLabel: 'Character id', placeholder: '2112000001' },
-  discordRole: {
-    label: 'Discord role',
-    icon: <Hash />,
-    idLabel: 'Role id',
-    placeholder: '81384788765712384',
-  },
-  account: { label: 'Account', icon: <KeyRound />, idLabel: 'Account id', placeholder: 'Account id' },
+const SUBJECT: Record<AccessSubjectKind, { label: string; icon: ReactNode; unknown: string }> = {
+  corporation: { label: 'Corporation', icon: <Building2 />, unknown: 'A corporation ESI does not know' },
+  alliance: { label: 'Alliance', icon: <Flag />, unknown: 'An alliance ESI does not know' },
+  character: { label: 'Character', icon: <UserRound />, unknown: 'A character ESI does not know' },
+  discordRole: { label: 'Discord role', icon: <Hash />, unknown: 'A Discord role the bot cannot see' },
+  account: { label: 'Person', icon: <KeyRound />, unknown: 'An account that was removed' },
+};
+
+const ROLE_LABEL: Record<MapRole, string> = {
+  viewer: 'Viewer',
+  member: 'Member',
+  manager: 'Manager',
+  admin: 'Admin',
+  blocked: 'Blocked',
 };
 
 const ROLE_HINT: Record<MapRole, string> = {
-  viewer: 'Viewer: sees the map',
-  member: 'Member: maps systems and signatures',
-  manager: 'Manager: also locks systems and edits labels',
-  admin: 'Admin: also settings, access and webhooks',
-  blocked: 'Blocked: refused',
+  viewer: 'Sees the map',
+  member: 'Maps systems and signatures',
+  manager: 'Also locks systems and edits labels',
+  admin: 'Also settings, access and notifications',
+  blocked: 'Refused, whatever else matches',
 };
 
-function subjectImage(rule: AccessRuleDto): string | null {
-  const id = Number(rule.subjectId);
-  if (!Number.isSafeInteger(id)) return null;
-  if (rule.subjectKind === 'corporation') return corporationLogoUrl(id, 64);
-  if (rule.subjectKind === 'alliance') return `https://images.evetech.net/alliances/${id}/logo?size=64`;
-  if (rule.subjectKind === 'character') return characterPortraitUrl(id, 64);
-  return null;
+type Subject =
+  | { kind: 'character' | 'corporation' | 'alliance'; picked: EveOption | null }
+  | { kind: 'account'; picked: AccountOption | null }
+  | { kind: 'discordRole'; guildId: string | null; roleId: string | null };
+
+function emptySubject(kind: AccessSubjectKind): Subject {
+  if (kind === 'account') return { kind, picked: null };
+  if (kind === 'discordRole') return { kind, guildId: null, roleId: null };
+  return { kind, picked: null };
+}
+
+function subjectRequest(
+  subject: Subject,
+): Pick<CreateAccessRuleRequest, 'subjectKind' | 'subjectId' | 'guildId'> | null {
+  switch (subject.kind) {
+    case 'account':
+      return subject.picked
+        ? { subjectKind: 'account', subjectId: subject.picked.account.id, guildId: null }
+        : null;
+    case 'discordRole':
+      return subject.guildId && subject.roleId
+        ? { subjectKind: 'discordRole', subjectId: subject.roleId, guildId: subject.guildId }
+        : null;
+    default:
+      return subject.picked
+        ? { subjectKind: subject.kind, subjectId: String(subject.picked.entity.id), guildId: null }
+        : null;
+  }
 }
 
 function AccessRules({ map }: { map: MapDto }) {
   const queryClient = useQueryClient();
   const toast = useToast();
+  const me = useMe();
+  const instance = useInstance();
   const key = ['access-rules', map.id];
   const rules = useQuery({
     queryKey: key,
     queryFn: () => api<AccessRuleDto[]>(buildPath(routes.access.list.path, { mapId: map.id })),
   });
-  const [draft, setDraft] = useState<CreateAccessRuleRequest>({
-    subjectKind: 'corporation',
-    subjectId: '',
-    guildId: null,
-    role: 'member',
-  });
+  const discordRoles = instance.data?.discordRoles ?? false;
+  const bot = instance.data?.discordBot ?? false;
+  const kinds = AccessSubjectKind.options.filter((k) => k !== 'discordRole' || discordRoles);
+  const [subject, setSubject] = useState<Subject>(emptySubject('corporation'));
+  const [role, setRole] = useState<MapRole>('member');
   const [removing, setRemoving] = useState<AccessRuleDto | null>(null);
   const add = useMutation({
     mutationFn: (body: CreateAccessRuleRequest) =>
@@ -595,9 +615,13 @@ function AccessRules({ map }: { map: MapDto }) {
         method: 'POST',
         json: body,
       }),
-    onSuccess: () => {
-      setDraft((d) => ({ ...d, subjectId: '' }));
+    onSuccess: (rule) => {
+      setSubject(emptySubject(subject.kind));
       void queryClient.invalidateQueries({ queryKey: key });
+      toast({
+        title: `${rule.subject?.name ?? 'Rule'} added as ${ROLE_LABEL[rule.role].toLowerCase()}`,
+        tone: 'success',
+      });
     },
   });
   const remove = useMutation({
@@ -612,22 +636,19 @@ function AccessRules({ map }: { map: MapDto }) {
       }),
   });
 
+  const request = subjectRequest(subject);
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    add.mutate({
-      ...draft,
-      subjectId: draft.subjectId.trim(),
-      guildId: draft.subjectKind === 'discordRole' ? draft.guildId?.trim() || null : null,
-    });
+    if (request) add.mutate({ ...request, role });
   };
-  const subject = SUBJECT[draft.subjectKind];
+  const admin = me.data?.account.instanceRole === 'owner' || me.data?.account.instanceRole === 'admin';
 
   return (
     <Stack>
       <Card>
         <CardHeader
           title="Who can open this map"
-          description="The highest matching rule wins. A blocked character or account is refused whatever else matches."
+          description="The highest matching rule wins. A blocked character or person is refused whatever else matches."
         />
         <CardBody flush>
           {rules.isPending ? (
@@ -639,58 +660,58 @@ function AccessRules({ map }: { map: MapDto }) {
               compact
               icon={<Lock />}
               title="Only you can see this map"
-              description="Add a rule below to let your corporation, alliance or a Discord role in."
+              description={
+                discordRoles
+                  ? 'Add a rule below to let your corporation, alliance or a Discord role in.'
+                  : 'Add a rule below to let your corporation, your alliance or a pilot in.'
+              }
             />
           ) : (
             <ul className={styles.list}>
-              {rules.data.map((r) => {
-                const image = subjectImage(r);
-                return (
-                  <li key={r.id} className={`${styles.item} ${styles.itemCenter}`}>
-                    {image ? (
-                      <Avatar src={image} name={SUBJECT[r.subjectKind].label} size={32} shape="rounded" />
-                    ) : (
-                      <span className={styles.subjectIcon} aria-hidden>
-                        {SUBJECT[r.subjectKind].icon}
-                      </span>
-                    )}
-                    <div className={styles.rowBody}>
-                      <div className={styles.rowTitle}>
-                        <span className="mono">{r.subjectId}</span>
-                      </div>
-                      <div className={styles.rowMeta}>
-                        {SUBJECT[r.subjectKind].label}
-                        {r.guildId && (
-                          <>
-                            {' '}
-                            on server <span className="mono">{r.guildId}</span>
-                          </>
-                        )}
-                      </div>
+              {rules.data.map((r) => (
+                <li key={r.id} className={`${styles.item} ${styles.itemCenter}`}>
+                  {r.subject?.imageUrl ? (
+                    <Avatar
+                      src={r.subject.imageUrl}
+                      name={r.subject.name}
+                      size={32}
+                      shape={
+                        r.subjectKind === 'character' || r.subjectKind === 'account' ? 'circle' : 'rounded'
+                      }
+                    />
+                  ) : (
+                    <span className={styles.subjectIcon} aria-hidden>
+                      {SUBJECT[r.subjectKind].icon}
+                    </span>
+                  )}
+                  <div className={styles.rowBody}>
+                    <div className={styles.rowTitle}>
+                      {r.subject?.name ?? <span className="muted">{SUBJECT[r.subjectKind].unknown}</span>}
+                      {r.subject?.detail && <span className={styles.version}>{r.subject.detail}</span>}
                     </div>
-                    <div className={styles.rowActions}>
-                      <Badge
-                        tone={
-                          r.role === 'blocked'
-                            ? 'danger'
-                            : r.role === 'admin' || r.role === 'manager'
-                              ? 'accent'
-                              : 'neutral'
-                        }
-                      >
-                        {r.role}
-                      </Badge>
-                      <IconButton
-                        size="sm"
-                        variant="danger-ghost"
-                        label="Remove rule"
-                        icon={<Trash2 />}
-                        onClick={() => setRemoving(r)}
-                      />
-                    </div>
-                  </li>
-                );
-              })}
+                    <div className={styles.rowMeta}>{SUBJECT[r.subjectKind].label}</div>
+                  </div>
+                  <div className={styles.rowActions}>
+                    <Badge
+                      tone={
+                        r.role === 'blocked'
+                          ? 'danger'
+                          : r.role === 'admin' || r.role === 'manager'
+                            ? 'accent'
+                            : 'neutral'
+                      }
+                    >
+                      {ROLE_LABEL[r.role]}
+                    </Badge>
+                    <IconButton
+                      size="sm"
+                      label={`Remove the rule for ${r.subject?.name ?? SUBJECT[r.subjectKind].label.toLowerCase()}`}
+                      icon={<Trash2 />}
+                      onClick={() => setRemoving(r)}
+                    />
+                  </div>
+                </li>
+              ))}
             </ul>
           )}
         </CardBody>
@@ -698,51 +719,73 @@ function AccessRules({ map }: { map: MapDto }) {
 
       <Card>
         <form onSubmit={submit} aria-label="Add access rule">
-          <CardHeader title="Add a rule" description="Ids are the numbers EVE and Discord use, not names." />
+          <CardHeader title="Add a rule" description="Find them by name." />
           <CardBody>
-            <div className={styles.grid}>
+            <div className={styles.ruleGrid}>
               <Field label="Who">
                 <Select
-                  value={draft.subjectKind}
-                  options={AccessSubjectKind.options.map((k) => ({
-                    value: k,
-                    label: SUBJECT[k].label,
-                    icon: SUBJECT[k].icon,
-                  }))}
-                  onValueChange={(k) => setDraft({ ...draft, subjectKind: k as AccessSubjectKind })}
+                  value={subject.kind}
+                  options={kinds.map((k) => ({ value: k, label: SUBJECT[k].label, icon: SUBJECT[k].icon }))}
+                  onValueChange={(k) => {
+                    add.reset();
+                    setSubject(emptySubject(k as AccessSubjectKind));
+                  }}
                 />
               </Field>
-              {draft.subjectKind === 'discordRole' && (
-                <Field label="Discord server id">
-                  <Input
-                    mono
-                    required
-                    inputMode="numeric"
-                    value={draft.guildId ?? ''}
-                    onChange={(e) => setDraft({ ...draft, guildId: e.target.value })}
+              {subject.kind === 'account' ? (
+                <Field
+                  label="Person"
+                  error={add.error ? errorText(add.error, 'Could not add the rule.') : undefined}
+                >
+                  <AccountPicker
+                    value={subject.picked}
+                    onChange={(picked) => setSubject({ kind: 'account', picked })}
+                  />
+                </Field>
+              ) : subject.kind === 'discordRole' ? (
+                bot ? (
+                  <>
+                    <Field label="Discord server">
+                      <GuildSelect
+                        value={subject.guildId}
+                        onChange={(guildId) => setSubject({ kind: 'discordRole', guildId, roleId: null })}
+                      />
+                    </Field>
+                    <Field
+                      label="Role"
+                      error={add.error ? errorText(add.error, 'Could not add the rule.') : undefined}
+                    >
+                      <RoleSelect
+                        guildId={subject.guildId}
+                        value={subject.roleId}
+                        onChange={(roleId) => setSubject({ ...subject, roleId })}
+                      />
+                    </Field>
+                  </>
+                ) : (
+                  <div className={styles.ruleWide}>
+                    <Callout tone="neutral" title="Discord roles need the bot">
+                      <BotHint admin={admin} />
+                    </Callout>
+                  </div>
+                )
+              ) : (
+                <Field
+                  label={SUBJECT[subject.kind].label}
+                  error={add.error ? errorText(add.error, 'Could not add the rule.') : undefined}
+                >
+                  <EvePicker
+                    category={subject.kind}
+                    value={subject.picked}
+                    onChange={(picked) => setSubject({ kind: subject.kind, picked } as Subject)}
                   />
                 </Field>
               )}
-              <Field
-                label={subject.idLabel}
-                error={add.error ? errorText(add.error, 'Could not add the rule.') : undefined}
-              >
-                <Input
-                  mono
-                  required
-                  placeholder={subject.placeholder}
-                  value={draft.subjectId}
-                  onChange={(e) => setDraft({ ...draft, subjectId: e.target.value })}
-                />
-              </Field>
-              <Field label="Map role" hint={ROLE_HINT[draft.role]}>
+              <Field label="Map role" hint={ROLE_HINT[role]}>
                 <Select
-                  value={draft.role}
-                  options={MapRole.options.map((r) => ({
-                    value: r,
-                    label: r[0]!.toUpperCase() + r.slice(1),
-                  }))}
-                  onValueChange={(r) => setDraft({ ...draft, role: r as MapRole })}
+                  value={role}
+                  options={MapRole.options.map((r) => ({ value: r, label: ROLE_LABEL[r] }))}
+                  onValueChange={(r) => setRole(r as MapRole)}
                 />
               </Field>
             </div>
@@ -753,7 +796,7 @@ function AccessRules({ map }: { map: MapDto }) {
               variant="primary"
               icon={<Plus />}
               loading={add.isPending}
-              disabled={!draft.subjectId.trim()}
+              disabled={!request}
             >
               Add rule
             </Button>
@@ -764,7 +807,7 @@ function AccessRules({ map }: { map: MapDto }) {
       <ConfirmDialog
         open={removing !== null}
         onOpenChange={(open) => !open && setRemoving(null)}
-        title="Remove this rule?"
+        title={`Remove the rule for ${removing?.subject?.name ?? 'them'}?`}
         description="People who got in only through it lose access at once."
         confirmLabel="Remove rule"
         tone="danger"
@@ -843,9 +886,12 @@ function Webhooks({ map }: { map: MapDto }) {
           title="Webhooks"
           description="Send chosen map events to another service as signed JSON, with retries."
           actions={
-            <Button size="sm" icon={<Plus />} onClick={() => setCreating(true)}>
-              Add webhook
-            </Button>
+            hooks.data &&
+            hooks.data.length > 0 && (
+              <Button size="sm" icon={<Plus />} onClick={() => setCreating(true)}>
+                Add webhook
+              </Button>
+            )
           }
         />
         <CardBody flush>
@@ -858,7 +904,7 @@ function Webhooks({ map }: { map: MapDto }) {
               compact
               icon={<Webhook />}
               title="No webhooks"
-              description="Post jumps, new signatures or connection changes to a bot or a Discord relay."
+              description="Post map events to your own service: a bot, an alert pipeline, a spreadsheet."
               actions={
                 <Button icon={<Plus />} onClick={() => setCreating(true)}>
                   Add webhook
@@ -1023,13 +1069,7 @@ function WebhookRow({
           onCheckedChange={onToggle}
           label={<span className="sr-only">Deliver to {hook.url}</span>}
         />
-        <IconButton
-          size="sm"
-          variant="danger-ghost"
-          label="Delete webhook"
-          icon={<Trash2 />}
-          onClick={onRemove}
-        />
+        <IconButton size="sm" label="Delete webhook" icon={<Trash2 />} onClick={onRemove} />
       </div>
     </li>
   );

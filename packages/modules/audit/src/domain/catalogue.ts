@@ -219,8 +219,20 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
     op: 'activity',
     entity: byId('account', 'accountId'),
     refs: (d) => ref('account', d.accountId),
-    activity: (d) => ({ signedOut: change(null, d.everywhere ? 'everywhere' : 'this browser') }),
+    activity: (d) => ({
+      signedOut: change(
+        null,
+        d.everywhere ? 'everywhere' : typeof d.device === 'string' ? d.device : 'this browser',
+      ),
+    }),
   },
+  'account.discord_changed': {
+    op: 'activity',
+    entity: byId('account', 'accountId'),
+    refs: (d) => ref('account', d.accountId),
+    activity: (d) => ({ discord: change(!d.connected, d.connected) }),
+  },
+  'discord_bot.changed': { op: 'update', entity: () => ({ kind: 'settings', id: 'discordBot' }) },
   'settings.changed': { op: 'update', entity: () => ({ kind: 'settings', id: 'instance' }) },
   'theme.installed': { op: 'create', entity: byId('theme') },
   'theme.removed': { op: 'delete', entity: byId('theme') },

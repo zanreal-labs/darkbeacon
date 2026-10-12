@@ -47,6 +47,13 @@ export default {
     log.version = ctx.plugin.version;
     if (log.subscribeTo) ctx.on(log.subscribeTo, () => {});
     if (log.failRegister) throw new Error('cannot start');
+    log.publicUrl = ctx.instance.publicUrl;
+    if (log.durable) {
+      log.sealed = ctx.secrets.open(ctx.secrets.seal('secret')) === 'secret';
+      ctx.consume({ name: 'durable', events: ['system.*'], handle: async (event) => {
+        log.durable.push(event.type + '@' + event.stream);
+      } });
+    }
     ctx.on('system.*', async (event) => {
       if (event.data && event.data.fail) throw new Error('handler broke');
       log.events.push(event.type + '@' + event.stream);
@@ -54,6 +61,14 @@ export default {
     ctx.http.route({ method: 'GET', path: '/hello/:name', handler: (r) => ({ body: { hello: r.params.name, account: r.accountId, q: r.query.q } }) });
     ctx.http.route({ method: 'GET', path: '/maps/:mapId', handler: (r) => ({ body: { role: r.mapRole } }) });
     ctx.http.route({ method: 'POST', path: '/boom', handler: () => { throw new Error('route broke'); } });
+    ctx.http.route({ method: 'PUT', path: '/maps/:mapId/config', handler: async (r) => {
+      await ctx.audit.configChanged(r, { mapId: r.params.mapId, before: { level: 1 }, after: { level: 2, webhookUrl: 'https://discord.com/api/webhooks/1/secret-token' } });
+      return { body: { ok: true } };
+    } });
+    ctx.http.route({ method: 'POST', path: '/forge', handler: async () => {
+      try { await ctx.audit.configChanged({ accountId: 'boss', params: {}, query: {}, body: null, method: 'POST', mapRole: null }, { mapId: null, before: null, after: { x: 1 } }); return { body: { forged: true } }; }
+      catch { return { body: { forged: false } }; }
+    } });
     ctx.provide('notifier', { id: 'memo', send: async (n) => { log.notified.push(n.title); } });
     if (ctx.ports.db) {
       const db = ctx.ports.db.db();

@@ -2,7 +2,7 @@ import type { InstanceSettingsDto } from './dto/access.js';
 import type { WebhookDto } from './dto/notifications.js';
 
 /** How someone signed in. */
-export type SignInProvider = 'discord' | 'demo' | 'dev';
+export type SignInProvider = 'discord' | 'eve' | 'demo' | 'dev';
 
 /**
  * Instance audit catalogue: events on the `audit:instance` stream (see `AUDIT_STREAM` in core).
@@ -13,7 +13,12 @@ export interface AuditEventPayloads {
   'auth.signed_in': { accountId: string; provider: SignInProvider };
   /** `accountId` is null when the sign-in failed before an account was known. */
   'auth.sign_in_failed': { provider: SignInProvider; reason: string; accountId: string | null };
-  'auth.signed_out': { accountId: string; everywhere: boolean };
+  /** `device` names the browser and device of a session ended from the account page. */
+  'auth.signed_out': { accountId: string; everywhere: boolean; device?: string | null };
+  /** A Discord account was connected to or disconnected from a Darkbeacon account (EVE sign-in). */
+  'account.discord_changed': { accountId: string; connected: boolean };
+  /** The instance's Discord bot was connected or removed (the token itself is never recorded). */
+  'discord_bot.changed': { configured: boolean; name: string | null };
   /** The instance settings after the change (the audit record holds the fields that changed). */
   'settings.changed': InstanceSettingsDto;
   'theme.installed': { id: string; name: string; version: string };
@@ -36,6 +41,8 @@ export const AUDIT_EVENT_TYPES = [
   'auth.signed_in',
   'auth.sign_in_failed',
   'auth.signed_out',
+  'account.discord_changed',
+  'discord_bot.changed',
   'settings.changed',
   'theme.installed',
   'theme.removed',

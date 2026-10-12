@@ -91,6 +91,12 @@ const FIELD_LABELS: Record<string, string> = {
   adminGuildId: 'Discord server',
   adminRoleIds: 'Discord admin roles',
   webhooksToPrivateNetworks: 'Webhooks to private networks',
+  loginMethod: 'Sign-in',
+  defaultMapId: 'Map that opens first',
+  configured: 'Connected',
+  discord: 'Discord',
+  channel: 'Channel',
+  webhookUrl: 'Webhook',
   url: 'Address',
   events: 'Events',
   themeId: 'Default theme',
@@ -196,7 +202,12 @@ function ruleSubject(rule: Record<string, unknown>, names: AuditNames): string {
   }
 }
 
-const PROVIDERS: Record<string, string> = { discord: 'Discord', demo: 'the demo', dev: 'a local account' };
+const PROVIDERS: Record<string, string> = {
+  discord: 'Discord',
+  eve: 'EVE Online',
+  demo: 'the demo',
+  dev: 'a local account',
+};
 
 /** A sentence-ready reading of one entry. */
 export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditReading {
@@ -236,7 +247,11 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
       };
     case 'auth.signed_out':
       return read(
-        entry.diff.signedOut?.after === 'everywhere' ? 'signed out everywhere' : 'signed out',
+        entry.diff.signedOut?.after === 'everywhere'
+          ? 'signed out everywhere'
+          : entry.diff.signedOut?.after && entry.diff.signedOut.after !== 'this browser'
+            ? `signed out ${String(entry.diff.signedOut.after)}`
+            : 'signed out',
         'signIn',
       );
     case 'access.role_changed':
@@ -258,6 +273,13 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
         changes: [],
       };
     }
+    case 'account.discord_changed':
+      return read(entry.diff.discord?.after ? 'connected Discord' : 'disconnected Discord', 'access');
+    case 'discord_bot.changed':
+      return read(
+        entry.diff.configured?.after === false ? 'removed the Discord bot' : 'connected the Discord bot',
+        'instance',
+      );
     case 'settings.changed':
       return read('changed the instance settings', 'instance');
     case 'theme.installed':
@@ -343,9 +365,13 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
 export const INSTANCE_AUDIT_KINDS = [
   { value: 'all', label: 'Everything', types: undefined },
   { value: 'signIn', label: 'Sign-ins', types: ['auth.*'] },
-  { value: 'access', label: 'Roles and access', types: ['access.*', 'character.unlinked'] },
+  {
+    value: 'access',
+    label: 'Roles and access',
+    types: ['access.*', 'character.unlinked', 'account.*'],
+  },
   { value: 'plugins', label: 'Plugins', types: ['plugin.*'] },
-  { value: 'instance', label: 'Settings and themes', types: ['settings.*', 'theme.*'] },
+  { value: 'instance', label: 'Settings and themes', types: ['settings.*', 'theme.*', 'discord_bot.*'] },
   { value: 'webhooks', label: 'Webhooks', types: ['webhook.*'] },
 ] as const;
 

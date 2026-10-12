@@ -3,6 +3,8 @@
 export * from './accounts.js';
 export * from './characters.js';
 export { base64url, pkceChallenge, randomToken } from './crypto.js';
+export * from './directory.js';
+export * from './discord-bot.js';
 export * from './guild-roles.js';
 export * from './login.js';
 export * from './sessions.js';

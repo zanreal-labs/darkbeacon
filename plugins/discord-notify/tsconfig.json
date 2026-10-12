@@ -6,5 +6,9 @@
     "tsBuildInfoFile": "dist/.tsbuildinfo"
   },
   "include": ["src"],
-  "references": [{ "path": "../../packages/plugin-sdk" }]
+  "references": [
+    { "path": "../../packages/plugin-sdk" },
+    { "path": "../../packages/db" },
+    { "path": "../../packages/theme-sdk" }
+  ]
 }

@@ -1,7 +1,10 @@
 export type { Clock, EventLog, UnitOfWork } from '@darkbeacon/core';
 export type * from './account-repository.js';
 export type * from './character-repository.js';
+export type * from './discord-bot.js';
 export type * from './discord-link-repository.js';
+export type * from './eve-directory.js';
 export type * from './eve-sso.js';
 export type * from './identity-provider.js';
+export type * from './login-policy.js';
 export type * from './session-repository.js';

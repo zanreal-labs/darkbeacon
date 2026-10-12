@@ -177,7 +177,12 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
   'plugin.removed': { data: { id: 'p' }, before: plugin },
   'auth.signed_in': { data: { accountId: 'a', provider: 'discord' } },
   'auth.sign_in_failed': { data: { provider: 'discord', reason: 'cancelled', accountId: null } },
-  'auth.signed_out': { data: { accountId: 'a', everywhere: true } },
+  'auth.signed_out': { data: { accountId: 'a', everywhere: false, device: 'Firefox on Windows' } },
+  'account.discord_changed': { data: { accountId: 'a', connected: true } },
+  'discord_bot.changed': {
+    data: { configured: true, name: 'Beacon' },
+    before: { configured: false, name: null },
+  },
   'settings.changed': { data: { ...settings, eventRetentionDays: 90 }, before: settings },
   'theme.installed': { data: { id: 't', name: 'T', version: '1.0.0' } },
   'theme.removed': { data: { id: 't' }, before: { id: 't', name: 'T', version: '1.0.0' } },

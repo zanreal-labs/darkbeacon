@@ -6,6 +6,16 @@ export * from './web.js';
 export type { DomainEvent } from '@darkbeacon/core';
 export type {
   ConnectionDto,
+  DiscordMention,
+  DiscordNotifyKind,
+  DiscordNotifySettings,
+  DiscordNotifyStateDto,
+  DiscordNotifyTargetDto,
+  DiscordNotifyTargetInput,
+  DiscordNotifyTestDto,
+  PingDto,
+  QuietHours,
+  UpdateDiscordNotifyRequest,
   EventPayloads,
   EventType,
   MapDto,

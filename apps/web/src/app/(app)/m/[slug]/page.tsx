@@ -12,6 +12,7 @@ import {
   serverGet,
 } from '../../../../server/api';
 import { MapLoading, MapPage, MapUnavailable } from '../../../../screens/MapPage';
+import { RememberMap } from '../../../../shell/RememberMap';
 import { SignInRedirect } from '../../../../shell/Session';
 
 /**
@@ -54,6 +55,7 @@ async function LiveMap({ params }: Pick<PageProps<'/m/[slug]'>, 'params'>) {
         ...ids.map((id) => [universeKey(id), universe.get(id)] as const),
       ])}
     >
+      <RememberMap mapId={map.id} />
       <MapPage slug={slug} snapshot={snapshot} />
     </HydrationBoundary>
   );

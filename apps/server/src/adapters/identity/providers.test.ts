@@ -73,7 +73,7 @@ describe('EveSsoHttp', () => {
       characterId: pilot.id,
       characterName: 'Test Pilot',
       ownerHash: 'owner-hash',
-      scopes: ['esi-location.read_location.v1', 'esi-location.read_ship_type.v1'],
+      scopes: network.eveScopes,
     });
     expect(tokens.expiresAt).toBe(clock.now() + 1_199_000);
     // Metadata and keys were discovered through the metadata document.

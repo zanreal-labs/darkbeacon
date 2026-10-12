@@ -15,19 +15,36 @@ import {
   type InstanceRole,
   type UnitOfWork,
 } from '@darkbeacon/core';
-import type { AccountDto, AdminAccountDto, CharacterDto, EventPayloads, MeDto } from '@darkbeacon/shared';
+import type {
+  AccountDto,
+  AccountSummaryDto,
+  AdminAccountDto,
+  CharacterDto,
+  EventPayloads,
+  MeDto,
+} from '@darkbeacon/shared';
 import type { Account, LinkedCharacter } from '../domain/account.js';
-import { effectiveInstanceRole, initialInstanceRole, WAYPOINT_SCOPE } from '../domain/rules.js';
+import {
+  effectiveInstanceRole,
+  EVE_SEARCH_SCOPE,
+  initialInstanceRole,
+  WAYPOINT_SCOPE,
+  withRecentMap,
+} from '../domain/rules.js';
 import type { AccountRepository } from '../ports/account-repository.js';
 import type { CharacterRepository } from '../ports/character-repository.js';
 import type { DiscordGuildPolicy, DiscordLinkRepository } from '../ports/discord-link-repository.js';
 import type { DiscordProfile } from '../ports/identity-provider.js';
+import type { LoginPolicy } from '../ports/login-policy.js';
+import { accountChanged } from './events.js';
 
 export interface AccountDeps {
   accounts: AccountRepository;
   characters: CharacterRepository;
   discordLinks: DiscordLinkRepository;
   guildPolicy: DiscordGuildPolicy;
+  /** Without one, Discord is the login method (tests that do not care). */
+  loginPolicy?: LoginPolicy;
   uow: UnitOfWork;
   events: EventLog;
   clock: Clock;
@@ -49,17 +66,22 @@ export function toAccountDto(account: Account, instanceRole: InstanceRole): Acco
     name: account.name,
     avatarUrl: account.avatarUrl,
     instanceRole,
+    defaultMapId: account.defaultMapId ?? null,
+    recentMapIds: account.recentMapIds ?? [],
     createdAt: account.createdAt,
   };
 }
 
-export function toCharacterDto(character: LinkedCharacter): CharacterDto {
+export function toCharacterDto(character: LinkedCharacter, scopes?: readonly string[]): CharacterDto {
   return {
     id: character.id,
     name: character.name,
     corporationId: character.corporationId,
     allianceId: character.allianceId,
     tokenValid: character.tokenValid,
+    // Characters without an EVE grant (demo, fake) say nothing about search, so no "Search off".
+    ...(scopes ? { canSearch: character.tokenValid && scopes.includes(EVE_SEARCH_SCOPE) } : {}),
+    canSetWaypoints: character.tokenValid && (scopes?.includes(WAYPOINT_SCOPE) ?? false),
     linkedAt: character.linkedAt,
   };
 }
@@ -76,6 +98,10 @@ export class AccountService {
     return effectiveInstanceRole('user', await this.deps.guildPolicy.grantsAdmin(link.guildRoles));
   }
 
+  find(accountId: string): Promise<Account | null> {
+    return this.deps.accounts.findById(accountId);
+  }
+
   async actorFor(account: Account): Promise<AccountActor> {
     return { kind: 'account', id: account.id, instanceRole: await this.effectiveRole(account) };
   }
@@ -85,19 +111,124 @@ export class AccountService {
     const account = await this.deps.accounts.findById(id);
     if (!account) throw new NotFoundError('Account');
     const characters = await this.deps.characters.listForAccount(id);
+    const scopes = await this.deps.characters.scopesOf(characters.map((c) => c.id));
     // A main character that was unlinked since no longer counts.
     const main = characters.some((c) => c.id === account.mainCharacterId) ? account.mainCharacterId : null;
     return {
       account: { ...toAccountDto(account, instanceRole), mainCharacterId: main ?? null },
-      characters: await Promise.all(
-        characters.map(async (character) => ({
-          ...toCharacterDto(character),
-          canSetWaypoints:
-            character.tokenValid &&
-            ((await this.deps.characters.getTokens(character.id))?.scopes.includes(WAYPOINT_SCOPE) ?? false),
-        })),
-      ),
+      characters: characters.map((c) => toCharacterDto(c, scopes.get(c.id))),
     };
+  }
+
+  /** Stars a map as the one `/` opens (null clears it). Map access is checked where it is used. */
+  async setDefaultMap(actor: Actor | null, mapId: string | null): Promise<MeDto> {
+    const { id } = requireAccount(actor);
+    await this.deps.uow.transaction(async () => {
+      const account = await this.deps.accounts.findById(id);
+      if (!account) throw new NotFoundError('Account');
+      await this.deps.accounts.update({ ...account, defaultMapId: mapId, updatedAt: this.deps.clock.now() });
+    });
+    return this.me(actor);
+  }
+
+  /** Remembers that the account opened a map (the most recent first). Writes only on a change. */
+  async recordMapOpened(actor: Actor | null, mapId: string): Promise<void> {
+    const { id } = requireAccount(actor);
+    const account = await this.deps.accounts.findById(id);
+    if (!account) throw new NotFoundError('Account');
+    if (account.recentMapIds?.[0] === mapId) return;
+    await this.deps.accounts.setRecentMaps(id, withRecentMap(account.recentMapIds, mapId));
+  }
+
+  /** The account's own map preferences, for choosing where `/` goes. */
+  async mapPreferences(
+    actor: Actor | null,
+  ): Promise<{ defaultMapId: string | null; recentMapIds: string[] }> {
+    const { id } = requireAccount(actor);
+    const account = await this.deps.accounts.findById(id);
+    return { defaultMapId: account?.defaultMapId ?? null, recentMapIds: account?.recentMapIds ?? [] };
+  }
+
+  /** Accounts by name, for people picking someone (the caller decides who may ask). */
+  async search(text: string, limit = 10): Promise<AccountSummaryDto[]> {
+    const found = await this.deps.accounts.search(text.trim(), limit);
+    return found.map((a) => ({
+      id: a.id,
+      name: a.name,
+      avatarUrl: a.avatarUrl,
+      mainCharacterId: a.mainCharacterId ?? null,
+    }));
+  }
+
+  /** Names of accounts, for showing rules about them. Unknown ids are left out. */
+  async names(ids: readonly string[]): Promise<Map<string, Account>> {
+    const result = new Map<string, Account>();
+    for (const id of new Set(ids)) {
+      const account = await this.deps.accounts.findById(id);
+      if (account) result.set(id, account);
+    }
+    return result;
+  }
+
+  /**
+   * A new account for an EVE character signing in for the first time (EVE sign-in instances).
+   * It is named after the character, which becomes its main; the first account is the owner.
+   */
+  createForCharacter(character: { id: number; name: string }): Promise<Account> {
+    return this.withCreateRetry(async () => {
+      const account = await this.create({
+        discordId: null,
+        name: character.name.slice(0, 64),
+        avatarUrl: null,
+      });
+      const withMain = { ...account, mainCharacterId: character.id };
+      await this.deps.accounts.update(withMain);
+      return withMain;
+    });
+  }
+
+  /**
+   * Connects a Discord user to an existing account (EVE sign-in instances). One Discord user
+   * belongs to one account; the account takes over its avatar.
+   */
+  async connectDiscord(accountId: string, profile: DiscordProfile): Promise<Account> {
+    return this.deps.uow.transaction(async () => {
+      const account = await this.deps.accounts.findById(accountId);
+      if (!account) throw new NotFoundError('Account');
+      const owner = await this.deps.accounts.findByDiscordId(profile.id);
+      if (owner && owner.id !== accountId) {
+        throw new ConflictError(
+          `This Discord user is already connected to ${owner.name}. Disconnect it there first.`,
+        );
+      }
+      const updated: Account = {
+        ...account,
+        discordId: profile.id,
+        avatarUrl: profile.avatarUrl ?? account.avatarUrl,
+        updatedAt: this.deps.clock.now(),
+      };
+      await this.deps.accounts.update(updated);
+      await this.deps.events.append([
+        accountChanged(accountId, { kind: 'account', id: accountId }, this.deps.clock.now()),
+      ]);
+      return updated;
+    });
+  }
+
+  /** Disconnects the account's Discord user; its Discord roles stop counting. */
+  async disconnectDiscord(actor: Actor | null): Promise<void> {
+    const { id } = requireAccount(actor);
+    if ((await this.deps.loginPolicy?.loginMethod()) !== 'eve') {
+      throw new ForbiddenError('People sign in with Discord here, so it cannot be disconnected');
+    }
+    await this.deps.uow.transaction(async () => {
+      const account = await this.deps.accounts.findById(id);
+      if (!account) throw new NotFoundError('Account');
+      if (!account.discordId) return;
+      await this.deps.accounts.update({ ...account, discordId: null, updatedAt: this.deps.clock.now() });
+      await this.deps.discordLinks.remove(id);
+      await this.deps.events.append([accountChanged(id, { kind: 'account', id }, this.deps.clock.now())]);
+    });
   }
 
   /** Picks which of the account's own characters it acts as by default. */
@@ -226,7 +357,11 @@ export class AccountService {
   }
 
   private async adminDto(account: Account): Promise<AdminAccountDto> {
-    return { ...toAccountDto(account, await this.effectiveRole(account)), lastSeenAt: account.lastSeenAt };
+    return {
+      ...toAccountDto(account, await this.effectiveRole(account)),
+      mainCharacterId: account.mainCharacterId ?? null,
+      lastSeenAt: account.lastSeenAt,
+    };
   }
 
   private async roleChanged(actor: Actor, account: Account, before: Account): Promise<void> {

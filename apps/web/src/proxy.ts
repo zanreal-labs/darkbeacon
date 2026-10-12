@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { safeNext } from './lib/safe-next';
-import { LAST_MAP_COOKIE, isMapSlug } from './lib/last-map';
 
 /** Cookie names shared with the API server (apps/server/src/modules/identity/cookies.ts). */
 export const SESSION_COOKIES = ['dbk_session', 'ww_session'] as const;
@@ -21,7 +20,43 @@ function redirectTo(request: NextRequest, path: string): NextResponse {
 }
 
 /** The app's pages; anything else (robots.txt, scanners probing /wp-login.php) is a plain 404. */
-const PAGE = /^\/(?:account|admin|maps)?\/?$|^\/m\/[^/]+(?:\/settings)?\/?$/;
+const PAGE = /^\/(?:account|admin|maps|dev\/components)?\/?$|^\/m\/[^/]+(?:\/settings)?\/?$/;
+
+/**
+ * Where `/` goes for this session (the account's star, the instance default, the last opened
+ * map, the only one), or null when it can see no map or the API did not answer. The redirect
+ * happens here, before any HTML, so the maps list never flashes.
+ */
+async function landingPath(cookie: string, request: NextRequest): Promise<string | null> {
+  const response = await fetch(apiUrl('/api/accounts/me/landing'), {
+    headers: {
+      cookie,
+      accept: 'application/json',
+      'user-agent': request.headers.get('user-agent') ?? 'darkbeacon-web',
+    },
+    cache: 'no-store',
+  }).catch(() => null);
+  if (!response?.ok) {
+    void response?.body?.cancel().catch(() => {});
+    return null;
+  }
+  const body = (await response.json().catch(() => null)) as { slug?: unknown } | null;
+  return typeof body?.slug === 'string' ? `/m/${encodeURIComponent(body.slug)}` : null;
+}
+
+/** `/` opened by someone signed in: straight to their map. */
+async function land(
+  request: NextRequest,
+  cookie: string,
+  setCookies: string[] = [],
+): Promise<NextResponse | null> {
+  if (request.nextUrl.pathname !== '/' || request.headers.has('next-router-prefetch')) return null;
+  const path = await landingPath(cookie, request);
+  if (!path) return null;
+  const response = redirectTo(request, path);
+  for (const c of setCookies) response.headers.append('set-cookie', c);
+  return response;
+}
 
 /** Clients that are not someone browsing: crawlers, link previews, scripts, scanners. */
 const NOT_A_BROWSER =
@@ -95,18 +130,17 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     // knows comes back here with `reset`, so this cannot loop.
     return signedIn ? redirectTo(request, next) : NextResponse.next();
   }
-  if (signedIn) {
-    // `/` is the map you worked on last: go straight there, before any page renders.
-    const last = request.cookies.get(LAST_MAP_COOKIE)?.value;
-    if (pathname === '/' && isMapSlug(last)) return redirectTo(request, `/m/${last}`);
-    return NextResponse.next();
-  }
   if (!PAGE.test(pathname)) return NextResponse.next();
+  if (signedIn) {
+    return (await land(request, request.headers.get('cookie') ?? '')) ?? NextResponse.next();
+  }
 
   if (!request.cookies.has(DEMO_OPT_OUT_COOKIE) && isPageVisit(request)) {
     const setCookies = await demoSignIn(request);
     const session = setCookies?.map((c) => c.split(';')[0]!).find((c) => c.startsWith('dbk_session='));
     if (setCookies && session) {
+      const landed = await land(request, session, setCookies);
+      if (landed) return landed;
       // The page renders with the new session right away, and the browser keeps it.
       const headers = new Headers(request.headers);
       headers.set('cookie', [request.headers.get('cookie'), session].filter(Boolean).join('; '));

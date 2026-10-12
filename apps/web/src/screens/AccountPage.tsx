@@ -1,13 +1,34 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { LogOut, MoreHorizontal, Plus, Star, Unlink, UserRound } from 'lucide-react';
-import { buildPath, routes, type CharacterDto, type MeDto } from '@darkbeacon/shared';
+import {
+  Laptop,
+  LogOut,
+  MoreHorizontal,
+  Plus,
+  RefreshCw,
+  Smartphone,
+  Star,
+  Tablet,
+  Unlink,
+  UserRound,
+} from 'lucide-react';
+import {
+  buildPath,
+  routes,
+  type CharacterDto,
+  type EveEntityDto,
+  type MeDto,
+  type SessionDto,
+} from '@darkbeacon/shared';
+import { accountImage } from '../lib/account';
 import { api, ApiError } from '../lib/api';
 import { usePresenceSettings } from '../lib/presence';
-import { meKey, useLogout, useMe, useProviders } from '../lib/session';
+import { useMaps, useSetDefaultMap } from '../lib/maps';
+import { meKey, useLogout, useMe, useProviders, useRevokeSession, useSessions } from '../lib/session';
+import { relativeTime } from '../lib/time';
 import { eveLinkHref, ROLE_LABEL } from '../shell/AccountMenu';
 import { ThemePicker } from '../theme/ThemePicker';
 import {
@@ -22,6 +43,8 @@ import {
   CharacterAvatar,
   ConfirmDialog,
   EmptyState,
+  ErrorState,
+  Field,
   IconButton,
   Menu,
   MenuContent,
@@ -31,21 +54,20 @@ import {
   PageHeader,
   Row,
   Rows,
+  Select,
   Skeleton,
+  SkeletonRows,
   Stack,
   Switch,
   Tooltip,
   useToast,
 } from '../ui';
+import styles from './AccountPage.module.css';
 
 function errorText(error: unknown): string {
   return error instanceof ApiError ? error.message : 'Something went wrong. Try again.';
 }
 
-/**
- * Discord identity, linked EVE characters (main character, link, unlink), theme and sessions.
- * `authError`: an EVE SSO failure, which comes back as `?auth_error=<message>`.
- */
 const TITLE = 'Account';
 const DESCRIPTION = 'Your sign-in, EVE characters and preferences.';
 
@@ -62,40 +84,26 @@ export function AccountPageSkeleton() {
   );
 }
 
+/**
+ * Sign-in (and Discord on EVE instances), linked EVE characters, the map that opens first, theme
+ * and the signed-in devices. `authError`: an EVE SSO or Discord failure (`?auth_error=`).
+ */
 export function AccountPage({ authError = null }: { authError?: string | null }) {
   const me = useMe();
   if (!me.data) return null;
-  const { account } = me.data;
 
   return (
     <Page width={760}>
       <PageHeader title={TITLE} description={DESCRIPTION} />
       <Stack>
         {authError && (
-          <Callout tone="danger" title="EVE sign-in didn't work">
+          <Callout tone="danger" title="That didn't work">
             {authError}
           </Callout>
         )}
-
-        <Card>
-          <CardBody>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--dbk-space-3)' }}>
-              <Avatar src={account.avatarUrl} name={account.name} size={48} />
-              <div style={{ display: 'grid', gap: 2, minWidth: 0, flex: 1 }}>
-                <strong style={{ fontSize: 'var(--dbk-font-size-large)' }}>{account.name}</strong>
-                <span className="muted">
-                  {account.discordId ? 'Signed in with Discord' : 'Local demo account, not linked to Discord'}
-                </span>
-              </div>
-              <Badge tone={account.instanceRole === 'user' ? 'neutral' : 'accent'}>
-                {ROLE_LABEL[account.instanceRole]}
-              </Badge>
-            </div>
-          </CardBody>
-        </Card>
-
+        <Identity me={me.data} />
         <Characters me={me.data} />
-
+        <DefaultMap me={me.data} />
         <Card>
           <CardHeader
             title="Appearance"
@@ -114,6 +122,86 @@ export function AccountPage({ authError = null }: { authError?: string | null })
   );
 }
 
+function Identity({ me }: { me: MeDto }) {
+  const providers = useProviders();
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const [disconnecting, setDisconnecting] = useState(false);
+  const { account } = me;
+  const eveMode = providers.data?.loginMethod === 'eve';
+  const canConnect = eveMode && (providers.data?.discord ?? false);
+  const disconnect = useMutation({
+    mutationFn: () => api<void>(routes.accounts.disconnectDiscord.path, { method: 'DELETE' }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: meKey });
+      toast({ title: 'Discord disconnected', tone: 'success' });
+    },
+    onError: (error) =>
+      toast({ title: 'Could not disconnect', description: errorText(error), tone: 'danger' }),
+  });
+  const how =
+    providers.data?.demo && !account.discordId
+      ? 'The shared demo account: everyone exploring the demo uses it.'
+      : eveMode
+        ? 'Signed in with EVE Online: any of your characters opens this account.'
+        : account.discordId
+          ? 'Signed in with Discord.'
+          : 'A local account, not linked to Discord.';
+  const connectHref = `${routes.auth.discordConnect.path}?${new URLSearchParams({ returnTo: '/account' })}`;
+
+  return (
+    <Card>
+      <CardBody>
+        <div className={styles.identity}>
+          <Avatar src={accountImage(me)} name={account.name} size={48} />
+          <div className={styles.identityText}>
+            <strong>{account.name}</strong>
+            <span className="muted">{how}</span>
+          </div>
+          <Badge tone={account.instanceRole === 'user' ? 'neutral' : 'accent'}>
+            {ROLE_LABEL[account.instanceRole]}
+          </Badge>
+        </div>
+      </CardBody>
+      {canConnect && (
+        <CardFooter>
+          <span className={styles.footerNote}>
+            {account.discordId
+              ? 'Discord is connected: its roles can count on maps.'
+              : 'Connect Discord to sign in with it too and bring your server roles along.'}
+          </span>
+          {account.discordId ? (
+            <Button onClick={() => setDisconnecting(true)}>Disconnect Discord</Button>
+          ) : (
+            <Button asChild>
+              <a href={connectHref}>Connect Discord</a>
+            </Button>
+          )}
+        </CardFooter>
+      )}
+      <ConfirmDialog
+        open={disconnecting}
+        onOpenChange={setDisconnecting}
+        title="Disconnect Discord?"
+        description="Map access that came from your Discord roles ends. You keep signing in with EVE Online."
+        confirmLabel="Disconnect"
+        tone="danger"
+        onConfirm={() => disconnect.mutateAsync()}
+      />
+    </Card>
+  );
+}
+
+function useEntities(ids: number[]) {
+  const unique = [...new Set(ids)].sort((a, b) => a - b);
+  return useQuery({
+    queryKey: ['eve-entities', unique.join(',')],
+    queryFn: () => api<EveEntityDto[]>(`${routes.eve.entities.path}?ids=${unique.join(',')}`),
+    enabled: unique.length > 0,
+    staleTime: 60 * 60_000,
+  });
+}
+
 function Characters({ me }: { me: MeDto }) {
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -121,6 +209,15 @@ function Characters({ me }: { me: MeDto }) {
   const [unlinking, setUnlinking] = useState<CharacterDto | null>(null);
   const { account, characters } = me;
   const eve = providers.data?.eve ?? false;
+  const eveMode = providers.data?.loginMethod === 'eve';
+  const groups = useEntities(
+    characters.flatMap((c) => [c.corporationId, ...(c.allianceId ? [c.allianceId] : [])]),
+  );
+  const groupName = (id: number | null) => {
+    if (!id) return null;
+    const e = groups.data?.find((g) => g.id === id);
+    return e ? `${e.name}${e.ticker ? ` [${e.ticker}]` : ''}` : null;
+  };
 
   const setMain = useMutation({
     mutationFn: (characterId: number) =>
@@ -143,10 +240,7 @@ function Characters({ me }: { me: MeDto }) {
   const linkButton = (
     <Button asChild={eve} variant="primary" size="sm" icon={<Plus />} disabled={!eve}>
       {eve ? (
-        <a href={eveLinkHref()}>
-          <Plus />
-          <span>Link EVE character</span>
-        </a>
+        <a href={eveLinkHref()}>{eveMode ? 'Add a character' : 'Link EVE character'}</a>
       ) : (
         'Link EVE character'
       )}
@@ -157,7 +251,11 @@ function Characters({ me }: { me: MeDto }) {
     <Card>
       <CardHeader
         title="EVE characters"
-        description="Linked through EVE SSO. Your main character is who you act as on maps."
+        description={
+          eveMode
+            ? 'Every character here signs you in to this account. Your main is who you act as on maps.'
+            : 'Linked through EVE SSO. Your main character is who you act as on maps.'
+        }
         actions={
           eve ? (
             linkButton
@@ -180,6 +278,9 @@ function Characters({ me }: { me: MeDto }) {
           <Rows>
             {characters.map((c) => {
               const main = account.mainCharacterId === c.id;
+              const affiliation = [groupName(c.corporationId), groupName(c.allianceId)]
+                .filter(Boolean)
+                .join(' · ');
               return (
                 <Row
                   key={c.id}
@@ -193,13 +294,22 @@ function Characters({ me }: { me: MeDto }) {
                         </Badge>
                       )}
                       {!c.tokenValid && <Badge tone="danger">Login expired</Badge>}
+                      {c.tokenValid && c.canSearch === false && (
+                        <Tooltip content="Linked before Darkbeacon asked for search. Link it again so name pickers can search through it.">
+                          <span tabIndex={0}>
+                            <Badge tone="warning">Search off</Badge>
+                          </span>
+                        </Tooltip>
+                      )}
                     </>
                   }
                   meta={
                     !c.tokenValid ? (
                       <span className="error">Link the character again to resume tracking.</span>
+                    ) : groups.isPending && affiliation === '' ? (
+                      <Skeleton width={160} height={10} />
                     ) : (
-                      <span className="mono">#{c.id}</span>
+                      affiliation || 'No corporation found'
                     )
                   }
                   actions={
@@ -219,6 +329,11 @@ function Characters({ me }: { me: MeDto }) {
                         >
                           Make main character
                         </MenuItem>
+                        {eve && (
+                          <MenuItem icon={<RefreshCw />} href={eveLinkHref()}>
+                            Link again
+                          </MenuItem>
+                        )}
                         <MenuItem icon={<Unlink />} tone="danger" onSelect={() => setUnlinking(c)}>
                           Unlink…
                         </MenuItem>
@@ -235,7 +350,11 @@ function Characters({ me }: { me: MeDto }) {
         open={unlinking !== null}
         onOpenChange={(open) => !open && setUnlinking(null)}
         title={`Unlink ${unlinking?.name ?? 'character'}?`}
-        description="Tracking stops on every map. You can link the character again later."
+        description={
+          eveMode
+            ? 'Tracking stops on every map, and the character no longer signs you in. You can add it again later.'
+            : 'Tracking stops on every map. You can link the character again later.'
+        }
         confirmLabel="Unlink"
         tone="danger"
         onConfirm={() => (unlinking ? unlink.mutateAsync(unlinking.id) : undefined)}
@@ -280,32 +399,145 @@ function Collaboration() {
   );
 }
 
+/** Value of "no star": `/` then opens the instance default or the map used last. */
+const NO_DEFAULT = '__last__';
+
+function DefaultMap({ me }: { me: MeDto }) {
+  const maps = useMaps();
+  const star = useSetDefaultMap();
+  const toast = useToast();
+  const value = me.account.defaultMapId ?? NO_DEFAULT;
+  return (
+    <Card>
+      <CardHeader
+        title="Map that opens first"
+        description="Where Darkbeacon takes you when you open it or press the map button."
+      />
+      <CardBody>
+        {maps.isError ? (
+          <ErrorState compact error={maps.error} onRetry={() => void maps.refetch()} />
+        ) : (
+          <Field
+            label="Opens first"
+            hint="You can also star a map in the map switcher, next to the map's name."
+          >
+            <Select
+              value={maps.data ? value : undefined}
+              disabled={!maps.data || star.isPending}
+              placeholder="Loading maps…"
+              options={[
+                { value: NO_DEFAULT, label: 'The map I used last' },
+                ...(maps.data ?? []).map((m) => ({ value: m.id, label: m.name, icon: <Star /> })),
+              ]}
+              onValueChange={(id) =>
+                star.mutate(id === NO_DEFAULT ? null : id, {
+                  onSuccess: () => toast({ title: 'Saved', tone: 'success' }),
+                  onError: (error) =>
+                    toast({ title: 'Could not save', description: errorText(error), tone: 'danger' }),
+                })
+              }
+            />
+          </Field>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+const DEVICE_ICON = {
+  desktop: <Laptop />,
+  mobile: <Smartphone />,
+  tablet: <Tablet />,
+  unknown: <Laptop />,
+} as const;
+
+function sessionName(s: SessionDto): string {
+  if (s.browser && s.os) return `${s.browser} on ${s.os}`;
+  return s.browser ?? s.os ?? 'Unknown browser';
+}
+
 function Sessions() {
   const router = useRouter();
+  const toast = useToast();
+  const sessions = useSessions();
+  const revoke = useRevokeSession();
   const logout = useLogout();
   const logoutEverywhere = useLogout(true);
   const [confirmAll, setConfirmAll] = useState(false);
   const done = () => router.replace('/login');
+  const others = sessions.data?.filter((s) => !s.current).length ?? 0;
   return (
     <Card>
-      <CardHeader title="Sessions" description="Signing out everywhere ends your sessions on every device." />
+      <CardHeader title="Sessions" description="Browsers and devices signed in to this account." />
+      <CardBody flush>
+        {sessions.isPending ? (
+          <SkeletonRows count={2} />
+        ) : sessions.isError ? (
+          <ErrorState compact error={sessions.error} onRetry={() => void sessions.refetch()} />
+        ) : (
+          <Rows>
+            {sessions.data.map((s) => (
+              <Row
+                key={s.id}
+                leading={
+                  <span className={styles.device} aria-hidden>
+                    {DEVICE_ICON[s.device]}
+                  </span>
+                }
+                title={
+                  <>
+                    <span>{sessionName(s)}</span>
+                    {s.current && <Badge tone="accent">This device</Badge>}
+                  </>
+                }
+                meta={`${s.current ? 'Active now' : `Active ${relativeTime(s.lastSeenAt)}`} · signed in ${relativeTime(s.createdAt)}`}
+                actions={
+                  !s.current && (
+                    <Button
+                      size="sm"
+                      loading={revoke.isPending && revoke.variables === s.id}
+                      onClick={() =>
+                        revoke.mutate(s.id, {
+                          onSuccess: () => toast({ title: `${sessionName(s)} signed out`, tone: 'success' }),
+                          onError: (error) =>
+                            toast({
+                              title: 'Could not sign it out',
+                              description: errorText(error),
+                              tone: 'danger',
+                            }),
+                        })
+                      }
+                    >
+                      Sign out
+                    </Button>
+                  )
+                }
+              />
+            ))}
+          </Rows>
+        )}
+      </CardBody>
       <CardFooter>
-        <Button variant="danger-ghost" onClick={() => setConfirmAll(true)}>
-          Sign out everywhere
-        </Button>
         <Button
           icon={<LogOut />}
           loading={logout.isPending}
           onClick={() => logout.mutate(undefined, { onSuccess: done })}
         >
-          Sign out
+          Sign out here
+        </Button>
+        <Button variant="danger" onClick={() => setConfirmAll(true)}>
+          Sign out everywhere…
         </Button>
       </CardFooter>
       <ConfirmDialog
         open={confirmAll}
         onOpenChange={setConfirmAll}
         title="Sign out everywhere?"
-        description="Every browser and device signed in to this account is signed out, including this one."
+        description={
+          others > 0
+            ? `This device and ${others} other${others === 1 ? '' : 's'} are signed out.`
+            : 'Every browser and device signed in to this account is signed out, including this one.'
+        }
         confirmLabel="Sign out everywhere"
         tone="danger"
         onConfirm={() => logoutEverywhere.mutateAsync().then(done)}

@@ -27,8 +27,24 @@ describe('proxy', () => {
     const fetch = fakeApi(() => new Response(null, { status: 500 }));
     const response = await proxy(request('/m/home', 'dbk_session=abc'));
     expect(response.headers.get('x-middleware-next')).toBe('1');
-    expect((await proxy(request('/', 'ww_session=old'))).headers.get('x-middleware-next')).toBe('1');
+    expect((await proxy(request('/account', 'ww_session=old'))).headers.get('x-middleware-next')).toBe('1');
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('sends `/` straight to the map it should open, before any HTML', async () => {
+    const fetch = fakeApi(() => Response.json({ slug: 'home-chain', reason: 'account' }));
+    const response = await proxy(request('/', 'dbk_session=abc'));
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('http://darkbeacon.test/m/home-chain');
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/accounts\/me\/landing$/),
+      expect.objectContaining({ headers: expect.objectContaining({ cookie: 'dbk_session=abc' }) }),
+    );
+    // No map to open (or the API did not answer): the page shows the first-map screen.
+    fakeApi(() => Response.json({ slug: null, reason: null }));
+    expect((await proxy(request('/', 'dbk_session=abc'))).headers.get('x-middleware-next')).toBe('1');
+    fakeApi(() => new Response(null, { status: 500 }));
+    expect((await proxy(request('/', 'dbk_session=abc'))).headers.get('x-middleware-next')).toBe('1');
   });
 
   it('signs a signed-out visit in as the demo account before the page renders', async () => {

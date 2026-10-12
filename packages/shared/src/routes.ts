@@ -56,6 +56,21 @@ export const routes = {
       auth: 'public',
       redirect: true,
     }),
+    /**
+     * Connects a Discord user to the signed-in account (EVE sign-in instances), so Discord roles
+     * and the account's Discord name come along. Returns to `returnTo`.
+     */
+    discordConnect: route({
+      method: 'GET',
+      path: '/api/auth/discord/connect',
+      auth: 'account',
+      redirect: true,
+    }),
+    /**
+     * Signs in with an EVE character (instances whose login method is `eve`). A linked character
+     * opens its account; an unknown one creates a new account (see docs/decisions.md).
+     */
+    eveSignIn: route({ method: 'GET', path: '/api/auth/eve/signin', auth: 'public', redirect: true }),
     /** Links an EVE character to the signed-in account (EVE SSO v2, PKCE). */
     eveLogin: route({ method: 'GET', path: '/api/auth/eve/login', auth: 'account', redirect: true }),
     eveCallback: route({ method: 'GET', path: '/api/auth/eve/callback', auth: 'account', redirect: true }),
@@ -86,6 +101,118 @@ export const routes = {
       method: 'DELETE',
       path: '/api/accounts/me/characters/:characterId',
       auth: 'account',
+    }),
+    setDefaultMap: route({
+      method: 'PUT',
+      path: '/api/accounts/me/default-map',
+      auth: 'account',
+      body: dto.SetDefaultMapRequest,
+      response: dto.MeDto,
+    }),
+    /** Remembers the map the account opened (the map page calls it). */
+    recordMapOpened: route({
+      method: 'PUT',
+      path: '/api/accounts/me/recent-map',
+      auth: 'account',
+      body: dto.RecordMapOpenedRequest,
+    }),
+    /** Where `/` goes: account default, instance default, last opened, the only map. */
+    landing: route({
+      method: 'GET',
+      path: '/api/accounts/me/landing',
+      auth: 'account',
+      response: dto.LandingDto,
+    }),
+    sessions: route({
+      method: 'GET',
+      path: '/api/accounts/me/sessions',
+      auth: 'account',
+      response: z.array(dto.SessionDto),
+    }),
+    revokeSession: route({
+      method: 'DELETE',
+      path: '/api/accounts/me/sessions/:sessionId',
+      auth: 'account',
+    }),
+    /** Disconnects the account's Discord user (EVE sign-in instances only). */
+    disconnectDiscord: route({ method: 'DELETE', path: '/api/accounts/me/discord', auth: 'account' }),
+    /** Accounts by name, for map admins (people who are admin of a map, or instance admins). */
+    search: route({
+      method: 'GET',
+      path: '/api/accounts/search',
+      auth: 'account',
+      query: dto.AccountSearchQuery,
+      response: z.array(dto.AccountSummaryDto),
+    }),
+  },
+
+  instance: {
+    info: route({ method: 'GET', path: '/api/instance', auth: 'account', response: dto.InstanceInfoDto }),
+  },
+
+  eve: {
+    /** ESI search through one of the caller's characters, or exact names (POST /universe/ids). */
+    search: route({
+      method: 'GET',
+      path: '/api/eve/search',
+      auth: 'account',
+      query: dto.EveSearchQuery,
+      response: dto.EveSearchResultDto,
+    }),
+    entities: route({
+      method: 'GET',
+      path: '/api/eve/entities',
+      auth: 'account',
+      query: dto.EveEntitiesQuery,
+      response: z.array(dto.EveEntityDto),
+    }),
+  },
+
+  discord: {
+    /** Servers the instance bot is in (map admins and instance admins). */
+    guilds: route({
+      method: 'GET',
+      path: '/api/discord/guilds',
+      auth: 'account',
+      response: z.array(dto.DiscordGuildDto),
+    }),
+    roles: route({
+      method: 'GET',
+      path: '/api/discord/guilds/:guildId/roles',
+      auth: 'account',
+      response: z.array(dto.DiscordRoleDto),
+    }),
+    channels: route({
+      method: 'GET',
+      path: '/api/discord/guilds/:guildId/channels',
+      auth: 'account',
+      response: z.array(dto.DiscordChannelDto),
+    }),
+  },
+
+  /** Served by the bundled `discord-notify` plugin (map admins). */
+  discordNotify: {
+    get: route({
+      method: 'GET',
+      path: '/api/plugins/discord-notify/maps/:mapId',
+      auth: 'account',
+      mapRole: 'admin',
+      response: dto.DiscordNotifyStateDto,
+    }),
+    update: route({
+      method: 'PUT',
+      path: '/api/plugins/discord-notify/maps/:mapId',
+      auth: 'account',
+      mapRole: 'admin',
+      body: dto.UpdateDiscordNotifyRequest,
+      response: dto.DiscordNotifyStateDto,
+    }),
+    test: route({
+      method: 'POST',
+      path: '/api/plugins/discord-notify/maps/:mapId/test',
+      auth: 'account',
+      mapRole: 'admin',
+      response: dto.DiscordNotifyTestDto,
     }),
   },
 
@@ -122,6 +249,21 @@ export const routes = {
       body: dto.UpdateInstanceSettingsRequest,
       response: dto.InstanceSettingsDto,
     }),
+    discordBot: route({
+      method: 'GET',
+      path: '/api/admin/discord-bot',
+      auth: 'admin',
+      response: dto.DiscordBotDto,
+    }),
+    /** Connects the bot: the token is checked with Discord, then stored encrypted and never shown. */
+    setDiscordBot: route({
+      method: 'PUT',
+      path: '/api/admin/discord-bot',
+      auth: 'admin',
+      body: dto.SetDiscordBotRequest,
+      response: dto.DiscordBotDto,
+    }),
+    removeDiscordBot: route({ method: 'DELETE', path: '/api/admin/discord-bot', auth: 'admin' }),
   },
 
   universe: {

@@ -20,7 +20,8 @@ function DiscordMark() {
 }
 
 /**
- * Full-screen sign-in: one way in (Discord). EVE characters are linked afterwards with EVE SSO.
+ * Full-screen sign-in: one way in, Discord or EVE Online as the instance chose (EVE when Discord
+ * is not configured). With Discord, EVE characters are linked afterwards with EVE SSO.
  * Everything but `actions` is static and prerendered; the actions depend on how the instance is
  * set up and on the URL, so they stream in.
  */
@@ -80,6 +81,9 @@ export function LoginActions({
   const router = useRouter();
   const enterDemo = useEnterDemo();
   const discordHref = `${routes.auth.discordLogin.path}?${new URLSearchParams({ returnTo: next })}`;
+  const eveHref = `${routes.auth.eveSignIn.path}?${new URLSearchParams({ returnTo: next })}`;
+  const eveMode = providers.loginMethod === 'eve';
+  const primary = eveMode ? providers.eve : providers.discord;
 
   return (
     <>
@@ -89,7 +93,23 @@ export function LoginActions({
         </Callout>
       )}
 
-      {providers.discord && (
+      {eveMode && providers.eve && (
+        <a href={eveHref} className={styles.eveButton}>
+          {/* CCP's own button, as the EVE SSO docs ask third-party sites to use. */}
+          <img src={EVE_SSO_BUTTON} alt="Log in with EVE Online" width={270} height={45} decoding="async" />
+        </a>
+      )}
+
+      {eveMode && !providers.eve && (
+        <Callout tone="warning" title="EVE Online sign-in isn't set up yet">
+          <span className={styles.setup}>
+            An admin of this instance needs to create an application on the EVE developers site, set{' '}
+            <code>EVE_CLIENT_ID</code> and <code>EVE_CLIENT_SECRET</code> and restart the server.
+          </span>
+        </Callout>
+      )}
+
+      {!eveMode && providers.discord && (
         <Button asChild variant="discord" size="lg" block>
           <a href={discordHref}>
             <DiscordMark />
@@ -98,7 +118,7 @@ export function LoginActions({
         </Button>
       )}
 
-      {!providers.discord && (
+      {!eveMode && !providers.discord && (
         <Callout tone="warning" title="Discord sign-in isn't set up yet">
           <span className={styles.setup}>
             An admin of this instance needs to create a Discord application, set{' '}
@@ -110,8 +130,8 @@ export function LoginActions({
 
       {providers.demo && (
         <Button
-          variant={providers.discord ? 'ghost' : 'primary'}
-          size={providers.discord ? 'md' : 'lg'}
+          variant={primary ? 'ghost' : 'primary'}
+          size={primary ? 'md' : 'lg'}
           block
           icon={<Compass />}
           loading={enterDemo.isPending || enterDemo.isSuccess}
@@ -126,7 +146,15 @@ export function LoginActions({
         </Callout>
       )}
 
-      <p className={styles.note}>You link your EVE characters with EVE SSO once you are in.</p>
+      <p className={styles.note}>
+        {eveMode
+          ? 'Sign in with any of your characters. Add your alts on your account page once you are in.'
+          : 'You link your EVE characters with EVE SSO once you are in.'}
+      </p>
     </>
   );
 }
+
+/** https://developers.eveonline.com/docs/services/sso/ ("please use one of the following images"). */
+export const EVE_SSO_BUTTON =
+  'https://web.ccpgamescdn.com/eveonlineassets/developers/eve-sso-login-black-large.png';

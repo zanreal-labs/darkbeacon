@@ -1,8 +1,6 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { rememberLastMap } from '../lib/last-map';
-import { useEffect } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { ReactFlowProvider } from '@xyflow/react';
@@ -54,11 +52,6 @@ export function MapPage({ slug, snapshot }: { slug: string; snapshot?: StreamSna
     retry: false,
   });
   useBreadcrumbs([{ label: 'Maps', to: '/maps' }, { label: map.data?.name ?? slug }]);
-  // `/` reopens this map next time.
-  useEffect(() => {
-    if (map.isSuccess) rememberLastMap(map.data.slug);
-  }, [map.isSuccess, map.data?.slug]);
-
   if (map.isPending) return <MapLoading />;
   if (map.isError) return <MapUnavailable slug={slug} error={map.error} onRetry={() => void map.refetch()} />;
   const role = maps.data?.find((m) => m.id === map.data.id)?.role ?? 'viewer';

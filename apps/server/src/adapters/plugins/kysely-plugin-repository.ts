@@ -1,5 +1,6 @@
 import { bool, json, type Database } from '@darkbeacon/db';
 import type {
+  BundledPluginMarks,
   InstalledPlugin,
   InstalledTheme,
   PluginManifestSummary,
@@ -30,6 +31,31 @@ export interface PluginTables {
     installed_at: number;
   };
   theme_choice: { scope: string; theme_id: string };
+  plugin_bundled: { id: string; seen_at: number };
+}
+
+/** Bundled plugins this instance has seen (installed at least once). */
+export class KyselyBundledPluginMarks implements BundledPluginMarks {
+  constructor(private readonly database: Database) {}
+
+  async seen(id: string): Promise<boolean> {
+    const row = await this.database
+      .db<PluginTables>()
+      .selectFrom('plugin_bundled')
+      .select('id')
+      .where('id', '=', id)
+      .executeTakeFirst();
+    return row !== undefined;
+  }
+
+  async mark(id: string, at: number): Promise<void> {
+    await this.database
+      .db<PluginTables>()
+      .insertInto('plugin_bundled')
+      .values({ id, seen_at: at })
+      .onConflict((oc) => oc.column('id').doNothing())
+      .execute();
+  }
 }
 
 type PluginRow = PluginTables['plugin'];

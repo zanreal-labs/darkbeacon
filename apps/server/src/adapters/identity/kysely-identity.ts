@@ -1,3 +1,4 @@
+import { sql } from 'kysely';
 import type { InstanceRole } from '@darkbeacon/core';
 import { bool, json, type Database } from '@darkbeacon/db';
 import type {
@@ -5,6 +6,8 @@ import type {
   AccountRepository,
   CharacterRepository,
   CharacterTokens,
+  DiscordBotStore,
+  DiscordBotUser,
   DiscordLink,
   DiscordLinkRepository,
   GuildRole,
@@ -22,6 +25,8 @@ export interface IdentityTables {
     avatar_url: string | null;
     instance_role: string;
     main_character_id: number | null;
+    default_map_id: string | null;
+    recent_map_ids: string | null;
     created_at: number;
     updated_at: number;
     last_seen_at: number | null;
@@ -60,6 +65,15 @@ export interface IdentityTables {
     expires_at: number;
     scopes: string;
   };
+  discord_bot: {
+    id: string;
+    token: string;
+    user_id: string;
+    name: string;
+    avatar_url: string | null;
+    error: string | null;
+    updated_at: number;
+  };
 }
 
 type AccountRow = IdentityTables['account'];
@@ -72,6 +86,8 @@ function toAccount(row: AccountRow): Account {
     avatarUrl: row.avatar_url,
     instanceRole: row.instance_role as InstanceRole,
     mainCharacterId: row.main_character_id === null ? null : Number(row.main_character_id),
+    defaultMapId: row.default_map_id,
+    recentMapIds: json.decode<string[]>(row.recent_map_ids) ?? [],
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
     lastSeenAt: row.last_seen_at === null ? null : Number(row.last_seen_at),
@@ -86,6 +102,8 @@ function fromAccount(a: Account): AccountRow {
     avatar_url: a.avatarUrl,
     instance_role: a.instanceRole,
     main_character_id: a.mainCharacterId ?? null,
+    default_map_id: a.defaultMapId ?? null,
+    recent_map_ids: json.encode(a.recentMapIds ?? []),
     created_at: a.createdAt,
     updated_at: a.updatedAt,
     last_seen_at: a.lastSeenAt,
@@ -154,6 +172,34 @@ export class KyselyAccountRepository implements AccountRepository {
   async touch(id: string, lastSeenAt: number): Promise<void> {
     await this.db.updateTable('account').set({ last_seen_at: lastSeenAt }).where('id', '=', id).execute();
   }
+
+  async setRecentMaps(id: string, recentMapIds: string[]): Promise<void> {
+    await this.db
+      .updateTable('account')
+      .set({ recent_map_ids: json.encode(recentMapIds) })
+      .where('id', '=', id)
+      .execute();
+  }
+
+  async search(text: string, limit: number): Promise<Account[]> {
+    const needle = text.toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`);
+    const rows = await this.db
+      .selectFrom('account')
+      .selectAll()
+      .where(sql<boolean>`lower(name) like ${`%${needle}%`} escape '\\'`)
+      .orderBy('name')
+      .limit(limit * 4)
+      .execute();
+    const t = text.toLowerCase();
+    return rows
+      .map(toAccount)
+      .sort(
+        (a, b) =>
+          Number(!a.name.toLowerCase().startsWith(t)) - Number(!b.name.toLowerCase().startsWith(t)) ||
+          a.name.localeCompare(b.name),
+      )
+      .slice(0, limit);
+  }
 }
 
 export class KyselySessionRepository implements SessionRepository {
@@ -188,6 +234,23 @@ export class KyselySessionRepository implements SessionRepository {
       lastSeenAt: Number(row.last_seen_at),
       userAgent: row.user_agent,
     };
+  }
+
+  async listForAccount(accountId: string): Promise<Session[]> {
+    const rows = await this.db
+      .selectFrom('session')
+      .selectAll()
+      .where('account_id', '=', accountId)
+      .orderBy('last_seen_at', 'desc')
+      .execute();
+    return rows.map((row) => ({
+      id: row.id,
+      accountId: row.account_id,
+      createdAt: Number(row.created_at),
+      expiresAt: Number(row.expires_at),
+      lastSeenAt: Number(row.last_seen_at),
+      userAgent: row.user_agent,
+    }));
   }
 
   async touch(id: string, lastSeenAt: number, expiresAt: number): Promise<void> {
@@ -254,6 +317,64 @@ export class KyselyDiscordLinkRepository implements DiscordLinkRepository {
       .values(row)
       .onConflict((oc) => oc.column('account_id').doUpdateSet(update))
       .execute();
+  }
+
+  async remove(accountId: string): Promise<void> {
+    await this.database
+      .db<IdentityTables>()
+      .deleteFrom('discord_link')
+      .where('account_id', '=', accountId)
+      .execute();
+  }
+}
+
+/** The instance's Discord bot; its token is sealed with the `discord-bot` key. */
+export class KyselyDiscordBotStore implements DiscordBotStore {
+  constructor(
+    private readonly database: Database,
+    private readonly box: SecretBox,
+  ) {}
+
+  private get db() {
+    return this.database.db<IdentityTables>();
+  }
+
+  async load(): Promise<{ token: string; user: DiscordBotUser; error: string | null } | null> {
+    const row = await this.db
+      .selectFrom('discord_bot')
+      .selectAll()
+      .where('id', '=', 'instance')
+      .executeTakeFirst();
+    if (!row) return null;
+    const token = this.box.open(row.token);
+    if (!token) return null;
+    return {
+      token,
+      user: { id: row.user_id, name: row.name, avatarUrl: row.avatar_url },
+      error: row.error,
+    };
+  }
+
+  async save(bot: { token: string; user: DiscordBotUser; error: string | null }): Promise<void> {
+    const row = {
+      id: 'instance',
+      token: this.box.seal(bot.token),
+      user_id: bot.user.id,
+      name: bot.user.name,
+      avatar_url: bot.user.avatarUrl,
+      error: bot.error,
+      updated_at: Date.now(),
+    };
+    const { id: _, ...update } = row;
+    await this.db
+      .insertInto('discord_bot')
+      .values(row)
+      .onConflict((oc) => oc.column('id').doUpdateSet(update))
+      .execute();
+  }
+
+  async clear(): Promise<void> {
+    await this.db.deleteFrom('discord_bot').execute();
   }
 }
 
@@ -379,5 +500,15 @@ export class KyselyCharacterRepository implements CharacterRepository {
       expiresAt: Number(row.expires_at),
       scopes: json.decode<string[]>(row.scopes) ?? [],
     };
+  }
+
+  async scopesOf(characterIds: readonly number[]): Promise<Map<number, string[]>> {
+    if (characterIds.length === 0) return new Map();
+    const rows = await this.db
+      .selectFrom('eve_character_token')
+      .select(['character_id', 'scopes'])
+      .where('character_id', 'in', [...characterIds])
+      .execute();
+    return new Map(rows.map((r) => [Number(r.character_id), json.decode<string[]>(r.scopes) ?? []]));
   }
 }

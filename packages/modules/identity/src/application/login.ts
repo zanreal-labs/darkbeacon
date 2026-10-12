@@ -1,11 +1,23 @@
-import { ConflictError, NotFoundError, ValidationError, type Clock, type UnitOfWork } from '@darkbeacon/core';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  requireAccount,
+  ValidationError,
+  type Actor,
+  type Clock,
+  type UnitOfWork,
+} from '@darkbeacon/core';
 import type { DevLoginRequest } from '@darkbeacon/shared';
 import type { Account } from '../domain/account.js';
 import type { PendingAuth } from '../domain/pending-auth.js';
 import { devCharacterId } from '../domain/rules.js';
+import type { AccountRepository } from '../ports/account-repository.js';
 import type { CharacterRepository } from '../ports/character-repository.js';
-import type { IdentityProvider } from '../ports/identity-provider.js';
+import type { DiscordGrant, IdentityProvider } from '../ports/identity-provider.js';
+import type { LoginPolicy } from '../ports/login-policy.js';
 import type { AccountService } from './accounts.js';
+import type { CharacterService } from './characters.js';
 import type { GuildRoleSync } from './guild-roles.js';
 import { asAuthFailure, beginPendingAuth, checkPendingAuth, requireConfigured } from './pending.js';
 import type { SessionService } from './sessions.js';
@@ -22,6 +34,9 @@ export interface DiscordLoginDeps {
   accounts: AccountService;
   guildRoles: GuildRoleSync;
   sessions: SessionService;
+  /** Without one, Discord is the login method. */
+  loginPolicy?: LoginPolicy;
+  accountRepository?: AccountRepository;
   clock: Clock;
   redirectUri: string;
 }
@@ -65,14 +80,122 @@ export class DiscordLogin {
         codeVerifier: pending.codeVerifier,
       }),
     );
-    const account = await this.deps.accounts.upsertDiscordAccount(grant.profile);
+    // With EVE sign-in, Discord opens only accounts it was connected to (keeping their names);
+    // it never creates one.
+    let account: Account;
+    if ((await this.deps.loginPolicy?.loginMethod()) === 'eve') {
+      const known = await this.deps.accountRepository?.findByDiscordId(grant.profile.id);
+      if (!known) {
+        throw new ForbiddenError(
+          'Sign in with EVE Online. Discord can be connected on your account page afterwards.',
+        );
+      }
+      account = known;
+    } else {
+      account = await this.deps.accounts.upsertDiscordAccount(grant.profile);
+    }
+    await this.saveGrant(account.id, grant);
+    const { token } = await this.deps.sessions.create(account.id, input.userAgent);
+    return { token, account, returnTo: pending.returnTo };
+  }
+
+  /** Starts connecting a Discord user to the signed-in account. */
+  async startConnect(actor: Actor | null, returnTo: unknown): Promise<{ url: string; pending: PendingAuth }> {
+    const account = requireAccount(actor);
+    const discord = requireConfigured(this.deps.discord, 'Discord');
+    const { pending, codeChallenge } = await beginPendingAuth(this.deps.clock, {
+      kind: 'discord-connect',
+      accountId: account.id,
+      returnTo,
+    });
+    const url = discord.authorizationUrl({
+      state: pending.state,
+      redirectUri: this.deps.redirectUri,
+      codeChallenge,
+    });
+    return { url, pending };
+  }
+
+  /** Finishes connecting: the Discord user joins the account that started the round trip. */
+  async completeConnect(
+    actor: Actor | null,
+    input: { code: string | undefined; state: string | undefined; pending: PendingAuth | null },
+  ): Promise<{ account: Account; returnTo: string }> {
+    const caller = requireAccount(actor);
+    const discord = requireConfigured(this.deps.discord, 'Discord');
+    const pending = checkPendingAuth(this.deps.clock, 'discord-connect', input.pending, input.state);
+    if (pending.accountId !== caller.id) throw new ForbiddenError('This was started by another account');
+    if (!input.code) throw new ValidationError('Discord did not return an authorization code');
+    const grant = await asAuthFailure(
+      discord.exchangeCode({
+        code: input.code,
+        redirectUri: this.deps.redirectUri,
+        codeVerifier: pending.codeVerifier,
+      }),
+    );
+    const account = await this.deps.accounts.connectDiscord(caller.id, grant.profile);
+    await this.saveGrant(account.id, grant);
+    return { account, returnTo: pending.returnTo };
+  }
+
+  private async saveGrant(accountId: string, grant: DiscordGrant): Promise<void> {
     try {
-      await this.deps.guildRoles.saveGrant(account.id, grant);
+      await this.deps.guildRoles.saveGrant(accountId, grant);
     } catch {
       // Roles are retried in the background; a Discord hiccup must not block the login.
     }
+  }
+}
+
+export interface EveLoginDeps {
+  characters: CharacterService;
+  accounts: AccountService;
+  sessions: SessionService;
+  loginPolicy: LoginPolicy;
+}
+
+/**
+ * Sign in with EVE Online (instances whose login method is `eve`). The rules, also in
+ * docs/decisions.md: the first sign-in of a character creates an account for it; characters
+ * linked while signed in join that account; signing in with any linked character (main or alt)
+ * opens its account; an unknown character signing in while signed out creates a new account.
+ */
+export class EveLogin {
+  constructor(private readonly deps: EveLoginDeps) {}
+
+  get configured(): boolean {
+    return this.deps.characters.enabled;
+  }
+
+  async start(returnTo: unknown): Promise<{ url: string; pending: PendingAuth }> {
+    await this.requireEveLogin();
+    return this.deps.characters.startSignIn(returnTo);
+  }
+
+  async complete(
+    actor: Actor | null,
+    input: {
+      code: string | undefined;
+      state: string | undefined;
+      pending: PendingAuth | null;
+      userAgent: string | null;
+    },
+  ): Promise<SignedIn & { created: boolean }> {
+    await this.requireEveLogin();
+    const result = await this.deps.characters.completeSignIn(input, {
+      signedInAccountId: actor?.kind === 'account' ? actor.id : null,
+      createAccount: (character) => this.deps.accounts.createForCharacter(character),
+    });
+    const account = await this.deps.accounts.find(result.accountId);
+    if (!account) throw new NotFoundError('Account');
     const { token } = await this.deps.sessions.create(account.id, input.userAgent);
-    return { token, account, returnTo: pending.returnTo };
+    return { token, account, returnTo: result.returnTo, created: result.created };
+  }
+
+  private async requireEveLogin(): Promise<void> {
+    if ((await this.deps.loginPolicy.loginMethod()) !== 'eve') {
+      throw new ForbiddenError('This instance signs people in with Discord');
+    }
   }
 }
 

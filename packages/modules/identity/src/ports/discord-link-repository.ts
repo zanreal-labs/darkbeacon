@@ -4,6 +4,7 @@ import type { DiscordLink } from '../domain/account.js';
 export interface DiscordLinkRepository {
   find(accountId: string): Promise<DiscordLink | null>;
   save(link: DiscordLink): Promise<void>;
+  remove(accountId: string): Promise<void>;
 }
 
 /**

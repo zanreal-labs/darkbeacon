@@ -8,14 +8,16 @@ import {
 } from '@darkbeacon/access';
 import { hasMapRole, type Clock, type EventLog, type UnitOfWork } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
-import { AccountService } from '@darkbeacon/identity';
+import { AccountService, DiscordBotService, EveDirectoryService } from '@darkbeacon/identity';
 import { isEventOfType } from '@darkbeacon/shared';
 import {
   KyselyAccessRuleRepository,
   KyselyInstanceSettingsRepository,
 } from '../../adapters/access/kysely-access.js';
+import { IdentitySubjectDirectory } from '../../adapters/access/subject-directory.js';
+import type { AppConfig } from '../../config/config.js';
 import { EventConsumers } from '../../platform/event-consumers.js';
-import { CLOCK, EVENT_LOG, MAP_ACCESS, UNIT_OF_WORK } from '../../platform/tokens.js';
+import { APP_CONFIG, CLOCK, EVENT_LOG, MAP_ACCESS, UNIT_OF_WORK } from '../../platform/tokens.js';
 import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
 import { AccessRulesController, InstanceSettingsController } from './access.controller.js';
 import { MapOwnershipRegistry } from './map-ownership.registry.js';
@@ -52,8 +54,28 @@ const RULES = 'access.AccessRuleRepository';
         uow: UnitOfWork,
         events: EventLog,
         clock: Clock,
-      ) => new AccessRules({ rules, access, uow, events, clock }),
-      inject: [RULES, AccessService, UNIT_OF_WORK, EVENT_LOG, CLOCK],
+        eve: EveDirectoryService,
+        accounts: AccountService,
+        bot: DiscordBotService,
+      ) =>
+        new AccessRules({
+          rules,
+          access,
+          uow,
+          events,
+          clock,
+          directory: new IdentitySubjectDirectory(eve, accounts, bot),
+        }),
+      inject: [
+        RULES,
+        AccessService,
+        UNIT_OF_WORK,
+        EVENT_LOG,
+        CLOCK,
+        EveDirectoryService,
+        AccountService,
+        DiscordBotService,
+      ],
     },
     {
       provide: InstanceSettingsService,
@@ -63,6 +85,7 @@ const RULES = 'access.AccessRuleRepository';
         uow: UnitOfWork,
         events: EventLog,
         clock: Clock,
+        config: AppConfig,
       ) =>
         new InstanceSettingsService({
           settings: new KyselyInstanceSettingsRepository(db),
@@ -70,8 +93,9 @@ const RULES = 'access.AccessRuleRepository';
           uow,
           events,
           clock,
+          discordConfigured: config.discord !== null,
         }),
-      inject: [Database, RULES, UNIT_OF_WORK, EVENT_LOG, CLOCK],
+      inject: [Database, RULES, UNIT_OF_WORK, EVENT_LOG, CLOCK, APP_CONFIG],
     },
   ],
   exports: [MAP_ACCESS, AccessService, MapOwnershipRegistry, InstanceSettingsService],

@@ -1,7 +1,7 @@
 /* Shared layout for the admin and map settings pages. */
 
 .tabs {
-  margin-bottom: var(--dbk-space-5);
+  margin-bottom: var(--dbk-space-2);
 }
 
 /* Key / value facts (version, database). */
@@ -19,7 +19,6 @@
   padding: var(--dbk-space-3);
   border: 1px solid var(--dbk-color-border);
   border-radius: var(--dbk-radius);
-  background: var(--dbk-color-bg-subtle);
 }
 
 .fact dt {
@@ -81,6 +80,92 @@
   flex-wrap: wrap;
   gap: var(--dbk-space-1);
   margin-top: var(--dbk-space-1);
+}
+
+/* Groups of options inside a card body, under a small heading. */
+.fieldset {
+  display: grid;
+  gap: var(--dbk-space-3);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.legend {
+  margin-bottom: var(--dbk-space-2);
+  padding: 0;
+  color: var(--dbk-color-text);
+  font-size: var(--dbk-font-size-small);
+  font-weight: 600;
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--dbk-space-2);
+}
+
+/* Where notifications go, once connected. */
+.target {
+  display: flex;
+  align-items: center;
+  gap: var(--dbk-space-3);
+  padding: var(--dbk-space-3);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+}
+
+/* The add-rule form: who, the picker (wide), the role. */
+.ruleGrid {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(220px, 2fr) minmax(150px, 1fr);
+  align-items: start;
+  gap: var(--dbk-space-4);
+}
+
+.ruleGrid:has(> :nth-child(4)) {
+  grid-template-columns: minmax(150px, 1fr) minmax(180px, 1.5fr) minmax(180px, 1.5fr) minmax(150px, 1fr);
+}
+
+.ruleWide {
+  grid-column: span 1;
+  align-self: end;
+}
+
+@media (max-width: 760px) {
+  .ruleGrid,
+  .ruleGrid:has(> :nth-child(4)) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.chipRemove {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  margin-right: -2px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.chipRemove:hover {
+  background: var(--dbk-color-surface-hover);
+}
+
+.chipRemove svg {
+  width: 11px;
+  height: 11px;
+}
+
+.botRow {
+  display: flex;
+  align-items: center;
+  gap: var(--dbk-space-3);
 }
 
 .rowNotes {
@@ -284,4 +369,9 @@
     width: 100%;
     justify-content: flex-end;
   }
+}
+
+/* A short control that would look lost at full width. */
+.narrow {
+  max-width: 320px;
 }

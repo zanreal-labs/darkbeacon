@@ -238,12 +238,16 @@ describe('InstanceSettingsService', () => {
       adminRoleIds: [],
       webhooksToPrivateNetworks: false,
       eventRetentionDays: null,
+      loginMethod: null,
+      defaultMapId: null,
     });
     expect(await service.update(admin, { adminGuildId: 'g1', adminRoleIds: ['r1', 'r1'] })).toEqual({
       adminGuildId: 'g1',
       adminRoleIds: ['r1'],
       webhooksToPrivateNetworks: false,
       eventRetentionDays: null,
+      loginMethod: null,
+      defaultMapId: null,
     });
     expect((await service.update(admin, {})).adminGuildId).toBe('g1');
     // A change is recorded on the audit stream with what it was before; no change, no record.
@@ -265,5 +269,39 @@ describe('InstanceSettingsService', () => {
     expect(await service.guildIds()).toEqual(['g1', 'g2']);
     expect(await service.grantsAdmin([{ guildId: 'g1', roleId: 'r1' }])).toBe(true);
     expect(await service.grantsAdmin([{ guildId: 'g2', roleId: 'r1' }])).toBe(false);
+
+    // With EVE sign-in, Discord roles no longer make anyone an admin.
+    await service.update(admin, { loginMethod: 'eve' });
+    expect(await service.loginMethod()).toBe('eve');
+    expect(await service.grantsAdmin([{ guildId: 'g1', roleId: 'r1' }])).toBe(false);
+  });
+
+  it('signs people in with EVE when Discord is not configured, else as chosen', async () => {
+    const rules = new MemoryRules();
+    const admin: Actor = { kind: 'account', id: 'a', instanceRole: 'admin' };
+    const withDiscord = new InstanceSettingsService({
+      settings: new MemorySettings(),
+      rules,
+      uow,
+      events: new Events(),
+      clock: new ManualClock(),
+    });
+    expect(await withDiscord.loginMethod()).toBe('discord');
+    await withDiscord.update(admin, { loginMethod: 'eve', defaultMapId: 'map-1' });
+    expect(await withDiscord.loginMethod()).toBe('eve');
+    expect((await withDiscord.current()).defaultMapId).toBe('map-1');
+
+    const noDiscord = new InstanceSettingsService({
+      settings: new MemorySettings(),
+      rules,
+      uow,
+      events: new Events(),
+      clock: new ManualClock(),
+      discordConfigured: false,
+    });
+    expect(await noDiscord.loginMethod()).toBe('eve');
+    await expect(noDiscord.update(admin, { loginMethod: 'discord' })).rejects.toMatchObject({
+      code: 'validation',
+    });
   });
 });
