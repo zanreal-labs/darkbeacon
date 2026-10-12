@@ -254,6 +254,9 @@ describeEachDialect('identity and access over HTTP', (t) => {
       expiredConnectionMinutes: 0,
       autoEol: true,
       staleSystemMinutes: 15,
+      mcpMode: 'off',
+      apiCorsOrigins: [],
+      publicMaps: true,
     });
     expect(
       (await bob.request('/api/admin/settings', { method: 'PATCH', json: { adminGuildId: 'x' } })).status,

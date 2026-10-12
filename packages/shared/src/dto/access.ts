@@ -79,6 +79,18 @@ export const InstanceSettingsDto = z.object({
    * tracked character in them, no lock and are not home; null never.
    */
   staleSystemMinutes: z.number().int().min(5).max(10_080).nullable().optional(),
+  /**
+   * The MCP endpoint for AI agents (`/mcp`): `off` (default), `authenticated` (API keys only) or
+   * `public` (also anonymous, read-only, for public maps that allow it). Maps narrow it further.
+   */
+  mcpMode: z.enum(['off', 'authenticated', 'public']).optional(),
+  /**
+   * Origins that may call the REST API from a browser (CORS) with an API key. Cookies are never
+   * accepted cross-origin; empty (default): no cross-origin access.
+   */
+  apiCorsOrigins: z.array(z.string()).optional(),
+  /** Whether map admins may make maps public (`/p/<token>`); on by default. */
+  publicMaps: z.boolean().optional(),
 });
 export type InstanceSettingsDto = z.infer<typeof InstanceSettingsDto>;
 
@@ -94,5 +106,18 @@ export const UpdateInstanceSettingsRequest = z.object({
   expiredConnectionMinutes: z.number().int().min(0).max(1440).nullable().optional(),
   autoEol: z.boolean().optional(),
   staleSystemMinutes: z.number().int().min(5).max(10_080).nullable().optional(),
+  mcpMode: z.enum(['off', 'authenticated', 'public']).optional(),
+  apiCorsOrigins: z
+    .array(
+      z
+        .string()
+        .regex(
+          /^https?:\/\/[A-Za-z0-9.-]+(:\d{1,5})?$/,
+          'expected an origin such as https://tools.example.com',
+        ),
+    )
+    .max(20)
+    .optional(),
+  publicMaps: z.boolean().optional(),
 });
 export type UpdateInstanceSettingsRequest = z.infer<typeof UpdateInstanceSettingsRequest>;

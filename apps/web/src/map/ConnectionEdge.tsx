@@ -135,8 +135,16 @@ export const ConnectionEdge = memo(function ConnectionEdge({
   const c = data.connection;
   const visual = edgeVisual(c, now);
   const inner = edgeInnerStyle(visual);
-  const { from, to } = floatingEnds(rectOf(sourceNode), rectOf(targetNode));
-  const path = `M ${from.x},${from.y} L ${to.x},${to.y}`;
+  const sourceRect = rectOf(sourceNode);
+  const targetRect = rectOf(targetNode);
+  const { from, to } = floatingEnds(sourceRect, targetRect);
+  // The line runs from centre to centre, under the opaque cards, so its layers of different
+  // widths never show a stepped cut where it meets a card; the label and bubbles still use the
+  // points on the borders.
+  const centre = (r: Rect) => ({ x: r.x + r.width / 2, y: r.y + r.height / 2 });
+  const a = centre(sourceRect);
+  const b = centre(targetRect);
+  const path = `M ${a.x},${a.y} L ${b.x},${b.y}`;
   const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
   const bubbles = visual.bubbles.map((end) => ({
     end,

@@ -44,7 +44,7 @@ describeEachDialect('mapping over HTTP and WebSocket', (t) => {
     const response = await fetch(`http://${base}${path}`, {
       method,
       headers: {
-        ...(user ? { authorization: `Bearer ${user}` } : {}),
+        ...(user ? { 'x-test-actor': user } : {}),
         ...(body === undefined ? {} : { 'content-type': 'application/json' }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -62,7 +62,7 @@ describeEachDialect('mapping over HTTP and WebSocket', (t) => {
     app = await createApp(config, { database: t.db, logger: false });
     // Stand-in for the identity module: the bearer token names the account.
     app.get(ActorResolverRegistry).use(async (req) => {
-      const match = /^Bearer (\w+)$/.exec(String(req.headers.authorization ?? ''));
+      const match = /^(\w+)$/.exec(String(req.headers['x-test-actor'] ?? ''));
       return match ? { kind: 'account', id: match[1]!, instanceRole: 'user' } : null;
     });
     await app.listen({ port: 0, host: '127.0.0.1' });
@@ -172,7 +172,7 @@ describeEachDialect('mapping over HTTP and WebSocket', (t) => {
     await call('POST', `${systems}/${SYSTEMS.c5}/signatures`, 'alice', { eveId: 'ABC-123' });
     await call('DELETE', `${systems}/${SYSTEMS.c5}`, 'alice');
 
-    const socket = new WebSocket(`ws://${base}/ws`, { headers: { authorization: 'Bearer alice' } });
+    const socket = new WebSocket(`ws://${base}/ws`, { headers: { 'x-test-actor': 'alice' } });
     const messages: ServerMessage[] = [];
     socket.on('message', (data) => messages.push(JSON.parse(String(data)) as ServerMessage));
     await new Promise((resolve, reject) => socket.once('open', resolve).once('error', reject));
@@ -194,7 +194,7 @@ describeEachDialect('mapping over HTTP and WebSocket', (t) => {
     expect((live[0]!.data as MapSystemDto).solarSystemId).toBe(SYSTEMS.c5);
 
     // Strangers cannot follow the map.
-    const stranger = new WebSocket(`ws://${base}/ws`, { headers: { authorization: 'Bearer bob' } });
+    const stranger = new WebSocket(`ws://${base}/ws`, { headers: { 'x-test-actor': 'bob' } });
     const refused: ServerMessage[] = [];
     stranger.on('message', (raw) => refused.push(JSON.parse(String(raw)) as ServerMessage));
     await new Promise((resolve) => stranger.once('open', resolve));

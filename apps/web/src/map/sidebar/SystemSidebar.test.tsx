@@ -85,6 +85,10 @@ const mapDto: MapDto = {
   ownerAccountId: 'acc',
   settings: { scopes: ['wormhole'] },
   labels: [{ id: 'l1', name: 'Staging', color: '#3b82f6', description: '' }],
+  systemLabels: [
+    { id: 'wh1', name: 'WH1', description: '' },
+    { id: 'wh2', name: 'WH2', description: 'Second hole' },
+  ],
   createdAt: 1,
   updatedAt: 1,
 };
@@ -192,6 +196,7 @@ function Sidebar({
         info={universe[solarSystemId]}
         universe={new Map(Object.values(universe).map((u) => [u.id, u]))}
         labels={mapDto.labels}
+        systemLabels={mapDto.systemLabels}
         state={full}
         can={mapPermissions('member')}
         store={store}
@@ -291,7 +296,7 @@ describe('SystemSidebar', () => {
     expect(within(local.querySelector('header')!).getByText('2')).toBeTruthy();
   });
 
-  it('edits tag, notes and labels in place', async () => {
+  it('edits labels, the custom label, tags and notes in place; no free-text tag', async () => {
     const patches: unknown[] = [];
     server.use(
       http.patch(
@@ -304,11 +309,29 @@ describe('SystemSidebar', () => {
     );
     const user = userEvent.setup();
     wrap(<Sidebar state={{}} />);
-    await user.type(screen.getByRole('textbox', { name: 'Tag' }), 'A1{Enter}');
+    expect(screen.queryByRole('textbox', { name: 'Tag' })).toBeNull();
+    // Labels come before Tags, each a row of its own.
+    const terms = [...document.querySelectorAll('dt')].map((d) => d.textContent);
+    expect(terms.indexOf('Labels')).toBeLessThan(terms.indexOf('Tags'));
+    const labels = screen.getByRole('group', { name: 'Labels' });
+    expect(
+      within(labels)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['WH1', 'WH2']);
+    await user.click(within(labels).getByRole('button', { name: 'WH2' }));
+    await user.type(screen.getByRole('textbox', { name: 'Custom label' }), 'bait{Enter}');
     await user.type(screen.getByRole('textbox', { name: 'Notes' }), 'Loki fleet in C3');
-    await user.click(screen.getByRole('button', { name: 'Staging' }));
+    await user.click(
+      within(screen.getByRole('group', { name: 'Tags' })).getByRole('button', { name: 'Staging' }),
+    );
     await waitFor(() =>
-      expect(patches).toEqual([{ tag: 'A1' }, { description: 'Loki fleet in C3' }, { labelIds: ['l1'] }]),
+      expect(patches).toEqual([
+        { systemLabelIds: ['wh2'] },
+        { customLabel: 'bait' },
+        { description: 'Loki fleet in C3' },
+        { labelIds: ['l1'] },
+      ]),
     );
   });
 

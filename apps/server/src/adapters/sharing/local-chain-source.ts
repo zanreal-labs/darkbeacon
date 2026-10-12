@@ -34,6 +34,8 @@ import {
   type UpdateSystemRequest,
 } from '@darkbeacon/shared';
 import {
+  labelIdsByName,
+  labelNamesById,
   pairKey,
   parsePair,
   passageKey,
@@ -78,7 +80,14 @@ export class LocalChainSources implements ChainSources {
     if (origin.instance !== LOCAL_INSTANCE) return null;
     const map = await this.deps.ports.maps.findById(origin.mapId);
     return map
-      ? { origin, name: map.name, slug: map.slug, kind: map.kind ?? 'standard', instanceName: null }
+      ? {
+          origin,
+          name: map.name,
+          slug: map.slug,
+          kind: map.kind ?? 'standard',
+          instanceName: null,
+          systemLabels: map.systemLabels,
+        }
       : null;
   }
 
@@ -121,12 +130,13 @@ export class LocalChainSource implements ChainSource {
 
     if (want.system) {
       const times = await ports.stamps.fieldTimes(mapId, 'system');
+      const systemLabels = (await ports.maps.findById(mapId))?.systemLabels ?? [];
       for (const system of systems) {
         const key = String(system.solarSystemId);
         if (!want.system.has(key) && !want.system.all) continue;
         entries.push(
           system.visible
-            ? systemEntry(system, times.get(key) ?? {})
+            ? systemEntry(system, times.get(key) ?? {}, systemLabels)
             : { kind: 'system', key, state: 'absent' },
         );
       }
@@ -276,9 +286,11 @@ export class LocalChainSource implements ChainSource {
         );
         return;
       }
-      case 'system.update':
-        await systems.update(actor, mapId, Number(command.key), systemRequest(command.fields));
+      case 'system.update': {
+        const systemLabels = (await ports.maps.findById(mapId))?.systemLabels ?? [];
+        await systems.update(actor, mapId, Number(command.key), systemRequest(command.fields, systemLabels));
         return;
+      }
       case 'system.remove':
         await systems.remove(actor, mapId, Number(command.key));
         return;
@@ -479,7 +491,10 @@ function plan(
 
 const at = (times: FieldTimes, field: string, born: number) => times[field] ?? born;
 
-function systemEntry(s: MapSystem, times: FieldTimes): ChainEntry {
+/** The map's Labels, to name the ones a system has (they cross by name). */
+type LabelList = ReadonlyArray<{ id: string; name: string }>;
+
+function systemEntry(s: MapSystem, times: FieldTimes, systemLabels: LabelList): ChainEntry {
   const born = s.createdAt;
   return {
     kind: 'system',
@@ -493,6 +508,8 @@ function systemEntry(s: MapSystem, times: FieldTimes): ChainEntry {
       customName: stamp(s.customName, at(times, 'customName', born)),
       notes: stamp(s.description, at(times, 'description', born)),
       label: stamp(s.temporaryName, at(times, 'temporaryName', born)),
+      systemLabels: stamp(labelNamesById(s.systemLabelIds, systemLabels), at(times, 'systemLabelIds', born)),
+      customLabel: stamp(s.customLabel, at(times, 'customLabel', born)),
       labelIds: stamp(s.labelIds, at(times, 'labelIds', born)),
       locked: stamp(s.locked, at(times, 'locked', born)),
     },
@@ -572,13 +589,16 @@ function characterEntry(c: CharacterPresenceDto): ChainEntry {
 
 // --- writing helpers ----------------------------------------------------------------------------
 
-function systemRequest(f: Record<string, unknown>): UpdateSystemRequest {
+function systemRequest(f: Record<string, unknown>, systemLabels: LabelList): UpdateSystemRequest {
   const r: UpdateSystemRequest = {};
   if (typeof f.status === 'string') r.status = f.status as MapSystem['status'];
   if (f.tag !== undefined) r.tag = f.tag as string | null;
   if (f.customName !== undefined) r.customName = f.customName as string | null;
   if (typeof f.notes === 'string') r.description = f.notes;
   if (f.label !== undefined) r.temporaryName = f.label as string | null;
+  // Names this map has no Label of drop out.
+  if (Array.isArray(f.systemLabels)) r.systemLabelIds = labelIdsByName(f.systemLabels, systemLabels);
+  if (f.customLabel !== undefined) r.customLabel = f.customLabel as string | null;
   if (Array.isArray(f.labelIds)) r.labelIds = f.labelIds as string[];
   if (typeof f.locked === 'boolean') r.locked = f.locked;
   return r;

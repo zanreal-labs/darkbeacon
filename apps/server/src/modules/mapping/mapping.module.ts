@@ -155,6 +155,8 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
     BookmarkNumberUseCases,
     PassageUseCases,
     SweeperRuntime,
+    ConnectionIntelQuery,
+    MergedWriteRouter,
   ],
 })
 export class MappingModule implements OnModuleInit, OnApplicationBootstrap {

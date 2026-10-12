@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   ManualClock,
   type Actor,
+  type CredentialGrant,
   type DomainEvent,
   type EventLog,
   type NewEvent,
@@ -64,7 +65,22 @@ class Owners implements MapOwnership {
   mapsOwnedBy(accountId: string) {
     return Promise.resolve([...this.owners].filter(([, o]) => o === accountId).map(([m]) => m));
   }
+  allMaps() {
+    return Promise.resolve([...this.owners.keys()]);
+  }
 }
+
+const grant = (over: Partial<CredentialGrant> = {}): CredentialGrant => ({
+  credentialId: 'k',
+  name: 'Key',
+  kind: 'pat',
+  channel: 'api',
+  scopes: [],
+  readOnly: false,
+  allMaps: null,
+  maps: {},
+  ...over,
+});
 
 class Events implements EventLog {
   readonly events: DomainEvent[] = [];
@@ -141,13 +157,53 @@ describe('access', () => {
       expect(await service.mapsFor(account('pilot'))).toEqual([]);
     });
 
-    it('scopes api tokens to their map and treats system actors as admin', async () => {
-      const token: Actor = { kind: 'apiToken', id: 't', mapId: 'm1', role: 'viewer' };
+    it('gives service keys their own roles, capped by their scopes, and treats system actors as admin', async () => {
+      const token: Actor = {
+        kind: 'apiToken',
+        id: 't',
+        instanceRole: 'user',
+        roles: { allMaps: null, maps: { m1: 'manager' } },
+        grant: grant({ kind: 'svc', allMaps: 'viewer' }),
+      };
       expect(await service.roleOf(token, 'm1')).toBe('viewer');
       expect(await service.roleOf(token, 'm2')).toBeNull();
       expect(await service.mapsFor(token)).toEqual([{ mapId: 'm1', role: 'viewer' }]);
+      const everywhere: Actor = {
+        ...token,
+        roles: { allMaps: 'member', maps: {} },
+        grant: grant({ kind: 'svc', allMaps: 'admin' }),
+      } as Actor;
+      expect(await service.mapsFor(everywhere)).toEqual([
+        { mapId: 'm1', role: 'member' },
+        { mapId: 'm2', role: 'member' },
+      ]);
       expect(await service.roleOf({ kind: 'system', id: 'tracking' }, 'm2')).toBe('admin');
       expect(await service.mapsFor({ kind: 'plugin', id: 'p' })).toEqual([]);
+    });
+
+    it('lets a personal token only narrow its owner', async () => {
+      const owner = account('owner');
+      const via = (g: Partial<CredentialGrant>): Actor => ({ ...owner, grant: grant(g) }) as Actor;
+      // The owner is admin on m1 (its own map) and has nothing on m2.
+      expect(await service.roleOf(via({ allMaps: 'viewer' }), 'm1')).toBe('viewer');
+      expect(await service.roleOf(via({ maps: { m1: 'member' } }), 'm1')).toBe('member');
+      expect(await service.roleOf(via({ maps: { m1: 'member' } }), 'm2')).toBeNull();
+      expect(await service.mapsFor(via({ maps: { m1: 'member' } }))).toEqual([
+        { mapId: 'm1', role: 'member' },
+      ]);
+      // A cap above the owner's own role changes nothing: the pilot is only a viewer.
+      await accessRules.add(owner, 'm1', { subjectKind: 'account', subjectId: 'pilot', role: 'viewer' });
+      const pilot: Actor = { ...account('pilot'), grant: grant({ allMaps: 'admin' }) } as Actor;
+      expect(await service.roleOf(pilot, 'm1')).toBe('viewer');
+      expect(await service.roleOf(pilot, 'm2')).toBeNull();
+    });
+
+    it('lets a public visitor view only the map it came through', async () => {
+      const visitor: Actor = { kind: 'public', id: 'share', mapId: 'm1' };
+      expect(await service.roleOf(visitor, 'm1')).toBe('viewer');
+      expect(await service.roleOf(visitor, 'm2')).toBeNull();
+      expect(await service.mapsFor(visitor)).toEqual([{ mapId: 'm1', role: 'viewer' }]);
+      await expect(service.require(visitor, 'm1', 'member')).rejects.toMatchObject({ code: 'forbidden' });
     });
 
     it('hides maps the actor cannot view and forbids what it may not do', async () => {
@@ -243,6 +299,9 @@ describe('InstanceSettingsService', () => {
       expiredConnectionMinutes: 0,
       autoEol: true,
       staleSystemMinutes: 15,
+      mcpMode: 'off',
+      apiCorsOrigins: [],
+      publicMaps: true,
     });
     expect(await service.update(admin, { adminGuildId: 'g1', adminRoleIds: ['r1', 'r1'] })).toEqual({
       adminGuildId: 'g1',
@@ -254,6 +313,9 @@ describe('InstanceSettingsService', () => {
       expiredConnectionMinutes: 0,
       autoEol: true,
       staleSystemMinutes: 15,
+      mcpMode: 'off',
+      apiCorsOrigins: [],
+      publicMaps: true,
     });
     expect((await service.update(admin, {})).adminGuildId).toBe('g1');
     // A change is recorded on the audit stream with what it was before; no change, no record.

@@ -17,7 +17,7 @@ describeEachDialect('map preferences and bookmark templates over HTTP', (t) => {
     const response = await fetch(`http://${base}${path}`, {
       method,
       headers: {
-        ...(user ? { authorization: `Bearer ${user}` } : {}),
+        ...(user ? { 'x-test-actor': user } : {}),
         ...(body === undefined ? {} : { 'content-type': 'application/json' }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -30,7 +30,7 @@ describeEachDialect('map preferences and bookmark templates over HTTP', (t) => {
     const config = { ...parseEnv({ NODE_ENV: 'test' }), secretKey: 'x'.repeat(32) };
     app = await createApp(config, { database: t.db, logger: false });
     app.get(ActorResolverRegistry).use(async (req) => {
-      const match = /^Bearer (\w+)$/.exec(String(req.headers.authorization ?? ''));
+      const match = /^(\w+)$/.exec(String(req.headers['x-test-actor'] ?? ''));
       return match ? { kind: 'account', id: match[1]!, instanceRole: 'user' } : null;
     });
     await app.listen({ port: 0, host: '127.0.0.1' });

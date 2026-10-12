@@ -23,6 +23,7 @@ import {
 } from '@darkbeacon/shared';
 import {
   connectionFields,
+  labelNamesById,
   refusedFields,
   SCOPE_WORDS,
   scopeOfField,
@@ -87,9 +88,10 @@ export class ChainWrites {
       await this.removeSystem(who, mapId, solarSystemId);
       return;
     }
-    const fields = systemFields(request);
+    // Labels cross by name: the merged map's own names of the ones picked.
+    const fields = systemFields(request, (ids) => labelNamesById(ids, map.info.systemLabels ?? []));
     if (composite) {
-      // Notes, labels and locks of a composite are its own, kept over what its sources say.
+      // Notes, Tags and locks of a composite are its own, kept over what its sources say.
       const own: Partial<{ notes: string | null; labelIds: string[]; locked: boolean }> = {};
       if ('notes' in fields) own.notes = (fields.notes as string) || null;
       if ('labelIds' in fields) own.labelIds = fields.labelIds as string[];

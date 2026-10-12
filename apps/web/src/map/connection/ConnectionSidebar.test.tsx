@@ -242,6 +242,7 @@ const mapDto: MapDto = {
   ownerAccountId: 'acc',
   settings: { scopes: ['wormhole'] },
   labels: [],
+  systemLabels: [],
   createdAt: 1,
   updatedAt: 1,
 };

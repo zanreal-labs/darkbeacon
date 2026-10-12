@@ -10,7 +10,7 @@ export type FeedSelector =
 /** A map event's meaning for the maps that merge it. */
 export type FeedSignal =
   | { kind: 'objects'; selectors: FeedSelector[] }
-  /** The map's name or settings changed: merged maps show its name. */
+  /** The map's name, settings or Labels changed: merged maps show its name and label names. */
   | { kind: 'renamed' }
   | { kind: 'removed' }
   | null;
@@ -79,7 +79,9 @@ export function feedSignal(event: Pick<DomainEvent, 'type' | 'data'>): FeedSigna
     case 'character.ship_changed':
     case 'character.online_changed':
       return { kind: 'objects', selectors: [{ kind: 'character', key: String(d.characterId) }] };
+    // Labels cross by name: a renamed or removed one reads differently everywhere.
     case 'map.settings_changed':
+    case 'system_labels.changed':
       return { kind: 'renamed' };
     case 'map.removed':
       return { kind: 'removed' };

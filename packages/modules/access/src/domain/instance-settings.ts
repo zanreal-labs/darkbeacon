@@ -14,6 +14,9 @@ export const DEFAULT_INSTANCE_SETTINGS: InstanceSettings = {
   expiredConnectionMinutes: 0,
   autoEol: true,
   staleSystemMinutes: 15,
+  mcpMode: 'off',
+  apiCorsOrigins: [],
+  publicMaps: true,
 };
 
 /** True when one of the account's guild roles is an admin role on the configured admin guild. */

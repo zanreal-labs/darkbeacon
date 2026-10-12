@@ -15,6 +15,7 @@ export const ApiErrorCode = z.enum([
   'bad_request',
   'internal',
   'unavailable',
+  'rate_limited',
 ]);
 export type ApiErrorCode = z.infer<typeof ApiErrorCode>;
 

@@ -64,7 +64,7 @@ export class SweeperRuntime implements OnApplicationBootstrap, OnModuleDestroy {
         autoEol: current.autoEol ?? true,
         staleSystemMinutes: current.staleSystemMinutes ?? null,
       };
-      for (const mapId of await this.ports.maps.listIds()) {
+      for (const mapId of await this.ports.maps.allIds()) {
         try {
           const done = await this.audit.run(
             { channel: { kind: 'system', id: 'sweeper' }, origin: undefined },

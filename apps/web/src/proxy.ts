@@ -21,7 +21,13 @@ function redirectTo(request: NextRequest, path: string): NextResponse {
 }
 
 /** The app's pages; anything else (robots.txt, scanners probing /wp-login.php) is a plain 404. */
-const PAGE = /^\/(?:account|admin|maps|dev\/components)?\/?$|^\/m\/[^/]+\/?$/;
+const PAGE = /^\/(?:account|admin|maps|dev\/components|oauth\/authorize)?\/?$|^\/m\/[^/]+\/?$/;
+
+/**
+ * Public maps (`/p/<token>`): for anyone, signed in or not. Never a demo sign-in, never a redirect
+ * to the sign-in page, and the address (the secret) never leaves as a referrer.
+ */
+const PUBLIC_PAGE = /^\/p\/[^/]+\/?$/;
 
 /**
  * Where `/` goes for this session (the account's star, the instance default, the last opened
@@ -120,6 +126,11 @@ async function demoSignIn(request: NextRequest): Promise<string[] | null> {
  */
 export async function proxy(request: NextRequest): Promise<NextResponse> {
   const { pathname, searchParams } = request.nextUrl;
+  if (PUBLIC_PAGE.test(pathname)) {
+    const response = NextResponse.next();
+    response.headers.set('referrer-policy', 'no-referrer');
+    return response;
+  }
   // Map settings were a page; they open over the map now. Old links and bookmarks still work.
   const moved = movedSettingsPath(pathname, searchParams);
   if (moved) return redirectTo(request, moved);

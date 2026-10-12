@@ -51,12 +51,15 @@ export const SCOPE_TEXT: Record<ShareScope, { label: string; hint: string }> = {
   },
   connectionStatus: { label: 'Connection status', hint: 'Mass, time left, ship size, bubbles and danger.' },
   signatures: { label: 'Signatures', hint: 'What has been scanned in each system.' },
-  intel: { label: 'System intel', hint: 'Status, tags, custom names and notes of systems.' },
+  intel: { label: 'System intel', hint: 'Status, custom names and notes of systems.' },
   characters: {
     label: 'Characters',
     hint: 'Where your tracked pilots are, their ships and whether they are online.',
   },
-  labels: { label: 'Bookmark labels', hint: 'The bookmark names you gave systems.' },
+  labels: {
+    label: 'Labels',
+    hint: 'Labels like WH1 (matched by name), custom labels and temporary names of systems. Tags stay on your map.',
+  },
 };
 
 const LEVELS: { value: ShareLevel; label: string }[] = [

@@ -11,7 +11,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { NotFoundError, requireAccount, ValidationError, type Actor } from '@darkbeacon/core';
+import { NotFoundError, requirePrincipal, ValidationError, type Actor } from '@darkbeacon/core';
 import { fitMass, type UniverseCatalog } from '@darkbeacon/mapping';
 import {
   EveId,
@@ -50,7 +50,7 @@ export class UniverseController {
     @CurrentActor() actor: Actor | null,
     @Query(new ZodPipe(UniverseSearchQuery)) query: UniverseSearchQuery,
   ): UniverseSystemDto[] {
-    requireAccount(actor);
+    requirePrincipal(actor);
     return this.catalog.searchSystems(query.q, query.limit);
   }
 
@@ -59,7 +59,7 @@ export class UniverseController {
     @CurrentActor() actor: Actor | null,
     @Query(new ZodPipe(UniverseLookupQuery)) query: UniverseLookupQuery,
   ): UniverseSystemDto[] {
-    requireAccount(actor);
+    requirePrincipal(actor);
     return query.ids.flatMap((id) => this.catalog.getSystem(id) ?? []);
   }
 
@@ -68,13 +68,13 @@ export class UniverseController {
     @CurrentActor() actor: Actor | null,
     @Query(new ZodPipe(ShipSearchQuery)) query: ShipSearchQuery,
   ): ShipTypeDto[] {
-    requireAccount(actor);
+    requirePrincipal(actor);
     return this.catalog.searchShips(query.q, query.limit);
   }
 
   @Get(nestPath(routes.universe.shipCatalog.path))
   shipCatalog(@CurrentActor() actor: Actor | null): ShipCatalogDto {
-    requireAccount(actor);
+    requirePrincipal(actor);
     return {
       modifiers: this.catalog.massModifiers(),
       suggested: SUGGESTED_SHIPS.flatMap((id) => this.catalog.ship(id) ?? []),
@@ -87,7 +87,7 @@ export class UniverseController {
     @CurrentActor() actor: Actor | null,
     @Body(new ZodPipe(FitMassRequest)) body: FitMassRequest,
   ): FitMassDto {
-    requireAccount(actor);
+    requirePrincipal(actor);
     const weighed = fitMass(body.fit, this.catalog);
     if (!weighed) throw new ValidationError('Not a fit this server knows: paste it as the game copies it');
     return weighed;
@@ -98,7 +98,7 @@ export class UniverseController {
     @CurrentActor() actor: Actor | null,
     @Param('shipTypeId', new ZodPipe(z.coerce.number().pipe(EveId))) shipTypeId: number,
   ): ShipTypeDto {
-    requireAccount(actor);
+    requirePrincipal(actor);
     const ship = this.catalog.ship(shipTypeId);
     if (!ship) throw new NotFoundError('Ship');
     return ship;
@@ -106,7 +106,7 @@ export class UniverseController {
 
   @Get(nestPath(routes.universe.wormholes.path))
   wormholes(@CurrentActor() actor: Actor | null): WormholeCatalogDto {
-    requireAccount(actor);
+    requirePrincipal(actor);
     return { types: this.catalog.wormholeTypes(), hullClasses: this.catalog.hullClasses() };
   }
 
@@ -115,7 +115,7 @@ export class UniverseController {
     @CurrentActor() actor: Actor | null,
     @Param('solarSystemId', new ZodPipe(z.coerce.number().pipe(EveId))) solarSystemId: number,
   ): UniverseSystemDto {
-    requireAccount(actor);
+    requirePrincipal(actor);
     const system = this.catalog.getSystem(solarSystemId);
     if (!system) throw new NotFoundError('Solar system');
     return system;
