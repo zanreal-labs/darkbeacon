@@ -29,7 +29,7 @@ export interface AuditDescriptor {
 
 export type AuditedEventType = EventType | AuditEventType;
 
-const STAMPS = ['createdAt', 'updatedAt', 'mapId'] as const;
+const STAMPS = ['createdAt', 'updatedAt', 'mapId', 'provenance'] as const;
 const str = (v: unknown) => String(v);
 const num = (v: unknown) => (typeof v === 'number' ? v : null);
 const ref = (kind: string, id: unknown) => (id === null || id === undefined ? [] : [`${kind}:${str(id)}`]);
@@ -58,6 +58,17 @@ const subject = (d: Fields) => num(d.characterId);
 const change = (before: unknown, after: unknown) => ({ before, after });
 
 const MAP_ENTITY: Partial<AuditDescriptor> = { ignore: ['createdAt', 'updatedAt'] };
+
+const originMap = (value: unknown) => asFields(value)?.mapId;
+/** A share between two maps: found in both maps' histories. */
+const SHARE: Omit<AuditDescriptor, 'op'> = {
+  entity: byId('share'),
+  refs: (d, b) => [
+    ...ref('map', originMap(d.source) ?? originMap(b?.source)),
+    ...ref('map', originMap(d.target) ?? originMap(b?.target)),
+  ],
+  ignore: ['updatedAt', 'offeredAt', 'acceptedAt', 'id', 'source', 'target'],
+};
 
 /**
  * The catalogue: event type -> descriptor. A `Record` over every type of `EventPayloads` and
@@ -157,6 +168,17 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
     op: 'update',
     entity: () => ({ kind: 'labels', id: 'map' }),
     state: (d) => ({ labels: d.labels }),
+  },
+  'map.share.offered': { ...SHARE, op: 'create' },
+  'map.share.accepted': { ...SHARE, op: 'update' },
+  'map.share.changed': { ...SHARE, op: 'update' },
+  'map.share.revoked': { ...SHARE, op: 'delete' },
+  'map.sources_changed': {
+    op: 'update',
+    entity: () => ({ kind: 'sources', id: 'map' }),
+    state: (d) => ({
+      sources: Array.isArray(d.sources) ? d.sources.map((s: Fields) => str(s.name)) : [],
+    }),
   },
   'routes.exits_changed': {
     op: 'update',

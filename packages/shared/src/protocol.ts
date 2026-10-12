@@ -4,6 +4,7 @@ import type { CharacterPresenceDto } from './dto/tracking.js';
 import { PresencePeerDto, PresenceStatePatch } from './dto/presence.js';
 import type { ConnectionDto, MapDto, MapSystemDto, SignatureDto } from './dto/mapping.js';
 import type { MapExitDto } from './dto/routing.js';
+import type { MapSourceDto } from './dto/sharing.js';
 
 /**
  * WebSocket protocol at /ws. Commands go over REST; their results arrive here as events.
@@ -84,4 +85,10 @@ export interface MapSnapshot {
   characters?: CharacterPresenceDto[];
   /** Ways out of the chain (shortest mode, trade and map hubs); see `routes.exits_changed`. */
   exits?: MapExitDto[];
+  /**
+   * Present on maps that merge other maps (composites, and maps with accepted shares): the maps
+   * merged in. Their systems, connections and signatures are then the merged ones, each with a
+   * `provenance`, and the map's own (unmerged) entity events are to be ignored.
+   */
+  sources?: MapSourceDto[];
 }

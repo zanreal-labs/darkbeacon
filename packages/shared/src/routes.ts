@@ -542,6 +542,131 @@ export const routes = {
     }),
   },
 
+  /** Shares between maps: a source map's admins offer, the target map's admins accept. */
+  sharing: {
+    list: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/shares',
+      auth: 'account',
+      mapRole: 'admin',
+      response: dto.MapSharesDto,
+    }),
+    offer: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/shares',
+      auth: 'account',
+      mapRole: 'admin',
+      body: dto.OfferShareRequest,
+      response: dto.MapShareDto,
+    }),
+    update: route({
+      method: 'PATCH',
+      path: '/api/maps/:mapId/shares/:shareId',
+      auth: 'account',
+      mapRole: 'admin',
+      body: dto.UpdateShareRequest,
+      response: dto.MapShareDto,
+    }),
+    accept: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/shares/:shareId/accept',
+      auth: 'account',
+      mapRole: 'admin',
+      body: dto.AcceptShareRequest,
+      response: dto.MapShareDto,
+    }),
+    /** Revokes a share or declines an offer (either side's admins). */
+    revoke: route({
+      method: 'DELETE',
+      path: '/api/maps/:mapId/shares/:shareId',
+      auth: 'account',
+      mapRole: 'admin',
+    }),
+  },
+
+  /**
+   * Changes on a map that merges other maps: written to its own objects and to the read-write
+   * sources holding the object, never past what the share's scopes let the map see. Same bodies
+   * as the plain map routes; positions are the merged map's own layout.
+   */
+  chain: {
+    addSystem: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/chain/systems',
+      auth: 'account',
+      mapRole: 'member',
+      body: dto.AddSystemRequest,
+    }),
+    updateSystem: route({
+      method: 'PATCH',
+      path: '/api/maps/:mapId/chain/systems/:solarSystemId',
+      auth: 'account',
+      mapRole: 'member',
+      body: dto.UpdateSystemRequest,
+    }),
+    moveSystems: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/chain/systems/positions',
+      auth: 'account',
+      mapRole: 'member',
+      body: dto.MoveSystemsRequest,
+    }),
+    removeSystem: route({
+      method: 'DELETE',
+      path: '/api/maps/:mapId/chain/systems/:solarSystemId',
+      auth: 'account',
+      mapRole: 'member',
+    }),
+    addConnection: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/chain/connections',
+      auth: 'account',
+      mapRole: 'member',
+      body: dto.AddConnectionRequest,
+    }),
+    updateConnection: route({
+      method: 'PATCH',
+      path: '/api/maps/:mapId/chain/connections/:connectionId',
+      auth: 'account',
+      mapRole: 'member',
+      body: dto.UpdateConnectionRequest,
+    }),
+    removeConnection: route({
+      method: 'DELETE',
+      path: '/api/maps/:mapId/chain/connections/:connectionId',
+      auth: 'account',
+      mapRole: 'member',
+    }),
+    addSignature: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/chain/systems/:solarSystemId/signatures',
+      auth: 'account',
+      mapRole: 'member',
+      body: dto.AddSignatureRequest,
+    }),
+    pasteSignatures: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/chain/systems/:solarSystemId/signatures/paste',
+      auth: 'account',
+      mapRole: 'member',
+      body: dto.PasteSignaturesRequest,
+      response: dto.PasteSignaturesResult,
+    }),
+    updateSignature: route({
+      method: 'PATCH',
+      path: '/api/maps/:mapId/chain/signatures/:signatureId',
+      auth: 'account',
+      mapRole: 'member',
+      body: dto.UpdateSignatureRequest,
+    }),
+    removeSignature: route({
+      method: 'DELETE',
+      path: '/api/maps/:mapId/chain/signatures/:signatureId',
+      auth: 'account',
+      mapRole: 'member',
+    }),
+  },
+
   access: {
     list: route({
       method: 'GET',

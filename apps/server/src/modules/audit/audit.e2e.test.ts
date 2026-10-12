@@ -336,7 +336,7 @@ describeEachDialect('audit trail over HTTP', (t) => {
     expect(csv.headers.get('content-disposition')).toMatch(/attachment; filename="instance-audit-.*\.csv"/);
     const lines = (await csv.text()).trim().split('\r\n');
     expect(lines[0]).toBe(
-      'time,type,map,person,character,channel,entity,changes,removed,country,userAgent,revertOf,id',
+      'time,type,map,person,character,channel,entity,changes,removed,country,userAgent,revertOf,via,id',
     );
     expect(lines.length).toBe(1 + entries.filter((e) => e.type.startsWith('auth.')).length);
     const json = (await (

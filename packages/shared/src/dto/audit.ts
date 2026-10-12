@@ -36,6 +36,10 @@ export type AuditFieldChange = z.infer<typeof AuditFieldChange>;
 export const AuditOp = z.enum(['create', 'update', 'delete', 'activity']);
 export type AuditOp = z.infer<typeof AuditOp>;
 
+/** A map named in an audit entry; `instance` is `local` for this instance. */
+export const AuditMapRefDto = z.object({ instance: z.string(), mapId: Id, name: z.string() });
+export type AuditMapRefDto = z.infer<typeof AuditMapRefDto>;
+
 /** One entry of a history: an event of the log with its audit record. */
 export const AuditEntryDto = z.object({
   id: Id,
@@ -59,6 +63,10 @@ export const AuditEntryDto = z.object({
   revertOf: Id.nullable(),
   /** A later change that reverted this one. */
   revertedBy: Id.nullable(),
+  /** Made on a map that merges this map and written back here ("via Alliance chain"). */
+  via: AuditMapRefDto.nullable().optional(),
+  /** On a map that merges others: the source map this change came from. */
+  mergedFrom: AuditMapRefDto.nullable().optional(),
   /** The server knows how to revert this kind of change (it still refuses when it changed since). */
   revertible: z.boolean(),
   /** False for events written before the audit trail existed (no diff, actor names unknown). */

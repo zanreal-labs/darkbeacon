@@ -54,6 +54,22 @@ const signature = {
   createdAt: 1,
   updatedAt: 1,
 };
+const share = {
+  id: 'sh1',
+  source: { instance: 'local', mapId: 'm' },
+  sourceName: 'Corp A',
+  target: { instance: 'local', mapId: 'm2' },
+  targetName: 'Alliance chain',
+  sourceInstanceName: null,
+  level: 'read',
+  offeredScopes: ['topology'],
+  scopes: ['topology'],
+  status: 'offered',
+  hidden: false,
+  offeredAt: 1,
+  acceptedAt: null,
+  updatedAt: 1,
+};
 const presence = {
   characterId: 9,
   accountId: 'a',
@@ -143,6 +159,14 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
   'labels.changed': {
     data: { labels: [{ id: 'l', name: 'Home', color: '#22aa66', description: '' }] },
     before: { labels: [] },
+  },
+  'map.share.offered': { data: share },
+  'map.share.accepted': { data: { ...share, status: 'active', acceptedAt: 2 }, before: share },
+  'map.share.changed': { data: { ...share, level: 'read-write' }, before: share },
+  'map.share.revoked': { data: share, before: share },
+  'map.sources_changed': {
+    data: { sources: [{ id: 'sh1', name: 'Corp A' }] },
+    before: { sources: [] },
   },
   'routes.exits_changed': {
     data: {

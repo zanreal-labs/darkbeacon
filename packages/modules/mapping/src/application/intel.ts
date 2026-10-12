@@ -9,14 +9,18 @@ export class ConnectionIntelQuery extends MappingUseCases {
   async list(actor: Actor | null, mapId: string): Promise<ConnectionIntelDto[]> {
     await this.authorize(actor, mapId, 'viewer');
     const { universe } = this.ports;
+    // A merged chain has no passages of its own: who jumped stays with the source maps.
+    const merged = await this.ports.overlay?.view(mapId);
     const visible = new Set(
-      (await this.ports.systems.list(mapId)).filter((s) => s.visible).map((s) => s.solarSystemId),
+      (merged?.systems ?? (await this.ports.systems.list(mapId)))
+        .filter((s) => s.visible)
+        .map((s) => s.solarSystemId),
     );
-    const connections = (await this.ports.connections.list(mapId)).filter(
+    const connections = (merged?.connections ?? (await this.ports.connections.list(mapId))).filter(
       (c) => visible.has(c.source) && visible.has(c.target),
     );
-    const signatures = await this.ports.signatures.listForMap(mapId);
-    const passages = await this.ports.passages.listForMap(mapId);
+    const signatures = merged?.signatures ?? (await this.ports.signatures.listForMap(mapId));
+    const passages = merged ? [] : await this.ports.passages.listForMap(mapId);
     const now = this.ports.clock.now();
     return connections
       .map((connection) =>

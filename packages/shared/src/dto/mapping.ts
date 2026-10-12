@@ -30,10 +30,18 @@ export const Slug = z
   .max(48)
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'lowercase letters, digits and dashes');
 
+/**
+ * `standard`: a map of its own systems (it may merge shared maps too); `composite`: a map with no
+ * objects of its own that merges other maps (an alliance chain). Absent means `standard`.
+ */
+export const MapKind = z.enum(['standard', 'composite']);
+export type MapKind = z.infer<typeof MapKind>;
+
 export const MapDto = z.object({
   id: Id,
   slug: Slug,
   name: z.string(),
+  kind: MapKind.optional(),
   ownerAccountId: Id,
   settings: MapSettings,
   labels: z.array(LabelDto),
@@ -43,7 +51,7 @@ export const MapDto = z.object({
 export type MapDto = z.infer<typeof MapDto>;
 
 /** GET /api/maps item: a map plus the caller's effective role. */
-export const MapSummaryDto = MapDto.pick({ id: true, slug: true, name: true }).extend({
+export const MapSummaryDto = MapDto.pick({ id: true, slug: true, name: true, kind: true }).extend({
   role: MapRole.exclude(['blocked']),
 });
 export type MapSummaryDto = z.infer<typeof MapSummaryDto>;
@@ -51,6 +59,7 @@ export type MapSummaryDto = z.infer<typeof MapSummaryDto>;
 export const CreateMapRequest = z.object({
   name: z.string().trim().min(1).max(64),
   slug: Slug.optional(),
+  kind: MapKind.optional(),
 });
 export type CreateMapRequest = z.infer<typeof CreateMapRequest>;
 
@@ -64,6 +73,21 @@ export type UpdateMapRequest = z.infer<typeof UpdateMapRequest>;
 /** PUT /api/maps/:mapId/labels replaces the whole list (manager+). */
 export const SetLabelsRequest = z.object({ labels: z.array(LabelDto).max(64) });
 export type SetLabelsRequest = z.infer<typeof SetLabelsRequest>;
+
+/**
+ * Where a merged object comes from: the maps holding it and whose write is newest. Only on maps that
+ * merge others; names come from `MapSnapshot.sources`.
+ */
+export const ProvenanceDto = z.object({
+  /** Source ids (`MapSourceDto.id`) holding the object, in source order. */
+  sources: z.array(Id),
+  /** The source whose change is the newest, and when it was made. */
+  updatedBy: Id,
+  updatedAt: Timestamp,
+  /** True when a read-write source (or the map itself) holds it, so its editors may change it. */
+  writable: z.boolean(),
+});
+export type ProvenanceDto = z.infer<typeof ProvenanceDto>;
 
 export const Position = z.object({ x: z.number().finite(), y: z.number().finite() });
 export type Position = z.infer<typeof Position>;
@@ -97,6 +121,8 @@ export const MapSystemDto = z.object({
   visible: z.boolean(),
   createdAt: Timestamp,
   updatedAt: Timestamp,
+  /** On maps that merge other maps only. */
+  provenance: ProvenanceDto.optional(),
 });
 export type MapSystemDto = z.infer<typeof MapSystemDto>;
 
@@ -161,6 +187,8 @@ export const ConnectionDto = z.object({
   massStatusAt: Timestamp.nullable().optional(),
   createdAt: Timestamp,
   updatedAt: Timestamp,
+  /** On maps that merge other maps only. */
+  provenance: ProvenanceDto.optional(),
 });
 export type ConnectionDto = z.infer<typeof ConnectionDto>;
 
@@ -201,6 +229,8 @@ export const SignatureDto = z.object({
   connectionId: Id.nullable(),
   createdAt: Timestamp,
   updatedAt: Timestamp,
+  /** On maps that merge other maps only. */
+  provenance: ProvenanceDto.optional(),
 });
 export type SignatureDto = z.infer<typeof SignatureDto>;
 

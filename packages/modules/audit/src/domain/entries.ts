@@ -62,6 +62,8 @@ export function toEntry(
     diff: audit?.diff ?? {},
     removed: audit?.removed ?? null,
     revertOf: audit?.revertOf ?? null,
+    via: audit?.via ?? null,
+    mergedFrom: audit?.mergedFrom ?? null,
     revertedBy: options.revertedBy,
     revertible: options.revertible && audit !== null && options.revertedBy === null,
     recorded: audit !== null,
@@ -81,6 +83,7 @@ const CSV_COLUMNS = [
   'country',
   'userAgent',
   'revertOf',
+  'via',
   'id',
 ] as const;
 
@@ -116,6 +119,7 @@ export function toCsv(entries: readonly AuditEntryDto[]): string {
         e.origin?.country,
         e.origin?.userAgent,
         e.revertOf,
+        (e.via ?? e.mergedFrom)?.name,
         e.id,
       ]
         .map(cell)

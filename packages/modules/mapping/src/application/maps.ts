@@ -18,7 +18,13 @@ export class MapUseCases extends MappingUseCases {
     const roles = new Map(grants.map((g) => [g.mapId, g.role]));
     const maps = await this.ports.maps.listByIds([...roles.keys()]);
     return maps
-      .map((m) => ({ id: m.id, slug: m.slug, name: m.name, role: roles.get(m.id)! }))
+      .map((m) => ({
+        id: m.id,
+        slug: m.slug,
+        name: m.name,
+        ...(m.kind ? { kind: m.kind } : {}),
+        role: roles.get(m.id)!,
+      }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }
 
@@ -42,6 +48,7 @@ export class MapUseCases extends MappingUseCases {
       id: newId(),
       slug: request.slug ?? (await this.freeSlug(slugify(request.name))),
       name: request.name,
+      ...(request.kind === 'composite' ? { kind: 'composite' as const } : {}),
       ownerAccountId: account.id,
       settings: { scopes: ['wormhole'] },
       labels: [],

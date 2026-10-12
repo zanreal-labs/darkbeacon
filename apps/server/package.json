@@ -27,6 +27,7 @@
     "@darkbeacon/plugins": "workspace:*",
     "@darkbeacon/routing": "workspace:*",
     "@darkbeacon/sde": "workspace:*",
+    "@darkbeacon/sharing": "workspace:*",
     "@darkbeacon/shared": "workspace:*",
     "@darkbeacon/theme-sdk": "workspace:*",
     "@darkbeacon/tracking": "workspace:*",

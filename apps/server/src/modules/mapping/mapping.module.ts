@@ -9,6 +9,7 @@ import {
 } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
 import {
+  ChainOverlaySlot,
   ConnectionIntelQuery,
   ConnectionUseCases,
   MapPreferenceUseCases,
@@ -22,6 +23,7 @@ import {
   type UniverseCatalog,
 } from '@darkbeacon/mapping';
 import {
+  KyselyChangeStamps,
   KyselyConnectionRepository,
   KyselyMapRepository,
   KyselyPassageRepository,
@@ -42,7 +44,7 @@ import {
   SignaturesController,
   SystemsController,
 } from './mapping.controllers.js';
-import { MAP_OWNERSHIP, MAP_REPOSITORY, MAPPING_PORTS } from './mapping.tokens.js';
+import { CHAIN_OVERLAY, MAP_OWNERSHIP, MAP_REPOSITORY, MAPPING_PORTS } from './mapping.tokens.js';
 
 const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
   provide: type,
@@ -73,6 +75,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
       useFactory: (maps: MapRepository) => new MappingMapOwnership(maps),
       inject: [MAP_REPOSITORY],
     },
+    { provide: CHAIN_OVERLAY, useFactory: () => new ChainOverlaySlot() },
     {
       provide: MAPPING_PORTS,
       useFactory: (
@@ -83,19 +86,31 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
         uow: UnitOfWork,
         clock: Clock,
         access: MapAccess,
+        overlay: ChainOverlaySlot,
       ): MappingPorts => ({
         maps,
         systems: new KyselySystemRepository(database),
         connections: new KyselyConnectionRepository(database),
         signatures: new KyselySignatureRepository(database),
         passages: new KyselyPassageRepository(database),
+        stamps: new KyselyChangeStamps(database),
+        overlay,
         universe,
         access,
         events,
         uow,
         clock,
       }),
-      inject: [Database, MAP_REPOSITORY, UNIVERSE_CATALOG, EVENT_LOG, UNIT_OF_WORK, CLOCK, MAP_ACCESS],
+      inject: [
+        Database,
+        MAP_REPOSITORY,
+        UNIVERSE_CATALOG,
+        EVENT_LOG,
+        UNIT_OF_WORK,
+        CLOCK,
+        MAP_ACCESS,
+        CHAIN_OVERLAY,
+      ],
     },
     useCase(MapUseCases),
     useCase(SystemUseCases),
@@ -116,6 +131,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
     },
   ],
   exports: [
+    CHAIN_OVERLAY,
     MAP_REPOSITORY,
     MAP_OWNERSHIP,
     MAPPING_PORTS,

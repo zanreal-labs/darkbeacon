@@ -8,3 +8,4 @@ export * from './preferences.js';
 export * from './signatures.js';
 export * from './snapshot.js';
 export { SystemUseCases } from './systems.js';
+export * from './overlay.js';

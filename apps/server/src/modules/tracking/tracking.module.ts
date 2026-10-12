@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { Logger, Module } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import type { AuditScope, Clock, EventLog, MapAccess, UnitOfWork } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
 import {
@@ -18,6 +19,8 @@ import { ConnectionUseCases, SystemUseCases, type MappingPorts } from '@darkbeac
 import { CharacterService } from '@darkbeacon/identity';
 import { HttpEsiGateway } from '../../adapters/tracking/http-esi-gateway.js';
 import { MappingAutoMapTarget } from '../../adapters/tracking/mapping-auto-map-target.js';
+import { SharingAutoMapTarget } from '../../adapters/sharing/sharing-auto-map-target.js';
+import { ChainMerger, ChainWrites } from '@darkbeacon/sharing';
 import { KyselyTrackingRepository } from '../../adapters/tracking/kysely-tracking-repository.js';
 import type { AppConfig } from '../../config/config.js';
 import {
@@ -59,8 +62,33 @@ const { version } = JSON.parse(readFileSync(new URL('../../../package.json', imp
         systems: SystemUseCases,
         connections: ConnectionUseCases,
         audit: AuditScope,
-      ) => new MappingAutoMapTarget(ports, systems, connections, audit),
-      inject: [MAPPING_PORTS, SystemUseCases, ConnectionUseCases, AUDIT_SCOPE],
+        tracking: TrackingRepository,
+        modules: ModuleRef,
+      ) =>
+        // Sharing depends on tracking, so its services are looked up once the application runs.
+        new SharingAutoMapTarget(
+          new MappingAutoMapTarget(ports, systems, connections, audit),
+          () => {
+            try {
+              return {
+                merger: modules.get(ChainMerger, { strict: false }),
+                writes: modules.get(ChainWrites, { strict: false }),
+              };
+            } catch {
+              return null;
+            }
+          },
+          tracking,
+          audit,
+        ),
+      inject: [
+        MAPPING_PORTS,
+        SystemUseCases,
+        ConnectionUseCases,
+        AUDIT_SCOPE,
+        TRACKING_REPOSITORY,
+        ModuleRef,
+      ],
     },
     {
       provide: TRACKING_REPOSITORY,
@@ -148,5 +176,6 @@ const { version } = JSON.parse(readFileSync(new URL('../../../package.json', imp
     },
     TrackingRuntime,
   ],
+  exports: [ListMapCharacters, TRACKING_REPOSITORY],
 })
 export class TrackingModule {}

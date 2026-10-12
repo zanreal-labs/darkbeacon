@@ -1,4 +1,5 @@
 import {
+  ConflictError,
   actorRef,
   mapStream,
   newEvent,
@@ -15,6 +16,8 @@ import {
 import type { EventPayloads, EventType } from '@darkbeacon/shared';
 import type { MapSystem } from '../domain/map.js';
 import type {
+  ChainOverlay,
+  ChangeStamps,
   ConnectionRepository,
   MapRepository,
   PassageRepository,
@@ -30,6 +33,10 @@ export interface MappingPorts {
   connections: ConnectionRepository;
   signatures: SignatureRepository;
   passages: PassageRepository;
+  /** Field change times and deletions, for maps that merge this one. */
+  stamps: ChangeStamps;
+  /** Merged chains of maps that merge others (sharing); absent: every map shows its own rows. */
+  overlay?: ChainOverlay;
   universe: UniverseCatalog;
   access: MapAccess;
   events: EventLog;
@@ -69,6 +76,17 @@ export abstract class MappingUseCases {
   protected async authorize(actor: Actor | null, mapId: string, min: GrantingMapRole): Promise<Actor> {
     await requireMapRole(this.ports.access, actor, mapId, min);
     return actor!;
+  }
+
+  /**
+   * Throws unless the actor may change the map's own systems, connections and signatures:
+   * member+, on a map that has objects of its own (a composite only shows other maps').
+   */
+  protected async authorizeEdit(actor: Actor | null, mapId: string): Promise<Actor> {
+    const who = await this.authorize(actor, mapId, 'member');
+    if ((await this.ports.maps.findById(mapId))?.kind === 'composite')
+      throw new ConflictError('This map merges other maps; change them through it');
+    return who;
   }
 
   /**

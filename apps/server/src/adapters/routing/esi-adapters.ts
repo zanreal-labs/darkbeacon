@@ -5,10 +5,13 @@ import { ESI_COMPATIBILITY_DATE } from '../tracking/http-esi-gateway.js';
 
 /** Routing's ChainSource over mapping's repositories. */
 export class MappingChainSource implements ChainSource {
-  constructor(private readonly ports: Pick<MappingPorts, 'maps' | 'systems' | 'connections'>) {}
+  constructor(private readonly ports: Pick<MappingPorts, 'maps' | 'systems' | 'connections' | 'overlay'>) {}
 
   async chain(mapId: string) {
     if (!(await this.ports.maps.findById(mapId))) return null;
+    // A map that merges others routes over the merged chain.
+    const merged = await this.ports.overlay?.view(mapId);
+    if (merged) return { systems: merged.systems, connections: merged.connections };
     const [systems, connections] = await Promise.all([
       this.ports.systems.list(mapId),
       this.ports.connections.list(mapId),
