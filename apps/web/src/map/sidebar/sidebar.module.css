@@ -493,7 +493,25 @@
 
 .notesText {
   margin: 0;
-  white-space: pre-wrap;
+}
+
+/* Rendered notes an editor can click into. */
+.notesView {
+  min-height: 28px;
+  margin: 0 -8px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--dbk-radius);
+  cursor: text;
+}
+
+.notesView:hover {
+  border-color: var(--dbk-color-border);
+}
+
+.notesView:focus-visible {
+  border-color: var(--dbk-color-focus);
+  outline: none;
 }
 
 .detailsFooter {
