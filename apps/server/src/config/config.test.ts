@@ -11,12 +11,18 @@ describe('config', () => {
       publicUrl: 'http://localhost:3000',
       port: 3000,
       dataDir: '/data',
+      esiBaseUrl: 'https://esi.evetech.net',
       demoMode: false,
       deprecated: [],
       discord: null,
       eve: null,
       databaseUrl: undefined,
     });
+  });
+
+  it('points ESI elsewhere only when asked (load tests)', () => {
+    expect(parseEnv({ ESI_BASE_URL: 'http://fake-esi:8080/' }).esiBaseUrl).toBe('http://fake-esi:8080');
+    expect(() => parseEnv({ ESI_BASE_URL: 'not a url' })).toThrow(/ESI_BASE_URL/);
   });
 
   it('reads oauth clients and treats empty values as unset', () => {

@@ -23,6 +23,8 @@ const EnvSchema = z
       .optional(),
     PORT: z.coerce.number().int().min(1).max(65535).default(3000),
     DATA_DIR: z.string().min(1).default('/data'),
+    /** Where ESI is reached; only load tests and ESI proxies change it. */
+    ESI_BASE_URL: z.url().default('https://esi.evetech.net'),
     DEMO_MODE: flag,
     ALLOW_DEMO_MODE: flag,
     /** Deprecated aliases of DEMO_MODE and ALLOW_DEMO_MODE. */
@@ -71,6 +73,8 @@ export interface AppConfig {
   databaseUrl: string | undefined;
   port: number;
   dataDir: string;
+  /** ESI origin for tracking and waypoints (default https://esi.evetech.net); a fake one in load tests. */
+  esiBaseUrl: string;
   /**
    * Demo mode: unauthenticated visits are signed in as a demo account and a demo map is seeded.
    * Anyone who can reach the instance gets in, so it is refused in production unless allowed.
@@ -107,6 +111,7 @@ export function parseEnv(
     databaseUrl: e.DATABASE_URL,
     port: e.PORT,
     dataDir: e.DATA_DIR,
+    esiBaseUrl: e.ESI_BASE_URL.replace(/\/+$/, ''),
     demoMode: e.DEMO_MODE || e.DEV_LOGIN,
     deprecated: [
       ...(cleaned.DEV_LOGIN !== undefined ? ['DEV_LOGIN (use DEMO_MODE)'] : []),

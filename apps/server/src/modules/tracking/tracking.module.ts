@@ -70,7 +70,11 @@ const { version } = JSON.parse(readFileSync(new URL('../../../package.json', imp
     {
       provide: ESI_GATEWAY,
       useFactory: (config: AppConfig, clock: Clock) =>
-        new HttpEsiGateway({ clock, userAgent: `Darkbeacon/${version} (+${config.publicUrl})` }),
+        new HttpEsiGateway({
+          clock,
+          userAgent: `Darkbeacon/${version} (+${config.publicUrl})`,
+          baseUrl: config.esiBaseUrl,
+        }),
       inject: [APP_CONFIG, CLOCK],
     },
     {

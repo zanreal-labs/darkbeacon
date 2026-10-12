@@ -172,6 +172,7 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
           clock,
           fetch: fetchFn,
           userAgent: `Darkbeacon/${version} (+${config.publicUrl})`,
+          baseUrl: config.esiBaseUrl,
         }),
       inject: [APP_CONFIG, CharacterService, CLOCK, HTTP_FETCH],
     },
@@ -181,6 +182,7 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
         new HttpWaypointGateway({
           fetch: fetchFn,
           userAgent: `Darkbeacon/${version} (+${config.publicUrl})`,
+          baseUrl: config.esiBaseUrl,
         }),
       inject: [APP_CONFIG, HTTP_FETCH],
     },
