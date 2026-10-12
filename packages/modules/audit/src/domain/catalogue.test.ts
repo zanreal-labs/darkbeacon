@@ -54,6 +54,22 @@ const signature = {
   createdAt: 1,
   updatedAt: 1,
 };
+const share = {
+  id: 'sh1',
+  source: { instance: 'local', mapId: 'm' },
+  sourceName: 'Corp A',
+  target: { instance: 'local', mapId: 'm2' },
+  targetName: 'Alliance chain',
+  sourceInstanceName: null,
+  level: 'read',
+  offeredScopes: ['topology'],
+  scopes: ['topology'],
+  status: 'offered',
+  hidden: false,
+  offeredAt: 1,
+  acceptedAt: null,
+  updatedAt: 1,
+};
 const presence = {
   characterId: 9,
   accountId: 'a',
@@ -117,6 +133,7 @@ const webhook = {
  * updates and removals, what it passes as `before`. A new event type does not compile until it
  * has a sample here, and the test below fails unless its audit record is complete.
  */
+const BACKUP = 'darkbeacon-20261012T101500Z-v0.1.0-s20.db.gz';
 const importSource = { kind: 'wanderer-api' as const, host: 'wanderer.ltd', slug: 'home', name: 'Home' };
 const importJob = {
   id: 'j',
@@ -178,6 +195,14 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
     data: { labels: [{ id: 'l', name: 'Home', color: '#22aa66', description: '' }] },
     before: { labels: [] },
   },
+  'map.share.offered': { data: share },
+  'map.share.accepted': { data: { ...share, status: 'active', acceptedAt: 2 }, before: share },
+  'map.share.changed': { data: { ...share, level: 'read-write' }, before: share },
+  'map.share.revoked': { data: share, before: share },
+  'map.sources_changed': {
+    data: { sources: [{ id: 'sh1', name: 'Corp A' }] },
+    before: { sources: [] },
+  },
   'routes.exits_changed': {
     data: {
       exits: [
@@ -229,6 +254,7 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
     before: { configured: false, name: null },
   },
   'settings.changed': { data: { ...settings, eventRetentionDays: 90 }, before: settings },
+  'telemetry.changed': { data: { enabled: false }, before: { enabled: true } },
   'theme.installed': { data: { id: 't', name: 'T', version: '1.0.0' } },
   'theme.removed': { data: { id: 't' }, before: { id: 't', name: 'T', version: '1.0.0' } },
   'theme.default_changed': { data: { themeId: 'dark' }, before: { themeId: 'system' } },
@@ -238,6 +264,17 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
   'plugin.settings_changed': {
     data: { pluginId: 'discord-notify', mapId: null, values: { username: 'Beacon' } },
     before: { pluginId: 'discord-notify', mapId: null, values: { username: 'Darkbeacon' } },
+  },
+  'backup.completed': { data: { name: BACKUP, trigger: 'manual', size: 10, schemaVersion: 20 } },
+  'backup.failed': { data: { operation: 'backup', trigger: 'scheduled', name: null, message: 'disk full' } },
+  'backup.restored': {
+    data: { name: BACKUP, source: 'backup', preRestore: BACKUP, migrationsApplied: [] },
+  },
+  'backup.deleted': { data: { name: BACKUP } },
+  'backup.downloaded': { data: { name: BACKUP } },
+  'backup.settings_changed': {
+    data: { intervalMinutes: 360, keep: 14, maxAgeDays: null, notifyHost: null, notifySuccess: false },
+    before: { intervalMinutes: 1440, keep: 14, maxAgeDays: null, notifyHost: null, notifySuccess: false },
   },
 };
 

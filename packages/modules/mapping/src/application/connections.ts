@@ -2,7 +2,9 @@ import { ConflictError, NotFoundError, ValidationError, newId, type Actor } from
 import type { AddConnectionRequest, UpdateConnectionRequest } from '@darkbeacon/shared';
 import type { Connection } from '../domain/map.js';
 import { changes, defaultShipSize, defined } from '../domain/rules.js';
+import { pairKey } from '../domain/stamps.js';
 import { MappingUseCases } from './base.js';
+import { renumberBookmarks } from './bookmark-numbers.js';
 import { removeConnection } from './systems.js';
 
 export class ConnectionUseCases extends MappingUseCases {
@@ -11,7 +13,7 @@ export class ConnectionUseCases extends MappingUseCases {
    * (in either direction), so auto-mapping can call it blindly.
    */
   async add(actor: Actor | null, mapId: string, request: AddConnectionRequest): Promise<Connection> {
-    const who = await this.authorize(actor, mapId, 'member');
+    const who = await this.authorizeEdit(actor, mapId);
     if (request.source === request.target) throw new ValidationError('A system cannot connect to itself');
     return this.write(who, mapId, async (events) => {
       await this.visibleSystem(mapId, request.source);
@@ -41,6 +43,8 @@ export class ConnectionUseCases extends MappingUseCases {
         bubbled: 'none',
         eolAt: null,
         massStatusAt: null,
+        bookmarkNumber: null,
+        bookmarkParent: null,
         createdAt: now,
         updatedAt: now,
       };
@@ -51,7 +55,9 @@ export class ConnectionUseCases extends MappingUseCases {
         throw new ConflictError('The connection changed meanwhile, try again');
       }
       events.add('connection.added', connection);
-      return connection;
+      // A new wormhole takes the lowest free number among the wormholes out of its parent.
+      const numbered = await renumberBookmarks(this.ports, events, mapId);
+      return numbered.get(connection.id) ?? connection;
     });
   }
 
@@ -65,7 +71,7 @@ export class ConnectionUseCases extends MappingUseCases {
     connectionId: string,
     request: UpdateConnectionRequest,
   ): Promise<Connection> {
-    const who = await this.authorize(actor, mapId, 'member');
+    const who = await this.authorizeEdit(actor, mapId);
     return this.write(who, mapId, async (events) => {
       const current = await this.load(mapId, connectionId);
       const patch = defined(request);
@@ -76,14 +82,29 @@ export class ConnectionUseCases extends MappingUseCases {
       if (patch.massStatus && patch.massStatus !== current.massStatus) next.massStatusAt = now;
       await this.ports.connections.update(next);
       events.add('connection.updated', next, current);
+      // Only wormholes are numbered.
+      if (next.type !== current.type) {
+        const numbered = await renumberBookmarks(this.ports, events, mapId);
+        return numbered.get(next.id) ?? next;
+      }
       return next;
     });
   }
 
   async remove(actor: Actor | null, mapId: string, connectionId: string): Promise<void> {
-    const who = await this.authorize(actor, mapId, 'member');
+    const who = await this.authorizeEdit(actor, mapId);
     await this.write(who, mapId, async (events) => {
-      await removeConnection(this.ports, events, await this.load(mapId, connectionId));
+      const connection = await this.load(mapId, connectionId);
+      // A deliberate removal (the hole closed): maps merging this one drop older copies too.
+      await this.ports.stamps.putTombstone(
+        mapId,
+        'connection',
+        pairKey(connection.source, connection.target),
+        this.ports.clock.now(),
+      );
+      await removeConnection(this.ports, events, connection);
+      // Siblings keep their numbers (a gap), unless the map renumbers on close.
+      await renumberBookmarks(this.ports, events, mapId);
     });
   }
 

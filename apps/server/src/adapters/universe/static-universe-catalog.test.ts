@@ -92,7 +92,7 @@ describe('StaticUniverseCatalog', () => {
       fits: ['frigate', 'destroyer'],
       shipSize: 'small',
     });
-    expect(catalog.wormholeType('C248')).toMatchObject({ shipSize: 'xlarge' });
+    expect(catalog.wormholeType('C248')).toMatchObject({ shipSize: 'capital' });
     expect(catalog.wormholeType('C248')?.fits).toContain('capital');
     expect(catalog.wormholeType('B274')?.fits).not.toContain('freighter');
     expect(catalog.wormholeType('K162')).toMatchObject({ destination: null, totalMass: null, fits: [] });

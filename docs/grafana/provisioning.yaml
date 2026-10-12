@@ -1,0 +1,10 @@
+# Grafana dashboard provisioning for darkbeacon-dashboard.json (used by
+# docker-compose.observability.yml; copy it into any Grafana's provisioning/dashboards folder).
+apiVersion: 1
+
+providers:
+  - name: Darkbeacon
+    type: file
+    options:
+      path: /otel-lgtm/darkbeacon-dashboard.json
+      foldersFromFilesStructure: false

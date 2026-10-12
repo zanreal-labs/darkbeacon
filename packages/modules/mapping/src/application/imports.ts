@@ -11,6 +11,7 @@ import {
 import type { Connection, MapSystem, Signature } from '../domain/map.js';
 import { changes, defaultShipSize, defined, validateLabels } from '../domain/rules.js';
 import { MappingUseCases, type EventBatch } from './base.js';
+import { renumberBookmarks } from './bookmark-numbers.js';
 import { removeConnection } from './systems.js';
 
 /** System attributes an import may set. */
@@ -88,8 +89,9 @@ export class ChainImportUseCases extends MappingUseCases {
     solarSystemId: number,
     fields: ImportedSystemFields,
     createdAt?: number,
+    changedAt?: number,
   ): Promise<{ system: MapSystem; outcome: ImportOutcome }> {
-    const who = await this.authorize(actor, mapId, 'member');
+    const who = await this.authorizeEdit(actor, mapId);
     if (!this.ports.universe.getSystem(solarSystemId)) throw new NotFoundError('Solar system');
     const patch = defined(UpdateSystemRequest.parse(fields)) as ImportedSystemFields;
     return this.write(who, mapId, async (events) => {
@@ -113,15 +115,22 @@ export class ChainImportUseCases extends MappingUseCases {
           createdAt: Math.min(createdAt ?? now, now),
           updatedAt: now,
         };
+        system.updatedAt = changeTime(system.createdAt, changedAt, now);
         await this.ports.systems.insert(system);
         if (system.visible) events.add('system.added', system);
         return { system, outcome: 'created' };
       }
       if (!changes(current, patch)) return { system: current, outcome: 'unchanged' };
-      const next: MapSystem = { ...current, ...patch, updatedAt: now };
+      const next: MapSystem = {
+        ...current,
+        ...patch,
+        updatedAt: changeTime(current.updatedAt, changedAt, now),
+      };
       await this.ports.systems.update(next);
-      if (current.visible && !next.visible) await this.hidden(events, next, current);
-      else if (!current.visible && next.visible) await this.shown(events, next, current);
+      if (current.visible && !next.visible) {
+        await this.hidden(events, next, current);
+        await renumberBookmarks(this.ports, events, mapId);
+      } else if (!current.visible && next.visible) await this.shown(events, next, current);
       else if (next.visible) events.add('system.updated', next, current);
       return { system: next, outcome: 'updated' };
     });
@@ -137,8 +146,9 @@ export class ChainImportUseCases extends MappingUseCases {
     pair: { source: number; target: number },
     fields: ImportedConnectionFields,
     createdAt?: number,
+    changedAt?: number,
   ): Promise<{ connection: Connection; outcome: ImportOutcome }> {
-    const who = await this.authorize(actor, mapId, 'member');
+    const who = await this.authorizeEdit(actor, mapId);
     if (pair.source === pair.target) throw new ValidationError('A system cannot connect to itself');
     const { eolAt, massStatusAt, ...rest } = fields;
     const patch: ImportedConnectionFields = {
@@ -153,11 +163,20 @@ export class ChainImportUseCases extends MappingUseCases {
       const current = await this.ports.connections.findBetween(mapId, pair.source, pair.target);
       if (current) {
         if (!changes(current, patch)) return { connection: current, outcome: 'unchanged' as const };
-        const next: Connection = { ...current, ...patch, updatedAt: now };
+        const next: Connection = {
+          ...current,
+          ...patch,
+          updatedAt: changeTime(current.updatedAt, changedAt, now),
+        };
         if (next.timeStatus === 'normal') next.eolAt = null;
         else if (next.eolAt === null) next.eolAt = now;
         await this.ports.connections.update(next);
         events.add('connection.updated', next, current);
+        // Only wormholes are numbered.
+        if (next.type !== current.type) {
+          const numbered = await renumberBookmarks(this.ports, events, mapId);
+          return { connection: numbered.get(next.id) ?? next, outcome: 'updated' as const };
+        }
         return { connection: next, outcome: 'updated' as const };
       }
       const { universe } = this.ports;
@@ -176,10 +195,13 @@ export class ChainImportUseCases extends MappingUseCases {
         bubbled: 'none',
         eolAt: null,
         massStatusAt: null,
+        bookmarkNumber: null,
+        bookmarkParent: null,
         ...patch,
         createdAt: Math.min(createdAt ?? now, now),
         updatedAt: now,
       };
+      connection.updatedAt = changeTime(connection.createdAt, changedAt, now);
       if (connection.timeStatus === 'normal') connection.eolAt = null;
       else if (connection.eolAt === null) connection.eolAt = now;
       if (!(await this.ports.connections.insert(connection))) {
@@ -188,7 +210,9 @@ export class ChainImportUseCases extends MappingUseCases {
         throw new ConflictError('The connection changed meanwhile, try again');
       }
       events.add('connection.added', connection);
-      return { connection, outcome: 'created' as const };
+      // A new wormhole takes the lowest free number among the wormholes out of its parent.
+      const numbered = await renumberBookmarks(this.ports, events, mapId);
+      return { connection: numbered.get(connection.id) ?? connection, outcome: 'created' as const };
     });
   }
 
@@ -204,8 +228,9 @@ export class ChainImportUseCases extends MappingUseCases {
     eveId: string,
     fields: ImportedSignatureFields,
     createdAt?: number,
+    changedAt?: number,
   ): Promise<{ signature: Signature; outcome: ImportOutcome }> {
-    const who = await this.authorize(actor, mapId, 'member');
+    const who = await this.authorizeEdit(actor, mapId);
     const { connectionId, ...rest } = fields;
     const checked = AddSignatureRequest.parse({ eveId, ...rest });
     const patch: ImportedSignatureFields = {
@@ -233,7 +258,11 @@ export class ChainImportUseCases extends MappingUseCases {
       );
       if (current) {
         if (!changes(current, patch)) return { signature: current, outcome: 'unchanged' as const };
-        const next: Signature = { ...current, ...patch, updatedAt: now };
+        const next: Signature = {
+          ...current,
+          ...patch,
+          updatedAt: changeTime(current.updatedAt, changedAt, now),
+        };
         await this.ports.signatures.update(next);
         if (system.visible) events.add('signature.updated', next, current);
         return { signature: next, outcome: 'updated' as const };
@@ -252,6 +281,7 @@ export class ChainImportUseCases extends MappingUseCases {
         createdAt: Math.min(createdAt ?? now, now),
         updatedAt: now,
       };
+      signature.updatedAt = changeTime(signature.createdAt, changedAt, now);
       await this.ports.signatures.insert(signature);
       if (system.visible) events.add('signature.added', signature);
       return { signature, outcome: 'created' as const };
@@ -308,4 +338,13 @@ export class ChainImportUseCases extends MappingUseCases {
     const unknown = labelIds.filter((id) => !known.has(id));
     if (unknown.length > 0) throw new ValidationError('Unknown label', { labelIds: unknown });
   }
+}
+
+/**
+ * When an imported change happened: the source's own time (never in the future, never before
+ * `floor`), so the field change times maps merging this one compare are Wanderer's, not the
+ * moment of the import.
+ */
+function changeTime(floor: number, changedAt: number | undefined, now: number): number {
+  return Math.max(floor, Math.min(changedAt ?? now, now));
 }

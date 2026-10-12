@@ -17,7 +17,7 @@ Darkbeacon is written from scratch; it only speaks Wanderer's published API and 
    Access lists whose members the map key cannot read need their own **ACL API key** (from the ACL's edit
    screen in Wanderer); the preview tells you which ones.
 2. **Open the import in Darkbeacon.** Go to **All maps** and press **Import from Wanderer**, or, to merge into
-   a map you have already, open that map's settings, **Import**, **Import into this map**.
+   a map you have already, open that map's settings, **Import**, **Import into this map** (map managers).
 3. **Choose the source.**
    - **Wanderer's API**: the address of the instance (`https://wanderer.ltd` or your own), the map (its slug,
      or paste the map's address) and the map API key. **Test connection** checks the address and the key
@@ -31,7 +31,7 @@ Darkbeacon is written from scratch; it only speaks Wanderer's published API and 
    it today (or the name Wanderer had, when ESI does not know it).
 5. **Choose where it goes.**
    - **A new map**: you name it and become its owner; everything is created as Wanderer has it.
-   - **A map I manage**: merged field by field (see [Merging](#merging)). The preview shows what would be
+   - **A map I manage** (not a map that merges other maps): merged field by field (see [Merging](#merging)). The preview shows what would be
      new, updated, unchanged or skipped, and every field the two sides disagree on with the side that is kept.
    - Options: **Import access rules** (map admins), **Remove what Wanderer no longer has** (merges only) and
      **Keep syncing from Wanderer** (API only, every 5 to 60 minutes).
@@ -109,6 +109,8 @@ systems of a connection, system and signature id, the subject of an access rule)
 - **Later imports and syncs from the same source** are three-way merges against what the last import wrote:
   a field only Wanderer changed is taken, a field only changed here is kept, a field both changed goes to the
   newer side.
+- Imported changes carry Wanderer's own change times, so maps that merge this one (shared chains) weigh
+  them by when they happened in Wanderer, and imported wormholes are numbered like any other.
 - A system **locked** here keeps its position. A system Wanderer took off its map is hidden here only when
   **Remove what Wanderer no longer has** is on.
 - **Removals** (asked for) remove only what an earlier import brought and nobody changed here since.
@@ -130,6 +132,10 @@ Darkbeacon), while a block on a corporation or alliance yields to grants from ot
 so. Access rules only grant map roles: an import never makes anyone an instance admin. Importing access
 rules needs a map admin; the person who imports into a new map is its owner. Wanderer's map owner is not
 carried over.
+
+## While a backup is restored
+
+Imports and syncs pause while an admin restores a backup and carry on where they were afterwards.
 
 ## Audit
 

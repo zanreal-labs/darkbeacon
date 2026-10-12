@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ClientMessage, ServerMessage } from './protocol.js';
 import { buildPath, nestPath, routes } from './routes.js';
 import { CreateAccessRuleRequest } from './dto/access.js';
+import { isMergedCopy, isMergeEvent } from './dto/sharing.js';
 
 describe('ws protocol', () => {
   it('parses client messages', () => {
@@ -50,5 +51,16 @@ describe('routes', () => {
     const base = { subjectKind: 'discordRole', subjectId: '1', role: 'member' } as const;
     expect(CreateAccessRuleRequest.safeParse(base).success).toBe(false);
     expect(CreateAccessRuleRequest.safeParse({ ...base, guildId: '2' }).success).toBe(true);
+  });
+});
+
+describe('merged events', () => {
+  it('tells the merge’s events and its copies apart', () => {
+    const by = (id: string) => ({ actor: { kind: 'system', id } });
+    expect(isMergeEvent(by('sharing'))).toBe(true);
+    expect(isMergeEvent(by('sharing-copy'))).toBe(true);
+    expect(isMergedCopy(by('sharing'))).toBe(false);
+    expect(isMergedCopy(by('sharing-copy'))).toBe(true);
+    expect(isMergeEvent({ actor: { kind: 'account', id: 'sharing' } })).toBe(false);
   });
 });

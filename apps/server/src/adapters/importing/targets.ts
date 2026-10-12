@@ -34,6 +34,7 @@ const target = (map: MapDto): TargetMap => ({
   name: map.name,
   labels: map.labels,
   settings: map.settings,
+  kind: map.kind === 'composite' ? 'composite' : 'map',
 });
 
 /**

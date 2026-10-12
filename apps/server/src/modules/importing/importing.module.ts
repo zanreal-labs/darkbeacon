@@ -46,6 +46,7 @@ import { SecretBox } from '../../adapters/notifications/secret-box.js';
 import type { AppConfig } from '../../config/config.js';
 import { AsyncAuditScope } from '../../platform/audit.js';
 import { EventConsumers } from '../../platform/event-consumers.js';
+import { MaintenanceMode } from '../../platform/maintenance.js';
 import {
   APP_CONFIG,
   CLOCK,
@@ -86,6 +87,7 @@ export class ImportingRuntime implements OnModuleInit, OnApplicationBootstrap, O
     @Inject(HttpAdapterHost) private readonly http: HttpAdapterHost,
     @Inject(AsyncAuditScope) private readonly audit: AsyncAuditScope,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    @Inject(MaintenanceMode) private readonly maintenance: MaintenanceMode,
   ) {}
 
   onModuleInit(): void {
@@ -96,6 +98,16 @@ export class ImportingRuntime implements OnModuleInit, OnApplicationBootstrap, O
     this.realtime.registerSnapshot('import', async (jobId, actor) => ({
       job: await this.service.get(actor, jobId),
     }));
+    // A restore replaces the database: jobs stop where they are and syncs wait.
+    this.maintenance.register({
+      name: 'imports',
+      pause: () => this.runner.pause(),
+      resume: () => {
+        this.audit.detached(() => {
+          void this.runner.resume().catch((error: unknown) => this.logger.error(String(error)));
+        });
+      },
+    });
     this.consumers.register({
       name: 'importing.removed-maps',
       streams: ['map'],
@@ -119,7 +131,7 @@ export class ImportingRuntime implements OnModuleInit, OnApplicationBootstrap, O
       timer.unref();
       this.timers.push(timer);
     };
-    every(SYNC_TICK_MS, () => this.scheduler.tick());
+    every(SYNC_TICK_MS, () => (this.maintenance.active ? Promise.resolve() : this.scheduler.tick()));
     every(PRUNE_MS, () => this.service.prune());
   }
 

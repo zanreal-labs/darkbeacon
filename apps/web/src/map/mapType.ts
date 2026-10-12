@@ -11,6 +11,8 @@ export const MAP_TYPE = {
   secondary: 13,
   edge: 12.5,
   bookmark: 13,
+  /** Framed chips above and below a system: labels, the bookmark code, the nearest hub. */
+  chip: 14,
 } as const;
 
 /** The one zoom the map opens at (a saved view keeps its own). */
@@ -27,4 +29,5 @@ export const mapTypeVars = {
   '--map-text-secondary': `${MAP_TYPE.secondary}px`,
   '--map-text-edge': `${MAP_TYPE.edge}px`,
   '--map-text-bookmark': `${MAP_TYPE.bookmark}px`,
+  '--map-text-chip': `${MAP_TYPE.chip}px`,
 } as CSSProperties;

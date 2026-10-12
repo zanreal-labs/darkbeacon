@@ -101,7 +101,7 @@ await page.waitForTimeout(800);
 await shot('07-map-fit');
 
 step('the map settings show the sync');
-await page.goto(`${BASE}/m/home-chain/settings?tab=import`, { waitUntil: 'networkidle' });
+await page.goto(`${BASE}/m/home-chain?settings=import`, { waitUntil: 'networkidle' });
 await page.getByText('Syncing from Wanderer').waitFor({ timeout: 15_000 });
 await shot('08-settings-import');
 

@@ -23,9 +23,10 @@ async function Admin() {
   if (!me) return <SignInRedirect />;
   if (!isInstanceAdmin(me)) redirect('/');
   // The first tab's data; the other tabs load theirs when opened.
-  const [settings, health] = await Promise.all([
+  const [settings, health, observability] = await Promise.all([
     serverGet(routes.admin.settings),
     serverGet(routes.health).catch(() => undefined),
+    serverGet(routes.admin.observability).catch(() => undefined),
   ]);
   return (
     <HydrationBoundary
@@ -33,6 +34,7 @@ async function Admin() {
         [meKey, me],
         [adminKeys.settings, settings],
         [adminKeys.health, health],
+        [adminKeys.observability, observability],
       ])}
     >
       <AdminPage />

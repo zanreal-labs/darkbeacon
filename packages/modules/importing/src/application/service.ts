@@ -310,6 +310,8 @@ export class ImportService {
     const role = await this.deps.target.roleOf(account, mapId);
     if (!hasMapRole(role, 'viewer')) throw new NotFoundError('Map');
     if (!hasMapRole(role, 'manager')) throw new ForbiddenError('Merging into a map needs a map manager');
+    if ((await this.deps.target.map(account, mapId)).kind === 'composite')
+      throw new ConflictError('This map merges other maps; import into one of the maps it merges');
     return role;
   }
 

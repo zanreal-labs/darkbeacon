@@ -7,7 +7,9 @@ import { Breadcrumbs } from './Trail';
 import { BreadcrumbProvider } from './breadcrumbs';
 import { ConnectionIndicator } from './ConnectionIndicator';
 import { LogoMark } from './Logo';
+import { MapSettingsRailButton } from './MapSettingsButton';
 import { NavLink } from './NavLink';
+import { TelemetryRoot } from './Telemetry';
 import { ThemeMenu } from './ThemeMenu';
 import styles from './AppShell.module.css';
 
@@ -111,6 +113,10 @@ export function AppShell({
               <LogoMark size={26} />
             </Link>
             <RailLink item={MAPS_NAV} />
+            {/* Reads the URL and the map's role, so it waits for both; nothing shows meanwhile. */}
+            <Suspense fallback={null}>
+              <MapSettingsRailButton />
+            </Suspense>
             {adminRail}
           </nav>
           <header className={styles.topbar}>
@@ -134,6 +140,9 @@ export function AppShell({
             {adminTab}
             <TabLink item={ACCOUNT_NAV} />
           </nav>
+          <Suspense fallback={null}>
+            <TelemetryRoot />
+          </Suspense>
         </div>
       </BreadcrumbProvider>
     </PluginsProvider>

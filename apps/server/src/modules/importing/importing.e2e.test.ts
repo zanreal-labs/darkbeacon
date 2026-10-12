@@ -147,6 +147,9 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
     expect(home).toMatchObject({ customName: 'Home sweet home', tag: 'HQ', status: 'home', locked: true });
     expect(home.description).toContain('Fortizar “Home Fort” · Wormhole Rescue Ltd [RESQ]');
     expect(home.description).toContain('Neut Loki on d-scan');
+    // Changes carry Wanderer's times (the field times maps merging this one compare).
+    const wandererHome = wanderer.map.systems.find((x) => x.solar_system_id === 31002531)!;
+    expect(home.updatedAt).toBe(Date.parse(String(wandererHome.updated_at)));
     expect(map.map.labels.map((l) => l.name).sort()).toEqual([
       'Label 1',
       'Label A',
@@ -168,6 +171,10 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
     )!;
     expect(kept.createdAt).toBe(Date.parse(String(first.inserted_at)));
     expect(map.signatures.filter((s) => s.connectionId).length).toBeGreaterThan(10);
+    // Imported wormholes are numbered like any other ({n} of the bookmark labels).
+    expect(map.connections.filter((c) => c.type === 'wormhole' && c.bookmarkNumber).length).toBeGreaterThan(
+      10,
+    );
 
     const rules = await owner.json<AccessRuleDto[]>(`/api/maps/${mapId}/access-rules`);
     expect(rules.map((r) => `${r.subjectKind}:${r.subjectId}:${r.role}`).sort()).toEqual([
@@ -287,6 +294,18 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
       json: { mode: 'merge', mapId },
     });
     expect(refused.status).toBe(403);
+
+    // A map that merges other maps holds nothing of its own to import into.
+    const composite = await owner.json<{ id: string }>('/api/maps', {
+      method: 'POST',
+      json: { name: 'All chains', kind: 'composite' },
+    });
+    const mine = await owner.json<ImportJobDto>('/api/imports/wanderer', { method: 'POST', json: source() });
+    const merge = await owner.request(`/api/imports/${mine.id}/plan`, {
+      method: 'POST',
+      json: { mode: 'merge', mapId: composite.id },
+    });
+    expect(merge.status).toBe(409);
   });
 
   it('imports an uploaded export file, streamed and checked', async () => {

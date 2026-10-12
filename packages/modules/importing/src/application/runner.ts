@@ -38,6 +38,13 @@ class Cancelled extends Error {
   }
 }
 
+/** The runner was paused (maintenance): the job stops where it is and resumes later. */
+class Paused extends Error {
+  constructor() {
+    super('Paused');
+  }
+}
+
 /**
  * Runs import jobs, one at a time, in the order they were queued. A job writes through the
  * mapping, access and routing use cases as the account that started it, under an audit channel
@@ -48,12 +55,14 @@ class Cancelled extends Error {
 export class ImportRunner {
   private draining: Promise<void> | null = null;
   private again = false;
+  private paused = false;
   private readonly cancelled = new Set<string>();
 
   constructor(private readonly deps: ImportingDeps) {}
 
   /** Runs queued and interrupted jobs; resolves when none is left. */
   drain(): Promise<void> {
+    if (this.paused) return Promise.resolve();
     this.again = true;
     this.draining ??= (async () => {
       try {
@@ -68,6 +77,21 @@ export class ImportRunner {
     return this.draining;
   }
 
+  /**
+   * Stops writing (a backup is being restored): the running job stops before its next object
+   * without touching the database again, and stays `running`, so `resume` picks it up where it
+   * was (in the restored database, whatever that holds).
+   */
+  async pause(): Promise<void> {
+    this.paused = true;
+    await this.draining?.catch(() => undefined);
+  }
+
+  resume(): Promise<void> {
+    this.paused = false;
+    return this.drain();
+  }
+
   /** Stops a running job at the next object it would write. */
   cancel(jobId: string): void {
     this.cancelled.add(jobId);
@@ -76,6 +100,7 @@ export class ImportRunner {
   private async loop(): Promise<void> {
     const tried = new Set<string>();
     for (;;) {
+      if (this.paused) return;
       const next = (await this.deps.jobs.listRunnable()).find((j) => !tried.has(j.id));
       if (!next) return;
       tried.add(next.id);
@@ -88,6 +113,7 @@ export class ImportRunner {
     try {
       await this.deps.audit.run({ channel: auditChannel(record.source) }, () => this.execute(job));
     } catch (error) {
+      if (error instanceof Paused || this.paused) return;
       const cancelled = error instanceof Cancelled;
       await job
         .finish(cancelled ? 'cancelled' : 'failed', cancelled ? null : describe(error))
@@ -123,6 +149,8 @@ export class ImportRunner {
     }
     const mapId = r.mapId;
     const map = await deps.target.map(actor, mapId);
+    if (map.kind === 'composite')
+      throw new Error('This map merges other maps; import into one of the maps it merges');
     r.mapSlug = map.slug;
     r.mapName = map.name;
     const key = sourceKey(r.source);
@@ -204,6 +232,7 @@ export class ImportRunner {
                 planned.solarSystemId,
                 decision.write,
                 planned.createdAt ?? undefined,
+                planned.remoteUpdatedAt ?? undefined,
               );
               step('systems', outcome === 'unchanged' ? 'unchanged' : outcome);
               await this.link(
@@ -265,6 +294,7 @@ export class ImportRunner {
                 { source: planned.source, target: planned.target },
                 decision.write,
                 planned.createdAt ?? undefined,
+                planned.remoteUpdatedAt ?? undefined,
               );
               localId = connection.id;
               step('connections', outcome);
@@ -314,6 +344,7 @@ export class ImportRunner {
                 planned.eveId,
                 decision.write,
                 planned.createdAt ?? undefined,
+                planned.remoteUpdatedAt ?? undefined,
               );
               localId = signature.id;
               step('signatures', outcome);
@@ -489,6 +520,7 @@ export class ImportRunner {
   }
 
   private check(jobId: string): void {
+    if (this.paused) throw new Paused();
     if (this.cancelled.has(jobId)) throw new Cancelled();
   }
 

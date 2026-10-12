@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
   ArrowUpRight,
@@ -37,6 +37,7 @@ import {
 import { useMaps } from '../lib/maps';
 import { atLeast } from '../lib/roles';
 import { useMe } from '../lib/session';
+import { track } from '../lib/telemetry';
 import { useBreadcrumbs } from '../shell/breadcrumbs';
 import {
   Avatar,
@@ -82,6 +83,7 @@ export function ImportPageSkeleton() {
  */
 export function ImportPage({ into }: { into: string | null }) {
   useBreadcrumbs([{ label: 'All maps', to: '/maps' }, { label: TITLE }]);
+  useEffect(() => track('page_viewed', { page: 'import' }), []);
   const [jobId, setJobId] = useState<string | null>(null);
   const job = useImportJob(jobId);
   const staged = job.data?.status === 'preview' ? job.data : null;
@@ -424,7 +426,10 @@ const KINDS: Array<[string, string]> = [
 
 function TargetCard({ job, into }: { job: ImportJobDto; into: string | null }) {
   const maps = useMaps();
-  const managed = useMemo(() => (maps.data ?? []).filter((m) => atLeast(m.role, 'manager')), [maps.data]);
+  const managed = useMemo(
+    () => (maps.data ?? []).filter((m) => m.kind !== 'composite' && atLeast(m.role, 'manager')),
+    [maps.data],
+  );
   const preset = into ? managed.find((m) => m.slug === into) : undefined;
   const [mode, setMode] = useState<'new' | 'merge'>(preset ? 'merge' : 'new');
   const [mapId, setMapId] = useState<string | undefined>(preset?.id);

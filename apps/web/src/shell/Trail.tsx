@@ -16,38 +16,22 @@ export function routeCrumbs(pathname: string): Crumb[] {
   if (pathname.startsWith('/import'))
     return [{ label: 'All maps', to: '/maps' }, { label: 'Import from Wanderer' }];
   if (pathname.startsWith('/dev')) return [{ label: 'Components' }];
-  const map = /^\/m\/([^/]+)(\/settings)?/.exec(pathname);
-  if (map) {
-    const crumbs: Crumb[] = [{ label: decodeURIComponent(map[1]!), to: `/m/${map[1]}` }];
-    if (map[2]) crumbs.push({ label: 'Settings' });
-    return crumbs;
-  }
+  const map = /^\/m\/([^/]+)/.exec(pathname);
+  if (map) return [{ label: decodeURIComponent(map[1]!), to: `/m/${map[1]}` }];
   return [{ label: 'Map' }];
 }
 
 export function Breadcrumbs() {
   const pathname = usePathname();
-  const map = /^\/m\/([^/]+)(\/settings)?/.exec(pathname);
-  // On a map the map's name is the switcher; its settings follow it.
+  const map = /^\/m\/([^/]+)/.exec(pathname);
+  // On a map the map's name is the switcher (its settings open over the map, from the rail).
   if (map) {
-    const slug = decodeURIComponent(map[1]!);
     return (
-      <nav aria-label="Breadcrumb" className={styles.breadcrumbs} data-nested={map[2] ? '' : undefined}>
-        {map[2] && (
-          <Link href={`/m/${map[1]}`} className={styles.back} aria-label="Back to the map">
-            <ChevronLeft aria-hidden />
-          </Link>
-        )}
+      <nav aria-label="Breadcrumb" className={styles.breadcrumbs}>
         <ol>
-          <li className={map[2] ? styles.crumbParent : undefined}>
-            <MapSwitcher slug={slug} />
+          <li>
+            <MapSwitcher slug={decodeURIComponent(map[1]!)} />
           </li>
-          {map[2] && (
-            <li>
-              <ChevronRight className={styles.crumbSep} aria-hidden />
-              <span aria-current="page">Settings</span>
-            </li>
-          )}
         </ol>
       </nav>
     );

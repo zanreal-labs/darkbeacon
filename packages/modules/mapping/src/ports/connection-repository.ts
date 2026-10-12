@@ -10,4 +10,6 @@ export interface ConnectionRepository {
   insert(connection: Connection): Promise<boolean>;
   update(connection: Connection): Promise<void>;
   delete(mapId: string, id: string): Promise<void>;
+  /** Maps with a wormhole that has no bookmark number yet (mapped before numbering existed). */
+  mapsWithUnnumberedWormholes(): Promise<string[]>;
 }

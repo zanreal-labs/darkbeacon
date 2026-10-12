@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowUpRight,
   Crown,
+  DatabaseBackup,
   MessageSquare,
   MoreHorizontal,
   Package,
@@ -26,6 +27,7 @@ import {
   type DiscordBotDto,
   type HealthDto,
   type InstanceSettingsDto,
+  type ObservabilityDto,
   type PluginDto,
   type ThemeDto,
   type ThemesDto,
@@ -40,6 +42,7 @@ import { instanceKey } from '../lib/session-keys';
 import { meKey, providersKey, useMe, useProviders } from '../lib/session';
 import { relativeTime } from '../lib/time';
 import { useTabParam } from '../lib/useTabParam';
+import { usePageView } from '../lib/useTelemetry';
 import { PluginSlot } from '../plugins/PluginSlot';
 import { useBreadcrumbs } from '../shell/breadcrumbs';
 import { ThemePicker } from '../theme/ThemePicker';
@@ -78,6 +81,8 @@ import {
   useToast,
 } from '../ui';
 import { AuditTab } from './AuditTab';
+import { TelemetryCard } from './TelemetryCard';
+import { BackupsTab, useBackupStatus } from './BackupsTab';
 import styles from './settings.module.css';
 
 const TABS = [
@@ -85,6 +90,7 @@ const TABS = [
   { id: 'people', title: 'People', icon: <Users /> },
   { id: 'plugins', title: 'Plugins', icon: <Puzzle /> },
   { id: 'themes', title: 'Themes', icon: <Palette /> },
+  { id: 'backups', title: 'Backups', icon: <DatabaseBackup /> },
   { id: 'audit', title: 'Audit', icon: <ScrollText /> },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
@@ -92,13 +98,15 @@ type TabId = (typeof TABS)[number]['id'];
 const errorText = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback);
 
 const TITLE = 'Admin';
-const DESCRIPTION = 'Settings for this instance, the people on it, plugins, themes and what changed.';
+const DESCRIPTION =
+  'Settings for this instance, the people on it, plugins, themes, backups and what changed.';
 
 /** Query keys of the data the server renders the first tab with. */
 export const adminKeys = {
   settings: ['admin-settings'],
   health: ['health'],
   bot: ['admin-discord-bot'],
+  observability: ['admin-observability'],
 } as const;
 
 /** The admin page as it looks while its data streams in. */
@@ -118,14 +126,34 @@ export function AdminPage() {
     TABS.map((t) => t.id),
     'instance',
   );
+  usePageView('admin', tab);
+  const backups = useBackupStatus();
+  const failing = backups.data?.failing ? backups.data.lastFailure : null;
   return (
     <Page width={880}>
       <PageHeader title={TITLE} description={DESCRIPTION} />
+      {failing && tab !== 'backups' && (
+        <div className={styles.notice}>
+          <Callout
+            tone="danger"
+            role="alert"
+            title={`The last ${failing.operation === 'restore' ? 'restore' : 'backup'} failed ${relativeTime(failing.at)}`}
+          >
+            {failing.message}{' '}
+            <button type="button" className={styles.noticeLink} onClick={() => setTab('backups')}>
+              Open Backups
+            </button>
+          </Callout>
+        </div>
+      )}
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className={styles.tabs} aria-label="Admin sections">
           {TABS.map((t) => (
             <TabsTrigger key={t.id} value={t.id} icon={t.icon}>
               {t.title}
+              {t.id === 'backups' && failing && (
+                <span className={styles.tabAlert} role="img" aria-label="needs attention" />
+              )}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -140,6 +168,9 @@ export function AdminPage() {
         </TabsContent>
         <TabsContent value="themes">
           <ThemesTab />
+        </TabsContent>
+        <TabsContent value="backups">
+          <BackupsTab />
         </TabsContent>
         <TabsContent value="audit">
           <AuditTab settingsKey={adminKeys.settings} />
@@ -215,14 +246,101 @@ function InstanceTab() {
           )}
         </CardBody>
       </Card>
+      <ObservabilityCard />
       <SignInSettings />
       <DefaultMapSettings />
       <DiscordBotSettings />
       {providers.data?.loginMethod === 'discord' && <DiscordAdminSettings />}
       <WebhookSettings />
       <ImportSettings />
+      <TelemetryCard />
       <PluginSlot slot="settingsPage" props={{ mapId: null }} />
     </Stack>
+  );
+}
+
+const SIGNAL_NAMES = { traces: 'Traces', metrics: 'Metrics', logs: 'Logs' } as const;
+const PROTOCOL_NAMES = {
+  'http/protobuf': 'HTTP (protobuf)',
+  'http/json': 'HTTP (JSON)',
+  grpc: 'gRPC',
+} as const;
+
+/** Read-only: telemetry is set with environment variables (docs/observability.md). */
+function ObservabilityCard() {
+  const status = useQuery({
+    queryKey: adminKeys.observability,
+    queryFn: () => api<ObservabilityDto>(routes.admin.observability.path),
+  });
+  const data = status.data;
+  const none = <span className={styles.muted}>None</span>;
+  const fact = (label: string, value: ReactNode) => (
+    <div className={styles.fact}>
+      <dt>{label}</dt>
+      <dd>{status.isPending ? <Skeleton width="60%" height={14} /> : value}</dd>
+    </div>
+  );
+  return (
+    <Card>
+      <CardHeader
+        title="Observability"
+        description="Traces, metrics and logs over OpenTelemetry, for Grafana or any OTLP collector. Set with environment variables on the server."
+      />
+      <CardBody>
+        {status.isError ? (
+          <ErrorState compact error={status.error} onRetry={() => void status.refetch()} />
+        ) : (
+          <Stack>
+            {data?.notLoaded && (
+              <Callout tone="warning" title="Configured, but not running">
+                The server was started without the telemetry preload. Start it with{' '}
+                <span className="mono">--import ./apps/server/dist/adapters/observability/preload.js</span>,
+                as the container image does.
+              </Callout>
+            )}
+            <dl className={styles.facts}>
+              {fact(
+                'Telemetry',
+                <Badge tone={data?.enabled ? 'success' : 'neutral'} dot>
+                  {data?.enabled ? 'On' : 'Off'}
+                </Badge>,
+              )}
+              {fact('Service name', <span className="mono">{data?.serviceName}</span>)}
+              {fact(
+                'OTLP endpoint',
+                data?.otlp.endpoint ? <span className="mono">{data.otlp.endpoint}</span> : none,
+              )}
+              {fact('Protocol', data?.otlp.protocol ? PROTOCOL_NAMES[data.otlp.protocol] : none)}
+              {fact(
+                'Signals',
+                data && data.otlp.signals.length > 0
+                  ? data.otlp.signals.map((s) => SIGNAL_NAMES[s]).join(', ')
+                  : none,
+              )}
+              {fact(
+                'Prometheus',
+                data?.prometheus.enabled ? (
+                  <Badge tone="success" dot title="Scrapers send METRICS_TOKEN as a bearer token">
+                    <span className="mono">{data.prometheus.path}</span>
+                  </Badge>
+                ) : (
+                  <Badge tone="neutral" dot>
+                    Off
+                  </Badge>
+                ),
+              )}
+            </dl>
+            {data && !data.enabled && !data.notLoaded && (
+              <p className={styles.hint}>
+                Set <span className="mono">OTEL_EXPORTER_OTLP_ENDPOINT</span> to send telemetry to a
+                collector, or <span className="mono">METRICS_PROMETHEUS=true</span> with a{' '}
+                <span className="mono">METRICS_TOKEN</span> to serve <span className="mono">/metrics</span>.
+              </p>
+            )}
+          </Stack>
+        )}
+      </CardBody>
+    </Card>
   );
 }
 

@@ -4,6 +4,30 @@
   margin-bottom: var(--dbk-space-2);
 }
 
+/* Something on another tab needs an admin (a failed backup). */
+.notice {
+  margin-bottom: var(--dbk-space-4);
+}
+
+.noticeLink {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.tabAlert {
+  width: 7px;
+  height: 7px;
+  margin-left: 2px;
+  border-radius: 50%;
+  background: var(--dbk-color-danger);
+}
+
 /* Key / value facts (version, database). */
 .facts {
   display: grid;
@@ -60,6 +84,19 @@
 .inline > :not(button) {
   flex: 1 1 200px;
   min-width: 0;
+}
+
+/* A fact with no value. */
+.muted {
+  color: var(--dbk-color-text-subtle);
+  font-weight: 400;
+}
+
+/* How to turn on something that is set outside the app (environment variables). */
+.hint {
+  margin: 0;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
 }
 
 .footerNote {

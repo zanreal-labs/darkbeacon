@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post, Put } from '@nestjs/common';
 import type { Actor } from '@darkbeacon/core';
 import {
+  BookmarkNumberUseCases,
   ConnectionIntelQuery,
   ConnectionUseCases,
   MapPreferenceUseCases,
@@ -17,7 +18,10 @@ import {
   MoveSystemsRequest,
   nestPath,
   PasteSignaturesRequest,
+  RenumberBookmarksRequest,
   routes,
+  SetBookmarkNumberingRequest,
+  SetBookmarkNumberRequest,
   SetBookmarkTemplateRequest,
   SetLabelsRequest,
   UpdateConnectionRequest,
@@ -29,6 +33,7 @@ import {
 import { z } from 'zod';
 import { CurrentActor } from '../../platform/actor.js';
 import { ZodPipe } from '../../platform/http.js';
+import { MergedWriteRouter } from './merged-writes.js';
 
 /** `:solarSystemId` path segment as a number. */
 const systemId = new ZodPipe(z.coerce.number().pipe(EveId));
@@ -89,6 +94,41 @@ export class MapsController {
   ) {
     return this.maps.setBookmarkTemplate(actor, mapId, body.template);
   }
+
+  @Put(nestPath(routes.maps.setBookmarkNumbering.path))
+  setBookmarkNumbering(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Body(new ZodPipe(SetBookmarkNumberingRequest)) body: SetBookmarkNumberingRequest,
+  ) {
+    return this.maps.setBookmarkNumbering(actor, mapId, body.numbering);
+  }
+}
+
+/** `{n}` of wormholes: renumbering on request and numbers set by hand. */
+@Controller()
+export class BookmarkNumbersController {
+  constructor(@Inject(BookmarkNumberUseCases) private readonly numbers: BookmarkNumberUseCases) {}
+
+  @Post(nestPath(routes.maps.renumberBookmarks.path))
+  @HttpCode(204)
+  async renumber(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Body(new ZodPipe(RenumberBookmarksRequest)) body: RenumberBookmarksRequest,
+  ): Promise<void> {
+    await this.numbers.renumber(actor, mapId, body.parent);
+  }
+
+  @Put(nestPath(routes.connections.setBookmarkNumber.path))
+  setNumber(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Param('connectionId') connectionId: string,
+    @Body(new ZodPipe(SetBookmarkNumberRequest)) body: SetBookmarkNumberRequest,
+  ) {
+    return this.numbers.setNumber(actor, mapId, connectionId, body.number);
+  }
 }
 
 /** The caller's own view of a map. */
@@ -113,7 +153,10 @@ export class MapPreferencesController {
 
 @Controller()
 export class SystemsController {
-  constructor(@Inject(SystemUseCases) private readonly systems: SystemUseCases) {}
+  constructor(
+    @Inject(SystemUseCases) private readonly systems: SystemUseCases,
+    @Inject(MergedWriteRouter) private readonly merged: MergedWriteRouter,
+  ) {}
 
   @Post(nestPath(routes.systems.add.path))
   add(
@@ -121,7 +164,11 @@ export class SystemsController {
     @Param('mapId') mapId: string,
     @Body(new ZodPipe(AddSystemRequest)) body: AddSystemRequest,
   ) {
-    return this.systems.add(actor, mapId, body);
+    return this.merged.route(
+      mapId,
+      (w) => w.addSystem(actor, mapId, body),
+      () => this.systems.add(actor, mapId, body),
+    );
   }
 
   @Post(nestPath(routes.systems.move.path))
@@ -131,7 +178,11 @@ export class SystemsController {
     @Param('mapId') mapId: string,
     @Body(new ZodPipe(MoveSystemsRequest)) body: MoveSystemsRequest,
   ): Promise<void> {
-    await this.systems.move(actor, mapId, body);
+    await this.merged.route(
+      mapId,
+      (w) => w.moveSystems(actor, mapId, body),
+      () => this.systems.move(actor, mapId, body),
+    );
   }
 
   @Patch(nestPath(routes.systems.update.path))
@@ -141,7 +192,11 @@ export class SystemsController {
     @Param('solarSystemId', systemId) solarSystemId: number,
     @Body(new ZodPipe(UpdateSystemRequest)) body: UpdateSystemRequest,
   ) {
-    return this.systems.update(actor, mapId, solarSystemId, body);
+    return this.merged.route(
+      mapId,
+      (w) => w.updateSystem(actor, mapId, solarSystemId, body),
+      () => this.systems.update(actor, mapId, solarSystemId, body),
+    );
   }
 
   @Delete(nestPath(routes.systems.remove.path))
@@ -151,7 +206,11 @@ export class SystemsController {
     @Param('mapId') mapId: string,
     @Param('solarSystemId', systemId) solarSystemId: number,
   ): Promise<void> {
-    await this.systems.remove(actor, mapId, solarSystemId);
+    await this.merged.route(
+      mapId,
+      (w) => w.removeSystem(actor, mapId, solarSystemId),
+      () => this.systems.remove(actor, mapId, solarSystemId),
+    );
   }
 }
 
@@ -160,6 +219,7 @@ export class ConnectionsController {
   constructor(
     @Inject(ConnectionUseCases) private readonly connections: ConnectionUseCases,
     @Inject(ConnectionIntelQuery) private readonly intel: ConnectionIntelQuery,
+    @Inject(MergedWriteRouter) private readonly merged: MergedWriteRouter,
   ) {}
 
   @Get(nestPath(routes.connections.intel.path))
@@ -182,7 +242,11 @@ export class ConnectionsController {
     @Param('mapId') mapId: string,
     @Body(new ZodPipe(AddConnectionRequest)) body: AddConnectionRequest,
   ) {
-    return this.connections.add(actor, mapId, body);
+    return this.merged.route(
+      mapId,
+      (w) => w.addConnection(actor, mapId, body),
+      () => this.connections.add(actor, mapId, body),
+    );
   }
 
   @Patch(nestPath(routes.connections.update.path))
@@ -192,7 +256,11 @@ export class ConnectionsController {
     @Param('connectionId') connectionId: string,
     @Body(new ZodPipe(UpdateConnectionRequest)) body: UpdateConnectionRequest,
   ) {
-    return this.connections.update(actor, mapId, connectionId, body);
+    return this.merged.route(
+      mapId,
+      (w) => w.updateConnection(actor, mapId, connectionId, body),
+      () => this.connections.update(actor, mapId, connectionId, body),
+    );
   }
 
   @Delete(nestPath(routes.connections.remove.path))
@@ -202,13 +270,20 @@ export class ConnectionsController {
     @Param('mapId') mapId: string,
     @Param('connectionId') connectionId: string,
   ): Promise<void> {
-    await this.connections.remove(actor, mapId, connectionId);
+    await this.merged.route(
+      mapId,
+      (w) => w.removeConnection(actor, mapId, connectionId),
+      () => this.connections.remove(actor, mapId, connectionId),
+    );
   }
 }
 
 @Controller()
 export class SignaturesController {
-  constructor(@Inject(SignatureUseCases) private readonly signatures: SignatureUseCases) {}
+  constructor(
+    @Inject(SignatureUseCases) private readonly signatures: SignatureUseCases,
+    @Inject(MergedWriteRouter) private readonly merged: MergedWriteRouter,
+  ) {}
 
   @Get(nestPath(routes.signatures.list.path))
   list(
@@ -226,7 +301,11 @@ export class SignaturesController {
     @Param('solarSystemId', systemId) solarSystemId: number,
     @Body(new ZodPipe(AddSignatureRequest)) body: AddSignatureRequest,
   ) {
-    return this.signatures.add(actor, mapId, solarSystemId, body);
+    return this.merged.route(
+      mapId,
+      (w) => w.addSignature(actor, mapId, solarSystemId, body),
+      () => this.signatures.add(actor, mapId, solarSystemId, body),
+    );
   }
 
   @Post(nestPath(routes.signatures.paste.path))
@@ -237,7 +316,11 @@ export class SignaturesController {
     @Param('solarSystemId', systemId) solarSystemId: number,
     @Body(new ZodPipe(PasteSignaturesRequest)) body: PasteSignaturesRequest,
   ) {
-    return this.signatures.paste(actor, mapId, solarSystemId, body);
+    return this.merged.route(
+      mapId,
+      (w) => w.pasteSignatures(actor, mapId, solarSystemId, body),
+      () => this.signatures.paste(actor, mapId, solarSystemId, body),
+    );
   }
 
   @Patch(nestPath(routes.signatures.update.path))
@@ -247,7 +330,11 @@ export class SignaturesController {
     @Param('signatureId') signatureId: string,
     @Body(new ZodPipe(UpdateSignatureRequest)) body: UpdateSignatureRequest,
   ) {
-    return this.signatures.update(actor, mapId, signatureId, body);
+    return this.merged.route(
+      mapId,
+      (w) => w.updateSignature(actor, mapId, signatureId, body),
+      () => this.signatures.update(actor, mapId, signatureId, body),
+    );
   }
 
   @Delete(nestPath(routes.signatures.remove.path))
@@ -257,6 +344,10 @@ export class SignaturesController {
     @Param('mapId') mapId: string,
     @Param('signatureId') signatureId: string,
   ): Promise<void> {
-    await this.signatures.remove(actor, mapId, signatureId);
+    await this.merged.route(
+      mapId,
+      (w) => w.removeSignature(actor, mapId, signatureId),
+      () => this.signatures.remove(actor, mapId, signatureId),
+    );
   }
 }

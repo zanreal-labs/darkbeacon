@@ -18,26 +18,13 @@
   pointer-events: none;
 }
 
-/*
- * Keep clear of the dock: its column when open, and the floating tab strip when closed, which can
- * grow as wide as the column with plugin widgets.
- */
-.topbar:not([data-dock]),
-.topbar[data-dock] {
-  right: calc(360px + var(--dbk-space-3));
+/* Keeps clear of the system sidebar while it is open (`--covered-right`, set by the map view). */
+.topbar {
+  right: calc(var(--covered-right, 0px) + var(--dbk-space-3));
 }
 
 .topbar > * {
   pointer-events: auto;
-}
-
-.spacer {
-  flex: 1;
-  pointer-events: none !important;
-}
-
-.toolButton {
-  box-shadow: var(--dbk-shadow-medium);
 }
 
 .saving {
@@ -81,8 +68,8 @@
   transform: translate(-50%, -50%);
 }
 
-.overlayCard[data-dock] {
-  left: calc(50% - 180px);
+.overlayCard {
+  left: calc(50% - var(--covered-right, 0px) / 2);
 }
 
 .streamError {
@@ -156,9 +143,7 @@
 }
 
 @media (max-width: 760px) {
-  .topbar,
-  .topbar:not([data-dock]),
-  .topbar[data-dock] {
+  .topbar {
     right: var(--dbk-space-3);
   }
 
@@ -170,12 +155,11 @@
     display: none;
   }
 
-  .overlayCard,
-  .overlayCard[data-dock] {
+  .overlayCard {
     left: 50%;
   }
 
   .notices {
-    bottom: 76px;
+    bottom: calc(var(--covered-bottom, 0px) + var(--dbk-space-4));
   }
 }

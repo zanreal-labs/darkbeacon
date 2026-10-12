@@ -57,23 +57,23 @@ async function renderEdge(connection: ConnectionDto, selected = false) {
 }
 
 const line = (container: HTMLElement) => container.querySelector<SVGPathElement>('.react-flow__edge-path')!;
-const badges = (container: HTMLElement) =>
-  [...container.querySelectorAll<HTMLElement>('[data-edge-label] [data-kind]')].map((b) => b.dataset.kind);
+const core = (container: HTMLElement) => container.querySelector<SVGPathElement>('[data-layer="mass"]');
+const label = (container: HTMLElement) => container.querySelector<HTMLElement>('[data-edge-label]')!;
 
 describe('ConnectionEdge', () => {
-  it('draws a healthy wormhole as a calm plain line without badges', async () => {
+  it('draws a healthy wormhole as a thick neutral two-layer line without any text', async () => {
     const { container } = await renderEdge(connectionFixture('c1', 1, 2));
     expect(container.querySelector('[data-underlay="dangerous"]')).toBeNull();
     expect(container.querySelectorAll('[data-bubble]')).toHaveLength(0);
     expect(line(container).style.stroke).toBe('var(--dbk-edge-color)');
-    expect(line(container).style.strokeWidth).toBe('calc(var(--dbk-edge-width) * 1)');
-    expect(line(container).style.strokeDasharray).toBe('');
+    expect(line(container).style.strokeWidth).toBe('var(--dbk-edge-width)');
+    expect(core(container)?.style.stroke).toBe('var(--dbk-edge-mass-fresh)');
     // The line runs between the node borders, not their centres.
     expect(line(container).getAttribute('d')).toBe('M 160,30 L 400,30');
-    expect(badges(container)).toEqual([]);
+    expect(label(container).textContent).toBe('');
   });
 
-  it('shows at most two badges, most urgent first, a halo and bubbles on both ends', async () => {
+  it('shows time outside, mass inside, a halo and bubbles outside both systems; only the size as text', async () => {
     const { container } = await renderEdge(
       connectionFixture('c2', 1, 2, {
         timeStatus: 'eol',
@@ -89,16 +89,16 @@ describe('ConnectionEdge', () => {
     // The halo is drawn first, so it sits beneath the line.
     expect(halo.compareDocumentPosition(line(container))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
 
-    const bubbles = [...container.querySelectorAll<HTMLElement>('[data-bubble]')];
-    expect(bubbles.map((b) => [b.dataset.bubble, b.style.transform])).toEqual([
-      ['source', 'translate(-50%, -50%) translate(173px, 30px)'],
-      ['target', 'translate(-50%, -50%) translate(387px, 30px)'],
+    // Centred on the line's ends at the node borders (160 and 400), under the cards.
+    const bubbles = [...container.querySelectorAll<SVGCircleElement>('[data-bubble]')];
+    expect(bubbles.map((b) => [b.dataset.bubble, b.getAttribute('cx'), b.getAttribute('cy')])).toEqual([
+      ['source', '160', '30'],
+      ['target', '400', '30'],
     ]);
 
-    expect(line(container).style.stroke).toBe('var(--dbk-edge-mass-critical)');
-    expect(line(container).style.strokeDasharray).not.toBe('');
-    expect(badges(container)).toEqual(['dangerous', 'eol']);
-    expect(screen.getByText(/^EOL ~2h(29|30)m$/)).toBeTruthy();
+    expect(line(container).style.stroke).toBe('var(--dbk-edge-time-eol)');
+    expect(core(container)?.style.stroke).toBe('var(--dbk-edge-mass-critical)');
+    expect(label(container).textContent).toBe('S');
   });
 
   it('marks only the bubbled end and explains everything on hover', async () => {
@@ -106,8 +106,9 @@ describe('ConnectionEdge', () => {
       connectionFixture('c3', 1, 2, { bubbled: 'target', massStatus: 'reduced', massSaved: true }),
     );
     expect(
-      [...container.querySelectorAll<HTMLElement>('[data-bubble]')].map((b) => b.dataset.bubble),
+      [...container.querySelectorAll<SVGCircleElement>('[data-bubble]')].map((b) => b.dataset.bubble),
     ).toEqual(['target']);
+    expect(label(container).textContent).toBe('');
     expect(screen.queryByRole('tooltip')).toBeNull();
     fireEvent.mouseEnter(container.querySelector('.react-flow__edge g')!);
     const tip = await screen.findByRole('tooltip');
@@ -117,14 +118,15 @@ describe('ConnectionEdge', () => {
     expect(tip.textContent).toContain('Mass saved');
   });
 
-  it('draws gates solid with a gate icon and bridges dotted', async () => {
-    const gate = await renderEdge(connectionFixture('g', 1, 2, { type: 'gate', shipSize: 'xlarge' }));
+  it('draws gates as one plain line and bridges dotted lime, without text', async () => {
+    const gate = await renderEdge(connectionFixture('g', 1, 2, { type: 'gate', shipSize: 'capital' }));
     expect(line(gate.container).style.stroke).toBe('var(--dbk-edge-gate)');
     expect(line(gate.container).style.strokeDasharray).toBe('');
-    expect(badges(gate.container)).toEqual(['gate']);
+    expect(core(gate.container)).toBeNull();
+    expect(label(gate.container).textContent).toBe('');
     gate.unmount();
 
-    const bridge = await renderEdge(connectionFixture('b', 1, 2, { type: 'bridge', shipSize: 'xlarge' }));
+    const bridge = await renderEdge(connectionFixture('b', 1, 2, { type: 'bridge', shipSize: 'capital' }));
     expect(line(bridge.container).style.stroke).toBe('var(--dbk-edge-bridge)');
     expect(line(bridge.container).style.strokeDasharray).toMatch(/^0\.01 /);
   });

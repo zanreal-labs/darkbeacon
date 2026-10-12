@@ -19,6 +19,8 @@ export interface TargetMap {
   name: string;
   labels: LabelDto[];
   settings: MapSettings;
+  /** `composite` maps only show other maps' chains; nothing is imported into them. */
+  kind: 'map' | 'composite';
 }
 
 /**
@@ -40,6 +42,7 @@ export interface ChainTarget {
     solarSystemId: number,
     fields: SystemWrite,
     createdAt?: number,
+    changedAt?: number,
   ): Promise<{ system: MapSystemDto; outcome: WriteOutcome }>;
   putConnection(
     actor: Actor,
@@ -47,6 +50,7 @@ export interface ChainTarget {
     pair: { source: number; target: number },
     fields: ConnectionWrite,
     createdAt?: number,
+    changedAt?: number,
   ): Promise<{ connection: ConnectionDto; outcome: WriteOutcome }>;
   putSignature(
     actor: Actor,
@@ -55,6 +59,7 @@ export interface ChainTarget {
     eveId: string,
     fields: SignatureWrite,
     createdAt?: number,
+    changedAt?: number,
   ): Promise<{ signature: SignatureDto; outcome: WriteOutcome }>;
   ensureLabels(actor: Actor, mapId: string, labels: ReadonlyArray<Omit<LabelDto, 'id'>>): Promise<LabelDto[]>;
   setScopes(actor: Actor, mapId: string, scopes: MapScope[]): Promise<void>;

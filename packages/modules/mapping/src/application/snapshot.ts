@@ -10,6 +10,9 @@ export class MapSnapshotQuery extends MappingUseCases {
     await this.authorize(actor, mapId, 'viewer');
     const map = await this.ports.maps.findById(mapId);
     if (!map) throw new NotFoundError('Map');
+    // A map that merges others shows the merged chain (already without hidden systems).
+    const merged = await this.ports.overlay?.view(mapId);
+    if (merged) return { map, ...merged };
     const systems = (await this.ports.systems.list(mapId)).filter((s) => s.visible);
     const visible = new Set(systems.map((s) => s.solarSystemId));
     const connections = (await this.ports.connections.list(mapId)).filter(

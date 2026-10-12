@@ -5,7 +5,10 @@ import { WsAdapter } from '@nestjs/platform-ws';
 import { Logger, type LogLevel } from '@nestjs/common';
 import { AppModule } from './app.module.js';
 import type { AppConfig } from './config/config.js';
+import { installMaintenanceGate, MaintenanceMode } from './platform/maintenance.js';
 import type { PlatformOptions } from './platform/platform.module.js';
+import { OtelBridgeLogger } from './adapters/observability/otel-logger.js';
+import { telemetryRuntime } from './adapters/observability/runtime.js';
 import { installUpgradeRouting, installWebProxy, type WebUpstream } from './web/web-proxy.js';
 
 export interface CreateAppOptions extends PlatformOptions {
@@ -23,14 +26,20 @@ export async function createApp(
   options: CreateAppOptions = {},
 ): Promise<NestFastifyApplication> {
   const web = options.web ?? null;
+  const levels: LogLevel[] = ['log', 'warn', 'error'];
+  // With logs going out over OpenTelemetry, every line is also a log record tied to its trace.
+  const appLogger =
+    options.logger ?? (telemetryRuntime().logs ? new OtelBridgeLogger({ logLevels: levels }) : levels);
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule.forRoot(config, options, web),
     new FastifyAdapter({ trustProxy: true }),
-    { logger: options.logger ?? ['log', 'warn', 'error'] },
+    { logger: appLogger },
   );
   app.setGlobalPrefix('api');
   app.useWebSocketAdapter(new WsAdapter(app));
   app.enableShutdownHooks();
+  // Before the web proxy: in maintenance, page loads are answered here.
+  installMaintenanceGate(app, app.get(MaintenanceMode));
   const logger = new Logger('Web');
   installWebProxy(app, web, (error) => logger.warn(`web server did not answer: ${error.message}`));
   await app.init();

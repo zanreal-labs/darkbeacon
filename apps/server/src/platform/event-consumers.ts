@@ -4,6 +4,7 @@ import {
   Logger,
   type OnApplicationBootstrap,
   type OnModuleDestroy,
+  type OnModuleInit,
 } from '@nestjs/common';
 import {
   INSTANCE_STREAM,
@@ -15,6 +16,7 @@ import {
 } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
 import type { EventTables } from '../adapters/events/kysely-event-log.js';
+import { MaintenanceMode } from './maintenance.js';
 import { CLOCK, EVENT_BUS, EVENT_LOG } from './tokens.js';
 
 /** A reader of the event log that resumes where it stopped, also after a crash or restart. */
@@ -48,7 +50,7 @@ const MAX_TRIES = 5;
  * `onModuleInit`, consumers start once the application is up. The EventBus only wakes them.
  */
 @Injectable()
-export class EventConsumers implements OnApplicationBootstrap, OnModuleDestroy {
+export class EventConsumers implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
   private readonly consumers: EventConsumer[] = [];
   /** Consumers whose cursor exists; only those are drained. */
   private readonly ready = new Set<EventConsumer>();
@@ -65,7 +67,17 @@ export class EventConsumers implements OnApplicationBootstrap, OnModuleDestroy {
     @Inject(EVENT_LOG) private readonly log: EventLog,
     @Inject(EVENT_BUS) private readonly bus: EventBus,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(MaintenanceMode) private readonly maintenance: MaintenanceMode = new MaintenanceMode(),
   ) {}
+
+  onModuleInit(): void {
+    // A restored database has cursors of its own (or none for newer consumers): start over from it.
+    this.maintenance.register({
+      name: 'event consumers',
+      pause: () => this.pause(),
+      resume: () => this.onApplicationBootstrap(),
+    });
+  }
 
   register(consumer: EventConsumer): void {
     if (this.consumers.some((c) => c.name === consumer.name)) {
@@ -103,10 +115,18 @@ export class EventConsumers implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
+    await this.pause();
+  }
+
+  /** Stops draining and waits for the run in progress; `onApplicationBootstrap` starts again. */
+  async pause(): Promise<void> {
     this.stopped = true;
     clearInterval(this.timer);
     this.unsubscribe?.();
+    this.unsubscribe = undefined;
     await this.running;
+    this.ready.clear();
+    this.failures.clear();
   }
 
   /** Lets every consumer catch up; resolves once they have (calls during a run join it). */
@@ -129,6 +149,26 @@ export class EventConsumers implements OnApplicationBootstrap, OnModuleDestroy {
       } while (this.again && !this.stopped);
     })().finally(() => (this.running = null));
     return this.running;
+  }
+
+  /** Events each running consumer has not got past yet, over the streams it reads (the backlog). */
+  async lag(): Promise<Array<{ consumer: string; behind: number }>> {
+    const lags: Array<{ consumer: string; behind: number }> = [];
+    for (const consumer of this.consumers) {
+      if (!this.ready.has(consumer)) continue;
+      const row = await this.streamsOf(consumer)
+        .leftJoin('event_consumer_offset as o', (join) =>
+          join.onRef('o.stream', '=', 'event_stream.stream').on('o.consumer', '=', consumer.name),
+        )
+        .select((eb) =>
+          eb.fn
+            .sum<number | string | null>(eb('event_stream.head_seq', '-', eb.fn.coalesce('o.seq', eb.lit(0))))
+            .as('behind'),
+        )
+        .executeTakeFirst();
+      lags.push({ consumer: consumer.name, behind: Number(row?.behind ?? 0) });
+    }
+    return lags;
   }
 
   private get db() {

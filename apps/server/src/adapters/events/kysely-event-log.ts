@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import {
   noAuditScope,
   type ActorKind,
+  type AuditContext,
   type AuditScope,
   type DomainEvent,
   type EventBus,
@@ -63,6 +64,11 @@ export function eventHash(row: Omit<EventRow, 'hash'>): string {
 export interface EventLogAudit {
   stamper: AuditStamper;
   scope: AuditScope;
+  /**
+   * Told after commit about every appended event as it was written (with `before`) and the
+   * audit facts it was written under; for observers the bus envelope is too thin for.
+   */
+  committed?: (events: readonly NewEvent[], context: AuditContext) => void;
 }
 
 /**
@@ -78,14 +84,19 @@ export class KyselyEventLog implements EventLog {
     private readonly bus: EventBus,
     audit: Partial<EventLogAudit> = {},
   ) {
-    this.audit = { stamper: audit.stamper ?? new AuditStamper(), scope: audit.scope ?? noAuditScope };
+    this.audit = {
+      stamper: audit.stamper ?? new AuditStamper(),
+      scope: audit.scope ?? noAuditScope,
+      ...(audit.committed ? { committed: audit.committed } : {}),
+    };
   }
 
   append(events: readonly NewEvent[]): Promise<DomainEvent[]> {
     if (events.length === 0) return Promise.resolve([]);
     return this.database.transaction(async () => {
       const db = this.database.db<EventTables>();
-      const stamps = await this.audit.stamper.stamp(events, this.audit.scope.current());
+      const context = this.audit.scope.current();
+      const stamps = await this.audit.stamper.stamp(events, context);
       const counts = new Map<string, number>();
       for (const e of events) counts.set(e.stream, (counts.get(e.stream) ?? 0) + 1);
 
@@ -145,7 +156,10 @@ export class KyselyEventLog implements EventLog {
       for (const [stream, { hash }] of next)
         await db.updateTable('event_stream').set({ head_hash: hash }).where('stream', '=', stream).execute();
 
-      this.database.afterCommit(() => this.bus.publish(stored));
+      this.database.afterCommit(() => {
+        this.bus.publish(stored);
+        this.audit.committed?.(events, context);
+      });
       return stored;
     });
   }

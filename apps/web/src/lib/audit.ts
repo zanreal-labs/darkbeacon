@@ -40,6 +40,7 @@ const SYSTEM_PROCESSES: Record<string, string> = {
   'plugin-loader': 'Plugin loader',
   plugins: 'Map cleanup',
   routing: 'Routing',
+  'bookmark-numbers': 'Bookmark numbering',
   mapping: 'Mapping',
   passages: 'Passage log',
 };
@@ -85,6 +86,8 @@ const FIELD_LABELS: Record<string, string> = {
   group: 'Group',
   name: 'Name',
   connectionId: 'Linked connection',
+  bookmarkNumber: 'Bookmark number',
+  bookmarkParent: 'Numbered from',
   role: 'Role',
   enabled: 'Enabled',
   error: 'Problem',
@@ -146,7 +149,8 @@ function value(field: string, v: unknown, names: AuditNames): string {
   if (field === 'eventRetentionDays') return typeof v === 'number' ? `${v} days` : 'Forever';
   if (v === null || v === undefined || v === '') return '—';
   if (typeof v === 'boolean') return v ? 'Yes' : 'No';
-  if (field === 'location' && typeof v === 'number') return names.system?.(v) ?? 'a known system';
+  if ((field === 'location' || field === 'bookmarkParent') && typeof v === 'number')
+    return names.system?.(v) ?? 'a known system';
   if (field === 'themeId' && typeof v === 'string') return names.theme?.(v) ?? titleCase(v);
   if (field === 'position' && typeof v === 'object') {
     const p = v as { x: number; y: number };
@@ -285,6 +289,11 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
       );
     case 'settings.changed':
       return read('changed the instance settings', 'instance');
+    case 'telemetry.changed':
+      return read(
+        data.enabled ? 'turned anonymous telemetry on' : 'turned anonymous telemetry off',
+        'instance',
+      );
     case 'theme.installed':
       return read(`installed the theme ${String(data.name ?? '')}`.trim(), 'instance');
     case 'theme.removed':
@@ -311,6 +320,21 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
         `changed the settings of ${String(entry.entity?.id ?? 'a plugin').split('@')[0]}`,
         'plugins',
       );
+    case 'backup.completed':
+      return read(`made a backup (${String(entry.diff.backup?.after ?? 'manual')})`, 'instance');
+    case 'backup.failed':
+      return read(
+        entry.diff.restoreFailed ? 'could not restore a backup' : 'could not make a backup',
+        'instance',
+      );
+    case 'backup.restored':
+      return read('restored a backup', 'instance');
+    case 'backup.deleted':
+      return read('deleted a backup', 'instance');
+    case 'backup.downloaded':
+      return read('downloaded a backup', 'instance');
+    case 'backup.settings_changed':
+      return read('changed the backup settings', 'instance');
     case 'character.unlinked':
       return read('unlinked a character', 'access');
     case 'map.created':
@@ -359,6 +383,27 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
       return read('started tracking a character', 'tracking');
     case 'character.untracked':
       return read('stopped tracking a character', 'tracking');
+    case 'import.started':
+      return read(`started importing from ${String(entry.diff.imported?.after ?? 'Wanderer')}`, 'map');
+    case 'import.finished': {
+      const status = entry.diff.status?.after;
+      const source = String(entry.diff.imported?.after ?? 'Wanderer');
+      return read(
+        status === 'done'
+          ? `imported from ${source}`
+          : status === 'cancelled'
+            ? `stopped importing from ${source}`
+            : `could not import from ${source}`,
+        'map',
+      );
+    }
+    case 'import.sync_changed':
+      return read(
+        entry.diff.syncing?.after
+          ? `started syncing from ${String(entry.diff.source?.after ?? 'Wanderer')}`
+          : `stopped syncing from ${String(entry.diff.source?.after ?? 'Wanderer')}`,
+        'map',
+      );
     default:
       return read(`made a change (${entry.type})`, 'map');
   }

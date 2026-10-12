@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { MapRole } from './access.js';
-import { BookmarkTemplate } from './bookmarks.js';
+import { BookmarkNumbering, BookmarkTemplate } from './bookmarks.js';
 import { EveId, Id, Timestamp } from './common.js';
 
 export const MapScope = z.enum(['wormhole', 'high', 'low', 'null', 'pochven']);
@@ -11,6 +11,8 @@ export const MapSettings = z.object({
   scopes: z.array(MapScope).default(['wormhole']),
   /** Default bookmark label template of the map (see `bookmarks.ts`); absent means `{sig}`. */
   bookmarkTemplate: BookmarkTemplate.optional(),
+  /** How `{n}` numbers wormholes (see `bookmarks.ts`); absent means found order, gaps kept. */
+  bookmarkNumbering: BookmarkNumbering.optional(),
 });
 export type MapSettings = z.infer<typeof MapSettings>;
 
@@ -30,10 +32,18 @@ export const Slug = z
   .max(48)
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'lowercase letters, digits and dashes');
 
+/**
+ * `standard`: a map of its own systems (it may merge shared maps too); `composite`: a map with no
+ * objects of its own that merges other maps (an alliance chain). Absent means `standard`.
+ */
+export const MapKind = z.enum(['standard', 'composite']);
+export type MapKind = z.infer<typeof MapKind>;
+
 export const MapDto = z.object({
   id: Id,
   slug: Slug,
   name: z.string(),
+  kind: MapKind.optional(),
   ownerAccountId: Id,
   settings: MapSettings,
   labels: z.array(LabelDto),
@@ -43,7 +53,7 @@ export const MapDto = z.object({
 export type MapDto = z.infer<typeof MapDto>;
 
 /** GET /api/maps item: a map plus the caller's effective role. */
-export const MapSummaryDto = MapDto.pick({ id: true, slug: true, name: true }).extend({
+export const MapSummaryDto = MapDto.pick({ id: true, slug: true, name: true, kind: true }).extend({
   role: MapRole.exclude(['blocked']),
 });
 export type MapSummaryDto = z.infer<typeof MapSummaryDto>;
@@ -51,6 +61,7 @@ export type MapSummaryDto = z.infer<typeof MapSummaryDto>;
 export const CreateMapRequest = z.object({
   name: z.string().trim().min(1).max(64),
   slug: Slug.optional(),
+  kind: MapKind.optional(),
 });
 export type CreateMapRequest = z.infer<typeof CreateMapRequest>;
 
@@ -64,6 +75,21 @@ export type UpdateMapRequest = z.infer<typeof UpdateMapRequest>;
 /** PUT /api/maps/:mapId/labels replaces the whole list (manager+). */
 export const SetLabelsRequest = z.object({ labels: z.array(LabelDto).max(64) });
 export type SetLabelsRequest = z.infer<typeof SetLabelsRequest>;
+
+/**
+ * Where a merged object comes from: the maps holding it and whose write is newest. Only on maps that
+ * merge others; names come from `MapSnapshot.sources`.
+ */
+export const ProvenanceDto = z.object({
+  /** Source ids (`MapSourceDto.id`) holding the object, in source order. */
+  sources: z.array(Id),
+  /** The source whose change is the newest, and when it was made. */
+  updatedBy: Id,
+  updatedAt: Timestamp,
+  /** True when a read-write source (or the map itself) holds it, so its editors may change it. */
+  writable: z.boolean(),
+});
+export type ProvenanceDto = z.infer<typeof ProvenanceDto>;
 
 export const Position = z.object({ x: z.number().finite(), y: z.number().finite() });
 export type Position = z.infer<typeof Position>;
@@ -97,6 +123,8 @@ export const MapSystemDto = z.object({
   visible: z.boolean(),
   createdAt: Timestamp,
   updatedAt: Timestamp,
+  /** On maps that merge other maps only. */
+  provenance: ProvenanceDto.optional(),
 });
 export type MapSystemDto = z.infer<typeof MapSystemDto>;
 
@@ -134,8 +162,12 @@ export type TimeStatus = z.infer<typeof TimeStatus>;
 /** In-game: fresh > 50 %, reduced 10-50 %, critical < 10 % of mass left. */
 export const MassStatus = z.enum(['fresh', 'reduced', 'critical']);
 export type MassStatus = z.infer<typeof MassStatus>;
-/** Largest ship class that fits: small = frigates, medium = up to battlecruisers, large = battleships, xlarge = capitals/freighters. */
-export const ShipSize = z.enum(['small', 'medium', 'large', 'xlarge']);
+/**
+ * Largest ship class that fits, from the max jump mass: small = frigates and destroyers (5 000 t),
+ * medium = up to battlecruisers and industrials (62 000 t), large = battleships (375 000-410 000 t),
+ * xlarge = freighters (1 000 000 t), capital = capitals (2 000 000 t).
+ */
+export const ShipSize = z.enum(['small', 'medium', 'large', 'xlarge', 'capital']);
 export type ShipSize = z.infer<typeof ShipSize>;
 export const Bubbled = z.enum(['none', 'source', 'target', 'both']);
 export type Bubbled = z.infer<typeof Bubbled>;
@@ -159,8 +191,17 @@ export const ConnectionDto = z.object({
    * passages from then on. Optional: connections from before it existed lack it.
    */
   massStatusAt: Timestamp.nullable().optional(),
+  /**
+   * `{n}` of a wormhole: its number among the wormholes out of `bookmarkParent`, the system it is
+   * reached from in the chain. Kept by the server, the same for everyone; null for stargates and
+   * bridges. Optional: connections from before numbering lack it.
+   */
+  bookmarkNumber: z.number().int().positive().nullable().optional(),
+  bookmarkParent: EveId.nullable().optional(),
   createdAt: Timestamp,
   updatedAt: Timestamp,
+  /** On maps that merge other maps only. */
+  provenance: ProvenanceDto.optional(),
 });
 export type ConnectionDto = z.infer<typeof ConnectionDto>;
 
@@ -201,6 +242,8 @@ export const SignatureDto = z.object({
   connectionId: Id.nullable(),
   createdAt: Timestamp,
   updatedAt: Timestamp,
+  /** On maps that merge other maps only. */
+  provenance: ProvenanceDto.optional(),
 });
 export type SignatureDto = z.infer<typeof SignatureDto>;
 

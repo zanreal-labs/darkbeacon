@@ -42,6 +42,7 @@ import { SecretBox } from '../../adapters/identity/secret-box.js';
 import type { AppConfig } from '../../config/config.js';
 import { ActorResolverRegistry } from '../../platform/actor.js';
 import { AuditDirectoryRegistry } from '../../platform/audit.js';
+import { MaintenanceMode } from '../../platform/maintenance.js';
 import { APP_CONFIG, CLOCK, EVENT_LOG, HTTP_FETCH, UNIT_OF_WORK } from '../../platform/tokens.js';
 import { AccountsController, AdminAccountsController } from './accounts.controller.js';
 import { AuthController, oauthCallbackUrl } from './auth.controller.js';
@@ -268,9 +269,17 @@ export class IdentityModule implements OnModuleInit, OnApplicationBootstrap, OnM
     @Inject(AuditDirectoryRegistry) private readonly directory: AuditDirectoryRegistry,
     @Inject(ACCOUNTS) private readonly accountRepository: KyselyAccountRepository,
     @Inject(CHARACTERS) private readonly characterRepository: CharacterRepository,
+    @Inject(DiscordBotService) private readonly bot: DiscordBotService,
+    @Inject(MaintenanceMode) private readonly maintenance: MaintenanceMode,
   ) {}
 
   onModuleInit(): void {
+    this.maintenance.register({
+      name: 'identity',
+      resume: (restored) => {
+        if (restored) this.bot.forgetCachedLists();
+      },
+    });
     // Names and main characters for the audit trail, read when an event is written.
     this.directory.use({
       account: async (accountId) => {
