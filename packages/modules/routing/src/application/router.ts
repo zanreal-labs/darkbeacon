@@ -98,7 +98,13 @@ export class Router {
     let table = state.tables.get(policy.key);
     if (!table) state.tables.set(policy.key, (table = new Map()));
     let jumps = table.get(hubId);
-    if (!jumps) table.set(hubId, (jumps = jumpsTo(graph, hubId, policy)));
+    if (!jumps) {
+      // A search over the whole universe takes a few milliseconds; computing several in a row
+      // (exits, precomputed tables) would hold everything else up, so each waits its turn.
+      await yieldTurn();
+      jumps = table.get(hubId);
+      if (!jumps) table.set(hubId, (jumps = jumpsTo(graph, hubId, policy)));
+    }
     return { graph, jumps };
   }
 
@@ -179,4 +185,9 @@ export class Router {
     const extra = (await Promise.all(this.edgeSources.map((s) => s.edges(mapId)))).flat();
     return { visible, edges, extra, connections };
   }
+}
+
+/** Lets other work (requests, sockets) run before a long computation. */
+function yieldTurn(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }
