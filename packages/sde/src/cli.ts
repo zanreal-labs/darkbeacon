@@ -1,7 +1,17 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
 import { buildUniverse, formatUniverse, parseJsonl, SDE_FILES, type SdeInput } from './build.js';
-import { UNIVERSE_DATA_FILE, WORMHOLE_DATA_FILE } from './index.js';
+import { STATION_DATA_FILE, UNIVERSE_DATA_FILE, WORMHOLE_DATA_FILE } from './index.js';
+import {
+  BLUE_LOOT_TYPES,
+  buildStations,
+  formatStations,
+  npcBuyStations,
+  planetNames,
+  RED_LOOT_TYPES,
+  STATION_SDE_FILES,
+  type RawPlanet,
+} from './stations.js';
 import {
   buildWormholes,
   formatWormholes,
@@ -36,6 +46,7 @@ const { values } = parseArgs({
     statics: { type: 'string', default: STATICS },
     out: { type: 'string', default: UNIVERSE_DATA_FILE },
     'wormholes-out': { type: 'string', default: WORMHOLE_DATA_FILE },
+    'stations-out': { type: 'string', default: STATION_DATA_FILE },
   },
 });
 
@@ -50,6 +61,7 @@ async function fetchBytes(source: string): Promise<Buffer> {
 const entries = readZipEntries(await fetchBytes(values.from), [
   ...Object.values(SDE_FILES),
   ...Object.values(WORMHOLE_SDE_FILES),
+  ...Object.values(STATION_SDE_FILES),
 ]);
 const text = (name: string) => {
   const entry = entries.get(name);
@@ -105,3 +117,34 @@ await writeFile(values['wormholes-out'], formatWormholes(wormholes));
 console.log(
   `${wormholes.types?.length} wormhole types, ${Object.keys(wormholes.systems).length} systems -> ${values['wormholes-out']}`,
 );
+
+// Stations, and which of them buy blue and red loot (NPC buy orders on ESI's regional markets).
+const fetchJson = async (url: string): Promise<unknown> => {
+  for (let attempt = 0; ; attempt++) {
+    const response = await fetch(url, { headers: { 'user-agent': 'Darkbeacon SDE builder' } });
+    if (response.ok) return response.json();
+    if (response.status === 404) return null;
+    if (attempt >= 3) throw new Error(`${url}: ${response.status}`);
+    await new Promise((resolve) => setTimeout(resolve, 2000 * (attempt + 1)));
+  }
+};
+const knownRegions = universe.regions.filter((r) => r.id < 11_000_000).map((r) => r.id);
+console.log(`reading NPC loot buy orders in ${knownRegions.length} regions`);
+const stations = buildStations({
+  meta,
+  stations: read(STATION_SDE_FILES.stations),
+  operations: read(STATION_SDE_FILES.operations),
+  corporations: read(STATION_SDE_FILES.corporations),
+  planetNames: planetNames(
+    text(STATION_SDE_FILES.planets)
+      .split('\n')
+      .filter((line) => line.includes('"uniqueName"'))
+      .map((line) => JSON.parse(line) as RawPlanet),
+  ),
+  systems: new Map(universe.systems.map((s) => [s.id, { name: s.name, security: s.security }])),
+  blueLoot: await npcBuyStations(BLUE_LOOT_TYPES, knownRegions, fetchJson),
+  redLoot: await npcBuyStations(RED_LOOT_TYPES, knownRegions, fetchJson),
+  buyOrdersSource: `ESI markets ${new Date().toISOString().slice(0, 10)}`,
+});
+await writeFile(values['stations-out'], formatStations(stations));
+console.log(`${stations.stations.length} stations -> ${values['stations-out']}`);
