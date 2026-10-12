@@ -326,7 +326,7 @@ export function buildOpenApi(options: OpenApiOptions): JsonSchema {
       description: [
         'REST API of a self-hosted Darkbeacon instance (EVE Online wormhole mapper).',
         '',
-        'Authenticate with `Authorization: Bearer dbk_pat_…` (a personal access token from Account → API keys) or `dbk_svc_…` (a service key from Admin → API keys). Every request runs through the same use cases and permission checks as the web app: a key acts as its owner and can only narrow what the owner may do.',
+        'Authenticate with `Authorization: Bearer dbk_pat_…` (a personal access token from Account → API keys) or `dbk_svc_…` (a service key from Admin → API access). MCP clients may instead sign in with OAuth 2.1 (`dbk_oat_…`, valid on `/mcp` only; see docs/mcp.md). Every request runs through the same use cases and permission checks as the web app: a key acts as its owner and can only narrow what the owner may do.',
         '',
         `Scopes are \`<resource>:<action>\` on every map the principal reaches, or \`map:<mapId>:<resource>:<action>\` on one map; actions are \`read\` < \`write\` < \`manage\`, \`*\` means all. Resources:\n${scopeList}`,
         '',
