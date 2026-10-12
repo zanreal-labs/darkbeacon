@@ -217,6 +217,14 @@ export const routes = {
       mapRole: 'admin',
       response: dto.DiscordNotifyTestDto,
     }),
+    /** Posts the map's way home now (the hubs, their jumps and mouths). */
+    testWayHome: route({
+      method: 'POST',
+      path: '/api/plugins/discord-notify/maps/:mapId/test-way-home',
+      auth: 'account',
+      mapRole: 'admin',
+      response: dto.DiscordNotifyTestDto,
+    }),
   },
 
   admin: {

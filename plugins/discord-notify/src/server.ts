@@ -12,18 +12,18 @@ import type {
   PluginHttpResponse,
   ServerPlugin,
   UpdateDiscordNotifyRequest,
+  WayHomeDto,
 } from '@darkbeacon/plugin-sdk';
 import { deliver, webhookInfo, type Fetch } from './deliver.js';
 import {
   arrival,
   connectionAdded,
   connectionChanged,
-  exitsFrom,
   killInChain,
   rallyPing,
   systemMarkedHostile,
   testNote,
-  wayHomeDigest,
+  wayHomeNote,
   type Embed,
   type MapView,
   type Note,
@@ -58,8 +58,11 @@ const EMBEDS_PER_MESSAGE = 10;
 const RETRIES = [10_000, 60_000, 5 * 60_000];
 /** Events older than this when they are read (a plugin switched on again) are not posted. */
 const STALE_MS = 10 * 60_000;
-/** The way-home digest is posted at most this often. */
-const DIGEST_EVERY_MS = 15 * 60_000;
+/**
+ * The way home is posted once the map has been quiet this long since it last changed: chains
+ * change in bursts while scouts map, and one message after the burst is what a fleet reads.
+ */
+export const WAY_HOME_QUIET_MS = 10 * 60_000;
 /** Map data (systems, connections) is read again after this long. */
 const VIEW_TTL_MS = 5_000;
 
@@ -70,9 +73,13 @@ const EVENTS = [
   'system.added',
   'system.updated',
   'system.removed',
+  'signature.added',
+  'signature.updated',
+  'signature.removed',
   'ping.created',
   'character.jumped',
   'map.removed',
+  'routes.way_home_changed',
 ];
 
 interface MapData {
@@ -146,6 +153,11 @@ export class DiscordNotify {
       method: 'POST',
       path: '/maps/:mapId/test',
       handler: (r) => this.guard(r, () => this.test(r.params.mapId!)),
+    });
+    ctx.http.route({
+      method: 'POST',
+      path: '/maps/:mapId/test-way-home',
+      handler: (r) => this.guard(r, () => this.testWayHome(r.params.mapId!)),
     });
     // Notifications other plugins send through the core notifier go to the map's channel too.
     ctx.provide('notifier', {
@@ -320,6 +332,21 @@ export class DiscordNotify {
     return { ok: result.ok, error: result.ok ? null : result.error };
   }
 
+  /** Posts the way home now, whatever was posted before (the Discord tab's test button). */
+  async testWayHome(mapId: string): Promise<{ ok: boolean; error: string | null }> {
+    const config = await this.store.config(mapId);
+    if (!config?.target) throw new RequestError('Connect a channel first');
+    const data = await this.mapData(mapId);
+    if (!data) throw new RequestError('Map not found');
+    const latest = await this.store.remember<WayHomeDto>(mapId, 'wayhome:latest');
+    if (!latest?.home) throw new RequestError('Mark a system of the map as Home first');
+    const note = wayHomeNote(data.view, latest, this.now())!;
+    const result = await this.send(config.target, [note.embed], null);
+    if (result.ok) await this.store.saveStatus(mapId, { last_sent_at: this.now() });
+    else await this.store.saveStatus(mapId, { last_error: result.error, last_error_at: this.now() });
+    return { ok: result.ok, error: result.ok ? null : result.error };
+  }
+
   // ---- Events ----------------------------------------------------------------------------------
 
   /** Runs in the transaction that moves the plugin's cursor: notes and memory commit together. */
@@ -330,6 +357,9 @@ export class DiscordNotify {
       this.maps.delete(mapId);
       await this.store.forgetMap(mapId);
       return;
+    }
+    if (event.type === 'routes.way_home_changed') {
+      await this.store.memorize(mapId, 'wayhome:latest', event.data as WayHomeDto);
     }
     const config = await this.store.config(mapId);
     if (!config?.settings.enabled || !config.target) return;
@@ -373,7 +403,13 @@ export class DiscordNotify {
           : [];
       }
       case 'system.removed':
+      case 'signature.added':
+      case 'signature.updated':
+      case 'signature.removed':
         await this.markDigest(config);
+        return [];
+      case 'routes.way_home_changed':
+        if (config.settings.kinds.wayHome) await this.store.memorize(mapId, 'wayhome:pending', { since: at });
         return [];
       case 'ping.created':
         return [rallyPing(view, event.data as PingDto, at)];
@@ -411,8 +447,11 @@ export class DiscordNotify {
     );
   }
 
+  /** A change of the chain restarts the quiet period of a way home waiting to be posted. */
   private async markDigest(config: MapConfig): Promise<void> {
-    if (config.settings.kinds.wayHome) await this.store.memorize(config.mapId, 'digest:dirty', true);
+    if (!config.settings.kinds.wayHome) return;
+    if (await this.store.remember(config.mapId, 'wayhome:pending'))
+      await this.store.memorize(config.mapId, 'wayhome:pending', { since: this.now() });
   }
 
   // ---- Sending ---------------------------------------------------------------------------------
@@ -479,35 +518,25 @@ export class DiscordNotify {
 
   // ---- Way home and kills ----------------------------------------------------------------------
 
-  /** Posts the way-home digest of maps whose exits changed, at most every 15 minutes. */
+  /**
+   * Posts the way home of maps where it changed and the chain has been quiet for ten minutes
+   * since; the same way home is never posted twice in a row.
+   */
   async digests(): Promise<void> {
     for (const config of await this.store.activeConfigs()) {
       if (!config.settings.kinds.wayHome) continue;
-      if (!(await this.store.remember<boolean>(config.mapId, 'digest:dirty'))) continue;
-      const last = await this.store.remember<{ at: number; exits: string }>(config.mapId, 'digest:last');
-      if (last && this.now() - last.at < DIGEST_EVERY_MS) continue;
-      await this.store.forget(config.mapId, 'digest:dirty');
+      const pending = await this.store.remember<{ since: number }>(config.mapId, 'wayhome:pending');
+      if (!pending || this.now() - pending.since < WAY_HOME_QUIET_MS) continue;
+      await this.store.forget(config.mapId, 'wayhome:pending');
+      const latest = await this.store.remember<WayHomeDto>(config.mapId, 'wayhome:latest');
       const data = await this.mapData(config.mapId);
-      if (!data) continue;
-      const home = [...data.view.systems.values()].find((s) => s.visible && s.status === 'home');
-      if (!home) continue;
-      const visible = new Set(
-        [...data.view.systems.values()].filter((s) => s.visible).map((s) => s.solarSystemId),
-      );
-      const exits = exitsFrom(
-        home.solarSystemId,
-        data.connections,
-        visible,
-        (id) => data.view.universe(id)?.whClass,
-      );
-      const key = JSON.stringify(exits);
-      if (last?.exits === key) continue;
-      await this.store.memorize(config.mapId, 'digest:last', { at: this.now(), exits: key });
-      await this.enqueue(
-        config,
-        [wayHomeDigest(data.view, home.solarSystemId, exits, this.now())],
-        this.now(),
-      );
+      if (!latest || !data) continue;
+      const note = wayHomeNote(data.view, latest, this.now());
+      if (!note) continue;
+      const key = JSON.stringify(note.embed.description);
+      if ((await this.store.remember<string>(config.mapId, 'wayhome:last')) === key) continue;
+      await this.store.memorize(config.mapId, 'wayhome:last', key);
+      await this.enqueue(config, [note], this.now());
     }
   }
 

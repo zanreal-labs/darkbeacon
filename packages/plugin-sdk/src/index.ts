@@ -23,4 +23,5 @@ export type {
   SignatureDto,
   TypedEvent,
   UniverseSystemDto,
+  WayHomeDto,
 } from '@darkbeacon/shared';
