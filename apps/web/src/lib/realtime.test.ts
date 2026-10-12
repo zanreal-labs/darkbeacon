@@ -42,6 +42,34 @@ const event = (seq: number) => ({
 });
 
 describe('RealtimeClient', () => {
+  it('measures the round trip with pings, keeps the best of the last three and forgets it on close', () => {
+    FakeSocket.all = [];
+    const client = new RealtimeClient({ url: 'ws://x', createSocket: () => new FakeSocket() });
+    const seen: Array<number | null> = [];
+    client.onLatency((ms) => seen.push(ms));
+    let now = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    client.start();
+    const socket = FakeSocket.all[0]!;
+    client.ping(); // not open yet: nothing sent
+    socket.open();
+    const answer = (ms: number) => {
+      client.ping();
+      now += ms;
+      socket.push({ op: 'pong' });
+    };
+    answer(300);
+    answer(40);
+    answer(90);
+    expect(socket.sent.filter((m) => (m as { op: string }).op === 'ping')).toHaveLength(3);
+    expect(client.latency).toBe(40);
+    expect(seen).toEqual([300, 40]);
+    socket.close();
+    expect(client.latency).toBeNull();
+    client.stop();
+    vi.restoreAllMocks();
+  });
+
   it('starts over from snapshots after the server restored its database', () => {
     vi.useFakeTimers();
     FakeSocket.all = [];

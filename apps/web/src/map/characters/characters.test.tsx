@@ -3,7 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import type { CharacterDto, CharacterPresenceDto, MeDto } from '@darkbeacon/shared';
 import { charactersNeedingAttention, relinkHref } from '../../lib/scope-health';
-import { exportPreferences, parsePreferencesFile, readBrowserOptions, writeBrowserOptions } from '../../lib/preferences';
+import {
+  exportPreferences,
+  parsePreferencesFile,
+  readBrowserOptions,
+  writeBrowserOptions,
+} from '../../lib/preferences';
 import { isOutdated } from '../../shell/NewVersion';
 import { latencyColor } from '../../shell/ConnectionIndicator';
 import { describeTq } from '../../shell/EveStatus';
@@ -64,7 +69,9 @@ describe('follow mode', () => {
     const arrived: number[] = [];
     const { rerender } = renderHook(
       ({ at, follow }: { at: number; follow: number | null }) =>
-        useFollowCharacter(new Map([[7, presence(7, { solarSystemId: at })]]), follow, (id) => arrived.push(id)),
+        useFollowCharacter(new Map([[7, presence(7, { solarSystemId: at })]]), follow, (id) =>
+          arrived.push(id),
+        ),
       { initialProps: { at: 1, follow: null as number | null } },
     );
     // Turning follow on does not move the view by itself.

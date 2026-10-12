@@ -48,8 +48,9 @@ export class RealtimeClient {
   private readonly latencyListeners = new Set<(ms: number | null) => void>();
   /** When the unanswered ping was sent (performance.now()); null with none out. */
   private pingSentAt: number | null = null;
-  /** Round trip of the last ping in ms; null until one was answered on this socket. */
+  /** Round trip in ms (the best of the last few pings); null until one was answered on this socket. */
   latency: number | null = null;
+  private latencySamples: number[] = [];
   private attempt = 0;
   private stopped = true;
   private timer: ReturnType<typeof setTimeout> | undefined;
@@ -164,9 +165,16 @@ export class RealtimeClient {
     return () => this.latencyListeners.delete(listener);
   }
 
+  /**
+   * A busy page (just loaded, rendering a big map) answers late; the best of the last three
+   * round trips is the network's, which is what the dot shows.
+   */
   private setLatency(ms: number | null): void {
-    this.latency = ms;
-    for (const listener of this.latencyListeners) listener(ms);
+    this.latencySamples = ms === null ? [] : [...this.latencySamples, ms].slice(-3);
+    const next = ms === null ? null : Math.min(...this.latencySamples);
+    if (next === this.latency) return;
+    this.latency = next;
+    for (const listener of this.latencyListeners) listener(next);
   }
 
   onStatus(listener: (status: ConnectionStatus) => void): () => void {

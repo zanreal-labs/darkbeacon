@@ -90,8 +90,13 @@ export function useLatency(): number | null {
   useEffect(() => {
     if (status !== 'open') return;
     client.ping();
+    // A second look soon after connecting, when the page has settled.
+    const soon = setTimeout(() => client.ping(), 3_000);
     const timer = setInterval(() => client.ping(), LATENCY_EVERY_MS);
-    return () => clearInterval(timer);
+    return () => {
+      clearTimeout(soon);
+      clearInterval(timer);
+    };
   }, [client, status]);
   return useSyncExternalStore(
     (notify) => client.onLatency(notify),
