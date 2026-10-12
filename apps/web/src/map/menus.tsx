@@ -47,6 +47,7 @@ import { SlotItem } from '../plugins/PluginSlot';
 import type { SlotEntry } from '../plugins/registry';
 import type { ToastInput } from '../ui';
 import { SHIP_SIZE_LABEL } from './ConnectionEdge';
+import { passageMenuItems } from './menus/passages';
 import { STATUS_LABEL } from './nodeFacts';
 import type { MapStore } from './useMapStore';
 
@@ -278,6 +279,8 @@ export interface ConnectionMenuContext {
   can: MapPermissions;
   store: Commands;
   plugins: readonly SlotEntry<'connectionContextMenu'>[];
+  onLogJump?(): void;
+  onPlanRoll?(): void;
 }
 
 const MASS_LABEL: Record<MassStatus, string> = { fresh: 'Fresh', reduced: 'Reduced', critical: 'Critical' };
@@ -419,7 +422,7 @@ export function connectionMenu(ctx: ConnectionMenuContext): MenuItem[] {
         },
       ]
     : [];
-  return groups(state, flags, remove);
+  return groups(state, passageMenuItems(ctx), flags, remove);
 }
 
 export interface PaneMenuContext {

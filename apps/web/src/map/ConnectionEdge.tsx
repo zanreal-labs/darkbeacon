@@ -15,12 +15,29 @@ import { edgeInnerStyle, edgeOuterStyle, edgeVisual, SHIP_SIZE_TEXT, type EdgeVi
 import { floatingEnds, type Point, type Rect } from './geometry';
 import styles from './ConnectionEdge.module.css';
 
+/** What went through a connection since its mass was last marked, for the hover card. */
+export interface ConnectionTraffic {
+  passages: number;
+  /** kg */
+  passed: number;
+}
+
 export interface ConnectionEdgeData extends Record<string, unknown> {
   mapId: string;
   connection: ConnectionDto;
   /** Names of the two ends, for the tooltip. */
   sourceName?: string;
   targetName?: string;
+  traffic?: ConnectionTraffic;
+}
+
+/** "3 jumps, 445 200 t since marked". */
+export function trafficLine(traffic: ConnectionTraffic | undefined): string | null {
+  if (!traffic || traffic.passages === 0) return null;
+  const tonnes = Math.round(traffic.passed / 1000)
+    .toLocaleString('en-US')
+    .replace(/,/g, ' ');
+  return `${traffic.passages} jump${traffic.passages === 1 ? '' : 's'}, ${tonnes} t since marked`;
 }
 
 export type ConnectionEdgeType = Edge<ConnectionEdgeData, 'connection'>;
@@ -77,6 +94,7 @@ function EdgeDetails({ data, visual, at }: { data: ConnectionEdgeData; visual: E
     ...visual.bubbles.map((end) => `Bubbled on the ${name(end)} side`),
     ...(c.type === 'wormhole' && c.massStatus === 'fresh' ? ['Mass fresh: over 50 % left'] : []),
     ...(c.type === 'wormhole' && c.timeStatus === 'normal' ? ['Lifetime normal'] : []),
+    ...(c.type === 'wormhole' && trafficLine(data.traffic) ? [trafficLine(data.traffic)!] : []),
   ];
   return (
     <div

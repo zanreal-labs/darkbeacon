@@ -70,6 +70,7 @@ const server = setupMockServer(
   http.get(routes.universe.getSystem.path, ({ params }) =>
     HttpResponse.json(universe[Number(params.solarSystemId)]),
   ),
+  http.get(routes.connections.intel.path, () => HttpResponse.json([])),
   http.get(routes.maps.getPreferences.path, () =>
     HttpResponse.json({ viewport: null, bookmarkTemplate: null, updatedAt: 0 }),
   ),
