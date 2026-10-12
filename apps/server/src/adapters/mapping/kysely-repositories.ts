@@ -220,12 +220,9 @@ export class KyselyConnectionRepository extends Repository implements Connection
       .selectFrom('map_connections')
       .selectAll()
       .where('map_id', '=', mapId)
-      .where((eb) =>
-        eb.or([
-          eb.and([eb('source', '=', a), eb('target', '=', b)]),
-          eb.and([eb('source', '=', b), eb('target', '=', a)]),
-        ]),
-      )
+      // Unordered pair: one lookup in the unique (map_id, pair_low, pair_high) index.
+      .where('pair_low', '=', Math.min(a, b))
+      .where('pair_high', '=', Math.max(a, b))
       .executeTakeFirst();
     return row ? connectionFromRow(row) : null;
   }
