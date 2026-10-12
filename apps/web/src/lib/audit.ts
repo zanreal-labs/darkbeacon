@@ -9,6 +9,8 @@ export interface AuditNames {
   map?(mapId: string): string | undefined;
   account?(accountId: string): string | undefined;
   theme?(themeId: string): string | undefined;
+  /** A Label (WH1...) of a map by its id. */
+  systemLabel?(mapId: string, labelId: string): string | undefined;
 }
 
 export type AuditCategory = 'access' | 'map' | 'intel' | 'tracking' | 'instance' | 'plugins' | 'signIn';
@@ -64,8 +66,11 @@ const FIELD_LABELS: Record<string, string> = {
   temporaryName: 'Temporary name',
   tag: 'Tag',
   description: 'Notes',
-  labelIds: 'Labels',
-  labels: 'Labels',
+  labelIds: 'Tags',
+  labels: 'Tags',
+  systemLabelIds: 'Labels',
+  systemLabels: 'Labels',
+  customLabel: 'Custom label',
   locked: 'Locked',
   position: 'Position',
   visible: 'On the map',
@@ -142,7 +147,13 @@ const HIDDEN = new Set([
 
 const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-function value(field: string, v: unknown, names: AuditNames): string {
+/** Names of a map's Labels by id, as far as they are known ("a label" for the others). */
+function labelNames(ids: unknown, mapId: string | null, names: AuditNames): string[] {
+  if (!Array.isArray(ids)) return [];
+  return ids.map((id) => (mapId && names.systemLabel?.(mapId, String(id))) || 'a label');
+}
+
+function value(field: string, v: unknown, names: AuditNames, mapId: string | null = null): string {
   if (field === 'eventRetentionDays') return typeof v === 'number' ? `${v} days` : 'Forever';
   if (v === null || v === undefined || v === '') return '—';
   if (typeof v === 'boolean') return v ? 'Yes' : 'No';
@@ -157,8 +168,10 @@ function value(field: string, v: unknown, names: AuditNames): string {
     const scopes = (v as { scopes?: string[] }).scopes;
     return scopes?.length ? scopes.map(titleCase).join(', ') : '—';
   }
-  if (field === 'labels' && Array.isArray(v))
+  if ((field === 'labels' || field === 'systemLabels') && Array.isArray(v))
     return v.length ? v.map((l) => (l as { name?: string }).name ?? '').join(', ') : 'none';
+  if (field === 'systemLabelIds' && Array.isArray(v))
+    return v.length ? labelNames(v, mapId, names).join(', ') : 'none';
   if (OPAQUE.has(field)) return Array.isArray(v) ? (v.length ? `${v.length} set` : 'none') : 'set';
   if (Array.isArray(v)) return v.length ? v.map(String).join(', ') : 'none';
   if (typeof v === 'object') return 'changed';
@@ -171,8 +184,8 @@ export function changeLines(entry: AuditEntryDto, names: AuditNames = {}): Audit
   for (const [field, change] of Object.entries(entry.diff)) {
     const label = FIELD_LABELS[field];
     if (HIDDEN.has(field) || label === undefined) continue;
-    const before = value(field, change.before, names);
-    const after = value(field, change.after, names);
+    const before = value(field, change.before, names, entry.mapId);
+    const after = value(field, change.after, names, entry.mapId);
     // Opaque values (ids) that changed but read the same ("set" -> "set") still say so.
     lines.push(before === after ? { label, before: 'changed', after: '' } : { label, before, after });
   }
@@ -204,6 +217,34 @@ function ruleSubject(rule: Record<string, unknown>, names: AuditNames): string {
     default:
       return 'someone';
   }
+}
+
+/**
+ * A change of a system's Labels or custom label alone, in words: "added label WH1 to J123456",
+ * "set the custom label of J123456 to bait". Null for anything else.
+ */
+function labelChange(entry: AuditEntryDto, system: string, names: AuditNames): string | null {
+  const fields = Object.keys(entry.diff).filter((f) => f !== 'updatedAt');
+  if (fields.length !== 1) return null;
+  const custom = entry.diff.customLabel;
+  if (custom) {
+    const after = typeof custom.after === 'string' ? custom.after : '';
+    return after ? `set the custom label of ${system} to ${after}` : `removed the custom label of ${system}`;
+  }
+  const change = entry.diff.systemLabelIds;
+  if (!change) return null;
+  const before = Array.isArray(change.before) ? change.before.map(String) : [];
+  const after = Array.isArray(change.after) ? change.after.map(String) : [];
+  const added = after.filter((id) => !before.includes(id));
+  const removed = before.filter((id) => !after.includes(id));
+  const words = (ids: string[]) => {
+    const known = ids.flatMap((id) => (entry.mapId && names.systemLabel?.(entry.mapId, id)) || []);
+    if (known.length < ids.length) return ids.length === 1 ? 'a label' : `${ids.length} labels`;
+    return `${known.length === 1 ? 'label' : 'labels'} ${known.join(', ')}`;
+  };
+  if (added.length > 0 && removed.length === 0) return `added ${words(added)} to ${system}`;
+  if (removed.length > 0 && added.length === 0) return `removed ${words(removed)} from ${system}`;
+  return `changed the labels of ${system}`;
 }
 
 const PROVIDERS: Record<string, string> = {
@@ -341,7 +382,9 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
     case 'map.removed':
       return read(`deleted ${mapName}`, 'map');
     case 'labels.changed':
-      return read('changed the labels', 'map');
+      return read(`changed the tags of ${mapName}`, 'map');
+    case 'system_labels.changed':
+      return read(`changed the labels of ${mapName}`, 'map');
     case 'routes.exits_changed':
       return read("updated the chain's exits", 'map');
     case 'routes.hubs_changed':
@@ -350,7 +393,10 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
       return read(entry.diff.visible ? `put ${system} back on the map` : `added ${system}`, 'map');
     case 'system.updated':
       return read(
-        Object.keys(entry.diff).length === 1 && entry.diff.position ? `moved ${system}` : `changed ${system}`,
+        labelChange(entry, system, names) ??
+          (Object.keys(entry.diff).length === 1 && entry.diff.position
+            ? `moved ${system}`
+            : `changed ${system}`),
         'map',
       );
     case 'system.removed':

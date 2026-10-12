@@ -12,6 +12,8 @@ import {
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  ArrowDown,
+  ArrowUp,
   Bell,
   Bookmark,
   Building2,
@@ -28,6 +30,7 @@ import {
   Tags,
   Trash2,
   TriangleAlert,
+  Type,
   UserRound,
   Webhook,
   X,
@@ -56,6 +59,7 @@ import {
   type CreatedWebhookDto,
   type LabelDto,
   type MapDto,
+  type SystemLabelDto,
   type UpdateMapRequest,
   type WebhookDeliveryDto,
   type WebhookDto,
@@ -144,8 +148,14 @@ const SECTIONS: readonly Section[] = [
   {
     id: 'labels',
     title: 'Labels',
+    icon: <Type />,
+    render: (map) => <SystemLabelSettings key={map.id} map={map} />,
+  },
+  {
+    id: 'tags',
+    title: 'Tags',
     icon: <Tags />,
-    render: (map) => <LabelSettings key={map.id} map={map} />,
+    render: (map) => <TagSettings key={map.id} map={map} />,
   },
   {
     id: 'bookmarks',
@@ -476,20 +486,183 @@ function DeleteMap({ map }: { map: MapDto }) {
 
 // ---- Labels -----------------------------------------------------------------------------------
 
-const PALETTE = ['#38c6d6', '#3fbf7f', '#eba23b', '#f05252', '#7b93ff', '#b98cf5', '#f472b6', '#94a3b8'];
 /** `crypto.randomUUID` exists only on HTTPS and localhost; an instance on plain HTTP gets random hex. */
-const labelId = () =>
+const randomId = () =>
   typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
     : Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
-const newLabel = (n: number): LabelDto => ({
-  id: labelId(),
+
+/** The next free "WH<n>" name: WH4 after WH1 to WH3. */
+export function nextSystemLabelName(labels: readonly SystemLabelDto[]): string {
+  const taken = new Set(labels.map((l) => l.name.trim().toLowerCase()));
+  for (let n = labels.length + 1; ; n++) if (!taken.has(`wh${n}`)) return `WH${n}`;
+}
+
+/**
+ * The map's Labels (WH1, WH2... as in Wanderer): short text markers anyone who edits the map turns
+ * on for a system, plus a custom label of its own. Managers keep the list: names up to 8
+ * characters, an optional description of what a name stands for, in the order systems show them.
+ */
+function SystemLabelSettings({ map }: { map: MapDto }) {
+  const formId = useId();
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const initial = map.systemLabels ?? [];
+  const [labels, setLabels] = useState<SystemLabelDto[]>(initial);
+  const [saved, setSaved] = useState<SystemLabelDto[]>(initial);
+  const dirty = JSON.stringify(labels) !== JSON.stringify(saved);
+  const save = useMutation({
+    mutationFn: (list: SystemLabelDto[]) =>
+      api<SystemLabelDto[]>(buildPath(routes.maps.setSystemLabels.path, { mapId: map.id }), {
+        method: 'PUT',
+        json: { systemLabels: list },
+      }),
+    onSuccess: (list) => {
+      setLabels(list);
+      setSaved(list);
+      queryClient.setQueryData(['map', map.slug], { ...map, systemLabels: list });
+      toast({ title: 'Labels saved', tone: 'success' });
+    },
+  });
+  const change = (id: string, patch: Partial<SystemLabelDto>) =>
+    setLabels((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+  const move = (index: number, by: -1 | 1) =>
+    setLabels((ls) => {
+      const next = [...ls];
+      const [item] = next.splice(index, 1);
+      next.splice(index + by, 0, item!);
+      return next;
+    });
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    save.mutate(
+      labels
+        .map((l) => ({ ...l, name: l.name.trim(), description: l.description.trim() }))
+        .filter((l) => l.name),
+    );
+  };
+  const named = labels.filter((l) => l.name.trim());
+
+  return (
+    <Pane
+      footer={
+        <>
+          {named.length > 0 && (
+            <span className={`${styles.footerNote} ${dialog.footerNote}`}>
+              <span className={styles.preview}>
+                {named.map((l) => (
+                  <span key={l.id} className={styles.systemLabelPreview}>
+                    {l.name}
+                  </span>
+                ))}
+              </span>
+            </span>
+          )}
+          {save.error && <span className="error">{errorText(save.error, 'Could not save the labels.')}</span>}
+          {dirty && (
+            <Button variant="ghost" onClick={() => setLabels(saved)}>
+              Discard
+            </Button>
+          )}
+          <Button type="submit" form={formId} variant="primary" loading={save.isPending} disabled={!dirty}>
+            Save labels
+          </Button>
+        </>
+      }
+    >
+      <Card>
+        <form id={formId} onSubmit={submit} aria-label="Labels">
+          <CardHeader
+            title="Labels"
+            description="Short markers like WH1 or A, shown first above a system. Anyone who edits the map turns them on from a system's menu or sidebar, and can give a system a custom label of its own."
+            actions={
+              <Button
+                size="sm"
+                icon={<Plus />}
+                onClick={() =>
+                  setLabels((ls) => [
+                    ...ls,
+                    { id: randomId(), name: nextSystemLabelName(ls), description: '' },
+                  ])
+                }
+                disabled={labels.length >= 32}
+              >
+                Add label
+              </Button>
+            }
+          />
+          <CardBody flush>
+            {labels.length === 0 ? (
+              <EmptyState
+                compact
+                icon={<Type />}
+                title="No labels"
+                description="Add WH1, WH2 and so on to mark the holes out of a system, or letters for anything else."
+              />
+            ) : (
+              <div>
+                {labels.map((l, i) => (
+                  <div key={l.id} className={styles.systemLabelRow}>
+                    <Input
+                      aria-label="Label name"
+                      placeholder="Name"
+                      maxLength={8}
+                      value={l.name}
+                      onChange={(e) => change(l.id, { name: e.target.value })}
+                    />
+                    <Input
+                      aria-label={`Description of ${l.name || 'the new label'}`}
+                      placeholder="What it stands for (optional)"
+                      maxLength={120}
+                      value={l.description}
+                      onChange={(e) => change(l.id, { description: e.target.value })}
+                    />
+                    <span className={styles.rowButtons}>
+                      <IconButton
+                        size="sm"
+                        label={`Move ${l.name || 'the new label'} up`}
+                        icon={<ArrowUp />}
+                        disabled={i === 0}
+                        onClick={() => move(i, -1)}
+                      />
+                      <IconButton
+                        size="sm"
+                        label={`Move ${l.name || 'the new label'} down`}
+                        icon={<ArrowDown />}
+                        disabled={i === labels.length - 1}
+                        onClick={() => move(i, 1)}
+                      />
+                      <IconButton
+                        size="sm"
+                        label={`Remove label ${l.name || 'new label'}`}
+                        icon={<X />}
+                        onClick={() => setLabels((ls) => ls.filter((x) => x.id !== l.id))}
+                      />
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardBody>
+        </form>
+      </Card>
+    </Pane>
+  );
+}
+
+// ---- Tags -------------------------------------------------------------------------------------
+
+const PALETTE = ['#38c6d6', '#3fbf7f', '#eba23b', '#f05252', '#7b93ff', '#b98cf5', '#f472b6', '#94a3b8'];
+const newTag = (n: number): LabelDto => ({
+  id: randomId(),
   name: '',
   color: PALETTE[n % PALETTE.length]!,
   description: '',
 });
 
-function LabelSettings({ map }: { map: MapDto }) {
+/** The map's Tags (`labels` in the data): coloured markers like Staging or Sites. */
+function TagSettings({ map }: { map: MapDto }) {
   const formId = useId();
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -506,7 +679,7 @@ function LabelSettings({ map }: { map: MapDto }) {
       setLabels(list);
       setSaved(list);
       queryClient.setQueryData(['map', map.slug], { ...map, labels: list });
-      toast({ title: 'Labels saved', tone: 'success' });
+      toast({ title: 'Tags saved', tone: 'success' });
     },
   });
   const change = (id: string, patch: Partial<LabelDto>) =>
@@ -538,31 +711,31 @@ function LabelSettings({ map }: { map: MapDto }) {
               </span>
             </span>
           )}
-          {save.error && <span className="error">{errorText(save.error, 'Could not save the labels.')}</span>}
+          {save.error && <span className="error">{errorText(save.error, 'Could not save the tags.')}</span>}
           {dirty && (
             <Button variant="ghost" onClick={() => setLabels(saved)}>
               Discard
             </Button>
           )}
           <Button type="submit" form={formId} variant="primary" loading={save.isPending} disabled={!dirty}>
-            Save labels
+            Save tags
           </Button>
         </>
       }
     >
       <Card>
-        <form id={formId} onSubmit={submit} aria-label="Labels">
+        <form id={formId} onSubmit={submit} aria-label="Tags">
           <CardHeader
-            title="Labels"
-            description="Tags for systems, like Staging or Sites. The description shows when someone hovers the label."
+            title="Tags"
+            description="Coloured markers for systems, like Staging or Sites, shown last above a system. The description shows when someone hovers the tag."
             actions={
               <Button
                 size="sm"
                 icon={<Plus />}
-                onClick={() => setLabels((ls) => [...ls, newLabel(ls.length)])}
+                onClick={() => setLabels((ls) => [...ls, newTag(ls.length)])}
                 disabled={labels.length >= 64}
               >
-                Add label
+                Add tag
               </Button>
             }
           />
@@ -571,7 +744,7 @@ function LabelSettings({ map }: { map: MapDto }) {
               <EmptyState
                 compact
                 icon={<Tags />}
-                title="No labels yet"
+                title="No tags yet"
                 description="Add a few to mark staging systems, sites or exits on the map."
               />
             ) : (
@@ -582,7 +755,7 @@ function LabelSettings({ map }: { map: MapDto }) {
                       <label className={styles.swatch} style={{ background: l.color }}>
                         <input
                           type="color"
-                          aria-label={`Colour of ${l.name || 'new label'}`}
+                          aria-label={`Colour of ${l.name || 'new tag'}`}
                           value={l.color}
                           onChange={(e) => change(l.id, { color: e.target.value })}
                           style={{ opacity: 0 }}
@@ -590,7 +763,7 @@ function LabelSettings({ map }: { map: MapDto }) {
                       </label>
                     </Tooltip>
                     <Input
-                      aria-label="Label name"
+                      aria-label="Tag name"
                       placeholder="Name"
                       maxLength={32}
                       value={l.name}
@@ -605,7 +778,7 @@ function LabelSettings({ map }: { map: MapDto }) {
                     />
                     <IconButton
                       size="sm"
-                      label={`Remove label ${l.name || 'new label'}`}
+                      label={`Remove tag ${l.name || 'new tag'}`}
                       icon={<X />}
                       onClick={() => setLabels((ls) => ls.filter((x) => x.id !== l.id))}
                     />
@@ -641,7 +814,7 @@ const ROLE_LABEL: Record<MapRole, string> = {
 const ROLE_HINT: Record<MapRole, string> = {
   viewer: 'Sees the map',
   member: 'Maps systems and signatures',
-  manager: 'Also locks systems and edits labels',
+  manager: 'Also locks systems and edits labels and tags',
   admin: 'Also settings, access and notifications',
   blocked: 'Refused, whatever else matches',
 };
@@ -907,7 +1080,8 @@ const EVENT_GROUPS = [
   { value: 'connection.*', label: 'Connections', hint: 'Added, changed, removed, passages' },
   { value: 'signature.*', label: 'Signatures', hint: 'Added, changed, removed' },
   { value: 'character.*', label: 'Characters', hint: 'Jumps, ships, online' },
-  { value: 'labels.changed', label: 'Labels', hint: 'The label list changed' },
+  { value: 'system_labels.changed', label: 'Labels', hint: 'The list of labels changed' },
+  { value: 'labels.changed', label: 'Tags', hint: 'The list of tags changed' },
   { value: 'map.*', label: 'Map', hint: 'Settings changed' },
   { value: 'access.*', label: 'Access', hint: 'Rules and roles' },
   { value: 'ping.*', label: 'Pings', hint: 'Created and removed' },

@@ -25,6 +25,7 @@ const map: MapDto = {
   ownerAccountId: 'a',
   settings: { scopes: ['wormhole'] },
   labels: [],
+  systemLabels: [],
   createdAt: 0,
   updatedAt: 0,
 };
@@ -187,6 +188,8 @@ describe('bookmark numbering', () => {
       status,
       description: '',
       labelIds: [],
+      systemLabelIds: [],
+      customLabel: null,
       locked: false,
       visible: true,
       createdAt: id,

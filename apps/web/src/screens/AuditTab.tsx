@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, type ReactNode } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowRight,
   Download,
@@ -15,11 +15,13 @@ import {
   Users,
 } from 'lucide-react';
 import {
+  buildPath,
   routes,
   type AdminAccountDto,
   type AuditEntryDto,
   type AuditVerifyDto,
   type InstanceSettingsDto,
+  type MapDto,
   type MapSummaryDto,
   type ThemesDto,
 } from '@darkbeacon/shared';
@@ -92,16 +94,32 @@ function useNames(): AuditNames {
     queryKey: ['admin-themes'],
     queryFn: () => api<ThemesDto>(routes.themes.list.path),
   });
+  // Each map's Labels, so a change of a system's labels reads "added label WH1".
+  const details = useQueries({
+    queries: (maps.data ?? []).map((m) => ({
+      queryKey: ['admin-map-labels', m.id],
+      queryFn: () => api<MapDto>(buildPath(routes.maps.get.path, { mapId: m.id })),
+      staleTime: 60_000,
+    })),
+  });
+  const labelData = details.map((d) => d.data);
+  // A new array every render: keyed by the maps' update times instead.
+  const labelsKey = labelData.map((m) => `${m?.id}:${m?.updatedAt}`).join();
   return useMemo(() => {
     const accountNames = new Map(accounts.data?.map((a) => [a.id, a.name]));
     const mapNames = new Map(maps.data?.map((m) => [m.id, m.name]));
     const themeNames = new Map(themes.data?.themes.map((t) => [t.id, t.name]));
+    const labelNames = new Map(
+      labelData.flatMap((m) => (m?.systemLabels ?? []).map((l) => [`${m!.id}|${l.id}`, l.name] as const)),
+    );
     return {
       account: (id) => accountNames.get(id),
       map: (id) => mapNames.get(id),
       theme: (id) => (id === 'system' ? 'Follow the system' : themeNames.get(id)),
+      systemLabel: (mapId, id) => labelNames.get(`${mapId}|${id}`),
     };
-  }, [accounts.data, maps.data, themes.data]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- labelData follows labelsKey
+  }, [accounts.data, maps.data, themes.data, labelsKey]);
 }
 
 function dayLabel(ms: number, now = Date.now()): string {

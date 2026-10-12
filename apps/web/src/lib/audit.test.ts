@@ -81,6 +81,54 @@ describe('reading audit entries', () => {
     });
   });
 
+  it('reads changes of Labels and custom labels in words, with label names', () => {
+    const names = {
+      system: () => 'J123456',
+      map: () => 'Home chain',
+      systemLabel: (mapId: string, id: string) =>
+        mapId === 'm' ? ({ wh1: 'WH1', wh2: 'WH2' } as Record<string, string>)[id] : undefined,
+    };
+    const system = (diff: AuditEntryDto['diff']) =>
+      readEntry(
+        entry({ type: 'system.updated', mapId: 'm', entity: { kind: 'system', id: '31000005' }, diff }),
+        names,
+      );
+    expect(system({ systemLabelIds: { before: [], after: ['wh1'] } })).toMatchObject({
+      what: 'added label WH1 to J123456',
+      changes: [{ label: 'Labels', before: 'none', after: 'WH1' }],
+    });
+    expect(system({ systemLabelIds: { before: ['wh1', 'wh2'], after: [] } }).what).toBe(
+      'removed labels WH1, WH2 from J123456',
+    );
+    expect(system({ systemLabelIds: { before: ['wh1'], after: ['wh2'] } }).what).toBe(
+      'changed the labels of J123456',
+    );
+    expect(system({ systemLabelIds: { before: [], after: ['gone'] } }).what).toBe('added a label to J123456');
+    expect(system({ customLabel: { before: null, after: 'bait' } })).toMatchObject({
+      what: 'set the custom label of J123456 to bait',
+      changes: [{ label: 'Custom label', before: '—', after: 'bait' }],
+    });
+    expect(system({ customLabel: { before: 'bait', after: null } }).what).toBe(
+      'removed the custom label of J123456',
+    );
+    // Tags are Tags in the history too.
+    expect(
+      system({ labelIds: { before: [], after: ['t1'] }, status: { before: 'unknown', after: 'home' } }),
+    ).toMatchObject({
+      what: 'changed J123456',
+      changes: [
+        { label: 'Tags', before: 'none', after: '1 set' },
+        { label: 'Status', before: 'unknown', after: 'home' },
+      ],
+    });
+    expect(readEntry(entry({ type: 'system_labels.changed', mapId: 'm' }), names).what).toBe(
+      'changed the labels of Home chain',
+    );
+    expect(readEntry(entry({ type: 'labels.changed', mapId: 'm' }), names).what).toBe(
+      'changed the tags of Home chain',
+    );
+  });
+
   it('says how a change came in and who signs in', () => {
     expect(channelLabel({ kind: 'system', id: 'auto-mapping' })).toBe('Auto-mapping');
     expect(channelLabel({ kind: 'plugin', id: 'discord-notify' })).toBe('Plugin discord-notify');

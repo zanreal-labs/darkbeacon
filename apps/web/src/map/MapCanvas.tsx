@@ -25,6 +25,7 @@ import {
   bookmarkLabel,
   DEFAULT_BOOKMARK_TEMPLATE,
   type LabelDto,
+  type SystemLabelDto,
   type UniverseSystemDto,
 } from '@darkbeacon/shared';
 import type { MapPermissions } from '../lib/roles';
@@ -103,7 +104,10 @@ interface Props {
   mapId: string;
   state: MapState;
   loaded: boolean;
+  /** The map's Tags (`labels` in the data). */
   labels: LabelDto[];
+  /** The map's Labels (WH1...). */
+  systemLabels: SystemLabelDto[];
   universe: Map<number, UniverseSystemDto>;
   can: MapPermissions;
   store: Pick<MapStore, 'moveSystems' | 'addConnection'>;
@@ -138,6 +142,7 @@ export function MapCanvas({
   state,
   loaded,
   labels,
+  systemLabels,
   universe,
   can,
   store,
@@ -192,6 +197,7 @@ export function MapCanvas({
       connections: [...state.connections.values()],
       signatures: [...state.signatures.values()],
       classOf: (id) => bookmarkClassLabel(universe.get(id)),
+      systemLabels,
       // Stored numbers are the sources' own on a merged map: it counts in its order here.
       order: ownOrder ?? (state.sources ? mapOrder : undefined),
     });
@@ -201,6 +207,7 @@ export function MapCanvas({
     state.connections,
     state.signatures,
     state.sources,
+    systemLabels,
     universe,
     template,
     ownOrder,
@@ -215,7 +222,7 @@ export function MapCanvas({
         here.set(c.solarSystemId, (here.get(c.solarSystemId) ?? 0) + 1);
     }
     const hubs = exitHubs(state.exits);
-    const labelById = new Map(labels.map((l) => [l.id, l]));
+    const tagById = new Map(labels.map((l) => [l.id, l]));
     setNodes((prev) => {
       const previous = new Map(prev.map((n) => [n.id, n]));
       return [...state.systems.values()].map((system): SystemNodeType => {
@@ -232,7 +239,9 @@ export function MapCanvas({
             mapId,
             system,
             info,
-            labels: system.labelIds.flatMap((l) => labelById.get(l) ?? []),
+            // Labels in the map's order; Tags in the order they were set.
+            systemLabels: systemLabels.filter((l) => system.systemLabelIds.includes(l.id)),
+            tags: system.labelIds.flatMap((l) => tagById.get(l) ?? []),
             characters: here.get(system.solarSystemId) ?? 0,
             bookmark: bookmarks.get(system.solarSystemId) ?? null,
             hub: hubs.get(system.solarSystemId) ?? null,
@@ -246,6 +255,7 @@ export function MapCanvas({
     state.characters,
     state.exits,
     labels,
+    systemLabels,
     universe,
     can.edit,
     mapId,

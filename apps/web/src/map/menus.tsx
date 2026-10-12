@@ -4,6 +4,7 @@ import {
   Bubbled,
   buildPath,
   ConnectionType,
+  CUSTOM_LABEL_MAX,
   MassStatus,
   routes,
   ShipSize,
@@ -13,6 +14,7 @@ import {
   type ConnectionDto,
   type LabelDto,
   type MapSystemDto,
+  type SystemLabelDto,
   type WaypointRequest,
 } from '@darkbeacon/shared';
 import { cssVar } from '@darkbeacon/theme-sdk';
@@ -34,10 +36,10 @@ import {
   Puzzle,
   Route,
   Ship,
-  Tag,
   Tags,
   Trash2,
   TriangleAlert,
+  Type,
   Weight,
 } from 'lucide-react';
 import type { MenuItem } from '../components/ContextMenu';
@@ -90,15 +92,95 @@ export interface SystemMenuContext {
   mapId: string;
   system: MapSystemDto;
   name: string;
+  /** The map's Tags (`labels` in the data). */
   labels: LabelDto[];
+  /** The map's Labels (WH1...); none means the map has no list, a custom label still works. */
+  systemLabels?: readonly SystemLabelDto[];
   can: MapPermissions;
   store: Commands;
   plugins: readonly SlotEntry<'systemContextMenu'>[];
   /** The user's own characters; those whose EVE grant allows it can set the in-game route. */
   characters?: readonly CharacterDto[];
   notify?: Notify;
-  /** Opens the map's label settings (managers). */
+  /** Opens the map's Labels settings (managers). */
   onManageLabels?(): void;
+  /** Opens the map's Tags settings (managers). */
+  onManageTags?(): void;
+}
+
+/** "WH1" or "WH1 — Static to high-sec": the name alone is often a letter or two. */
+export function systemLabelText(label: Pick<SystemLabelDto, 'name' | 'description'>): string {
+  return label.description ? `${label.name} — ${label.description}` : label.name;
+}
+
+/**
+ * Labels ▸: the custom label, then the map's Labels to toggle, Clear and (managers) Manage. The
+ * hint names what is on: "WH1 bait".
+ */
+function labelsMenu(
+  ctx: SystemMenuContext,
+  update: (patch: Parameters<Commands['updateSystem']>[1]) => void,
+) {
+  const { system, can } = ctx;
+  const list = ctx.systemLabels ?? [];
+  const onIds = system.systemLabelIds.filter((id) => list.some((l) => l.id === id));
+  const shown = [
+    ...list.filter((l) => onIds.includes(l.id)).map((l) => l.name),
+    ...(system.customLabel ? [system.customLabel] : []),
+  ];
+  const manage = can.manage && ctx.onManageLabels;
+  const item: MenuItem = {
+    kind: 'submenu',
+    label: 'Labels',
+    icon: <Type />,
+    hint: shown.length > 0 ? shown.join(' ') : undefined,
+    items: groups(
+      [
+        {
+          kind: 'input',
+          label: 'Custom label',
+          value: system.customLabel ?? '',
+          hint: system.customLabel ?? undefined,
+          placeholder: 'e.g. bait',
+          maxLength: CUSTOM_LABEL_MAX,
+          onSubmit: (customLabel) => update({ customLabel: customLabel || null }),
+        },
+        ...(system.customLabel
+          ? [
+              {
+                kind: 'action',
+                label: 'Remove custom label',
+                onSelect: () => update({ customLabel: null }),
+              } satisfies MenuItem,
+            ]
+          : []),
+      ],
+      list.map((l) => ({
+        kind: 'check',
+        label: systemLabelText(l),
+        checked: onIds.includes(l.id),
+        onSelect: () =>
+          update({
+            systemLabelIds: onIds.includes(l.id) ? onIds.filter((x) => x !== l.id) : [...onIds, l.id],
+          }),
+      })),
+      [
+        ...(onIds.length > 0
+          ? [
+              {
+                kind: 'action',
+                label: 'Clear',
+                onSelect: () => update({ systemLabelIds: [] }),
+              } satisfies MenuItem,
+            ]
+          : []),
+        ...(manage
+          ? [{ kind: 'action', label: 'Manage labels…', onSelect: ctx.onManageLabels! } satisfies MenuItem]
+          : []),
+      ],
+    ),
+  };
+  return item;
 }
 
 export function systemMenu(ctx: SystemMenuContext): MenuItem[] {
@@ -123,53 +205,42 @@ export function systemMenu(ctx: SystemMenuContext): MenuItem[] {
         onSelect: () => update({ status: o.value }),
       })),
     });
-    const manage = can.manage && ctx.onManageLabels;
-    if (ctx.labels.length > 0 || manage) {
-      const on = system.labelIds.filter((l) => ctx.labels.some((label) => label.id === l)).length;
+    edit.push(labelsMenu(ctx, update));
+    const manageTags = can.manage && ctx.onManageTags;
+    if (ctx.labels.length > 0 || manageTags) {
+      const on = system.labelIds.filter((l) => ctx.labels.some((tag) => tag.id === l)).length;
       edit.push({
         kind: 'submenu',
-        label: 'Labels',
+        label: 'Tags',
         icon: <Tags />,
         hint: on > 0 ? String(on) : undefined,
         items: groups(
-          ctx.labels.map((l) => ({
+          ctx.labels.map((t) => ({
             kind: 'check',
-            label: l.name,
-            title: l.description || undefined,
-            checked: system.labelIds.includes(l.id),
-            swatch: { color: l.color, shape: 'square' },
+            label: t.name,
+            title: t.description || undefined,
+            checked: system.labelIds.includes(t.id),
+            swatch: { color: t.color, shape: 'square' },
             onSelect: () =>
               update({
-                labelIds: system.labelIds.includes(l.id)
-                  ? system.labelIds.filter((x) => x !== l.id)
-                  : [...system.labelIds, l.id],
+                labelIds: system.labelIds.includes(t.id)
+                  ? system.labelIds.filter((x) => x !== t.id)
+                  : [...system.labelIds, t.id],
               }),
           })),
-          manage ? [{ kind: 'action', label: 'Manage labels…', onSelect: ctx.onManageLabels! }] : [],
+          manageTags ? [{ kind: 'action', label: 'Manage tags…', onSelect: ctx.onManageTags! }] : [],
         ),
       });
     }
-    edit.push(
-      {
-        kind: 'input',
-        label: 'Tag',
-        icon: <Tag />,
-        value: system.tag ?? '',
-        hint: system.tag ?? undefined,
-        placeholder: 'Tag, e.g. C3a',
-        maxLength: 16,
-        onSubmit: (tag) => update({ tag: tag || null }),
-      },
-      {
-        kind: 'input',
-        label: 'Rename',
-        icon: <PencilLine />,
-        value: system.customName ?? '',
-        placeholder: ctx.name,
-        maxLength: 64,
-        onSubmit: (customName) => update({ customName: customName || null }),
-      },
-    );
+    edit.push({
+      kind: 'input',
+      label: 'Rename',
+      icon: <PencilLine />,
+      value: system.customName ?? '',
+      placeholder: ctx.name,
+      maxLength: 64,
+      onSubmit: (customName) => update({ customName: customName || null }),
+    });
   }
   if (can.manage) {
     edit.push({
