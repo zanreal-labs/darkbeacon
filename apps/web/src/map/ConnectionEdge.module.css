@@ -2,25 +2,40 @@
   opacity: 0.6;
 }
 
-.danger {
+/* Dangerous: a strong red halo around the whole line. */
+.halo {
   fill: none;
   stroke: var(--dbk-edge-dangerous);
-  stroke-width: calc(var(--dbk-edge-width) * 5);
+  stroke-width: calc(var(--dbk-edge-width) * 6);
   stroke-linecap: round;
-}
-
-/* A thin solid core in the EOL colour inside the dashed line, so EOL reads at any mass colour. */
-.eol {
-  fill: none;
-  stroke: var(--dbk-edge-time-eol);
-  stroke-width: calc(var(--dbk-edge-width) / 2);
   pointer-events: none;
 }
 
+/* Hover and selection light the whole line from end to end, under its own colour. */
+.highlight {
+  fill: none;
+  stroke: var(--dbk-edge-selected);
+  stroke-width: calc(var(--dbk-edge-width) * 4);
+  stroke-linecap: round;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dbk-motion-fast) var(--dbk-motion-easing);
+}
+
+.edge[data-active] .highlight {
+  opacity: 0.35;
+}
+
+/* A bubble: big, half see-through, with a thick outline, drawn over every line at its end. */
 .bubble {
-  fill: var(--dbk-edge-bubble);
-  stroke: var(--dbk-color-canvas);
-  stroke-width: 2;
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border: 3px solid var(--dbk-edge-bubble);
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--dbk-edge-bubble) 30%, transparent);
+  box-shadow: 0 0 0 2px var(--dbk-color-canvas);
+  pointer-events: none;
 }
 
 .label {
@@ -30,35 +45,79 @@
   pointer-events: none;
 }
 
-/* Opaque, bordered and in the text colour, so the chips read on any line colour in both modes. */
-.chip {
+/* Opaque and bordered, so a badge reads on any line colour in both modes. */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 21px;
   padding: 0 6px;
   border: 1px solid var(--dbk-color-border-strong);
   border-radius: 999px;
   background: var(--dbk-color-surface-raised);
   color: var(--dbk-color-text);
-  font-size: 11px;
-  font-weight: 650;
-  line-height: 18px;
+  font-size: var(--map-text-edge, 12.5px);
+  font-weight: 700;
+  line-height: 1;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
   box-shadow: var(--dbk-shadow-small);
 }
 
-.chip[data-kind='eol'] {
-  border-color: color-mix(in oklab, var(--dbk-edge-time-eol) 55%, transparent);
+.badge svg {
+  width: 14px;
+  height: 14px;
+}
+
+.badge[data-kind='dangerous'] {
+  border-color: var(--dbk-edge-mass-critical);
+  background: var(--dbk-edge-mass-critical);
+  color: #ffffff;
+}
+
+.badge[data-kind='eol'] {
+  border-color: color-mix(in oklab, var(--dbk-edge-time-eol) 60%, transparent);
   background: color-mix(in oklab, var(--dbk-edge-time-eol) 14%, var(--dbk-color-surface-raised));
-  color: color-mix(in oklab, var(--dbk-edge-time-eol) 60%, var(--dbk-color-text));
+  color: color-mix(in oklab, var(--dbk-edge-time-eol) 55%, var(--dbk-color-text));
 }
 
-.chip[data-kind='reduced'] {
-  border-color: color-mix(in oklab, var(--dbk-edge-mass-reduced) 55%, transparent);
-  background: color-mix(in oklab, var(--dbk-edge-mass-reduced) 14%, var(--dbk-color-surface-raised));
-  color: color-mix(in oklab, var(--dbk-edge-mass-reduced) 60%, var(--dbk-color-text));
-}
-
-.chip[data-kind='critical'] {
-  border-color: color-mix(in oklab, var(--dbk-edge-mass-critical) 55%, transparent);
+.badge[data-kind='critical'] {
+  border-color: color-mix(in oklab, var(--dbk-edge-mass-critical) 60%, transparent);
   background: color-mix(in oklab, var(--dbk-edge-mass-critical) 14%, var(--dbk-color-surface-raised));
-  color: color-mix(in oklab, var(--dbk-edge-mass-critical) 60%, var(--dbk-color-text));
+  color: color-mix(in oklab, var(--dbk-edge-mass-critical) 55%, var(--dbk-color-text));
+}
+
+.badge[data-kind='reduced'] {
+  border-color: color-mix(in oklab, var(--dbk-edge-mass-reduced) 60%, transparent);
+  background: color-mix(in oklab, var(--dbk-edge-mass-reduced) 14%, var(--dbk-color-surface-raised));
+  color: color-mix(in oklab, var(--dbk-edge-mass-reduced) 55%, var(--dbk-color-text));
+}
+
+.badge[data-kind='bridge'] {
+  border-color: var(--dbk-edge-bridge);
+  color: color-mix(in oklab, var(--dbk-edge-bridge) 60%, var(--dbk-color-text));
+}
+
+.details {
+  position: absolute;
+  z-index: 10;
+  display: grid;
+  gap: 2px;
+  max-width: 280px;
+  padding: 8px 10px;
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+  background: var(--dbk-color-surface-raised);
+  box-shadow: var(--dbk-shadow-medium);
+  color: var(--dbk-color-text-muted);
+  font-size: var(--map-text-secondary, 13px);
+  line-height: 1.35;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.details strong {
+  color: var(--dbk-color-text);
+  font-weight: 650;
 }

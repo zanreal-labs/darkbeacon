@@ -1,24 +1,52 @@
 'use client';
 
-import { useEffect, useId } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Panel, useReactFlow } from '@xyflow/react';
-import { Focus, Info, Maximize, Minus, Plus } from 'lucide-react';
-import { IconButton } from '../ui';
+import { useQuery } from '@tanstack/react-query';
+import { buildPath, routes, type MapDto } from '@darkbeacon/shared';
+import { Bookmark, Info, LocateFixed, Maximize, Minus, Plus } from 'lucide-react';
+import { api } from '../lib/api';
+import type { MapPermissions } from '../lib/roles';
+import { Dialog, DialogContent, IconButton } from '../ui';
+import { BookmarkLabelSettings } from './BookmarkSettings';
 import { MapLegend } from './MapLegend';
 import styles from './MapControls.module.css';
 
 interface Props {
+  mapId: string;
+  can: MapPermissions;
+  /** Fit the whole chain (F). */
   onFit(): void;
-  onFitSelection(): void;
-  hasSelection: boolean;
+  /** Center on my character (C). */
+  onCenterMe(): void;
+  /** One of my characters is on the map. */
+  located: boolean;
   legend: boolean;
   onLegend(open: boolean): void;
 }
 
-/** Zoom, fit the map, fit the selection and the connection legend, bottom left of the canvas. */
-export function MapControls({ onFit, onFitSelection, hasSelection, legend, onLegend }: Props) {
+function BookmarkDialog({ mapId, can }: { mapId: string; can: MapPermissions }) {
+  const map = useQuery({
+    queryKey: ['map-by-id', mapId],
+    queryFn: () => api<MapDto>(buildPath(routes.maps.get.path, { mapId })),
+    staleTime: 0,
+  });
+  return (
+    <DialogContent
+      title="Bookmark labels"
+      description="The short label above each system, ready to paste into your in-game bookmark."
+      width={640}
+    >
+      {map.data ? <BookmarkLabelSettings map={map.data} canManage={can.manage} /> : null}
+    </DialogContent>
+  );
+}
+
+/** Zoom, fit the chain, center on me, bookmark labels and the legend, bottom left of the canvas. */
+export function MapControls({ mapId, can, onFit, onCenterMe, located, legend, onLegend }: Props) {
   const rf = useReactFlow();
   const legendId = useId();
+  const [labels, setLabels] = useState(false);
 
   useEffect(() => {
     if (!legend) return;
@@ -49,20 +77,30 @@ export function MapControls({ onFit, onFitSelection, hasSelection, legend, onLeg
           onClick={() => void rf.zoomOut({ duration: 150 })}
         />
         <span className={styles.divider} aria-hidden />
-        <IconButton tooltipSide="right" size="sm" label="Fit the map" icon={<Maximize />} onClick={onFit} />
+        <IconButton tooltipSide="right" size="sm" label="Fit chain (F)" icon={<Maximize />} onClick={onFit} />
         <IconButton
           tooltipSide="right"
           size="sm"
-          label="Fit the selection"
-          icon={<Focus />}
-          disabled={!hasSelection}
-          onClick={onFitSelection}
+          label="Center on me (C)"
+          icon={<LocateFixed />}
+          data-muted={!located || undefined}
+          onClick={onCenterMe}
         />
         <span className={styles.divider} aria-hidden />
+        <Dialog open={labels} onOpenChange={setLabels}>
+          <IconButton
+            tooltipSide="right"
+            size="sm"
+            label="Bookmark labels"
+            icon={<Bookmark />}
+            onClick={() => setLabels(true)}
+          />
+          {labels && <BookmarkDialog mapId={mapId} can={can} />}
+        </Dialog>
         <IconButton
           tooltipSide="right"
           size="sm"
-          label={legend ? 'Hide the legend' : 'Show the legend'}
+          label={legend ? 'Hide the legend (L)' : 'Show the legend (L)'}
           icon={<Info />}
           aria-expanded={legend}
           aria-controls={legend ? legendId : undefined}

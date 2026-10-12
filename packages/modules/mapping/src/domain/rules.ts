@@ -1,4 +1,11 @@
-import type { ConnectionType, LabelDto, Position, ShipSize, UniverseSystemDto } from '@darkbeacon/shared';
+import {
+  SYSTEM_PLACEMENT,
+  type ConnectionType,
+  type LabelDto,
+  type Position,
+  type ShipSize,
+  type UniverseSystemDto,
+} from '@darkbeacon/shared';
 import { ValidationError } from '@darkbeacon/core';
 
 /** "Home Chain #2" -> "home-chain-2". Falls back to "map" when nothing usable is left. */
@@ -35,7 +42,7 @@ export function defaultShipSize(
 }
 
 /** Spacing used to place a system that was added without a position. */
-export const SYSTEM_SPACING = { x: 280, y: 0 };
+export const SYSTEM_SPACING = { x: SYSTEM_PLACEMENT.x, y: 0 };
 
 /** Next free spot to the right of everything already placed. */
 export function nextPosition(existing: readonly Position[]): Position {

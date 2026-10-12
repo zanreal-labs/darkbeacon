@@ -195,11 +195,11 @@ async function run() {
         }
 
         // The connection legend, open over the canvas.
-        await page.getByRole('button', { name: 'Show the legend' }).click();
+        await page.getByRole('button', { name: /^Show the legend/ }).click();
         await page.mouse.move(viewport.width / 2, 10);
         await settle(page);
         await s('map-legend');
-        await page.getByRole('button', { name: 'Hide the legend' }).click();
+        await page.getByRole('button', { name: /^Hide the legend/ }).click();
         await settle(page, 200);
 
         const pane = page.locator('.react-flow__pane');

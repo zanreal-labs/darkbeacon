@@ -1,4 +1,5 @@
-.panel {
+/* Doubled class: React Flow's own panel margin has the same specificity and may load later. */
+.panel.panel {
   display: flex;
   align-items: flex-end;
   gap: var(--dbk-space-2);
@@ -15,6 +16,10 @@
   box-shadow: var(--dbk-shadow-medium);
 }
 
+.bar [data-muted] {
+  color: var(--dbk-color-text-subtle);
+}
+
 .bar [data-active] {
   background: var(--dbk-color-accent-subtle);
   color: var(--dbk-color-accent-text);
@@ -28,7 +33,7 @@
 
 /* ---- Legend ---- */
 .legend {
-  width: 248px;
+  width: 316px;
   max-height: calc(100dvh - 220px);
   overflow-y: auto;
   padding: var(--dbk-space-3);
@@ -77,26 +82,62 @@
 
 .legendRow {
   display: grid;
-  grid-template-columns: 40px 1fr;
+  grid-template-columns: 132px 1fr;
   align-items: center;
   gap: var(--dbk-space-2);
-  min-height: 22px;
+  min-height: 28px;
 }
 
 .legendRow > :first-child {
-  justify-self: center;
+  justify-self: start;
+}
+
+.legendNote {
+  margin: 0 0 var(--dbk-space-2);
+  color: var(--dbk-color-text-muted);
+}
+
+.edgeSample {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .sample {
   display: block;
-  width: 40px;
-  height: 16px;
+  flex: none;
+  width: 64px;
+  height: 24px;
   overflow: visible;
+}
+
+.sampleBubble {
+  top: 50%;
+  left: 60px;
+  width: 22px;
+  height: 22px;
+  border-width: 2px;
+  transform: translate(-50%, -50%);
+}
+
+.sampleBadges {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.statusSample {
+  display: block;
+  width: 40px;
+  height: 20px;
+  border: 1px solid var(--dbk-node-border);
+  border-radius: var(--dbk-radius-small);
+  background: var(--tint);
 }
 
 /* Phones: pinch zooms, so only fit and the legend; above the dock's tab bar. */
 @media (max-width: 760px) {
-  .panel {
+  .panel.panel {
     margin-bottom: calc(64px + env(safe-area-inset-bottom));
   }
 
@@ -106,7 +147,7 @@
   }
 
   .legend {
-    width: min(248px, calc(100vw - 88px));
+    width: min(316px, calc(100vw - 88px));
     max-height: calc(100dvh - 260px);
   }
 }

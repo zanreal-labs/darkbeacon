@@ -1,8 +1,16 @@
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { NextConfig } from 'next';
+import { nodeNameSizers } from './src/map/node-sizers';
 
 /** The monorepo root: workspace packages live outside apps/web and must be traced into the build. */
 const root = resolve(import.meta.dirname, '../..');
+
+/** The longest system names of the universe dataset; every system node is as wide as they need. */
+const universe = JSON.parse(readFileSync(resolve(root, 'packages/sde/data/universe.json'), 'utf8')) as {
+  systems: { name: string }[];
+};
+const sizers = nodeNameSizers(universe.systems.map((s) => s.name));
 
 const config: NextConfig = {
   // Cache Components with Partial Prerendering and Partial Prefetching, as the Next.js 16 docs
@@ -14,6 +22,7 @@ const config: NextConfig = {
   outputFileTracingRoot: root,
   turbopack: { root },
   poweredByHeader: false,
+  env: { DBK_NODE_NAME_SIZERS: JSON.stringify(sizers) },
   // The API server streams this app's answers through; anything in front of it must not buffer.
   headers: async () => [{ source: '/:path*{/}?', headers: [{ key: 'X-Accel-Buffering', value: 'no' }] }],
 };

@@ -1,6 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import {
   Background,
   ConnectionMode,
@@ -12,14 +19,26 @@ import {
   type Viewport,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import type { LabelDto, UniverseSystemDto } from '@darkbeacon/shared';
+import {
+  bookmarkChain,
+  bookmarkClassLabel,
+  bookmarkLabel,
+  DEFAULT_BOOKMARK_TEMPLATE,
+  type LabelDto,
+  type UniverseSystemDto,
+} from '@darkbeacon/shared';
 import type { MapPermissions } from '../lib/roles';
+import { useMe } from '../lib/session';
 import { useTheme } from '../theme/ThemeProvider';
+import { useToast } from '../ui';
 import { ConnectionEdge, type ConnectionEdgeType } from './ConnectionEdge';
-import { boundsOf, fitViewport, type Rect } from './geometry';
+import { boundsOf, fitViewport, type Point, type Rect } from './geometry';
 import { MapControls } from './MapControls';
+import { DEFAULT_ZOOM, FIT_MIN_ZOOM, mapTypeVars } from './mapType';
 import type { MapState } from './mapState';
-import { SystemNode, type SystemNodeType } from './SystemNode';
+import { exitLetters } from './nodeFacts';
+import { SystemNode, systemDisplayName, type SystemNodeType } from './SystemNode';
+import { useMapPreferences } from './useMapPreferences';
 import type { MapStore } from './useMapStore';
 import styles from './MapCanvas.module.css';
 
@@ -27,16 +46,12 @@ const nodeTypes = { system: SystemNode };
 const edgeTypes = { connection: ConnectionEdge };
 const LONG_PRESS_MS = 500;
 
-/** Below this zoom system names (15 px) get too small to read; the first view never goes lower. */
-const READABLE_ZOOM = { desktop: 0.9, phone: 0.75 };
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2;
-const FIT_MAX_ZOOM = 1.15;
+const FIT_MAX_ZOOM = 1;
+/** How long the view rests before it is saved for this account. */
+const SAVE_VIEW_AFTER_MS = 800;
 
-const isPhone = () => typeof window !== 'undefined' && !!window.matchMedia?.('(max-width: 760px)').matches;
-
-/** The viewer's last viewport of a map, kept in this browser only. */
-const viewportKey = (mapId: string) => `dbk-map-viewport:${mapId}`;
 const LEGEND_KEY = 'dbk-map-legend';
 
 function readStored<T>(key: string, valid: (v: unknown) => v is T): T | null {
@@ -57,12 +72,16 @@ function writeStored(key: string, value: unknown): void {
   }
 }
 
-const isViewport = (v: unknown): v is Viewport =>
-  typeof v === 'object' &&
+const isViewport = (v: Viewport | null): v is Viewport =>
   v !== null &&
-  ['x', 'y', 'zoom'].every((k) => Number.isFinite((v as Record<string, unknown>)[k])) &&
-  (v as Viewport).zoom >= MIN_ZOOM &&
-  (v as Viewport).zoom <= MAX_ZOOM;
+  ['x', 'y', 'zoom'].every((k) => Number.isFinite(v[k as keyof Viewport])) &&
+  v.zoom >= MIN_ZOOM;
+
+/** Keys typed into a field are not shortcuts. */
+function typing(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  return !!el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName));
+}
 
 /** Moves the selection to a node once it is rendered (it may still be on its way from the store). */
 export interface FocusRequest {
@@ -87,10 +106,27 @@ interface Props {
   onSelect(solarSystemId: number | null): void;
   focus: FocusRequest | null;
   onMenu(target: MenuTarget, x: number, y: number): void;
-  /** Pixels on the right covered by the widget panel; fitting the view keeps systems out from under it. */
+  /** Pixels on the right covered by the widget panel; views keep systems out from under it. */
   coveredRight?: number;
   /** Pixels at the bottom covered by the widget sheet (phones). */
   coveredBottom?: number;
+}
+
+/**
+ * Where the map opens: the viewer's last view of it, else their own location, else home, else
+ * the system changed last, at the one readable zoom. The whole chain is never fitted on open
+ * (chains get huge); "Fit chain" does that on demand.
+ */
+export function openingFocus({
+  mine,
+  home,
+  latest,
+}: {
+  mine: number | null;
+  home: number | null;
+  latest: number | null;
+}): number | null {
+  return mine ?? home ?? latest;
 }
 
 export function MapCanvas({
@@ -108,13 +144,47 @@ export function MapCanvas({
   coveredBottom = 0,
 }: Props) {
   const { theme } = useTheme();
+  const toast = useToast();
+  const me = useMe();
+  const { preferences, settled, update: updatePreferences } = useMapPreferences(mapId);
   const rf = useReactFlow<SystemNodeType, ConnectionEdgeType>();
   const [nodes, setNodes, onNodesChange] = useNodesState<SystemNodeType>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<ConnectionEdgeType>([]);
-  const fitted = useRef(false);
+  const opened = useRef(false);
   const handledFocus = useRef(0);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const press = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number } | null>(null);
+
+  // The viewer's own character on the map: their main first, then any other one that is online.
+  const myLocation = useMemo(() => {
+    const account = me.data?.account;
+    if (!account) return null;
+    const own = new Set(me.data?.characters.map((c) => c.id));
+    const here = [...state.characters.values()].filter(
+      (c) =>
+        (c.accountId === account.id || own.has(c.characterId)) &&
+        c.online &&
+        c.solarSystemId !== null &&
+        state.systems.has(c.solarSystemId),
+    );
+    const pick = here.find((c) => c.characterId === account.mainCharacterId) ?? here[0];
+    return pick
+      ? { characterId: pick.characterId, name: pick.name, solarSystemId: pick.solarSystemId! }
+      : null;
+  }, [me.data, state.characters, state.systems]);
+
+  const template =
+    preferences.bookmarkTemplate ?? state.map?.settings.bookmarkTemplate ?? DEFAULT_BOOKMARK_TEMPLATE;
+  const bookmarks = useMemo(() => {
+    const chain = bookmarkChain({
+      systems: [...state.systems.values()],
+      connections: [...state.connections.values()],
+      signatures: [...state.signatures.values()],
+      classOf: (id) => bookmarkClassLabel(universe.get(id)),
+    });
+    return new Map([...chain].map(([id, vars]) => [id, bookmarkLabel(template, vars)]));
+  }, [state.systems, state.connections, state.signatures, universe, template]);
 
   // Store -> React Flow, keeping what React Flow owns: measurements, selection, a drag in progress.
   useEffect(() => {
@@ -123,12 +193,19 @@ export function MapCanvas({
       if (c.online && c.solarSystemId !== null)
         here.set(c.solarSystemId, (here.get(c.solarSystemId) ?? 0) + 1);
     }
+    const bubbled = new Set<number>();
+    for (const c of state.connections.values()) {
+      if (c.bubbled === 'source' || c.bubbled === 'both') bubbled.add(c.source);
+      if (c.bubbled === 'target' || c.bubbled === 'both') bubbled.add(c.target);
+    }
+    const connections = [...state.connections.values()];
     const labelById = new Map(labels.map((l) => [l.id, l]));
     setNodes((prev) => {
       const previous = new Map(prev.map((n) => [n.id, n]));
       return [...state.systems.values()].map((system): SystemNodeType => {
         const id = String(system.solarSystemId);
         const old = previous.get(id);
+        const info = universe.get(system.solarSystemId);
         return {
           ...old,
           id,
@@ -138,16 +215,38 @@ export function MapCanvas({
           data: {
             mapId,
             system,
-            info: universe.get(system.solarSystemId),
+            info,
             labels: system.labelIds.flatMap((l) => labelById.get(l) ?? []),
             characters: here.get(system.solarSystemId) ?? 0,
+            bookmark: bookmarks.get(system.solarSystemId) ?? null,
+            exit: exitLetters(system.solarSystemId, info, connections),
+            bubbled: bubbled.has(system.solarSystemId),
+            me:
+              myLocation?.solarSystemId === system.solarSystemId
+                ? { characterId: myLocation.characterId, name: myLocation.name }
+                : null,
           },
         };
       });
     });
-  }, [state.systems, state.characters, labels, universe, can.edit, mapId, setNodes]);
+  }, [
+    state.systems,
+    state.characters,
+    state.connections,
+    labels,
+    universe,
+    can.edit,
+    mapId,
+    setNodes,
+    bookmarks,
+    myLocation,
+  ]);
 
   useEffect(() => {
+    const name = (id: number) => {
+      const system = state.systems.get(id);
+      return system ? systemDisplayName(system, universe.get(id)) : undefined;
+    };
     setEdges((prev) => {
       const selected = new Set(prev.filter((e) => e.selected).map((e) => e.id));
       return [...state.connections.values()]
@@ -158,10 +257,10 @@ export function MapCanvas({
           source: String(c.source),
           target: String(c.target),
           selected: selected.has(c.id),
-          data: { mapId, connection: c },
+          data: { mapId, connection: c, sourceName: name(c.source), targetName: name(c.target) },
         }));
     });
-  }, [state.connections, state.systems, mapId, setEdges]);
+  }, [state.connections, state.systems, universe, mapId, setEdges]);
 
   /** Rectangles of the given nodes (all when omitted), as React Flow measured them. */
   const rectsOf = useCallback(
@@ -172,53 +271,93 @@ export function MapCanvas({
         .map((n) => ({
           x: n.position.x,
           y: n.position.y,
-          width: n.measured?.width ?? 200,
-          height: n.measured?.height ?? 80,
+          width: n.measured?.width ?? 230,
+          height: n.measured?.height ?? 90,
         })),
     [rf],
   );
 
-  /**
-   * Fits `rects` into the part of the canvas no panel covers. The first view keeps systems
-   * readable (centred on the home system when the chain is wider than the screen); the buttons
-   * may zoom further out.
-   */
-  const fitTo = useCallback(
-    (rects: Rect[], { readable, animate }: { readable: boolean; animate: boolean }) => {
-      const bounds = boundsOf(rects);
-      const box = canvasRef.current?.getBoundingClientRect();
-      if (!bounds || !box) return;
-      const phone = isPhone();
-      const home = [...state.systems.values()].find((s) => s.status === 'home');
-      const homeRect = home && rectsOf(new Set([String(home.solarSystemId)]))[0];
-      const viewport = fitViewport(
-        bounds,
-        box,
-        phone
-          ? { top: 72, right: 16, bottom: 140, left: 16 }
-          : { top: 72, right: coveredRight + 48, bottom: 48, left: 72 },
-        {
-          minZoom: readable ? READABLE_ZOOM[phone ? 'phone' : 'desktop'] : MIN_ZOOM,
-          maxZoom: FIT_MAX_ZOOM,
-          anchor: homeRect
-            ? { x: homeRect.x + homeRect.width / 2, y: homeRect.y + homeRect.height / 2 }
-            : undefined,
-        },
+  /** The part of the canvas no panel covers. */
+  const visibleBox = useCallback(() => {
+    const box = canvasRef.current?.getBoundingClientRect();
+    if (!box) return null;
+    return { width: Math.max(1, box.width - coveredRight), height: Math.max(1, box.height - coveredBottom) };
+  }, [coveredRight, coveredBottom]);
+
+  /** Puts `point` (flow coordinates) in the middle of the visible canvas at `zoom`. */
+  const centerOn = useCallback(
+    (point: Point, zoom: number, animate: boolean) => {
+      const box = visibleBox();
+      if (!box) return;
+      void rf.setViewport(
+        { x: box.width / 2 - point.x * zoom, y: box.height / 2 - point.y * zoom, zoom },
+        animate ? { duration: 250 } : undefined,
       );
-      void rf.setViewport(viewport, animate ? { duration: 250 } : undefined);
     },
-    [rf, rectsOf, state.systems, coveredRight],
+    [rf, visibleBox],
   );
 
-  // First view: where this viewer left the map, else a readable fit.
+  const centerOfSystem = useCallback(
+    (solarSystemId: number): Point | null => {
+      const rect = rectsOf(new Set([String(solarSystemId)]))[0];
+      return rect ? { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 } : null;
+    },
+    [rectsOf],
+  );
+
+  // First view, once systems are measured and the saved view is known.
   useEffect(() => {
-    if (fitted.current || !loaded || nodes.length === 0) return;
+    if (opened.current || !loaded || !settled || nodes.length === 0) return;
     if (!nodes.every((n) => n.measured?.width)) return; // runs again once React Flow measured them
-    const saved = readStored(viewportKey(mapId), isViewport);
-    if (saved) void rf.setViewport(saved);
-    else fitTo(rectsOf(), { readable: true, animate: false });
-    fitted.current = true;
-  }, [loaded, nodes, rf, mapId, fitTo, rectsOf]);
+    opened.current = true;
+    if (isViewport(preferences.viewport)) {
+      // Saved as the point in the middle of the view, so it fits a phone and a desktop alike.
+      const { x, y, zoom } = preferences.viewport;
+      centerOn({ x, y }, zoom, false);
+      return;
+    }
+    const systems = [...state.systems.values()];
+    const id = openingFocus({
+      mine: myLocation?.solarSystemId ?? null,
+      home: systems.find((s) => s.status === 'home')?.solarSystemId ?? null,
+      latest:
+        systems.reduce<(typeof systems)[number] | null>(
+          (best, s) => (!best || s.updatedAt > best.updatedAt ? s : best),
+          null,
+        )?.solarSystemId ?? null,
+    });
+    const at = id !== null ? centerOfSystem(id) : null;
+    if (at) centerOn(at, DEFAULT_ZOOM, false);
+  }, [loaded, settled, nodes, rf, preferences.viewport, state.systems, myLocation, centerOfSystem, centerOn]);
+
+  const fitChain = useCallback(() => {
+    const bounds = boundsOf(rectsOf());
+    const box = canvasRef.current?.getBoundingClientRect();
+    if (!bounds || !box) return;
+    const phone = box.width < 760;
+    const viewport = fitViewport(
+      bounds,
+      box,
+      phone
+        ? { top: 72, right: 16, bottom: 140 + coveredBottom, left: 16 }
+        : { top: 80, right: coveredRight + 48, bottom: 56, left: 72 },
+      { minZoom: FIT_MIN_ZOOM, maxZoom: FIT_MAX_ZOOM },
+    );
+    void rf.setViewport(viewport, { duration: 250 });
+  }, [rf, rectsOf, coveredRight, coveredBottom]);
+
+  const centerOnMe = useCallback(() => {
+    const at = myLocation ? centerOfSystem(myLocation.solarSystemId) : null;
+    if (!at) {
+      toast({
+        title: 'None of your characters is on this map',
+        description: 'Track a character and the map follows as you jump.',
+        tone: 'info',
+      });
+      return;
+    }
+    centerOn(at, Math.max(rf.getZoom(), DEFAULT_ZOOM), true);
+  }, [myLocation, centerOfSystem, centerOn, rf, toast]);
 
   // A panel that opens over the canvas must not hide the selected system: pan it into view.
   useEffect(() => {
@@ -226,8 +365,8 @@ export function MapCanvas({
     const node = rf.getNodes().find((n) => n.selected);
     if (!box || !node || (coveredRight === 0 && coveredBottom === 0)) return;
     const { x, y, zoom } = rf.getViewport();
-    const right = x + (node.position.x + (node.measured?.width ?? 200)) * zoom;
-    const bottom = y + (node.position.y + (node.measured?.height ?? 80)) * zoom;
+    const right = x + (node.position.x + (node.measured?.width ?? 230)) * zoom;
+    const bottom = y + (node.position.y + (node.measured?.height ?? 90)) * zoom;
     const dx = Math.max(0, right - (box.width - coveredRight - 24));
     const dy = Math.max(0, bottom - (box.height - coveredBottom - 24));
     if (dx > 0 || dy > 0) void rf.setViewport({ x: x - dx, y: y - dy, zoom }, { duration: 250 });
@@ -243,7 +382,45 @@ export function MapCanvas({
     setLegendState(open);
     writeStored(LEGEND_KEY, open);
   }, []);
-  const selectedIds = new Set(nodes.filter((n) => n.selected).map((n) => n.id));
+
+  // F fits the chain, C centres on me, L toggles the legend.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
+      const key = e.key.toLowerCase();
+      if (key === 'f') fitChain();
+      else if (key === 'c') centerOnMe();
+      else if (key === 'l') setLegend(!legend);
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [fitChain, centerOnMe, setLegend, legend]);
+
+  useEffect(
+    () => () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    },
+    [],
+  );
+
+  const saveViewport = (viewport: Viewport) => {
+    if (!opened.current) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      const box = visibleBox();
+      if (!box) return;
+      const rounded = {
+        x: Math.round((box.width / 2 - viewport.x) / viewport.zoom),
+        y: Math.round((box.height / 2 - viewport.y) / viewport.zoom),
+        zoom: Math.round(viewport.zoom * 1000) / 1000,
+      };
+      updatePreferences({ viewport: rounded }).catch(() => {
+        // Only a convenience: the next pan tries again.
+      });
+    }, SAVE_VIEW_AFTER_MS);
+  };
 
   useEffect(() => {
     if (!focus || handledFocus.current === focus.n) return;
@@ -254,8 +431,8 @@ export function MapCanvas({
     setNodes((ns) => ns.map((n) => (!!n.selected === (n.id === id) ? n : { ...n, selected: n.id === id })));
     if (focus.center) {
       void rf.setCenter(
-        node.position.x + (node.measured?.width ?? 200) / 2,
-        node.position.y + (node.measured?.height ?? 80) / 2,
+        node.position.x + (node.measured?.width ?? 230) / 2,
+        node.position.y + (node.measured?.height ?? 90) / 2,
         { duration: 300, zoom: rf.getZoom() },
       );
     }
@@ -305,6 +482,7 @@ export function MapCanvas({
     <div
       ref={canvasRef}
       className={styles.canvas}
+      style={mapTypeVars}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={cancelPress}
@@ -318,9 +496,7 @@ export function MapCanvas({
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onSelectionChange={onSelectionChange}
-        onMoveEnd={(_, viewport) => {
-          if (fitted.current) writeStored(viewportKey(mapId), viewport);
-        }}
+        onMoveEnd={(_, viewport) => saveViewport(viewport)}
         onNodeDragStop={(_, __, dragged) =>
           void store.moveSystems(
             dragged.map((n) => ({
@@ -355,15 +531,18 @@ export function MapCanvas({
         nodeDragThreshold={4}
         deleteKeyCode={null}
         colorMode={theme.colorScheme}
+        defaultViewport={{ x: 0, y: 0, zoom: DEFAULT_ZOOM }}
         minZoom={MIN_ZOOM}
         maxZoom={MAX_ZOOM}
         proOptions={{ hideAttribution: true }}
       >
         <Background gap={24} />
         <MapControls
-          onFit={() => fitTo(rectsOf(), { readable: false, animate: true })}
-          onFitSelection={() => fitTo(rectsOf(selectedIds), { readable: false, animate: true })}
-          hasSelection={selectedIds.size > 0}
+          mapId={mapId}
+          can={can}
+          onFit={fitChain}
+          onCenterMe={centerOnMe}
+          located={myLocation !== null}
           legend={legend}
           onLegend={setLegend}
         />

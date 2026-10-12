@@ -68,6 +68,9 @@ export class MapUseCases extends MappingUseCases {
         settings: {
           ...current.settings,
           ...(request.settings?.scopes ? { scopes: [...new Set(request.settings.scopes)] } : {}),
+          ...(request.settings?.bookmarkTemplate
+            ? { bookmarkTemplate: request.settings.bookmarkTemplate }
+            : {}),
         },
       };
       if (!changes(current, next)) return current;
@@ -102,6 +105,27 @@ export class MapUseCases extends MappingUseCases {
         if (next.visible) events.add('system.updated', next);
       }
       return labels;
+    });
+  }
+
+  /**
+   * The map's default bookmark label template (manager+), published with the map settings so
+   * every open map relabels at once; null goes back to the built-in default.
+   */
+  async setBookmarkTemplate(actor: Actor | null, mapId: string, template: string | null): Promise<ChainMap> {
+    const who = await this.authorize(actor, mapId, 'manager');
+    return this.write(who, mapId, async (events) => {
+      const current = await this.load(mapId);
+      const { bookmarkTemplate: _old, ...settings } = current.settings;
+      const next: ChainMap = {
+        ...current,
+        settings: template === null ? settings : { ...settings, bookmarkTemplate: template },
+      };
+      if ((current.settings.bookmarkTemplate ?? null) === template) return current;
+      next.updatedAt = this.ports.clock.now();
+      await this.ports.maps.update(next);
+      events.add('map.settings_changed', next);
+      return next;
     });
   }
 

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { MapRole } from './access.js';
+import { BookmarkTemplate } from './bookmarks.js';
 import { EveId, Id, Timestamp } from './common.js';
 
 export const MapScope = z.enum(['wormhole', 'high', 'low', 'null', 'pochven']);
@@ -8,6 +9,8 @@ export type MapScope = z.infer<typeof MapScope>;
 export const MapSettings = z.object({
   /** Which kinds of space auto-mapping adds. */
   scopes: z.array(MapScope).default(['wormhole']),
+  /** Default bookmark label template of the map (see `bookmarks.ts`); absent means `{sig}`. */
+  bookmarkTemplate: BookmarkTemplate.optional(),
 });
 export type MapSettings = z.infer<typeof MapSettings>;
 
@@ -73,6 +76,7 @@ export const SystemStatus = z.enum([
   'occupied',
   'warning',
   'hostile',
+  'target',
 ]);
 export type SystemStatus = z.infer<typeof SystemStatus>;
 

@@ -1,24 +1,23 @@
+/*
+ * Every node has the same box: as wide as the widest system name of the game next to the widest
+ * class pill (invisible sizers set it), three rows of fixed height. Nothing in it can make it grow.
+ */
 .node {
   position: relative;
+  display: grid;
+  grid-template-columns: max-content;
+  grid-auto-rows: auto;
+  row-gap: 5px;
+  width: max-content;
   min-width: var(--dbk-node-min-width);
-  max-width: 264px;
   padding: var(--dbk-node-padding);
-  padding-left: 14px;
   border: var(--dbk-node-border-width) solid var(--dbk-node-border);
   border-radius: var(--dbk-node-radius);
-  background-color: var(--dbk-node-bg);
-  /* status stripe, plus a faint wash of the status colour */
-  background-image:
-    linear-gradient(to right, var(--status-color) 4px, transparent 4px),
-    linear-gradient(
-      color-mix(in oklab, var(--status-color) 7%, transparent),
-      color-mix(in oklab, var(--status-color) 7%, transparent)
-    );
-  background-clip: padding-box;
+  background: var(--node-tint, var(--dbk-node-bg));
   box-shadow: var(--dbk-shadow-small);
   color: var(--dbk-node-text);
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: var(--map-text-secondary, 13px);
+  line-height: 1.3;
   touch-action: none;
   transition:
     border-color var(--dbk-motion-fast) var(--dbk-motion-easing),
@@ -29,11 +28,12 @@
   border-color: var(--dbk-color-border-strong);
 }
 
+/* Selected: an accent outline, nothing else changes. */
 .node[data-selected] {
   border-color: var(--dbk-node-selected-border);
   box-shadow:
-    0 0 0 1px var(--dbk-node-selected-border),
-    0 0 0 5px color-mix(in oklab, var(--dbk-node-selected-border) 18%, transparent);
+    0 0 0 2px var(--dbk-node-selected-border),
+    0 0 0 6px color-mix(in oklab, var(--dbk-node-selected-border) 22%, transparent);
 }
 
 .node[data-hidden] {
@@ -42,107 +42,101 @@
   box-shadow: none;
 }
 
-.row,
-.sub {
+/* Takes the node's width without adding to it. */
+.fill {
+  width: 0;
+  min-width: 100%;
+}
+
+.head {
+  display: grid;
+}
+
+.head > .row {
+  grid-area: 1 / 1;
+}
+
+.row {
   display: flex;
   align-items: center;
   gap: 6px;
-  min-width: 0;
+  height: 24px;
 }
 
-/* The class reads first: a small solid-tinted badge in the class colour. */
-.class {
+.stack {
+  display: grid;
+}
+
+.stack > * {
+  grid-area: 1 / 1;
+}
+
+.sizer {
+  visibility: hidden;
+}
+
+.pill {
   flex: none;
-  padding: 0 5px;
+  padding: 0 6px;
   border-radius: var(--dbk-radius-small);
-  background: color-mix(in oklab, var(--class-color) 16%, transparent);
-  color: color-mix(in oklab, var(--class-color) 85%, var(--dbk-node-text));
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--map-text-secondary, 13px);
+  font-weight: 750;
   line-height: 20px;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pill[data-kind='unknown'] {
+  border: 1px solid var(--dbk-node-border);
+  color: var(--dbk-color-text-muted);
 }
 
 .name {
+  min-width: 0;
   overflow: hidden;
-  font-size: 15px;
+  font-size: var(--map-text-name, 15px);
   font-weight: 650;
-  line-height: 20px;
+  line-height: 22px;
   letter-spacing: -0.01em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.tag {
-  flex: none;
-  padding: 0 5px;
-  border: 1px solid var(--dbk-node-border);
-  border-radius: var(--dbk-radius-small);
-  color: var(--dbk-color-text-muted);
-  font-family: var(--dbk-font-family-mono);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 17px;
-}
-
-.icons {
-  display: inline-flex;
-  flex: none;
-  gap: 4px;
-  margin-left: auto;
-  padding-left: 4px;
-  color: var(--dbk-color-text-subtle);
-}
-
-.icons span {
-  display: inline-flex;
-}
-
-.icons svg {
-  width: 14px;
-  height: 14px;
-}
-
-.sub {
-  margin-top: 2px;
-  color: var(--dbk-color-text-muted);
-}
-
-.subtitle {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.characters {
-  display: inline-flex;
-  flex: none;
+.line {
+  display: flex;
   align-items: center;
-  gap: 3px;
-  margin-left: auto;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--dbk-color-accent-subtle);
-  color: var(--dbk-color-accent-text);
-  font-weight: 600;
-  line-height: 18px;
-  font-variant-numeric: tabular-nums;
-}
-
-.characters svg {
-  width: 12px;
-  height: 12px;
+  gap: 4px;
+  height: 21px;
+  overflow: hidden;
 }
 
 .statics {
-  margin-top: 6px;
+  flex-wrap: nowrap;
+}
+
+.statics li {
+  font-size: var(--map-text-secondary, 13px);
+  line-height: 19px;
+}
+
+.exit {
+  flex: none;
+  padding: 0 6px;
+  border-radius: var(--dbk-radius-small);
+  background: var(--dbk-node-text);
+  color: var(--dbk-node-bg);
+  font-size: var(--map-text-secondary, 13px);
+  font-weight: 750;
+  line-height: 19px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
 .labels {
   display: flex;
-  flex-wrap: wrap;
   gap: 4px;
-  margin: 6px 0 0;
+  min-width: 0;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
@@ -151,32 +145,171 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
+  max-width: 96px;
   padding: 0 6px;
   border-radius: var(--dbk-radius-small);
-  background: color-mix(in oklab, var(--label-color) 16%, transparent);
+  background: color-mix(in oklab, var(--label-color) 18%, var(--dbk-node-bg));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--label-color) 45%, transparent);
   color: var(--dbk-node-text);
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 18px;
+  font-size: var(--map-text-secondary, 13px);
+  font-weight: 550;
+  line-height: 19px;
   cursor: help;
 }
 
 .label::before {
   content: '';
-  width: 6px;
-  height: 6px;
+  flex: none;
+  width: 7px;
+  height: 7px;
   border-radius: 2px;
   background: var(--label-color);
+}
+
+.labelName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.more {
+  flex: none;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--map-text-secondary, 13px);
+  font-weight: 650;
+  line-height: 19px;
+  cursor: help;
+}
+
+.badges {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: auto;
 }
 
 .badges:empty {
   display: none;
 }
 
-.badges {
+/* ---- Above and below the box ---- */
+.above {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  left: 0;
   display: flex;
-  gap: 3px;
-  margin-top: 4px;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.bookmark {
+  overflow: hidden;
+  max-width: 62%;
+  padding: 1px 6px;
+  border: 1px solid var(--dbk-color-border-strong);
+  border-radius: var(--dbk-radius-small);
+  background: var(--dbk-color-surface-raised);
+  color: var(--dbk-color-text);
+  font-family: var(--dbk-font-family-mono);
+  font-size: var(--map-text-bookmark, 13px);
+  font-weight: 600;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: copy;
+  pointer-events: auto;
+}
+
+.bookmark:hover {
+  border-color: var(--dbk-color-accent);
+}
+
+.bookmark:focus-visible {
+  outline: 2px solid var(--dbk-color-focus);
+  outline-offset: 1px;
+}
+
+.here,
+.pilots {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 1px 8px 1px 2px;
+  border-radius: 999px;
+  font-size: var(--map-text-secondary, 13px);
+  font-weight: 700;
+  line-height: 18px;
+  white-space: nowrap;
+  pointer-events: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.here {
+  background: var(--dbk-color-accent);
+  color: var(--dbk-color-accent-contrast);
+  box-shadow: var(--dbk-shadow-small);
+}
+
+.here img {
+  border-radius: 50%;
+}
+
+.hereCount {
+  opacity: 0.85;
+}
+
+.pilots {
+  padding-left: 6px;
+  border: 1px solid var(--dbk-color-border-strong);
+  background: var(--dbk-color-surface-raised);
+  color: var(--dbk-color-text);
+}
+
+.pilots svg {
+  width: 13px;
+  height: 13px;
+}
+
+.bubble {
+  position: absolute;
+  right: -11px;
+  bottom: -11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--dbk-edge-bubble);
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--dbk-edge-bubble) 22%, var(--dbk-color-surface-raised));
+  color: var(--dbk-edge-bubble);
+}
+
+.bubble svg {
+  width: 14px;
+  height: 14px;
+}
+
+.hub {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  padding: 1px 8px;
+  border: 1px solid var(--dbk-color-border-strong);
+  border-radius: 999px;
+  background: var(--dbk-color-surface-raised);
+  color: var(--dbk-color-text);
+  font-size: var(--map-text-secondary, 13px);
+  font-weight: 650;
+  line-height: 18px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  font-variant-numeric: tabular-nums;
 }
 
 .handle {

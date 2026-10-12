@@ -1,4 +1,5 @@
 export * from './access.js';
+export * from './bookmarks.js';
 export * from './common.js';
 export * from './identity.js';
 export * from './mapping.js';

@@ -3,6 +3,7 @@ import type { Clock, EventLog, MapAccess, UnitOfWork } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
 import {
   ConnectionUseCases,
+  MapPreferenceUseCases,
   MapSnapshotQuery,
   MapUseCases,
   SignatureUseCases,
@@ -17,12 +18,14 @@ import {
   KyselySignatureRepository,
   KyselySystemRepository,
 } from '../../adapters/mapping/kysely-repositories.js';
+import { KyselyMapPreferenceRepository } from '../../adapters/mapping/kysely-preferences.js';
 import { MappingMapOwnership } from '../../adapters/mapping/map-ownership.js';
 import { CLOCK, EVENT_LOG, MAP_ACCESS, UNIT_OF_WORK, UNIVERSE_CATALOG } from '../../platform/tokens.js';
 import { MapOwnershipRegistry } from '../access/map-ownership.registry.js';
 import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
 import {
   ConnectionsController,
+  MapPreferencesController,
   MapsController,
   SignaturesController,
   SystemsController,
@@ -40,7 +43,13 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
  * of the `map:<id>` snapshot.
  */
 @Module({
-  controllers: [MapsController, SystemsController, ConnectionsController, SignaturesController],
+  controllers: [
+    MapsController,
+    MapPreferencesController,
+    SystemsController,
+    ConnectionsController,
+    SignaturesController,
+  ],
   providers: [
     {
       provide: MAP_REPOSITORY,
@@ -80,6 +89,16 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
     useCase(ConnectionUseCases),
     useCase(SignatureUseCases),
     useCase(MapSnapshotQuery),
+    {
+      provide: MapPreferenceUseCases,
+      useFactory: (database: Database, access: MapAccess, clock: Clock) =>
+        new MapPreferenceUseCases({
+          preferences: new KyselyMapPreferenceRepository(database),
+          access,
+          clock,
+        }),
+      inject: [Database, MAP_ACCESS, CLOCK],
+    },
   ],
   exports: [
     MAP_REPOSITORY,
