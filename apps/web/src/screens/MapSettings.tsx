@@ -141,7 +141,7 @@ const SECTIONS: readonly Section[] = [
     icon: <Bookmark />,
     render: (map, can) => (
       <Pane>
-        <BookmarkLabelSettings key={map.id} map={map} canManage={can.manage} />
+        <BookmarkLabelSettings key={map.id} map={map} canManage={can.manage} canEdit={can.edit} />
       </Pane>
     ),
   },

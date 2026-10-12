@@ -37,7 +37,7 @@ function BookmarkDialog({ mapId, can }: { mapId: string; can: MapPermissions }) 
       description="The short label above each system, ready to paste into your in-game bookmark."
       width={640}
     >
-      {map.data ? <BookmarkLabelSettings map={map.data} canManage={can.manage} /> : null}
+      {map.data ? <BookmarkLabelSettings map={map.data} canManage={can.manage} canEdit={can.edit} /> : null}
     </DialogContent>
   );
 }
