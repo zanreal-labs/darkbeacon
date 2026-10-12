@@ -1,5 +1,12 @@
 import { newId, type Actor } from '@darkbeacon/core';
-import type { ConnectionUseCases, MapUseCases, SignatureUseCases, SystemUseCases } from '@darkbeacon/mapping';
+import type {
+  CommentUseCases,
+  ConnectionUseCases,
+  MapUseCases,
+  SignatureUseCases,
+  StructureUseCases,
+  SystemUseCases,
+} from '@darkbeacon/mapping';
 import type {
   AddSignatureRequest,
   LabelDto,
@@ -24,6 +31,9 @@ export interface DemoMapping {
   systems: SystemUseCases;
   connections: ConnectionUseCases;
   signatures: SignatureUseCases;
+  /** Comments and structures of the home system; left out when absent. */
+  comments?: CommentUseCases;
+  structures?: StructureUseCases;
 }
 
 type SystemSeed = { id: number; x: number; y: number } & UpdateSystemRequest;
@@ -130,8 +140,24 @@ export async function seedDemoChain(actor: Actor, mapping: DemoMapping): Promise
     { system: HOME, eveId: 'RLK-302', group: 'relic', name: 'Forgotten Frontier Quarantine Outpost' },
     { system: HOME, eveId: 'DTA-559', group: 'data', name: 'Unsecured Frontier Database' },
     { system: HOME, eveId: 'QNV-904' },
+    {
+      system: HOME,
+      eveId: 'WND-552',
+      group: 'wormhole',
+      type: 'E004',
+      tempName: 'Frig C1',
+      bubbled: true,
+      description: 'Bubbled on our side. Not linked yet.',
+    },
     { system: MAGNETAR, eveId: 'OBW-477', type: 'O477', connection: 'o477' },
-    { system: MAGNETAR, eveId: 'KCC-162', type: 'K162', connection: 'd364', description: 'Hostile C5.' },
+    {
+      system: MAGNETAR,
+      eveId: 'KCC-162',
+      type: 'K162',
+      destination: 'c5',
+      connection: 'd364',
+      description: 'Hostile C5.',
+    },
     { system: MAGNETAR, eveId: 'QFR-003', type: 'Q003', connection: 'q003', description: 'Frigates only.' },
     { system: MAGNETAR, eveId: 'BHS-274', type: 'B274', description: 'Not opened yet.' },
   ];
@@ -139,6 +165,33 @@ export async function seedDemoChain(actor: Actor, mapping: DemoMapping): Promise
     const added = await mapping.signatures.add(actor, map.id, system, request);
     const connectionId = connection ? ids.get(connection) : undefined;
     if (connectionId) await mapping.signatures.update(actor, map.id, added.id, { connectionId });
+  }
+
+  await mapping.comments?.add(actor, map.id, PULSAR, {
+    text: 'Rattlesnakes and a **Nestor** on d-scan at 19:40. Their Fortizar is in reinforce, see Structures.',
+  });
+  await mapping.comments?.add(actor, map.id, HOME, {
+    text: 'Rolling the D845 after downtime. Ping in [fleet comms](https://example.com) before jumping.',
+  });
+  if (mapping.structures) {
+    await mapping.structures.paste(
+      actor,
+      map.id,
+      PULSAR,
+      [
+        '35833\tJ130026 - Hammer Time\tFortizar\t3,210 km',
+        '35835\tJ130026 - Moon Drill\tAthanor\t1.2 AU',
+      ].join('\n'),
+    );
+    const until = new Date(Date.now() + 26 * 60 * 60 * 1000);
+    const stamp = `${until.getUTCFullYear()}.${String(until.getUTCMonth() + 1).padStart(2, '0')}.${String(until.getUTCDate()).padStart(2, '0')} ${String(until.getUTCHours()).padStart(2, '0')}:${String(until.getUTCMinutes()).padStart(2, '0')}`;
+    await mapping.structures.paste(actor, map.id, PULSAR, `Hammer Time\n3,210 km\nReinforced until ${stamp}`);
+    await mapping.structures.add(actor, map.id, HOME, {
+      typeId: 35832,
+      typeName: 'Astrahus',
+      name: 'Home Sweet Home',
+      owner: { id: 98000001, name: 'Darkbeacon Demo Corp', ticker: 'DBK' },
+    });
   }
   return map.id;
 }
