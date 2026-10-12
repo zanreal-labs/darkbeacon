@@ -17,3 +17,6 @@ export * from './presence.js';
 export * from './sharing.js';
 export * from './observability.js';
 export * from './backups.js';
+export * from './route-options.js';
+export * from './route-panel.js';
+export * from './bridges.js';

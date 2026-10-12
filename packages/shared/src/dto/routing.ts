@@ -2,16 +2,7 @@ import { z } from 'zod';
 import { EveId, Id, Timestamp } from './common.js';
 import { Bubbled, ConnectionType, MassStatus, ShipSize, TimeStatus } from './mapping.js';
 import { HullClass, WormholeDestination } from './wormholes.js';
-
-/** Comma separated query value -> distinct items (`?skip=eol,critical`). */
-const split = (value: string) => [
-  ...new Set(
-    value
-      .split(',')
-      .map((v) => v.trim())
-      .filter(Boolean),
-  ),
-];
+import { RouteOptionsQuery } from './route-options.js';
 
 // --- Connections panel ---------------------------------------------------------------------
 
@@ -116,10 +107,6 @@ export type PassageDto = z.infer<typeof PassageDto>;
 export const RouteMode = z.enum(['shortest', 'safer', 'highsec', 'outlaw', 'pilot']);
 export type RouteMode = z.infer<typeof RouteMode>;
 
-/** Chain connections a route may skip: EOL, critical mass, frigate-only (ship size small). */
-export const RouteSkip = z.enum(['eol', 'critical', 'frigate']);
-export type RouteSkip = z.infer<typeof RouteSkip>;
-
 /** Whose security status the `pilot` mode uses: one of the caller's characters, or a number. */
 const PilotQuery = {
   characterId: z.coerce.number().pipe(EveId).optional(),
@@ -131,12 +118,7 @@ export const RouteQuery = z.object({
   from: z.coerce.number().pipe(EveId),
   to: z.coerce.number().pipe(EveId),
   mode: RouteMode.default('shortest'),
-  skip: z.string().transform(split).pipe(z.array(RouteSkip).max(3)).optional(),
-  avoid: z
-    .string()
-    .transform((value) => split(value).map(Number))
-    .pipe(z.array(EveId).max(200))
-    .optional(),
+  ...RouteOptionsQuery,
   ...PilotQuery,
 });
 export type RouteQuery = z.infer<typeof RouteQuery>;
@@ -151,6 +133,14 @@ export const RouteStepDto = z.object({
   via: z.enum(['start', 'gate', 'wormhole', 'bridge']),
   /** The chain connection used for `wormhole` and `bridge` steps. */
   connectionId: Id.nullable(),
+  /**
+   * Where a step off the stargates comes from when it is not a map connection: an Ansiblex jump
+   * bridge of the map, or a Thera or Turnur hole EVE-Scout lists.
+   */
+  edge: z.enum(['ansiblex', 'eve-scout']).optional(),
+  regionName: z.string().optional(),
+  /** Triglavian invasion outcome of a known-space system (see `InvasionStatus`). */
+  invasion: z.enum(['edencom', 'triglavian', 'final']).optional(),
 });
 export type RouteStepDto = z.infer<typeof RouteStepDto>;
 
@@ -171,7 +161,7 @@ export type RouteDto = z.infer<typeof RouteDto>;
  * allows next to a trade hub it does not (a low-sec staging system for outlaws). `map`: chosen by
  * the map's managers. `personal`: chosen by the viewer.
  */
-export const HubKind = z.enum(['trade', 'staging', 'map', 'personal']);
+export const HubKind = z.enum(['trade', 'staging', 'map', 'personal', 'ping']);
 export type HubKind = z.infer<typeof HubKind>;
 
 export const HubDto = z.object({
@@ -215,6 +205,7 @@ export type SetHubsRequest = z.infer<typeof SetHubsRequest>;
 export const HubDistancesQuery = z.object({
   from: z.coerce.number().pipe(EveId),
   mode: RouteMode.default('shortest'),
+  ...RouteOptionsQuery,
   ...PilotQuery,
 });
 export type HubDistancesQuery = z.infer<typeof HubDistancesQuery>;
@@ -245,7 +236,11 @@ export const MapExitDto = z.object({
 export type MapExitDto = z.infer<typeof MapExitDto>;
 
 /** GET /api/maps/:mapId/exits */
-export const ExitsQuery = z.object({ mode: RouteMode.default('shortest'), ...PilotQuery });
+export const ExitsQuery = z.object({
+  mode: RouteMode.default('shortest'),
+  ...RouteOptionsQuery,
+  ...PilotQuery,
+});
 export type ExitsQuery = z.infer<typeof ExitsQuery>;
 
 export const MapExitsDto = z.object({ mode: RouteMode, exits: z.array(MapExitDto) });
@@ -257,7 +252,12 @@ export type MapExitsDto = z.infer<typeof MapExitsDto>;
  */
 export const WaypointRequest = z.object({
   solarSystemId: EveId,
-  /** `destination` replaces the route; `waypoint` appends to it. */
-  mode: z.enum(['destination', 'waypoint']).default('destination'),
+  /**
+   * `destination` replaces the route; `waypoint` appends to it; `front` puts it first and keeps
+   * the rest of the route.
+   */
+  mode: z.enum(['destination', 'waypoint', 'front']).default('destination'),
+  /** An NPC station in that system to fly to instead of the system itself. */
+  stationId: EveId.optional(),
 });
 export type WaypointRequest = z.infer<typeof WaypointRequest>;

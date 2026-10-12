@@ -547,7 +547,7 @@ export const routes = {
       method: 'PUT',
       path: '/api/maps/:mapId/hubs',
       auth: 'account',
-      mapRole: 'manager',
+      mapRole: 'member',
       body: dto.SetHubsRequest,
       response: z.array(dto.HubDto),
     }),
@@ -579,6 +579,131 @@ export const routes = {
       path: '/api/accounts/me/characters/:characterId/waypoint',
       auth: 'account',
       body: dto.WaypointRequest,
+    }),
+    /** One destination or waypoint for several own characters at once. */
+    waypoints: route({
+      method: 'POST',
+      path: '/api/accounts/me/waypoints',
+      auth: 'account',
+      body: dto.WaypointsRequest,
+      response: dto.WaypointsResultDto,
+    }),
+    /** Routes from one system to every map hub (or every own hub), with the systems on the way. */
+    hubRoutes: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/routes/hubs',
+      auth: 'account',
+      mapRole: 'viewer',
+      query: dto.HubRoutesQuery,
+      response: dto.HubRoutesDto,
+    }),
+    /** The nearest places of a kind (loot buyers, security offices, trade hubs, Thera, Turnur). */
+    routesBy: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/routes/by',
+      auth: 'account',
+      mapRole: 'viewer',
+      query: dto.RoutesByQuery,
+      response: dto.RoutesByDto,
+    }),
+    /** The viewer's route options, the same on every map. */
+    preferences: route({
+      method: 'GET',
+      path: '/api/accounts/me/route-preferences',
+      auth: 'account',
+      response: dto.RoutePreferencesDto,
+    }),
+    updatePreferences: route({
+      method: 'PUT',
+      path: '/api/accounts/me/route-preferences',
+      auth: 'account',
+      body: dto.UpdateRoutePreferencesRequest,
+      response: dto.RoutePreferencesDto,
+    }),
+    mapSettings: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/routing-settings',
+      auth: 'account',
+      mapRole: 'viewer',
+      response: dto.MapRoutingSettingsDto,
+    }),
+    updateMapSettings: route({
+      method: 'PATCH',
+      path: '/api/maps/:mapId/routing-settings',
+      auth: 'account',
+      mapRole: 'manager',
+      body: dto.UpdateMapRoutingSettingsRequest,
+      response: dto.MapRoutingSettingsDto,
+    }),
+    /** The way home from each hub to the map's home system. */
+    wayHome: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/way-home',
+      auth: 'account',
+      mapRole: 'viewer',
+      response: dto.WayHomeDto,
+    }),
+    /** Thera and Turnur holes as EVE-Scout lists them. */
+    eveScout: route({
+      method: 'GET',
+      path: '/api/routes/eve-scout',
+      auth: 'account',
+      response: dto.TheraDto,
+    }),
+    /** NPC stations of a system. */
+    stations: route({
+      method: 'GET',
+      path: '/api/universe/systems/:solarSystemId/stations',
+      auth: 'account',
+      response: dto.StationsDto,
+    }),
+  },
+
+  /** Ansiblex jump bridges a map routes over. */
+  bridges: {
+    list: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/bridges',
+      auth: 'account',
+      mapRole: 'viewer',
+      response: z.array(dto.BridgeDto),
+    }),
+    paste: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/bridges/paste',
+      auth: 'account',
+      mapRole: 'manager',
+      body: dto.PasteBridgesRequest,
+      response: dto.ImportBridgesResultDto,
+    }),
+    /** Reads the Ansiblex gates of the character's corporation (ESI, Station Manager role). */
+    readFromEsi: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/bridges/esi',
+      auth: 'account',
+      mapRole: 'manager',
+      body: dto.ReadBridgesFromEsiRequest,
+      response: dto.ImportBridgesResultDto,
+    }),
+    update: route({
+      method: 'PATCH',
+      path: '/api/maps/:mapId/bridges/:bridgeId',
+      auth: 'account',
+      mapRole: 'manager',
+      body: dto.UpdateBridgeRequest,
+      response: dto.BridgeDto,
+    }),
+    remove: route({
+      method: 'DELETE',
+      path: '/api/maps/:mapId/bridges/:bridgeId',
+      auth: 'account',
+      mapRole: 'manager',
+    }),
+    clear: route({
+      method: 'DELETE',
+      path: '/api/maps/:mapId/bridges',
+      auth: 'account',
+      mapRole: 'manager',
     }),
   },
 

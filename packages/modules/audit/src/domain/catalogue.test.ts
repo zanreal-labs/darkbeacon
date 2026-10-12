@@ -198,6 +198,21 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
     before: { accountId: 'b', role: 'user' },
   },
   'access.account_changed': { data: { accountId: 'b' } },
+  'routes.bridges_changed': {
+    data: {
+      added: [{ id: 'b1', a: { name: '1DQ1-A' }, b: { name: 'UALX-3' } }],
+      updated: [],
+      removed: ['b0'],
+    },
+  },
+  'routes.settings_changed': { data: { thera: false }, before: { thera: true } },
+  'routes.way_home_changed': {
+    data: {
+      home: { solarSystemId: 31002531, name: 'J014348' },
+      routes: [{ hub: { name: 'Jita' }, jumps: 7, mouth: { name: 'Tama' } }],
+    },
+    before: { home: null, routes: [] },
+  },
   'character.unlinked': { data: { characterId: 9 } },
   'plugin.updated': { data: { ...plugin, enabled: true }, before: plugin },
   'plugin.removed': { data: { id: 'p' }, before: plugin },
