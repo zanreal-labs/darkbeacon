@@ -130,7 +130,7 @@ describe('map settings dialog', () => {
     open('/m/home-chain?settings=general', 'manager');
     await screen.findByRole('dialog', { name: 'Map settings' });
     const tabs = screen.getAllByRole('tab').map((t) => t.textContent);
-    expect(tabs).toEqual(['Labels', 'Bookmark labels']);
+    expect(tabs).toEqual(['Labels', 'Bookmark labels', 'Routes', 'Bridges']);
     expect(screen.getByRole('tab', { name: 'Labels', selected: true })).toBeTruthy();
   });
 
