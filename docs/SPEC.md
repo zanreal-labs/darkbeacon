@@ -49,6 +49,7 @@ packages/modules/routing        routes over stargates and the chain, hubs, chain
 packages/modules/audit          audit records of events, histories, reverts, hash chain check
 packages/modules/telemetry      anonymous product telemetry: allow-list, pseudonymous ids, opt-outs, heartbeat
 packages/modules/observability  telemetry settings, domain metrics, admin status (OpenTelemetry SDK in adapters)
+packages/modules/backups        SQLite backups: snapshots, schedule, retention, validation, restore
 packages/db            Kysely factory, dialect switch, migration runner; migrations in migrations/<module>/
 packages/shared        zod schemas, DTOs and the WebSocket protocol shared by server and web
 packages/plugin-sdk    public plugin contract: manifest type, PluginContext (exposed ports), web slots

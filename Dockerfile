@@ -33,7 +33,9 @@ COPY --from=build /app/apps/server/dist ./apps/server/dist
 COPY --from=build --chown=node:node /app/apps/web/.next/standalone ./apps/web/.next/standalone
 # First-party plugins and themes: the catalogue admins install from.
 COPY --from=build /app/plugins ./plugins
-RUN mkdir -p /data && chown node:node /data
+RUN mkdir -p /data && chown node:node /data \
+    && printf '#!/bin/sh\nexec node /app/apps/server/dist/cli.js "$@"\n' > /usr/local/bin/darkbeacon \
+    && chmod 755 /usr/local/bin/darkbeacon
 USER node
 VOLUME /data
 EXPOSE 3000

@@ -13,6 +13,7 @@
   "dependencies": {
     "@darkbeacon/access": "workspace:*",
     "@darkbeacon/audit": "workspace:*",
+    "@darkbeacon/backups": "workspace:*",
     "@darkbeacon/core": "workspace:*",
     "@darkbeacon/db": "workspace:*",
     "@darkbeacon/identity": "workspace:*",
@@ -27,6 +28,7 @@
     "@darkbeacon/theme-sdk": "workspace:*",
     "@darkbeacon/telemetry": "workspace:*",
     "@darkbeacon/tracking": "workspace:*",
+    "@fastify/busboy": "^3.2.0",
     "@fastify/otel": "0.21.2",
     "@nestjs/common": "^12.1.2",
     "@nestjs/core": "^12.1.2",

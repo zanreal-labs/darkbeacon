@@ -33,6 +33,7 @@ import { PluginCommandRegistry } from '../../plugins/plugin-commands.js';
 import { PluginHost, PluginPortProviders } from '../../plugins/plugin-host.js';
 import { PresenceRooms } from '../../realtime/presence.js';
 import { EventConsumers } from '../../platform/event-consumers.js';
+import { MaintenanceMode } from '../../platform/maintenance.js';
 import { SignInCookies } from '../../platform/sign-in-cookies.js';
 import { FilePluginSettingsSchemas } from '../../plugins/settings-schemas.js';
 import {
@@ -84,9 +85,18 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
     @Inject(PresenceRooms) private readonly presence: PresenceRooms,
     @Inject(DiscordBotService) private readonly bot: DiscordBotService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    @Inject(MaintenanceMode) private readonly maintenance: MaintenanceMode,
   ) {}
 
   onModuleInit(): void {
+    // Plugins read and write the database from their own timers: unloaded while it is replaced,
+    // loaded again from what the (restored) database says is enabled.
+    this.maintenance.register({
+      name: 'plugins',
+      pause: () => this.host.stop(),
+      resume: () => this.host.start(),
+    });
+
     const fastify = this.http.httpAdapter.getInstance<FastifyInstance>();
     if (!fastify.hasContentTypeParser('application/gzip')) {
       fastify.addContentTypeParser(

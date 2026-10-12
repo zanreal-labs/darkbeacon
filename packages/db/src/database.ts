@@ -1,12 +1,12 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import SQLite from 'better-sqlite3';
 import { Kysely, PostgresDialect, SqliteDialect, type Transaction } from 'kysely';
 import pg from 'pg';
 import type { UnitOfWork } from '@darkbeacon/core';
 import { migrateToLatest, migrationStatus } from './migrator.js';
 import { tracedDialect, type QueryTracer } from './tracing.js';
+import { openSqlite, SqliteFile } from './sqlite.js';
 
 export type Dialect = 'sqlite' | 'postgres';
 
@@ -51,6 +51,8 @@ export class Database implements UnitOfWork {
     readonly dialect: Dialect,
     /** Postgres schema this handle works in, when not the default. */
     readonly schema?: string,
+    /** The SQLite file behind the handle (null on Postgres). */
+    readonly sqlite: SqliteFile | null = null,
   ) {}
 
   /** The open transaction inside `transaction()`, the root handle outside. */
@@ -92,9 +94,21 @@ export class Database implements UnitOfWork {
     return migrateToLatest(this.kysely, { schema: this.schema });
   }
 
-  /** Applied and pending migrations (readiness: nothing may be pending). */
-  migrationStatus(): Promise<{ applied: number; pending: number }> {
+  /** Applied and pending migrations of this database. */
+  migrationStatus(): Promise<{ applied: string[]; pending: string[] }> {
     return migrationStatus(this.kysely, { schema: this.schema });
+  }
+
+  /**
+   * SQLite only: runs `work` holding the single connection, so no transaction is open and every
+   * other query waits until it is done (online backups, swapping the file during a restore).
+   * Inside, use the raw handle of `file`; a query through `db()` would wait forever.
+   */
+  async exclusive<T>(work: (file: SqliteFile) => Promise<T>): Promise<T> {
+    const file = this.sqlite;
+    if (!file) throw new Error('exclusive access is only available on SQLite');
+    if (this.inTransaction) throw new Error('exclusive() cannot run inside a transaction');
+    return this.kysely.connection().execute(() => work(file));
   }
 
   async ping(): Promise<void> {
@@ -119,15 +133,13 @@ export async function createDatabase(options: DatabaseOptions = {}): Promise<Dat
 
   const filename = options.filename ?? join(options.dataDir ?? '/data', 'app.db');
   if (filename !== ':memory:') mkdirSync(dirname(filename), { recursive: true });
-  const sqlite = new SQLite(filename);
-  sqlite.pragma('journal_mode = WAL');
-  sqlite.pragma('synchronous = NORMAL');
-  sqlite.pragma('foreign_keys = ON');
-  sqlite.pragma('busy_timeout = 5000');
-  const dialect = new SqliteDialect({ database: sqlite });
+  const file = new SqliteFile(filename, openSqlite(filename));
+  const dialect = new SqliteDialect({ database: file.forKysely });
   return new Database(
     new Kysely({ dialect: options.tracer ? tracedDialect(dialect, options.tracer, 'sqlite') : dialect }),
     'sqlite',
+    undefined,
+    file,
   );
 }
 

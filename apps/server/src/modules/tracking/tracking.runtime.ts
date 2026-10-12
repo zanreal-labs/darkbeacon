@@ -12,6 +12,7 @@ import { isEventOfType } from '@darkbeacon/shared';
 import { AutoMapper, ListMapCharacters, TrackingCleanup, TrackingPoller } from '@darkbeacon/tracking';
 import type { AppConfig } from '../../config/config.js';
 import { EventConsumers } from '../../platform/event-consumers.js';
+import { MaintenanceMode } from '../../platform/maintenance.js';
 import { APP_CONFIG, EVENT_BUS, OBSERVABILITY } from '../../platform/tokens.js';
 import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
 
@@ -35,6 +36,7 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
     @Inject(TrackingCleanup) private readonly cleanup: TrackingCleanup,
     @Inject(EventConsumers) private readonly consumers: EventConsumers,
     @Inject(EVENT_BUS) private readonly bus: EventBus,
+    @Inject(MaintenanceMode) private readonly maintenance: MaintenanceMode,
     @Optional() @Inject(OBSERVABILITY) private readonly telemetry?: DomainTelemetry | null,
   ) {}
 
@@ -66,6 +68,12 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
       },
     });
     this.unsubscribe = this.bus.subscribe(() => this.poller.recheckAccess(), { types: ['access.*'] });
+    this.maintenance.register({
+      name: 'tracking',
+      resume: (restored) => {
+        if (restored) this.poller.recheckAccess();
+      },
+    });
   }
 
   onApplicationBootstrap(): void {
@@ -76,6 +84,7 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
   }
 
   private async tick(): Promise<void> {
+    if (this.maintenance.active) return;
     const telemetry = this.telemetry;
     if (!telemetry) return this.poller.tick();
     // A poll still running makes the next tick a no-op; only whole polls are measured.

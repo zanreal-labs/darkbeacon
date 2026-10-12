@@ -36,7 +36,8 @@ export class HealthController {
     let migrations: ReadyDto['migrations'];
     try {
       await this.database.ping();
-      migrations = await this.database.migrationStatus();
+      const status = await this.database.migrationStatus();
+      migrations = { applied: status.applied.length, pending: status.pending.length };
     } catch {
       throw new ServiceUnavailableException('The database is not answering');
     }

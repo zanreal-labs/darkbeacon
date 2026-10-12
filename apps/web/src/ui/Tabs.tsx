@@ -1,6 +1,6 @@
 'use client';
 
-import type { ComponentProps, ReactNode } from 'react';
+import { useEffect, useRef, type ComponentProps, type ReactNode } from 'react';
 import { Tabs as T, ToggleGroup } from 'radix-ui';
 import { cx } from './cx';
 import styles from './tabs.module.css';
@@ -12,7 +12,20 @@ import styles from './tabs.module.css';
 export const Tabs = T.Root;
 
 export function TabsList({ className, ...props }: ComponentProps<typeof T.List>) {
-  return <T.List className={cx(styles.list, className)} {...props} />;
+  const list = useRef<HTMLDivElement>(null);
+  const shown = useRef<Element | null>(null);
+  // On narrow screens the list scrolls sideways: keep the open tab in view (e.g. opened by ?tab=).
+  useEffect(() => {
+    const active = list.current?.querySelector('[role="tab"][data-state="active"]') ?? null;
+    if (!active || active === shown.current) return;
+    shown.current = active;
+    const box = list.current!;
+    const tab = active.getBoundingClientRect();
+    const frame = box.getBoundingClientRect();
+    if (tab.right > frame.right) box.scrollLeft += tab.right - frame.right + 16;
+    else if (tab.left < frame.left) box.scrollLeft -= frame.left - tab.left + 16;
+  });
+  return <T.List ref={list} className={cx(styles.list, className)} {...props} />;
 }
 
 export function TabsTrigger({

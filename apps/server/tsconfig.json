@@ -24,6 +24,7 @@
     { "path": "../../packages/modules/routing" },
     { "path": "../../packages/modules/audit" },
     { "path": "../../packages/modules/telemetry" },
-    { "path": "../../packages/modules/observability" }
+    { "path": "../../packages/modules/observability" },
+    { "path": "../../packages/modules/backups" }
   ]
 }
