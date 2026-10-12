@@ -57,6 +57,12 @@ const characterRefs = (d: Fields) => [...ref('character', d.characterId)];
 const subject = (d: Fields) => num(d.characterId);
 const change = (before: unknown, after: unknown) => ({ before, after });
 
+/** `Wanderer wanderer.ltd/home-chain`, as the audit trail names where an import came from. */
+const importSource = (source: unknown): string => {
+  const s = asFields(source);
+  return s ? `Wanderer ${str(s.host)}/${str(s.slug)}` : 'Wanderer';
+};
+
 const MAP_ENTITY: Partial<AuditDescriptor> = { ignore: ['createdAt', 'updatedAt'] };
 
 /**
@@ -201,6 +207,35 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
   },
   'plugin.updated': { op: 'update', entity: byId('plugin'), ignore: ['installedAt'] },
   'plugin.removed': { op: 'delete', entity: byId('plugin'), ignore: ['installedAt'] },
+  'import.started': {
+    op: 'activity',
+    entity: byId('import', 'jobId'),
+    activity: (d) => ({ imported: change(null, importSource(d.source)), mode: change(null, d.mode) }),
+  },
+  'import.finished': {
+    op: 'activity',
+    entity: byId('import', 'jobId'),
+    activity: (d) => ({
+      imported: change(null, importSource(d.source)),
+      status: change(null, d.status),
+      ...(d.error ? { error: change(null, d.error) } : {}),
+    }),
+  },
+  'import.sync_changed': {
+    op: 'activity',
+    entity: byId('importSync', 'syncId'),
+    activity: (d) => ({
+      syncing: change(!d.enabled, d.enabled),
+      source: change(null, importSource(d.source)),
+      intervalMinutes: change(null, d.intervalMinutes),
+      ...(d.reason ? { reason: change(null, d.reason) } : {}),
+    }),
+  },
+  'import.progress': {
+    op: 'update',
+    entity: byId('import'),
+    state: (d) => ({ status: d.status, phase: d.phase }),
+  },
 
   // Instance audit (the `audit:instance` stream).
   'auth.signed_in': {

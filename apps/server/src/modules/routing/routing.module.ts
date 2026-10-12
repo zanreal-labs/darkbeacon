@@ -228,6 +228,6 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
     },
     RoutingRuntime,
   ],
-  exports: [Router],
+  exports: [Router, HubAdmin, RouteQueries],
 })
 export class RoutingModule {}

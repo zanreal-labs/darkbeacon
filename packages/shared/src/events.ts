@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { DomainEvent } from '@darkbeacon/core';
 import type { AccessRuleDto } from './dto/access.js';
+import type { ImportJobDto, ImportSourceDto, ImportOutcomeDto } from './dto/importing.js';
 import type { InstanceRole } from './dto/identity.js';
 import type { PluginDto } from './dto/plugins.js';
 import type { ConnectionDto, LabelDto, MapDto, MapSystemDto, SignatureDto } from './dto/mapping.js';
@@ -89,6 +90,26 @@ export interface EventPayloads {
   /** Instance stream: a plugin was installed, upgraded, enabled, disabled or failed. */
   'plugin.updated': PluginDto;
   'plugin.removed': { id: string };
+  /** Map stream: an import from Wanderer started writing into this map. */
+  'import.started': { jobId: string; source: ImportSourceDto; mode: 'new' | 'merge' };
+  /** Map stream: an import finished (`done`), failed or was cancelled, with what it did per kind. */
+  'import.finished': {
+    jobId: string;
+    source: ImportSourceDto;
+    status: 'done' | 'failed' | 'cancelled';
+    outcome: Record<string, ImportOutcomeDto>;
+    error: string | null;
+  };
+  /** Map stream: pulling from Wanderer every few minutes was switched on (`enabled`) or off. */
+  'import.sync_changed': {
+    syncId: string;
+    source: ImportSourceDto;
+    enabled: boolean;
+    intervalMinutes: number;
+    reason: string | null;
+  };
+  /** `import:<jobId>` stream: the job as it is now (progress, report). */
+  'import.progress': ImportJobDto;
 }
 
 export type EventType = keyof EventPayloads;
@@ -125,6 +146,10 @@ export const EVENT_TYPES = [
   'character.unlinked',
   'plugin.updated',
   'plugin.removed',
+  'import.started',
+  'import.finished',
+  'import.sync_changed',
+  'import.progress',
 ] as const satisfies readonly EventType[];
 
 export type TypedEvent<K extends EventType = EventType> = {

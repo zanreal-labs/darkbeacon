@@ -583,6 +583,74 @@ export const routes = {
     }),
   },
 
+  /** Imports of whole maps from Wanderer (docs/migrate-from-wanderer.md). */
+  imports: {
+    /** Whether a Wanderer instance answers and the map API key works. */
+    test: route({
+      method: 'POST',
+      path: '/api/imports/wanderer/test',
+      auth: 'account',
+      body: dto.WandererApiSourceRequest,
+      response: dto.WandererTestResultDto,
+    }),
+    /** Reads the whole map over Wanderer's API and stages it as a preview. */
+    previewApi: route({
+      method: 'POST',
+      path: '/api/imports/wanderer',
+      auth: 'account',
+      body: dto.WandererApiSourceRequest,
+      response: dto.ImportJobDto,
+    }),
+    /**
+     * Stages a Wanderer export file: the raw JSON as the body with content type
+     * `WANDERER_EXPORT_CONTENT_TYPE` (streamed, 25 MB at most); `?name=` the file's name.
+     */
+    previewFile: route({
+      method: 'POST',
+      path: '/api/imports/wanderer/file',
+      auth: 'account',
+      response: dto.ImportJobDto,
+    }),
+    get: route({ method: 'GET', path: '/api/imports/:jobId', auth: 'account', response: dto.ImportJobDto }),
+    /** What an import into a new map or a merge into an existing one would do. */
+    plan: route({
+      method: 'POST',
+      path: '/api/imports/:jobId/plan',
+      auth: 'account',
+      body: dto.ImportPlanRequest,
+      response: dto.ImportPlanDto,
+    }),
+    start: route({
+      method: 'POST',
+      path: '/api/imports/:jobId/start',
+      auth: 'account',
+      body: dto.StartImportRequest,
+      response: dto.ImportJobDto,
+    }),
+    cancel: route({
+      method: 'POST',
+      path: '/api/imports/:jobId/cancel',
+      auth: 'account',
+      response: dto.ImportJobDto,
+    }),
+    /** The whole report as a JSON download (job, mapping report, outcome, `importedExtra`). */
+    report: route({ method: 'GET', path: '/api/imports/:jobId/report', auth: 'account' }),
+    /** The map's sync from Wanderer, or null. */
+    sync: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/import-sync',
+      auth: 'account',
+      mapRole: 'viewer',
+      response: dto.ImportSyncDto.nullable(),
+    }),
+    stopSync: route({
+      method: 'DELETE',
+      path: '/api/maps/:mapId/import-sync',
+      auth: 'account',
+      mapRole: 'manager',
+    }),
+  },
+
   webhooks: {
     list: route({
       method: 'GET',

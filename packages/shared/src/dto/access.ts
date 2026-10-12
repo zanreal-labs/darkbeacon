@@ -67,6 +67,11 @@ export const InstanceSettingsDto = z.object({
   loginMethod: z.enum(['discord', 'eve']).nullable().optional(),
   /** The map `/` opens for everyone who has not starred a map of their own. */
   defaultMapId: Id.nullable().optional(),
+  /**
+   * Whether imports may read Wanderer instances on private and local networks (and over plain
+   * http), e.g. a self-hosted Wanderer next to this server. Off by default.
+   */
+  importsFromPrivateNetworks: z.boolean().optional(),
 });
 export type InstanceSettingsDto = z.infer<typeof InstanceSettingsDto>;
 
@@ -79,5 +84,6 @@ export const UpdateInstanceSettingsRequest = z.object({
   eventRetentionDays: z.number().int().min(1).max(36_500).nullable().optional(),
   loginMethod: z.enum(['discord', 'eve']).nullable().optional(),
   defaultMapId: Id.nullable().optional(),
+  importsFromPrivateNetworks: z.boolean().optional(),
 });
 export type UpdateInstanceSettingsRequest = z.infer<typeof UpdateInstanceSettingsRequest>;

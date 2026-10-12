@@ -1,0 +1,211 @@
+import { describe, expect, it } from 'vitest';
+import { apiDump, SYS, systemName } from '../test-support.js';
+import { translate, type ImportPlan } from '../domain/translate.js';
+import { readLabels, readSystem, time } from '../domain/wanderer.js';
+
+const run = () => translate(apiDump(), { systemName });
+const system = (plan: ImportPlan, id: number) => plan.systems.find((s) => s.solarSystemId === id)!;
+const connection = (plan: ImportPlan, a: number, b: number) =>
+  plan.connections.find((c) => (c.source === a && c.target === b) || (c.source === b && c.target === a));
+const signature = (plan: ImportPlan, eveId: string) => plan.signatures.find((s) => s.eveId === eveId);
+const line = (report: ReturnType<typeof run>['report'], bucket: string, what: RegExp) =>
+  report.find((l) => l.bucket === bucket && what.test(l.what));
+
+describe('reading Wanderer answers', () => {
+  it('reads timestamps with microseconds and without a zone', () => {
+    expect(time('2025-01-01T13:38:42.875843Z')).toBe(Date.parse('2025-01-01T13:38:42.875Z'));
+    expect(time('2025-01-01T13:38:42')).toBe(Date.parse('2025-01-01T13:38:42Z'));
+    expect(time('')).toBeNull();
+  });
+
+  it('reads labels as JSON, as a comma list or as a list', () => {
+    expect(readLabels('{"customLabel":"Staging","labels":["a","1"]}')).toEqual({
+      ids: ['a', '1'],
+      custom: 'Staging',
+    });
+    expect(readLabels('market,hub')).toEqual({ ids: ['market', 'hub'], custom: null });
+    expect(readLabels(['a'])).toEqual({ ids: ['a'], custom: null });
+    expect(readLabels(null)).toEqual({ ids: [], custom: null });
+  });
+
+  it('takes the custom name from the shown name when it differs from the real one', () => {
+    const read = readSystem({ solar_system_id: SYS.c5, name: 'Farm', original_name: 'J130026' })!;
+    expect(read.customName).toBe('Farm');
+    expect(readSystem({ id: String(SYS.c5), position: { x: 1, y: 2 } })).toMatchObject({
+      solarSystemId: SYS.c5,
+      uuid: null,
+      position: { x: 1, y: 2 },
+    });
+  });
+});
+
+describe('translating a Wanderer map', () => {
+  it('maps systems with their names, notes, statuses, labels, locks and visibility', () => {
+    const { plan, counts } = run();
+    expect(counts).toMatchObject({ systems: 6, hiddenSystems: 1, structures: 2, comments: 1 });
+    const home = system(plan, SYS.home);
+    expect(home.fields).toMatchObject({
+      customName: 'Home sweet home',
+      tag: 'HQ',
+      status: 'home',
+      locked: true,
+      visible: true,
+    });
+    expect(home.createdAt).toBe(Date.parse('2026-10-10T12:00:00Z'));
+    expect(home.remoteUpdatedAt).toBe(Date.parse('2026-10-12T08:30:15.123Z'));
+    // Structures and comments become part of the notes.
+    expect(home.fields.description).toContain('Our home. Rolling on Tuesdays.');
+    expect(home.fields.description).toContain('Structures (from Wanderer):');
+    expect(home.fields.description).toContain(
+      'Fortizar “Home Fort” · Wormhole Rescue Ltd [RESQ] · online — Fuel until November',
+    );
+    expect(home.fields.description).toContain('Comments (from Wanderer):\n- 2026-10-11: Neut Loki on d-scan');
+    // Labels: built-in A and 1, and the custom label, as map labels.
+    const names = home.fields.labelKeys.map((k) => plan.labels.find((l) => l.key === k)!.name);
+    expect(names).toEqual(['Label A', 'Label 1', 'Staging']);
+
+    expect(system(plan, SYS.c2).fields).toMatchObject({ temporaryName: '1a', status: 'target' });
+    expect(system(plan, SYS.c5).fields.tag).toBe('FARMTAGISWAYTOOL');
+    expect(system(plan, SYS.c1).fields).toMatchObject({
+      visible: false,
+      description: 'Hidden, but the notes stay',
+    });
+    // "Looking for" has no status here; it becomes a label.
+    const c5 = system(plan, SYS.c5);
+    expect(c5.fields.status).toBe('unknown');
+    expect(c5.fields.labelKeys.map((k) => plan.labels.find((l) => l.key === k)!.name)).toEqual([
+      'Looking for',
+    ]);
+  });
+
+  it('spreads a tight layout to Darkbeacon node sizes', () => {
+    const { plan, report } = run();
+    expect(plan.layoutScale).toBeGreaterThan(1);
+    const home = system(plan, SYS.home).fields.position;
+    const c2 = system(plan, SYS.c2).fields.position;
+    expect(c2.x - home.x).toBeGreaterThanOrEqual(260);
+    expect(line(report, 'approximated', /Positions spread/)).toBeDefined();
+    // Given the scale of an earlier import, positions follow it exactly.
+    const again = translate(apiDump(), { systemName, layoutScale: 2 }).plan;
+    expect(system(again, SYS.c2).fields.position).toEqual({ x: 300, y: 0 });
+  });
+
+  it('maps connection types, mass, size, end of life and danger', () => {
+    const { plan, report } = run();
+    const readAt = Date.parse('2026-10-12T08:30:15.123Z');
+    expect(connection(plan, SYS.home, SYS.c2)?.fields).toEqual({
+      type: 'wormhole',
+      timeStatus: 'eol',
+      massStatus: 'reduced',
+      shipSize: 'large',
+      dangerous: false,
+      bubbled: 'none',
+      // "EOL 4h" marked at updated_at: Darkbeacon's 4 hours start then.
+      eolAt: readAt,
+      massStatusAt: readAt,
+    });
+    const critical = connection(plan, SYS.home, SYS.c5)!;
+    expect(critical.fields).toMatchObject({
+      massStatus: 'critical',
+      shipSize: 'xlarge',
+      dangerous: true,
+      bubbled: 'target',
+      timeStatus: 'eol',
+    });
+    // "EOL 1h": three of Darkbeacon's four hours were gone when it was marked.
+    expect(critical.fields.eolAt).toBe(readAt - 3 * 3_600_000);
+    expect(connection(plan, SYS.c2, SYS.hs)?.fields).toMatchObject({
+      timeStatus: 'normal',
+      shipSize: 'medium',
+    });
+    expect(connection(plan, SYS.jita, SYS.perimeter)?.fields.type).toBe('gate');
+    expect(plan.connections.filter((c) => c.key === `${SYS.jita}-${SYS.perimeter}`)).toHaveLength(1);
+    // A connection to a hidden system cannot exist here.
+    expect(connection(plan, SYS.c2, SYS.c1)).toBeUndefined();
+    expect(connection(plan, SYS.home, SYS.c2)?.extra).toEqual({
+      customInfo: 'Rolled once',
+      countOfPassage: 4,
+    });
+
+    expect(line(report, 'approximated', /Freighter size became XL/)?.count).toBe(1);
+    expect(line(report, 'approximated', /Lifetime mark "24 h" dropped/)).toBeDefined();
+    expect(line(report, 'dropped', /Lock on a connection/)).toBeDefined();
+    expect(line(report, 'dropped', /Connection to a hidden system/)).toBeDefined();
+    expect(line(report, 'dropped', /Second connection/)).toBeDefined();
+  });
+
+  it('maps signatures, links them to connections and carries the wormhole type over', () => {
+    const { plan, report } = run();
+    expect(signature(plan, 'ABC-123')).toMatchObject({
+      solarSystemId: SYS.home,
+      linkedTo: SYS.c2,
+      fields: { group: 'wormhole', type: 'O477', description: 'Bookmark: 1a' },
+      extra: { customInfo: { time_status: 2, bookmark_index: 1 }, scannedBy: '2112625428' },
+    });
+    // Found by its system's Wanderer id; the id is upper-cased.
+    expect(signature(plan, 'XYZ-789')).toMatchObject({
+      solarSystemId: SYS.c2,
+      fields: { group: 'wormhole', type: 'K162' },
+    });
+    expect(signature(plan, 'DEF-456')?.fields).toEqual({
+      group: 'relic',
+      type: null,
+      name: 'Forgotten Perimeter Coronation Platform',
+      description: 'Hacked half',
+    });
+    expect(signature(plan, 'GHI-111')?.fields.group).toBe('gas');
+    expect(signature(plan, 'OPQ-333')).toMatchObject({ solarSystemId: SYS.c1, fields: { group: 'ore' } });
+    expect(signature(plan, 'JKL-222')).toBeUndefined();
+    expect(signature(plan, 'MN-1')).toBeUndefined();
+    // Leads to Jita, but nothing connects the two here.
+    expect(signature(plan, 'RST-444')?.linkedTo).toBeNull();
+
+    expect(line(report, 'dropped', /Cosmic anomaly entries/)?.examples).toEqual(['JKL-222 in J130026']);
+    expect(line(report, 'dropped', /without a full id/)).toBeDefined();
+    expect(line(report, 'dropped', /Link to a system without a connection/)).toBeDefined();
+    // U210 on home ↔ C5 has no signature to keep it.
+    expect(
+      line(report, 'dropped', /Wormhole type of a connection without a signature/)?.examples[0],
+    ).toContain('U210');
+  });
+
+  it('turns ACL members into one access rule per subject', () => {
+    const { plan, report } = run();
+    const rule = (key: string) => plan.access.find((r) => r.key === key);
+    expect(rule('character:2112625428')).toMatchObject({ role: 'admin', acls: ['Corp'] });
+    expect(rule('corporation:98000001')).toMatchObject({ role: 'member' });
+    expect(rule('alliance:99000001')).toMatchObject({ role: 'viewer' });
+    // In two ACLs: the stronger role wins.
+    expect(rule('character:2116161001')).toMatchObject({ role: 'manager', acls: ['Corp', 'Allies'] });
+    expect(rule('character:2116161002')).toMatchObject({ role: 'blocked' });
+    expect(rule('corporation:98000002')?.note).toMatch(/yields to any grant/);
+    expect(rule('character:2116161009')).toBeUndefined();
+    expect(line(report, 'dropped', /Role “owner”/)).toBeDefined();
+    expect(line(report, 'dropped', /Members of the ACL “Officers”/)).toBeDefined();
+    expect(plan.access.map((r) => r.role)).toEqual([
+      'admin',
+      'manager',
+      'member',
+      'viewer',
+      'blocked',
+      'blocked',
+    ]);
+  });
+
+  it('maps settings and reports what has no place here', () => {
+    const { plan, report } = run();
+    expect(plan.hubs).toEqual([SYS.jita]);
+    expect(plan.scopes).toEqual(['wormhole']);
+    expect(plan.mapName).toBe('Home Chain');
+    expect(line(report, 'dropped', /Unknown solar system/)?.examples).toEqual(['99999999']);
+    expect(line(report, 'dropped', /Unreadable row/)?.count).toBe(1);
+    expect(line(report, 'dropped', /Tracked characters \(3\)/)).toBeDefined();
+    expect(line(report, 'dropped', /Map description/)).toBeDefined();
+    // Every line says what and, unless it came over as it was, why.
+    for (const l of report) if (l.bucket !== 'mapped') expect(l.why, l.what).toBeTruthy();
+  });
+
+  it('gives the same plan for the same map', () => {
+    expect(run().plan).toEqual(run().plan);
+  });
+});

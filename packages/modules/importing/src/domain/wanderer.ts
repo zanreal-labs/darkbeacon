@@ -1,0 +1,390 @@
+import type { ImportSourceDto } from '@darkbeacon/shared';
+
+/**
+ * What a Wanderer map holds, read from its API or its export file and normalised. Field names
+ * and value codes follow Wanderer's published API documentation (see
+ * docs/migrate-from-wanderer.md, "Sources"); the readers below accept the variants that the API
+ * versions and the two export formats use (numbers as strings, `position` or `position_x/y`,
+ * labels as JSON or as a comma list).
+ */
+export interface WandererMapDump {
+  source: ImportSourceDto;
+  map: { name: string | null; slug: string | null; description: string | null; scope: string | null };
+  systems: WandererSystem[];
+  connections: WandererConnection[];
+  signatures: WandererSignature[];
+  structures: WandererStructure[];
+  comments: WandererComment[];
+  acls: WandererAcl[];
+  /** Wanderer map hubs (solar system ids), from the settings export. */
+  hubs: number[];
+  /** Names of the map's own system labels by id (export version 2: `map.system_labels`). */
+  labelNames: Record<string, string>;
+  /** Tracked characters Wanderer listed (they are reported, not imported). */
+  trackedCharacters: number;
+  /** Problems reading the source that did not stop the import. */
+  warnings: string[];
+  /** Rows the readers could not understand, per kind. */
+  rejected: Record<string, number>;
+  /** When the source was read; also the "last changed" time of rows without one (files). */
+  readAt: number;
+}
+
+export interface WandererSystem {
+  /** Wanderer's own id of the system on the map (API only); signatures and comments refer to it. */
+  uuid: string | null;
+  solarSystemId: number;
+  customName: string | null;
+  temporaryName: string | null;
+  description: string | null;
+  tag: string | null;
+  labels: { ids: string[]; custom: string | null };
+  /** Wanderer status code (0-8) or name. */
+  status: number | string | null;
+  visible: boolean;
+  locked: boolean;
+  position: { x: number; y: number } | null;
+  insertedAt: number | null;
+  updatedAt: number | null;
+}
+
+export interface WandererConnection {
+  source: number;
+  target: number;
+  /** 0 wormhole, 1 gate, 2 bridge. */
+  type: number | null;
+  /** 0 more than half, 1 less than half, 2 critical. */
+  massStatus: number | null;
+  /** 0 normal, 1 EOL 1 h, 2 EOL 4 h, 3 EOL 4.5 h, 4 16 h, 5 24 h, 6 48 h. */
+  timeStatus: number | null;
+  /** 0 frigate, 1 medium, 2 large, 3 freight, 4 capital. */
+  shipSizeType: number | null;
+  wormholeType: string | null;
+  locked: boolean;
+  dangerous: boolean | null;
+  /** 0 none, 1 source, 2 target, 3 both. */
+  bubbled: number | null;
+  customInfo: string | null;
+  countOfPassage: number | null;
+  insertedAt: number | null;
+  updatedAt: number | null;
+}
+
+export interface WandererSignature {
+  systemUuid: string | null;
+  solarSystemId: number | null;
+  eveId: string;
+  name: string | null;
+  temporaryName: string | null;
+  description: string | null;
+  /** `Cosmic Signature`, `Cosmic Anomaly`, `Structure`... (also `cosmic_signature`). */
+  kind: string | null;
+  /** `Wormhole`, `Data Site`, `Relic Site`, `Gas Site`, `Ore Site`, `Combat Site`... */
+  group: string | null;
+  type: string | null;
+  /** JSON text Wanderer keeps per signature (time and mass marks, bookmark index...). */
+  customInfo: string | null;
+  linkedSystemId: number | null;
+  characterEveId: string | null;
+  insertedAt: number | null;
+  updatedAt: number | null;
+}
+
+export interface WandererStructure {
+  systemUuid: string | null;
+  solarSystemId: number | null;
+  name: string | null;
+  type: string | null;
+  typeId: string | null;
+  ownerName: string | null;
+  ownerTicker: string | null;
+  status: string | null;
+  endTime: number | null;
+  notes: string | null;
+  updatedAt: number | null;
+}
+
+export interface WandererComment {
+  systemUuid: string | null;
+  solarSystemId: number | null;
+  text: string;
+  insertedAt: number | null;
+}
+
+export interface WandererAcl {
+  id: string;
+  name: string;
+  /** Null when the members could not be read (the ACL's own API key is needed). */
+  members: WandererAclMember[] | null;
+  error: string | null;
+}
+
+export interface WandererAclMember {
+  kind: 'character' | 'corporation' | 'alliance';
+  eveId: string;
+  name: string | null;
+  role: string;
+}
+
+// ---- readers ------------------------------------------------------------------------------------
+
+type Row = Record<string, unknown>;
+
+export function isRow(value: unknown): value is Row {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** `12`, `"12"`, `12.0` -> 12; anything else null. */
+export function int(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.round(value);
+  if (typeof value === 'string' && /^-?\d+(\.\d+)?$/.test(value.trim())) return Math.round(Number(value));
+  return null;
+}
+
+function eveIdNumber(value: unknown): number | null {
+  const n = int(value);
+  return n !== null && n > 0 && Number.isSafeInteger(n) ? n : null;
+}
+
+export function text(value: unknown): string | null {
+  if (typeof value === 'string') return value.trim() === '' ? null : value;
+  if (typeof value === 'number') return String(value);
+  return null;
+}
+
+function bool(value: unknown): boolean | null {
+  if (typeof value === 'boolean') return value;
+  if (value === 1 || value === '1' || value === 'true') return true;
+  if (value === 0 || value === '0' || value === 'false') return false;
+  return null;
+}
+
+/** ISO 8601 (Wanderer's timestamps, with or without zone) or epoch ms/s -> epoch ms. */
+export function time(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0)
+    return value < 1e12 ? value * 1000 : value;
+  if (typeof value !== 'string' || value.trim() === '') return null;
+  const iso = /[zZ]|[+-]\d\d:?\d\d$/.test(value) ? value : `${value}Z`;
+  const ms = Date.parse(iso);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+/**
+ * Wanderer labels: JSON `{"customLabel": "...", "labels": ["a", "1"]}`, a comma list
+ * (`"market,hub"`), an array, or nothing.
+ */
+export function readLabels(value: unknown): { ids: string[]; custom: string | null } {
+  let raw: unknown = value;
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (trimmed === '') return { ids: [], custom: null };
+    try {
+      raw = JSON.parse(trimmed);
+    } catch {
+      return { ids: split(trimmed), custom: null };
+    }
+  }
+  if (Array.isArray(raw)) return { ids: raw.map(text).filter((v): v is string => v !== null), custom: null };
+  if (isRow(raw)) {
+    const ids = Array.isArray(raw.labels)
+      ? raw.labels.map(text).filter((v): v is string => v !== null)
+      : typeof raw.labels === 'string'
+        ? split(raw.labels)
+        : [];
+    return { ids, custom: text(raw.customLabel)?.trim() ?? null };
+  }
+  return { ids: [], custom: null };
+}
+
+const split = (s: string) =>
+  s
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
+
+function position(row: Row): { x: number; y: number } | null {
+  if (isRow(row.position)) {
+    const x = Number(row.position.x);
+    const y = Number(row.position.y);
+    if (Number.isFinite(x) && Number.isFinite(y)) return { x, y };
+  }
+  const x = Number(row.position_x);
+  const y = Number(row.position_y);
+  return row.position_x !== undefined && Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+}
+
+/** A system row of `GET /api/map/systems`, `/api/maps/:map/systems` or an export file. */
+export function readSystem(row: unknown): WandererSystem | null {
+  if (!isRow(row)) return null;
+  // The settings export keys systems by `id` (the solar system id as a string).
+  const solarSystemId = eveIdNumber(row.solar_system_id) ?? eveIdNumber(row.id);
+  if (solarSystemId === null) return null;
+  const uuid = typeof row.id === 'string' && !/^\d+$/.test(row.id) ? row.id : null;
+  // The API's `name` is the name shown (temporary, custom or real); `custom_name` is the real one.
+  const custom = text(row.custom_name);
+  const shown = text(row.name);
+  const original = text(row.original_name) ?? text(row.solar_system_name);
+  const customName = custom ?? (shown && original && shown !== original ? shown : null);
+  return {
+    uuid,
+    solarSystemId,
+    customName,
+    temporaryName: text(row.temporary_name),
+    description: text(row.description),
+    tag: text(row.tag),
+    labels: readLabels(row.labels),
+    status: typeof row.status === 'string' && !/^\d+$/.test(row.status) ? row.status : int(row.status),
+    visible: bool(row.visible) ?? true,
+    locked: bool(row.locked) ?? false,
+    position: position(row),
+    insertedAt: time(row.inserted_at),
+    updatedAt: time(row.updated_at),
+  };
+}
+
+/** A connection row (`solar_system_source/target` from the API, `source/target` in exports). */
+export function readConnection(row: unknown): WandererConnection | null {
+  if (!isRow(row)) return null;
+  const source = eveIdNumber(row.solar_system_source) ?? eveIdNumber(row.source);
+  const target = eveIdNumber(row.solar_system_target) ?? eveIdNumber(row.target);
+  if (source === null || target === null || source === target) return null;
+  return {
+    source,
+    target,
+    type: int(row.type),
+    massStatus: int(row.mass_status),
+    timeStatus: int(row.time_status),
+    shipSizeType: int(row.ship_size_type),
+    wormholeType: text(row.wormhole_type),
+    locked: bool(row.locked) ?? false,
+    dangerous: bool(row.dangerous),
+    bubbled: int(row.bubbled),
+    customInfo: text(row.custom_info),
+    countOfPassage: int(row.count_of_passage),
+    insertedAt: time(row.inserted_at),
+    updatedAt: time(row.updated_at),
+  };
+}
+
+export function readSignature(row: unknown): WandererSignature | null {
+  if (!isRow(row)) return null;
+  const eveId = text(row.eve_id);
+  if (!eveId) return null;
+  return {
+    systemUuid: text(row.system_id),
+    solarSystemId: eveIdNumber(row.solar_system_id),
+    eveId,
+    name: text(row.name),
+    temporaryName: text(row.temporary_name),
+    description: text(row.description),
+    kind: text(row.kind),
+    group: text(row.group),
+    type: text(row.type),
+    customInfo:
+      typeof row.custom_info === 'string'
+        ? text(row.custom_info)
+        : isRow(row.custom_info)
+          ? JSON.stringify(row.custom_info)
+          : null,
+    linkedSystemId: eveIdNumber(row.linked_system_id),
+    characterEveId: text(row.character_eve_id),
+    insertedAt: time(row.inserted_at),
+    updatedAt: time(row.updated_at),
+  };
+}
+
+export function readStructure(row: unknown): WandererStructure | null {
+  if (!isRow(row)) return null;
+  const structure: WandererStructure = {
+    systemUuid: text(row.system_id),
+    solarSystemId: eveIdNumber(row.solar_system_id),
+    name: text(row.name),
+    type: text(row.structure_type),
+    typeId: text(row.structure_type_id),
+    ownerName: text(row.owner_name),
+    ownerTicker: text(row.owner_ticker),
+    status: text(row.status),
+    endTime: time(row.end_time),
+    notes: text(row.notes),
+    updatedAt: time(row.updated_at),
+  };
+  return structure.solarSystemId !== null || structure.systemUuid !== null ? structure : null;
+}
+
+/**
+ * A system comment: `{solar_system_id, text}` in exports, a JSON:API resource
+ * (`attributes.text`, `relationships.system.data.id`) from `/api/v1/map_system_comments`.
+ */
+export function readComment(row: unknown): WandererComment | null {
+  if (!isRow(row)) return null;
+  const attributes = isRow(row.attributes) ? row.attributes : row;
+  const commentText = text(attributes.text);
+  if (!commentText) return null;
+  const relationships = isRow(row.relationships) ? row.relationships : null;
+  const system = relationships && isRow(relationships.system) ? relationships.system : null;
+  const systemData = system && isRow(system.data) ? system.data : null;
+  return {
+    systemUuid: text(attributes.system_id) ?? (systemData ? text(systemData.id) : null),
+    solarSystemId: eveIdNumber(attributes.solar_system_id),
+    text: commentText,
+    insertedAt: time(attributes.inserted_at),
+  };
+}
+
+/** A member of `GET /api/acls/:id`: exactly one of eve_character_id, eve_corporation_id, eve_alliance_id. */
+export function readAclMember(row: unknown): WandererAclMember | null {
+  if (!isRow(row)) return null;
+  const role = text(row.role)?.toLowerCase() ?? 'viewer';
+  const name = text(row.name);
+  for (const [key, kind] of [
+    ['eve_character_id', 'character'],
+    ['eve_corporation_id', 'corporation'],
+    ['eve_alliance_id', 'alliance'],
+  ] as const) {
+    const id = eveIdNumber(row[key]);
+    if (id !== null) return { kind, eveId: String(id), name, role };
+  }
+  return null;
+}
+
+/** Reads every row of a list with `read`, counting the ones it could not understand. */
+export function readAll<T>(
+  rows: unknown,
+  read: (row: unknown) => T | null,
+  kind: string,
+  rejected: Record<string, number>,
+): T[] {
+  if (!Array.isArray(rows)) return [];
+  const out: T[] = [];
+  for (const row of rows) {
+    const item = read(row);
+    if (item) out.push(item);
+    else rejected[kind] = (rejected[kind] ?? 0) + 1;
+  }
+  return out;
+}
+
+/** An empty dump to fill. */
+export function emptyDump(source: ImportSourceDto, readAt: number): WandererMapDump {
+  return {
+    source,
+    map: {
+      name: source.name,
+      slug: source.kind === 'wanderer-api' ? source.slug : null,
+      description: null,
+      scope: null,
+    },
+    systems: [],
+    connections: [],
+    signatures: [],
+    structures: [],
+    comments: [],
+    acls: [],
+    hubs: [],
+    labelNames: {},
+    trackedCharacters: 0,
+    warnings: [],
+    rejected: {},
+    readAt,
+  };
+}

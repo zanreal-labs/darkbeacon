@@ -21,6 +21,7 @@
     "@darkbeacon/core": "workspace:*",
     "@darkbeacon/db": "workspace:*",
     "@darkbeacon/identity": "workspace:*",
+    "@darkbeacon/importing": "workspace:*",
     "@darkbeacon/mapping": "workspace:*",
     "@darkbeacon/notifications": "workspace:*",
     "@darkbeacon/plugin-sdk": "workspace:*",

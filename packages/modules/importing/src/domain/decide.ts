@@ -1,0 +1,198 @@
+import type { AccessRuleDto, ConnectionDto, MapRole, MapSystemDto, SignatureDto } from '@darkbeacon/shared';
+import type { PlannedAccessRule } from './acl.js';
+import { mergeFields, type FieldConflict } from './merge.js';
+import type { PlannedConnection, PlannedSignature, PlannedSystem } from './translate.js';
+
+export type SystemWrite = Partial<
+  Pick<
+    MapSystemDto,
+    | 'position'
+    | 'customName'
+    | 'temporaryName'
+    | 'tag'
+    | 'status'
+    | 'description'
+    | 'labelIds'
+    | 'locked'
+    | 'visible'
+  >
+>;
+
+export type ConnectionWrite = Partial<
+  Pick<
+    ConnectionDto,
+    'type' | 'timeStatus' | 'massStatus' | 'shipSize' | 'dangerous' | 'bubbled' | 'eolAt' | 'massStatusAt'
+  >
+>;
+
+export type SignatureWrite = Partial<
+  Pick<SignatureDto, 'group' | 'type' | 'name' | 'description' | 'connectionId'>
+>;
+
+/** What to do with one imported object. `written` is what Wanderer has, kept as the next base. */
+export interface Decision<W> {
+  action: 'create' | 'update' | 'unchanged' | 'skip';
+  write: W;
+  written: W;
+  conflicts: FieldConflict[];
+  /** Why it is skipped. */
+  reason?: string;
+}
+
+const SYSTEM_FIELDS = [
+  'position',
+  'customName',
+  'temporaryName',
+  'tag',
+  'status',
+  'description',
+  'labelIds',
+  'locked',
+  'visible',
+] as const;
+
+/**
+ * A system: created as Wanderer has it, or merged field by field (see `mergeFields`). A
+ * system locked here keeps its position; hiding a system that is shown here (Wanderer took it off
+ * its map) happens only when removals were asked for.
+ */
+export function decideSystem(
+  planned: PlannedSystem,
+  here: MapSystemDto | undefined,
+  base: SystemWrite | null,
+  labelIds: ReadonlyMap<string, string>,
+  options: { removeMissing: boolean },
+): Decision<SystemWrite> {
+  const wanderer: Required<SystemWrite> = {
+    position: planned.fields.position,
+    customName: planned.fields.customName,
+    temporaryName: planned.fields.temporaryName,
+    tag: planned.fields.tag,
+    status: planned.fields.status,
+    description: planned.fields.description,
+    labelIds: planned.fields.labelKeys.map((k) => labelIds.get(k)).filter((id): id is string => !!id),
+    locked: planned.fields.locked,
+    visible: planned.fields.visible,
+  };
+  if (!here) return { action: 'create', write: wanderer, written: wanderer, conflicts: [] };
+  const protect: Partial<Record<keyof SystemWrite, string>> = {};
+  if (here.locked) protect.position = 'The system is locked here';
+  if (here.visible && !wanderer.visible && !options.removeMissing)
+    protect.visible = 'Wanderer took it off its map; removals were not asked for';
+  const { patch, conflicts } = mergeFields<SystemWrite>({
+    here: pick(here, SYSTEM_FIELDS),
+    wanderer,
+    base: base ? { ...wanderer, ...base } : null,
+    hereAt: here.updatedAt,
+    wandererAt: planned.remoteUpdatedAt,
+    fields: SYSTEM_FIELDS,
+    joined: ['description', 'labelIds'],
+    protect,
+    blank: (field, value) =>
+      value === null ||
+      value === '' ||
+      (Array.isArray(value) && value.length === 0) ||
+      (field === 'status' && value === 'unknown') ||
+      (field === 'locked' && value === false) ||
+      // A hidden system here is shown when Wanderer shows it; Wanderer hiding one is a removal.
+      (field === 'visible' && value === false),
+  });
+  return outcome(patch, wanderer, conflicts);
+}
+
+const CONNECTION_FIELDS = ['type', 'timeStatus', 'massStatus', 'shipSize', 'dangerous', 'bubbled'] as const;
+
+/**
+ * A connection: created with Wanderer's states and times, or merged. Default states (normal,
+ * fresh, not dangerous, no bubble) count as blank, so Wanderer marking a hole EOL or critical
+ * fills them in, but Wanderer's default never clears a mark made here (unless Wanderer changed
+ * it since the last import and this side did not).
+ */
+export function decideConnection(
+  planned: PlannedConnection,
+  here: ConnectionDto | undefined,
+  base: ConnectionWrite | null,
+): Decision<ConnectionWrite> {
+  const wanderer: Required<ConnectionWrite> = { ...planned.fields };
+  if (!here) return { action: 'create', write: wanderer, written: wanderer, conflicts: [] };
+  const { patch, conflicts } = mergeFields<ConnectionWrite>({
+    here: pick(here, CONNECTION_FIELDS),
+    wanderer,
+    base: base ? { ...wanderer, ...base } : null,
+    hereAt: here.updatedAt,
+    wandererAt: planned.remoteUpdatedAt,
+    fields: CONNECTION_FIELDS,
+    blank: (field, value) =>
+      (field === 'timeStatus' && value === 'normal') ||
+      (field === 'massStatus' && value === 'fresh') ||
+      (field === 'dangerous' && value === false) ||
+      (field === 'bubbled' && value === 'none'),
+  });
+  if (patch.timeStatus === 'eol') patch.eolAt = wanderer.eolAt;
+  if (patch.timeStatus === 'normal') patch.eolAt = null;
+  if (patch.massStatus !== undefined) patch.massStatusAt = wanderer.massStatusAt;
+  return outcome(patch, wanderer, conflicts);
+}
+
+const SIGNATURE_FIELDS = ['group', 'type', 'name', 'description', 'connectionId'] as const;
+
+/** A signature: created, or merged (notes joined, a link here never cut by Wanderer). */
+export function decideSignature(
+  planned: PlannedSignature,
+  here: SignatureDto | undefined,
+  base: SignatureWrite | null,
+  connectionId: string | null,
+): Decision<SignatureWrite> {
+  const wanderer: Required<SignatureWrite> = { ...planned.fields, connectionId };
+  if (!here) return { action: 'create', write: wanderer, written: wanderer, conflicts: [] };
+  const { patch, conflicts } = mergeFields<SignatureWrite>({
+    here: pick(here, SIGNATURE_FIELDS),
+    wanderer,
+    base: base ? { ...wanderer, ...base } : null,
+    hereAt: here.updatedAt,
+    wandererAt: planned.remoteUpdatedAt,
+    fields: SIGNATURE_FIELDS,
+    joined: ['description'],
+    protect: here.connectionId ? { connectionId: 'Linked here' } : {},
+    blank: (field, value) => value === null || value === '' || (field === 'group' && value === 'unknown'),
+  });
+  // A link makes it a wormhole; the use case does the same.
+  if (patch.connectionId) delete patch.group;
+  return outcome(patch, wanderer, conflicts);
+}
+
+/**
+ * An access rule: added when the map has none for the subject. One the import added before and
+ * nobody changed since follows Wanderer's role; any other rule here is kept.
+ */
+export function decideAccess(
+  planned: PlannedAccessRule,
+  here: AccessRuleDto | undefined,
+  base: { role: MapRole; ruleId: string } | null,
+): { action: 'create' | 'replace' | 'unchanged'; conflict: FieldConflict | null } {
+  if (!here) return { action: 'create', conflict: null };
+  if (here.role === planned.role) return { action: 'unchanged', conflict: null };
+  if (base && base.ruleId === here.id && base.role === here.role)
+    return { action: 'replace', conflict: null };
+  return {
+    action: 'unchanged',
+    conflict: {
+      field: 'role',
+      here: here.role,
+      wanderer: planned.role,
+      keeps: 'here',
+      why: 'The map has its own rule for them',
+    },
+  };
+}
+
+function outcome<W>(patch: Partial<W>, wanderer: W, conflicts: FieldConflict[]): Decision<W> {
+  const changed = Object.keys(patch).length > 0;
+  return { action: changed ? 'update' : 'unchanged', write: patch as W, written: wanderer, conflicts };
+}
+
+function pick<T extends object, K extends keyof T>(value: T, keys: readonly K[]): Pick<T, K> {
+  const out = {} as Pick<T, K>;
+  for (const key of keys) out[key] = value[key];
+  return out;
+}

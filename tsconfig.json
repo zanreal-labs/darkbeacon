@@ -15,6 +15,7 @@
     { "path": "packages/modules/plugins" },
     { "path": "packages/modules/routing" },
     { "path": "packages/modules/audit" },
+    { "path": "packages/modules/importing" },
     { "path": "apps/server" },
     { "path": "plugins/discord-notify" },
     { "path": "plugins/sample-widget" }
