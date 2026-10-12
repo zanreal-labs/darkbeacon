@@ -128,15 +128,31 @@ describe('bookmark numbering', () => {
     await user.click(within(orders).getByRole('radio', { name: /Class/ }));
     expect(preview.textContent).toContain('WH1XYZ-777 · HSWH2no signature yet · LSWH3ABC-123 · C3');
 
-    await user.click(screen.getByRole('switch'));
+    await user.click(screen.getByRole('switch', { name: /Renumber when a wormhole closes/ }));
     expect(preview.textContent).toContain('When WH2 closesWH1WH2');
     expect(preview.textContent).not.toContain('the next new one');
+
+    // Counting from 0 and a value mapping show in the preview, and are saved with the rest.
+    await user.click(screen.getByRole('switch', { name: /Count from 0/ }));
+    expect(preview.textContent).toContain('WH0XYZ-777');
+    await user.click(screen.getByText(/Write values as/));
+    await user.type(screen.getByRole('textbox', { name: 'destClass HS written as' }), 'H');
 
     const card = orders.closest('section')!;
     await user.click(within(card).getByRole('button', { name: 'Save numbering' }));
     await waitFor(() =>
       expect(bodies).toEqual([
-        { path: 'numbering', body: { numbering: { order: 'class', renumberOnClose: true } } },
+        {
+          path: 'numbering',
+          body: {
+            numbering: {
+              order: 'class',
+              renumberOnClose: true,
+              startAtZero: true,
+              values: { 'destClass:HS': 'H' },
+            },
+          },
+        },
       ]),
     );
     // Saved: nothing left to save, even before the map is read again.

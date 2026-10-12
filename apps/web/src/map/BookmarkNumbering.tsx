@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import {
+  BOOKMARK_MAPPABLE_VALUES,
   BOOKMARK_ORDERS,
   BOOKMARK_PREVIEW_VARS,
   bookmarkClassLabel,
@@ -26,7 +27,7 @@ import {
 import { api, ApiError } from '../lib/api';
 import { mapKey } from '../lib/session-keys';
 import { useUniverseSystems } from '../lib/universe';
-import { Button, Card, CardBody, CardFooter, CardHeader, IconButton, Switch, useToast } from '../ui';
+import { Button, Card, CardBody, CardFooter, CardHeader, IconButton, Input, Switch, useToast } from '../ui';
 import styles from './BookmarkSettings.module.css';
 
 export const ORDERS = BookmarkOrder.options;
@@ -47,15 +48,26 @@ const SAMPLE: (BookmarkSibling & { sig3: string })[] = [
   { connectionId: 'k', createdAt: 3, signature: null, sig3: '', destClass: 'LS', number: 2 },
 ];
 
-function sampleLabel(template: string, sibling: (typeof SAMPLE)[number], n: number): string {
-  return renderBookmarkTemplate(template, {
-    ...BOOKMARK_PREVIEW_VARS,
-    sig: sibling.signature ?? '',
-    sig3: sibling.sig3,
-    destClass: sibling.destClass,
-    n: String(n),
-    N: String(n).padStart(2, '0'),
-  });
+function sampleLabel(
+  template: string,
+  sibling: (typeof SAMPLE)[number],
+  n: number,
+  numbering: Pick<BookmarkNumbering, 'startAtZero' | 'values'> = {},
+): string {
+  const shown = numbering.startAtZero ? n - 1 : n;
+  return renderBookmarkTemplate(
+    template,
+    {
+      ...BOOKMARK_PREVIEW_VARS,
+      sig: sibling.signature ?? '',
+      sig3: sibling.sig3,
+      destClass: sibling.destClass,
+      n: String(shown),
+      N: String(shown).padStart(2, '0'),
+      letter: String.fromCharCode(64 + n),
+    },
+    numbering.values,
+  );
 }
 
 /**
@@ -82,7 +94,7 @@ export function NumberingPreview({
         <ul className={styles.sampleHoles}>
           {numbered.map((s) => (
             <li key={s.connectionId}>
-              <span className={styles.tag}>{sampleLabel(shown, s, s.n) || '—'}</span>
+              <span className={styles.tag}>{sampleLabel(shown, s, s.n, numbering) || '—'}</span>
               <span className={styles.sampleFacts}>
                 {s.signature ?? 'no signature yet'} · {s.destClass}
               </span>
@@ -91,15 +103,17 @@ export function NumberingPreview({
         </ul>
       </div>
       <div className={styles.preview}>
-        <span className={styles.previewLabel}>When {sampleLabel(shown, numbered[1]!, 2)} closes</span>
+        <span className={styles.previewLabel}>
+          When {sampleLabel(shown, numbered[1]!, 2, numbering)} closes
+        </span>
         {after.map((s) => (
           <span key={s.connectionId} className={styles.tag}>
-            {sampleLabel(shown, s, s.n)}
+            {sampleLabel(shown, s, s.n, numbering)}
           </span>
         ))}
         {!numbering.renumberOnClose && (
           <span className={styles.previewLabel}>
-            the next new one is {sampleLabel(shown, numbered[1]!, 2)}
+            the next new one is {sampleLabel(shown, numbered[1]!, 2, numbering)}
           </span>
         )}
       </div>
@@ -291,7 +305,7 @@ export function BookmarkNumberingCard({
   const saved = stored ?? fromMap;
   const [draft, setDraft] = useState<BookmarkNumbering>(fromMap);
   // A newer map (refetched, or changed by another manager) resets the draft.
-  const fromMapKey = `${fromMap.order}/${fromMap.renumberOnClose}`;
+  const fromMapKey = JSON.stringify(fromMap);
   const [seen, setSeen] = useState(fromMapKey);
   if (seen !== fromMapKey) {
     setSeen(fromMapKey);
@@ -299,7 +313,7 @@ export function BookmarkNumberingCard({
     setDraft(fromMap);
   }
   const [busy, setBusy] = useState<'save' | 'renumber' | null>(null);
-  const dirty = draft.order !== saved.order || draft.renumberOnClose !== saved.renumberOnClose;
+  const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
 
   const save = async () => {
     setBusy('save');
@@ -370,6 +384,18 @@ export function BookmarkNumberingCard({
                 : 'Off: the others keep their numbers and the next new wormhole takes the free one.'
             }
           />
+          <Switch
+            checked={draft.startAtZero ?? false}
+            onCheckedChange={(startAtZero) => setDraft({ ...draft, startAtZero })}
+            disabled={!canManage}
+            label="Count from 0"
+            description="{n} of the first wormhole is 0 ({letter} still starts at A)."
+          />
+          <ValueMappings
+            values={draft.values ?? {}}
+            disabled={!canManage}
+            onChange={(values) => setDraft({ ...draft, values })}
+          />
           <NumberingPreview numbering={draft} template={template} />
           {/* A composite counts in its order as its viewers look: stored numbers are its sources'. */}
           {saved.order === 'manual' && map.kind !== 'composite' && (
@@ -402,5 +428,67 @@ export function BookmarkNumberingCard({
         </CardFooter>
       )}
     </Card>
+  );
+}
+
+/**
+ * What the values of `{destClass}`, `{size}`, `{mass}`, `{eol}`, `{direction}` and `{spawn}` are
+ * written as in bookmark labels (Wanderer's value mappings): `HS` as `H`, `L` as nothing...
+ * An unchanged value keeps its own text.
+ */
+function ValueMappings({
+  values,
+  disabled,
+  onChange,
+}: {
+  values: Readonly<Record<string, string>>;
+  disabled: boolean;
+  onChange(values: Record<string, string>): void;
+}) {
+  const set = (key: string, text: string | null) => {
+    const next = { ...values };
+    if (text === null) delete next[key];
+    else next[key] = text;
+    onChange(next);
+  };
+  return (
+    <details className={styles.mappings}>
+      <summary>
+        Write values as… {Object.keys(values).length > 0 && `(${Object.keys(values).length} changed)`}
+      </summary>
+      <div className={styles.mappingGrid}>
+        {(Object.entries(BOOKMARK_MAPPABLE_VALUES) as [string, readonly string[]][]).map(
+          ([variable, list]) => (
+            <fieldset key={variable} className={styles.mappingGroup} disabled={disabled}>
+              <legend className="mono">{`{${variable}}`}</legend>
+              {list.map((value) => {
+                const key = `${variable}:${value}`;
+                const mapped = Object.hasOwn(values, key);
+                return (
+                  <label key={key} className={styles.mappingRow}>
+                    <span className="mono">{value}</span>
+                    <Input
+                      size="sm"
+                      mono
+                      aria-label={`${variable} ${value} written as`}
+                      placeholder={value}
+                      maxLength={16}
+                      value={mapped ? values[key] : ''}
+                      onChange={(e) => set(key, e.target.value === '' ? null : e.target.value)}
+                    />
+                    {mapped && (
+                      <button type="button" className={styles.mappingClear} onClick={() => set(key, null)}>
+                        Reset
+                      </button>
+                    )}
+                  </label>
+                );
+              })}
+            </fieldset>
+          ),
+        )}
+      </div>
+      <p className="subtle">Empty keeps the value as it is. To drop a value, write a single space.</p>
+    </details>
   );
 }

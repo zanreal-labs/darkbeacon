@@ -207,6 +207,8 @@ export function MapCanvas({
     preferences.bookmarkTemplate ?? state.map?.settings.bookmarkTemplate ?? DEFAULT_BOOKMARK_TEMPLATE;
   // `{n}` in the viewer's own order is counted here; in the map's order it is the shared number.
   const mapOrder = state.map?.settings.bookmarkNumbering?.order ?? 'found';
+  const startAtZero = state.map?.settings.bookmarkNumbering?.startAtZero;
+  const values = state.map?.settings.bookmarkNumbering?.values;
   const ownOrder =
     preferences.bookmarkOrder && preferences.bookmarkOrder !== mapOrder
       ? preferences.bookmarkOrder
@@ -220,8 +222,10 @@ export function MapCanvas({
       systemLabels,
       // Stored numbers are the sources' own on a merged map: it counts in its order here.
       order: ownOrder ?? (state.sources ? mapOrder : undefined),
+      startAtZero,
+      staticsOf: (id) => universe.get(id)?.statics,
     });
-    return new Map([...chain].map(([id, vars]) => [id, bookmarkLabel(template, vars)]));
+    return new Map([...chain].map(([id, vars]) => [id, bookmarkLabel(template, vars, values)]));
   }, [
     state.systems,
     state.connections,
@@ -232,6 +236,8 @@ export function MapCanvas({
     template,
     ownOrder,
     mapOrder,
+    startAtZero,
+    values,
   ]);
 
   // Store -> React Flow, keeping what React Flow owns: measurements, selection, a drag in progress.
