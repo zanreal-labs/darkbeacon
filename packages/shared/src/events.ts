@@ -119,6 +119,17 @@ export interface EventPayloads {
   /** Instance stream: a plugin was installed, upgraded, enabled, disabled or failed. */
   'plugin.updated': PluginDto;
   'plugin.removed': { id: string };
+  /** A rule's role changed in place (the audit record holds the role before). */
+  'access.rule_changed': AccessRuleDto;
+  /** The map was handed to another account (the new owner is admin, the old one keeps only rules). */
+  'access.owner_changed': { mapId: string; ownerAccountId: string; previousOwnerAccountId: string };
+  /**
+   * The map was deleted, but can still be restored by an instance admin: nobody can open it until
+   * then. Rules, shares and webhooks stay with it (`map.removed` follows once it is purged).
+   */
+  'map.trashed': { id: string; deletedAt: number };
+  /** An instance admin brought a deleted map back as it was. */
+  'map.restored': MapDto;
 }
 
 export type EventType = keyof EventPayloads;
@@ -161,6 +172,10 @@ export const EVENT_TYPES = [
   'character.unlinked',
   'plugin.updated',
   'plugin.removed',
+  'access.rule_changed',
+  'access.owner_changed',
+  'map.trashed',
+  'map.restored',
 ] as const satisfies readonly EventType[];
 
 export type TypedEvent<K extends EventType = EventType> = {

@@ -65,6 +65,7 @@ const RULES = 'access.AccessRuleRepository';
           events,
           clock,
           directory: new IdentitySubjectDirectory(eve, accounts, bot),
+          subjects: accounts,
         }),
       inject: [
         RULES,
@@ -98,7 +99,7 @@ const RULES = 'access.AccessRuleRepository';
       inject: [Database, RULES, UNIT_OF_WORK, EVENT_LOG, CLOCK, APP_CONFIG],
     },
   ],
-  exports: [MAP_ACCESS, AccessService, MapOwnershipRegistry, InstanceSettingsService],
+  exports: [MAP_ACCESS, AccessService, AccessRules, MapOwnershipRegistry, InstanceSettingsService],
 })
 export class AccessModule implements OnModuleInit {
   constructor(

@@ -861,7 +861,7 @@ export const routes = {
       path: '/api/maps/:mapId/access-rules',
       auth: 'account',
       scope: { resource: 'access', action: 'manage' },
-      mapRole: 'admin',
+      mapRole: 'manager',
       response: z.array(dto.AccessRuleDto),
     }),
     add: route({
@@ -869,7 +869,7 @@ export const routes = {
       path: '/api/maps/:mapId/access-rules',
       auth: 'account',
       scope: { resource: 'access', action: 'manage' },
-      mapRole: 'admin',
+      mapRole: 'manager',
       body: dto.CreateAccessRuleRequest,
       response: dto.AccessRuleDto,
     }),
@@ -878,7 +878,7 @@ export const routes = {
       path: '/api/maps/:mapId/access-rules/:ruleId',
       auth: 'account',
       scope: { resource: 'access', action: 'manage' },
-      mapRole: 'admin',
+      mapRole: 'manager',
     }),
   },
 
@@ -1471,6 +1471,31 @@ export const routes = {
       scope: 'none',
       summary: 'Files of the API reference page',
       download: true,
+    }),
+  },
+
+  /** More on access rules (managers handle viewers, members and blocks; admins every rule). */
+  accessRules: {
+    /** Changes a rule's role in place; the subject stays. */
+    update: route({
+      method: 'PATCH',
+      path: '/api/maps/:mapId/access-rules/:ruleId',
+      auth: 'account',
+      scope: { resource: 'access', action: 'manage' },
+      mapRole: 'manager',
+      body: dto.UpdateAccessRuleRequest,
+      response: dto.AccessRuleDto,
+    }),
+    /** Adds the rules of another map the caller manages (admins of this map). */
+    copy: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/access-rules/copy',
+      auth: 'account',
+      scope: { resource: 'access', action: 'manage' },
+      mapRole: 'admin',
+      status: 200,
+      body: dto.CopyAccessRulesRequest,
+      response: dto.CopyAccessRulesResultDto,
     }),
   },
 } as const;

@@ -352,6 +352,60 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
     entity: byId('oauthGrant'),
     refs: (d) => ref('account', d.accountId),
   },
+  'access.rule_changed': {
+    op: 'update',
+    entity: byId('accessRule'),
+    ignore: ['createdAt', 'mapId', 'subject'],
+  },
+  'access.owner_changed': {
+    op: 'activity',
+    entity: byId('map', 'mapId'),
+    refs: (d) => [
+      ...ref('map', d.mapId),
+      ...ref('account', d.ownerAccountId),
+      ...ref('account', d.previousOwnerAccountId),
+    ],
+    activity: (d) => ({ ownerAccountId: change(d.previousOwnerAccountId, d.ownerAccountId) }),
+  },
+  'map.trashed': {
+    op: 'activity',
+    entity: byId('map'),
+    refs: (d) => ref('map', d.id),
+    activity: () => ({ deleted: change(false, true) }),
+  },
+  'map.restored': {
+    ...MAP_ENTITY,
+    op: 'activity',
+    entity: byId('map'),
+    refs: (d) => ref('map', d.id),
+    activity: () => ({ deleted: change(true, false) }),
+  },
+  'account.disabled_changed': {
+    op: 'activity',
+    entity: byId('account', 'accountId'),
+    refs: (d) => ref('account', d.accountId),
+    activity: (d) => ({ disabled: change(!d.disabled, d.disabled), reason: change(null, d.reason) }),
+  },
+  'webhook.secret_rotated': {
+    op: 'activity',
+    entity: byId('webhook'),
+    refs: (d) => ref('map', d.mapId),
+    activity: () => ({ secret: change('old', 'new') }),
+  },
+  'webhook.auto_disabled': {
+    op: 'activity',
+    entity: byId('webhook'),
+    refs: (d) => ref('map', d.mapId),
+    activity: (d) => ({ enabled: change(true, false), failures: change(null, d.failures) }),
+  },
+  'invite.created': { op: 'create', entity: byId('invite') },
+  'invite.revoked': { op: 'delete', entity: byId('invite') },
+  'invite.used': {
+    op: 'activity',
+    entity: byId('invite'),
+    refs: (d) => ref('account', d.accountId),
+    activity: (d) => ({ accountId: change(null, d.accountId) }),
+  },
 };
 
 /** Types the plugins and future modules add are audited as activity with their data as new. */
