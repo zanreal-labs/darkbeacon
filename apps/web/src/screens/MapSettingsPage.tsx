@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowUpRight,
   Bell,
+  Bookmark,
   Building2,
   Copy,
   Flag,
@@ -55,6 +56,7 @@ import { api, ApiError } from '../lib/api';
 import { mapPermissions } from '../lib/roles';
 import { relativeTime } from '../lib/time';
 import { useTabParam } from '../lib/useTabParam';
+import { BookmarkLabelSettings } from '../map/BookmarkSettings';
 import { PluginSlot } from '../plugins/PluginSlot';
 import {
   Avatar,
@@ -94,7 +96,7 @@ import styles from './settings.module.css';
 
 const errorText = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback);
 
-type TabId = 'general' | 'labels' | 'access' | 'notifications';
+type TabId = 'general' | 'labels' | 'bookmarks' | 'access' | 'notifications';
 
 /** Map settings while they load (also the server's Suspense fallback). */
 export function MapSettingsSkeleton() {
@@ -124,6 +126,7 @@ export function MapSettingsPage({ slug }: { slug: string }) {
   const tabs: { id: TabId; title: string; icon: ReactNode; show: boolean }[] = [
     { id: 'general', title: 'General', icon: <Settings2 />, show: can.admin },
     { id: 'labels', title: 'Labels', icon: <Tags />, show: can.manage },
+    { id: 'bookmarks', title: 'Bookmark labels', icon: <Bookmark />, show: can.manage },
     { id: 'access', title: 'Access', icon: <ShieldCheck />, show: can.admin },
     { id: 'notifications', title: 'Notifications', icon: <Bell />, show: can.admin },
   ];
@@ -191,6 +194,9 @@ export function MapSettingsPage({ slug }: { slug: string }) {
         )}
         <TabsContent value="labels">
           <LabelSettings key={map.data.id} map={map.data} />
+        </TabsContent>
+        <TabsContent value="bookmarks">
+          <BookmarkLabelSettings key={map.data.id} map={map.data} canManage={can.manage} />
         </TabsContent>
         {can.admin && (
           <TabsContent value="access">

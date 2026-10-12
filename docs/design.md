@@ -104,6 +104,83 @@ accent for connections and selection, `security-high` green for ways out to know
 `edge-time-eol` purple for end of life, `edge-mass-critical` and `status-hostile` red for critical
 and danger, `status-warning` amber for pings and stars, `status-friendly` green for arrivals.
 
+## The map
+
+### Opening view
+
+- The map opens at one fixed zoom, `DEFAULT_ZOOM` = 0.9 (`apps/web/src/map/mapType.ts`). Canvas type
+  sizes are chosen with it: system names 15 px (13.5 px on screen), pills and annotations 13 px
+  (11.7 px), the size letter on a connection 12.5 px (11.25 px). A test keeps the products at or above
+  13 / 11.5 / 11 px.
+- It centres on, in order: the viewer's last view of this map (kept on the server per account), the
+  viewer's own character, the home system, the system changed last. It never fits the whole chain
+  on open, because chains can be huge.
+- `F` fits the whole chain (never below zoom 0.5), `C` centres on me, `L` shows the legend. The
+  same actions are buttons in the bottom-left toolbar.
+
+### System node
+
+- Every node has the same size. The width is what the widest system name of the game needs in the
+  node's name font next to the widest designation pill: the build picks the longest names from the
+  universe dataset (`node-sizers.ts`, via `next.config.ts`) and the node lays them out invisibly, so
+  the width follows whatever font a theme sets. Longer custom names are cut with an ellipsis (full
+  name in the tooltip).
+- Surface: the neutral node background, never tinted. A 3 px border carries the status: grey by
+  default, home blue, friendly green, warning yellow, hostile and dangerous red, target purple. No
+  side stripe. Selection is an accent outline outside the border.
+- Row 1: a solid, fixed-width designation pill first, the class (`C1`-`C6`, `Thera`, `C13`, Drifter
+  and Pochven names) or the security (`0.8`, `0.4`, `-0.4`, `-1.0`) in its EVE colour as the pill's
+  background with dark bold monospace text; then the name (15 px semibold); the pilot count on the
+  right, in the accent colour when I am there.
+- Row 2: the statics as plain text, the hole type in the normal text colour (white in dark themes)
+  and monospace, the destination (`HS`, `LS`, `NS`, `C1`-`C6`) in its colour right after it:
+  `D845 HS`. No chips, no borders.
+- Nothing else on the node: region, effect, tag, notes and lock are in the tooltip and the side panel.
+- Above the node, left-aligned with its left edge: the map labels (a small coloured square and the
+  label's name, `■ Staging`), then the bookmark code (`ABC-123`, a click copies it).
+- Below an exit system, left-aligned: the nearest hub and its jumps (`Jita 4j`), followed by a small
+  square in the colour of the space the whole route runs through (high-sec green, low-sec orange,
+  null-sec red) only when it runs through one kind of space; a mixed route shows no square. The
+  numbers come from the routing API (`exits` in the map snapshot and `routes.exits_changed`).
+
+### Connections
+
+Every connection is the same thick two-layer line (8 px at 100 %), so state reads from colour alone
+(`edgeStyle.ts`):
+
+| Property | Channel                  | States                                                                    |
+| -------- | ------------------------ | ------------------------------------------------------------------------- |
+| Time     | outer layer colour       | normal neutral, EOL purple, under an hour left (critical time) pink       |
+| Mass     | inner core colour        | fresh neutral, reduced amber, critical red                                |
+| Danger   | red halo beyond the line | dangerous                                                                 |
+| Size     | a letter at the midpoint | `S`, `M`, `XL`, `C` (capital); large shows nothing. Never the line width. |
+| Bubble   | a circle on the line     | just outside the bubbled system (centre radius + 6 px past its border)    |
+| Type     | pattern                  | Ansiblex bridges dotted lime; gates plain neutral                         |
+
+The size letter is the only text ever drawn on a connection. Everything else (type, time left, mass
+left, saved mass, who changed it) is in the hover card and the Connections panel. The legend draws
+its samples with the same functions as the edge, and a test checks that every state looks different.
+
+### Bookmark labels
+
+The small mono tag above a system: by default the signature of the wormhole that leads into it from
+its parent (`ABC-123`); a click copies it. Templates mix text with `{sig} {sig3} {chainIndex}
+{destClass} {type} {size} {mass} {eol} {tempName}`; managers set the map default, everyone may pick
+their own (Map settings → Bookmark labels, or the bookmark button on the map). A temporary name wins
+unless the template places `{tempName}` itself. The chain is walked from the home system;
+`{chainIndex}` is the depth and the order among siblings (`1a`, `1b`, `2a`).
+
+### Around the map
+
+- Map settings open as a modal dialog from an icon in the left rail; the map stays live behind it.
+  There is no settings button on the canvas, and no settings screen replaces the map.
+- The side area is docked, resizable panels, hidden while nothing is selected.
+- Context menus are short lists (at most about eight items, one line each with an icon and a key
+  hint) with submenus for choices (`Status ▸`, `Labels ▸`, `Mass ▸`, `Time ▸`...), never settings
+  panels with chips or switches.
+- Other people on the map are arrow cursors with a name tag in their colour; the top bar says
+  `Live · 3 on this map`. No avatar circles for presence.
+
 ## Server data built for glancing
 
 The API does the thinking so panels only show it:

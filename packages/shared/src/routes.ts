@@ -337,6 +337,31 @@ export const routes = {
       body: dto.SetLabelsRequest,
       response: z.array(dto.LabelDto),
     }),
+    /** The map's default bookmark label template (manager+); published as `map.settings_changed`. */
+    setBookmarkTemplate: route({
+      method: 'PUT',
+      path: '/api/maps/:mapId/bookmark-template',
+      auth: 'account',
+      mapRole: 'manager',
+      body: dto.SetBookmarkTemplateRequest,
+      response: dto.MapDto,
+    }),
+    /** The caller's own view of the map: last viewport and bookmark template override. */
+    getPreferences: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/preferences',
+      auth: 'account',
+      mapRole: 'viewer',
+      response: dto.MapPreferencesDto,
+    }),
+    updatePreferences: route({
+      method: 'PATCH',
+      path: '/api/maps/:mapId/preferences',
+      auth: 'account',
+      mapRole: 'viewer',
+      body: dto.UpdateMapPreferencesRequest,
+      response: dto.MapPreferencesDto,
+    }),
   },
 
   systems: {

@@ -12,3 +12,5 @@ export const presenceSettingsKey = ['presence-settings'] as const;
 export function isInstanceAdmin(me: MeDto | null | undefined): boolean {
   return me?.account.instanceRole === 'owner' || me?.account.instanceRole === 'admin';
 }
+/** The viewer's own preferences on a map (viewport, bookmark template). */
+export const mapPreferencesKey = (mapId: string) => ['map-preferences', mapId] as const;

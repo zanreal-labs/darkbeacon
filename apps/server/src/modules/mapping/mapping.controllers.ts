@@ -3,6 +3,7 @@ import type { Actor } from '@darkbeacon/core';
 import {
   ConnectionIntelQuery,
   ConnectionUseCases,
+  MapPreferenceUseCases,
   MapUseCases,
   SignatureUseCases,
   SystemUseCases,
@@ -17,8 +18,10 @@ import {
   nestPath,
   PasteSignaturesRequest,
   routes,
+  SetBookmarkTemplateRequest,
   SetLabelsRequest,
   UpdateConnectionRequest,
+  UpdateMapPreferencesRequest,
   UpdateMapRequest,
   UpdateSignatureRequest,
   UpdateSystemRequest,
@@ -76,6 +79,35 @@ export class MapsController {
     @Body(new ZodPipe(SetLabelsRequest)) body: SetLabelsRequest,
   ) {
     return this.maps.setLabels(actor, mapId, body.labels);
+  }
+
+  @Put(nestPath(routes.maps.setBookmarkTemplate.path))
+  setBookmarkTemplate(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Body(new ZodPipe(SetBookmarkTemplateRequest)) body: SetBookmarkTemplateRequest,
+  ) {
+    return this.maps.setBookmarkTemplate(actor, mapId, body.template);
+  }
+}
+
+/** The caller's own view of a map. */
+@Controller()
+export class MapPreferencesController {
+  constructor(@Inject(MapPreferenceUseCases) private readonly preferences: MapPreferenceUseCases) {}
+
+  @Get(nestPath(routes.maps.getPreferences.path))
+  get(@CurrentActor() actor: Actor | null, @Param('mapId') mapId: string) {
+    return this.preferences.get(actor, mapId);
+  }
+
+  @Patch(nestPath(routes.maps.updatePreferences.path))
+  update(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Body(new ZodPipe(UpdateMapPreferencesRequest)) body: UpdateMapPreferencesRequest,
+  ) {
+    return this.preferences.update(actor, mapId, body);
   }
 }
 

@@ -18,17 +18,8 @@ import type { MapPermissions } from '../lib/roles';
 import { SlotItem } from '../plugins/PluginSlot';
 import type { SlotEntry } from '../plugins/registry';
 import { SHIP_SIZE_LABEL } from './ConnectionEdge';
+import { STATUS_LABEL } from './nodeFacts';
 import type { MapStore } from './useMapStore';
-
-const STATUS_LABEL: Record<SystemStatus, string> = {
-  unknown: 'Unknown',
-  home: 'Home',
-  friendly: 'Friendly',
-  empty: 'Empty',
-  occupied: 'Occupied',
-  warning: 'Warning',
-  hostile: 'Hostile',
-};
 
 export const statusOptions = SystemStatus.options.map((s) => ({
   value: s,

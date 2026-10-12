@@ -3,7 +3,13 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useReactFlow } from '@xyflow/react';
-import type { MapDto, MapSummaryDto, StreamSnapshotDto, UniverseSystemDto } from '@darkbeacon/shared';
+import {
+  SYSTEM_PLACEMENT,
+  type MapDto,
+  type MapSummaryDto,
+  type StreamSnapshotDto,
+  type UniverseSystemDto,
+} from '@darkbeacon/shared';
 import {
   AlertTriangle,
   Info,
@@ -160,7 +166,7 @@ export function MapView({
 
   /** Next to the selected system, or in the middle of the visible canvas. */
   const defaultPosition = () => {
-    if (system) return { x: system.position.x + 280, y: system.position.y };
+    if (system) return { x: system.position.x + SYSTEM_PLACEMENT.x, y: system.position.y };
     const bounds = document.querySelector('.react-flow')?.getBoundingClientRect();
     if (!bounds) return { x: 0, y: 0 };
     const panel = dock.open && bounds.width > 760 ? 360 : 0;

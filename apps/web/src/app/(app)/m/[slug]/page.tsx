@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { HydrationBoundary } from '@tanstack/react-query';
 import { buildPath, routes, type MapSnapshot, type UniverseSystemDto } from '@darkbeacon/shared';
-import { mapKey, mapsKey, meKey } from '../../../../lib/session-keys';
+import { mapKey, mapPreferencesKey, mapsKey, meKey } from '../../../../lib/session-keys';
 import { universeKey } from '../../../../lib/universe-keys';
 import {
   getMapBySlug,
@@ -35,12 +35,17 @@ async function LiveMap({ params }: Pick<PageProps<'/m/[slug]'>, 'params'>) {
   const [me, map] = await Promise.all([getMe(), getMapBySlug(slug)]);
   if (!me) return <SignInRedirect />;
   if (!map) return <MapUnavailable slug={slug} error={null} />;
-  const [list, snapshot] = await Promise.all([
+  const [list, snapshot, preferences] = await Promise.all([
     maps,
     serverGet(
       routes.realtime.snapshot,
       buildPath(routes.realtime.snapshot.path, { stream: `map:${map.id}` }),
     ),
+    // Where this account left the map; the first view needs it. Without it the browser asks.
+    serverGet(
+      routes.maps.getPreferences,
+      buildPath(routes.maps.getPreferences.path, { mapId: map.id }),
+    ).catch(() => undefined),
   ]);
   // Names and classes of the systems on the map, so the first paint is complete (static data,
   // cached by this server after the first time it is asked).
@@ -52,6 +57,7 @@ async function LiveMap({ params }: Pick<PageProps<'/m/[slug]'>, 'params'>) {
         [meKey, me],
         [mapsKey, list],
         [mapKey(slug), map],
+        [mapPreferencesKey(map.id), preferences],
         ...ids.map((id) => [universeKey(id), universe.get(id)] as const),
       ])}
     >
