@@ -269,7 +269,8 @@ export function SignaturesSection({
     const target = e.target as HTMLElement;
     if (target.closest('input, textarea, select, [contenteditable="true"]')) return;
     const mod = e.metaKey || e.ctrlKey;
-    if (mod && e.key.toLowerCase() === 'a') {
+    // Ctrl/⌘+A as in Wanderer, or just A while the table has the focus.
+    if (e.key.toLowerCase() === 'a' && !e.altKey && !e.shiftKey) {
       e.preventDefault();
       setSelected(new Set(rows.map((r) => r.id)));
     } else if (mod && e.key.toLowerCase() === 'z' && undo.batches.length > 0) {
