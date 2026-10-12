@@ -78,6 +78,10 @@ const server = setupMockServer(
   http.get(routes.tracking.characters.path, () => HttpResponse.json(pilots)),
   http.get(routes.maps.get.path, () => HttpResponse.json(mapDto)),
   http.get(routes.intel.map.path, () => HttpResponse.json({ systems: [], live: true })),
+  http.get(routes.intel.standings.path, () =>
+    HttpResponse.json({ standings: [], missingScopes: false, overrides: [] }),
+  ),
+  http.get(routes.routing.hubs.path, () => HttpResponse.json({ trade: [], map: [], personal: [] })),
   http.get(routes.intel.system.path, () => HttpResponse.json(activityFixture())),
   http.get(routes.intel.kills.path, ({ request }) => {
     const all = !new URL(request.url).searchParams.has('systems');
@@ -491,5 +495,26 @@ describe('SystemSidebar', () => {
     expect(JSON.parse(window.localStorage.getItem(`dbk-kills-settings:${MAP_ID}`)!)).toMatchObject({
       scope: 'all',
     });
+  });
+
+  it('names the holder and the claiming corporation, and asks to link again for standings', async () => {
+    const held = activityFixture();
+    held.intel.sovereignty = {
+      kind: 'alliance',
+      holder: { id: 1354830081, name: 'Goonswarm Federation', ticker: 'CONDI' },
+      corporation: { id: 98000001, name: 'KarmaFleet', ticker: 'KARMA' },
+    };
+    server.use(
+      http.get(routes.intel.system.path, () => HttpResponse.json(held)),
+      http.get(routes.intel.standings.path, () =>
+        HttpResponse.json({ standings: [], missingScopes: true, overrides: [] }),
+      ),
+    );
+    wrap(<Sidebar state={{}} />);
+    const header = screen.getByRole('complementary', { name: 'System' });
+    expect(await within(header).findByText('Goonswarm Federation')).toBeTruthy();
+    expect(header.textContent).toContain('claimed by KarmaFleet [KARMA]');
+    const relink = await within(header).findByRole('link', { name: 'Link your characters again' });
+    expect(relink.getAttribute('href')).toContain('/api/auth/eve/login');
   });
 });

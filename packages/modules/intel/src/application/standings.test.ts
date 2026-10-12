@@ -97,4 +97,32 @@ describe('standings', () => {
     expect(calls).toHaveLength(4);
     await expect(standings.forAccount(null)).rejects.toThrow();
   });
+
+  it('lets a standing set by hand win over contacts until it is cleared', async () => {
+    const stored = new Map<number, number>();
+    const standings = new Standings({
+      pilots: {
+        characters: async () => [{ id: 1, corporationId: 98000001, allianceId: null, scopes: ALL }],
+        accessToken: async () => 'tok',
+      },
+      contacts: { contacts: async () => ({ ok: true, data: [{ id: 99000666, standing: 5 }], nextAt: 0 }) },
+      clock: new ManualClock(),
+      overrides: {
+        standingOverrides: async () => new Map(stored),
+        setStandingOverride: async (_account, id, standing) => {
+          if (standing === null) stored.delete(id);
+          else stored.set(id, standing);
+        },
+      },
+    });
+    const of = (dto: { standings: Array<{ id: number; standing: number }> }) =>
+      new Map(dto.standings.map((s) => [s.id, s.standing])).get(99000666);
+    expect(of(await standings.forAccount(alice))).toBe(5);
+    const set = await standings.set(alice, 99000666, -25);
+    expect(of(set)).toBe(-10);
+    expect(set.overrides).toEqual([99000666]);
+    const cleared = await standings.set(alice, 99000666, null);
+    expect(of(cleared)).toBe(5);
+    expect(cleared.overrides).toEqual([]);
+  });
 });

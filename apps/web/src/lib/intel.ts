@@ -6,6 +6,7 @@ import {
   buildPath,
   isEventOfType,
   routes,
+  type HubsDto,
   type IntelEntityDto,
   type KillmailDto,
   type MapIntelDto,
@@ -134,15 +135,34 @@ export function useMapKills(mapId: string, filter: KillsFilter, enabled = true) 
   });
 }
 
-/** The signed-in account's standings (its characters' contacts), id -> -10..+10. */
-export function useStandings(enabled = true): ReadonlyMap<number, number> {
-  const query = useQuery({
+export const standingsKey = ['standings'] as const;
+
+/** The signed-in account's standings as the server gives them (with overrides and missing scopes). */
+export function useStandingsQuery(enabled = true) {
+  return useQuery({
     enabled,
-    queryKey: ['standings'],
+    queryKey: standingsKey,
     queryFn: () => api<StandingsDto>(routes.intel.standings.path),
     staleTime: 10 * 60_000,
     refetchInterval: 15 * 60_000,
   });
+}
+
+/** Sets a standing by hand (null: back to contacts); the map recolours at once. */
+export function useSetStanding() {
+  const queryClient = useQueryClient();
+  return async (entityId: number, standing: number | null) => {
+    const next = await api<StandingsDto>(buildPath(routes.intel.setStanding.path, { entityId }), {
+      method: 'PUT',
+      json: { standing },
+    });
+    queryClient.setQueryData(standingsKey, next);
+  };
+}
+
+/** The signed-in account's standings (its characters' contacts), id -> -10..+10. */
+export function useStandings(enabled = true): ReadonlyMap<number, number> {
+  const query = useStandingsQuery(enabled);
   return useMemo(() => new Map((query.data?.standings ?? []).map((s) => [s.id, s.standing])), [query.data]);
 }
 
@@ -155,6 +175,23 @@ export function holderStanding(
   if (sov?.kind !== 'alliance') return null;
   return (
     standings.get(sov.holder.id) ?? (sov.corporation ? (standings.get(sov.corporation.id) ?? null) : null)
+  );
+}
+
+/** The map's own hubs and the viewer's (trade hubs are everywhere and not marked). */
+export function useRouteHubs(mapId: string, enabled = true) {
+  const query = useQuery({
+    enabled,
+    queryKey: ['routes', mapId, 'hubs'],
+    queryFn: () => api<HubsDto>(buildPath(routes.routing.hubs.path, { mapId })),
+    staleTime: 5 * 60_000,
+  });
+  return useMemo(
+    () => ({
+      map: new Set((query.data?.map ?? []).map((h) => h.solarSystemId)),
+      personal: new Set((query.data?.personal ?? []).map((h) => h.solarSystemId)),
+    }),
+    [query.data],
   );
 }
 

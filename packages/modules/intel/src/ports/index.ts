@@ -167,6 +167,16 @@ export interface IntelRepository {
   saveNames(names: readonly StoredName[]): Promise<void>;
   pruneNames(before: number): Promise<void>;
 
+  // Standings a person set by hand
+  standingOverrides(accountId: string): Promise<Map<number, number>>;
+  /** Null removes the override. */
+  setStandingOverride(
+    accountId: string,
+    entityId: number,
+    standing: number | null,
+    at: number,
+  ): Promise<void>;
+
   // Small values: the feed's position, when sources may be asked again
   state<T>(key: string): Promise<T | null>;
   setState(key: string, value: unknown): Promise<void>;

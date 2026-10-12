@@ -18,7 +18,9 @@ import { useUniverseSystems } from '../lib/universe';
 import { useMapSettings } from '../lib/useMapSettings';
 import { usePageView } from '../lib/useTelemetry';
 import { AddSystemSearch } from '../map/AddSystemSearch';
+import { useMapIntel, useSetStanding, useStandingsQuery } from '../lib/intel';
 import { MapCanvas, type FocusRequest, type MenuTarget } from '../map/MapCanvas';
+import type { HolderStanding } from '../map/menus/intel';
 import { freeSpot } from '../map/geometry';
 import { connectionMenu, paneMenu, systemMenu } from '../map/menus';
 import { systemDisplayName } from '../map/SystemNode';
@@ -98,6 +100,27 @@ export function MapView({
     setFocusNode((f) => ({ id: solarSystemId, center, n: (f?.n ?? 0) + 1 }));
   };
 
+  // System intel for the system menu: who holds a system and how the viewer stands towards it.
+  const intel = useMapIntel(map.id);
+  const standings = useStandingsQuery();
+  const setStanding = useSetStanding();
+  const holderOf = (solarSystemId: number): { holder?: HolderStanding } => {
+    const sov = intel.systems.get(solarSystemId)?.sovereignty;
+    if (sov?.kind !== 'alliance' || !standings.data) return {};
+    const id = sov.holder.id;
+    return {
+      holder: {
+        holder: sov.holder,
+        standing: standings.data.standings.find((s) => s.id === id)?.standing ?? null,
+        overridden: standings.data.overrides.includes(id),
+        set: (standing) =>
+          void setStanding(id, standing).catch(() =>
+            toast({ title: 'Standing did not change', tone: 'danger' }),
+          ),
+      },
+    };
+  };
+
   const deselect = () => setFocusNode((f) => ({ id: null, center: false, n: (f?.n ?? 0) + 1 }));
 
   // A right click only opens the menu: it does not select the system or open the panel.
@@ -126,6 +149,7 @@ export function MapView({
           notify: toast,
           onManageLabels: () => settings.show('labels'),
           onManageTags: () => settings.show('tags'),
+          ...holderOf(sys.solarSystemId),
         }),
       };
     }

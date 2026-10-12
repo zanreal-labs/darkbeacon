@@ -1,8 +1,10 @@
 import { readFileSync } from 'node:fs';
 import {
+  Body,
   Controller,
   Get,
   Global,
+  Put,
   HttpException,
   Optional,
   Res,
@@ -37,7 +39,14 @@ import { AccountService, CharacterService } from '@darkbeacon/identity';
 import type { MappingPorts } from '@darkbeacon/mapping';
 import type { DomainTelemetry } from '@darkbeacon/observability';
 import { MapPublishing } from '@darkbeacon/publishing';
-import { EveId, MapKillsQuery, nestPath, routes, type MapIntelDto } from '@darkbeacon/shared';
+import {
+  EveId,
+  MapKillsQuery,
+  nestPath,
+  routes,
+  SetStandingRequest,
+  type MapIntelDto,
+} from '@darkbeacon/shared';
 import type { FastifyReply } from 'fastify';
 import { z } from 'zod';
 import {
@@ -133,6 +142,15 @@ export class IntelController {
   @Get(nestPath(routes.intel.standings.path))
   myStandings(@CurrentActor() actor: Actor | null) {
     return this.standings.forAccount(actor);
+  }
+
+  @Put(nestPath(routes.intel.setStanding.path))
+  setStanding(
+    @CurrentActor() actor: Actor | null,
+    @Param('entityId', new ZodPipe(z.coerce.number().pipe(EveId))) entityId: number,
+    @Body(new ZodPipe(SetStandingRequest)) body: SetStandingRequest,
+  ) {
+    return this.standings.set(actor, entityId, body.standing);
   }
 
   @Get(nestPath(routes.intel.map.path))
@@ -394,6 +412,7 @@ export class IntelRuntime implements OnModuleInit, OnModuleDestroy {
         characters: CharacterService,
         client: EsiPublicClient,
         clock: Clock,
+        repo: IntelRepository,
       ) =>
         new Standings({
           pilots: new IdentityStandingPilots({
@@ -404,8 +423,9 @@ export class IntelRuntime implements OnModuleInit, OnModuleDestroy {
           }),
           contacts: new EsiContactsSource(client),
           clock,
+          overrides: repo,
         }),
-      inject: [AccountService, CharacterService, EsiPublicClient, CLOCK],
+      inject: [AccountService, CharacterService, EsiPublicClient, CLOCK, INTEL_REPOSITORY],
     },
     IntelRuntime,
   ],

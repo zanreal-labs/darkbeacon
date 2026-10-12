@@ -184,6 +184,8 @@ export const StandingsDto = z.object({
   standings: z.array(z.object({ id: EveId, standing: z.number().min(-10).max(10) })),
   /** Some linked characters lack the contact scopes (linked before they were asked for). */
   missingScopes: z.boolean(),
+  /** Ids whose standing the person set by hand (they win over contacts). */
+  overrides: z.array(EveId),
 });
 export type StandingsDto = z.infer<typeof StandingsDto>;
 
@@ -211,3 +213,7 @@ export function statusFromStanding(
   if (standing <= -5) return 'warning';
   return null;
 }
+
+/** `PUT /api/accounts/me/standings/:entityId`: set a standing by hand, or null to go back to contacts. */
+export const SetStandingRequest = z.object({ standing: z.number().min(-10).max(10).nullable() });
+export type SetStandingRequest = z.infer<typeof SetStandingRequest>;

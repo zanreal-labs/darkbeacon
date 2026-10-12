@@ -329,3 +329,27 @@
 .handle:not(:global(.connectable)) {
   pointer-events: none;
 }
+
+/* The pilots behind the count, on hover: name, then the ship, mine first and highlighted. */
+.pilotList {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+  list-style: none;
+}
+
+.pilotList li {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.pilotList li[data-mine] {
+  font-weight: 700;
+}
+
+.pilotShip {
+  color: var(--dbk-color-text-muted);
+}

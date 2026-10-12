@@ -177,6 +177,12 @@ describeEachDialect('intel repository', (ctx) => {
       updatedAt: 5,
     });
     expect(names.get(98000001)?.ticker).toBeNull();
+    await repo.setStandingOverride('alice', 99000001, -10, 1);
+    await repo.setStandingOverride('alice', 99000001, -5, 2);
+    await repo.setStandingOverride('bob', 99000001, 10, 2);
+    expect(await repo.standingOverrides('alice')).toEqual(new Map([[99000001, -5]]));
+    await repo.setStandingOverride('alice', 99000001, null, 3);
+    expect((await repo.standingOverrides('alice')).size).toBe(0);
     await repo.setState('r2z2', { sequence: 5, at: 1 });
     expect(await repo.state('r2z2')).toEqual({ sequence: 5, at: 1 });
     expect(await repo.state('missing')).toBeNull();

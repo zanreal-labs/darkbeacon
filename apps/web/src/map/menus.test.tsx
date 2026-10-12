@@ -74,6 +74,33 @@ describe('system menu', () => {
     expect(rows(sub(withPilot, 'Set destination'))).toEqual(['Set destination', 'Add waypoint']);
   });
 
+  it('lets anyone set their own standing towards the holder, and go back to their contacts', () => {
+    const set: Array<number | null> = [];
+    const holder = (standing: number | null, overridden: boolean) => ({
+      holder: { id: 1354830081, name: 'Goonswarm Federation', ticker: 'CONDI' },
+      standing,
+      overridden,
+      set: (v: number | null) => void set.push(v),
+    });
+    const items = system('viewer', {}, { holder: holder(5, false) }).items;
+    expect(rows(items)).toEqual(['Standing towards [CONDI]', 'Copy name']);
+    const choices = sub(items, 'Standing towards [CONDI]');
+    expect(rows(choices)).toEqual([
+      'Excellent (+10)',
+      'Good (+5)',
+      'Neutral (0)',
+      'Bad (-5)',
+      'Terrible (-10)',
+    ]);
+    pick(choices, 'Terrible (-10)');
+    const overridden = sub(
+      system('viewer', {}, { holder: holder(-10, true) }).items,
+      'Standing towards [CONDI]',
+    );
+    pick(overridden, 'Use my contacts again');
+    expect(set).toEqual([-10, null]);
+  });
+
   it('keeps the member top level short: details in submenus, remove last', () => {
     const { items } = system('member');
     expect(rows(items)).toEqual([

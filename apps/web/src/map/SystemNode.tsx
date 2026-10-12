@@ -13,12 +13,13 @@ import {
   type SystemIntelDto,
   type SystemLabelDto,
   type UniverseSystemDto,
+  type WormholeTypeDto,
 } from '@darkbeacon/shared';
 import { cssVar } from '@darkbeacon/theme-sdk';
-import { Lock, Users } from 'lucide-react';
+import { Lock, MapPin, MessageSquareText, Users } from 'lucide-react';
 import { staticFacts, useWormholeTypes } from '../lib/wormholes';
 import { PluginSlot } from '../plugins/PluginSlot';
-import { useToast } from '../ui';
+import { Tooltip, useToast } from '../ui';
 import {
   classPill,
   PILL_LABELS,
@@ -59,8 +60,12 @@ export interface SystemNodeData extends Record<string, unknown> {
   standing?: number | null;
   /** A kill just came in: the node rings softly for a moment. */
   pulse?: boolean;
-  /** Whether hovering the kills may list the killmails (not on public views). */
-  killList?: boolean;
+  /** The viewer reads the map with an account (not a public view): killmail lists, wormhole facts. */
+  withAccount?: boolean;
+  /** The pilots counted on the node, listed when hovering the count (mine first). */
+  pilots?: ReadonlyArray<{ id: number; name: string; ship: string | null; mine: boolean }>;
+  /** A route hub of the map or of the viewer: a small pin in the corner. */
+  routeHub?: 'map' | 'personal' | null;
 }
 
 export type SystemNodeType = Node<SystemNodeData, 'system'>;
@@ -80,6 +85,44 @@ export function systemDisplayName(system: MapSystemDto, info: UniverseSystemDto 
  */
 export function nodeName(system: MapSystemDto, info: UniverseSystemDto | undefined): string {
   return system.customName || info?.name || String(system.solarSystemId);
+}
+
+/** The pilot count; hovering lists who is there and in what (when the map shares pilots). */
+function NodePilots({
+  count,
+  mine,
+  pilots,
+}: {
+  count: number;
+  mine: boolean;
+  pilots: SystemNodeData['pilots'];
+}) {
+  const text = `${count} tracked pilot${count === 1 ? '' : 's'} here${mine ? ', you among them' : ''}`;
+  const badge = (
+    <span className={`${styles.pilots} nodrag`} data-mine={mine || undefined} aria-label={text} tabIndex={0}>
+      <Users aria-hidden />
+      {count}
+    </span>
+  );
+  if (!pilots?.length) return badge;
+  return (
+    <Tooltip
+      side="bottom"
+      align="end"
+      content={
+        <ul className={styles.pilotList} aria-label="Pilots here">
+          {pilots.map((p) => (
+            <li key={p.id} data-mine={p.mine || undefined}>
+              <span>{p.name}</span>
+              <span className={styles.pilotShip}>{p.ship ?? 'ship unknown'}</span>
+            </li>
+          ))}
+        </ul>
+      }
+    >
+      {badge}
+    </Tooltip>
+  );
 }
 
 /** K-space and Pochven: where the node names the region (wormholes show their statics instead). */
@@ -130,14 +173,26 @@ function PillContent({ info }: { info: UniverseSystemDto | undefined }) {
 }
 
 /** Statics as plain text: the hole type, then where it leads in that place's colour ("D845 HS"). */
-function StaticsText({ statics }: { statics: readonly string[] }) {
+function StaticsText({ statics, facts }: { statics: readonly string[]; facts: boolean }) {
   if (statics.length === 0) return null;
-  return <StaticsList statics={statics} />;
+  return facts ? <StaticsWithFacts statics={statics} /> : <StaticsList statics={statics} types={NO_TYPES} />;
+}
+
+const NO_TYPES: ReadonlyMap<string, WormholeTypeDto> = new Map();
+
+/** The wormhole catalogue needs an account; public views name only where statics lead. */
+function StaticsWithFacts({ statics }: { statics: readonly string[] }) {
+  return <StaticsList statics={statics} types={useWormholeTypes()} />;
 }
 
 /** The statics with their facts (mass, per-jump mass, lifetime) on hover. */
-function StaticsList({ statics }: { statics: readonly string[] }) {
-  const types = useWormholeTypes();
+function StaticsList({
+  statics,
+  types,
+}: {
+  statics: readonly string[];
+  types: ReadonlyMap<string, WormholeTypeDto>;
+}) {
   return (
     <ul className={styles.statics} aria-label="Statics">
       {statics.map((type) => {
@@ -182,7 +237,9 @@ export const SystemNode = memo(function SystemNode({
     intel,
     standing,
     pulse,
-    killList,
+    withAccount,
+    pilots,
+    routeHub,
   } = data;
   const toast = useToast();
   const name = nodeName(system, info);
@@ -308,30 +365,39 @@ export const SystemNode = memo(function SystemNode({
               mapId={mapId}
               solarSystemId={system.solarSystemId}
               kills={intel?.kills1h ?? 0}
-              list={killList !== false}
+              list={withAccount !== false}
             />
-            {characters > 0 && (
-              <span
-                className={styles.pilots}
-                data-mine={mine || undefined}
-                title={`${characters} tracked pilot${characters === 1 ? '' : 's'} here${mine ? ', you among them' : ''}`}
-              >
-                <Users aria-hidden />
-                {characters}
-              </span>
-            )}
+            {characters > 0 && <NodePilots count={characters} mine={!!mine} pilots={pilots} />}
           </span>
         </div>
       </div>
 
       <div className={`${styles.line} ${styles.fill}`}>
-        <StaticsText statics={info?.statics ?? []} />
+        <StaticsText statics={info?.statics ?? []} facts={withAccount !== false} />
         {info && !system.customName && isKnownSpace(info) && (
           <span className={styles.region} title={`${info.regionName} › ${info.constellationName}`}>
             {info.whClass === 25 ? info.constellationName : info.regionName}
           </span>
         )}
         <span className={styles.corner}>
+          {system.description.trim() && (
+            <span
+              className={styles.lock}
+              data-notes
+              title={`Notes: ${system.description.trim().slice(0, 200)}`}
+            >
+              <MessageSquareText aria-label="Has notes" />
+            </span>
+          )}
+          {routeHub && (
+            <span
+              className={styles.lock}
+              data-hub={routeHub}
+              title={routeHub === 'map' ? "One of the map's route hubs" : 'One of your route hubs'}
+            >
+              <MapPin aria-label="Route hub" />
+            </span>
+          )}
           {system.locked && (
             <span className={styles.lock} title="Locked: cannot be moved or removed" data-locked>
               <Lock aria-label="Locked" />

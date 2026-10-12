@@ -10,7 +10,8 @@ import type {
   SovereigntyDto,
   SystemActivityDto,
 } from '@darkbeacon/shared';
-import { evewho, images, useSystemActivity, zkill } from '../../lib/intel';
+import { evewho, images, useStandingsQuery, useSystemActivity, zkill } from '../../lib/intel';
+import { eveLinkHref } from '../../shell/AccountMenu';
 import { track } from '../../lib/telemetry';
 import { Avatar, Segmented } from '../../ui';
 import styles from './intel.module.css';
@@ -94,7 +95,21 @@ function GroupLogo({
 /** The holder line of the system's header, from the Activity data (shared query). */
 export function SystemHolder({ mapId, solarSystemId }: { mapId: string; solarSystemId: number }) {
   const activity = useSystemActivity(mapId, solarSystemId);
-  return <SovereigntyLine intel={activity.data?.intel} />;
+  const standings = useStandingsQuery();
+  const held = activity.data?.intel.sovereignty?.kind === 'alliance';
+  return (
+    <>
+      <SovereigntyLine intel={activity.data?.intel} />
+      {held && standings.data?.missingScopes && (
+        <p className={styles.relink}>
+          <a href={eveLinkHref(typeof window === 'undefined' ? '/account' : window.location.pathname)}>
+            Link your characters again
+          </a>{' '}
+          to colour holders by your standings (contacts were not asked for when they were linked).
+        </p>
+      )}
+    </>
+  );
 }
 
 /** One line under the system's name: who holds it, with the logo; for unclaimed null-sec the region's holder. */
@@ -121,6 +136,13 @@ export function SovereigntyLine({ intel }: { intel: SystemActivityDto['intel'] |
             {sov.holder.name ?? 'an alliance ESI does not name yet'}
           </a>
           {!faction && sov.holder.ticker && <span className={styles.ticker}> [{sov.holder.ticker}]</span>}
+          {sov.corporation && (
+            <span className={styles.muted}>
+              {' '}
+              · claimed by {sov.corporation.name ?? 'a corporation'}
+              {sov.corporation.ticker && ` [${sov.corporation.ticker}]`}
+            </span>
+          )}
         </span>
       </p>
     );

@@ -1554,6 +1554,15 @@ export const routes = {
       scope: { resource: 'account', action: 'read' },
       response: dto.StandingsDto,
     }),
+    /** Sets the account's standing towards an alliance or corporation by hand (null: from contacts). */
+    setStanding: route({
+      method: 'PUT',
+      path: '/api/accounts/me/standings/:entityId',
+      auth: 'account',
+      scope: { resource: 'account', action: 'write' },
+      body: dto.SetStandingRequest,
+      response: dto.StandingsDto,
+    }),
     /** Sovereignty and kills of the last hour of the systems a public link shows (public data). */
     publicMap: route({
       method: 'GET',

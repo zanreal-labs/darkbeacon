@@ -28,7 +28,7 @@ import {
   type SystemLabelDto,
   type UniverseSystemDto,
 } from '@darkbeacon/shared';
-import { holderStanding, useMapIntel, useStandings } from '../lib/intel';
+import { holderStanding, useMapIntel, useRouteHubs, useStandings } from '../lib/intel';
 import type { MapPermissions } from '../lib/roles';
 import { useMe } from '../lib/session';
 import { track } from '../lib/telemetry';
@@ -182,6 +182,7 @@ export function MapCanvas({
   // A read-only view has intel only through its public link.
   const intel = useMapIntel(mapId, publicToken, !readOnly || publicToken !== undefined);
   const standings = useStandings(!readOnly);
+  const routeHubs = useRouteHubs(mapId, !readOnly);
 
   // The viewer's own character on the map: their main first, then any other one that is online.
   const myLocation = useMemo(() => {
@@ -235,10 +236,21 @@ export function MapCanvas({
   // Store -> React Flow, keeping what React Flow owns: measurements, selection, a drag in progress.
   useEffect(() => {
     const here = new Map<number, number>();
+    const pilotsHere = new Map<
+      number,
+      Array<{ id: number; name: string; ship: string | null; mine: boolean }>
+    >();
+    const own = new Set(me.data?.characters.map((c) => c.id));
     for (const c of state.characters.values()) {
-      if (c.online && c.solarSystemId !== null)
+      if (c.online && c.solarSystemId !== null) {
         here.set(c.solarSystemId, (here.get(c.solarSystemId) ?? 0) + 1);
+        const list = pilotsHere.get(c.solarSystemId) ?? [];
+        list.push({ id: c.characterId, name: c.name, ship: c.shipName, mine: own.has(c.characterId) });
+        pilotsHere.set(c.solarSystemId, list);
+      }
     }
+    for (const list of pilotsHere.values())
+      list.sort((a, b) => Number(b.mine) - Number(a.mine) || a.name.localeCompare(b.name));
     const hubs = exitHubs(state.exits);
     const tagById = new Map(labels.map((l) => [l.id, l]));
     setNodes((prev) => {
@@ -267,7 +279,13 @@ export function MapCanvas({
             intel: intel.systems.get(system.solarSystemId),
             standing: holderStanding(intel.systems.get(system.solarSystemId), standings),
             pulse: intel.pulses.has(system.solarSystemId),
-            killList: !readOnly,
+            withAccount: !readOnly,
+            pilots: pilotsHere.get(system.solarSystemId) ?? [],
+            routeHub: routeHubs.map.has(system.solarSystemId)
+              ? 'map'
+              : routeHubs.personal.has(system.solarSystemId)
+                ? 'personal'
+                : null,
           },
         };
       });
@@ -276,6 +294,8 @@ export function MapCanvas({
     intel,
     standings,
     readOnly,
+    routeHubs,
+    me.data,
     state.systems,
     state.characters,
     state.exits,

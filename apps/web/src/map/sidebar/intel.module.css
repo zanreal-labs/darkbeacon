@@ -37,6 +37,16 @@
   text-decoration: underline;
 }
 
+.relink {
+  margin: 4px 0 0;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+}
+
+.relink a {
+  color: var(--dbk-color-accent-text);
+}
+
 /* ---- Activity ---- */
 
 .activity {

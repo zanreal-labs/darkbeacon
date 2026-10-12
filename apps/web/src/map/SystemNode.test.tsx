@@ -148,13 +148,13 @@ describe('SystemNode', () => {
 
   it('counts pilots on the right, in the accent colour where I am, with no portraits', () => {
     const { container, unmount } = renderNode({ characters: 3, mine: true });
-    const pilots = screen.getByTitle('3 tracked pilots here, you among them');
+    const pilots = screen.getByLabelText('3 tracked pilots here, you among them');
     expect(pilots.textContent).toBe('3');
     expect(pilots.dataset.mine).toBe('true');
     expect(container.querySelector('img')).toBeNull();
     unmount();
     renderNode({ characters: 1 });
-    expect(screen.getByTitle('1 tracked pilot here').dataset.mine).toBeUndefined();
+    expect(screen.getByLabelText('1 tracked pilot here').dataset.mine).toBeUndefined();
   });
 
   it('copies the bookmark label on click', async () => {
@@ -211,7 +211,7 @@ describe('SystemNode', () => {
     expect(quiet.textContent).toBe('3');
     expect(quiet.dataset.heat).toBe('active');
     // Kills come first, the pilot count stays last on the row.
-    expect(quiet.nextElementSibling?.getAttribute('title')).toBe('2 tracked pilots here');
+    expect(quiet.nextElementSibling?.getAttribute('aria-label')).toBe('2 tracked pilots here');
     unmount();
     const busy = renderNode({ intel: intel({ kills1h: 7 }) });
     expect(screen.getByRole('button', { name: '7 kills in the last hour' }).dataset.heat).toBe('hot');
@@ -306,5 +306,29 @@ describe('SystemNode', () => {
     marked.unmount();
     renderNode({ info: nullSec, intel: held, standing: 10 });
     expect(screen.getByText('[CONDI]').dataset.standing).toBe('excellent');
+  });
+
+  it('marks notes and route hubs in the corner and lists the pilots behind the count on hover', async () => {
+    const user = userEvent.setup();
+    const { container } = renderNode({
+      system: systemFixture(31000001, { description: 'Hostile POS on planet 3' }),
+      routeHub: 'map',
+      characters: 2,
+      mine: true,
+      pilots: [
+        { id: 1, name: 'Me Myself', ship: 'Loki', mine: true },
+        { id: 2, name: 'Other Pilot', ship: null, mine: false },
+      ],
+    });
+    expect(container.querySelector('[data-notes]')!.getAttribute('title')).toBe(
+      'Notes: Hostile POS on planet 3',
+    );
+    expect(container.querySelector('[data-hub="map"]')!.getAttribute('title')).toBe(
+      "One of the map's route hubs",
+    );
+    await user.hover(screen.getByLabelText('2 tracked pilots here, you among them'));
+    const list = await screen.findByRole('list', { name: 'Pilots here' });
+    expect(list.textContent).toContain('Me MyselfLoki');
+    expect(list.textContent).toContain('ship unknown');
   });
 });

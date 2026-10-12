@@ -51,6 +51,7 @@ export interface IntelTables {
     updated_at: number;
   };
   intel_state: { key: string; value: string };
+  intel_standing_overrides: { account_id: string; entity_id: number; standing: number; updated_at: number };
 }
 
 /** Rows per statement: well under SQLite's variable limit for every table here. */
@@ -440,6 +441,38 @@ export class KyselyIntelRepository implements IntelRepository {
 
   async pruneNames(before: number): Promise<void> {
     await this.db.deleteFrom('intel_names').where('updated_at', '<', before).execute();
+  }
+
+  // ---- Standing overrides ----------------------------------------------------------------------
+
+  async standingOverrides(accountId: string): Promise<Map<number, number>> {
+    const rows = await this.db
+      .selectFrom('intel_standing_overrides')
+      .select(['entity_id', 'standing'])
+      .where('account_id', '=', accountId)
+      .execute();
+    return new Map(rows.map((r) => [Number(r.entity_id), Number(r.standing)]));
+  }
+
+  async setStandingOverride(
+    accountId: string,
+    entityId: number,
+    standing: number | null,
+    at: number,
+  ): Promise<void> {
+    if (standing === null) {
+      await this.db
+        .deleteFrom('intel_standing_overrides')
+        .where('account_id', '=', accountId)
+        .where('entity_id', '=', entityId)
+        .execute();
+      return;
+    }
+    await this.db
+      .insertInto('intel_standing_overrides')
+      .values({ account_id: accountId, entity_id: entityId, standing, updated_at: at })
+      .onConflict((oc) => oc.columns(['account_id', 'entity_id']).doUpdateSet({ standing, updated_at: at }))
+      .execute();
   }
 
   // ---- State -----------------------------------------------------------------------------------

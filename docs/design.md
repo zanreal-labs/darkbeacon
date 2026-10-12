@@ -146,6 +146,8 @@ and danger, `status-warning` amber for pings and stars, `status-friendly` green 
   towards it), or the faction's short name in NPC null-sec (`Sansha`); never in wormholes, high- or
   low-sec. Full names are in its tooltip.
 - A new kill rings the node once, softly (no badge that stays; none with reduced motion).
+- The same corner marks notes (a speech bubble) and route hubs (a pin, the map's or mine); hovering
+  the pilot count lists the pilots and their ships, mine first.
 - Nothing else on the node: notes and the rest are in the tooltip and the side panel. Every
   element of rows 1 and 2 is in the invisible sizers, so every node keeps the same width.
 - Above the node, left-aligned with its left edge, in this order: the system's Labels (`WH1`, plain

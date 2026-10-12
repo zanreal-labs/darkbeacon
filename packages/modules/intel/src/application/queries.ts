@@ -191,8 +191,11 @@ export class IntelQueries {
       ),
       ...[...unheld.values()].map((h) => h.allianceId),
     ];
+    // Tickers: the holding alliances and the corporations that claimed for them.
     const alliances = [
-      ...[...shown.values()].flatMap((c) => (c.kind === 'alliance' ? [c.allianceId] : [])),
+      ...[...shown.values()].flatMap((c) =>
+        c.kind === 'alliance' ? [c.allianceId, ...(c.corporationId ? [c.corporationId] : [])] : [],
+      ),
       ...[...unheld.values()].map((h) => h.allianceId),
     ];
     const book = holders.length > 0 ? await this.deps.names.lookup(holders, alliances) : new Map();
