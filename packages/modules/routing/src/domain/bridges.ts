@@ -9,6 +9,12 @@
 /** The SDE type id of the Ansiblex Jump Gate. */
 export const ANSIBLEX_TYPE_ID = 35841;
 
+/**
+ * How far apart two linked Ansiblexes may stand: "within 5 light years", as the conduit
+ * generator's description in the SDE (type 35913) says.
+ */
+export const ANSIBLEX_RANGE_LY = 5;
+
 /** A pair of system names read from one line. */
 export interface BridgeLine {
   /** 1-based line number in the paste. */

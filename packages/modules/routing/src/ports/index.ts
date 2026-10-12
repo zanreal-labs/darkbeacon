@@ -115,6 +115,11 @@ export interface CorporationStructures {
   ansiblexes(characterId: number): Promise<CorporationAnsiblex[]>;
 }
 
+/** Distances between known-space systems (static data); null when one has no position. */
+export interface SystemDistances {
+  lightYears(a: number, b: number): number | null;
+}
+
 /** Who holds sovereignty over a system (ESI sovereignty map); null when nobody or not known. */
 export interface SovereigntyLookup {
   holderOf(solarSystemId: number): number | null;

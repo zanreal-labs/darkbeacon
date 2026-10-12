@@ -8,6 +8,7 @@ import {
   EsiCorporationStructures,
   EsiSovereignty,
   HttpEveScoutClient,
+  KspaceDistances,
   StaticInvasionLookup,
 } from './external-adapters.js';
 
@@ -111,43 +112,43 @@ describe('ESI', () => {
     ).rejects.toBeInstanceOf(EsiStructuresError);
   });
 
-  it('keeps the sovereignty map for an hour', async () => {
-    let reads = 0;
+  it('reads who holds each system and keeps it for an hour', async () => {
+    const urls: string[] = [];
     const clock = new ManualClock();
     const sov = new EsiSovereignty({
       userAgent: 'test',
       clock,
-      fetch: (async () => {
-        reads++;
-        return json([
-          { system_id: 30004759, alliance_id: 1354830081 },
-          { system_id: 30000142, faction_id: 500001 },
-        ]);
+      fetch: (async (url: string, init?: RequestInit) => {
+        urls.push(`${url} ${new Headers(init?.headers).get('x-compatibility-date')}`);
+        return json({
+          solar_systems: [
+            {
+              solar_system_id: 30004759,
+              claim: { alliance: { alliance_id: 1900696668, corporation_id: 1 } },
+            },
+            { solar_system_id: 30000001, claim: { faction: { faction_id: 500007 } } },
+            { solar_system_id: 30000002, claim: { unclaimed: {} } },
+          ],
+        });
       }) as typeof fetch,
     });
     expect(sov.holderOf(30004759)).toBeNull();
     expect(await sov.refresh()).toBe(true);
     expect(await sov.refresh()).toBe(false);
-    expect(sov.holderOf(30004759)).toBe(1354830081);
-    expect(sov.holderOf(30000142)).toBeNull();
+    expect(sov.holderOf(30004759)).toBe(1900696668);
+    expect(sov.holderOf(30000001)).toBeNull();
+    expect(urls).toEqual(['https://esi.evetech.net/sovereignty/systems 2026-08-18']);
     clock.advance(60 * 60_000);
     expect(await sov.refresh()).toBe(true);
-    expect(reads).toBe(2);
   });
 
-  it('falls back to the sovereignty hubs when the map does not answer', async () => {
-    const sov = new EsiSovereignty({
-      userAgent: 'test',
-      clock: new ManualClock(),
-      fetch: (async (url: string) =>
-        url.endsWith('/sovereignty/map')
-          ? json({ error: 'Page not found' }, { status: 404 })
-          : json([
-              { solar_system_id: 30004759, alliance_id: 1354830081, structure_type_id: 32458 },
-            ])) as typeof fetch,
-    });
-    expect(await sov.refresh()).toBe(true);
-    expect(sov.holderOf(30004759)).toBe(1354830081);
+  it('measures light years between known-space systems', () => {
+    const distances = KspaceDistances.load();
+    // T5ZI-S and 1DQ1-A (Delve) are 1.4 ly apart, PR-8CA and 1DQ1-A 5.6 ly, Jita and 1DQ1-A 51 ly.
+    expect(distances.lightYears(30004735, 30004759)).toBeCloseTo(1.4, 1);
+    expect(distances.lightYears(30004711, 30004759)).toBeCloseTo(5.63, 1);
+    expect(distances.lightYears(30000142, 30004759)).toBeGreaterThan(5);
+    expect(distances.lightYears(30000142, 31000005)).toBeNull();
   });
 });
 

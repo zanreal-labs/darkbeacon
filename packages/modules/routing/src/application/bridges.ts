@@ -14,7 +14,13 @@ import {
   type UnitOfWork,
 } from '@darkbeacon/core';
 import type { BridgeDto, ImportBridgesResultDto, PasteBridgesRequest } from '@darkbeacon/shared';
-import { EsiStructuresError, farSideOf, parseBridgeLines, type UnreadableLine } from '../domain/bridges.js';
+import {
+  ANSIBLEX_RANGE_LY,
+  EsiStructuresError,
+  farSideOf,
+  parseBridgeLines,
+  type UnreadableLine,
+} from '../domain/bridges.js';
 import { isWormholeSpace } from '../domain/modes.js';
 import type { RoutedEdge } from '../domain/options.js';
 import type {
@@ -25,6 +31,7 @@ import type {
   PilotDirectory,
   RouteEdgeSource,
   RoutingUniverse,
+  SystemDistances,
 } from '../ports/index.js';
 
 export interface BridgeAdminDeps {
@@ -37,6 +44,8 @@ export interface BridgeAdminDeps {
   uow: UnitOfWork;
   clock: Clock;
   newId(): string;
+  /** Positions of known space, for the Ansiblex range; without them the range is not checked. */
+  distances?: SystemDistances;
 }
 
 /** Unknown names reported back, at most. */
@@ -244,6 +253,10 @@ export class BridgeAdmin {
       // Ansiblexes need sovereignty, which only null-sec has.
       if (isWormholeSpace(system) || system.whClass === 25 || system.security > 0)
         return `${system.name} is not in null-sec, where Ansiblexes stand`;
+    }
+    const ly = this.deps.distances?.lightYears(a, b) ?? null;
+    if (ly !== null && ly > ANSIBLEX_RANGE_LY) {
+      return `${ly.toFixed(1)} ly apart; an Ansiblex reaches ${ANSIBLEX_RANGE_LY} ly`;
     }
     return null;
   }

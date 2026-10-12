@@ -46,6 +46,7 @@ import {
   EsiCorporationStructures,
   EsiSovereignty,
   HttpEveScoutClient,
+  KspaceDistances,
   NO_PINGS,
   StaticInvasionLookup,
   StaticStationCatalog,
@@ -388,7 +389,19 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
         events: EventLog,
         uow: UnitOfWork,
         clock: Clock,
-      ) => new BridgeAdmin({ bridges, universe, structures, pilots, access, events, uow, clock, newId }),
+      ) =>
+        new BridgeAdmin({
+          bridges,
+          universe,
+          structures,
+          pilots,
+          access,
+          events,
+          uow,
+          clock,
+          newId,
+          distances: KspaceDistances.load(),
+        }),
       inject: [
         BRIDGE_REPOSITORY,
         UNIVERSE_CATALOG,

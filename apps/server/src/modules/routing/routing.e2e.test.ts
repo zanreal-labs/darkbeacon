@@ -201,21 +201,25 @@ describeEachDialect('routing and connections over HTTP', (t) => {
       (await request<UniverseSystemDto[]>('GET', `/api/universe/systems?q=${name}&limit=1`, 'alice')).body[0]!
         .id;
     const dq = await idOf('1DQ1-A');
-    const ualx = await idOf('UALX-3');
+    const t5 = await idOf('4O-239');
 
     const paste = await request<ImportBridgesResultDto>('POST', `/api/maps/${mapId}/bridges/paste`, 'alice', {
-      text: '1DQ1-A » UALX-3 - Home Bridge\nJita » Perimeter\nNowhere » 1DQ1-A\nUALX-3 -> 1DQ1-A',
+      text: '4O-239 » 1DQ1-A - Home Bridge\nJita » Perimeter\nNowhere » 1DQ1-A\n1DQ1-A -> 4O-239\nPR-8CA » 1DQ1-A',
     });
     expect(paste.status).toBe(200);
     expect(paste.body).toMatchObject({ added: 1, known: 0, unknownSystems: ['Nowhere'] });
-    expect(paste.body.unreadable).toMatchObject([{ line: 2, reason: expect.stringContaining('null-sec') }]);
+    // Jita is high-sec; PR-8CA is 5.6 ly from 1DQ1-A, past an Ansiblex's 5 ly.
+    expect(paste.body.unreadable).toMatchObject([
+      { line: 2, reason: expect.stringContaining('null-sec') },
+      { line: 5, reason: '5.6 ly apart; an Ansiblex reaches 5 ly' },
+    ]);
     expect(paste.body.bridges).toMatchObject([
-      { a: { name: '1DQ1-A' }, b: { name: 'UALX-3' }, source: 'paste' },
+      { a: { name: '4O-239' }, b: { name: '1DQ1-A' }, source: 'paste' },
     ]);
     expect(await events('routes.bridges_changed')).toHaveLength(1);
 
     const route = (query: string) =>
-      request<RouteDto>('GET', `/api/maps/${mapId}/route?from=${dq}&to=${ualx}${query}`, 'alice');
+      request<RouteDto>('GET', `/api/maps/${mapId}/route?from=${dq}&to=${t5}${query}`, 'alice');
     expect((await route('')).body).toMatchObject({
       jumps: 1,
       steps: [{}, { via: 'bridge', edge: 'ansiblex' }],

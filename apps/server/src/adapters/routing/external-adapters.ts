@@ -12,8 +12,16 @@ import {
   type PingTargets,
   type SovereigntyLookup,
   type StationCatalog,
+  type SystemDistances,
 } from '@darkbeacon/routing';
-import { loadInvasionData, loadStationData, type InvasionData, type StationData } from '@darkbeacon/sde';
+import {
+  loadInvasionData,
+  loadKspaceData,
+  loadStationData,
+  type InvasionData,
+  type KspaceData,
+  type StationData,
+} from '@darkbeacon/sde';
 import type { StationDto } from '@darkbeacon/shared';
 import { ESI_COMPATIBILITY_DATE } from '../tracking/http-esi-gateway.js';
 
@@ -125,9 +133,10 @@ export class HttpEveScoutClient implements EveScoutClient {
 }
 
 /**
- * Sovereignty holders from ESI's public `GET /sovereignty/map`, read again every hour. When the
- * map does not answer (ESI has answered 404 for it since 2026-10), the alliances owning the
- * sovereignty hubs (`GET /sovereignty/structures`) stand in for the holders.
+ * Sovereignty holders from ESI's public `GET /sovereignty/systems` (the claim of every system: an
+ * alliance, a faction or none), read again every hour. It replaced `/sovereignty/map` and
+ * `/sovereignty/structures`, which answer 404 from compatibility date 2026-05-19; ESI caches it
+ * for 300 s.
  */
 export class EsiSovereignty implements SovereigntyLookup {
   private holders = new Map<number, number>();
@@ -142,28 +151,49 @@ export class EsiSovereignty implements SovereigntyLookup {
   /** Reads the holders when the copy is older than an hour; true when it was read. */
   async refresh(maxAgeMs = 60 * 60_000): Promise<boolean> {
     if (this.options.clock.now() - this.readAt < maxAgeMs) return false;
-    const map = await this.read<{ system_id: number; alliance_id?: number }>('/sovereignty/map');
-    if (map) {
-      this.holders = new Map(
-        map.flatMap((r) => (r.alliance_id ? [[r.system_id, r.alliance_id] as const] : [])),
-      );
-    } else {
-      const hubs = await this.read<{ solar_system_id: number; alliance_id: number }>(
-        '/sovereignty/structures',
-      );
-      if (!hubs) throw new Error('ESI answered neither the sovereignty map nor its structures');
-      this.holders = new Map(hubs.map((r) => [r.solar_system_id, r.alliance_id] as const));
-    }
+    const response = await (this.options.fetch ?? fetch)(
+      `${this.options.baseUrl ?? ESI}/sovereignty/systems`,
+      { headers: headers(this.options.userAgent), signal: AbortSignal.timeout(20_000) },
+    );
+    if (!response.ok) throw new Error(`ESI answered ${response.status} for the sovereignty of systems`);
+    const body = (await response.json()) as {
+      solar_systems?: Array<{ solar_system_id: number; claim?: { alliance?: { alliance_id?: number } } }>;
+    };
+    this.holders = new Map(
+      (body.solar_systems ?? []).flatMap((s) => {
+        const alliance = s.claim?.alliance?.alliance_id;
+        return alliance ? [[s.solar_system_id, alliance] as const] : [];
+      }),
+    );
     this.readAt = this.options.clock.now();
     return true;
   }
+}
 
-  private async read<T>(path: string): Promise<T[] | null> {
-    const response = await (this.options.fetch ?? fetch)(`${this.options.baseUrl ?? ESI}${path}`, {
-      headers: headers(this.options.userAgent),
-      signal: AbortSignal.timeout(20_000),
-    });
-    return response.ok ? ((await response.json()) as T[]) : null;
+/** Light years between known-space systems, from the jump planner's map (`data/kspace.json`). */
+export class KspaceDistances implements SystemDistances {
+  private readonly at = new Map<number, number>();
+
+  constructor(private readonly data: Pick<KspaceData, 'systems'>) {
+    data.systems.id.forEach((id, i) => this.at.set(id, i));
+  }
+
+  static load(): KspaceDistances {
+    try {
+      return new KspaceDistances(loadKspaceData());
+    } catch {
+      return new KspaceDistances({
+        systems: { id: [], name: [], region: [], security: [], x: [], y: [], z: [], flags: [] },
+      });
+    }
+  }
+
+  lightYears(a: number, b: number): number | null {
+    const i = this.at.get(a);
+    const j = this.at.get(b);
+    if (i === undefined || j === undefined) return null;
+    const { x, y, z } = this.data.systems;
+    return Math.hypot(x[i]! - x[j]!, y[i]! - y[j]!, z[i]! - z[j]!);
   }
 }
 
