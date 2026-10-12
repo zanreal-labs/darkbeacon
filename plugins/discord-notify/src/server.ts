@@ -5,6 +5,7 @@ import type {
   DiscordNotifySettings,
   DiscordNotifyStateDto,
   DomainEvent,
+  KillmailDto,
   MapSystemDto,
   PingDto,
   PluginContext,
@@ -28,7 +29,6 @@ import {
   type MapView,
   type Note,
 } from './describe.js';
-import { KillFeed } from './kills.js';
 import {
   DEFAULT_SETTINGS,
   inQuietHours,
@@ -37,7 +37,7 @@ import {
   URGENT_KINDS,
   withDefaults,
 } from './settings.js';
-import { INSTANCE, Store, type MapConfig, type OutboxRow, type Target } from './store.js';
+import { Store, type MapConfig, type OutboxRow, type Target } from './store.js';
 
 type Ports = 'maps' | 'universe' | 'db' | 'discord' | 'clock';
 type Ctx = PluginContext<Ports>;
@@ -48,8 +48,6 @@ export interface DiscordNotifyOptions {
   batchMs?: number;
   /** How often the outbox is looked at. */
   tickMs?: number;
-  /** Whether to read zKillboard (off in tests that do not care). */
-  kills?: boolean;
 }
 
 /** At most this many embeds per Discord message. */
@@ -72,6 +70,7 @@ const EVENTS = [
   'system.removed',
   'ping.created',
   'character.jumped',
+  'kill.reported',
   'map.removed',
 ];
 
@@ -106,7 +105,6 @@ export class DiscordNotify {
   private readonly names = new Map<number, string>();
   private timers: NodeJS.Timeout[] = [];
   private flushing: Promise<void> | null = null;
-  private kills: KillFeed | null = null;
 
   constructor(
     private readonly ctx: Ctx,
@@ -186,32 +184,11 @@ export class DiscordNotify {
     every(this.options.tickMs ?? 2_000, () => this.flush());
     every(60_000, () => this.digests());
     every(60 * 60_000, () => this.store.prune(this.now()));
-    if (this.options.kills !== false) {
-      let wanted = { value: false, at: -Infinity };
-      this.kills = new KillFeed({
-        fetch: this.fetch,
-        now: () => this.now(),
-        load: () => this.store.remember(INSTANCE, 'r2z2'),
-        save: (position) => this.store.memorize(INSTANCE, 'r2z2', position),
-        // Asked before every request; the answer is good for half a minute.
-        wanted: async () => {
-          if (this.now() - wanted.at > 30_000) {
-            const value = (await this.store.activeConfigs()).some((c) => c.settings.kinds.kills);
-            wanted = { value, at: this.now() };
-          }
-          return wanted.value;
-        },
-        onKill: (kill) => this.onKill(kill),
-        onError: (error) => ctx.logger.warn(`zKillboard: ${message(error)}`),
-      });
-      this.kills.start();
-    }
     ctx.logger.info('ready');
   }
 
   async stop(): Promise<void> {
     for (const timer of this.timers.splice(0)) clearInterval(timer);
-    await this.kills?.stop();
     await this.flushing;
   }
 
@@ -377,6 +354,22 @@ export class DiscordNotify {
         return [];
       case 'ping.created':
         return [rallyPing(view, event.data as PingDto, at)];
+      case 'kill.reported': {
+        // The core reports a kill on every map showing the system; the kind is opt-in per map.
+        const kill = event.data as KillmailDto;
+        if (!config.settings.kinds.kills || view.systems.get(kill.solarSystemId)?.visible !== true) return [];
+        return [
+          killInChain(view, {
+            killId: kill.id,
+            systemId: kill.solarSystemId,
+            victim: kill.victim.character?.name ?? null,
+            ship: kill.victim.ship?.name ?? null,
+            value: kill.value,
+            attackers: kill.attackerCount,
+            time: kill.time,
+          }),
+        ];
+      }
       case 'character.jumped': {
         const jump = event.data as { characterId: number; from: number; to: number };
         const inChain = (id: number) => view.systems.get(id)?.visible === true;
@@ -508,26 +501,6 @@ export class DiscordNotify {
         [wayHomeDigest(data.view, home.solarSystemId, exits, this.now())],
         this.now(),
       );
-    }
-  }
-
-  private async onKill(
-    kill: Parameters<typeof killInChain>[1] & { victimId: number | null; shipTypeId: number | null },
-  ) {
-    if (this.now() - kill.time > STALE_MS) return;
-    for (const config of await this.store.activeConfigs()) {
-      if (!config.settings.kinds.kills) continue;
-      const data = await this.mapData(config.mapId, 60_000);
-      if (data?.view.systems.get(kill.systemId)?.visible !== true) continue;
-      const names = await this.characterNames(
-        [kill.victimId, kill.shipTypeId].filter((id): id is number => id !== null),
-      );
-      const note = killInChain(data.view, {
-        ...kill,
-        victim: kill.victimId ? (names.get(kill.victimId) ?? null) : null,
-        ship: kill.shipTypeId ? (names.get(kill.shipTypeId) ?? null) : null,
-      });
-      await this.enqueue(config, [note], kill.time);
     }
   }
 
