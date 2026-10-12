@@ -13,9 +13,15 @@ export interface WebUpstream {
   readonly origin: string;
 }
 
-/** `/api` and everything below it belongs to Nest. */
+/** `/api` and everything below it belongs to Nest, and so does the MCP endpoint. */
 export function isApiPath(url: string): boolean {
-  return url === '/api' || url.startsWith('/api/') || url.startsWith('/api?');
+  return (
+    url === '/api' ||
+    url.startsWith('/api/') ||
+    url.startsWith('/api?') ||
+    url === '/mcp' ||
+    url.startsWith('/mcp?')
+  );
 }
 
 /** The realtime socket, handled by the Nest gateway. */

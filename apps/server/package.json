@@ -17,6 +17,7 @@
     "@nestjs/platform-ws": "^12.1.2",
     "@nestjs/websockets": "^12.1.2",
     "@darkbeacon/access": "workspace:*",
+    "@darkbeacon/api-keys": "workspace:*",
     "@darkbeacon/audit": "workspace:*",
     "@darkbeacon/core": "workspace:*",
     "@darkbeacon/db": "workspace:*",
@@ -28,8 +29,11 @@
     "@darkbeacon/routing": "workspace:*",
     "@darkbeacon/sde": "workspace:*",
     "@darkbeacon/shared": "workspace:*",
+    "@darkbeacon/sharing": "workspace:*",
     "@darkbeacon/theme-sdk": "workspace:*",
     "@darkbeacon/tracking": "workspace:*",
+    "@modelcontextprotocol/server": "2.1.0",
+    "@scalar/api-reference": "1.72.1",
     "fastify": "^5.12.5",
     "kysely": "^0.29.6",
     "reflect-metadata": "^0.2.2",
@@ -39,6 +43,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "2.1.0",
     "@types/ws": "^8.18.2"
   }
 }

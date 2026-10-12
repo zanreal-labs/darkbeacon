@@ -123,6 +123,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
     SystemUseCases,
     ConnectionUseCases,
     SignatureUseCases,
+    ConnectionIntelQuery,
   ],
 })
 export class MappingModule implements OnModuleInit {
