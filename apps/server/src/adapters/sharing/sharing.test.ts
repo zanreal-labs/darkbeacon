@@ -346,6 +346,45 @@ describeEachDialect('sharing and merged chains', (t) => {
     });
   });
 
+  it('shares Labels by name and the custom label with the labels scope only, and writes them back by name', async () => {
+    await env.systems.update(alice, corpA.id, c5, { systemLabelIds: ['wh1'], customLabel: 'bait' });
+    // The alliance names its Labels its own way: WH1 matches by name, B is its own.
+    await env.maps.setSystemLabels(carol, alliance.id, [
+      { id: 'al-1', name: 'wh1', description: '' },
+      { id: 'al-b', name: 'B', description: '' },
+    ]);
+    await share(corpA, alice, 'read-write', ['topology']);
+    const c5Of = async () => (await view(alliance.id)).systems.find((s) => s.solarSystemId === c5)!;
+    expect(await c5Of()).toMatchObject({ systemLabelIds: [], customLabel: null });
+    expect(JSON.stringify((await env.events(alliance.id)).map((e) => e.data))).not.toContain('bait');
+    await expect(
+      env.writes.updateSystem(dave, alliance.id, c5, { customLabel: 'scout' }),
+    ).rejects.toMatchObject({ code: 'forbidden', message: expect.stringMatching(/labels/) });
+
+    const offered = (await env.sharing.list(alice, corpA.id)).outgoing[0]!;
+    await env.sharing.update(alice, corpA.id, offered.id, { scopes: ['topology', 'labels'] });
+    await env.settle();
+    expect(await c5Of()).toMatchObject({ systemLabelIds: ['al-1'], customLabel: 'bait' });
+
+    // Written back by name: Corp A has no B, so only WH1 stays on there.
+    env.clock.advance(1_000);
+    await env.writes.updateSystem(dave, alliance.id, c5, {
+      systemLabelIds: ['al-b', 'al-1'],
+      customLabel: 'scout',
+    });
+    await env.settle();
+    expect(await env.ports.systems.find(corpA.id, c5)).toMatchObject({
+      systemLabelIds: ['wh1'],
+      customLabel: 'scout',
+    });
+    expect(await c5Of()).toMatchObject({ systemLabelIds: ['al-1'], customLabel: 'scout' });
+
+    // Corp A renames its WH1: the alliance has no Label of that name, so it shows none.
+    await env.maps.setSystemLabels(alice, corpA.id, [{ id: 'wh1', name: 'X', description: '' }]);
+    await env.settle();
+    expect(await c5Of()).toMatchObject({ systemLabelIds: [], customLabel: 'scout' });
+  });
+
   it('shares tracked characters only with the characters scope', async () => {
     env.tracked.set(corpA.id, [
       {

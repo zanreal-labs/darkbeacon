@@ -169,6 +169,11 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
     entity: () => ({ kind: 'labels', id: 'map' }),
     state: (d) => ({ labels: d.labels }),
   },
+  'system_labels.changed': {
+    op: 'update',
+    entity: () => ({ kind: 'systemLabels', id: 'map' }),
+    state: (d) => ({ systemLabels: d.systemLabels }),
+  },
   'map.share.offered': { ...SHARE, op: 'create' },
   'map.share.accepted': { ...SHARE, op: 'update' },
   'map.share.changed': { ...SHARE, op: 'update' },

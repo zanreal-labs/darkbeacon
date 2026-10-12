@@ -2,7 +2,14 @@ import { z } from 'zod';
 import { AccessRuleDto } from './dto/access.js';
 import { EveId, Id, Timestamp } from './dto/common.js';
 import { InstanceRole } from './dto/identity.js';
-import { ConnectionDto, LabelDto, MapDto, MapSystemDto, SignatureDto } from './dto/mapping.js';
+import {
+  ConnectionDto,
+  LabelDto,
+  MapDto,
+  MapSystemDto,
+  SignatureDto,
+  SystemLabelDto,
+} from './dto/mapping.js';
 import { PluginDto } from './dto/plugins.js';
 import { HubDto, MapExitDto } from './dto/routing.js';
 import { McpMode } from './dto/publishing.js';
@@ -50,6 +57,7 @@ export const EVENT_DATA_SCHEMAS: Record<EventType, z.ZodType> = {
   'map.created': MapDto,
   'map.removed': z.object({ id: Id }),
   'labels.changed': z.object({ labels: z.array(LabelDto) }),
+  'system_labels.changed': z.object({ systemLabels: z.array(SystemLabelDto) }),
   'map.share.offered': MapShareDto,
   'map.share.accepted': MapShareDto,
   'map.share.changed': MapShareDto,

@@ -545,6 +545,16 @@ export const routes = {
       body: dto.SetLabelsRequest,
       response: z.array(dto.LabelDto),
     }),
+    /** The map's Labels (WH1, WH2...) in order (manager+); published as `system_labels.changed`. */
+    setSystemLabels: route({
+      method: 'PUT',
+      path: '/api/maps/:mapId/system-labels',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'write' },
+      mapRole: 'manager',
+      body: dto.SetSystemLabelsRequest,
+      response: z.array(dto.SystemLabelDto),
+    }),
     /** The map's default bookmark label template (manager+); published as `map.settings_changed`. */
     setBookmarkTemplate: route({
       method: 'PUT',

@@ -85,6 +85,7 @@ export const TELEMETRY_SERVER_EVENTS = {
   connection_added: z.strictObject({ type: ConnectionType, source: ChangeSource }),
   connection_updated: z.strictObject({ field: ConnectionField, source: ChangeSource }),
   labels_changed: none,
+  system_labels_changed: none,
   ping_created: none,
   access_rule_added: z.strictObject({ subject: AccessSubjectKind }),
   webhook_created: none,

@@ -3,7 +3,14 @@ import type { DomainEvent } from '@darkbeacon/core';
 import type { AccessRuleDto } from './dto/access.js';
 import type { InstanceRole } from './dto/identity.js';
 import type { PluginDto } from './dto/plugins.js';
-import type { ConnectionDto, LabelDto, MapDto, MapSystemDto, SignatureDto } from './dto/mapping.js';
+import type {
+  ConnectionDto,
+  LabelDto,
+  MapDto,
+  MapSystemDto,
+  SignatureDto,
+  SystemLabelDto,
+} from './dto/mapping.js';
 import type { HubDto, MapExitDto } from './dto/routing.js';
 import type { CharacterPresenceDto } from './dto/tracking.js';
 import type { MapShareDto, MapSourceDto } from './dto/sharing.js';
@@ -71,7 +78,10 @@ export interface EventPayloads {
   'map.created': MapDto;
   /** Last event of a map stream: the map and everything on it is gone. */
   'map.removed': { id: string };
+  /** The map's Tags were replaced (manager+). */
   'labels.changed': { labels: LabelDto[] };
+  /** The map's Labels (WH1, WH2...) were replaced (manager+). */
+  'system_labels.changed': { systemLabels: SystemLabelDto[] };
   /** On the source's and the target's stream: a source admin offered the map to another map. */
   'map.share.offered': MapShareDto;
   /** On both streams: the target's admin accepted; the target merges the source from now on. */
@@ -144,6 +154,7 @@ export const EVENT_TYPES = [
   'map.created',
   'map.removed',
   'labels.changed',
+  'system_labels.changed',
   'map.share.offered',
   'map.share.accepted',
   'map.share.changed',

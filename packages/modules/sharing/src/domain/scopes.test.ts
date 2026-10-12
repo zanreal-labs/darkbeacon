@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { shareScope, type ChainEntry, type ShareScope, type StampedValue } from '@darkbeacon/shared';
-import { refusedFields } from './commands.js';
+import { labelIdsByName, labelNamesById, refusedFields, systemFields } from './commands.js';
 import { effectiveScopes, FIELD_SCOPES, normalizeScopes, projectEntry } from './scopes.js';
 
 const s = (v: unknown): StampedValue => ({ v, at: 1 });
@@ -89,5 +89,42 @@ describe('share scopes', () => {
     expect(refusedFields('signature', { code: 'ABC-124' }, ['topology'])).toEqual(['code']);
     expect(refusedFields('system', { locked: true }, [...shareScope.options])).toEqual(['locked']);
     expect(refusedFields('system', { locked: true }, 'all')).toEqual([]);
+  });
+
+  it('shares Labels and the custom label under "labels"; Tags never leave the map', () => {
+    expect(FIELD_SCOPES.system).toMatchObject({
+      systemLabels: 'labels',
+      customLabel: 'labels',
+      labelIds: 'local',
+    });
+    const entry: ChainEntry = {
+      kind: 'system',
+      key: '1',
+      state: 'present',
+      born: 1,
+      fields: { systemLabels: s(['WH1']), customLabel: s('bait'), labelIds: s(['t1']), status: s('home') },
+    };
+    const fields = (scopes: ShareScope[]) =>
+      Object.keys((projectEntry(entry, scopes) as Extract<ChainEntry, { state: 'present' }>).fields).sort();
+    expect(fields(['topology', 'intel'])).toEqual(['status']);
+    expect(fields(['topology', 'labels'])).toEqual(['customLabel', 'systemLabels']);
+    expect(
+      refusedFields('system', { systemLabels: ['WH1'], customLabel: 'x' }, ['topology', 'intel']),
+    ).toEqual(['systemLabels', 'customLabel']);
+  });
+
+  it('writes Labels back by name, and reads names as the map’s own Labels', () => {
+    const mine = [
+      { id: 'wh1', name: 'WH1' },
+      { id: 'x', name: 'A' },
+    ];
+    expect(labelNamesById(['x', 'wh1', 'gone'], mine)).toEqual(['WH1', 'A']);
+    // Any case; names this map has no Label of drop out; the list's order wins.
+    expect(labelIdsByName(['a', 'WH9', 'wh1', 7], mine)).toEqual(['wh1', 'x']);
+    expect(
+      systemFields({ systemLabelIds: ['x'], customLabel: 'bait' }, (ids) => labelNamesById(ids, mine)),
+    ).toEqual({ systemLabels: ['A'], customLabel: 'bait' });
+    // Without names a change of Labels cannot cross.
+    expect(systemFields({ systemLabelIds: ['x'] })).toEqual({});
   });
 });

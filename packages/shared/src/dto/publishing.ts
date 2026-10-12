@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { shareScope } from '../share-scope.js';
 import { Id, Timestamp } from './common.js';
-import { ConnectionDto, LabelDto, MapSystemDto, SignatureDto, Slug } from './mapping.js';
+import { ConnectionDto, LabelDto, MapSystemDto, SignatureDto, Slug, SystemLabelDto } from './mapping.js';
 import { MapExitDto } from './routing.js';
 import { CharacterPresenceDto } from './tracking.js';
 import { UniverseSystemDto } from './universe.js';
@@ -48,6 +48,7 @@ export const PublicMapDto = z.object({
   id: Id,
   name: z.string(),
   labels: z.array(LabelDto),
+  systemLabels: z.array(SystemLabelDto).default([]),
   scopes: z.array(shareScope),
   noindex: z.boolean(),
 });

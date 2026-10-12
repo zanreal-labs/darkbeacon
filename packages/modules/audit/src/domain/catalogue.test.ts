@@ -20,6 +20,8 @@ const system = {
   status: 'unknown',
   description: '',
   labelIds: [],
+  systemLabelIds: [],
+  customLabel: null,
   locked: false,
   visible: true,
   createdAt: 1,
@@ -87,6 +89,7 @@ const map = {
   ownerAccountId: 'a',
   settings: { scopes: ['wormhole'] },
   labels: [],
+  systemLabels: [],
   createdAt: 1,
   updatedAt: 1,
 };
@@ -184,6 +187,10 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
   'labels.changed': {
     data: { labels: [{ id: 'l', name: 'Home', color: '#22aa66', description: '' }] },
     before: { labels: [] },
+  },
+  'system_labels.changed': {
+    data: { systemLabels: [{ id: 'wh1', name: 'WH1', description: '' }] },
+    before: { systemLabels: [] },
   },
   'map.share.offered': { data: share },
   'map.share.accepted': { data: { ...share, status: 'active', acceptedAt: 2 }, before: share },
