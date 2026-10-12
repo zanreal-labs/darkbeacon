@@ -74,7 +74,7 @@ export class MapUseCases extends MappingUseCases {
       if (next.slug !== current.slug) await this.ensureSlugFree(next.slug);
       next.updatedAt = this.ports.clock.now();
       await this.ports.maps.update(next);
-      events.add('map.settings_changed', next);
+      events.add('map.settings_changed', next, current);
       return next;
     });
   }
@@ -91,7 +91,7 @@ export class MapUseCases extends MappingUseCases {
       if (!changes(current, { labels })) return current.labels;
       const now = this.ports.clock.now();
       await this.ports.maps.update({ ...current, labels, updatedAt: now });
-      events.add('labels.changed', { labels });
+      events.add('labels.changed', { labels }, { labels: current.labels });
 
       const kept = new Set(labels.map((l) => l.id));
       for (const system of await this.ports.systems.list(mapId)) {
@@ -99,7 +99,7 @@ export class MapUseCases extends MappingUseCases {
         if (labelIds.length === system.labelIds.length) continue;
         const next = { ...system, labelIds, updatedAt: now };
         await this.ports.systems.update(next);
-        if (next.visible) events.add('system.updated', next);
+        if (next.visible) events.add('system.updated', next, system);
       }
       return labels;
     });
@@ -109,9 +109,9 @@ export class MapUseCases extends MappingUseCases {
   async remove(actor: Actor | null, mapId: string): Promise<void> {
     const who = await this.authorize(actor, mapId, 'admin');
     await this.write(who, mapId, async (events) => {
-      await this.load(mapId);
+      const current = await this.load(mapId);
       await this.ports.maps.delete(mapId);
-      events.add('map.removed', { id: mapId });
+      events.add('map.removed', { id: mapId }, current);
     });
   }
 

@@ -19,3 +19,5 @@ export const CHARACTER_TOKENS = 'CharacterTokenSource';
 export const AUTO_MAP_TARGET = 'AutoMapTarget';
 /** The web app's server behind the API (`WebUpstream | null`), for health checks. */
 export const WEB_UPSTREAM = 'WebUpstream';
+/** AuditScope: facts about the current change (channel, origin, character, revert) for the audit trail. */
+export const AUDIT_SCOPE = 'AuditScope';

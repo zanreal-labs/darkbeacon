@@ -76,7 +76,7 @@ export class SignatureUseCases extends MappingUseCases {
       }
       const next: Signature = { ...current, ...patch, updatedAt: this.ports.clock.now() };
       await this.ports.signatures.update(next);
-      events.add('signature.updated', next);
+      events.add('signature.updated', next, current);
       return next;
     });
   }
@@ -86,7 +86,11 @@ export class SignatureUseCases extends MappingUseCases {
     await this.write(who, mapId, async (events) => {
       const signature = await this.load(mapId, signatureId);
       await this.ports.signatures.delete(mapId, signatureId);
-      events.add('signature.removed', { id: signature.id, solarSystemId: signature.solarSystemId });
+      events.add(
+        'signature.removed',
+        { id: signature.id, solarSystemId: signature.solarSystemId },
+        signature,
+      );
     });
   }
 
@@ -139,14 +143,14 @@ export class SignatureUseCases extends MappingUseCases {
         if (!changes(current, patch)) continue;
         const next = { ...current, ...patch, updatedAt: now };
         await this.ports.signatures.update(next);
-        events.add('signature.updated', next);
+        events.add('signature.updated', next, current);
         result.updated++;
       }
 
       if (request.mode === 'replace' && parsed.signatures.length > 0) {
         for (const stale of existing.values()) {
           await this.ports.signatures.delete(mapId, stale.id);
-          events.add('signature.removed', { id: stale.id, solarSystemId });
+          events.add('signature.removed', { id: stale.id, solarSystemId }, stale);
           result.removed++;
         }
       }

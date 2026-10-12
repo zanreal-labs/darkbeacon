@@ -1,10 +1,14 @@
 import {
+  AUDIT_STREAM,
   NotFoundError,
   ValidationError,
+  actorRef,
+  newEvent,
   requireAccount,
   requireInstanceRole,
   type Actor,
 } from '@darkbeacon/core';
+import type { AuditEventPayloads, AuditEventType } from '@darkbeacon/shared';
 import type { PackageSource } from '../domain/source.js';
 import {
   DEFAULT_THEME_ID,
@@ -12,7 +16,7 @@ import {
   accountThemeScope,
   type InstalledTheme,
 } from '../domain/theme.js';
-import type { Clock, UnitOfWork } from '../ports/index.js';
+import type { Clock, EventLog, UnitOfWork } from '../ports/index.js';
 import type { PluginInstaller } from '../ports/plugin-repository.js';
 import type { ThemeRepository } from '../ports/theme-repository.js';
 
@@ -21,6 +25,8 @@ export interface ThemeAdminDeps {
   installer: PluginInstaller;
   uow: UnitOfWork;
   clock: Clock;
+  /** Theme changes are recorded on the audit stream. */
+  log: EventLog;
   /** Ids of the built-in themes (and the `system` preference): valid choices that packages cannot reuse. */
   builtInIds: readonly string[];
 }
@@ -65,7 +71,7 @@ export class ThemeAdmin {
   }
 
   async install(actor: Actor | null, source: PackageSource): Promise<InstalledTheme> {
-    requireInstanceRole(actor, 'admin');
+    const admin = requireInstanceRole(actor, 'admin');
     const staged = await this.deps.installer.stage(source);
     try {
       if (staged.kind !== 'theme')
@@ -77,7 +83,16 @@ export class ThemeAdmin {
         throw new ValidationError(`Unknown base theme "${staged.theme.extends}"`);
       }
       const theme: InstalledTheme = { ...staged.theme, installedAt: this.deps.clock.now() };
-      await this.deps.themes.save(theme);
+      const previous = await this.deps.themes.findById(theme.id);
+      await this.deps.uow.transaction(async () => {
+        await this.deps.themes.save(theme);
+        await this.record(
+          admin,
+          'theme.installed',
+          { id: theme.id, name: theme.name, version: theme.version },
+          previous ? { id: previous.id, name: previous.name, version: previous.version } : undefined,
+        );
+      });
       return theme;
     } finally {
       // Theme tokens live in the database; the package files are not needed afterwards.
@@ -86,19 +101,44 @@ export class ThemeAdmin {
   }
 
   async uninstall(actor: Actor | null, id: string): Promise<void> {
-    requireInstanceRole(actor, 'admin');
+    const admin = requireInstanceRole(actor, 'admin');
     await this.deps.uow.transaction(async () => {
-      if (!(await this.deps.themes.findById(id))) throw new NotFoundError('Theme');
+      const theme = await this.deps.themes.findById(id);
+      if (!theme) throw new NotFoundError('Theme');
       await this.deps.themes.delete(id);
       await this.deps.themes.clearChoicesOf(id);
+      await this.record(admin, 'theme.removed', { id }, { id, name: theme.name, version: theme.version });
     });
   }
 
   async setDefault(actor: Actor | null, themeId: string): Promise<ThemeOverview> {
-    requireInstanceRole(actor, 'admin');
+    const admin = requireInstanceRole(actor, 'admin');
     await this.requireTheme(themeId);
-    await this.deps.themes.setChoice(INSTANCE_THEME_SCOPE, themeId);
+    await this.deps.uow.transaction(async () => {
+      const previous = (await this.overview(actor)).defaultThemeId;
+      if (previous === themeId) return;
+      await this.deps.themes.setChoice(INSTANCE_THEME_SCOPE, themeId);
+      await this.record(admin, 'theme.default_changed', { themeId }, { themeId: previous });
+    });
     return this.overview(actor);
+  }
+
+  private async record<K extends AuditEventType>(
+    actor: Actor,
+    type: K,
+    data: AuditEventPayloads[K],
+    before?: unknown,
+  ): Promise<void> {
+    await this.deps.log.append([
+      newEvent({
+        stream: AUDIT_STREAM,
+        type,
+        actor: actorRef(actor),
+        data,
+        occurredAt: this.deps.clock.now(),
+        ...(before === undefined ? {} : { before }),
+      }),
+    ]);
   }
 
   /** The account's own theme; null goes back to the instance default. */

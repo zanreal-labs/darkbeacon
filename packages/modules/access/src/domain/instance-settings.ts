@@ -6,6 +6,7 @@ export const DEFAULT_INSTANCE_SETTINGS: InstanceSettings = {
   adminGuildId: null,
   adminRoleIds: [],
   webhooksToPrivateNetworks: false,
+  eventRetentionDays: null,
 };
 
 /** True when one of the account's guild roles is an admin role on the configured admin guild. */

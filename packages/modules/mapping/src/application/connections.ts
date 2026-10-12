@@ -70,7 +70,7 @@ export class ConnectionUseCases extends MappingUseCases {
       const next: Connection = { ...current, ...patch, updatedAt: now };
       if (patch.timeStatus) next.eolAt = patch.timeStatus === 'eol' ? (current.eolAt ?? now) : null;
       await this.ports.connections.update(next);
-      events.add('connection.updated', next);
+      events.add('connection.updated', next, current);
       return next;
     });
   }

@@ -2,8 +2,10 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Logger } from '@nestjs/common';
 import {
+  AUDIT_STREAM,
   ForbiddenError,
   INSTANCE_STREAM,
+  mapStream,
   parseStream,
   type Actor,
   type Clock,
@@ -28,6 +30,8 @@ import {
   type PluginManifest,
   type PluginPorts,
   type PluginRoute,
+  type PresenceReader,
+  type PresenceSummary,
   type ServerPlugin,
   type UniverseReader,
 } from '@darkbeacon/plugin-sdk';
@@ -54,6 +58,11 @@ import { runPluginMigrations } from './plugin-migrations.js';
 export class PluginPortProviders {
   universe: UniverseReader | null = null;
   mapSnapshot: ((mapId: string) => Promise<MapSnapshot | null>) | null = null;
+  /** Presence rooms of the realtime gateway (by stream `map:<id>`). */
+  presence: {
+    here(stream: string): PresenceSummary[];
+    onChange(listener: (stream: string, here: PresenceSummary[]) => void): () => void;
+  } | null = null;
 }
 
 export interface PluginHostDeps {
@@ -328,6 +337,32 @@ export class PluginHost {
         db: () => database.db(),
         transaction: (work) => database.transaction(work),
       }),
+      presence: () => this.presenceReader(loaded),
+    };
+  }
+
+  /** Who is on the maps the plugin is enabled on; nothing about the others. */
+  private presenceReader(loaded: LoadedPlugin): PresenceReader {
+    const rooms = () => {
+      if (!this.deps.providers.presence) throw new Error('No presence on this server');
+      return this.deps.providers.presence;
+    };
+    return {
+      here: (mapId) =>
+        Promise.resolve(isActiveOn(loaded.plugin, mapId) ? rooms().here(mapStream(mapId)) : []),
+      onChange: (handler) => {
+        const unsubscribe = rooms().onChange((stream, here) => {
+          const parsed = parseStream(stream);
+          if (loaded.stopped || parsed?.kind !== 'map' || !isActiveOn(loaded.plugin, parsed.id)) return;
+          try {
+            handler(parsed.id, here);
+          } catch (error) {
+            this.fail(loaded, error, 'handling presence');
+          }
+        });
+        loaded.cleanups.push(unsubscribe);
+        return unsubscribe;
+      },
     };
   }
 
@@ -360,6 +395,8 @@ export class PluginHost {
     }
     const unsubscribe = this.deps.bus.subscribe(
       async (event) => {
+        // The instance audit (sign-ins, settings...) is for instance admins, never plugins.
+        if (event.stream === AUDIT_STREAM) return;
         if (loaded.stopped || !isActiveOn(loaded.plugin, mapIdOf(event))) return;
         try {
           await handler(event);

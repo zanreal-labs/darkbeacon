@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /** Ports a plugin may ask for in its manifest; it receives only those. */
-export const PLUGIN_PORTS = ['maps', 'universe', 'events', 'notifier', 'clock', 'db'] as const;
+export const PLUGIN_PORTS = ['maps', 'universe', 'events', 'notifier', 'clock', 'db', 'presence'] as const;
 export type PluginPortName = (typeof PLUGIN_PORTS)[number];
 
 export const SDK_VERSION = '1.0.0';

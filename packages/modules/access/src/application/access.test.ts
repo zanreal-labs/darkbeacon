@@ -222,7 +222,14 @@ describe('InstanceSettingsService', () => {
 
   it('is admin-only, merges updates and reports the guilds that matter', async () => {
     const rules = new MemoryRules();
-    const service = new InstanceSettingsService({ settings: new MemorySettings(), rules, uow });
+    const log = new Events();
+    const service = new InstanceSettingsService({
+      settings: new MemorySettings(),
+      rules,
+      uow,
+      events: log,
+      clock: new ManualClock(),
+    });
     const admin: Actor = { kind: 'account', id: 'a', instanceRole: 'admin' };
 
     await expect(service.get(account('u'))).rejects.toMatchObject({ code: 'forbidden' });
@@ -230,13 +237,20 @@ describe('InstanceSettingsService', () => {
       adminGuildId: null,
       adminRoleIds: [],
       webhooksToPrivateNetworks: false,
+      eventRetentionDays: null,
     });
     expect(await service.update(admin, { adminGuildId: 'g1', adminRoleIds: ['r1', 'r1'] })).toEqual({
       adminGuildId: 'g1',
       adminRoleIds: ['r1'],
       webhooksToPrivateNetworks: false,
+      eventRetentionDays: null,
     });
     expect((await service.update(admin, {})).adminGuildId).toBe('g1');
+    // A change is recorded on the audit stream with what it was before; no change, no record.
+    expect(log.events.map((e) => [e.stream, e.type])).toEqual([['audit:instance', 'settings.changed']]);
+    expect(
+      (log.events[0] as unknown as { before: { adminGuildId: string | null } }).before.adminGuildId,
+    ).toBeNull();
 
     await rules.insert({
       id: 'x',

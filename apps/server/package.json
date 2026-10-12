@@ -17,6 +17,7 @@
     "@nestjs/platform-ws": "^12.1.2",
     "@nestjs/websockets": "^12.1.2",
     "@darkbeacon/access": "workspace:*",
+    "@darkbeacon/audit": "workspace:*",
     "@darkbeacon/core": "workspace:*",
     "@darkbeacon/db": "workspace:*",
     "@darkbeacon/identity": "workspace:*",

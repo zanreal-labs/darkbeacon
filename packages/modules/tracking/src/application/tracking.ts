@@ -52,13 +52,18 @@ export class SetTracking {
       );
 
       const base = { stream: mapStream(mapId), actor: actorRef(account), occurredAt: now };
+      const stored = await tracking.getPresence(input.characterId);
       if (!input.tracked) {
         await events.append([
-          newEvent({ ...base, type: 'character.untracked', data: { characterId: input.characterId } }),
+          newEvent({
+            ...base,
+            type: 'character.untracked',
+            data: { characterId: input.characterId },
+            before: stored ?? { characterId: input.characterId, name: owner.name },
+          }),
         ]);
         return;
       }
-      const stored = await tracking.getPresence(input.characterId);
       const presence: CharacterPresence = {
         ...(stored ?? blankPresence(input.characterId, now)),
         accountId: account.id,

@@ -1,7 +1,9 @@
-import { ServerMessage } from '@darkbeacon/shared';
+import { ServerMessage, type PresenceStatePatch } from '@darkbeacon/shared';
 
 export type StreamMessage = Extract<ServerMessage, { op: 'snapshot' | 'event' | 'subscribed' | 'error' }>;
 export type StreamListener = (message: StreamMessage) => void;
+export type PresenceMessage = Extract<ServerMessage, { op: 'presence' }>;
+export type PresenceListener = (message: PresenceMessage) => void;
 export type ConnectionStatus = 'connecting' | 'open' | 'closed';
 
 interface MinimalSocket {
@@ -35,6 +37,9 @@ const OPEN = 1;
 export class RealtimeClient {
   private socket: MinimalSocket | null = null;
   private readonly streams = new Map<string, StreamState>();
+  /** What this tab shares per map, re-sent after a reconnect (presence is not stored anywhere). */
+  private readonly presence = new Map<string, PresenceStatePatch>();
+  private readonly presenceListeners = new Map<string, Set<PresenceListener>>();
   private readonly statusListeners = new Set<(status: ConnectionStatus) => void>();
   private attempt = 0;
   private stopped = true;
@@ -87,8 +92,35 @@ export class RealtimeClient {
       current.listeners.delete(listener);
       if (current.listeners.size === 0) {
         this.streams.delete(stream);
+        this.presence.delete(stream);
         this.send({ op: 'unsubscribe', stream });
       }
+    };
+  }
+
+  /**
+   * Shares (part of) this tab's presence on a map stream the client follows; the first call
+   * joins. Fields left out keep their value, null clears one. Callers throttle (see PresenceStore).
+   */
+  sendPresence(stream: string, patch: PresenceStatePatch): void {
+    this.presence.set(stream, { ...this.presence.get(stream), ...patch });
+    this.send({ op: 'presence', stream, state: patch });
+  }
+
+  /** Stops sharing presence on a map (others see this tab leave). */
+  leavePresence(stream: string): void {
+    if (!this.presence.delete(stream)) return;
+    this.send({ op: 'presence.leave', stream });
+  }
+
+  /** Others' presence on a stream: the full list on joining, then changes. */
+  onPresence(stream: string, listener: PresenceListener): () => void {
+    let set = this.presenceListeners.get(stream);
+    if (!set) this.presenceListeners.set(stream, (set = new Set()));
+    set.add(listener);
+    return () => {
+      set.delete(listener);
+      if (set.size === 0) this.presenceListeners.delete(stream);
     };
   }
 
@@ -107,6 +139,8 @@ export class RealtimeClient {
       this.attempt = 0;
       this.setStatus('open');
       for (const [stream, state] of this.streams) this.sendSubscribe(stream, state);
+      // After the subscribes, so the server knows the streams: join again with the last state.
+      for (const [stream, state] of this.presence) this.send({ op: 'presence', stream, state });
     };
     socket.onmessage = (event) => this.receive(String(event.data));
     socket.onclose = () => {
@@ -127,6 +161,10 @@ export class RealtimeClient {
       return;
     }
     if (parsed.op === 'pong' || parsed.op === 'unsubscribed') return;
+    if (parsed.op === 'presence') {
+      for (const listener of this.presenceListeners.get(parsed.stream) ?? []) listener(parsed);
+      return;
+    }
     const stream = parsed.op === 'event' ? parsed.event.stream : parsed.stream;
     const state = stream === undefined ? undefined : this.streams.get(stream);
     if (!state) return;

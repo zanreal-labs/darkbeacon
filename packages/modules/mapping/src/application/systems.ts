@@ -17,7 +17,11 @@ export class SystemUseCases extends MappingUseCases {
       const existing = await this.ports.systems.find(mapId, request.solarSystemId);
       if (existing?.visible) return existing;
       if (existing)
-        return this.restore(events, { ...existing, position: request.position ?? existing.position });
+        return this.restore(
+          events,
+          { ...existing, position: request.position ?? existing.position },
+          existing,
+        );
 
       const now = this.ports.clock.now();
       const placed = (await this.ports.systems.list(mapId)).filter((s) => s.visible);
@@ -68,13 +72,13 @@ export class SystemUseCases extends MappingUseCases {
       }
 
       const next: MapSystem = { ...current, ...patch, updatedAt: this.ports.clock.now() };
-      if (!current.visible) return this.restore(events, next);
+      if (!current.visible) return this.restore(events, next, current);
       if (!next.visible) {
-        await this.hide(events, next);
+        await this.hide(events, next, current);
         return next;
       }
       await this.ports.systems.update(next);
-      events.add('system.updated', next);
+      events.add('system.updated', next, current);
       return next;
     });
   }
@@ -90,7 +94,7 @@ export class SystemUseCases extends MappingUseCases {
         if (current.locked) throw new ConflictError('A locked system cannot be moved', { solarSystemId });
         const next = { ...current, position: { x, y }, updatedAt: now };
         await this.ports.systems.update(next);
-        events.add('system.updated', next);
+        events.add('system.updated', next, current);
       }
     });
   }
@@ -101,24 +105,25 @@ export class SystemUseCases extends MappingUseCases {
     await this.write(who, mapId, async (events) => {
       const current = await this.visibleSystem(mapId, solarSystemId);
       if (current.locked) throw new ConflictError('The system is locked');
-      await this.hide(events, { ...current, visible: false, updatedAt: this.ports.clock.now() });
+      await this.hide(events, { ...current, visible: false, updatedAt: this.ports.clock.now() }, current);
     });
   }
 
-  private async hide(events: EventBatch, system: MapSystem): Promise<void> {
+  /** `before`: the system as it was shown, kept as the removed snapshot. */
+  private async hide(events: EventBatch, system: MapSystem, before: MapSystem): Promise<void> {
     const hidden = { ...system, visible: false };
     await this.ports.systems.update(hidden);
     for (const connection of await this.ports.connections.listForSystem(system.mapId, system.solarSystemId)) {
       await removeConnection(this.ports, events, connection);
     }
-    events.add('system.removed', { solarSystemId: system.solarSystemId });
+    events.add('system.removed', { solarSystemId: system.solarSystemId }, before);
   }
 
   /** Makes a hidden system visible again and publishes it with the intel it kept. */
-  private async restore(events: EventBatch, hidden: MapSystem): Promise<MapSystem> {
+  private async restore(events: EventBatch, hidden: MapSystem, before: MapSystem): Promise<MapSystem> {
     const system: MapSystem = { ...hidden, visible: true, updatedAt: this.ports.clock.now() };
     await this.ports.systems.update(system);
-    events.add('system.added', system);
+    events.add('system.added', system, before);
     for (const signature of await this.ports.signatures.listForSystem(system.mapId, system.solarSystemId)) {
       events.add('signature.added', signature);
     }
@@ -150,8 +155,8 @@ export async function removeConnection(
       if (signature.connectionId !== connection.id) continue;
       const next = { ...signature, connectionId: null, updatedAt: now };
       await ports.signatures.update(next);
-      if (system?.visible) events.add('signature.updated', next);
+      if (system?.visible) events.add('signature.updated', next, signature);
     }
   }
-  events.add('connection.removed', { id: connection.id });
+  events.add('connection.removed', { id: connection.id }, connection);
 }

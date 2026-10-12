@@ -24,6 +24,11 @@ export async function untrack(
   if (entries.length === 0) return;
   await deps.uow.transaction(async () => {
     for (const entry of entries) await deps.tracking.setTracked(entry, false);
+    const presences = new Map<number, unknown>();
+    for (const entry of entries) {
+      if (!presences.has(entry.characterId))
+        presences.set(entry.characterId, await deps.tracking.getPresence(entry.characterId));
+    }
     await deps.events.append(
       entries.map((entry) =>
         newEvent({
@@ -32,6 +37,8 @@ export async function untrack(
           actor,
           data: { characterId: entry.characterId },
           occurredAt: now,
+          // What the map knew of the character, kept as the removed snapshot.
+          before: presences.get(entry.characterId) ?? { characterId: entry.characterId },
         }),
       ),
     );

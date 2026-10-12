@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { Logger, Module } from '@nestjs/common';
-import type { Clock, EventLog, MapAccess, UnitOfWork } from '@darkbeacon/core';
+import type { AuditScope, Clock, EventLog, MapAccess, UnitOfWork } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
 import {
   AutoMapper,
@@ -22,6 +22,7 @@ import { KyselyTrackingRepository } from '../../adapters/tracking/kysely-trackin
 import type { AppConfig } from '../../config/config.js';
 import {
   APP_CONFIG,
+  AUDIT_SCOPE,
   AUTO_MAP_TARGET,
   CHARACTER_TOKENS,
   CLOCK,
@@ -53,9 +54,13 @@ const { version } = JSON.parse(readFileSync(new URL('../../../package.json', imp
     { provide: CHARACTER_TOKENS, useExisting: CharacterService },
     {
       provide: AUTO_MAP_TARGET,
-      useFactory: (ports: MappingPorts, systems: SystemUseCases, connections: ConnectionUseCases) =>
-        new MappingAutoMapTarget(ports, systems, connections),
-      inject: [MAPPING_PORTS, SystemUseCases, ConnectionUseCases],
+      useFactory: (
+        ports: MappingPorts,
+        systems: SystemUseCases,
+        connections: ConnectionUseCases,
+        audit: AuditScope,
+      ) => new MappingAutoMapTarget(ports, systems, connections, audit),
+      inject: [MAPPING_PORTS, SystemUseCases, ConnectionUseCases, AUDIT_SCOPE],
     },
     {
       provide: TRACKING_REPOSITORY,

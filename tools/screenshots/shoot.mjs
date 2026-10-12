@@ -241,6 +241,17 @@ async function run() {
           await blur(page);
           await settle(page, 600);
           await s(`admin-${label.replace(/[^a-z0-9]+/g, '-')}`, { fullPage: true });
+          if (label === 'audit') {
+            // Retention and the integrity check sit below the activity feed.
+            const check = page.getByRole('button', { name: 'Check integrity' });
+            await check.scrollIntoViewIfNeeded();
+            await check.click();
+            await page.getByText(/Every history is intact|was changed outside/).waitFor({ timeout: 15_000 });
+            await blur(page);
+            await page.getByRole('heading', { name: 'Keep history' }).scrollIntoViewIfNeeded();
+            await settle(page);
+            await s('admin-audit-integrity');
+          }
         }
       });
 

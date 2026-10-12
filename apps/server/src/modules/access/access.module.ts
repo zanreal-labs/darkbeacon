@@ -57,9 +57,21 @@ const RULES = 'access.AccessRuleRepository';
     },
     {
       provide: InstanceSettingsService,
-      useFactory: (db: Database, rules: AccessRuleRepository, uow: UnitOfWork) =>
-        new InstanceSettingsService({ settings: new KyselyInstanceSettingsRepository(db), rules, uow }),
-      inject: [Database, RULES, UNIT_OF_WORK],
+      useFactory: (
+        db: Database,
+        rules: AccessRuleRepository,
+        uow: UnitOfWork,
+        events: EventLog,
+        clock: Clock,
+      ) =>
+        new InstanceSettingsService({
+          settings: new KyselyInstanceSettingsRepository(db),
+          rules,
+          uow,
+          events,
+          clock,
+        }),
+      inject: [Database, RULES, UNIT_OF_WORK, EVENT_LOG, CLOCK],
     },
   ],
   exports: [MAP_ACCESS, AccessService, MapOwnershipRegistry, InstanceSettingsService],

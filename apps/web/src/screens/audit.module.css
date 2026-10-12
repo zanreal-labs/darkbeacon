@@ -1,0 +1,215 @@
+/* The admin Audit tab: an activity feed grouped by day, retention and integrity. */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dbk-space-2);
+  padding: 0 var(--dbk-space-4) var(--dbk-space-3);
+}
+
+.filters > * {
+  flex: 0 1 220px;
+  min-width: 0;
+}
+
+.day {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: var(--dbk-space-2) var(--dbk-space-4);
+  border-top: 1px solid var(--dbk-color-border);
+  background: var(--dbk-color-bg-subtle);
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.entry {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--dbk-space-3);
+  padding: var(--dbk-space-3) var(--dbk-space-4);
+  border-top: 1px solid var(--dbk-color-border);
+}
+
+.entry:first-child {
+  border-top: 0;
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--dbk-radius);
+  background: var(--dbk-color-surface-hover);
+  color: var(--dbk-color-text-muted);
+}
+
+.icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.icon[data-category='signIn'] {
+  background: var(--dbk-color-accent-subtle);
+  color: var(--dbk-color-accent-text);
+}
+
+.icon[data-category='access'] {
+  background: var(--dbk-color-warning-subtle);
+  color: var(--dbk-color-warning);
+}
+
+.icon[data-category='plugins'],
+.icon[data-category='instance'] {
+  background: var(--dbk-color-success-subtle);
+  color: var(--dbk-color-success);
+}
+
+.entry[data-tone='danger'] .icon {
+  background: var(--dbk-color-danger-subtle);
+  color: var(--dbk-color-danger);
+}
+
+.body {
+  display: grid;
+  gap: var(--dbk-space-1);
+  min-width: 0;
+}
+
+.sentence {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.sentence strong {
+  font-weight: 600;
+}
+
+.changes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dbk-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.change {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 2px 8px;
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius-small);
+  background: var(--dbk-color-bg-subtle);
+  font-size: var(--dbk-font-size-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.change > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.field {
+  color: var(--dbk-color-text-muted);
+  font-weight: 500;
+}
+
+.before {
+  color: var(--dbk-color-text-subtle);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in oklab, var(--dbk-color-text-subtle) 60%, transparent);
+}
+
+.after {
+  color: var(--dbk-color-text);
+  font-weight: 500;
+}
+
+.arrow {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: var(--dbk-color-text-subtle);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--dbk-space-3);
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+}
+
+.character {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.agent {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.time {
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-small);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.retention {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dbk-space-3);
+}
+
+.retention > :first-child {
+  flex: 0 1 220px;
+}
+
+.broken {
+  display: block;
+}
+
+/* On wide screens the time sits on the right; on phones it leads the meta line. */
+.metaTime {
+  display: none;
+}
+
+.repeats {
+  margin-left: var(--dbk-space-2);
+  vertical-align: 1px;
+}
+
+@media (max-width: 560px) {
+  .entry {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .time {
+    display: none;
+  }
+
+  .metaTime {
+    display: inline;
+  }
+
+  .filters > * {
+    flex: 1 1 140px;
+  }
+}

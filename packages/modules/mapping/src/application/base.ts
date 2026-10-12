@@ -45,7 +45,8 @@ export class EventBatch {
     private readonly now: number,
   ) {}
 
-  add<K extends EventType>(type: K, data: EventPayloads[K]): void {
+  /** `before`: the entity before an update, or the one removed (for the audit trail). */
+  add<K extends EventType>(type: K, data: EventPayloads[K], before?: unknown): void {
     this.events.push(
       newEvent({
         stream: mapStream(this.mapId),
@@ -53,6 +54,7 @@ export class EventBatch {
         actor: actorRef(this.actor),
         data,
         occurredAt: this.now,
+        ...(before === undefined ? {} : { before }),
       }),
     );
   }

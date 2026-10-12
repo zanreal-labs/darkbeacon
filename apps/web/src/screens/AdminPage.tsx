@@ -2,7 +2,18 @@
 
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Crown, MoreHorizontal, Package, Palette, Plus, Puzzle, Server, Trash2, Users } from 'lucide-react';
+import {
+  Crown,
+  MoreHorizontal,
+  Package,
+  Palette,
+  Plus,
+  Puzzle,
+  ScrollText,
+  Server,
+  Trash2,
+  Users,
+} from 'lucide-react';
 import {
   buildPath,
   routes,
@@ -55,6 +66,7 @@ import {
   TabsTrigger,
   useToast,
 } from '../ui';
+import { AuditTab } from './AuditTab';
 import styles from './settings.module.css';
 
 const TABS = [
@@ -62,13 +74,14 @@ const TABS = [
   { id: 'people', title: 'People', icon: <Users /> },
   { id: 'plugins', title: 'Plugins', icon: <Puzzle /> },
   { id: 'themes', title: 'Themes', icon: <Palette /> },
+  { id: 'audit', title: 'Audit', icon: <ScrollText /> },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
 
 const errorText = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback);
 
 const TITLE = 'Admin';
-const DESCRIPTION = 'Settings for this instance, the people on it, plugins and themes.';
+const DESCRIPTION = 'Settings for this instance, the people on it, plugins, themes and what changed.';
 
 /** Query keys of the data the server renders the first tab with. */
 export const adminKeys = { settings: ['admin-settings'], health: ['health'] } as const;
@@ -112,6 +125,9 @@ export function AdminPage() {
         </TabsContent>
         <TabsContent value="themes">
           <ThemesTab />
+        </TabsContent>
+        <TabsContent value="audit">
+          <AuditTab settingsKey={adminKeys.settings} />
         </TabsContent>
       </Tabs>
     </Page>

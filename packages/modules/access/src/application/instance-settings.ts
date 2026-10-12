@@ -1,4 +1,13 @@
-import { requireInstanceRole, type Actor, type UnitOfWork } from '@darkbeacon/core';
+import {
+  AUDIT_STREAM,
+  actorRef,
+  newEvent,
+  requireInstanceRole,
+  type Actor,
+  type Clock,
+  type EventLog,
+  type UnitOfWork,
+} from '@darkbeacon/core';
 import type { UpdateInstanceSettingsRequest } from '@darkbeacon/shared';
 import {
   adminByDiscord,
@@ -12,6 +21,9 @@ export interface InstanceSettingsDeps {
   settings: InstanceSettingsRepository;
   rules: AccessRuleRepository;
   uow: UnitOfWork;
+  /** Changes are recorded on the audit stream. */
+  events: EventLog;
+  clock: Clock;
 }
 
 /**
@@ -27,14 +39,28 @@ export class InstanceSettingsService {
   }
 
   async update(actor: Actor | null, patch: UpdateInstanceSettingsRequest): Promise<InstanceSettings> {
-    requireInstanceRole(actor, 'admin');
+    const admin = requireInstanceRole(actor, 'admin');
     return this.deps.uow.transaction(async () => {
+      const before = await this.current();
       const changes = Object.fromEntries(
         Object.entries(patch).filter(([, value]) => value !== undefined),
       ) as Partial<InstanceSettings>;
       if (changes.adminRoleIds) changes.adminRoleIds = [...new Set(changes.adminRoleIds)];
       await this.deps.settings.save(changes);
-      return this.current();
+      const after = await this.current();
+      if (JSON.stringify(after) !== JSON.stringify(before)) {
+        await this.deps.events.append([
+          newEvent({
+            stream: AUDIT_STREAM,
+            type: 'settings.changed',
+            actor: actorRef(admin),
+            data: after,
+            occurredAt: this.deps.clock.now(),
+            before,
+          }),
+        ]);
+      }
+      return after;
     });
   }
 

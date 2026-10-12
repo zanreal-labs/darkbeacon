@@ -8,7 +8,8 @@ export type TokenGroup =
   | 'typography'
   | 'density'
   | 'elevation'
-  | 'motion';
+  | 'motion'
+  | 'presence';
 
 export interface TokenInfo {
   group: TokenGroup;
@@ -112,6 +113,16 @@ export const TOKENS = {
   'motion-fast': { group: 'motion', description: 'Hover and press transitions' },
   'motion-normal': { group: 'motion', description: 'Menus, dialogs, sheets' },
   'motion-easing': { group: 'motion', description: 'Easing curve of transitions' },
+
+  // Collaboration: one colour per person (cursors, selections, editing markers), stable per account.
+  'presence-0': { group: 'presence', description: 'Presence colour 1 (cursor, selection, editing marker)' },
+  'presence-1': { group: 'presence', description: 'Presence colour 2' },
+  'presence-2': { group: 'presence', description: 'Presence colour 3' },
+  'presence-3': { group: 'presence', description: 'Presence colour 4' },
+  'presence-4': { group: 'presence', description: 'Presence colour 5' },
+  'presence-5': { group: 'presence', description: 'Presence colour 6' },
+  'presence-6': { group: 'presence', description: 'Presence colour 7' },
+  'presence-7': { group: 'presence', description: 'Presence colour 8' },
 } as const satisfies Record<string, TokenInfo>;
 
 export type TokenName = keyof typeof TOKENS;

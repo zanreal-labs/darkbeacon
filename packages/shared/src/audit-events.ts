@@ -1,0 +1,47 @@
+import type { InstanceSettingsDto } from './dto/access.js';
+import type { WebhookDto } from './dto/notifications.js';
+
+/** How someone signed in. */
+export type SignInProvider = 'discord' | 'demo' | 'dev';
+
+/**
+ * Instance audit catalogue: events on the `audit:instance` stream (see `AUDIT_STREAM` in core).
+ * They record instance changes that are not map state, so they are not part of `EventPayloads`
+ * (plugins and map webhooks never see them); only instance admins read them.
+ */
+export interface AuditEventPayloads {
+  'auth.signed_in': { accountId: string; provider: SignInProvider };
+  /** `accountId` is null when the sign-in failed before an account was known. */
+  'auth.sign_in_failed': { provider: SignInProvider; reason: string; accountId: string | null };
+  'auth.signed_out': { accountId: string; everywhere: boolean };
+  /** The instance settings after the change (the audit record holds the fields that changed). */
+  'settings.changed': InstanceSettingsDto;
+  'theme.installed': { id: string; name: string; version: string };
+  'theme.removed': { id: string };
+  'theme.default_changed': { themeId: string };
+  /** Webhooks belong to a map, but their config is never on the map stream (secrets). */
+  'webhook.created': WebhookDto;
+  'webhook.updated': WebhookDto;
+  'webhook.removed': { id: string; mapId: string };
+  /**
+   * Plugin settings (instance values, or the overrides of one map). Values of secret-looking
+   * keys (tokens, webhook URLs, passwords) are replaced by a short fingerprint.
+   */
+  'plugin.settings_changed': { pluginId: string; mapId: string | null; values: Record<string, unknown> };
+}
+
+export type AuditEventType = keyof AuditEventPayloads;
+
+export const AUDIT_EVENT_TYPES = [
+  'auth.signed_in',
+  'auth.sign_in_failed',
+  'auth.signed_out',
+  'settings.changed',
+  'theme.installed',
+  'theme.removed',
+  'theme.default_changed',
+  'webhook.created',
+  'webhook.updated',
+  'webhook.removed',
+  'plugin.settings_changed',
+] as const satisfies readonly AuditEventType[];

@@ -247,6 +247,7 @@ describeEachDialect('identity and access over HTTP', (t) => {
       adminGuildId: '123',
       adminRoleIds: ['456'],
       webhooksToPrivateNetworks: false,
+      eventRetentionDays: null,
     });
     expect(
       (await bob.request('/api/admin/settings', { method: 'PATCH', json: { adminGuildId: 'x' } })).status,

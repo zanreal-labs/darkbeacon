@@ -1,4 +1,5 @@
 import {
+  AUDIT_STREAM,
   INSTANCE_STREAM,
   NotFoundError,
   ValidationError,
@@ -9,7 +10,13 @@ import {
   type Actor,
   type ActorRef,
 } from '@darkbeacon/core';
-import type { CatalogEntryDto, PluginDto, PluginSettingsDto } from '@darkbeacon/shared';
+import {
+  redactSecrets,
+  type CatalogEntryDto,
+  type PluginDto,
+  type PluginSettingsDto,
+} from '@darkbeacon/shared';
+
 import {
   disableAfterFailures,
   isActiveOn,
@@ -83,7 +90,7 @@ export class PluginAdmin {
         : newInstalledPlugin(staged.manifest, now);
       await this.deps.uow.transaction(async () => {
         await this.deps.plugins.save(plugin);
-        await this.publish(plugin, actorRef(admin));
+        await this.publish(plugin, actorRef(admin), existing);
         // Last, so a failed database write leaves the previous version in place.
         await this.deps.installer.commit(staged);
       });
@@ -102,7 +109,7 @@ export class PluginAdmin {
   async uninstall(actor: Actor | null, id: string): Promise<void> {
     const admin = requireInstanceRole(actor, 'admin');
     await this.deps.uow.transaction(async () => {
-      await this.require(id);
+      const plugin = await this.require(id);
       await this.deps.plugins.delete(id);
       await this.deps.log.append([
         newEvent({
@@ -111,6 +118,7 @@ export class PluginAdmin {
           actor: actorRef(admin),
           data: { id },
           occurredAt: this.deps.clock.now(),
+          before: toPluginDto(plugin),
         }),
       ]);
     });
@@ -130,7 +138,7 @@ export class PluginAdmin {
     values: PluginSettingsValues,
     mapId?: string,
   ): Promise<PluginSettingsDto> {
-    requireInstanceRole(actor, 'admin');
+    const admin = requireInstanceRole(actor, 'admin');
     const plugin = await this.require(id);
     if (plugin.manifest.settings === null) throw new ValidationError('This plugin has no settings');
     // Map overrides are checked merged over the instance settings, as the plugin will read them.
@@ -141,7 +149,22 @@ export class PluginAdmin {
       mapId === undefined
         ? { ...plugin, settings: check.value }
         : { ...plugin, mapSettings: { ...plugin.mapSettings, [mapId]: values } };
-    await this.deps.plugins.save(updated);
+    await this.deps.uow.transaction(async () => {
+      await this.deps.plugins.save(updated);
+      const scope = mapId ?? null;
+      const before = scope === null ? plugin.settings : (plugin.mapSettings[scope] ?? {});
+      const after = scope === null ? updated.settings : values;
+      await this.deps.log.append([
+        newEvent({
+          stream: AUDIT_STREAM,
+          type: 'plugin.settings_changed',
+          actor: actorRef(admin),
+          data: { pluginId: id, mapId: scope, values: redactSecrets(after) },
+          occurredAt: this.deps.clock.now(),
+          before: { pluginId: id, mapId: scope, values: redactSecrets(before) },
+        }),
+      ]);
+    });
     return this.settingsDto(updated, mapId ?? null);
   }
 
@@ -171,14 +194,19 @@ export class PluginAdmin {
     apply: (plugin: InstalledPlugin) => InstalledPlugin,
   ): Promise<PluginDto> {
     return this.deps.uow.transaction(async () => {
-      const plugin = apply(await this.require(id));
+      const before = await this.require(id);
+      const plugin = apply(before);
       await this.deps.plugins.save(plugin);
-      await this.publish(plugin, actor);
+      await this.publish(plugin, actor, before);
       return toPluginDto(plugin);
     });
   }
 
-  private async publish(plugin: InstalledPlugin, actor: ActorRef): Promise<void> {
+  private async publish(
+    plugin: InstalledPlugin,
+    actor: ActorRef,
+    before: InstalledPlugin | null,
+  ): Promise<void> {
     await this.deps.log.append([
       newEvent({
         stream: INSTANCE_STREAM,
@@ -186,6 +214,7 @@ export class PluginAdmin {
         actor,
         data: toPluginDto(plugin),
         occurredAt: this.deps.clock.now(),
+        ...(before ? { before: toPluginDto(before) } : {}),
       }),
     ]);
   }

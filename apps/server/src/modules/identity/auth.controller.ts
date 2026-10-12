@@ -31,6 +31,7 @@ import {
   SESSION_COOKIE,
 } from './cookies.js';
 import { PENDING_BOX } from './identity.tokens.js';
+import { SignInAudit } from './sign-in-audit.js';
 
 type CallbackQuery = { code?: string; state?: string; error?: string };
 
@@ -54,6 +55,7 @@ export class AuthController {
     @Inject(SessionService) private readonly sessions: SessionService,
     @Inject(AccountService) private readonly accounts: AccountService,
     @Inject(SignInCookies) private readonly signInCookies: SignInCookies,
+    @Inject(SignInAudit) private readonly audit: SignInAudit,
   ) {
     this.secure = config.publicUrl.startsWith('https://');
   }
@@ -80,17 +82,26 @@ export class AuthController {
     @Res() reply: FastifyReply,
   ): Promise<void> {
     const pending = this.takePending(request, reply);
-    await this.redirect(reply, pending?.returnTo ?? '/', async () => {
-      if (query.error) return withError(pending?.returnTo ?? '/', 'Discord sign-in was cancelled');
-      const signedIn = await this.discord.complete({
-        code: query.code,
-        state: query.state,
-        pending,
-        userAgent: userAgent(request),
-      });
-      await this.startSession(request, reply, signedIn.token, signedIn.account.id);
-      return signedIn.returnTo;
-    });
+    await this.redirect(
+      reply,
+      pending?.returnTo ?? '/',
+      async () => {
+        if (query.error) {
+          await this.audit.failed('discord', 'Discord sign-in was cancelled');
+          return withError(pending?.returnTo ?? '/', 'Discord sign-in was cancelled');
+        }
+        const signedIn = await this.discord.complete({
+          code: query.code,
+          state: query.state,
+          pending,
+          userAgent: userAgent(request),
+        });
+        await this.startSession(request, reply, signedIn.token, signedIn.account.id);
+        await this.audit.signedIn(signedIn.account.id, 'discord');
+        return signedIn.returnTo;
+      },
+      (reason) => this.audit.failed('discord', reason),
+    );
   }
 
   @Get(nestPath(routes.auth.eveLogin.path))
@@ -133,16 +144,19 @@ export class AuthController {
   ): Promise<MeDto> {
     const signedIn = await this.demo.signIn(body, userAgent(request));
     await this.startSession(request, reply, signedIn.token, signedIn.account.id);
+    await this.audit.signedIn(signedIn.account.id, 'dev');
     return this.accounts.me(await this.accounts.actorFor(signedIn.account));
   }
 
   @Post(nestPath(routes.auth.logout.path))
   @HttpCode(204)
   async logout(
+    @CurrentActor() actor: Actor | null,
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<void> {
     await this.sessions.logout(readSessionCookie(request));
+    if (actor?.kind === 'account') await this.audit.signedOut(actor.id, false);
     this.clearSession(reply);
   }
 
@@ -152,7 +166,9 @@ export class AuthController {
     @CurrentActor() actor: Actor | null,
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<void> {
-    await this.sessions.logoutEverywhere(requireAccount(actor).id);
+    const account = requireAccount(actor);
+    await this.sessions.logoutEverywhere(account.id);
+    await this.audit.signedOut(account.id, true);
     this.clearSession(reply);
   }
 
@@ -209,17 +225,21 @@ export class AuthController {
    * OAuth endpoints are browser navigations, so failures go back to the app as `?auth_error=`
    * instead of a JSON error page.
    */
-  private async redirect(reply: FastifyReply, fallback: string, work: () => Promise<string>): Promise<void> {
+  private async redirect(
+    reply: FastifyReply,
+    fallback: string,
+    work: () => Promise<string>,
+    onFailure?: (reason: string) => Promise<void>,
+  ): Promise<void> {
     let location: string;
     try {
       location = await work();
     } catch (error) {
       if (!isDomainError(error))
         this.logger.error(error instanceof Error ? (error.stack ?? error.message) : error);
-      location = withError(
-        fallback,
-        isDomainError(error) ? error.message : 'Sign-in failed, please try again',
-      );
+      const reason = isDomainError(error) ? error.message : 'Sign-in failed, please try again';
+      await onFailure?.(reason);
+      location = withError(fallback, reason);
     }
     await reply.code(302).header('location', location).send();
   }
