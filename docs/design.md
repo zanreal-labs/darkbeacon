@@ -205,6 +205,34 @@ unless the template places `{tempName}` itself. The chain is walked from the hom
 - Other people on the map are arrow cursors with a name tag in their colour; the top bar says
   `Live · 3 on this map`. No avatar circles for presence.
 
+## The jump planner
+
+The one place Darkbeacon goes further than Wanderer: `/jump` (the rail's orbit icon, under the map)
+is a map of all known space for planning a capital's jump route, a jump freighter's or a titan's,
+from A to B.
+
+- The map is the in-game star map seen from above: every system a dot in its security colour (the
+  game's palette, as on the pills), Pochven and Zarzakh in the special-space colour, stargates as
+  faint lines, region names when zoomed out and system names when zoomed in. Drag to pan, scroll or
+  pinch to zoom; it stays at 60 frames a second on a laptop.
+- A system under the pointer shows a card: name, security, region, how far it is from the start
+  and whether a jump can land there ("High-sec: no cynos"). A click pins the card with its actions:
+  Start here, Destination, Avoid. Right-click does the same.
+- The controls are a panel docked on the left (a bottom sheet on phones, folded at first): hull and
+  ship, start and destination (search, or from the map), the three skills, route options (finish
+  over stargates, stop at NPC stations, outlaw, keep fatigue under, fatigue now, avoid, Ansiblex
+  bridges, bridged mass), then the route.
+- The answer comes first: "3 jumps 20.19 ly", then fuel in the ship's isotope, fatigue at the end
+  and the waiting; then the legs, each with the system's security pill, light years, fuel, wait and
+  fatigue. Hovering a leg shows the range around its start on the map; a click flies there.
+- The range (light years with the chosen Jump Drive Calibration) is a dashed disk around the start;
+  until there is a route, systems a jump cannot reach from it are dimmed.
+- Copy route gives plain lines for fleet chat (`1. Jump 9.95 ly to Ahbazon (0.4, Genesis),
+industrial cyno, 31,524 fuel`); Set waypoints puts the stops into the game for a character whose
+  EVE grant allows it.
+- The address holds the start, destination and ship by name (`/jump?from=…&to=…&ship=Ark`), so a
+  route can be linked. `/` searches, Esc clears.
+
 ## Server data built for glancing
 
 The API does the thinking so panels only show it:

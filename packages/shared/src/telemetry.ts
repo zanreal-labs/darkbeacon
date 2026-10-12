@@ -79,6 +79,7 @@ export const TelemetryPage = z.enum([
   'map_settings',
   'oauth_consent',
   'import',
+  'jump',
 ]);
 /** Tabs of the admin page and of a map's settings. */
 export const TelemetrySection = z.enum([

@@ -6,6 +6,7 @@ import {
   EveEntityCategory,
   FIRST_PARTY_PLUGIN_IDS,
   FirstPartyPluginId,
+  JumpHull,
   RouteMode,
   TELEMETRY_WEB_EVENTS,
   TelemetryThemeId,
@@ -110,6 +111,8 @@ export const TELEMETRY_SERVER_EVENTS = {
     signatures: CountBucket,
     access_rules: CountBucket,
   }),
+  /** A jump route was planned: the hull class and how many legs it has (a bucket; 0 = no route). */
+  jump_planned: z.strictObject({ hull: JumpHull, legs: CountBucket }),
 } as const;
 
 export type TelemetryServerEventName = keyof typeof TELEMETRY_SERVER_EVENTS;

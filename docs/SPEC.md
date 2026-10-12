@@ -46,6 +46,7 @@ packages/modules/tracking       ESI polling -> character events, auto-mapping su
 packages/modules/notifications  notifier port + webhook delivery
 packages/modules/plugins        plugin registry, manifest validation, enable/disable state
 packages/modules/routing        routes over stargates and the chain, hubs, chain exits, in-game waypoints
+packages/modules/jumps          capital jump routes across known space: ships, range, fuel, fatigue, the planner
 packages/modules/audit          audit records of events, histories, reverts, hash chain check
 packages/modules/sharing        shares between maps, composite maps, merging several maps' chains
 packages/modules/publishing     public links of maps (/p/<token>), what they show, a map's reach for AI agents
@@ -59,7 +60,7 @@ packages/db            Kysely factory, dialect switch, migration runner; migrati
 packages/shared        zod schemas, DTOs and the WebSocket protocol shared by server and web
 packages/plugin-sdk    public plugin contract: manifest type, PluginContext (exposed ports), web slots
 packages/theme-sdk     token catalogue, built-in themes (default, dark, contrast), CSS generator
-packages/sde           script that builds static game data (systems, regions, classes, security) from CCP's SDE
+packages/sde           script that builds static game data (systems, regions, classes, security, the k-space map) from CCP's SDE
 plugins/*              first-party plugins, built against plugin-sdk only
 ```
 

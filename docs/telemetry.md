@@ -141,6 +141,7 @@ made while seeding the demo map or by cleanups count as nothing; a history rever
 | `esi_picker_used`                    | `category`: `character`, `corporation`, `alliance`; `mode`: `search` or `exact`                                                                                                          |
 | `waypoint_set`                       | `mode`: `destination` or `waypoint`                                                                                                                                                      |
 | `import_completed`                   | `source`: `api` or `file`; `status`: `done`, `failed`, `cancelled`; `systems`, `connections`, `signatures`, `access_rules`: buckets of what was written (never the Wanderer host or map) |
+| `jump_planned`                       | `hull`: `jump_freighter`, `black_ops`, `rorqual`, `carrier`, `command_carrier`, `dreadnought`, `lancer`, `force_auxiliary`, `supercarrier`, `titan`; `legs`: bucket (`0` = no route)     |
 
 ### Web app events
 
@@ -148,7 +149,7 @@ made while seeding the demo map or by cleanups count as nothing; a history rever
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `app_loaded`        | `viewport`: `phone`, `tablet`, `desktop`; `tti`: `<1s`, `1-2s`, `2-4s`, `4-8s`, `8s+`                                                                                                                    |
 | `theme_used`        | `theme` (as `theme_default`); `scheme`: `light` or `dark`                                                                                                                                                |
-| `page_viewed`       | `page`: `map`, `maps`, `account`, `admin`, `map_settings`, `oauth_consent`, `import`; `section`: the admin or map settings tab                                                                           |
+| `page_viewed`       | `page`: `map`, `maps`, `account`, `admin`, `map_settings`, `oauth_consent`, `import`, `jump`; `section`: the admin or map settings tab                                                                   |
 | `panel_opened`      | `panel`: `system`, `signatures`, `local`, `routes`, `connections`, `history`, `plugin`                                                                                                                   |
 | `context_menu_used` | `menu`: `system` or `connection`; `action`: `status`, `labels`, `tags`, `edit`, `hidden`, `locked`, `copy_name`, `remove`, `time`, `mass`, `size`, `type`, `bubble`, `dangerous`, `mass_saved`, `plugin` |
 | `shortcut_used`     | `shortcut`: `fit_chain`, `center_on_me`, `legend`                                                                                                                                                        |
