@@ -15,6 +15,7 @@ import {
   type EveSearchResultDto,
 } from '@darkbeacon/shared';
 import { api } from '../lib/api';
+import { hereForReturn } from '../lib/scope-health';
 import { eveLinkHref } from '../shell/AccountMenu';
 import { characterPortraitUrl, SearchPicker, Select, Skeleton, type PickerOption } from '../ui';
 import styles from './pickers.module.css';
@@ -75,8 +76,8 @@ export function EvePicker({
           options: found.results.map(eveOption),
           note: found.relinkToSearch ? (
             <>
-              Only exact names match. <a href={eveLinkHref('/account')}>Link a character again</a> to search
-              by part of a name.
+              Only exact names match. <a href={eveLinkHref(hereForReturn())}>Link a character again</a> to
+              search by part of a name.
             </>
           ) : found.mode === 'exact' && q.length < 3 ? (
             'Type at least 3 letters to search; shorter text must be the exact name.'

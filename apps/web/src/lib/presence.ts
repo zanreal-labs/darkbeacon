@@ -259,3 +259,38 @@ export function usePresenceSettings() {
   });
   return { settings, update };
 }
+
+/** Who is on the map this tab shows (the viewer included), for the top bar; null off a map. */
+export interface MapPeople {
+  count: number;
+  /** The others' names, oldest arrival first. */
+  others: string[];
+}
+
+let mapPeople: MapPeople | null = null;
+const mapPeopleListeners = new Set<() => void>();
+
+/** Set by the map view while it is mounted (one per tab). */
+export function setMapPeople(people: MapPeople | null): void {
+  if (
+    mapPeople === people ||
+    (mapPeople &&
+      people &&
+      mapPeople.count === people.count &&
+      mapPeople.others.join('\n') === people.others.join('\n'))
+  )
+    return;
+  mapPeople = people;
+  for (const listener of mapPeopleListeners) listener();
+}
+
+export function useMapPeople(): MapPeople | null {
+  return useSyncExternalStore(
+    (listener) => {
+      mapPeopleListeners.add(listener);
+      return () => mapPeopleListeners.delete(listener);
+    },
+    () => mapPeople,
+    () => null,
+  );
+}

@@ -1,5 +1,11 @@
 import { bool, type Database } from '@darkbeacon/db';
-import type { CharacterPresence, TrackedCharacter, TrackingRepository } from '@darkbeacon/tracking';
+import type {
+  CharacterPresence,
+  MapCharacterSettings,
+  MapCharacterSettingsRepository,
+  TrackedCharacter,
+  TrackingRepository,
+} from '@darkbeacon/tracking';
 
 export interface TrackingTables {
   tracked_character: { map_id: string; character_id: number; account_id: string; since: number };
@@ -11,6 +17,14 @@ export interface TrackingTables {
     ship_type_id: number | null;
     ship_name: string | null;
     online: number;
+    updated_at: number;
+    docked: number | null;
+  };
+  map_character_setting: {
+    map_id: string;
+    account_id: string;
+    main_character_id: number | null;
+    follow_character_id: number | null;
     updated_at: number;
   };
 }
@@ -104,6 +118,7 @@ export class KyselyTrackingRepository implements TrackingRepository {
       ship_name: p.shipName,
       online: bool.encode(p.online),
       updated_at: p.updatedAt,
+      docked: p.docked === undefined ? null : bool.encode(p.docked),
     };
     const { character_id: _, ...changes } = row;
     await this.db
@@ -138,5 +153,50 @@ function toPresence(row: PresenceRow): CharacterPresence {
     shipName: row.ship_name,
     online: bool.decode(row.online),
     updatedAt: Number(row.updated_at),
+    ...(row.docked === null || row.docked === undefined ? {} : { docked: bool.decode(row.docked) }),
   };
+}
+
+/** Each account's main and followed character per map. */
+export class KyselyMapCharacterSettings implements MapCharacterSettingsRepository {
+  constructor(private readonly database: Database) {}
+
+  private get db() {
+    return this.database.db<TrackingTables>();
+  }
+
+  async get(mapId: string, accountId: string): Promise<MapCharacterSettings | null> {
+    const row = await this.db
+      .selectFrom('map_character_setting')
+      .selectAll()
+      .where('map_id', '=', mapId)
+      .where('account_id', '=', accountId)
+      .executeTakeFirst();
+    if (!row) return null;
+    const id = (v: number | null) => (v === null ? null : Number(v));
+    return {
+      mapId,
+      accountId,
+      mainCharacterId: id(row.main_character_id),
+      followCharacterId: id(row.follow_character_id),
+      updatedAt: Number(row.updated_at),
+    };
+  }
+
+  async save(settings: MapCharacterSettings): Promise<void> {
+    const changes = {
+      main_character_id: settings.mainCharacterId,
+      follow_character_id: settings.followCharacterId,
+      updated_at: settings.updatedAt,
+    };
+    await this.db
+      .insertInto('map_character_setting')
+      .values({ map_id: settings.mapId, account_id: settings.accountId, ...changes })
+      .onConflict((oc) => oc.columns(['map_id', 'account_id']).doUpdateSet(changes))
+      .execute();
+  }
+
+  async forgetMap(mapId: string): Promise<void> {
+    await this.db.deleteFrom('map_character_setting').where('map_id', '=', mapId).execute();
+  }
 }

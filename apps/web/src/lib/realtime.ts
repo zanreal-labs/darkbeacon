@@ -45,6 +45,12 @@ export class RealtimeClient {
   private readonly intelListeners = new Map<string, Set<IntelListener>>();
   private readonly statusListeners = new Set<(status: ConnectionStatus) => void>();
   private readonly resetListeners = new Set<() => void>();
+  private readonly latencyListeners = new Set<(ms: number | null) => void>();
+  /** When the unanswered ping was sent (performance.now()); null with none out. */
+  private pingSentAt: number | null = null;
+  /** Round trip in ms (the best of the last few pings); null until one was answered on this socket. */
+  latency: number | null = null;
+  private latencySamples: number[] = [];
   private attempt = 0;
   private stopped = true;
   private timer: ReturnType<typeof setTimeout> | undefined;
@@ -145,6 +151,32 @@ export class RealtimeClient {
     return () => this.resetListeners.delete(listener);
   }
 
+  /** Measures the round trip to the server once (an answered ping updates `latency`). */
+  ping(): void {
+    if (this.socket?.readyState !== OPEN) return;
+    // A ping unanswered for 10 s is given up, so a lost pong does not stop measuring.
+    if (this.pingSentAt !== null && performance.now() - this.pingSentAt < 10_000) return;
+    this.pingSentAt = performance.now();
+    this.send({ op: 'ping' });
+  }
+
+  onLatency(listener: (ms: number | null) => void): () => void {
+    this.latencyListeners.add(listener);
+    return () => this.latencyListeners.delete(listener);
+  }
+
+  /**
+   * A busy page (just loaded, rendering a big map) answers late; the best of the last three
+   * round trips is the network's, which is what the dot shows.
+   */
+  private setLatency(ms: number | null): void {
+    this.latencySamples = ms === null ? [] : [...this.latencySamples, ms].slice(-3);
+    const next = ms === null ? null : Math.min(...this.latencySamples);
+    if (next === this.latency) return;
+    this.latency = next;
+    for (const listener of this.latencyListeners) listener(next);
+  }
+
   onStatus(listener: (status: ConnectionStatus) => void): () => void {
     this.statusListeners.add(listener);
     return () => this.statusListeners.delete(listener);
@@ -167,6 +199,8 @@ export class RealtimeClient {
     socket.onclose = (event) => {
       if (this.socket !== socket) return;
       this.socket = null;
+      this.pingSentAt = null;
+      this.setLatency(null);
       if ((event as { code?: number } | undefined)?.code === RESTORED_CLOSE_CODE) {
         // The seqs held belong to the old database: resubscribe from snapshots.
         for (const state of this.streams.values()) state.lastSeq = undefined;
@@ -186,7 +220,12 @@ export class RealtimeClient {
     } catch {
       return;
     }
-    if (parsed.op === 'pong' || parsed.op === 'unsubscribed') return;
+    if (parsed.op === 'pong') {
+      if (this.pingSentAt !== null) this.setLatency(Math.round(performance.now() - this.pingSentAt));
+      this.pingSentAt = null;
+      return;
+    }
+    if (parsed.op === 'unsubscribed') return;
     if (parsed.op === 'presence') {
       for (const listener of this.presenceListeners.get(parsed.stream) ?? []) listener(parsed);
       return;

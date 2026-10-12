@@ -373,6 +373,9 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
         ? data.solarSystemId
         : undefined;
   const system = systemId ? (names.system?.(systemId) ?? 'a system') : 'a system';
+  /** A system named in the data (pings, kills). */
+  const systemOf = (id: unknown) =>
+    typeof id === 'number' ? (names.system?.(id) ?? 'a system') : 'a system';
   const via = channelLabel(entry.channel);
   const who =
     entry.actor.accountName ??
@@ -587,6 +590,16 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
       return read('changed a signature', 'intel');
     case 'signature.removed':
       return read(`removed signature ${String(data.eveId ?? '')}`.trim(), 'intel');
+    case 'ping.created':
+      return read(`called a rally in ${systemOf(data.solarSystemId)}`, 'map');
+    case 'ping.removed':
+      return read(`ended the rally in ${systemOf(data.solarSystemId)}`, 'map');
+    case 'kill.reported':
+      return {
+        ...read(`reported a kill: ${String(data.kill ?? 'a ship')} destroyed`, 'intel'),
+        who: 'zKillboard',
+        changes: [],
+      };
     case 'comment.added':
       return read(`commented on ${system}`, 'intel');
     case 'comment.removed':
@@ -604,6 +617,8 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
       return read('changed ship', 'tracking');
     case 'character.online_changed':
       return read(entry.diff.online?.after ? 'came online' : 'went offline', 'tracking');
+    case 'character.docked_changed':
+      return read(entry.diff.docked?.after ? 'docked' : 'undocked', 'tracking');
     case 'character.tracked':
       return read('started tracking a character', 'tracking');
     case 'character.untracked':

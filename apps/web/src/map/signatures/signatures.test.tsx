@@ -153,7 +153,8 @@ function Section({ signatures }: { signatures: SignatureDto[] }) {
 }
 
 describe('selecting and removing signatures', () => {
-  it('removes the selected rows with Delete and puts them back with Ctrl+Z', async () => {
+  // Ctrl+Z is the map's: its undo stack takes these removals too (map/undo/signatureBridge).
+  it('removes the selected rows with Delete and puts them back with the undo button', async () => {
     const removed: unknown[] = [];
     const restored: unknown[] = [];
     const a = signatureFixture('s1', SYSTEM, 'AAA-111', { createdAt: 2 });
@@ -182,7 +183,7 @@ describe('selecting and removing signatures', () => {
     );
     expect(await screen.findByRole('button', { name: /Undo/ })).toBeTruthy();
     expect(signatureUndoables(MAP_ID).map((u) => u.label)).toEqual(['2 signatures removed']);
-    await user.keyboard('{Control>}z{/Control}');
+    await user.click(screen.getByRole('button', { name: /Undo/ }));
     await waitFor(() => expect(restored).toEqual([{ signatures: [a, b] }]));
     expect(signatureUndoables(MAP_ID)).toEqual([]);
   });

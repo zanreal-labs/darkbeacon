@@ -175,6 +175,13 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
     activity: (d) => ({ online: change(!d.online, d.online) }),
     subjectCharacter: subject,
   },
+  'character.docked_changed': {
+    op: 'activity',
+    entity: character,
+    refs: characterRefs,
+    activity: (d) => ({ docked: change(!d.docked, d.docked) }),
+    subjectCharacter: subject,
+  },
   'character.tracked': {
     op: 'create',
     entity: character,

@@ -2,6 +2,8 @@ import type { CharacterTokens, LinkedCharacter } from '../domain/account.js';
 
 export interface CharacterRepository {
   findById(characterId: number): Promise<LinkedCharacter | null>;
+  /** Linked characters among these ids, in one read (unknown ids left out). */
+  findMany(characterIds: readonly number[]): Promise<LinkedCharacter[]>;
   listForAccount(accountId: string): Promise<LinkedCharacter[]>;
   /** Every linked character, by name (the admins' character list). */
   listAll(): Promise<LinkedCharacter[]>;

@@ -9,3 +9,6 @@ export * from './guild-roles.js';
 export * from './login.js';
 export * from './sessions.js';
 export * from './sign-up.js';
+export * from './affiliations.js';
+export * from './wallet.js';
+export * from './preferences.js';

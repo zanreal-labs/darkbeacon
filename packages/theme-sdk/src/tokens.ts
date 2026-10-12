@@ -117,6 +117,10 @@ export const TOKENS = {
   'font-size-large': { group: 'typography', description: 'Section titles' },
   'font-size-title': { group: 'typography', description: 'Page titles' },
   'line-height': { group: 'typography', description: 'Base line height' },
+  'map-text-scale': {
+    group: 'typography',
+    description: 'Scale of everything written on the map canvas (1 = the readable default; 1.2 = large)',
+  },
 
   'space-1': { group: 'density', description: 'Smallest spacing step' },
   'space-2': { group: 'density', description: 'Small spacing step' },

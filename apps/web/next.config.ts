@@ -12,6 +12,13 @@ const universe = JSON.parse(readFileSync(resolve(root, 'packages/sde/data/univer
 };
 const sizers = nodeNameSizers(universe.systems.map((s) => s.name));
 
+/**
+ * One id per build, shared by the pages and the server (which reads `.next/BUILD_ID`): a page
+ * whose id differs from the server's is out of date and offers a reload.
+ */
+const buildId =
+  process.env.DBK_BUILD_ID ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
 const config: NextConfig = {
   // Cache Components with Partial Prerendering and Partial Prefetching, as the Next.js 16 docs
   // recommend (https://nextjs.org/docs/app/getting-started/caching). See docs/decisions.md.
@@ -24,7 +31,8 @@ const config: NextConfig = {
   poweredByHeader: false,
   // OpenTelemetry (src/instrumentation.node.ts) loads exporters at runtime; keep it out of the bundle.
   serverExternalPackages: ['@opentelemetry/sdk-node', '@opentelemetry/instrumentation-undici'],
-  env: { DBK_NODE_NAME_SIZERS: JSON.stringify(sizers) },
+  env: { DBK_NODE_NAME_SIZERS: JSON.stringify(sizers), DBK_BUILD_ID: buildId },
+  generateBuildId: () => buildId,
   // The API server streams this app's answers through; anything in front of it must not buffer.
   headers: async () => [{ source: '/:path*{/}?', headers: [{ key: 'X-Accel-Buffering', value: 'no' }] }],
 };

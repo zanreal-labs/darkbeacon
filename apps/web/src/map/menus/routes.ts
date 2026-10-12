@@ -19,6 +19,8 @@ export interface WaypointTarget {
   solarSystemId: number;
   name: string;
   stationId?: number;
+  /** Wormhole space: EVE's autopilot routes over stargates only, so there is no destination. */
+  wormhole?: boolean;
 }
 
 const MODES: ReadonlyArray<{ mode: WaypointMode; label: string; icon: typeof Navigation }> = [
@@ -51,7 +53,7 @@ export function waypointMenu(
   notify?: Notify,
 ): MenuItem[] {
   const pilots = waypointPilots(characters);
-  if (pilots.length === 0) return [];
+  if (pilots.length === 0 || target.wormhole) return [];
   return [
     {
       kind: 'submenu',

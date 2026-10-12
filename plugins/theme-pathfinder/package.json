@@ -1,0 +1,9 @@
+{
+  "name": "@darkbeacon/theme-pathfinder",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pathfinder's look: graphite panels, square systems, green actions, orange selection",
+  "files": [
+    "darkbeacon-theme.json"
+  ]
+}

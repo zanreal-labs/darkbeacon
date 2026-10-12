@@ -27,6 +27,7 @@ import {
 import { MAP_FILE_TYPE, readJsonFile } from '../lib/map-files';
 import { api, ApiError } from '../lib/api';
 import { mapSettingsHref } from '../lib/map-settings';
+import { useOnlineCounts } from '../lib/characters';
 import { useInstance, useMaps, useSetDefaultMap } from '../lib/maps';
 import { mapsKey } from '../lib/session-keys';
 import { mapPermissions } from '../lib/roles';
@@ -55,6 +56,7 @@ import {
   Skeleton,
   Spinner,
   Stack,
+  StatusDot,
   useToast,
 } from '../ui';
 import { usePageView } from '../lib/useTelemetry';
@@ -201,12 +203,14 @@ function MapList({ maps }: { maps: MapSummaryDto[] }) {
   const toast = useToast();
   const mine = me.data?.account.defaultMapId ?? null;
   const fallback = instance.data?.defaultMapId ?? null;
+  const online = useOnlineCounts();
   return (
     <ul className={styles.list} aria-label="Maps">
       {maps.map((m) => (
         <MapRow
           key={m.id}
           map={m}
+          online={online.data?.counts[m.id] ?? 0}
           starred={mine === m.id}
           instanceDefault={!mine && fallback === m.id}
           lastOpened={me.data?.account.recentMapIds?.[0] === m.id}
@@ -229,12 +233,15 @@ function MapList({ maps }: { maps: MapSummaryDto[] }) {
 
 function MapRow({
   map,
+  online,
   starred,
   instanceDefault,
   lastOpened,
   onStar,
 }: {
   map: MapSummaryDto;
+  /** Tracked characters online on the map. */
+  online: number;
   starred: boolean;
   instanceDefault: boolean;
   lastOpened: boolean;
@@ -260,6 +267,16 @@ function MapRow({
             </span>
           )}
         </span>
+        {online > 0 && (
+          <span
+            className={styles.online}
+            title={`${online} tracked ${online === 1 ? 'character' : 'characters'} online`}
+          >
+            <StatusDot color="var(--dbk-color-success)" />
+            {online}
+            <span className="sr-only"> online</span>
+          </span>
+        )}
         <Badge tone={ROLE_TONE[map.role]}>{ROLE_NAME[map.role]}</Badge>
         <ChevronRight className={styles.chevron} aria-hidden />
       </Link>

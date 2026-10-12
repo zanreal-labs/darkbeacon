@@ -10,6 +10,20 @@ const { version } = JSON.parse(readFileSync(new URL('../../package.json', import
   version: string;
 };
 
+/** The id of the web build next to this server (Next.js writes it at build time); null in development. */
+const WEB_BUILD = (() => {
+  try {
+    return (
+      readFileSync(
+        new URL('../../../web/.next/standalone/apps/web/.next/BUILD_ID', import.meta.url),
+        'utf8',
+      ).trim() || null
+    );
+  } catch {
+    return null;
+  }
+})();
+
 /**
  * `/api/health`: healthy when the database answers and, if this process fronts the web app, its
  * server does too. `/api/ready`: the database answers and every migration is applied.
@@ -27,7 +41,13 @@ export class HealthController {
     if (this.web && !(await webServerAnswers(this.web))) {
       throw new ServiceUnavailableException('The web app server is not answering');
     }
-    return { status: 'ok', version, database: this.database.dialect, web: this.web ? 'ok' : 'off' };
+    return {
+      status: 'ok',
+      version,
+      database: this.database.dialect,
+      web: this.web ? 'ok' : 'off',
+      ...(WEB_BUILD ? { build: WEB_BUILD } : {}),
+    };
   }
 
   /** Ready for traffic: the database answers and no migration is pending. */

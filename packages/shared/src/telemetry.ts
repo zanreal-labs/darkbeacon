@@ -12,7 +12,15 @@ export const FIRST_PARTY_PLUGIN_IDS = ['discord-notify', 'sample-widget'] as con
 export const FirstPartyPluginId = z.enum(FIRST_PARTY_PLUGIN_IDS);
 
 /** Built-in themes, `system` and the first-party theme packages; any other theme is `custom`. */
-export const FIRST_PARTY_THEME_IDS = ['system', 'default', 'dark', 'contrast', 'amarr'] as const;
+export const FIRST_PARTY_THEME_IDS = [
+  'system',
+  'default',
+  'dark',
+  'contrast',
+  'amarr',
+  'large',
+  'pathfinder',
+] as const;
 export const TelemetryThemeId = z.enum([...FIRST_PARTY_THEME_IDS, 'custom']);
 export type TelemetryThemeId = z.infer<typeof TelemetryThemeId>;
 
@@ -80,6 +88,8 @@ export const TelemetryPage = z.enum([
   'oauth_consent',
   'import',
   'jump',
+  'characters',
+  'changelog',
 ]);
 /** Tabs of the admin page and of a map's settings. */
 export const TelemetrySection = z.enum([
@@ -110,6 +120,12 @@ export const TelemetrySection = z.enum([
   'api',
   /** Map settings, Public link. */
   'public',
+  /** Map settings, Your view (canvas preferences of this browser). */
+  'view',
+  /** Map settings, History. */
+  'history',
+  /** Map settings, Auto-mapping. */
+  'automap',
 ]);
 /** Map panels (the widget dock); `plugin` for any plugin widget. */
 export const TelemetryPanel = z.enum([
@@ -142,7 +158,15 @@ export const ContextMenuAction = z.enum([
   // either: an item a plugin added
   'plugin',
 ]);
-export const KeyboardShortcut = z.enum(['fit_chain', 'center_on_me', 'legend']);
+export const KeyboardShortcut = z.enum([
+  'fit_chain',
+  'center_on_me',
+  'legend',
+  'undo',
+  'delete_selection',
+  'copy_selection',
+  'paste_systems',
+]);
 
 /**
  * Events the web app may report (through `POST /api/telemetry/e`, never straight to PostHog).

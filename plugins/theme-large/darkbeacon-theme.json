@@ -1,0 +1,17 @@
+{
+  "id": "large",
+  "name": "Large text",
+  "version": "1.0.0",
+  "colorScheme": "dark",
+  "extends": "dark",
+  "tokens": {
+    "font-size-xs": "12.5px",
+    "font-size-small": "14px",
+    "font-size": "15px",
+    "font-size-large": "17px",
+    "font-size-title": "23px",
+    "map-text-scale": "1.15",
+    "control-height-small": "30px",
+    "control-height": "36px"
+  }
+}

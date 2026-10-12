@@ -453,3 +453,21 @@
 .narrow {
   max-width: 320px;
 }
+
+/* Removable chips in a list (excluded systems). */
+ul.chips {
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 28px;
+  padding: 0 2px 0 var(--dbk-space-2);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: 999px;
+  background: var(--dbk-color-surface-sunken, var(--dbk-color-bg-subtle));
+  font-size: var(--dbk-font-size-small);
+}

@@ -4,3 +4,4 @@ export * from './auto-mapper.js';
 export * from './cleanup.js';
 export * from './poller.js';
 export * from './tracking.js';
+export * from './settings.js';

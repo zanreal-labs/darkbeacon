@@ -1,7 +1,12 @@
 import { noAuditScope, type Actor, type AuditScope } from '@darkbeacon/core';
 import type { ConnectionUseCases, MappingPorts, SystemUseCases } from '@darkbeacon/mapping';
 import { SYSTEM_PLACEMENT, type Position } from '@darkbeacon/shared';
-import type { AutoMapTarget, RecordedJump } from '@darkbeacon/tracking';
+import {
+  DEFAULT_AUTO_MAP_RULES,
+  type AutoMapRules,
+  type AutoMapTarget,
+  type RecordedJump,
+} from '@darkbeacon/tracking';
 
 /** Room a system node needs; a spot closer than this to another system is taken. */
 const GAP = { x: SYSTEM_PLACEMENT.x - 40, y: SYSTEM_PLACEMENT.y - 10 };
@@ -27,6 +32,18 @@ export class MappingAutoMapTarget implements AutoMapTarget {
     return (await this.ports.maps.findById(mapId))?.settings.scopes ?? null;
   }
 
+  async rules(mapId: string): Promise<AutoMapRules | null> {
+    const settings = (await this.ports.maps.findById(mapId))?.settings;
+    if (!settings) return null;
+    const own = settings.autoMap ?? {};
+    return {
+      scopes: settings.scopes,
+      excludedSystems: own.excludedSystems ?? DEFAULT_AUTO_MAP_RULES.excludedSystems,
+      gateRule: own.gateRule ?? DEFAULT_AUTO_MAP_RULES.gateRule,
+      typeBridges: own.typeBridges ?? DEFAULT_AUTO_MAP_RULES.typeBridges,
+    };
+  }
+
   async recordJump(jump: RecordedJump): Promise<void> {
     const actor: Actor = { kind: 'account', id: jump.accountId, instanceRole: 'user' };
     // Recorded as the owner, made by auto-mapping with the character that jumped.
@@ -42,6 +59,17 @@ export class MappingAutoMapTarget implements AutoMapTarget {
           type: jump.type,
         });
       },
+    );
+  }
+
+  async placeSystem(input: { mapId: string; solarSystemId: number; characterId: number; accountId: string }) {
+    const actor: Actor = { kind: 'account', id: input.accountId, instanceRole: 'user' };
+    const all = await this.ports.systems.list(input.mapId);
+    if (all.find((s) => s.solarSystemId === input.solarSystemId)?.visible) return;
+    await this.audit.run(
+      { channel: { kind: 'system', id: 'auto-mapping' }, characterId: input.characterId },
+      () =>
+        this.systems.add(actor, input.mapId, { solarSystemId: input.solarSystemId }).then(() => undefined),
     );
   }
 

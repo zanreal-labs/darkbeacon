@@ -241,12 +241,15 @@ On the leader only:
 - Wanderer imports and syncs: a job queued on another replica is signalled to the leader, and a new leader
   resumes jobs the old one left running;
 - schedules: event retention, the chain sweeper, the signature sweep, routing exits and the way home
-  (computed and published), session, OAuth, delivery and tombstone prunes, the telemetry heartbeat,
-  installing bundled plugins and plugins' background work (`ctx.every`).
+  (computed and published), the affiliation refresh (corporations and alliances of every character,
+  every 10 minutes), session, OAuth, delivery and tombstone prunes, the telemetry heartbeat, installing
+  bundled plugins and plugins' background work (`ctx.every`).
 
 Everywhere: HTTP, WebSockets and SSE with their fan-out, access caches (kept current by the bus), the
-router's tables, and two small public caches every replica's routes read from memory: EVE-Scout's Thera
-and Turnur holes (one request every 5 minutes) and ESI's sovereignty holders for bridges (one an hour).
+router's tables, and three small public reads each replica keeps in memory: EVE-Scout's Thera and
+Turnur holes (one request every 5 minutes) and ESI's sovereignty holders for bridges (one an hour), which
+its routes use, and Tranquility's status (`/status`, once a minute), which it shows its clients; the
+leader's copy also pauses tracking during downtime.
 Committed events are counted for OpenTelemetry by the replica that committed them. Built-in backups are
 SQLite's; a cluster runs on Postgres and is backed up with its tooling.
 

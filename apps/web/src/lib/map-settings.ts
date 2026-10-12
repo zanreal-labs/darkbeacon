@@ -6,6 +6,7 @@ export const MAP_SETTINGS_PARAM = 'settings';
 
 export const MAP_SETTINGS_SECTIONS = [
   'general',
+  'automap',
   'access',
   'characters',
   'sharing',
@@ -20,9 +21,14 @@ export const MAP_SETTINGS_SECTIONS = [
   'webhooks',
   'import',
   'transfer',
+  'view',
+  'history',
   'danger',
 ] as const;
 export type MapSettingsSection = (typeof MAP_SETTINGS_SECTIONS)[number];
+
+/** What everyone on the map has: their own view of the canvas, and the map's history. */
+const FOR_EVERYONE: readonly MapSettingsSection[] = ['view', 'history'];
 
 /** What managers may change; every other section is for the map's admins. */
 const FOR_MANAGERS: readonly MapSettingsSection[] = [
@@ -35,12 +41,13 @@ const FOR_MANAGERS: readonly MapSettingsSection[] = [
   'bridges',
   'import',
   'transfer',
+  ...FOR_EVERYONE,
 ];
 
-/** The sections someone with these rights sees, in order (none below manager). */
+/** The sections someone with these rights sees, in order (viewers: their view and the history). */
 export function mapSettingsSections(can: { manage: boolean; admin: boolean }): MapSettingsSection[] {
   if (can.admin) return [...MAP_SETTINGS_SECTIONS];
-  return can.manage ? MAP_SETTINGS_SECTIONS.filter((s) => FOR_MANAGERS.includes(s)) : [];
+  return MAP_SETTINGS_SECTIONS.filter((s) => (can.manage ? FOR_MANAGERS : FOR_EVERYONE).includes(s));
 }
 
 /** Tabs of the old settings page (`/m/<slug>/settings?tab=`) that have another name now. */

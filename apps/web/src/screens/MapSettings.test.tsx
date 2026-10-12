@@ -183,13 +183,20 @@ describe('map settings dialog', () => {
       'Bridges',
       'Import',
       'Copy and hand over',
+      'Your view',
+      'History',
     ]);
     expect(screen.getByRole('tab', { name: 'Access', selected: true })).toBeTruthy();
   });
 
-  it('has no rail button for members, nor off a map', async () => {
-    open('/m/home-chain', 'member');
-    expect(screen.queryByRole('button', { name: 'Map settings' })).toBeNull();
+  it('gives members and viewers their own view and the history, and nothing off a map', async () => {
+    const user = userEvent.setup();
+    const view = open('/m/home-chain', 'viewer');
+    await user.click(screen.getByRole('button', { name: 'Map settings' }));
+    await screen.findByRole('dialog', { name: 'Map settings' });
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Your view', 'History']);
+    expect(screen.getByRole('tab', { name: 'Your view', selected: true })).toBeTruthy();
+    view.unmount();
     window.history.replaceState(null, '', '/account');
     open('/account', 'admin');
     expect(screen.queryByRole('button', { name: 'Map settings' })).toBeNull();

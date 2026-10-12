@@ -9,13 +9,22 @@ import {
 import type { EventBus, Leadership } from '@darkbeacon/core';
 import type { DomainTelemetry } from '@darkbeacon/observability';
 import { isEventOfType } from '@darkbeacon/shared';
-import { AutoMapper, ListMapCharacters, TrackingCleanup, TrackingPoller } from '@darkbeacon/tracking';
+import {
+  AutoMapper,
+  ListMapCharacters,
+  ServerStatusWatch,
+  STATUS_INTERVAL_MS,
+  TrackingCleanup,
+  TrackingPoller,
+  type MapCharacterSettingsRepository,
+} from '@darkbeacon/tracking';
 import type { AppConfig } from '../../config/config.js';
 import { EventConsumers } from '../../platform/event-consumers.js';
 import { MaintenanceMode } from '../../platform/maintenance.js';
 import { APP_CONFIG, EVENT_BUS, LEADERSHIP, OBSERVABILITY } from '../../platform/tokens.js';
 import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
 import { OfflineVisibility } from './offline-visibility.js';
+import { MAP_CHARACTER_SETTINGS } from './tracking.tokens.js';
 
 /** How often the poller looks for characters that are due (a tick only reads memory). */
 const TICK_MS = 250;
@@ -28,6 +37,7 @@ const TICK_MS = 250;
 @Injectable()
 export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
   private timer: NodeJS.Timeout | undefined;
+  private statusTimer: NodeJS.Timeout | undefined;
   private unsubscribe: (() => void) | undefined;
 
   constructor(
@@ -42,6 +52,8 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
     @Inject(LEADERSHIP) private readonly leadership: Leadership,
     @Inject(MaintenanceMode) private readonly maintenance: MaintenanceMode,
     @Inject(OfflineVisibility) private readonly offline: OfflineVisibility,
+    @Inject(ServerStatusWatch) private readonly serverStatus: ServerStatusWatch,
+    @Inject(MAP_CHARACTER_SETTINGS) private readonly mapSettings: MapCharacterSettingsRepository,
     @Optional() @Inject(OBSERVABILITY) private readonly telemetry?: DomainTelemetry | null,
   ) {}
 
@@ -56,7 +68,7 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
     this.consumers.register({
       name: 'auto-mapping',
       streams: ['map'],
-      types: ['character.jumped'],
+      types: ['character.jumped', 'character.tracked', 'character.moved'],
       handle: (event) => this.autoMapper.handle(event),
     });
     this.consumers.register({
@@ -64,7 +76,9 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
       streams: ['map'],
       types: ['map.removed'],
       handle: async (event) => {
-        if (isEventOfType(event, 'map.removed')) await this.cleanup.forgetMap(event.data.id);
+        if (!isEventOfType(event, 'map.removed')) return;
+        await this.cleanup.forgetMap(event.data.id);
+        await this.mapSettings.forgetMap(event.data.id);
       },
     });
     this.consumers.register({
@@ -103,6 +117,10 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
     // Tests drive the poller themselves.
     if (this.config.env !== 'test') {
       this.timer = setInterval(() => void this.tick(), TICK_MS).unref();
+      // Downtime: TQ's status decides whether polling characters makes sense. Every replica reads
+      // it (one cached request a minute): each shows it to its own clients.
+      void this.serverStatus.refresh();
+      this.statusTimer = setInterval(() => void this.serverStatus.refresh(), STATUS_INTERVAL_MS).unref();
     }
   }
 
@@ -111,7 +129,7 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
    * never polls a character twice at once); each one's duration is what it polled.
    */
   private async tick(): Promise<void> {
-    if (this.maintenance.active || !this.leadership.isLeader()) return;
+    if (this.maintenance.active || !this.leadership.isLeader() || this.serverStatus.paused) return;
     const telemetry = this.telemetry;
     if (!telemetry) return this.poller.tick();
     const started = performance.now();
@@ -124,6 +142,7 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
 
   onModuleDestroy(): void {
     clearInterval(this.timer);
+    clearInterval(this.statusTimer);
     this.unsubscribe?.();
   }
 }

@@ -17,7 +17,16 @@ import {
 import type { CharacterTokens, LinkedCharacter } from '../domain/account.js';
 import { ExternalAuthError } from '../domain/errors.js';
 import type { PendingAuth } from '../domain/pending-auth.js';
-import { EVE_SCOPES, EVE_SEARCH_SCOPE, TOKEN_REFRESH_MARGIN_MS } from '../domain/rules.js';
+import {
+  addStrike,
+  EVE_SCOPES,
+  EVE_SEARCH_SCOPE,
+  linkScopes,
+  TOKEN_REFRESH_MARGIN_MS,
+  TOKEN_STRIKES,
+  type OptionalEveScope,
+  type TokenStrikes,
+} from '../domain/rules.js';
 import type { CharacterRepository } from '../ports/character-repository.js';
 import type { EveSso, EveTokenSet } from '../ports/eve-sso.js';
 import { accountChanged, IDENTITY_ACTOR } from './events.js';
@@ -36,6 +45,8 @@ export interface CharacterDeps {
 /** EVE characters: linking through EVE SSO, unlinking, and fresh ESI tokens for tracking. */
 export class CharacterService {
   private readonly refreshing = new Map<number, Promise<string | null>>();
+  /** Refresh refusals per character; a token is given up after TOKEN_STRIKES of them. */
+  private readonly strikes = new Map<number, TokenStrikes>();
 
   constructor(private readonly deps: CharacterDeps) {}
 
@@ -43,7 +54,15 @@ export class CharacterService {
     return this.deps.eve !== null;
   }
 
-  async startLink(actor: Actor | null, returnTo: unknown): Promise<{ url: string; pending: PendingAuth }> {
+  /**
+   * Starts linking a character (or linking it again). `extras` asks for opt-in scopes on top of
+   * the required ones; a character linked again without them loses the extras it had.
+   */
+  async startLink(
+    actor: Actor | null,
+    returnTo: unknown,
+    extras: readonly OptionalEveScope[] = [],
+  ): Promise<{ url: string; pending: PendingAuth }> {
     const account = requireAccount(actor);
     const eve = requireConfigured(this.deps.eve, 'EVE');
     const { pending, codeChallenge } = await beginPendingAuth(this.deps.clock, {
@@ -55,7 +74,7 @@ export class CharacterService {
       state: pending.state,
       codeChallenge,
       redirectUri: this.deps.redirectUri,
-      scopes: [...EVE_SCOPES],
+      scopes: linkScopes(extras),
     });
     return { url, pending };
   }
@@ -276,13 +295,8 @@ export class CharacterService {
   }
 
   /** Linked characters by id, with their corporation and alliance; unknown ids are left out. */
-  async linked(characterIds: readonly number[]): Promise<LinkedCharacter[]> {
-    const found: LinkedCharacter[] = [];
-    for (const id of new Set(characterIds)) {
-      const character = await this.deps.characters.findById(id);
-      if (character) found.push(character);
-    }
-    return found;
+  linked(characterIds: readonly number[]): Promise<LinkedCharacter[]> {
+    return this.deps.characters.findMany([...new Set(characterIds)]);
   }
 
   /** Name and owner account of a linked character (CharacterTokenSource of tracking). */
@@ -328,12 +342,20 @@ export class CharacterService {
       refreshed = await this.deps.eve.refresh(tokens.refreshToken);
     } catch (error) {
       if (!(error instanceof ExternalAuthError)) throw error;
+      // EVE refuses a refresh now and then; only repeated refusals mean the grant is gone.
+      const strikes = addStrike(this.strikes.get(characterId), this.deps.clock.now());
+      if (strikes.count < TOKEN_STRIKES.max) {
+        this.strikes.set(characterId, strikes);
+        return null;
+      }
+      this.strikes.delete(characterId);
       await this.deps.characters.updateState(characterId, character.accountId, {
         tokenValid: false,
         updatedAt: this.deps.clock.now(),
       });
       return null;
     }
+    this.strikes.delete(characterId);
     // Corporation and alliance feed access rules; keep them current while the character is used.
     const affiliation = await this.deps.eve.affiliation(characterId).catch(() => null);
     return this.deps.uow.transaction(async () => {

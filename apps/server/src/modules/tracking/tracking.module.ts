@@ -5,12 +5,16 @@ import type { AuditScope, Clock, EventLog, MapAccess, UnitOfWork } from '@darkbe
 import { Database } from '@darkbeacon/db';
 import {
   AutoMapper,
+  CharacterActivity,
   ListMapCharacters,
+  MapCharacterSettingsUseCases,
+  ServerStatusWatch,
   ManageMapTracking,
   SetTracking,
   TrackingCleanup,
   TrackingPoller,
   type AutoMapTarget,
+  type BridgeLookup,
   type CharacterTokenSource,
   type EsiGateway,
   type TrackingRepository,
@@ -18,6 +22,7 @@ import {
 } from '@darkbeacon/tracking';
 import {
   ConnectionUseCases,
+  MapUseCases,
   SystemUseCases,
   type MapRepository,
   type MappingPorts,
@@ -29,7 +34,14 @@ import { RealtimeMapViewers } from '../../adapters/tracking/realtime-map-viewers
 import { MappingAutoMapTarget } from '../../adapters/tracking/mapping-auto-map-target.js';
 import { SharingAutoMapTarget } from '../../adapters/sharing/sharing-auto-map-target.js';
 import { ChainMerger, ChainWrites } from '@darkbeacon/sharing';
-import { KyselyTrackingRepository } from '../../adapters/tracking/kysely-tracking-repository.js';
+import {
+  KyselyMapCharacterSettings,
+  KyselyTrackingRepository,
+} from '../../adapters/tracking/kysely-tracking-repository.js';
+import { KyselyActivityReader } from '../../adapters/tracking/kysely-activity-reader.js';
+import { HttpServerStatus } from '../../adapters/tracking/http-server-status.js';
+import { RoutingBridgeLookup } from '../../adapters/tracking/routing-bridge-lookup.js';
+import { KyselyBridgeRepository } from '../../adapters/routing/kysely-routing-repositories.js';
 import type { AppConfig } from '../../config/config.js';
 import {
   APP_CONFIG,
@@ -45,6 +57,8 @@ import {
 import { RealtimeHub } from '../../realtime/realtime.hub.js';
 import { MappingModule } from '../mapping/mapping.module.js';
 import { MAP_REPOSITORY, MAPPING_PORTS } from '../mapping/mapping.tokens.js';
+import { CharactersController } from './characters.controller.js';
+import { TrackingOverview } from './my-tracking.js';
 import { OfflineVisibility } from './offline-visibility.js';
 import { TrackingController } from './tracking.controller.js';
 import { TrackingRuntime } from './tracking.runtime.js';
@@ -58,6 +72,9 @@ export const ESI_GATEWAY = 'EsiGateway';
  * less often, maps someone has open first. See docs/scaling.md for the arithmetic.
  */
 export const ESI_REQUESTS_PER_SECOND = 500;
+export { MAP_CHARACTER_SETTINGS } from './tracking.tokens.js';
+import { MAP_CHARACTER_SETTINGS } from './tracking.tokens.js';
+const BRIDGE_LOOKUP = 'tracking.BridgeLookup';
 
 const { version } = JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')) as {
   version: string;
@@ -69,7 +86,7 @@ const { version } = JSON.parse(readFileSync(new URL('../../../package.json', imp
  */
 @Module({
   imports: [MappingModule],
-  controllers: [TrackingController],
+  controllers: [TrackingController, CharactersController],
   providers: [
     { provide: CHARACTER_TOKENS, useExisting: CharacterService },
     {
@@ -136,9 +153,65 @@ const { version } = JSON.parse(readFileSync(new URL('../../../package.json', imp
     },
     {
       provide: ListMapCharacters,
-      useFactory: (tracking: TrackingRepository, access: MapAccess) =>
-        new ListMapCharacters({ tracking, access }),
-      inject: [TRACKING_REPOSITORY, MAP_ACCESS],
+      useFactory: (tracking: TrackingRepository, access: MapAccess, characters: CharacterTokenSource) =>
+        new ListMapCharacters({ tracking, access, characters }),
+      inject: [TRACKING_REPOSITORY, MAP_ACCESS, CHARACTER_TOKENS],
+    },
+    {
+      provide: MAP_CHARACTER_SETTINGS,
+      useFactory: (database: Database) => new KyselyMapCharacterSettings(database),
+      inject: [Database],
+    },
+    {
+      provide: MapCharacterSettingsUseCases,
+      useFactory: (
+        settings: KyselyMapCharacterSettings,
+        characters: CharacterTokenSource,
+        access: MapAccess,
+        clock: Clock,
+      ) => new MapCharacterSettingsUseCases({ settings, characters, access, clock }),
+      inject: [MAP_CHARACTER_SETTINGS, CHARACTER_TOKENS, MAP_ACCESS, CLOCK],
+    },
+    {
+      provide: CharacterActivity,
+      useFactory: (
+        database: Database,
+        characters: CharacterTokenSource,
+        tracking: TrackingRepository,
+        access: MapAccess,
+        clock: Clock,
+      ) =>
+        new CharacterActivity({
+          activity: new KyselyActivityReader(database),
+          characters,
+          tracking,
+          access,
+          clock,
+        }),
+      inject: [Database, CHARACTER_TOKENS, TRACKING_REPOSITORY, MAP_ACCESS, CLOCK],
+    },
+    {
+      provide: ServerStatusWatch,
+      useFactory: (config: AppConfig, clock: Clock) =>
+        new ServerStatusWatch({
+          source: new HttpServerStatus({
+            userAgent: `Darkbeacon/${version} (+${config.publicUrl})`,
+            baseUrl: config.esiBaseUrl,
+          }),
+          clock,
+        }),
+      inject: [APP_CONFIG, CLOCK],
+    },
+    {
+      provide: TrackingOverview,
+      useFactory: (characters: CharacterService, maps: MapUseCases, tracking: TrackingRepository) =>
+        new TrackingOverview({ characters, maps, tracking }),
+      inject: [CharacterService, MapUseCases, TRACKING_REPOSITORY],
+    },
+    {
+      provide: BRIDGE_LOOKUP,
+      useFactory: (database: Database) => new RoutingBridgeLookup(new KyselyBridgeRepository(database)),
+      inject: [Database],
     },
     {
       provide: ManageMapTracking,
@@ -202,8 +275,9 @@ const { version } = JSON.parse(readFileSync(new URL('../../../package.json', imp
         access: MapAccess,
         target: AutoMapTarget,
         universe: UniverseLookup,
-      ) => new AutoMapper({ tracking, access, target, universe }),
-      inject: [TRACKING_REPOSITORY, MAP_ACCESS, AUTO_MAP_TARGET, UNIVERSE_CATALOG],
+        bridges: BridgeLookup,
+      ) => new AutoMapper({ tracking, access, target, universe, bridges }),
+      inject: [TRACKING_REPOSITORY, MAP_ACCESS, AUTO_MAP_TARGET, UNIVERSE_CATALOG, BRIDGE_LOOKUP],
     },
     {
       provide: TrackingCleanup,

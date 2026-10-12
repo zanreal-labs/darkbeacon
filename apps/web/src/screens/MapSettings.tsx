@@ -17,7 +17,9 @@ import {
   Bell,
   Bookmark,
   Copy,
+  Eye,
   Globe,
+  History,
   Import,
   KeyRound,
   Network,
@@ -42,6 +44,7 @@ import { MapSharing } from './MapSharing';
 import { MapAccessSection } from './MapAccess';
 import { MapCharactersSection } from './MapCharacters';
 import { MapTransferSection } from './MapTransfer';
+import { MapAutoMapSettings } from './MapAutoMapSettings';
 import {
   buildPath,
   MAP_DESCRIPTION_MAX,
@@ -63,6 +66,9 @@ import { relativeTime } from '../lib/time';
 import { track } from '../lib/telemetry';
 import { useMapSettings } from '../lib/useMapSettings';
 import { BookmarkLabelSettings } from '../map/BookmarkSettings';
+import { CanvasSettings } from '../map/canvas/CanvasSettings';
+import { ClipboardRoles } from '../map/clipboard/ClipboardRoles';
+import { MapHistory } from '../map/history/MapHistory';
 import { BridgesSettings, RoutesSettings } from '../map/routes/RoutingSettings';
 import { PluginSlot } from '../plugins/PluginSlot';
 import {
@@ -117,6 +123,16 @@ const SECTIONS: readonly Section[] = [
     title: 'General',
     icon: <Settings2 />,
     render: (map) => <GeneralSettings map={map} />,
+  },
+  {
+    id: 'automap',
+    title: 'Auto-mapping',
+    icon: <Radar />,
+    render: (map) => (
+      <Pane>
+        <MapAutoMapSettings key={map.id} map={map} />
+      </Pane>
+    ),
   },
   {
     id: 'access',
@@ -247,6 +263,27 @@ const SECTIONS: readonly Section[] = [
     render: (map, can) => (
       <Pane>
         <MapTransferSection map={map} can={can} />
+        <ClipboardRoles map={map} />
+      </Pane>
+    ),
+  },
+  {
+    id: 'view',
+    title: 'Your view',
+    icon: <Eye />,
+    render: () => (
+      <Pane>
+        <CanvasSettings />
+      </Pane>
+    ),
+  },
+  {
+    id: 'history',
+    title: 'History',
+    icon: <History />,
+    render: (map, can) => (
+      <Pane>
+        <MapHistory key={map.id} map={map} can={can} />
       </Pane>
     ),
   },

@@ -13,6 +13,7 @@ import {
   SystemLabelDto,
 } from './dto/mapping.js';
 import { MassMode, PassageSource } from './dto/passages.js';
+import { MapPingDto } from './dto/pings.js';
 import { PluginDto } from './dto/plugins.js';
 import { HubDto, MapExitDto } from './dto/routing.js';
 import { BridgeDto } from './dto/bridges.js';
@@ -68,6 +69,7 @@ export const EVENT_DATA_SCHEMAS: Record<EventType, z.ZodType> = {
     shipName: z.string().nullable(),
   }),
   'character.online_changed': z.object({ characterId: EveId, online: z.boolean() }),
+  'character.docked_changed': z.object({ characterId: EveId, docked: z.boolean() }),
   'character.tracked': CharacterPresenceDto,
   'character.untracked': z.object({ characterId: EveId }),
   'map.settings_changed': MapDto,
@@ -82,13 +84,7 @@ export const EVENT_DATA_SCHEMAS: Record<EventType, z.ZodType> = {
   'map.sources_changed': z.object({ sources: z.array(MapSourceDto) }),
   'routes.exits_changed': z.object({ exits: z.array(MapExitDto) }),
   'routes.hubs_changed': z.object({ hubs: z.array(HubDto) }),
-  'ping.created': z.object({
-    id: Id,
-    solarSystemId: EveId,
-    message: z.string(),
-    createdBy: z.string(),
-    createdAt: Timestamp,
-  }),
+  'ping.created': MapPingDto,
   'ping.removed': z.object({ id: Id }),
   'kill.reported': KillmailDto,
   'access.rule_added': AccessRuleDto,

@@ -99,7 +99,7 @@ Sent once a day (checked hourly; the first one a minute after a new instance sta
 | `discord_bot`                      | an instance Discord bot is connected                                                      |
 | `plugins_first_party`              | enabled plugins shipped with Darkbeacon (`discord-notify`, `sample-widget`)               |
 | `plugins_third_party`              | bucket: other enabled plugins (never their ids)                                           |
-| `theme_default`                    | `system`, `default`, `dark`, `contrast`, `amarr` or `custom`                              |
+| `theme_default`                    | `system`, `default`, `dark`, `contrast`, `amarr`, `large`, `pathfinder` or `custom`       |
 | `themes_third_party`               | bucket: installed themes that are not first-party                                         |
 | `event_retention`                  | an event log retention is set                                                             |
 | `accounts`                         | number of accounts                                                                        |
@@ -151,10 +151,10 @@ made while seeding the demo map or by cleanups count as nothing; a history rever
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `app_loaded`        | `viewport`: `phone`, `tablet`, `desktop`; `tti`: `<1s`, `1-2s`, `2-4s`, `4-8s`, `8s+`                                                                                                                    |
 | `theme_used`        | `theme` (as `theme_default`); `scheme`: `light` or `dark`                                                                                                                                                |
-| `page_viewed`       | `page`: `map`, `maps`, `account`, `admin`, `map_settings`, `oauth_consent`, `import`, `jump`; `section`: the admin or map settings tab                                                                   |
+| `page_viewed`       | `page`: `map`, `maps`, `account`, `admin`, `map_settings`, `oauth_consent`, `import`, `jump`, `characters`, `changelog`; `section`: the admin or map settings tab                                        |
 | `panel_opened`      | `panel`: `system`, `signatures`, `local`, `routes`, `connections`, `history`, `plugin`                                                                                                                   |
 | `context_menu_used` | `menu`: `system` or `connection`; `action`: `status`, `labels`, `tags`, `edit`, `hidden`, `locked`, `copy_name`, `remove`, `time`, `mass`, `size`, `type`, `bubble`, `dangerous`, `mass_saved`, `plugin` |
-| `shortcut_used`     | `shortcut`: `fit_chain`, `center_on_me`, `legend`                                                                                                                                                        |
+| `shortcut_used`     | `shortcut`: `fit_chain`, `center_on_me`, `legend`, `undo`, `delete_selection`, `copy_selection`, `paste_systems`                                                                                         |
 | `activity_viewed`   | `section`: `activity` or `kills`; `window`: `1h`, `4h`, `12h`, `24h`, `7d` (its time window was changed)                                                                                                 |
 
 ## Delivery

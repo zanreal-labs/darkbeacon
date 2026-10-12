@@ -1,0 +1,34 @@
+/* Doubled class: React Flow's own panel margin has the same specificity and may load later. */
+.minimap.minimap {
+  width: 200px;
+  height: 140px;
+  margin: var(--dbk-space-3);
+  overflow: hidden;
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius-large);
+  box-shadow: var(--dbk-shadow-medium);
+}
+
+.minimap svg {
+  display: block;
+}
+
+/* Under the top bar (search, filters), beside the view controls, left of the panel. */
+.minimap[data-corner^='top'] {
+  top: 52px;
+}
+
+.minimap[data-corner='bottom-left'] {
+  left: 52px;
+}
+
+.minimap[data-corner$='right'] {
+  right: var(--covered-right, 0px);
+}
+
+/* A phone has no room for it. */
+@media (max-width: 760px) {
+  .minimap.minimap {
+    display: none;
+  }
+}

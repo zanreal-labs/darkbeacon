@@ -306,6 +306,15 @@ createServer((req, res) => {
     });
     return;
   }
+  // Tranquility is up (the server pauses tracking during downtime).
+  if (url.pathname === '/status' && req.method === 'GET') {
+    return send(
+      res,
+      200,
+      { 'cache-control': 'public, max-age=30' },
+      JSON.stringify({ players: 30_000, server_version: '3000000', start_time: '2026-10-12T11:00:00Z' }),
+    );
+  }
   const match = ROUTE.exec(url.pathname);
   if (!match || req.method !== 'GET') return send(res, 404, {}, '{"error":"Not found"}');
   stats.inflight++;

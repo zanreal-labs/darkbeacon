@@ -255,7 +255,18 @@ function Activity() {
   );
 }
 
-function EntryRow({ entry, repeats, names }: { entry: AuditEntryDto; repeats: number; names: AuditNames }) {
+/** One change, as a sentence with its field changes and where it came from; `actions` at the end. */
+export function EntryRow({
+  entry,
+  repeats,
+  names,
+  actions,
+}: {
+  entry: AuditEntryDto;
+  repeats: number;
+  names: AuditNames;
+  actions?: ReactNode;
+}) {
   const reading = readEntry(entry, names);
   const when = (
     <time
@@ -323,6 +334,7 @@ function EntryRow({ entry, repeats, names }: { entry: AuditEntryDto; repeats: nu
             </span>
           )}
           {entry.revertOf && <Badge variant="outline">Revert</Badge>}
+          {actions}
         </div>
       </div>
       <span className={styles.time}>{when}</span>

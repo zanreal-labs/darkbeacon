@@ -274,6 +274,20 @@ export class DemoLogin {
     return { token, account, returnTo: '/' };
   }
 
+  /**
+   * A named local account with one fake character and no session: the other pilots of the demo
+   * map. Returns the account and the character's id.
+   */
+  async ensurePilot(
+    accountName: string,
+    character: FakeCharacter,
+  ): Promise<{ accountId: string; characterId: number }> {
+    if (!this.deps.enabled) throw new NotFoundError('Demo access');
+    const account = await this.deps.accounts.devAccount(accountName);
+    await this.attach(account, character);
+    return { accountId: account.id, characterId: character.id ?? devCharacterId(character.name) };
+  }
+
   private async attach(account: Account, fake: FakeCharacter): Promise<void> {
     await this.deps.uow.transaction(async () => {
       const id = fake.id ?? devCharacterId(fake.name);

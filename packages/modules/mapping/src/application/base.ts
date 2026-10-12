@@ -24,6 +24,8 @@ import type {
   MapRepository,
   PassageRepository,
   PilotDirectory,
+  PingAuthorDirectory,
+  PingRepository,
   SignatureRepository,
   StructureRepository,
   SystemRepository,
@@ -52,6 +54,10 @@ export interface MappingPorts {
   comments?: CommentRepository;
   /** Accounts, the map creation policy and rule counts; absent: anyone creates, no inventory names. */
   directory?: MapDirectory;
+  /** Rally pings; absent: no pings (and nothing is held on the map by one). */
+  pings?: PingRepository;
+  /** Who called a ping, with which character; absent: pings carry no names. */
+  pingAuthors?: PingAuthorDirectory;
   access: MapAccess;
   events: EventLog;
   uow: UnitOfWork;

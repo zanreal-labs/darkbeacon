@@ -433,6 +433,21 @@ export class KyselyCharacterRepository implements CharacterRepository {
     return row ? toCharacter(row) : null;
   }
 
+  async findMany(characterIds: readonly number[]): Promise<LinkedCharacter[]> {
+    if (characterIds.length === 0) return [];
+    const found: LinkedCharacter[] = [];
+    // Kept well below the bound-parameter limits of both dialects.
+    for (let i = 0; i < characterIds.length; i += 500) {
+      const rows = await this.db
+        .selectFrom('eve_character')
+        .selectAll()
+        .where('id', 'in', [...characterIds.slice(i, i + 500)])
+        .execute();
+      found.push(...rows.map(toCharacter));
+    }
+    return found;
+  }
+
   async listAll(): Promise<LinkedCharacter[]> {
     const rows = await this.db.selectFrom('eve_character').selectAll().orderBy('name').execute();
     return rows.map(toCharacter);

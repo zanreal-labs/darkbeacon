@@ -1,4 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { AccessRules } from '@darkbeacon/access';
+import type { Clock } from '@darkbeacon/core';
+import type { TrackingRepository } from '@darkbeacon/tracking';
 import { AccountService, DemoLogin, type SignedIn } from '@darkbeacon/identity';
 import {
   CommentUseCases,
@@ -13,6 +16,9 @@ import { AsyncAuditScope } from '../../platform/audit.js';
 import { SharingUseCases } from '@darkbeacon/sharing';
 import { seedDemoAlliance } from './demo-alliance.js';
 import { seedDemoChain } from './demo-chain.js';
+import { seedDemoPilots } from './demo-pilots.js';
+import { CLOCK } from '../../platform/tokens.js';
+import { TRACKING_REPOSITORY } from '../tracking/tracking.module.js';
 
 /**
  * Demo mode: signs a visit in as the demo account and seeds the demo map the first time that
@@ -36,6 +42,9 @@ export class DemoService {
     @Inject(SharingUseCases) private readonly sharing: SharingUseCases,
     @Inject(CommentUseCases) private readonly comments: CommentUseCases,
     @Inject(StructureUseCases) private readonly structures: StructureUseCases,
+    @Inject(AccessRules) private readonly rules: AccessRules,
+    @Inject(TRACKING_REPOSITORY) private readonly tracking: TrackingRepository,
+    @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
   get enabled(): boolean {
@@ -62,6 +71,13 @@ export class DemoService {
           const id = await seedDemoChain(actor, { ...mapping, passages: this.passages });
           // Two corporations' maps and the alliance chain merging them (shares between maps).
           await seedDemoAlliance(actor, mapping, this.sharing);
+          // Pilots tracked on the chain, for its character strip, Local and "On the map".
+          await seedDemoPilots(actor, id, {
+            login: this.login,
+            rules: this.rules,
+            tracking: this.tracking,
+            now: this.clock.now(),
+          });
           return id;
         },
       );

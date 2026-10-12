@@ -81,7 +81,14 @@ export function setupMockServer(...handlers: Parameters<typeof setupServer>) {
       }),
     ),
   ];
-  const server = setupServer(...handlers, themes, ...empty, wormholes, ...routing);
+  // My preferences and my settings on a map: nothing set yet.
+  const characters = [
+    http.get(routes.characters.preferences.path, () => HttpResponse.json({ preferences: {}, updatedAt: 0 })),
+    http.get(routes.characters.mapSettings.path, () =>
+      HttpResponse.json({ mainCharacterId: null, followCharacterId: null }),
+    ),
+  ];
+  const server = setupServer(...handlers, themes, ...empty, wormholes, ...routing, ...characters);
   beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
   afterEach(() => server.resetHandlers());
   afterAll(() => server.close());

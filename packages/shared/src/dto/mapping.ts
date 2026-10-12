@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { MapRole } from './access.js';
 import { AuthorDto } from './authors.js';
 import { StarterAccessRule } from './access-rules.js';
+import { AutoMapRulesDto } from './auto-map.js';
 import { BookmarkNumbering, BookmarkTemplate } from './bookmarks.js';
 import { EveId, Id, Timestamp } from './common.js';
 
@@ -27,6 +28,13 @@ export const MapSettings = z.object({
   onlyTrackedCharacters: z.boolean().optional(),
   /** Wanderer's `restrict_offline_showing`: offline characters are shown to managers and up only. */
   offlineForManagersOnly: z.boolean().optional(),
+  /**
+   * Who may copy systems off this map and paste systems onto it (the lowest role). Absent: viewers
+   * copy, members paste.
+   */
+  clipboard: z.object({ copy: MapRole, paste: MapRole }).optional(),
+  /** Excluded systems, the gate rule and bridge typing of auto-mapping; absent: the defaults. */
+  autoMap: AutoMapRulesDto.optional(),
 });
 export type MapSettings = z.infer<typeof MapSettings>;
 

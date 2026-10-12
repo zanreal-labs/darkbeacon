@@ -112,6 +112,9 @@ export class MemoryCharacters implements CharacterRepository {
   findById(id: number) {
     return Promise.resolve(this.rows.get(id) ?? null);
   }
+  findMany(ids: readonly number[]) {
+    return Promise.resolve(ids.flatMap((id) => (this.rows.has(id) ? [this.rows.get(id)!] : [])));
+  }
   listForAccount(accountId: string) {
     return Promise.resolve([...this.rows.values()].filter((c) => c.accountId === accountId));
   }

@@ -36,3 +36,41 @@
   width: 18px;
   height: 18px;
 }
+
+/* My preferences */
+.prefs {
+  display: grid;
+  gap: var(--dbk-space-4);
+}
+
+.prefRow {
+  display: flex;
+  align-items: center;
+  gap: var(--dbk-space-3);
+}
+
+.prefText {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.prefText .muted {
+  font-size: var(--dbk-font-size-small);
+}
+
+.prefGroup {
+  display: grid;
+  gap: var(--dbk-space-3);
+}
+
+.prefNote {
+  margin: 0;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+}
+
+.spacer {
+  flex: 1;
+}
