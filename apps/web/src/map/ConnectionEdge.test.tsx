@@ -89,11 +89,11 @@ describe('ConnectionEdge', () => {
     // The halo is drawn first, so it sits beneath the line.
     expect(halo.compareDocumentPosition(line(container))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
 
-    // Centres radius + 6 px past the node borders (160 and 400), so the circles never cover a node.
-    const bubbles = [...container.querySelectorAll<HTMLElement>('[data-bubble]')];
-    expect(bubbles.map((b) => [b.dataset.bubble, b.style.transform])).toEqual([
-      ['source', 'translate(-50%, -50%) translate(181px, 30px)'],
-      ['target', 'translate(-50%, -50%) translate(379px, 30px)'],
+    // Centres radius + 5 px past the node borders (160 and 400), so the rings never cover a node.
+    const bubbles = [...container.querySelectorAll<SVGCircleElement>('[data-bubble]')];
+    expect(bubbles.map((b) => [b.dataset.bubble, b.getAttribute('cx'), b.getAttribute('cy')])).toEqual([
+      ['source', '185', '30'],
+      ['target', '375', '30'],
     ]);
 
     expect(line(container).style.stroke).toBe('var(--dbk-edge-time-eol)');
@@ -106,7 +106,7 @@ describe('ConnectionEdge', () => {
       connectionFixture('c3', 1, 2, { bubbled: 'target', massStatus: 'reduced', massSaved: true }),
     );
     expect(
-      [...container.querySelectorAll<HTMLElement>('[data-bubble]')].map((b) => b.dataset.bubble),
+      [...container.querySelectorAll<SVGCircleElement>('[data-bubble]')].map((b) => b.dataset.bubble),
     ).toEqual(['target']);
     expect(label(container).textContent).toBe('');
     expect(screen.queryByRole('tooltip')).toBeNull();

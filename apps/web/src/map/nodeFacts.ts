@@ -28,23 +28,22 @@ export const STATUS_BORDER: Record<SystemStatus, TokenName> = {
 };
 
 /**
- * Security colours from blue-green at 1.0 through yellow at 0.5 to red at 0.0 and below, the
- * gradient the game's map and route planner use. Exact client values are not published, so these
- * are our own steps along it, all light enough for the pill's dark text to pass WCAG AA (tested),
- * the same in every theme.
+ * Security colours exactly as the game client draws them, 1.0 down to 0.0 (negative systems take
+ * the 0.0 red), as recorded from the client in https://web.archive.org/web/20120219150840/http://blog.evepanel.net/eve-online/igb/colors-of-the-security-status.html.
+ * The same in every theme; the pill's dark text stays readable on all of them.
  */
 export const SECURITY_COLORS: Readonly<Record<string, string>> = {
-  '1.0': '#33c7e8',
-  '0.9': '#36d6bf',
-  '0.8': '#3bd27a',
-  '0.7': '#4cc63f',
-  '0.6': '#9ccc32',
-  '0.5': '#e3d62c',
-  '0.4': '#f0a12a',
-  '0.3': '#ef7f2a',
-  '0.2': '#f2703c',
-  '0.1': '#f45f4a',
-  '0.0': '#f55a5a',
+  '1.0': '#2fefef',
+  '0.9': '#48f0c0',
+  '0.8': '#00ef47',
+  '0.7': '#00f000',
+  '0.6': '#8fef2f',
+  '0.5': '#efef00',
+  '0.4': '#d77700',
+  '0.3': '#f06000',
+  '0.2': '#f04800',
+  '0.1': '#d73000',
+  '0.0': '#f00000',
 };
 
 /** Security as the game shows it: one decimal, 0.0 < s < 0.05 rounded up to 0.1. */

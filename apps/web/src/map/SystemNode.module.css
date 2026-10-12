@@ -156,72 +156,61 @@
   font-weight: 800;
 }
 
-/* ---- Above and below the box, left-aligned with its left edge ---- */
+/* ---- Above and below the box, left-aligned with its left edge: framed chips, big enough to read
+   at a glance. A label is framed in its own colour, the bookmark code and the hub in neutral grey. */
 .above {
   position: absolute;
-  bottom: calc(100% + 5px);
+  bottom: calc(100% + 6px);
   left: calc(-1 * var(--dbk-node-border-width));
   display: flex;
   align-items: center;
-  gap: 8px;
-  max-width: 160%;
+  gap: 6px;
+  max-width: 180%;
   white-space: nowrap;
   pointer-events: none;
 }
 
-.above > *,
-.hub {
-  /* A canvas-coloured backing, so lines arriving at the node never cross the text. */
-  border-radius: var(--dbk-radius-small);
-  background: var(--dbk-color-canvas);
-}
-
 .labels {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.label {
+.label,
+.bookmark,
+.hub {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 0 2px;
-  color: var(--dbk-color-text);
-  font-size: var(--map-text-secondary, 13px);
-  font-weight: 600;
-  line-height: 18px;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border: 2px solid var(--dbk-node-border);
+  border-radius: 6px;
+  background: var(--dbk-node-bg);
+  color: var(--dbk-node-text);
+  font-size: var(--map-text-chip, 14px);
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.label {
+  border-color: var(--label-color);
+  background: color-mix(in oklab, var(--label-color) 22%, var(--dbk-node-bg));
   pointer-events: auto;
   cursor: help;
 }
 
-.label::before {
-  content: '';
-  flex: none;
-  width: 9px;
-  height: 9px;
-  border-radius: 2px;
-  background: var(--label-color);
-}
-
 .bookmark {
-  padding: 0 4px;
-  border: 0;
-  border-radius: var(--dbk-radius-small);
-  background: transparent;
-  color: var(--dbk-color-text);
   font-family: var(--dbk-font-family-mono);
-  font-size: var(--map-text-bookmark, 13px);
-  font-weight: 700;
-  line-height: 18px;
   cursor: copy;
   pointer-events: auto;
 }
 
 .bookmark:hover {
-  background: var(--dbk-color-surface-hover);
+  border-color: var(--dbk-node-selected-border);
 }
 
 .bookmark:focus-visible {
@@ -241,23 +230,14 @@
 
 .hub {
   position: absolute;
-  top: calc(100% + 5px);
+  top: calc(100% + 6px);
   left: calc(-1 * var(--dbk-node-border-width));
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 3px;
-  color: var(--dbk-color-text);
-  font-size: var(--map-text-secondary, 13px);
-  font-weight: 700;
-  line-height: 18px;
-  white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
 .square {
-  width: 10px;
-  height: 10px;
+  width: 11px;
+  height: 11px;
   border-radius: 2px;
 }
 

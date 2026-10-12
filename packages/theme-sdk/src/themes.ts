@@ -118,9 +118,11 @@ const paired: Record<PairedToken, readonly [light: string, dark: string]> = {
   'color-canvas': ['#f3f5f8', '#0a0c10'],
   'color-canvas-grid': ['#d3d8e0', '#1f2430'],
   // Security status, close to the in-game palette but readable on both backgrounds.
-  'security-high': ['#137a40', '#3fd47a'],
-  'security-low': ['#b0560b', '#ef8a3c'],
-  'security-null': ['#d12f2f', '#f05252'],
+  // Text colours of high, low and null-sec (static codes, route squares). Dark mode takes the
+  // game client's own colours (0.8, 0.4 and 0.0); light mode darker shades of them, to stay legible.
+  'security-high': ['#00872a', '#00ef47'],
+  'security-low': ['#a85a00', '#d77700'],
+  'security-null': ['#c40000', '#f00000'],
   'security-wormhole': ['#4760dd', '#7b93ff'],
   'security-special': ['#8a4bd6', '#b98cf5'],
   'status-home': ['#2563eb', '#4d8dff'],
@@ -150,7 +152,7 @@ const paired: Record<PairedToken, readonly [light: string, dark: string]> = {
   'edge-mass-reduced': ['#f2b01e', '#f5b83a'],
   'edge-mass-critical': ['#e02424', '#ff4040'],
   'edge-dangerous': ['#d12f2f', '#f05252'],
-  'edge-bubble': ['#c0267a', '#f472b6'],
+  'edge-bubble': ['#c27400', '#ffb03a'],
   'edge-selected': ['#0b7f91', '#5dd3e0'],
   // People on the map: eight hues that stay apart from each other and readable on the canvas.
   'presence-0': ['#2563eb', '#60a5fa'],

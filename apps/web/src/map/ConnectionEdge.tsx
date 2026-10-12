@@ -43,10 +43,10 @@ function rectOf(node: InternalNode): Rect {
   };
 }
 
-/** Bubble circle radius (30 px across, see the CSS). */
-export const BUBBLE_RADIUS = 15;
+/** Bubble ring radius: big enough to read at a glance, like a warp disruption bubble in space. */
+export const BUBBLE_RADIUS = 20;
 /** The bubble's centre sits this far past the node border along the line: never on the node. */
-export const BUBBLE_OFFSET = BUBBLE_RADIUS + 6;
+export const BUBBLE_OFFSET = BUBBLE_RADIUS + 5;
 
 /** Re-renders once a minute while `on`, so EOL estimates count down. */
 function useMinuteClock(on: boolean): number {
@@ -140,16 +140,12 @@ export const ConnectionEdge = memo(function ConnectionEdge({
       <path d={path} className={styles.casing} data-underlay="casing" />
       <BaseEdge id={id} path={path} interactionWidth={22} style={edgeOuterStyle(visual)} />
       {inner && <path d={path} fill="none" className={styles.core} style={inner} data-layer="mass" />}
+      {bubbles.map(({ end, at }) => (
+        <circle key={end} className={styles.bubble} data-bubble={end} cx={at.x} cy={at.y} r={BUBBLE_RADIUS}>
+          <title>{`Bubbled on the ${(end === 'source' ? data.sourceName : data.targetName) ?? end} side`}</title>
+        </circle>
+      ))}
       <EdgeLabelRenderer>
-        {bubbles.map(({ end, at }) => (
-          <div
-            key={end}
-            className={styles.bubble}
-            data-bubble={end}
-            style={{ transform: `translate(-50%, -50%) translate(${at.x}px, ${at.y}px)` }}
-            title={`Bubbled on the ${(end === 'source' ? data.sourceName : data.targetName) ?? end} side`}
-          />
-        ))}
         <div
           className={styles.label}
           style={{ transform: `translate(-50%, -50%) translate(${mid.x}px, ${mid.y}px)` }}
