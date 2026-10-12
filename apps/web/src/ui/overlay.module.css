@@ -316,3 +316,10 @@
     transform: translateY(8px);
   }
 }
+
+/* A panel next to its trigger (Popover): its own width, never wider than the screen. */
+.popover {
+  width: min(var(--popover-width, 320px), calc(100vw - 24px));
+  max-height: min(var(--radix-popover-content-available-height, 70vh), 70vh);
+  padding: 0;
+}

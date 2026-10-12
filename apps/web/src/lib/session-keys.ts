@@ -14,3 +14,5 @@ export function isInstanceAdmin(me: MeDto | null | undefined): boolean {
 }
 /** The viewer's own preferences on a map (viewport, bookmark template). */
 export const mapPreferencesKey = (mapId: string) => ['map-preferences', mapId] as const;
+/** My characters' whereabouts and the maps they may be tracked on (the characters page). */
+export const myTrackingKey = ['my-tracking'] as const;

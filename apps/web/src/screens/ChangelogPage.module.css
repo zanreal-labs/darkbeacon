@@ -1,0 +1,24 @@
+.group + .group {
+  margin-top: var(--dbk-space-4);
+}
+
+.groupName {
+  margin: 0 0 var(--dbk-space-2);
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.items {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 1.1em;
+  line-height: 1.5;
+}
+
+.items li::marker {
+  color: var(--dbk-color-text-subtle);
+}

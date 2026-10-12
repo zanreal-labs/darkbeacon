@@ -80,6 +80,8 @@ export const TelemetryPage = z.enum([
   'oauth_consent',
   'import',
   'jump',
+  'characters',
+  'changelog',
 ]);
 /** Tabs of the admin page and of a map's settings. */
 export const TelemetrySection = z.enum([
@@ -109,6 +111,8 @@ export const TelemetrySection = z.enum([
   'api',
   /** Map settings, Public link. */
   'public',
+  /** Map settings, Auto-mapping. */
+  'automap',
 ]);
 /** Map panels (the widget dock); `plugin` for any plugin widget. */
 export const TelemetryPanel = z.enum([

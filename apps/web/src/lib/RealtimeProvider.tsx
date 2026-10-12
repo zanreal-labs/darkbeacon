@@ -79,3 +79,23 @@ export function useConnectionStatus(): ConnectionStatus {
     () => 'connecting',
   );
 }
+
+/** How often the round trip to the server is measured while connected. */
+const LATENCY_EVERY_MS = 15_000;
+
+/** The last measured round trip to the server in ms (null while unknown or disconnected). */
+export function useLatency(): number | null {
+  const client = useRealtime();
+  const status = useConnectionStatus();
+  useEffect(() => {
+    if (status !== 'open') return;
+    client.ping();
+    const timer = setInterval(() => client.ping(), LATENCY_EVERY_MS);
+    return () => clearInterval(timer);
+  }, [client, status]);
+  return useSyncExternalStore(
+    (notify) => client.onLatency(notify),
+    () => client.latency,
+    () => null,
+  );
+}

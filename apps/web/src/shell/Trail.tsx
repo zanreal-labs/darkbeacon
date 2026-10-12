@@ -17,6 +17,8 @@ export function routeCrumbs(pathname: string): Crumb[] {
     return [{ label: 'All maps', to: '/maps' }, { label: 'Import from Wanderer' }];
   if (pathname.startsWith('/dev')) return [{ label: 'Components' }];
   if (pathname.startsWith('/jump')) return [{ label: 'Jump planner' }];
+  if (pathname.startsWith('/characters')) return [{ label: 'Characters' }];
+  if (pathname.startsWith('/changelog')) return [{ label: "What's new" }];
   const map = /^\/m\/([^/]+)/.exec(pathname);
   if (map) return [{ label: decodeURIComponent(map[1]!), to: `/m/${map[1]}` }];
   return [{ label: 'Map' }];
