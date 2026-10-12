@@ -79,6 +79,8 @@ start_app() {
     --cpus "$APP_CPUS" --memory "$APP_MEM" --stop-timeout 30 \
     -v "$P-data:/data" -v "$OUT:/out" -v "$HERE:/loadtest:ro" \
     -e SECRET_KEY="$SECRET_KEY" -e PUBLIC_URL=http://app:3000 -e ESI_BASE_URL=http://fake-esi:8080 -e TELEMETRY=off \
+    `# a few load containers stand for 400 people; intel would read zKillboard and EVE's ESI` \
+    -e RATE_LIMIT_PER_ADDRESS=0 -e INTEL_SOURCES=none \
     -e CLUSTER ${DB_ENV[@]+"${DB_ENV[@]}"} ${PROFILE_ENV[@]+"${PROFILE_ENV[@]}"} \
     "$IMAGE" >/dev/null
 }
