@@ -130,7 +130,10 @@ describeEachDialect('audit trail over HTTP', (t) => {
     await alice.request(`${m}/connections/${connection.id}`, { method: 'DELETE' });
     await alice.request(`${m}/systems/${PERIMETER}`, { method: 'DELETE' });
 
-    const entries = await history(alice, `${m}/history?limit=200`);
+    // Routing publishes recomputed exits on its own time (debounced): not part of what alice did.
+    const entries = (await history(alice, `${m}/history?limit=200`)).filter(
+      (e) => !e.type.startsWith('routes.'),
+    );
     const types = entries.map((e) => e.type).reverse();
     expect(types).toEqual([
       'map.created',
