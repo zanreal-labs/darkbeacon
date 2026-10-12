@@ -9,19 +9,71 @@
   },
   "include": ["src"],
   "references": [
-    { "path": "../../packages/core" },
-    { "path": "../../packages/shared" },
-    { "path": "../../packages/db" },
-    { "path": "../../packages/plugin-sdk" },
-    { "path": "../../packages/theme-sdk" },
-    { "path": "../../packages/sde" },
-    { "path": "../../packages/modules/identity" },
-    { "path": "../../packages/modules/access" },
-    { "path": "../../packages/modules/mapping" },
-    { "path": "../../packages/modules/tracking" },
-    { "path": "../../packages/modules/notifications" },
-    { "path": "../../packages/modules/plugins" },
-    { "path": "../../packages/modules/routing" },
-    { "path": "../../packages/modules/audit" }
+    {
+      "path": "../../packages/core"
+    },
+    {
+      "path": "../../packages/shared"
+    },
+    {
+      "path": "../../packages/db"
+    },
+    {
+      "path": "../../packages/plugin-sdk"
+    },
+    {
+      "path": "../../packages/theme-sdk"
+    },
+    {
+      "path": "../../packages/sde"
+    },
+    {
+      "path": "../../packages/modules/identity"
+    },
+    {
+      "path": "../../packages/modules/access"
+    },
+    {
+      "path": "../../packages/modules/mapping"
+    },
+    {
+      "path": "../../packages/modules/tracking"
+    },
+    {
+      "path": "../../packages/modules/notifications"
+    },
+    {
+      "path": "../../packages/modules/plugins"
+    },
+    {
+      "path": "../../packages/modules/routing"
+    },
+    {
+      "path": "../../packages/modules/jumps"
+    },
+    {
+      "path": "../../packages/modules/audit"
+    },
+    {
+      "path": "../../packages/modules/sharing"
+    },
+    {
+      "path": "../../packages/modules/telemetry"
+    },
+    {
+      "path": "../../packages/modules/observability"
+    },
+    {
+      "path": "../../packages/modules/backups"
+    },
+    {
+      "path": "../../packages/modules/api-keys"
+    },
+    {
+      "path": "../../packages/modules/publishing"
+    },
+    {
+      "path": "../../packages/modules/oauth"
+    }
   ]
 }

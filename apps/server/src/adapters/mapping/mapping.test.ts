@@ -73,7 +73,7 @@ describeEachDialect('mapping use cases', (t) => {
     await expect(maps.get(eve, map.id)).rejects.toMatchObject({ code: 'not_found' });
   });
 
-  it('changes settings (admin) and labels (manager+)', async () => {
+  it('changes settings (admin) and tags (manager+)', async () => {
     await expect(maps.update(bob, map.id, { name: 'Nope' })).rejects.toMatchObject({ code: 'forbidden' });
     env.clock.advance(1000);
     const updated = await maps.update(alice, map.id, {
@@ -110,6 +110,55 @@ describeEachDialect('mapping use cases', (t) => {
       ['system.updated', expect.objectContaining({ solarSystemId: SYSTEMS.c2, labelIds: ['l2'] })],
     ]);
     expect((await maps.get(bob, map.id)).labels).toEqual([labels[1]]);
+  });
+
+  it('starts every map with Labels WH1 to WH3; managers keep the list, editors set them on systems', async () => {
+    expect(map.systemLabels.map((l) => l.name)).toEqual(['WH1', 'WH2', 'WH3']);
+    expect((await maps.get(alice, map.id)).systemLabels).toEqual(map.systemLabels);
+
+    // Editors turn Labels on and give a custom label; both are stored and published.
+    await systems.add(bob, map.id, { solarSystemId: SYSTEMS.c2 });
+    const seq0 = await head();
+    const labelled = await systems.update(bob, map.id, SYSTEMS.c2, {
+      systemLabelIds: ['wh2', 'wh1', 'wh2'],
+      customLabel: '  bait ',
+    });
+    expect(labelled).toMatchObject({ systemLabelIds: ['wh2', 'wh1'], customLabel: 'bait' });
+    expect(await eventsSince(seq0)).toEqual([
+      ['system.updated', expect.objectContaining({ systemLabelIds: ['wh2', 'wh1'], customLabel: 'bait' })],
+    ]);
+    const stored = (await snapshots.snapshot(bob, map.id)).systems.find(
+      (s) => s.solarSystemId === SYSTEMS.c2,
+    );
+    expect(stored).toMatchObject({ systemLabelIds: ['wh2', 'wh1'], customLabel: 'bait' });
+    await expect(systems.update(bob, map.id, SYSTEMS.c2, { systemLabelIds: ['zz'] })).rejects.toMatchObject({
+      code: 'validation',
+    });
+    // An empty custom label is none.
+    expect((await systems.update(bob, map.id, SYSTEMS.c2, { customLabel: ' ' })).customLabel).toBeNull();
+
+    // Only managers change the list; names are unique in any case.
+    const list = [
+      { id: 'wh1', name: 'WH1', description: 'Static' },
+      { id: 'a', name: 'A', description: '' },
+    ];
+    await expect(maps.setSystemLabels(bob, map.id, list)).rejects.toMatchObject({ code: 'forbidden' });
+    env.access.grant('bob', map.id, 'manager');
+    await expect(
+      maps.setSystemLabels(bob, map.id, [...list, { id: 'b', name: 'a', description: '' }]),
+    ).rejects.toMatchObject({ code: 'validation' });
+    const seq1 = await head();
+    expect(await maps.setSystemLabels(bob, map.id, list)).toEqual(list);
+    // Systems lose the Labels that are gone, and nothing else.
+    expect(await eventsSince(seq1)).toEqual([
+      ['system_labels.changed', { systemLabels: list }],
+      ['system.updated', expect.objectContaining({ solarSystemId: SYSTEMS.c2, systemLabelIds: ['wh1'] })],
+    ]);
+    expect((await maps.get(bob, map.id)).systemLabels).toEqual(list);
+    // The same list again changes nothing.
+    const seq2 = await head();
+    await maps.setSystemLabels(bob, map.id, list);
+    expect(await eventsSince(seq2)).toEqual([]);
   });
 
   it('adds, updates, locks and moves systems', async () => {
@@ -236,7 +285,7 @@ describeEachDialect('mapping use cases', (t) => {
       await systems.add(bob, map.id, { solarSystemId: id });
     }
     const gate = await connections.add(bob, map.id, { source: SYSTEMS.jita, target: SYSTEMS.perimeter });
-    expect(gate).toMatchObject({ type: 'gate', shipSize: 'xlarge' });
+    expect(gate).toMatchObject({ type: 'gate', shipSize: 'capital' });
     const hole = await connections.add(bob, map.id, { source: SYSTEMS.c2, target: SYSTEMS.c1 });
     expect(hole).toMatchObject({
       type: 'wormhole',

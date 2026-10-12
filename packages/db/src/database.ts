@@ -1,12 +1,18 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import SQLite from 'better-sqlite3';
-import { Kysely, PostgresDialect, SqliteDialect, type Transaction } from 'kysely';
+import {
+  Kysely,
+  PostgresDialect,
+  SqliteDialect,
+  type Dialect as KyselyDialect,
+  type Transaction,
+} from 'kysely';
 import pg from 'pg';
 import type { UnitOfWork } from '@darkbeacon/core';
-import { WalCheckpointer } from './checkpointer.js';
-import { migrateToLatest } from './migrator.js';
+import { migrateToLatest, migrationStatus } from './migrator.js';
+import { tracedDialect, type QueryTracer } from './tracing.js';
+import { openSqlite, SqliteFile } from './sqlite.js';
 import { SplitSqliteDialect } from './sqlite-split.js';
 
 export type Dialect = 'sqlite' | 'postgres';
@@ -22,6 +28,8 @@ export interface DatabaseOptions {
   schema?: string | undefined;
   /** Postgres pool size (default 10). */
   poolSize?: number | undefined;
+  /** Runs every statement through this tracer (spans where the driver has no instrumentation). */
+  tracer?: QueryTracer | undefined;
 }
 
 export interface TransactionOptions {
@@ -32,6 +40,12 @@ export interface TransactionOptions {
    * neither waits for nor holds up writers; on Postgres it is a READ ONLY transaction.
    */
   readOnly?: boolean;
+}
+
+/** SQLite files: where read-only transactions run, and how to hold every connection at once. */
+interface SqliteReads {
+  snapshots: Kysely<unknown>;
+  exclusive<T>(work: () => Promise<T>): Promise<T>;
 }
 
 interface Scope {
@@ -55,10 +69,10 @@ export class Database implements UnitOfWork {
     readonly dialect: Dialect,
     /** Postgres schema this handle works in, when not the default. */
     readonly schema?: string,
-    /** SQLite files: a read-only connection for read-only transactions. */
-    private readonly snapshots?: Kysely<unknown>,
-    /** Also stopped on close (the SQLite checkpointer). */
-    private readonly companions: Array<{ stop(): Promise<void> }> = [],
+    /** The SQLite file behind the handle (null on Postgres). */
+    readonly sqlite: SqliteFile | null = null,
+    /** SQLite files with read connections (see `createDatabase`). */
+    private readonly reads: SqliteReads | null = null,
   ) {}
 
   /** The open transaction inside `transaction()`, the root handle outside. */
@@ -74,7 +88,7 @@ export class Database implements UnitOfWork {
   async transaction<T>(work: () => Promise<T>, options: TransactionOptions = {}): Promise<T> {
     if (this.scope.getStore()) return work();
     const afterCommit: Array<() => void> = [];
-    const root = options.readOnly && this.snapshots ? this.snapshots : this.kysely;
+    const root = options.readOnly && this.reads ? this.reads.snapshots : this.kysely;
     let builder = root.transaction();
     if (options.isolation && this.dialect === 'postgres')
       builder = builder.setIsolationLevel(options.isolation);
@@ -102,6 +116,26 @@ export class Database implements UnitOfWork {
     return migrateToLatest(this.kysely, { schema: this.schema });
   }
 
+  /** Applied and pending migrations of this database. */
+  migrationStatus(): Promise<{ applied: string[]; pending: string[] }> {
+    return migrationStatus(this.kysely, { schema: this.schema });
+  }
+
+  /**
+   * SQLite only: runs `work` holding the single connection, so no transaction is open and every
+   * other query waits until it is done (online backups, swapping the file during a restore).
+   * Inside, use the raw handle of `file`; a query through `db()` would wait forever.
+   */
+  async exclusive<T>(work: (file: SqliteFile) => Promise<T>): Promise<T> {
+    const file = this.sqlite;
+    if (!file) throw new Error('exclusive access is only available on SQLite');
+    if (this.inTransaction) throw new Error('exclusive() cannot run inside a transaction');
+    const reads = this.reads;
+    // With read connections: the writer, the readers and the snapshot connection all wait.
+    if (reads) return reads.exclusive(() => reads.snapshots.connection().execute(() => work(file)));
+    return this.kysely.connection().execute(() => work(file));
+  }
+
   async ping(): Promise<void> {
     await this.db<never>()
       .selectNoFrom((eb) => eb.lit(1).as('one'))
@@ -109,8 +143,7 @@ export class Database implements UnitOfWork {
   }
 
   async close(): Promise<void> {
-    for (const companion of this.companions) await companion.stop();
-    await this.snapshots?.destroy();
+    await this.reads?.snapshots.destroy();
     await this.kysely.destroy();
   }
 }
@@ -127,71 +160,29 @@ export async function createDatabase(options: DatabaseOptions = {}): Promise<Dat
   const filename = options.filename ?? join(options.dataDir ?? '/data', 'app.db');
   if (filename === ':memory:') {
     // One connection: a second one would open another, empty, database.
+    const file = new SqliteFile(filename, openSqlite(filename));
+    const dialect = new SqliteDialect({ database: file.forKysely });
     return new Database(
-      new Kysely({ dialect: new SqliteDialect({ database: openSqlite(filename) }) }),
+      new Kysely({ dialect: options.tracer ? tracedDialect(dialect, options.tracer, 'sqlite') : dialect }),
       'sqlite',
+      undefined,
+      file,
     );
   }
   mkdirSync(dirname(filename), { recursive: true });
-  const writer = openSqlite(filename);
-  // Checkpoints happen on a thread of their own (WalCheckpointer); the commit that crosses this
-  // many pages (about 400 MB) still does one, should that thread ever fall behind.
-  writer.pragma('wal_autocheckpoint = 100000');
-  // Once checkpointed, a WAL bigger than this is cut back.
-  writer.pragma('journal_size_limit = 67108864');
-  // WAL lets readers work next to the writer, each seeing the last commit.
-  const reader = openSqlite(filename, { readonly: true });
-  const snapshots = openSqlite(filename, { readonly: true });
-  const checkpointer = new WalCheckpointer(filename, 1_000, (message) =>
-    console.error(`SQLite checkpoint failed: ${message}`),
-  );
-  return new Database(
-    new Kysely({ dialect: new SplitSqliteDialect(writer, reader) }),
-    'sqlite',
-    undefined,
-    new Kysely({ dialect: new SqliteDialect({ database: snapshots }) }),
-    [checkpointer],
-  );
-}
-
-function openSqlite(filename: string, options: { readonly?: boolean } = {}): SQLite.Database {
-  const sqlite = new SQLite(filename, options);
-  if (!options.readonly) {
-    sqlite.pragma('journal_mode = WAL');
-    sqlite.pragma('synchronous = NORMAL');
-  }
-  sqlite.pragma('foreign_keys = ON');
-  sqlite.pragma('busy_timeout = 5000');
-  cachePreparedStatements(sqlite);
-  return sqlite;
-}
-
-/**
- * Kysely prepares every query again; preparing costs about as much as running a small query.
- * Statements are kept per SQL text (the most recently used `max`) and reused. Long SQL (batch
- * inserts of many rows, one text per row count) is prepared each time: such statements are big,
- * rare per request, and would fill the cache with variants. A statement still iterating a
- * streamed query is busy, and gets a fresh one instead.
- */
-export function cachePreparedStatements(sqlite: SQLite.Database, max = 500, maxLength = 2_000): void {
-  const cache = new Map<string, SQLite.Statement>();
-  const prepare = sqlite.prepare.bind(sqlite);
-  sqlite.prepare = ((source: string) => {
-    if (source.length > maxLength) return prepare(source);
-    const cached = cache.get(source);
-    if (cached && !cached.busy) {
-      // Most recently used last, so the oldest goes first.
-      cache.delete(source);
-      cache.set(source, cached);
-      return cached;
-    }
-    const statement = prepare(source);
-    if (!cached) {
-      cache.set(source, statement);
-      if (cache.size > max) cache.delete(cache.keys().next().value!);
-    }
-    return statement;
-  }) as typeof sqlite.prepare;
+  // A write connection used by transactions and writes one at a time, read-only connections for
+  // selects outside transactions and for read-only transactions, WAL checkpoints on a worker.
+  const file = new SqliteFile(filename, openSqlite(filename), { readers: true });
+  const split = new SplitSqliteDialect(file);
+  const snapshots = new SqliteDialect({
+    database: { prepare: (sql: string) => file.snapshotReader.prepare(sql), close: () => undefined },
+  });
+  const traced = (dialect: KyselyDialect) =>
+    options.tracer ? tracedDialect(dialect, options.tracer, 'sqlite') : dialect;
+  return new Database(new Kysely({ dialect: traced(split) }), 'sqlite', undefined, file, {
+    snapshots: new Kysely({ dialect: traced(snapshots) }),
+    exclusive: (work) => split.exclusive(work),
+  });
 }
 
 async function createPostgres(url: string, options: DatabaseOptions): Promise<Database> {
@@ -218,5 +209,10 @@ async function createPostgres(url: string, options: DatabaseOptions): Promise<Da
           : pg.types.getTypeParser(oid, format)) as typeof pg.types.getTypeParser,
     },
   });
-  return new Database(new Kysely({ dialect: new PostgresDialect({ pool }) }), 'postgres', schema);
+  const dialect = new PostgresDialect({ pool });
+  return new Database(
+    new Kysely({ dialect: options.tracer ? tracedDialect(dialect, options.tracer, 'postgres') : dialect }),
+    'postgres',
+    schema,
+  );
 }

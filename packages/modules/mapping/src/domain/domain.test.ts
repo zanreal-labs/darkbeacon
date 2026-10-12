@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { defaultShipSize, nextPosition, slugify, validateLabels } from './rules.js';
+import { DEFAULT_SYSTEM_LABELS, SystemLabelDto, UpdateSystemRequest } from '@darkbeacon/shared';
+import { defaultShipSize, nextPosition, slugify, validateLabels, validateSystemLabels } from './rules.js';
 import { parseSignaturePaste, type ScannerLanguage } from './signature-paste.js';
 
 const universe = (whClass: number | null) => ({
@@ -64,7 +65,7 @@ describe('rules', () => {
   });
 
   it('picks a default ship size', () => {
-    expect(defaultShipSize('gate', null, null)).toBe('xlarge');
+    expect(defaultShipSize('gate', null, null)).toBe('capital');
     expect(defaultShipSize('wormhole', universe(5), universe(2))).toBe('large');
     expect(defaultShipSize('wormhole', universe(7), universe(1))).toBe('medium');
     expect(defaultShipSize('wormhole', universe(1), universe(13))).toBe('small');
@@ -85,5 +86,22 @@ describe('rules', () => {
     expect(() => validateLabels([label, { ...label, id: 'b', name: 'home' }])).toThrow(/name/);
     expect(() => validateLabels([label, { ...label, name: 'Other' }])).toThrow(/id/);
     expect(() => validateLabels([label])).not.toThrow();
+  });
+
+  it('keeps Labels short, unique in any case, WH1 to WH3 to start with', () => {
+    expect(DEFAULT_SYSTEM_LABELS.map((l) => l.name)).toEqual(['WH1', 'WH2', 'WH3']);
+    expect(() => validateSystemLabels(DEFAULT_SYSTEM_LABELS)).not.toThrow();
+    const wh1 = DEFAULT_SYSTEM_LABELS[0]!;
+    expect(() => validateSystemLabels([wh1, { id: 'x', name: 'wh1 ', description: '' }])).toThrow(/name/);
+    expect(() => validateSystemLabels([wh1, { ...wh1, name: 'A' }])).toThrow(/id/);
+    // Names up to 8 characters, descriptions up to 120; a custom label up to 16.
+    expect(SystemLabelDto.safeParse({ id: 'a', name: 'ABCDEFGH' }).success).toBe(true);
+    expect(SystemLabelDto.safeParse({ id: 'a', name: 'ABCDEFGHI' }).success).toBe(false);
+    expect(SystemLabelDto.safeParse({ id: 'a', name: 'A', description: 'x'.repeat(121) }).success).toBe(
+      false,
+    );
+    expect(SystemLabelDto.parse({ id: 'a', name: ' A ' })).toEqual({ id: 'a', name: 'A', description: '' });
+    expect(UpdateSystemRequest.safeParse({ customLabel: 'x'.repeat(16) }).success).toBe(true);
+    expect(UpdateSystemRequest.safeParse({ customLabel: 'x'.repeat(17) }).success).toBe(false);
   });
 });

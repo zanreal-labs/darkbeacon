@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ReactFlow, ReactFlowProvider } from '@xyflow/react';
-import type { LabelDto, UniverseSystemDto } from '@darkbeacon/shared';
+import type { LabelDto, SystemLabelDto, UniverseSystemDto } from '@darkbeacon/shared';
 import { installFlowMocks, renderWithProviders } from '../test/setup';
 import { MAP_ID, systemFixture } from '../test/fixtures';
 import { ToastProvider } from '../ui';
@@ -22,14 +22,23 @@ const info: UniverseSystemDto = {
   effect: null,
 };
 
-const label = (id: string, name: string): LabelDto => ({ id, name, color: '#336699', description: '' });
+const tag = (id: string, name: string): LabelDto => ({ id, name, color: '#336699', description: '' });
+const systemLabel = (id: string, name: string): SystemLabelDto => ({ id, name, description: '' });
 
 function renderNode(data: Partial<SystemNodeData>, connectable = true) {
   const node: SystemNodeType = {
     id: '31000001',
     type: 'system',
     position: { x: 0, y: 0 },
-    data: { mapId: MAP_ID, system: systemFixture(31000001), info, labels: [], characters: 0, ...data },
+    data: {
+      mapId: MAP_ID,
+      system: systemFixture(31000001),
+      info,
+      systemLabels: [],
+      tags: [],
+      characters: 0,
+      ...data,
+    },
   };
   return renderWithProviders(
     <ToastProvider>
@@ -50,7 +59,7 @@ function renderNode(data: Partial<SystemNodeData>, connectable = true) {
 const box = (container: HTMLElement) => container.querySelector<HTMLElement>('[data-status]')!;
 
 describe('SystemNode', () => {
-  it('tints the background by status only, with the status and the rest in the tooltip', () => {
+  it('shows the status as the border only, with the rest in the tooltip', () => {
     const { container } = renderNode({
       system: systemFixture(31000001, {
         status: 'hostile',
@@ -60,17 +69,22 @@ describe('SystemNode', () => {
       }),
     });
     expect(box(container).dataset.status).toBe('hostile');
-    expect(box(container).style.getPropertyValue('--node-tint')).toBe('var(--dbk-node-status-hostile)');
+    expect(box(container).style.getPropertyValue('--node-status')).toBe('var(--dbk-status-hostile)');
     expect(screen.getByText('C3')).toBeTruthy();
     expect(screen.getByText('J100001')).toBeTruthy();
-    // Tag, notes and lock are not on the node, only in its tooltip.
+    // Notes and lock are not on the node, only in its tooltip; the old free-text tag is nowhere.
     expect(screen.queryByText('A1')).toBeNull();
     const title = box(container).title;
     expect(title).toContain('Status: Hostile');
     expect(title).toContain('A-R00001 · A-C00001');
-    expect(title).toContain('Tag: A1');
+    expect(title).not.toContain('A1');
     expect(title).toContain('Locked');
     expect(title).toContain('Notes: Rattlesnakes');
+  });
+
+  it('keeps a grey border for systems without a status', () => {
+    const { container } = renderNode({});
+    expect(box(container).style.getPropertyValue('--node-status')).toBe('var(--dbk-node-border)');
   });
 
   it('shows a custom name with the real one in the tooltip, and fills known space with its security', () => {
@@ -85,45 +99,60 @@ describe('SystemNode', () => {
     expect(pill.style.background).not.toBe('');
   });
 
-  it('shows statics, an EXIT chip, two labels and the rest as +N', () => {
-    renderNode({
+  it('writes statics as plain text and puts Labels, custom label, bookmark and Tags above the node', () => {
+    const { container } = renderNode({
+      system: systemFixture(31000001, { customLabel: 'bait' }),
       info: { ...info, statics: ['D845', 'U210'] },
-      exit: ['H', 'L'],
-      labels: [label('a', 'Staging'), label('b', 'Sites'), label('c', 'Exit'), label('d', 'Hostile')],
+      bookmark: 'ABC-123',
+      systemLabels: [systemLabel('wh1', 'WH1')],
+      tags: [tag('a', 'Staging'), tag('b', 'Sites')],
     });
     const statics = screen.getByRole('list', { name: 'Statics' });
     expect([...statics.querySelectorAll('li')].map((li) => li.textContent)).toEqual(['D845HS', 'U210LS']);
-    expect(screen.getByText('EXIT H/L')).toBeTruthy();
     const labels = screen.getByRole('list', { name: 'Labels' });
-    expect([...labels.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
-      'Staging',
-      'Sites',
-      '+2',
-    ]);
-    expect(screen.getByText('+2').getAttribute('title')).toBe('Exit, Hostile');
+    expect([...labels.querySelectorAll('li')].map((li) => li.textContent)).toEqual(['WH1', 'bait']);
+    const tags = screen.getByRole('list', { name: 'Tags' });
+    expect([...tags.querySelectorAll('li')].map((li) => li.textContent)).toEqual(['Staging', 'Sites']);
+    // Left to right: Labels, the custom label, the bookmark code, Tags; none inside the node's rows.
+    const above = labels.parentElement!;
+    expect(tags.parentElement).toBe(above);
+    const chips = [...above.querySelectorAll('li, button')].map((el) => el.textContent);
+    expect(chips).toEqual(['WH1', 'bait', 'ABC-123', 'Staging', 'Sites']);
+    // Labels are neutral text markers; only Tags carry a colour.
+    expect(labels.querySelector('[style]')).toBeNull();
+    expect(tags.querySelector('li')!.getAttribute('style')).toContain('--label-color');
+    expect(container.querySelector('[data-status] > [class*="line"]')?.textContent).toBe('D845HSU210LS');
   });
 
-  it('shows the nearest hub under an exit only', () => {
-    const { unmount } = renderNode({ exit: ['H'], hub: { name: 'Jita', jumps: 12 } });
-    expect(screen.getByText('Jita 12j')).toBeTruthy();
+  it('shows a custom label alone, without Labels', () => {
+    renderNode({ system: systemFixture(31000001, { customLabel: 'scout' }) });
+    const labels = screen.getByRole('list', { name: 'Labels' });
+    expect(labels.textContent).toBe('scout');
+    expect(screen.queryByRole('list', { name: 'Tags' })).toBeNull();
+  });
+
+  it('shows the nearest hub under an exit, with a square only for one kind of space', () => {
+    const { container, unmount } = renderNode({ hub: { name: 'Jita', jumps: 4, space: 'high' } });
+    expect(screen.getByText('Jita 4j')).toBeTruthy();
+    expect(container.querySelector('[data-space="high"]')).toBeTruthy();
     unmount();
-    renderNode({ exit: [], hub: { name: 'Jita', jumps: 12 } });
-    expect(screen.queryByText('Jita 12j')).toBeNull();
+    const mixed = renderNode({ hub: { name: 'Amarr', jumps: 9, space: 'mixed' } });
+    expect(screen.getByText('Amarr 9j')).toBeTruthy();
+    expect(mixed.container.querySelector('[data-space]')).toBeNull();
+    mixed.unmount();
+    renderNode({ hub: null });
+    expect(screen.queryByText(/\dj$/)).toBeNull();
   });
 
-  it('marks where I am with my portrait, other pilots and a bubble', () => {
-    const { container } = renderNode({
-      me: { characterId: 3900000001, name: 'Ayla Vex' },
-      characters: 3,
-      bubbled: true,
-    });
-    const here = screen.getByTitle('You are here: Ayla Vex');
-    expect(here.textContent).toBe('You are here+2');
-    expect(here.querySelector('img')?.getAttribute('src')).toBe(
-      'https://images.evetech.net/characters/3900000001/portrait?size=32',
-    );
-    expect(screen.getByRole('img', { name: 'Bubbled' })).toBeTruthy();
-    expect(container.querySelector('[title="3 tracked pilots here"]')).toBeNull();
+  it('counts pilots on the right, in the accent colour where I am, with no portraits', () => {
+    const { container, unmount } = renderNode({ characters: 3, mine: true });
+    const pilots = screen.getByTitle('3 tracked pilots here, you among them');
+    expect(pilots.textContent).toBe('3');
+    expect(pilots.dataset.mine).toBe('true');
+    expect(container.querySelector('img')).toBeNull();
+    unmount();
+    renderNode({ characters: 1 });
+    expect(screen.getByTitle('1 tracked pilot here').dataset.mine).toBeUndefined();
   });
 
   it('copies the bookmark label on click', async () => {

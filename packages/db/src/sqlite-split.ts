@@ -1,4 +1,4 @@
-import type SQLite from 'better-sqlite3';
+import type { RawSqlite, SqliteFile } from './sqlite.js';
 import {
   CompiledQuery,
   SelectQueryNode,
@@ -29,7 +29,7 @@ class Lock {
   }
 }
 
-function execute(db: SQLite.Database, { sql, parameters }: CompiledQuery): QueryResult<unknown> {
+function execute(db: RawSqlite, { sql, parameters }: CompiledQuery): QueryResult<unknown> {
   const statement = db.prepare(sql);
   if (statement.reader) return { rows: statement.all(parameters as unknown[]) };
   const { changes, lastInsertRowid } = statement.run(parameters as unknown[]);
@@ -62,21 +62,25 @@ class Lease implements DatabaseConnection {
 
   async begin(): Promise<void> {
     await this.lock();
-    execute(this.driver.writer, CompiledQuery.raw('begin'));
+    execute(this.driver.file.raw, CompiledQuery.raw('begin'));
     this.inTransaction = true;
   }
 
   end(command: 'commit' | 'rollback'): void {
     this.inTransaction = false;
-    execute(this.driver.writer, CompiledQuery.raw(command));
+    execute(this.driver.file.raw, CompiledQuery.raw(command));
   }
 
   async executeQuery<R>(compiled: CompiledQuery): Promise<QueryResult<R>> {
-    if (this.inTransaction) return execute(this.driver.writer, compiled) as QueryResult<R>;
-    if (SelectQueryNode.is(compiled.query)) return execute(this.driver.reader, compiled) as QueryResult<R>;
+    if (this.inTransaction) return execute(this.driver.file.raw, compiled) as QueryResult<R>;
+    if (SelectQueryNode.is(compiled.query)) {
+      // While someone holds the file exclusively (a backup, a restore), reads wait too.
+      while (this.driver.gate) await this.driver.gate;
+      return execute(this.driver.file.reader, compiled) as QueryResult<R>;
+    }
     await this.lock();
     try {
-      return execute(this.driver.writer, compiled) as QueryResult<R>;
+      return execute(this.driver.file.raw, compiled) as QueryResult<R>;
     } finally {
       this.unlock();
     }
@@ -90,11 +94,24 @@ class Lease implements DatabaseConnection {
 
 class SplitSqliteDriver implements Driver {
   readonly writerLock = new Lock();
+  /** Set while `exclusive` runs. */
+  gate: Promise<void> | null = null;
 
-  constructor(
-    readonly writer: SQLite.Database,
-    readonly reader: SQLite.Database,
-  ) {}
+  constructor(readonly file: SqliteFile) {}
+
+  /** Runs `work` with no transaction open and every query, reads included, waiting. */
+  async exclusive<T>(work: () => Promise<T>): Promise<T> {
+    const release = await this.writerLock.acquire();
+    let open!: () => void;
+    this.gate = new Promise<void>((resolve) => (open = resolve));
+    try {
+      return await work();
+    } finally {
+      this.gate = null;
+      open();
+      release();
+    }
+  }
 
   async init(): Promise<void> {}
 
@@ -119,8 +136,7 @@ class SplitSqliteDriver implements Driver {
   }
 
   async destroy(): Promise<void> {
-    this.reader.close();
-    this.writer.close();
+    await this.file.dispose();
   }
 }
 
@@ -138,13 +154,20 @@ class SplitSqliteAdapter extends SqliteAdapter {
  * parallelism; it removes the wait of every read for whatever transaction holds the connection.
  */
 export class SplitSqliteDialect implements Dialect {
-  constructor(
-    private readonly writer: SQLite.Database,
-    private readonly reader: SQLite.Database,
-  ) {}
+  /** The driver Kysely created, for `exclusive`. */
+  driver: SplitSqliteDriver | null = null;
+
+  constructor(private readonly file: SqliteFile) {}
 
   createDriver(): Driver {
-    return new SplitSqliteDriver(this.writer, this.reader);
+    this.driver = new SplitSqliteDriver(this.file);
+    return this.driver;
+  }
+
+  /** Runs `work` with the file to itself (see `Database.exclusive`). */
+  exclusive<T>(work: () => Promise<T>): Promise<T> {
+    if (!this.driver) throw new Error('the database is not open');
+    return this.driver.exclusive(work);
   }
 
   createQueryCompiler(): QueryCompiler {

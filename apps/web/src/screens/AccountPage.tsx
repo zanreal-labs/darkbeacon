@@ -29,6 +29,7 @@ import { usePresenceSettings } from '../lib/presence';
 import { useMaps, useSetDefaultMap } from '../lib/maps';
 import { meKey, useLogout, useMe, useProviders, useRevokeSession, useSessions } from '../lib/session';
 import { relativeTime } from '../lib/time';
+import { usePageView } from '../lib/useTelemetry';
 import { eveLinkHref, ROLE_LABEL } from '../shell/AccountMenu';
 import { ThemePicker } from '../theme/ThemePicker';
 import {
@@ -62,6 +63,8 @@ import {
   Tooltip,
   useToast,
 } from '../ui';
+import { ApiKeysCard } from './ApiKeysCard';
+import { ConnectedAppsCard } from './ConnectedAppsCard';
 import styles from './AccountPage.module.css';
 
 function errorText(error: unknown): string {
@@ -69,7 +72,7 @@ function errorText(error: unknown): string {
 }
 
 const TITLE = 'Account';
-const DESCRIPTION = 'Your sign-in, EVE characters and preferences.';
+const DESCRIPTION = 'Your sign-in, EVE characters, preferences and API keys.';
 
 /** The account page as it looks while the account streams in. */
 export function AccountPageSkeleton() {
@@ -90,6 +93,7 @@ export function AccountPageSkeleton() {
  */
 export function AccountPage({ authError = null }: { authError?: string | null }) {
   const me = useMe();
+  usePageView('account');
   if (!me.data) return null;
 
   return (
@@ -117,6 +121,9 @@ export function AccountPage({ authError = null }: { authError?: string | null })
         <Collaboration />
 
         <Sessions />
+
+        <ApiKeysCard />
+        <ConnectedAppsCard />
       </Stack>
     </Page>
   );

@@ -21,6 +21,7 @@ import {
 import { Database } from '@darkbeacon/db';
 import { NotifierRegistry } from '@darkbeacon/notifications';
 import type { UniverseCatalog } from '@darkbeacon/mapping';
+import type { DomainTelemetry } from '@darkbeacon/observability';
 import { PluginAdmin, ThemeAdmin } from '@darkbeacon/plugins';
 import { isEventOfType, type MapSnapshot } from '@darkbeacon/shared';
 import { builtInThemes, SYSTEM_THEME_ID } from '@darkbeacon/theme-sdk';
@@ -39,6 +40,7 @@ import { PluginCommandRegistry } from '../../plugins/plugin-commands.js';
 import { PluginHost, PluginPortProviders } from '../../plugins/plugin-host.js';
 import { PresenceRooms } from '../../realtime/presence.js';
 import { EventConsumers } from '../../platform/event-consumers.js';
+import { MaintenanceMode } from '../../platform/maintenance.js';
 import { SignInCookies } from '../../platform/sign-in-cookies.js';
 import { FilePluginSettingsSchemas } from '../../plugins/settings-schemas.js';
 import {
@@ -48,6 +50,7 @@ import {
   EVENT_LOG,
   LEADERSHIP,
   MAP_ACCESS,
+  OBSERVABILITY,
   UNIT_OF_WORK,
   UNIVERSE_CATALOG,
 } from '../../platform/tokens.js';
@@ -93,9 +96,18 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(LEADERSHIP) private readonly leadership: Leadership,
     @Inject(EVENT_BUS) private readonly bus: EventBus,
+    @Inject(MaintenanceMode) private readonly maintenance: MaintenanceMode,
   ) {}
 
   onModuleInit(): void {
+    // Plugins read and write the database from their own timers: unloaded while it is replaced,
+    // loaded again from what the (restored) database says is enabled.
+    this.maintenance.register({
+      name: 'plugins',
+      pause: () => this.host.stop(),
+      resume: () => this.host.start(),
+    });
+
     const fastify = this.http.httpAdapter.getInstance<FastifyInstance>();
     if (!fastify.hasContentTypeParser('application/gzip')) {
       fastify.addContentTypeParser(
@@ -287,6 +299,7 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
         consumers: EventConsumers,
         config: AppConfig,
         leadership: Leadership,
+        telemetry?: DomainTelemetry | null,
       ) =>
         new PluginHost({
           admin,
@@ -305,6 +318,7 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
           publicUrl: config.publicUrl,
           secrets: (id) => new SecretBox(config.secretKey, `plugin:${id}`),
           leadership,
+          delivered: telemetry ? (channel, ok) => telemetry.notificationDelivered(channel, ok) : undefined,
         }),
       inject: [
         PluginAdmin,
@@ -322,6 +336,7 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
         EventConsumers,
         APP_CONFIG,
         LEADERSHIP,
+        { token: OBSERVABILITY, optional: true },
       ],
     },
     PluginsLifecycle,

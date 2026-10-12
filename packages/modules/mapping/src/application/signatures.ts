@@ -8,6 +8,7 @@ import type {
 import type { Signature } from '../domain/map.js';
 import { signatureTypeCode } from '../domain/intel.js';
 import { changes, defined } from '../domain/rules.js';
+import { signatureKey } from '../domain/stamps.js';
 import { parseSignaturePaste } from '../domain/signature-paste.js';
 import { MappingUseCases, type EventBatch } from './base.js';
 
@@ -15,6 +16,11 @@ import { MappingUseCases, type EventBatch } from './base.js';
 export class SignatureUseCases extends MappingUseCases {
   async list(actor: Actor | null, mapId: string, solarSystemId: number): Promise<Signature[]> {
     await this.authorize(actor, mapId, 'viewer');
+    const merged = await this.ports.overlay?.view(mapId);
+    if (merged) {
+      if (!merged.systems.some((s) => s.solarSystemId === solarSystemId)) throw new NotFoundError('System');
+      return merged.signatures.filter((s) => s.solarSystemId === solarSystemId);
+    }
     await this.visibleSystem(mapId, solarSystemId);
     return this.ports.signatures.listForSystem(mapId, solarSystemId);
   }
@@ -25,7 +31,7 @@ export class SignatureUseCases extends MappingUseCases {
     solarSystemId: number,
     request: AddSignatureRequest,
   ): Promise<Signature> {
-    const who = await this.authorize(actor, mapId, 'member');
+    const who = await this.authorizeEdit(actor, mapId);
     return this.write(who, mapId, async (events) => {
       await this.visibleSystem(mapId, solarSystemId);
       const existing = await this.ports.signatures.listForSystem(mapId, solarSystemId);
@@ -61,7 +67,7 @@ export class SignatureUseCases extends MappingUseCases {
     signatureId: string,
     request: UpdateSignatureRequest,
   ): Promise<Signature> {
-    const who = await this.authorize(actor, mapId, 'member');
+    const who = await this.authorizeEdit(actor, mapId);
     return this.write(who, mapId, async (events) => {
       const current = await this.load(mapId, signatureId);
       const patch = defined(request);
@@ -70,6 +76,8 @@ export class SignatureUseCases extends MappingUseCases {
         const siblings = await this.ports.signatures.listForSystem(mapId, current.solarSystemId);
         if (siblings.some((s) => s.eveId === patch.eveId))
           throw new ConflictError(`Signature ${patch.eveId} already exists`);
+        // The old code is gone (a typo fixed): merged maps drop it everywhere.
+        await this.tombstone(current, this.ports.clock.now());
       }
       if (patch.connectionId) {
         const connection = await this.ports.connections.findById(mapId, patch.connectionId);
@@ -99,9 +107,10 @@ export class SignatureUseCases extends MappingUseCases {
   }
 
   async remove(actor: Actor | null, mapId: string, signatureId: string): Promise<void> {
-    const who = await this.authorize(actor, mapId, 'member');
+    const who = await this.authorizeEdit(actor, mapId);
     await this.write(who, mapId, async (events) => {
       const signature = await this.load(mapId, signatureId);
+      await this.tombstone(signature, this.ports.clock.now());
       await this.ports.signatures.delete(mapId, signatureId);
       events.add(
         'signature.removed',
@@ -122,7 +131,7 @@ export class SignatureUseCases extends MappingUseCases {
     solarSystemId: number,
     request: PasteSignaturesRequest,
   ): Promise<PasteSignaturesResult> {
-    const who = await this.authorize(actor, mapId, 'member');
+    const who = await this.authorizeEdit(actor, mapId);
     const parsed = parseSignaturePaste(request.text);
     return this.write(who, mapId, async (events) => {
       await this.visibleSystem(mapId, solarSystemId);
@@ -169,6 +178,7 @@ export class SignatureUseCases extends MappingUseCases {
 
       if (request.mode === 'replace' && parsed.signatures.length > 0) {
         for (const stale of existing.values()) {
+          await this.tombstone(stale, now);
           await this.ports.signatures.delete(mapId, stale.id);
           events.add('signature.removed', { id: stale.id, solarSystemId }, stale);
           result.removed++;
@@ -176,6 +186,16 @@ export class SignatureUseCases extends MappingUseCases {
       }
       return result;
     });
+  }
+
+  /** Records a deletion, so maps merging this one drop older copies of the signature too. */
+  private tombstone(signature: Signature, at: number): Promise<void> {
+    return this.ports.stamps.putTombstone(
+      signature.mapId,
+      'signature',
+      signatureKey(signature.solarSystemId, signature.eveId),
+      at,
+    );
   }
 
   /** A signature of a visible system. */

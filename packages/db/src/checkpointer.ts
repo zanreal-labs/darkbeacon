@@ -3,26 +3,34 @@ import { Worker } from 'node:worker_threads';
 
 const require = createRequire(import.meta.url);
 
-/** Runs in a worker thread with a connection of its own; plain CommonJS for `eval`. */
+/**
+ * Runs in a worker thread; plain CommonJS for `eval`. `state` is shared with the owner:
+ * [0] paused, [1] busy. Each round opens the file, checkpoints and closes it again, so no
+ * connection is left open while the owner swaps files (a restore).
+ */
 const SCRIPT = `
 const { parentPort, workerData } = require('node:worker_threads');
 const Database = require(workerData.driver);
-const db = new Database(workerData.filename);
-db.pragma('busy_timeout = 1000');
-const timer = setInterval(() => {
+const state = new Int32Array(workerData.state);
+setInterval(() => {
+  if (Atomics.load(state, 0) === 1) return;
+  Atomics.store(state, 1, 1);
   try {
-    db.pragma('wal_checkpoint(PASSIVE)');
+    if (Atomics.load(state, 0) === 1) return;
+    const db = new Database(workerData.filename, { fileMustExist: true });
+    try {
+      db.pragma('busy_timeout = 1000');
+      db.pragma('wal_checkpoint(PASSIVE)');
+    } finally {
+      db.close();
+    }
   } catch (error) {
     parentPort.postMessage(String(error));
+  } finally {
+    Atomics.store(state, 1, 0);
+    Atomics.notify(state, 1);
   }
 }, workerData.intervalMs);
-parentPort.on('message', (message) => {
-  if (message !== 'stop') return;
-  clearInterval(timer);
-  try { db.pragma('wal_checkpoint(PASSIVE)'); } catch {}
-  db.close();
-  parentPort.postMessage('stopped');
-});
 `;
 
 /**
@@ -34,26 +42,35 @@ parentPort.on('message', (message) => {
  */
 export class WalCheckpointer {
   private readonly worker: Worker;
+  private readonly state = new Int32Array(new SharedArrayBuffer(8));
 
   constructor(filename: string, intervalMs = 1_000, onError: (message: string) => void = () => {}) {
     this.worker = new Worker(SCRIPT, {
       eval: true,
-      workerData: { filename, intervalMs, driver: require.resolve('better-sqlite3') },
+      workerData: {
+        filename,
+        intervalMs,
+        driver: require.resolve('better-sqlite3'),
+        state: this.state.buffer,
+      },
     });
-    this.worker.on('message', (message: string) => {
-      if (message !== 'stopped') onError(message);
-    });
+    this.worker.on('message', (message: string) => onError(message));
     this.worker.on('error', (error) => onError(String(error)));
     this.worker.unref();
   }
 
+  /** Stops checkpointing and waits (synchronously) for a round in progress to finish. */
+  pause(): void {
+    Atomics.store(this.state, 0, 1);
+    while (Atomics.load(this.state, 1) === 1) Atomics.wait(this.state, 1, 1, 100);
+  }
+
+  resume(): void {
+    Atomics.store(this.state, 0, 0);
+  }
+
   async stop(): Promise<void> {
-    const stopped = new Promise<void>((resolve) => {
-      this.worker.once('message', () => resolve());
-      this.worker.once('exit', () => resolve());
-    });
-    this.worker.postMessage('stop');
-    await Promise.race([stopped, new Promise((resolve) => setTimeout(resolve, 2_000))]);
+    this.pause();
     await this.worker.terminate();
   }
 }

@@ -1,4 +1,5 @@
 import {
+  capMapRole,
   hasMapRole,
   requireMapRole,
   resolveMapRole,
@@ -23,13 +24,20 @@ export interface AccessServiceDeps {
  * - The map owner is always admin.
  * - Otherwise access rules decide: a block on one of the account's characters or on the account
  *   wins, then the highest granted role, then `blocked` if only blocks matched.
- * - API tokens hold a fixed role on one map; system and plugin actors act as admin.
+ * - Service keys hold the roles an instance admin gave them; a public visitor is a viewer of
+ *   the one map whose link it came through; system and plugin actors act as admin.
  * - Instance owners and admins get no implicit map access.
+ * - A credential (API key, MCP client) lowers the role to what its scopes allow (`capMapRole`).
  */
 export class AccessService implements MapAccess {
   constructor(private readonly deps: AccessServiceDeps) {}
 
   async roleOf(actor: Actor, mapId: string): Promise<MapRole | null> {
+    return capMapRole(actor, mapId, await this.ownRole(actor, mapId));
+  }
+
+  /** The principal's own role, before any credential narrows it. */
+  private async ownRole(actor: Actor, mapId: string): Promise<MapRole | null> {
     const owner = await this.deps.ownership.ownerOf(mapId);
     if (owner === null) return null;
     switch (actor.kind) {
@@ -37,7 +45,9 @@ export class AccessService implements MapAccess {
       case 'plugin':
         return 'admin';
       case 'apiToken':
-        return actor.mapId === mapId ? actor.role : null;
+        return actor.roles.maps[mapId] ?? actor.roles.allMaps;
+      case 'public':
+        return actor.mapId === mapId ? 'viewer' : null;
       case 'account': {
         if (owner === actor.id) return 'admin';
         const [rules, subjects] = await Promise.all([
@@ -50,15 +60,36 @@ export class AccessService implements MapAccess {
   }
 
   async mapsFor(actor: Actor): Promise<Array<{ mapId: string; role: GrantingMapRole }>> {
+    const capped = (list: Array<{ mapId: string; role: GrantingMapRole }>) =>
+      list.flatMap(({ mapId, role }) => {
+        const effective = capMapRole(actor, mapId, role);
+        return hasMapRole(effective, 'viewer') ? [{ mapId, role: effective as GrantingMapRole }] : [];
+      });
+    if (actor.kind === 'public') {
+      return hasMapRole(await this.roleOf(actor, actor.mapId), 'viewer')
+        ? [{ mapId: actor.mapId, role: 'viewer' }]
+        : [];
+    }
     if (actor.kind === 'apiToken') {
-      const role = await this.roleOf(actor, actor.mapId);
-      return hasMapRole(role, 'viewer') ? [{ mapId: actor.mapId, role: actor.role }] : [];
+      const ids =
+        actor.roles.allMaps !== null
+          ? ((await this.deps.ownership.allMaps?.()) ?? [])
+          : Object.keys(actor.roles.maps);
+      const result: Array<{ mapId: string; role: GrantingMapRole }> = [];
+      for (const mapId of ids) {
+        const role = await this.ownRole(actor, mapId);
+        if (hasMapRole(role, 'viewer')) result.push({ mapId, role: role as GrantingMapRole });
+      }
+      return capped(result);
     }
     if (actor.kind !== 'account') return [];
+    return capped(await this.accountMaps(actor.id));
+  }
 
+  private async accountMaps(accountId: string): Promise<Array<{ mapId: string; role: GrantingMapRole }>> {
     const [owned, subjects] = await Promise.all([
-      this.deps.ownership.mapsOwnedBy(actor.id),
-      this.deps.subjects.subjectsOf(actor.id),
+      this.deps.ownership.mapsOwnedBy(accountId),
+      this.deps.subjects.subjectsOf(accountId),
     ]);
     const result = owned.map((mapId) => ({ mapId, role: 'admin' as GrantingMapRole }));
     const byMap = new Map<string, AccessRule[]>();

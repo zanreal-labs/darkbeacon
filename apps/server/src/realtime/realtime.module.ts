@@ -1,9 +1,10 @@
 import { Global, Inject, Logger, Module, type OnModuleDestroy } from '@nestjs/common';
 import type { EventBus, EventLog } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
+import type { DomainTelemetry } from '@darkbeacon/observability';
 import { AuditDirectoryRegistry } from '../platform/audit.js';
 import { Cluster } from '../platform/cluster.js';
-import { EVENT_BUS, EVENT_LOG } from '../platform/tokens.js';
+import { EVENT_BUS, EVENT_LOG, OBSERVABILITY } from '../platform/tokens.js';
 import { PresenceRooms } from './presence.js';
 import { PresenceSettingsController, PresenceSettingsStore } from './presence-settings.js';
 import { RealtimeGateway } from './realtime.gateway.js';
@@ -37,6 +38,7 @@ import { SnapshotController } from './snapshot.controller.js';
         rooms: PresenceRooms,
         directory: AuditDirectoryRegistry,
         settings: PresenceSettingsStore,
+        telemetry?: DomainTelemetry | null,
       ) => {
         const logger = new Logger('Realtime');
         return new RealtimeHub({
@@ -59,6 +61,9 @@ import { SnapshotController } from './snapshot.controller.js';
           },
           onError: (error) =>
             logger.error(error instanceof Error ? (error.stack ?? error.message) : String(error)),
+          ...(telemetry
+            ? { trace: (name, attributes, work) => telemetry.traced(name, attributes, work) }
+            : {}),
         });
       },
       inject: [
@@ -69,6 +74,7 @@ import { SnapshotController } from './snapshot.controller.js';
         PresenceRooms,
         AuditDirectoryRegistry,
         PresenceSettingsStore,
+        { token: OBSERVABILITY, optional: true },
       ],
     },
     RealtimeGateway,

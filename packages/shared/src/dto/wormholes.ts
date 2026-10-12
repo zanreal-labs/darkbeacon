@@ -258,7 +258,7 @@ export const HullClassDto = z.object({
 });
 export type HullClassDto = z.infer<typeof HullClassDto>;
 
-const WormholeShipSize = z.enum(['small', 'medium', 'large', 'xlarge']);
+const WormholeShipSize = z.enum(['small', 'medium', 'large', 'xlarge', 'capital']);
 
 /**
  * A wormhole type with the attributes the SDE gives it. Masses in kg; the game varies a hole's
@@ -294,14 +294,15 @@ export type WormholeCatalogDto = z.infer<typeof WormholeCatalogDto>;
 /**
  * Connection size from a type's max jump mass: up to 5 000 t frigates and destroyers (small), up
  * to 62 000 t cruisers, battlecruisers and industrials (medium), up to 410 000 t battleships and
- * the Orca (large), above that freighters and capitals (xlarge).
+ * the Orca (large), up to 1 000 000 t freighters (xlarge), above that capitals (capital).
  */
 export function shipSizeForJumpMass(maxJumpMass: number | null): WormholeTypeDto['shipSize'] {
   if (maxJumpMass === null || maxJumpMass <= 0) return null;
   if (maxJumpMass <= 5_000_000) return 'small';
   if (maxJumpMass <= 62_000_000) return 'medium';
   if (maxJumpMass <= 410_000_000) return 'large';
-  return 'xlarge';
+  if (maxJumpMass <= 1_000_000_000) return 'xlarge';
+  return 'capital';
 }
 
 /** The class of a solar system as players write it: C1-C6, HS/LS/NS, Thera, C13, Drifter, Pochven. */

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { movedSettingsPath } from './lib/map-settings';
 import { safeNext } from './lib/safe-next';
 
 /** Cookie names shared with the API server (apps/server/src/modules/identity/cookies.ts). */
@@ -20,7 +21,13 @@ function redirectTo(request: NextRequest, path: string): NextResponse {
 }
 
 /** The app's pages; anything else (robots.txt, scanners probing /wp-login.php) is a plain 404. */
-const PAGE = /^\/(?:account|admin|maps|dev\/components)?\/?$|^\/m\/[^/]+(?:\/settings)?\/?$/;
+const PAGE = /^\/(?:account|admin|maps|jump|dev\/components|oauth\/authorize)?\/?$|^\/m\/[^/]+\/?$/;
+
+/**
+ * Public maps (`/p/<token>`): for anyone, signed in or not. Never a demo sign-in, never a redirect
+ * to the sign-in page, and the address (the secret) never leaves as a referrer.
+ */
+const PUBLIC_PAGE = /^\/p\/[^/]+\/?$/;
 
 /**
  * Where `/` goes for this session (the account's star, the instance default, the last opened
@@ -114,10 +121,19 @@ async function demoSignIn(request: NextRequest): Promise<string[] | null> {
  * is still valid is checked where the page reads the account; this only looks at the cookie.
  *
  * `/login` sends a visit with a session on to `next`; `/login?reset=1` drops a session cookie the
- * API no longer knows first, then continues to `next`.
+ * API no longer knows first, then continues to `next`. `/m/<slug>/settings` goes to the map with
+ * its settings dialog open (`?settings=`, the old `?tab=` kept as the section).
  */
 export async function proxy(request: NextRequest): Promise<NextResponse> {
   const { pathname, searchParams } = request.nextUrl;
+  if (PUBLIC_PAGE.test(pathname)) {
+    const response = NextResponse.next();
+    response.headers.set('referrer-policy', 'no-referrer');
+    return response;
+  }
+  // Map settings were a page; they open over the map now. Old links and bookmarks still work.
+  const moved = movedSettingsPath(pathname, searchParams);
+  if (moved) return redirectTo(request, moved);
   const signedIn = SESSION_COOKIES.some((name) => request.cookies.has(name));
   if (pathname === '/login') {
     const next = safeNext(searchParams.get('next'));

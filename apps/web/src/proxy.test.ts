@@ -47,6 +47,33 @@ describe('proxy', () => {
     expect((await proxy(request('/', 'dbk_session=abc'))).headers.get('x-middleware-next')).toBe('1');
   });
 
+  it('sends the old settings page to the map with its settings dialog open', async () => {
+    const fetch = fakeApi(() => new Response(null, { status: 500 }));
+    const moved = async (path: string, cookie?: string) => {
+      const response = await proxy(request(path, cookie));
+      expect(response.status).toBe(307);
+      return response.headers.get('location');
+    };
+    expect(await moved('/m/home-chain/settings', 'dbk_session=abc')).toBe(
+      'http://darkbeacon.test/m/home-chain?settings=general',
+    );
+    // The old tab becomes the section; signed out it goes first to the map, then to sign-in.
+    expect(await moved('/m/home-chain/settings/?tab=access')).toBe(
+      'http://darkbeacon.test/m/home-chain?settings=access',
+    );
+    expect(await moved('/m/home-chain/settings?tab=notifications', 'dbk_session=abc')).toBe(
+      'http://darkbeacon.test/m/home-chain?settings=discord',
+    );
+    expect(await moved('/m/home-chain/settings?tab=nope', 'dbk_session=abc')).toBe(
+      'http://darkbeacon.test/m/home-chain?settings=general',
+    );
+    expect(fetch).not.toHaveBeenCalled();
+    // Nothing else lives under a map.
+    expect(
+      (await proxy(request('/m/home-chain/history', 'dbk_session=abc'))).headers.get('x-middleware-next'),
+    ).toBe('1');
+  });
+
   it('signs a signed-out visit in as the demo account before the page renders', async () => {
     const fetch = fakeApi(
       () =>
@@ -186,11 +213,30 @@ describe('proxy', () => {
       'user-agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0',
     };
     await proxy(new NextRequest('http://darkbeacon.test/', { headers: firefox }));
-    await proxy(
-      request('/m/demo-chain/settings', undefined, { headers: { 'sec-fetch-dest': 'empty', rsc: '1' } }),
-    );
+    await proxy(request('/m/demo-chain', undefined, { headers: { 'sec-fetch-dest': 'empty', rsc: '1' } }));
     await proxy(request('/account'));
     expect(fetch).toHaveBeenCalledTimes(3);
     vi.useRealTimers();
+  });
+
+  it('lets public maps through for anyone, never signing in and never sending to sign-in', async () => {
+    const fetch = fakeApi(() => new Response(null, { status: 500 }));
+    for (const cookie of [undefined, 'dbk_session=abc']) {
+      const response = await proxy(request('/p/Zq3vT8nKpL2xYw7c', cookie));
+      expect(response.headers.get('x-middleware-next')).toBe('1');
+      expect(response.headers.get('referrer-policy')).toBe('no-referrer');
+      expect(response.headers.getSetCookie()).toEqual([]);
+    }
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('sends a signed-out OAuth consent visit to sign-in with its whole query', async () => {
+    fakeApi(() => new Response(null, { status: 404 }));
+    const path = '/oauth/authorize?response_type=code&client_id=abc&state=xyz';
+    const response = await proxy(request(path));
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe(
+      `http://darkbeacon.test/login?${new URLSearchParams({ next: path })}`,
+    );
   });
 });

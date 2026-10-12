@@ -31,7 +31,13 @@ export function RealtimeProvider({
   );
   useEffect(() => {
     client.start();
-    return () => client.stop();
+    // The server's database was restored: everything on the page (and maybe the session) is
+    // from the old one. A reload renders it again from the restored data.
+    const stopReset = client.onReset(() => window.location.reload());
+    return () => {
+      stopReset();
+      client.stop();
+    };
   }, [client]);
   return <RealtimeContext.Provider value={client}>{children}</RealtimeContext.Provider>;
 }

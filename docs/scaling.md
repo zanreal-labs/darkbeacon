@@ -21,13 +21,13 @@ One container, 2 vCPU and 2 GB of memory, on SQLite or Postgres 17, holds a whol
 
 Targets and results with that load running at once (p95 unless noted):
 
-| Target                                      | Goal     | SQLite            | Postgres      |
-| ------------------------------------------- | -------- | ----------------- | ------------- |
-| REST API                                    | < 150 ms | 16 ms (p99 37)  | 20 ms (p99 66)  |
-| Map snapshot, 500 systems (under load)      | < 300 ms | 32 ms | 62 ms |
-| Realtime fan-out (edit to every client)     | < 250 ms | 21 ms | 47 ms |
-| Presence fan-out (cursor to every peer)     | < 250 ms | 72 ms | 70 ms |
-| Server memory (API and web server together) | < 1 GB   | 802 MB peak  | 753 MB peak  |
+| Target                                      | Goal     | SQLite         | Postgres       |
+| ------------------------------------------- | -------- | -------------- | -------------- |
+| REST API                                    | < 150 ms | 16 ms (p99 37) | 20 ms (p99 66) |
+| Map snapshot, 500 systems (under load)      | < 300 ms | 32 ms          | 62 ms          |
+| Realtime fan-out (edit to every client)     | < 250 ms | 21 ms          | 47 ms          |
+| Presence fan-out (cursor to every peer)     | < 250 ms | 72 ms          | 70 ms          |
+| Server memory (API and web server together) | < 1 GB   | 802 MB peak    | 753 MB peak    |
 
 Beyond this the instance degrades gracefully rather than falling over: past the ESI budget every
 character is polled a little less often (maps someone has open first), crowded maps get fewer presence
@@ -64,25 +64,25 @@ with its connections and signatures).
 
 ### Before and after
 
-| Metric (p95 unless noted)                        | SQLite before | SQLite after | Postgres before | Postgres after |
-| ------------------------------------------------ | ------------- | ------------ | --------------- | -------------- |
-| REST API (reads and moves)                       | 82 ms         | 16 ms        | 101 ms          | 20 ms          |
-| REST API p99                                     | 144 ms        | 37 ms        | 191 ms          | 66 ms          |
-| Map snapshot, 500 systems, under load            | 81 ms         | 32 ms        | 121 ms          | 62 ms          |
-| Map snapshot, alone (p50)                        | 10 ms         | 8 ms         | 15 ms           | 14 ms          |
-| Map page, server-rendered                        | 279 ms        | 118 ms       | 297 ms          | 127 ms         |
-| Signature paste, 200 lines                       | 89 ms         | 46 ms        | 419 ms          | 80 ms          |
-| Edit fan-out (move sent to arrival at every client) | 80 ms      | 21 ms        | 88 ms           | 47 ms          |
-| Presence fan-out (cursor to every peer)          | 82 ms         | 72 ms        | 87 ms           | 70 ms          |
-| Snapshot when 400 clients open the map           | 49 ms         | 72 ms        | 99 ms           | 79 ms          |
-| Jump reaching the map, p50                       | 5.3 s         | 2.5 s        | 6.3 s           | 2.6 s          |
-| Jump reaching the map                            | 13.6 s        | 5.1 s        | 16.1 s          | 5.3 s          |
-| Location asked for, interval                     | 20.0 s        | 5.6 s        | 19.9 s          | 5.6 s          |
-| ESI requests a second                            | 122           | 248          | 114             | 248            |
-| Received per client                              | 219 KB/s      | 27 KB/s      | 231 KB/s        | 27 KB/s        |
-| Server CPU p50 / p95 (200 % = both cores)        | 70 / 90 %     | 47 / 87 %    | 97 / 116 %      | 45 / 94 %      |
-| Event-loop delay p99 (worst 10 s windows)        | 113 ms        | 40 ms        | 61 ms           | 18 ms          |
-| Peak RSS, API and web server together            | 771 MB        | 802 MB       | 743 MB          | 753 MB         |
+| Metric (p95 unless noted)                           | SQLite before | SQLite after | Postgres before | Postgres after |
+| --------------------------------------------------- | ------------- | ------------ | --------------- | -------------- |
+| REST API (reads and moves)                          | 82 ms         | 16 ms        | 101 ms          | 20 ms          |
+| REST API p99                                        | 144 ms        | 37 ms        | 191 ms          | 66 ms          |
+| Map snapshot, 500 systems, under load               | 81 ms         | 32 ms        | 121 ms          | 62 ms          |
+| Map snapshot, alone (p50)                           | 10 ms         | 8 ms         | 15 ms           | 14 ms          |
+| Map page, server-rendered                           | 279 ms        | 118 ms       | 297 ms          | 127 ms         |
+| Signature paste, 200 lines                          | 89 ms         | 46 ms        | 419 ms          | 80 ms          |
+| Edit fan-out (move sent to arrival at every client) | 80 ms         | 21 ms        | 88 ms           | 47 ms          |
+| Presence fan-out (cursor to every peer)             | 82 ms         | 72 ms        | 87 ms           | 70 ms          |
+| Snapshot when 400 clients open the map              | 49 ms         | 72 ms        | 99 ms           | 79 ms          |
+| Jump reaching the map, p50                          | 5.3 s         | 2.5 s        | 6.3 s           | 2.6 s          |
+| Jump reaching the map                               | 13.6 s        | 5.1 s        | 16.1 s          | 5.3 s          |
+| Location asked for, interval                        | 20.0 s        | 5.6 s        | 19.9 s          | 5.6 s          |
+| ESI requests a second                               | 122           | 248          | 114             | 248            |
+| Received per client                                 | 219 KB/s      | 27 KB/s      | 231 KB/s        | 27 KB/s        |
+| Server CPU p50 / p95 (200 % = both cores)           | 70 / 90 %     | 47 / 87 %    | 97 / 116 %      | 45 / 94 %      |
+| Event-loop delay p99 (worst 10 s windows)           | 113 ms        | 40 ms        | 61 ms           | 18 ms          |
+| Peak RSS, API and web server together               | 771 MB        | 802 MB       | 743 MB          | 753 MB         |
 
 The "after" columns do twice the tracking work of the "before" ones (each location asked for every
 5.6 s at p95 instead of every 20 s) and still use half the CPU. Edit fan-out on Postgres is the commit

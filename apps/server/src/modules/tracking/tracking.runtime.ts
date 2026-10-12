@@ -1,16 +1,19 @@
 import {
   Inject,
   Injectable,
+  Optional,
   type OnApplicationBootstrap,
   type OnModuleDestroy,
   type OnModuleInit,
 } from '@nestjs/common';
 import type { EventBus, Leadership } from '@darkbeacon/core';
+import type { DomainTelemetry } from '@darkbeacon/observability';
 import { isEventOfType } from '@darkbeacon/shared';
 import { AutoMapper, ListMapCharacters, TrackingCleanup, TrackingPoller } from '@darkbeacon/tracking';
 import type { AppConfig } from '../../config/config.js';
 import { EventConsumers } from '../../platform/event-consumers.js';
-import { APP_CONFIG, EVENT_BUS, LEADERSHIP } from '../../platform/tokens.js';
+import { MaintenanceMode } from '../../platform/maintenance.js';
+import { APP_CONFIG, EVENT_BUS, LEADERSHIP, OBSERVABILITY } from '../../platform/tokens.js';
 import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
 
 /** How often the poller looks for characters that are due (a tick only reads memory). */
@@ -36,6 +39,8 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
     @Inject(EventConsumers) private readonly consumers: EventConsumers,
     @Inject(EVENT_BUS) private readonly bus: EventBus,
     @Inject(LEADERSHIP) private readonly leadership: Leadership,
+    @Inject(MaintenanceMode) private readonly maintenance: MaintenanceMode,
+    @Optional() @Inject(OBSERVABILITY) private readonly telemetry?: DomainTelemetry | null,
   ) {}
 
   onModuleInit(): void {
@@ -74,15 +79,34 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
       unsubscribeAccess();
       unsubscribeTracking();
     };
+    this.maintenance.register({
+      name: 'tracking',
+      resume: (restored) => {
+        if (restored) this.poller.recheckAccess();
+      },
+    });
   }
 
   onApplicationBootstrap(): void {
     // Tests drive the poller themselves.
     if (this.config.env !== 'test') {
-      // One replica polls ESI (the leader); the others see its events.
-      this.timer = setInterval(() => {
-        if (this.leadership.isLeader()) void this.poller.tick();
-      }, TICK_MS).unref();
+      this.timer = setInterval(() => void this.tick(), TICK_MS).unref();
+    }
+  }
+
+  /**
+   * One replica polls ESI (the leader); the others see its events. Ticks overlap (the poller
+   * never polls a character twice at once); each one's duration is what it polled.
+   */
+  private async tick(): Promise<void> {
+    if (this.maintenance.active || !this.leadership.isLeader()) return;
+    const telemetry = this.telemetry;
+    if (!telemetry) return this.poller.tick();
+    const started = performance.now();
+    try {
+      await this.poller.tick();
+    } finally {
+      telemetry.trackingPolled((performance.now() - started) / 1000);
     }
   }
 

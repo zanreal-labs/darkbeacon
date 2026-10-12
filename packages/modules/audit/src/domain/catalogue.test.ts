@@ -20,6 +20,8 @@ const system = {
   status: 'unknown',
   description: '',
   labelIds: [],
+  systemLabelIds: [],
+  customLabel: null,
   locked: false,
   visible: true,
   createdAt: 1,
@@ -54,6 +56,22 @@ const signature = {
   createdAt: 1,
   updatedAt: 1,
 };
+const share = {
+  id: 'sh1',
+  source: { instance: 'local', mapId: 'm' },
+  sourceName: 'Corp A',
+  target: { instance: 'local', mapId: 'm2' },
+  targetName: 'Alliance chain',
+  sourceInstanceName: null,
+  level: 'read',
+  offeredScopes: ['topology'],
+  scopes: ['topology'],
+  status: 'offered',
+  hidden: false,
+  offeredAt: 1,
+  acceptedAt: null,
+  updatedAt: 1,
+};
 const presence = {
   characterId: 9,
   accountId: 'a',
@@ -71,6 +89,7 @@ const map = {
   ownerAccountId: 'a',
   settings: { scopes: ['wormhole'] },
   labels: [],
+  systemLabels: [],
   createdAt: 1,
   updatedAt: 1,
 };
@@ -117,6 +136,31 @@ const webhook = {
  * updates and removals, what it passes as `before`. A new event type does not compile until it
  * has a sample here, and the test below fails unless its audit record is complete.
  */
+const apiKey = {
+  id: 'k1',
+  kind: 'pat',
+  name: 'Bot',
+  scopes: ['maps:read'],
+  readOnly: true,
+  expiresAt: null,
+  allowedIps: [],
+  rateLimitPerMinute: null,
+  ownerAccountId: 'a',
+  instanceRole: null,
+  mapGrants: [],
+  allMapsRole: null,
+};
+const sharing = {
+  mapId: 'm',
+  enabled: false,
+  slug: null,
+  scopes: ['topology', 'connectionStatus'],
+  noindex: true,
+  mcpMode: 'authenticated',
+  regenerated: false,
+};
+const BACKUP = 'darkbeacon-20261012T101500Z-v0.1.0-s20.db.gz';
+
 const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
   'system.added': { data: system },
   'system.updated': { data: { ...system, status: 'hostile' }, before: system },
@@ -125,6 +169,36 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
   'connection.updated': { data: { ...connection, massStatus: 'critical' }, before: connection },
   'connection.removed': { data: { id: 'c1' }, before: connection },
   'connection.passage': { data: { connectionId: 'c1', characterId: 9, shipTypeId: 670, mass: 1_200_000 } },
+  'connection.passage_updated': {
+    data: {
+      passageId: 'p1',
+      connectionId: 'c1',
+      characterId: null,
+      shipTypeId: 641,
+      mass: 148_400_000,
+      massMode: 'hot',
+    },
+    before: {
+      passageId: 'p1',
+      connectionId: 'c1',
+      characterId: null,
+      shipTypeId: 641,
+      mass: 98_400_000,
+      massMode: 'cold',
+    },
+  },
+  'connection.passage_removed': {
+    data: { passageId: 'p1', connectionId: 'c1' },
+    before: {
+      passageId: 'p1',
+      connectionId: 'c1',
+      characterId: null,
+      shipTypeId: 641,
+      mass: 98_400_000,
+      from: 31000005,
+      to: 30000142,
+    },
+  },
   'signature.added': { data: signature },
   'signature.updated': { data: { ...signature, group: 'gas' }, before: signature },
   'signature.removed': { data: { id: 's1', solarSystemId: signature.solarSystemId }, before: signature },
@@ -143,6 +217,18 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
   'labels.changed': {
     data: { labels: [{ id: 'l', name: 'Home', color: '#22aa66', description: '' }] },
     before: { labels: [] },
+  },
+  'system_labels.changed': {
+    data: { systemLabels: [{ id: 'wh1', name: 'WH1', description: '' }] },
+    before: { systemLabels: [] },
+  },
+  'map.share.offered': { data: share },
+  'map.share.accepted': { data: { ...share, status: 'active', acceptedAt: 2 }, before: share },
+  'map.share.changed': { data: { ...share, level: 'read-write' }, before: share },
+  'map.share.revoked': { data: share, before: share },
+  'map.sources_changed': {
+    data: { sources: [{ id: 'sh1', name: 'Corp A' }] },
+    before: { sources: [] },
   },
   'routes.exits_changed': {
     data: {
@@ -167,6 +253,7 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
   'ping.removed': { data: { id: 'p1' }, before: { id: 'p1', solarSystemId: 31000005, message: 'Help' } },
   'access.rule_added': { data: rule },
   'access.rule_removed': { data: { id: 'r1' }, before: rule },
+  'access.public_link_changed': { data: { ...sharing, enabled: true }, before: sharing },
   'access.role_changed': {
     data: { accountId: 'b', role: 'admin' },
     before: { accountId: 'b', role: 'user' },
@@ -184,6 +271,7 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
     before: { configured: false, name: null },
   },
   'settings.changed': { data: { ...settings, eventRetentionDays: 90 }, before: settings },
+  'telemetry.changed': { data: { enabled: false }, before: { enabled: true } },
   'theme.installed': { data: { id: 't', name: 'T', version: '1.0.0' } },
   'theme.removed': { data: { id: 't' }, before: { id: 't', name: 'T', version: '1.0.0' } },
   'theme.default_changed': { data: { themeId: 'dark' }, before: { themeId: 'system' } },
@@ -193,6 +281,49 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
   'plugin.settings_changed': {
     data: { pluginId: 'discord-notify', mapId: null, values: { username: 'Beacon' } },
     before: { pluginId: 'discord-notify', mapId: null, values: { username: 'Darkbeacon' } },
+  },
+  'backup.completed': { data: { name: BACKUP, trigger: 'manual', size: 10, schemaVersion: 20 } },
+  'backup.failed': { data: { operation: 'backup', trigger: 'scheduled', name: null, message: 'disk full' } },
+  'backup.restored': {
+    data: { name: BACKUP, source: 'backup', preRestore: BACKUP, migrationsApplied: [] },
+  },
+  'backup.deleted': { data: { name: BACKUP } },
+  'backup.downloaded': { data: { name: BACKUP } },
+  'backup.settings_changed': {
+    data: { intervalMinutes: 360, keep: 14, maxAgeDays: null, notifyHost: null, notifySuccess: false },
+    before: { intervalMinutes: 1440, keep: 14, maxAgeDays: null, notifyHost: null, notifySuccess: false },
+  },
+  'api_key.created': { data: apiKey },
+  'api_key.updated': { data: { ...apiKey, name: 'Bot 2' }, before: apiKey },
+  'api_key.rotated': { data: { id: 'k1', name: 'Bot', kind: 'pat', ownerAccountId: 'a' } },
+  'api_key.revoked': { data: { id: 'k1', name: 'Bot', kind: 'pat', ownerAccountId: 'a' }, before: apiKey },
+  'oauth.grant_created': {
+    data: {
+      id: 'g1',
+      accountId: 'a',
+      clientId: 'https://client.example/meta',
+      clientName: 'Claude',
+      scopes: ['*:read'],
+      readOnly: true,
+    },
+  },
+  'oauth.grant_revoked': {
+    data: {
+      id: 'g1',
+      accountId: 'a',
+      clientId: 'c',
+      clientName: 'Claude',
+      scopes: ['*:read'],
+      readOnly: true,
+    },
+    before: {
+      id: 'g1',
+      accountId: 'a',
+      clientId: 'c',
+      clientName: 'Claude',
+      scopes: ['*:read'],
+      readOnly: true,
+    },
   },
 };
 

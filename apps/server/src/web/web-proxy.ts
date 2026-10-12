@@ -13,9 +13,18 @@ export interface WebUpstream {
   readonly origin: string;
 }
 
-/** `/api` and everything below it belongs to Nest. */
+/** OAuth metadata documents served by Nest (RFC 8414, RFC 9728). */
+export const WELL_KNOWN_PATHS = [
+  '/.well-known/oauth-protected-resource',
+  '/.well-known/oauth-protected-resource/mcp',
+  '/.well-known/oauth-authorization-server',
+  '/.well-known/openid-configuration',
+];
+
+/** `/api` and everything below it belongs to Nest, and so do the MCP endpoint and the OAuth metadata. */
 export function isApiPath(url: string): boolean {
-  return url === '/api' || url.startsWith('/api/') || url.startsWith('/api?');
+  const path = url.split('?')[0]!;
+  return path === '/api' || path.startsWith('/api/') || path === '/mcp' || WELL_KNOWN_PATHS.includes(path);
 }
 
 /** The realtime socket, handled by the Nest gateway. */
@@ -148,9 +157,9 @@ export function forwardUpgrade(
 }
 
 /**
- * Makes Nest the one front door: `/api` stays with Nest, `/ws` with the realtime gateway, and
- * everything else (pages, their assets, streamed HTML and the dev server's hot reload) goes to
- * the web server. Without an upstream only the API is served.
+ * Makes Nest the one front door: `/api` and the server's other routes stay with Nest, `/ws`
+ * with the realtime gateway, and everything else (pages, their assets, streamed HTML and the
+ * dev server's hot reload) goes to the web server. Without an upstream only the API is served.
  *
  * Call before `app.init()`; `installUpgradeRouting` runs after it, once the gateway listens.
  */
@@ -164,7 +173,8 @@ export function installWebProxy(
     .getHttpAdapter()
     .getInstance()
     .addHook('onRequest', (request, reply, done) => {
-      if (isApiPath(request.url)) return done();
+      // Routes of this server (the API, /metrics) answer here; everything no route matches goes on.
+      if (isApiPath(request.url) || !request.is404) return done();
       // The request body is not parsed: it is streamed to the web server untouched.
       void reply.hijack();
       forwardRequest(request.raw, reply.raw, upstream, onError);

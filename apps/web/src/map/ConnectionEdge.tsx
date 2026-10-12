@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useEffect, useState, type ReactNode } from 'react';
+import { memo, useEffect, useState } from 'react';
 import {
   BaseEdge,
   EdgeLabelRenderer,
@@ -10,11 +10,17 @@ import {
   type InternalNode,
 } from '@xyflow/react';
 import type { ConnectionDto, ShipSize } from '@darkbeacon/shared';
-import { TriangleAlert } from 'lucide-react';
 import { PluginSlot } from '../plugins/PluginSlot';
-import { edgeLineStyle, edgeVisual, SHIP_SIZE_TEXT, type EdgeBadge, type EdgeVisual } from './edgeStyle';
-import { along, floatingEnds, type Point, type Rect } from './geometry';
+import { edgeInnerStyle, edgeOuterStyle, edgeVisual, SHIP_SIZE_TEXT, type EdgeVisual } from './edgeStyle';
+import { floatingEnds, type Point, type Rect } from './geometry';
 import styles from './ConnectionEdge.module.css';
+
+/** What went through a connection since its mass was last marked, for the hover card. */
+export interface ConnectionTraffic {
+  passages: number;
+  /** kg */
+  passed: number;
+}
 
 export interface ConnectionEdgeData extends Record<string, unknown> {
   mapId: string;
@@ -22,15 +28,27 @@ export interface ConnectionEdgeData extends Record<string, unknown> {
   /** Names of the two ends, for the tooltip. */
   sourceName?: string;
   targetName?: string;
+  traffic?: ConnectionTraffic;
+}
+
+/** "3 jumps counted, 445 200 t". */
+export function trafficLine(traffic: ConnectionTraffic | undefined): string | null {
+  if (!traffic || traffic.passages === 0) return null;
+  const tonnes = Math.round(traffic.passed / 1000)
+    .toLocaleString('en-US')
+    .replace(/,/g, ' ');
+  return `${traffic.passages} jump${traffic.passages === 1 ? '' : 's'} counted, ${tonnes} t`;
 }
 
 export type ConnectionEdgeType = Edge<ConnectionEdgeData, 'connection'>;
 
+/** Ship size as the menus and the panel name it. */
 export const SHIP_SIZE_LABEL: Record<ShipSize, string> = {
-  small: 'F',
+  small: 'S',
   medium: 'M',
   large: 'L',
   xlarge: 'XL',
+  capital: 'C',
 };
 
 function rectOf(node: InternalNode): Rect {
@@ -42,42 +60,12 @@ function rectOf(node: InternalNode): Rect {
   };
 }
 
-/** Bubbles sit on the node's edge, pushed a little out so most of the circle shows. */
-const BUBBLE_OFFSET = 13;
-
-/** A stargate: an arch on a base line, drawn like the lucide icons around it. */
-function GateIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.2}
-      strokeLinecap="round"
-      aria-hidden
-    >
-      <path d="M5 20V11a7 7 0 0 1 14 0v9" />
-      <path d="M9 20v-8a3 3 0 0 1 6 0v8" />
-      <path d="M2 20h20" />
-    </svg>
-  );
-}
-
-const BADGE_ICON: Partial<Record<EdgeBadge['kind'], ReactNode>> = {
-  gate: <GateIcon />,
-  dangerous: <TriangleAlert aria-hidden />,
-};
-
-/** One badge on the line: an icon for a gate and for danger, short text for the rest. */
-export function EdgeBadgeChip({ badge }: { badge: EdgeBadge }) {
-  const icon = BADGE_ICON[badge.kind];
-  return (
-    <span className={styles.badge} data-kind={badge.kind} title={badge.title}>
-      {icon ?? badge.label}
-      {icon && <span className="sr-only">{badge.label}</span>}
-    </span>
-  );
-}
+/**
+ * Bubble ring radius. The ring is centred on the end of the line at the bubbled system and drawn
+ * in the edge layer, so the system card covers its inner half: what shows is a wide dashed arc
+ * hugging that side of the card, like a warp disruption bubble around the gate you land on.
+ */
+export const BUBBLE_RADIUS = 26;
 
 /** Re-renders once a minute while `on`, so EOL estimates count down. */
 function useMinuteClock(on: boolean): number {
@@ -102,11 +90,11 @@ function EdgeDetails({ data, visual, at }: { data: ConnectionEdgeData; visual: E
   const name = (end: 'source' | 'target') =>
     (end === 'source' ? data.sourceName : data.targetName) ?? 'this end';
   const lines = [
-    ...visual.states.filter((s) => s.kind !== 'gate' && s.kind !== 'bridge').map((s) => s.title),
+    ...visual.states.filter((s) => s.kind !== 'size').map((s) => s.title),
     ...visual.bubbles.map((end) => `Bubbled on the ${name(end)} side`),
     ...(c.type === 'wormhole' && c.massStatus === 'fresh' ? ['Mass fresh: over 50 % left'] : []),
     ...(c.type === 'wormhole' && c.timeStatus === 'normal' ? ['Lifetime normal'] : []),
-    ...(c.massSaved ? ['Mass saved'] : []),
+    ...(c.type === 'wormhole' && trafficLine(data.traffic) ? [trafficLine(data.traffic)!] : []),
   ];
   return (
     <div
@@ -126,9 +114,9 @@ function EdgeDetails({ data, visual, at }: { data: ConnectionEdgeData; visual: E
 }
 
 /**
- * The one connection edge: a straight line between node borders in the visual language of
- * `edgeStyle.ts`. Badges sit at the midpoint, bubbles on the bubbled ends above every other line,
- * and the whole line lights up while hovered or selected.
+ * The one connection edge: a straight two-layer line between node borders in the language of
+ * `edgeStyle.ts`. Only a size letter sits at the midpoint; bubbles sit at the bubbled end, under
+ * the system card; the whole line lights up while hovered or selected.
  */
 export const ConnectionEdge = memo(function ConnectionEdge({
   id,
@@ -146,12 +134,21 @@ export const ConnectionEdge = memo(function ConnectionEdge({
 
   const c = data.connection;
   const visual = edgeVisual(c, now);
-  const { from, to } = floatingEnds(rectOf(sourceNode), rectOf(targetNode));
-  const path = `M ${from.x},${from.y} L ${to.x},${to.y}`;
+  const inner = edgeInnerStyle(visual);
+  const sourceRect = rectOf(sourceNode);
+  const targetRect = rectOf(targetNode);
+  const { from, to } = floatingEnds(sourceRect, targetRect);
+  // The line runs from centre to centre, under the opaque cards, so its layers of different
+  // widths never show a stepped cut where it meets a card; the label and bubbles still use the
+  // points on the borders.
+  const centre = (r: Rect) => ({ x: r.x + r.width / 2, y: r.y + r.height / 2 });
+  const a = centre(sourceRect);
+  const b = centre(targetRect);
+  const path = `M ${a.x},${a.y} L ${b.x},${b.y}`;
   const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
   const bubbles = visual.bubbles.map((end) => ({
     end,
-    at: end === 'source' ? along(from, to, BUBBLE_OFFSET) : along(to, from, BUBBLE_OFFSET),
+    at: end === 'source' ? from : to,
   }));
 
   return (
@@ -159,7 +156,7 @@ export const ConnectionEdge = memo(function ConnectionEdge({
       className={styles.edge}
       data-type={c.type}
       data-mass={c.massStatus}
-      data-time={c.timeStatus}
+      data-time={visual.time}
       data-size={c.shipSize}
       data-active={hover || selected || undefined}
       data-pending={c.id.startsWith('pending:') || undefined}
@@ -168,25 +165,25 @@ export const ConnectionEdge = memo(function ConnectionEdge({
     >
       {visual.halo && <path d={path} className={styles.halo} data-underlay="dangerous" />}
       <path d={path} className={styles.highlight} data-underlay="highlight" />
-      <BaseEdge id={id} path={path} interactionWidth={22} style={edgeLineStyle(visual)} />
+      <path d={path} className={styles.casing} data-underlay="casing" />
+      <BaseEdge id={id} path={path} interactionWidth={22} style={edgeOuterStyle(visual)} />
+      {inner && <path d={path} fill="none" className={styles.core} style={inner} data-layer="mass" />}
+      {bubbles.map(({ end, at }) => (
+        <circle key={end} className={styles.bubble} data-bubble={end} cx={at.x} cy={at.y} r={BUBBLE_RADIUS}>
+          <title>{`Bubbled on the ${(end === 'source' ? data.sourceName : data.targetName) ?? end} side`}</title>
+        </circle>
+      ))}
       <EdgeLabelRenderer>
-        {bubbles.map(({ end, at }) => (
-          <div
-            key={end}
-            className={styles.bubble}
-            data-bubble={end}
-            style={{ transform: `translate(-50%, -50%) translate(${at.x}px, ${at.y}px)` }}
-            title={`Bubbled on the ${(end === 'source' ? data.sourceName : data.targetName) ?? end} side`}
-          />
-        ))}
         <div
           className={styles.label}
           style={{ transform: `translate(-50%, -50%) translate(${mid.x}px, ${mid.y}px)` }}
           data-edge-label={id}
         >
-          {visual.badges.map((badge) => (
-            <EdgeBadgeChip key={badge.kind} badge={badge} />
-          ))}
+          {visual.size && (
+            <span className={styles.size} data-size={c.shipSize} title={SHIP_SIZE_TEXT[c.shipSize]}>
+              {visual.size}
+            </span>
+          )}
           <PluginSlot slot="edgeBadge" props={{ mapId: data.mapId, connectionId: c.id }} />
         </div>
         {hover && <EdgeDetails data={data} visual={visual} at={mid} />}

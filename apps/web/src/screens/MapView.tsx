@@ -1,47 +1,41 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import {
   SYSTEM_PLACEMENT,
+  type ConnectionDto,
   type MapDto,
   type MapSummaryDto,
   type StreamSnapshotDto,
   type UniverseSystemDto,
 } from '@darkbeacon/shared';
-import {
-  AlertTriangle,
-  Info,
-  MousePointerClick,
-  Plus,
-  Puzzle,
-  Radar,
-  Settings,
-  UsersRound,
-  Waypoints,
-  X,
-} from 'lucide-react';
+import { AlertTriangle, PanelRight, Plus, Waypoints, X } from 'lucide-react';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
 import { mapPermissions } from '../lib/roles';
 import { useMe } from '../lib/session';
+import { track } from '../lib/telemetry';
 import { useUniverseSystems } from '../lib/universe';
+import { useMapSettings } from '../lib/useMapSettings';
+import { usePageView } from '../lib/useTelemetry';
 import { AddSystemSearch } from '../map/AddSystemSearch';
 import { MapCanvas, type FocusRequest, type MenuTarget } from '../map/MapCanvas';
 import { freeSpot } from '../map/geometry';
-import { connectionMenu, systemMenu } from '../map/menus';
+import { connectionMenu, paneMenu, systemMenu } from '../map/menus';
+import { ConnectionSidebar } from '../map/connection/ConnectionSidebar';
+import { useConnectionIntel, useLivePassages, useMapIntel } from '../map/connection/data';
+import { LogJumpDialog } from '../map/connection/LogJumpDialog';
+import { RollingCalculator } from '../map/connection/RollingCalculator';
+import type { ConnectionTraffic } from '../map/ConnectionEdge';
 import { systemDisplayName } from '../map/SystemNode';
 import { useMapStore } from '../map/useMapStore';
-import { LocalWidget } from '../map/widgets/LocalWidget';
-import { SignaturesWidget } from '../map/widgets/SignaturesWidget';
-import { SystemInfoWidget } from '../map/widgets/SystemInfoWidget';
-import { WidgetDock, type DockTab } from '../map/widgets/WidgetDock';
-import { SlotItem, useSlot } from '../plugins/PluginSlot';
-import { Button, EmptyState, IconButton, Spinner } from '../ui';
+import { SystemSidebar } from '../map/sidebar/SystemSidebar';
+import { filterableSources, permissionsFor, withoutSources } from '../map/sharing/chain';
+import { ProvenanceLine, provenanceText } from '../map/sharing/ProvenanceLine';
+import { SourceFilter, useHiddenSources } from '../map/sharing/SourceFilter';
+import { useSlot } from '../plugins/PluginSlot';
+import { Button, EmptyState, IconButton, Spinner, useToast } from '../ui';
 import styles from './MapPage.module.css';
-
-/** The phone dock's sheet at its tallest: 58 % of the screen above the 52 px tab bar. */
-const sheetHeight = () => (typeof window === 'undefined' ? 0 : Math.round(window.innerHeight * 0.58) + 52);
 
 interface OpenMenu {
   target: MenuTarget;
@@ -49,7 +43,59 @@ interface OpenMenu {
   y: number;
 }
 
-/** The live map: canvas, search, dock with widgets, context menus. Browser only (React Flow). */
+type ConnectionDialog = { kind: 'log' | 'roll'; connectionId: string };
+
+/** The rolling planner with the connection's intel (fetched, or shared with the open sidebar). */
+function RollDialog({
+  mapId,
+  connectionId,
+  merged,
+  onClose,
+}: {
+  mapId: string;
+  connectionId: string;
+  merged: boolean;
+  onClose(): void;
+}) {
+  const intel = useConnectionIntel(mapId, connectionId, merged);
+  return (
+    <RollingCalculator
+      open
+      onOpenChange={(open) => !open && onClose()}
+      mapId={mapId}
+      connectionId={connectionId}
+      intel={intel.data}
+    />
+  );
+}
+
+function LogDialog({
+  mapId,
+  connection,
+  names,
+  merged,
+  onClose,
+}: {
+  mapId: string;
+  connection: ConnectionDto;
+  names: { source: string; target: string };
+  merged: boolean;
+  onClose(): void;
+}) {
+  const intel = useConnectionIntel(mapId, connection.id, merged);
+  return (
+    <LogJumpDialog
+      open
+      onOpenChange={(open) => !open && onClose()}
+      mapId={mapId}
+      connection={connection}
+      names={names}
+      maxJumpMass={intel.data?.maxJumpMass ?? null}
+    />
+  );
+}
+
+/** The live map: canvas, search, the selected system's sidebar, context menus. Browser only (React Flow). */
 export function MapView({
   map,
   role,
@@ -60,17 +106,47 @@ export function MapView({
   snapshot?: StreamSnapshotDto;
 }) {
   const store = useMapStore(map.id, snapshot);
-  const { state } = store;
+  // On a map that merges others, a viewer may hide some of them (only in this browser).
+  const sourceFilter = useHiddenSources(map.id);
+  const state = useMemo(
+    () => withoutSources(store.state, sourceFilter.hidden),
+    [store.state, sourceFilter.hidden],
+  );
   const me = useMe();
   const rf = useReactFlow();
+  const settings = useMapSettings();
+  const toast = useToast();
   const can = mapPermissions(role);
   const [selected, setSelected] = useState<number | null>(null);
-  // The dock starts closed, so the first view has the whole width for the chain; on wide screens
-  // the first selection opens it, unless the user already opened or closed it themselves.
-  const [dock, setDock] = useState({ tab: 'system', open: false });
-  const dockTouched = useRef(false);
-  // Phones get the bottom dock, which covers nothing the view needs to avoid.
-  const wide = typeof window !== 'undefined' && !window.matchMedia?.('(max-width: 760px)').matches;
+  // A clicked connection takes the sidebar instead of a system.
+  const [selectedConnection, setSelectedConnection] = useState<string | null>(null);
+  const [connectionDialog, setConnectionDialog] = useState<ConnectionDialog | null>(null);
+  const merged = !!state.sources;
+  useLivePassages(map.id);
+  const intel = useMapIntel(map.id);
+  const traffic = useMemo(
+    () =>
+      new Map<string, ConnectionTraffic>(
+        (intel.data ?? []).map((c) => [c.connectionId, { passages: c.mass.passages, passed: c.mass.passed }]),
+      ),
+    [intel.data],
+  );
+  // The sidebar belongs to the selection: hidden with nothing selected, shown with each newly
+  // selected system; the top bar's toggle hides it while the selection stays.
+  const [panel, setPanel] = useState(true);
+  const [cover, setCover] = useState({ right: 0, bottom: 0 });
+  const onCover = useCallback(
+    (next: { right: number; bottom: number }) =>
+      setCover((c) => (c.right === next.right && c.bottom === next.bottom ? c : next)),
+    [],
+  );
+  usePageView('map');
+  useEffect(() => {
+    if (panel && selected !== null) track('panel_opened', { panel: 'system' });
+  }, [panel, selected]);
+  useEffect(() => {
+    if (panel && selectedConnection !== null) track('panel_opened', { panel: 'connections' });
+  }, [panel, selectedConnection]);
   const [menu, setMenu] = useState<OpenMenu | null>(null);
   const [addAt, setAddAt] = useState<{ x: number; y: number } | null>(null);
   const [focus, setFocus] = useState({ search: 0, name: 0 });
@@ -79,26 +155,39 @@ export function MapView({
   const connectionPlugins = useSlot('connectionContextMenu', map.id);
   const widgetPlugins = useSlot('widget', map.id);
 
+  // Tags (`labels` in the data) and Labels (WH1...) of the map.
   const labels = (state.map ?? map).labels;
+  const systemLabels = (state.map ?? map).systemLabels ?? [];
   const ids = useMemo(() => [...state.systems.keys()], [state.systems]);
   const universe = useUniverseSystems(ids);
   const onMap = useMemo(() => new Set(ids), [ids]);
   const system = selected !== null ? state.systems.get(selected) : undefined;
+  const connection = selectedConnection !== null ? state.connections.get(selectedConnection) : undefined;
+  const endName = (id: number) => {
+    const sys = state.systems.get(id);
+    return sys ? systemDisplayName(sys, universe.get(id)) : (universe.get(id)?.name ?? 'Unknown system');
+  };
 
   const closeMenu = useCallback(() => setMenu(null), []);
+  const covered = (system || connection) && panel ? cover : { right: 0, bottom: 0 };
 
   const select = (solarSystemId: number, center = false) => {
+    setSelectedConnection(null);
     setSelected(solarSystemId);
+    setPanel(true);
     setFocusNode((f) => ({ id: solarSystemId, center, n: (f?.n ?? 0) + 1 }));
   };
 
-  const openMenu = (target: MenuTarget, x: number, y: number) => {
-    if (target.kind === 'system') select(target.solarSystemId);
-    setMenu({ target, x, y });
+  const deselect = () => {
+    setSelectedConnection(null);
+    setFocusNode((f) => ({ id: null, center: false, n: (f?.n ?? 0) + 1 }));
   };
 
+  // A right click only opens the menu: it does not select the system or open the panel.
+  const openMenu = (target: MenuTarget, x: number, y: number) => setMenu({ target, x, y });
+
   // Built on every render, so toggles in an open menu show the current state.
-  const menuContent = ((): { title?: string; items: MenuItem[] } | null => {
+  const menuContent = ((): { title?: string; note?: string; items: MenuItem[] } | null => {
     if (!menu) return null;
     const { target } = menu;
     if (target.kind === 'system') {
@@ -112,13 +201,14 @@ export function MapView({
           system: sys,
           name,
           labels,
-          can,
+          systemLabels,
+          can: permissionsFor(can, sys.provenance, map.kind === 'composite'),
           store,
           plugins: systemPlugins,
-          onEdit: () => {
-            setDock({ tab: 'system', open: true });
-            setFocus((f) => ({ ...f, name: f.name + 1 }));
-          },
+          characters: me.data?.characters,
+          notify: toast,
+          onManageLabels: () => settings.show('labels'),
+          onManageTags: () => settings.show('tags'),
         }),
       };
     }
@@ -131,22 +221,32 @@ export function MapView({
       };
       return {
         title: `${end(connection.source)} ↔ ${end(connection.target)}`,
-        items: connectionMenu({ mapId: map.id, connection, can, store, plugins: connectionPlugins }),
+        // On a merged map: which maps hold it and whose change is the newest.
+        ...(connection.provenance && state.sources
+          ? { note: provenanceText(connection.provenance, state.sources) }
+          : {}),
+        items: connectionMenu({
+          mapId: map.id,
+          connection,
+          names: { source: end(connection.source), target: end(connection.target) },
+          can: permissionsFor(can, connection.provenance),
+          store,
+          plugins: connectionPlugins,
+          onLogJump: () => setConnectionDialog({ kind: 'log', connectionId: connection.id }),
+          onPlanRoll: () => setConnectionDialog({ kind: 'roll', connectionId: connection.id }),
+        }),
       };
     }
-    if (!can.edit) return null;
     return {
-      items: [
-        {
-          kind: 'action',
-          label: 'Add a system here…',
-          icon: <Plus />,
-          onSelect: () => {
-            setAddAt(target.flow);
-            setFocus((f) => ({ ...f, search: f.search + 1 }));
-          },
+      items: paneMenu({
+        can,
+        onAddSystem: () => {
+          setAddAt(target.flow);
+          setFocus((f) => ({ ...f, search: f.search + 1 }));
         },
-      ],
+        onFitChain: target.fitChain,
+        onCenterOnMe: target.centerOnMe,
+      }),
     };
   })();
 
@@ -169,113 +269,51 @@ export function MapView({
     if (system) return { x: system.position.x + SYSTEM_PLACEMENT.x, y: system.position.y };
     const bounds = document.querySelector('.react-flow')?.getBoundingClientRect();
     if (!bounds) return { x: 0, y: 0 };
-    const panel = dock.open && bounds.width > 760 ? 360 : 0;
     return rf.screenToFlowPosition({
-      x: bounds.left + (bounds.width - panel) / 2,
-      y: bounds.top + bounds.height / 2,
+      x: bounds.left + (bounds.width - covered.right) / 2,
+      y: bounds.top + (bounds.height - covered.bottom) / 2,
     });
   };
 
-  const characters = [...state.characters.values()];
-  const signatureCount = system
-    ? [...state.signatures.values()].filter((s) => s.solarSystemId === system.solarSystemId).length
-    : 0;
-  const nothingSelected = (
-    <EmptyState
-      compact
-      icon={<MousePointerClick />}
-      title="No system selected"
-      description="Click a system on the map to see its details. Right-click it for quick actions."
-    />
-  );
-  const tabs: DockTab[] = [
-    {
-      id: 'system',
-      title: 'System',
-      icon: <Info />,
-      render: () =>
-        system ? (
-          <SystemInfoWidget
-            system={system}
-            info={universe.get(system.solarSystemId)}
-            labels={labels}
-            can={can}
-            store={store}
-            focusToken={focus.name}
-          />
-        ) : (
-          nothingSelected
-        ),
-    },
-    {
-      id: 'signatures',
-      title: 'Signatures',
-      icon: <Radar />,
-      count: signatureCount,
-      render: () =>
-        system ? (
-          <SignaturesWidget
-            key={system.solarSystemId}
-            mapId={map.id}
-            solarSystemId={system.solarSystemId}
-            signatures={[...state.signatures.values()].filter(
-              (s) => s.solarSystemId === system.solarSystemId,
-            )}
-            streamed={state.has.signatures}
-            can={can}
-            store={store}
-          />
-        ) : (
-          nothingSelected
-        ),
-    },
-    {
-      id: 'local',
-      title: 'Local',
-      icon: <UsersRound />,
-      count: characters.filter((c) => c.online).length,
-      render: () => (
-        <LocalWidget
-          mapId={map.id}
-          selected={selected}
-          characters={characters}
-          universe={universe}
-          myCharacters={me.data?.characters ?? []}
-          can={can}
-          store={store}
-        />
-      ),
-    },
-    ...widgetPlugins.map((entry): DockTab => ({
-      id: entry.key,
-      title: entry.title,
-      icon: <Puzzle />,
-      render: () => <SlotItem entry={entry} props={{ mapId: map.id }} />,
-    })),
-  ];
-
   return (
-    <div className={styles.page} data-immersive>
+    <div
+      className={styles.page}
+      data-immersive
+      style={
+        {
+          '--covered-right': `${covered.right}px`,
+          '--covered-bottom': `${covered.bottom}px`,
+        } as CSSProperties
+      }
+    >
       <MapCanvas
         mapId={map.id}
         state={state}
         loaded={store.loaded}
         labels={labels}
+        systemLabels={systemLabels}
         universe={universe}
         can={can}
         store={store}
         onSelect={(id) => {
+          if (id !== null && id !== selected) setPanel(true);
+          if (id !== null) setSelectedConnection(null);
           setSelected(id);
-          if (id !== null && wide && !dockTouched.current)
-            setDock((d) => (d.open ? d : { ...d, open: true }));
         }}
+        onSelectConnection={(id) => {
+          if (id === null) return setSelectedConnection(null);
+          if (id !== selectedConnection) setPanel(true);
+          setSelected(null);
+          setSelectedConnection(id);
+        }}
+        traffic={traffic}
         focus={focusNode}
         onMenu={openMenu}
-        coveredRight={dock.open && wide ? 360 : 0}
-        coveredBottom={dock.open && !wide ? sheetHeight() : 0}
+        coveredRight={covered.right}
+        coveredBottom={covered.bottom}
       />
 
-      <div className={styles.topbar} data-dock={dock.open && wide ? 'open' : undefined}>
+      <div className={styles.topbar}>
         {can.edit && (
           <AddSystemSearch
             onMap={onMap}
@@ -291,39 +329,60 @@ export function MapView({
           </span>
         )}
         <span className={styles.spacer} />
-        {can.manage && (
+        <SourceFilter
+          sources={filterableSources(store.state.sources)}
+          hidden={sourceFilter.hidden}
+          onToggle={sourceFilter.toggle}
+          className={styles.toolButton}
+        />
+        {(system || connection) && (
           <IconButton
-            asChild
             variant="secondary"
             className={styles.toolButton}
-            label="Map settings"
-            icon={<Settings />}
-          >
-            <Link href={`/m/${map.slug}/settings`} />
-          </IconButton>
+            label={
+              connection
+                ? panel
+                  ? 'Hide connection panel'
+                  : 'Show connection panel'
+                : panel
+                  ? 'Hide system panel'
+                  : 'Show system panel'
+            }
+            aria-pressed={panel}
+            icon={<PanelRight />}
+            onClick={() => setPanel((p) => !p)}
+          />
         )}
       </div>
 
       {store.loaded && state.systems.size === 0 && (
-        <div className={styles.overlayCard} data-dock={dock.open && wide ? 'open' : undefined}>
+        <div className={styles.overlayCard}>
           <EmptyState
             icon={<Waypoints />}
             title="This map is empty"
             description={
-              can.edit
-                ? 'Search for a system to start the chain, or track a character and the map follows as you jump.'
-                : 'Nobody has mapped anything here yet.'
+              map.kind === 'composite'
+                ? 'It shows the maps shared with it, merged into one chain. Accept their offers under Sharing.'
+                : can.edit
+                  ? 'Search for a system to start the chain, or track a character and the map follows as you jump.'
+                  : 'Nobody has mapped anything here yet.'
             }
             actions={
-              can.edit && (
-                <Button
-                  variant="primary"
-                  icon={<Plus />}
-                  onClick={() => setFocus((f) => ({ ...f, search: f.search + 1 }))}
-                >
-                  Add a system
-                </Button>
-              )
+              map.kind === 'composite'
+                ? can.admin && (
+                    <Button variant="primary" onClick={() => settings.show('sharing')}>
+                      Open Sharing
+                    </Button>
+                  )
+                : can.edit && (
+                    <Button
+                      variant="primary"
+                      icon={<Plus />}
+                      onClick={() => setFocus((f) => ({ ...f, search: f.search + 1 }))}
+                    >
+                      Add a system
+                    </Button>
+                  )
             }
           />
         </div>
@@ -341,15 +400,67 @@ export function MapView({
         </div>
       )}
 
-      <WidgetDock
-        tabs={tabs}
-        active={dock.tab}
-        open={dock.open}
-        onChange={(tab, open) => {
-          dockTouched.current = true;
-          setDock({ tab, open });
-        }}
-      />
+      {system && (
+        <SystemSidebar
+          mapId={map.id}
+          system={system}
+          info={universe.get(system.solarSystemId)}
+          universe={universe}
+          labels={labels}
+          systemLabels={systemLabels}
+          state={state}
+          can={permissionsFor(can, system.provenance, map.kind === 'composite')}
+          store={store}
+          myCharacters={me.data?.characters ?? []}
+          plugins={widgetPlugins}
+          open={panel}
+          focusToken={focus.name}
+          onClose={deselect}
+          onSelectSystem={(id) => select(id, true)}
+          onCover={onCover}
+          note={<ProvenanceLine provenance={system.provenance} sources={state.sources} />}
+        />
+      )}
+
+      {connection && !system && (
+        <ConnectionSidebar
+          mapId={map.id}
+          connection={connection}
+          names={{ source: endName(connection.source), target: endName(connection.target) }}
+          universe={universe}
+          can={permissionsFor(can, connection.provenance)}
+          store={store}
+          merged={merged}
+          open={panel}
+          onClose={deselect}
+          onSelectSystem={(id) => select(id, true)}
+          onCover={onCover}
+          onLogJump={() => setConnectionDialog({ kind: 'log', connectionId: connection.id })}
+          onPlanRoll={() => setConnectionDialog({ kind: 'roll', connectionId: connection.id })}
+          note={<ProvenanceLine provenance={connection.provenance} sources={state.sources} />}
+        />
+      )}
+
+      {connectionDialog?.kind === 'roll' && (
+        <RollDialog
+          mapId={map.id}
+          connectionId={connectionDialog.connectionId}
+          merged={merged}
+          onClose={() => setConnectionDialog(null)}
+        />
+      )}
+      {connectionDialog?.kind === 'log' && state.connections.get(connectionDialog.connectionId) && (
+        <LogDialog
+          mapId={map.id}
+          connection={state.connections.get(connectionDialog.connectionId)!}
+          names={{
+            source: endName(state.connections.get(connectionDialog.connectionId)!.source),
+            target: endName(state.connections.get(connectionDialog.connectionId)!.target),
+          }}
+          merged={merged}
+          onClose={() => setConnectionDialog(null)}
+        />
+      )}
 
       <ul className={styles.notices} aria-live="polite">
         {store.notices.map((n) => (

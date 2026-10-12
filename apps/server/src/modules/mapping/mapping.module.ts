@@ -1,4 +1,4 @@
-import { Inject, Module, type OnModuleInit } from '@nestjs/common';
+import { Inject, Logger, Module, type OnApplicationBootstrap, type OnModuleInit } from '@nestjs/common';
 import {
   parseStream,
   type Clock,
@@ -9,11 +9,14 @@ import {
 } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
 import {
+  ChainOverlaySlot,
+  BookmarkNumberUseCases,
   ConnectionIntelQuery,
   ConnectionUseCases,
   MapPreferenceUseCases,
   MapSnapshotQuery,
   PassageRecorder,
+  PassageUseCases,
   MapUseCases,
   SignatureUseCases,
   SystemUseCases,
@@ -22,6 +25,7 @@ import {
   type UniverseCatalog,
 } from '@darkbeacon/mapping';
 import {
+  KyselyChangeStamps,
   KyselyConnectionRepository,
   KyselyMapRepository,
   KyselyPassageRepository,
@@ -29,20 +33,25 @@ import {
   KyselySystemRepository,
 } from '../../adapters/mapping/kysely-repositories.js';
 import { KyselyMapPreferenceRepository } from '../../adapters/mapping/kysely-preferences.js';
+import { KyselyPilotDirectory } from '../../adapters/mapping/pilot-directory.js';
 import { MappingMapOwnership } from '../../adapters/mapping/map-ownership.js';
 import { isEventOfType } from '@darkbeacon/shared';
+import { AsyncAuditScope } from '../../platform/audit.js';
 import { EventConsumers } from '../../platform/event-consumers.js';
 import { CLOCK, EVENT_LOG, MAP_ACCESS, UNIT_OF_WORK, UNIVERSE_CATALOG } from '../../platform/tokens.js';
 import { MapOwnershipRegistry } from '../access/map-ownership.registry.js';
 import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
 import {
+  BookmarkNumbersController,
   ConnectionsController,
   MapPreferencesController,
   MapsController,
   SignaturesController,
   SystemsController,
 } from './mapping.controllers.js';
-import { MAP_OWNERSHIP, MAP_REPOSITORY, MAPPING_PORTS } from './mapping.tokens.js';
+import { MergedWriteRouter } from './merged-writes.js';
+import { SweeperRuntime } from './sweeper.runtime.js';
+import { CHAIN_OVERLAY, MAP_OWNERSHIP, MAP_REPOSITORY, MAPPING_PORTS } from './mapping.tokens.js';
 
 const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
   provide: type,
@@ -60,6 +69,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
     MapPreferencesController,
     SystemsController,
     ConnectionsController,
+    BookmarkNumbersController,
     SignaturesController,
   ],
   providers: [
@@ -73,6 +83,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
       useFactory: (maps: MapRepository) => new MappingMapOwnership(maps),
       inject: [MAP_REPOSITORY],
     },
+    { provide: CHAIN_OVERLAY, useFactory: () => new ChainOverlaySlot() },
     {
       provide: MAPPING_PORTS,
       useFactory: (
@@ -83,27 +94,44 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
         uow: UnitOfWork,
         clock: Clock,
         access: MapAccess,
+        overlay: ChainOverlaySlot,
       ): MappingPorts => ({
         maps,
         systems: new KyselySystemRepository(database),
         connections: new KyselyConnectionRepository(database),
         signatures: new KyselySignatureRepository(database),
         passages: new KyselyPassageRepository(database),
+        pilots: new KyselyPilotDirectory(database),
+        stamps: new KyselyChangeStamps(database),
+        overlay,
         universe,
         access,
         events,
         uow,
         clock,
       }),
-      inject: [Database, MAP_REPOSITORY, UNIVERSE_CATALOG, EVENT_LOG, UNIT_OF_WORK, CLOCK, MAP_ACCESS],
+      inject: [
+        Database,
+        MAP_REPOSITORY,
+        UNIVERSE_CATALOG,
+        EVENT_LOG,
+        UNIT_OF_WORK,
+        CLOCK,
+        MAP_ACCESS,
+        CHAIN_OVERLAY,
+      ],
     },
+    MergedWriteRouter,
+    SweeperRuntime,
     useCase(MapUseCases),
     useCase(SystemUseCases),
     useCase(ConnectionUseCases),
     useCase(SignatureUseCases),
+    useCase(BookmarkNumberUseCases),
     useCase(MapSnapshotQuery),
     useCase(ConnectionIntelQuery),
     useCase(PassageRecorder),
+    useCase(PassageUseCases),
     {
       provide: MapPreferenceUseCases,
       useFactory: (database: Database, access: MapAccess, clock: Clock) =>
@@ -116,6 +144,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
     },
   ],
   exports: [
+    CHAIN_OVERLAY,
     MAP_REPOSITORY,
     MAP_OWNERSHIP,
     MAPPING_PORTS,
@@ -123,9 +152,16 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
     SystemUseCases,
     ConnectionUseCases,
     SignatureUseCases,
+    BookmarkNumberUseCases,
+    PassageUseCases,
+    SweeperRuntime,
+    ConnectionIntelQuery,
+    MergedWriteRouter,
   ],
 })
-export class MappingModule implements OnModuleInit {
+export class MappingModule implements OnModuleInit, OnApplicationBootstrap {
+  private readonly logger = new Logger('Mapping');
+
   constructor(
     @Inject(RealtimeRegistry) private readonly registry: RealtimeRegistry,
     @Inject(MapSnapshotQuery) private readonly snapshots: MapSnapshotQuery,
@@ -134,7 +170,18 @@ export class MappingModule implements OnModuleInit {
     @Inject(EventConsumers) private readonly consumers: EventConsumers,
     @Inject(PassageRecorder) private readonly passages: PassageRecorder,
     @Inject(EVENT_LOG) private readonly log: EventLog,
+    @Inject(BookmarkNumberUseCases) private readonly numbers: BookmarkNumberUseCases,
+    @Inject(AsyncAuditScope) private readonly audit: AsyncAuditScope,
   ) {}
+
+  /** Wormholes mapped before bookmark numbers existed get theirs once, as the server. */
+  async onApplicationBootstrap(): Promise<void> {
+    const maps = await this.audit.run(
+      { channel: { kind: 'system', id: 'bookmark-numbers' }, origin: undefined },
+      () => this.numbers.backfill(),
+    );
+    if (maps.length > 0) this.logger.log(`numbered the wormholes of ${maps.length} map(s)`);
+  }
 
   onModuleInit(): void {
     this.registry.registerSnapshot('map', (mapId, actor) => this.snapshots.snapshot(actor, mapId));

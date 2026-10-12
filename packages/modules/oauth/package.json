@@ -1,0 +1,21 @@
+{
+  "name": "@darkbeacon/oauth",
+  "version": "0.0.0",
+  "private": true,
+  "description": "OAuth 2.1 authorization server for the MCP endpoint: clients, consent, codes with PKCE, tokens",
+  "type": "module",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@darkbeacon/core": "workspace:*",
+    "@darkbeacon/shared": "workspace:*"
+  }
+}

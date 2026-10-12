@@ -18,6 +18,17 @@ import { useStream } from '../lib/RealtimeProvider';
 import { applyMapMessage, emptyMapState, type MapState } from './mapState';
 import { confirmPending, dropPending, settlePending, withPending, type PendingChange } from './optimistic';
 
+/** Reads the map's snapshot again over REST and shows it. */
+async function reloadSnapshot(mapId: string, set: (update: (s: MapState) => MapState) => void) {
+  const stream = `map:${mapId}`;
+  try {
+    const snapshot = await api<StreamSnapshotDto>(buildPath(routes.realtime.snapshot.path, { stream }));
+    set((s) => applyMapMessage(s, { op: 'snapshot', stream, seq: snapshot.seq, data: snapshot.data }));
+  } catch {
+    // The stream's next snapshot (reconnect) brings it.
+  }
+}
+
 /** How long a successful change waits for its event before the overlay is dropped anyway. */
 const CONFIRM_GRACE_MS = 5_000;
 const NOTICE_MS = 6_000;
@@ -108,6 +119,8 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto) {
       } else if (message.op === 'event') {
         const event = message.event as TypedEvent;
         setPending((p) => confirmPending(p, event));
+        // The map started or stopped merging others: what it shows is a different set of objects.
+        if (event.type === 'map.sources_changed') void reloadSnapshot(mapId, setConfirmed);
       }
     },
     initial?.seq,
@@ -160,6 +173,8 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto) {
           status: 'unknown',
           description: '',
           labelIds: [],
+          systemLabelIds: [],
+          customLabel: null,
           locked: false,
           visible: true,
           createdAt: now,

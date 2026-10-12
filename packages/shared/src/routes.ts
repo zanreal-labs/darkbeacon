@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import * as dto from './dto/index.js';
+import type { ScopeRequirement } from './scopes.js';
+import * as telemetry from './telemetry.js';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 /** Who may call: anyone, a signed-in account, or an instance admin. Map routes also check the map role. */
@@ -18,6 +20,25 @@ export interface RouteDef {
   response?: z.ZodType;
   /** Redirects instead of returning JSON (OAuth flows). */
   redirect?: true;
+  /**
+   * What an API key needs to call it (see `scopes.ts`): `none`, `session` (browser sessions only)
+   * or a resource and action. Required, so a new route cannot ship without deciding.
+   */
+  scope: ScopeRequirement;
+  /** Answers a file (CSV/JSON export, plugin asset) instead of a JSON body. */
+  download?: true;
+  /** Takes a raw body of this media type instead of JSON. */
+  upload?: string;
+  /** One line for the API docs; the doc comment above the route says more. */
+  summary?: string;
+  /** Kept for compatibility; see the deprecation policy in docs/api.md. */
+  deprecated?: true;
+  /** Media type of a response that is not JSON (the docs page). */
+  contentType?: string;
+  /** Media type of the body when it is not JSON (the OAuth token endpoint takes a form). */
+  bodyContentType?: string;
+  /** Success status when it is not the default (201 for POST with a body, else 200; 204 without one). */
+  status?: 200 | 202;
 }
 
 const route = <const R extends RouteDef>(r: R): R => r;
@@ -27,7 +48,15 @@ const route = <const R extends RouteDef>(r: R): R => r;
  * calls them through `buildPath`. Changing a route here is a contract change.
  */
 export const routes = {
-  health: route({ method: 'GET', path: '/api/health', auth: 'public', response: dto.HealthDto }),
+  health: route({
+    method: 'GET',
+    path: '/api/health',
+    auth: 'public',
+    scope: 'none',
+    response: dto.HealthDto,
+  }),
+  /** Readiness: the database answers and every migration is applied (503 otherwise). */
+  ready: route({ method: 'GET', path: '/api/ready', auth: 'public', scope: 'none', response: dto.ReadyDto }),
 
   realtime: {
     /**
@@ -38,6 +67,7 @@ export const routes = {
       method: 'GET',
       path: '/api/streams/:stream/snapshot',
       auth: 'public',
+      scope: { resource: '*', action: 'read' },
       response: dto.StreamSnapshotDto,
     }),
   },
@@ -47,13 +77,21 @@ export const routes = {
       method: 'GET',
       path: '/api/auth/providers',
       auth: 'public',
+      scope: 'none',
       response: dto.AuthProvidersDto,
     }),
-    discordLogin: route({ method: 'GET', path: '/api/auth/discord/login', auth: 'public', redirect: true }),
+    discordLogin: route({
+      method: 'GET',
+      path: '/api/auth/discord/login',
+      auth: 'public',
+      scope: 'session',
+      redirect: true,
+    }),
     discordCallback: route({
       method: 'GET',
       path: '/api/auth/discord/callback',
       auth: 'public',
+      scope: 'session',
       redirect: true,
     }),
     /**
@@ -64,36 +102,76 @@ export const routes = {
       method: 'GET',
       path: '/api/auth/discord/connect',
       auth: 'account',
+      scope: 'session',
       redirect: true,
     }),
     /**
      * Signs in with an EVE character (instances whose login method is `eve`). A linked character
      * opens its account; an unknown one creates a new account (see docs/decisions.md).
      */
-    eveSignIn: route({ method: 'GET', path: '/api/auth/eve/signin', auth: 'public', redirect: true }),
+    eveSignIn: route({
+      method: 'GET',
+      path: '/api/auth/eve/signin',
+      auth: 'public',
+      scope: 'session',
+      redirect: true,
+    }),
     /** Links an EVE character to the signed-in account (EVE SSO v2, PKCE). */
-    eveLogin: route({ method: 'GET', path: '/api/auth/eve/login', auth: 'account', redirect: true }),
-    eveCallback: route({ method: 'GET', path: '/api/auth/eve/callback', auth: 'account', redirect: true }),
+    eveLogin: route({
+      method: 'GET',
+      path: '/api/auth/eve/login',
+      auth: 'account',
+      scope: 'session',
+      redirect: true,
+    }),
+    eveCallback: route({
+      method: 'GET',
+      path: '/api/auth/eve/callback',
+      auth: 'account',
+      scope: 'session',
+      redirect: true,
+    }),
     /** Demo mode: signs in as the demo account (seeding the demo map once). */
-    demo: route({ method: 'POST', path: '/api/auth/demo', auth: 'public', response: dto.MeDto }),
+    demo: route({
+      method: 'POST',
+      path: '/api/auth/demo',
+      auth: 'public',
+      scope: 'session',
+      status: 200,
+      response: dto.MeDto,
+    }),
     /** Demo mode: signs in a named local account (scripts and tests). */
     dev: route({
       method: 'POST',
       path: '/api/auth/dev',
       auth: 'public',
+      scope: 'session',
+      status: 200,
       body: dto.DevLoginRequest,
       response: dto.MeDto,
     }),
-    logout: route({ method: 'POST', path: '/api/auth/logout', auth: 'account' }),
-    logoutEverywhere: route({ method: 'POST', path: '/api/auth/logout-everywhere', auth: 'account' }),
+    logout: route({ method: 'POST', path: '/api/auth/logout', auth: 'account', scope: 'session' }),
+    logoutEverywhere: route({
+      method: 'POST',
+      path: '/api/auth/logout-everywhere',
+      auth: 'account',
+      scope: 'session',
+    }),
   },
 
   accounts: {
-    me: route({ method: 'GET', path: '/api/accounts/me', auth: 'account', response: dto.MeDto }),
+    me: route({
+      method: 'GET',
+      path: '/api/accounts/me',
+      auth: 'account',
+      scope: { resource: 'account', action: 'read' },
+      response: dto.MeDto,
+    }),
     setMainCharacter: route({
       method: 'PUT',
       path: '/api/accounts/me/main-character',
       auth: 'account',
+      scope: { resource: 'account', action: 'write' },
       body: dto.SetMainCharacterRequest,
       response: dto.MeDto,
     }),
@@ -101,11 +179,13 @@ export const routes = {
       method: 'DELETE',
       path: '/api/accounts/me/characters/:characterId',
       auth: 'account',
+      scope: 'session',
     }),
     setDefaultMap: route({
       method: 'PUT',
       path: '/api/accounts/me/default-map',
       auth: 'account',
+      scope: { resource: 'account', action: 'write' },
       body: dto.SetDefaultMapRequest,
       response: dto.MeDto,
     }),
@@ -114,6 +194,7 @@ export const routes = {
       method: 'PUT',
       path: '/api/accounts/me/recent-map',
       auth: 'account',
+      scope: 'session',
       body: dto.RecordMapOpenedRequest,
     }),
     /** Where `/` goes: account default, instance default, last opened, the only map. */
@@ -121,33 +202,48 @@ export const routes = {
       method: 'GET',
       path: '/api/accounts/me/landing',
       auth: 'account',
+      scope: { resource: 'account', action: 'read' },
       response: dto.LandingDto,
     }),
     sessions: route({
       method: 'GET',
       path: '/api/accounts/me/sessions',
       auth: 'account',
+      scope: 'session',
       response: z.array(dto.SessionDto),
     }),
     revokeSession: route({
       method: 'DELETE',
       path: '/api/accounts/me/sessions/:sessionId',
       auth: 'account',
+      scope: 'session',
     }),
     /** Disconnects the account's Discord user (EVE sign-in instances only). */
-    disconnectDiscord: route({ method: 'DELETE', path: '/api/accounts/me/discord', auth: 'account' }),
+    disconnectDiscord: route({
+      method: 'DELETE',
+      path: '/api/accounts/me/discord',
+      auth: 'account',
+      scope: 'session',
+    }),
     /** Accounts by name, for map admins (people who are admin of a map, or instance admins). */
     search: route({
       method: 'GET',
       path: '/api/accounts/search',
       auth: 'account',
+      scope: 'session',
       query: dto.AccountSearchQuery,
       response: z.array(dto.AccountSummaryDto),
     }),
   },
 
   instance: {
-    info: route({ method: 'GET', path: '/api/instance', auth: 'account', response: dto.InstanceInfoDto }),
+    info: route({
+      method: 'GET',
+      path: '/api/instance',
+      auth: 'account',
+      scope: { resource: 'account', action: 'read' },
+      response: dto.InstanceInfoDto,
+    }),
   },
 
   eve: {
@@ -156,6 +252,7 @@ export const routes = {
       method: 'GET',
       path: '/api/eve/search',
       auth: 'account',
+      scope: 'session',
       query: dto.EveSearchQuery,
       response: dto.EveSearchResultDto,
     }),
@@ -163,6 +260,7 @@ export const routes = {
       method: 'GET',
       path: '/api/eve/entities',
       auth: 'account',
+      scope: 'session',
       query: dto.EveEntitiesQuery,
       response: z.array(dto.EveEntityDto),
     }),
@@ -174,18 +272,21 @@ export const routes = {
       method: 'GET',
       path: '/api/discord/guilds',
       auth: 'account',
+      scope: 'session',
       response: z.array(dto.DiscordGuildDto),
     }),
     roles: route({
       method: 'GET',
       path: '/api/discord/guilds/:guildId/roles',
       auth: 'account',
+      scope: 'session',
       response: z.array(dto.DiscordRoleDto),
     }),
     channels: route({
       method: 'GET',
       path: '/api/discord/guilds/:guildId/channels',
       auth: 'account',
+      scope: 'session',
       response: z.array(dto.DiscordChannelDto),
     }),
   },
@@ -196,6 +297,7 @@ export const routes = {
       method: 'GET',
       path: '/api/plugins/discord-notify/maps/:mapId',
       auth: 'account',
+      scope: 'session',
       mapRole: 'admin',
       response: dto.DiscordNotifyStateDto,
     }),
@@ -203,6 +305,7 @@ export const routes = {
       method: 'PUT',
       path: '/api/plugins/discord-notify/maps/:mapId',
       auth: 'account',
+      scope: 'session',
       mapRole: 'admin',
       body: dto.UpdateDiscordNotifyRequest,
       response: dto.DiscordNotifyStateDto,
@@ -211,6 +314,7 @@ export const routes = {
       method: 'POST',
       path: '/api/plugins/discord-notify/maps/:mapId/test',
       auth: 'account',
+      scope: 'session',
       mapRole: 'admin',
       response: dto.DiscordNotifyTestDto,
     }),
@@ -221,12 +325,14 @@ export const routes = {
       method: 'GET',
       path: '/api/admin/accounts',
       auth: 'admin',
+      scope: { resource: 'admin', action: 'read' },
       response: z.array(dto.AdminAccountDto),
     }),
     setInstanceRole: route({
       method: 'PUT',
       path: '/api/admin/accounts/:accountId/role',
       auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
       body: dto.UpdateInstanceRoleRequest,
       response: dto.AdminAccountDto,
     }),
@@ -234,18 +340,21 @@ export const routes = {
       method: 'POST',
       path: '/api/admin/transfer-ownership',
       auth: 'admin',
+      scope: 'session',
       body: dto.TransferOwnershipRequest,
     }),
     settings: route({
       method: 'GET',
       path: '/api/admin/settings',
       auth: 'admin',
+      scope: { resource: 'admin', action: 'read' },
       response: dto.InstanceSettingsDto,
     }),
     updateSettings: route({
       method: 'PATCH',
       path: '/api/admin/settings',
       auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
       body: dto.UpdateInstanceSettingsRequest,
       response: dto.InstanceSettingsDto,
     }),
@@ -253,6 +362,7 @@ export const routes = {
       method: 'GET',
       path: '/api/admin/discord-bot',
       auth: 'admin',
+      scope: { resource: 'admin', action: 'read' },
       response: dto.DiscordBotDto,
     }),
     /** Connects the bot: the token is checked with Discord, then stored encrypted and never shown. */
@@ -260,10 +370,87 @@ export const routes = {
       method: 'PUT',
       path: '/api/admin/discord-bot',
       auth: 'admin',
+      scope: 'session',
       body: dto.SetDiscordBotRequest,
       response: dto.DiscordBotDto,
     }),
-    removeDiscordBot: route({ method: 'DELETE', path: '/api/admin/discord-bot', auth: 'admin' }),
+    removeDiscordBot: route({
+      method: 'DELETE',
+      path: '/api/admin/discord-bot',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
+    }),
+    /** What the instance exports for monitoring (OpenTelemetry); set through the environment only. */
+    observability: route({
+      method: 'GET',
+      path: '/api/admin/observability',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'read' },
+      response: dto.ObservabilityDto,
+    }),
+  },
+
+  /**
+   * SQLite backups (instance admins). On Postgres the status says `supported: false` and the
+   * other routes answer 409: back Postgres up with its own tooling.
+   */
+  backups: {
+    status: route({
+      method: 'GET',
+      path: '/api/admin/backups',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'read' },
+      response: dto.BackupStatusDto,
+    }),
+    create: route({
+      method: 'POST',
+      path: '/api/admin/backups',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
+      response: dto.BackupDto,
+    }),
+    updateSettings: route({
+      method: 'PATCH',
+      path: '/api/admin/backups/settings',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
+      body: dto.UpdateBackupSettingsRequest,
+      response: dto.BackupSettingsDto,
+    }),
+    /** Streams the `.db.gz` file as an attachment. */
+    download: route({
+      method: 'GET',
+      path: '/api/admin/backups/:name/download',
+      auth: 'admin',
+      scope: 'session',
+      download: true,
+    }),
+    remove: route({
+      method: 'DELETE',
+      path: '/api/admin/backups/:name',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
+    }),
+    restore: route({
+      method: 'POST',
+      path: '/api/admin/backups/:name/restore',
+      auth: 'admin',
+      scope: 'session',
+      body: dto.RestoreBackupRequest,
+      response: dto.RestoreResultDto,
+    }),
+    /**
+     * multipart/form-data: a `confirm` field (`RESTORE`) first, then one `file` (a `.db.gz`
+     * backup or a plain SQLite file), streamed to disk up to `maxUploadBytes`.
+     */
+    restoreUpload: route({
+      method: 'POST',
+      path: '/api/admin/backups/restore-upload',
+      auth: 'admin',
+      scope: 'session',
+      upload: 'multipart/form-data',
+      response: dto.RestoreResultDto,
+    }),
   },
 
   universe: {
@@ -271,6 +458,7 @@ export const routes = {
       method: 'GET',
       path: '/api/universe/systems',
       auth: 'account',
+      scope: { resource: 'universe', action: 'read' },
       query: dto.UniverseSearchQuery,
       response: z.array(dto.UniverseSystemDto),
     }),
@@ -278,6 +466,7 @@ export const routes = {
       method: 'GET',
       path: '/api/universe/systems/:solarSystemId',
       auth: 'account',
+      scope: { resource: 'universe', action: 'read' },
       response: dto.UniverseSystemDto,
     }),
     /** Several systems at once (unknown ids are left out), e.g. every system on a map. */
@@ -285,24 +474,66 @@ export const routes = {
       method: 'GET',
       path: '/api/universe/lookup',
       auth: 'account',
+      scope: { resource: 'universe', action: 'read' },
       query: dto.UniverseLookupQuery,
       response: z.array(dto.UniverseSystemDto),
+    }),
+    /** Published ships by name with what changes their jump mass (SDE). */
+    searchShips: route({
+      method: 'GET',
+      path: '/api/universe/ships',
+      auth: 'account',
+      scope: { resource: 'universe', action: 'read' },
+      query: dto.ShipSearchQuery,
+      response: z.array(dto.ShipTypeDto),
+    }),
+    /** What prop modules, Higgs Anchors and the mass entangler do, and ships people roll with. */
+    shipCatalog: route({
+      method: 'GET',
+      path: '/api/universe/ships/catalog',
+      auth: 'account',
+      scope: { resource: 'universe', action: 'read' },
+      response: dto.ShipCatalogDto,
+    }),
+    /** A pasted fit (EFT) weighed cold and hot. */
+    fitMass: route({
+      method: 'POST',
+      path: '/api/universe/ships/fit-mass',
+      auth: 'account',
+      scope: { resource: 'universe', action: 'read' },
+      body: dto.FitMassRequest,
+      response: dto.FitMassDto,
+    }),
+    getShip: route({
+      method: 'GET',
+      path: '/api/universe/ships/:shipTypeId',
+      auth: 'account',
+      scope: { resource: 'universe', action: 'read' },
+      response: dto.ShipTypeDto,
     }),
     /** Every wormhole type with its SDE attributes, and the hull classes "fits" refers to. */
     wormholes: route({
       method: 'GET',
       path: '/api/universe/wormholes',
       auth: 'account',
+      scope: { resource: 'universe', action: 'read' },
       response: dto.WormholeCatalogDto,
     }),
   },
 
   maps: {
-    list: route({ method: 'GET', path: '/api/maps', auth: 'account', response: z.array(dto.MapSummaryDto) }),
+    list: route({
+      method: 'GET',
+      path: '/api/maps',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'read' },
+      response: z.array(dto.MapSummaryDto),
+    }),
     create: route({
       method: 'POST',
       path: '/api/maps',
       auth: 'account',
+      scope: { resource: 'maps', action: 'write', global: true },
       body: dto.CreateMapRequest,
       response: dto.MapDto,
     }),
@@ -310,6 +541,7 @@ export const routes = {
       method: 'GET',
       path: '/api/maps/by-slug/:slug',
       auth: 'account',
+      scope: { resource: 'maps', action: 'read' },
       mapRole: 'viewer',
       response: dto.MapDto,
     }),
@@ -317,6 +549,7 @@ export const routes = {
       method: 'GET',
       path: '/api/maps/:mapId',
       auth: 'account',
+      scope: { resource: 'maps', action: 'read' },
       mapRole: 'viewer',
       response: dto.MapDto,
     }),
@@ -324,33 +557,75 @@ export const routes = {
       method: 'PATCH',
       path: '/api/maps/:mapId',
       auth: 'account',
+      scope: { resource: 'maps', action: 'manage' },
       mapRole: 'admin',
       body: dto.UpdateMapRequest,
       response: dto.MapDto,
     }),
-    remove: route({ method: 'DELETE', path: '/api/maps/:mapId', auth: 'account', mapRole: 'admin' }),
+    remove: route({
+      method: 'DELETE',
+      path: '/api/maps/:mapId',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'manage' },
+      mapRole: 'admin',
+    }),
     setLabels: route({
       method: 'PUT',
       path: '/api/maps/:mapId/labels',
       auth: 'account',
+      scope: { resource: 'maps', action: 'write' },
       mapRole: 'manager',
       body: dto.SetLabelsRequest,
       response: z.array(dto.LabelDto),
+    }),
+    /** The map's Labels (WH1, WH2...) in order (manager+); published as `system_labels.changed`. */
+    setSystemLabels: route({
+      method: 'PUT',
+      path: '/api/maps/:mapId/system-labels',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'write' },
+      mapRole: 'manager',
+      body: dto.SetSystemLabelsRequest,
+      response: z.array(dto.SystemLabelDto),
     }),
     /** The map's default bookmark label template (manager+); published as `map.settings_changed`. */
     setBookmarkTemplate: route({
       method: 'PUT',
       path: '/api/maps/:mapId/bookmark-template',
       auth: 'account',
+      scope: { resource: 'maps', action: 'write' },
       mapRole: 'manager',
       body: dto.SetBookmarkTemplateRequest,
       response: dto.MapDto,
+    }),
+    /**
+     * The map's `{n}` numbering: order and renumber on close (manager+); published as
+     * `map.settings_changed`. A new order numbers every system's wormholes again.
+     */
+    setBookmarkNumbering: route({
+      method: 'PUT',
+      path: '/api/maps/:mapId/bookmark-numbering',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'write' },
+      mapRole: 'manager',
+      body: dto.SetBookmarkNumberingRequest,
+      response: dto.MapDto,
+    }),
+    /** Numbers wormholes 1, 2, 3 again in the map's order; changes arrive as `connection.updated`. */
+    renumberBookmarks: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/bookmark-numbers/renumber',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'write' },
+      mapRole: 'member',
+      body: dto.RenumberBookmarksRequest,
     }),
     /** The caller's own view of the map: last viewport and bookmark template override. */
     getPreferences: route({
       method: 'GET',
       path: '/api/maps/:mapId/preferences',
       auth: 'account',
+      scope: 'session',
       mapRole: 'viewer',
       response: dto.MapPreferencesDto,
     }),
@@ -358,6 +633,7 @@ export const routes = {
       method: 'PATCH',
       path: '/api/maps/:mapId/preferences',
       auth: 'account',
+      scope: 'session',
       mapRole: 'viewer',
       body: dto.UpdateMapPreferencesRequest,
       response: dto.MapPreferencesDto,
@@ -369,6 +645,7 @@ export const routes = {
       method: 'POST',
       path: '/api/maps/:mapId/systems',
       auth: 'account',
+      scope: { resource: 'systems', action: 'write' },
       mapRole: 'member',
       body: dto.AddSystemRequest,
       response: dto.MapSystemDto,
@@ -377,6 +654,7 @@ export const routes = {
       method: 'PATCH',
       path: '/api/maps/:mapId/systems/:solarSystemId',
       auth: 'account',
+      scope: { resource: 'systems', action: 'write' },
       mapRole: 'member',
       body: dto.UpdateSystemRequest,
       response: dto.MapSystemDto,
@@ -385,6 +663,7 @@ export const routes = {
       method: 'POST',
       path: '/api/maps/:mapId/systems/positions',
       auth: 'account',
+      scope: { resource: 'systems', action: 'write' },
       mapRole: 'member',
       body: dto.MoveSystemsRequest,
     }),
@@ -392,6 +671,7 @@ export const routes = {
       method: 'DELETE',
       path: '/api/maps/:mapId/systems/:solarSystemId',
       auth: 'account',
+      scope: { resource: 'systems', action: 'write' },
       mapRole: 'member',
     }),
   },
@@ -401,6 +681,7 @@ export const routes = {
       method: 'POST',
       path: '/api/maps/:mapId/connections',
       auth: 'account',
+      scope: { resource: 'connections', action: 'write' },
       mapRole: 'member',
       body: dto.AddConnectionRequest,
       response: dto.ConnectionDto,
@@ -409,6 +690,7 @@ export const routes = {
       method: 'PATCH',
       path: '/api/maps/:mapId/connections/:connectionId',
       auth: 'account',
+      scope: { resource: 'connections', action: 'write' },
       mapRole: 'member',
       body: dto.UpdateConnectionRequest,
       response: dto.ConnectionDto,
@@ -417,23 +699,90 @@ export const routes = {
       method: 'DELETE',
       path: '/api/maps/:mapId/connections/:connectionId',
       auth: 'account',
+      scope: { resource: 'connections', action: 'write' },
       mapRole: 'member',
+    }),
+    /** A wormhole's `{n}` set by hand; the sibling that had the number swaps with it. */
+    setBookmarkNumber: route({
+      method: 'PUT',
+      path: '/api/maps/:mapId/connections/:connectionId/bookmark-number',
+      auth: 'account',
+      scope: { resource: 'connections', action: 'write' },
+      mapRole: 'member',
+      body: dto.SetBookmarkNumberRequest,
+      response: dto.ConnectionDto,
     }),
     /** The connections panel: every visible connection with type, mass and time estimates, most urgent first. */
     intel: route({
       method: 'GET',
       path: '/api/maps/:mapId/connections/intel',
       auth: 'account',
+      scope: { resource: 'connections', action: 'read' },
       mapRole: 'viewer',
       response: z.array(dto.ConnectionIntelDto),
+    }),
+    /** One connection with its type, mass and time estimates (the sidebar's Connection section). */
+    intelOne: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/connections/:connectionId/intel',
+      auth: 'account',
+      scope: { resource: 'connections', action: 'read' },
+      mapRole: 'viewer',
+      response: dto.ConnectionIntelDto,
     }),
     /** Ships recorded going through a connection, newest first. */
     passages: route({
       method: 'GET',
       path: '/api/maps/:mapId/connections/:connectionId/passages',
       auth: 'account',
+      scope: { resource: 'connections', action: 'read' },
       mapRole: 'viewer',
       response: z.array(dto.PassageDto),
+    }),
+    /** "Log a jump" for pilots nobody tracks; on a merged map it goes to the map that takes new objects. */
+    logPassages: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/connections/:connectionId/passages',
+      auth: 'account',
+      scope: { resource: 'connections', action: 'write' },
+      mapRole: 'member',
+      body: dto.LogPassagesRequest,
+      response: z.array(dto.PassageDto),
+    }),
+    /** Passages count from now on, against the mass status as it is (earlier ones stay in the log). */
+    resetPassages: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/connections/:connectionId/passages/reset',
+      auth: 'account',
+      scope: { resource: 'connections', action: 'write' },
+      mapRole: 'member',
+    }),
+    /** How a passage's mass counts (cold, hot, custom), its modules and note. */
+    updatePassage: route({
+      method: 'PATCH',
+      path: '/api/maps/:mapId/connections/:connectionId/passages/:passageId',
+      auth: 'account',
+      scope: { resource: 'connections', action: 'write' },
+      mapRole: 'member',
+      body: dto.UpdatePassageRequest,
+      response: dto.PassageDto,
+    }),
+    removePassage: route({
+      method: 'DELETE',
+      path: '/api/maps/:mapId/connections/:connectionId/passages/:passageId',
+      auth: 'account',
+      scope: { resource: 'connections', action: 'write' },
+      mapRole: 'member',
+    }),
+    /** A rolling plan for the connection with the crew's ships. */
+    rollPlan: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/connections/:connectionId/roll-plan',
+      auth: 'account',
+      scope: { resource: 'connections', action: 'read' },
+      mapRole: 'viewer',
+      body: dto.RollPlanRequest,
+      response: dto.RollPlanDto,
     }),
   },
 
@@ -443,6 +792,7 @@ export const routes = {
       method: 'GET',
       path: '/api/maps/:mapId/route',
       auth: 'account',
+      scope: { resource: 'routes', action: 'read' },
       mapRole: 'viewer',
       query: dto.RouteQuery,
       response: dto.RouteDto,
@@ -452,6 +802,7 @@ export const routes = {
       method: 'GET',
       path: '/api/maps/:mapId/exits',
       auth: 'account',
+      scope: { resource: 'routes', action: 'read' },
       mapRole: 'viewer',
       query: dto.ExitsQuery,
       response: dto.MapExitsDto,
@@ -460,6 +811,7 @@ export const routes = {
       method: 'GET',
       path: '/api/maps/:mapId/hubs',
       auth: 'account',
+      scope: { resource: 'routes', action: 'read' },
       mapRole: 'viewer',
       response: dto.HubsDto,
     }),
@@ -467,6 +819,7 @@ export const routes = {
       method: 'PUT',
       path: '/api/maps/:mapId/hubs',
       auth: 'account',
+      scope: { resource: 'routes', action: 'write' },
       mapRole: 'manager',
       body: dto.SetHubsRequest,
       response: z.array(dto.HubDto),
@@ -476,6 +829,7 @@ export const routes = {
       method: 'GET',
       path: '/api/maps/:mapId/hubs/distances',
       auth: 'account',
+      scope: { resource: 'routes', action: 'read' },
       mapRole: 'viewer',
       query: dto.HubDistancesQuery,
       response: z.array(dto.HubDistanceDto),
@@ -484,12 +838,14 @@ export const routes = {
       method: 'GET',
       path: '/api/accounts/me/hubs',
       auth: 'account',
+      scope: { resource: 'account', action: 'read' },
       response: z.array(dto.HubDto),
     }),
     setPersonalHubs: route({
       method: 'PUT',
       path: '/api/accounts/me/hubs',
       auth: 'account',
+      scope: { resource: 'account', action: 'write' },
       body: dto.SetHubsRequest,
       response: z.array(dto.HubDto),
     }),
@@ -498,7 +854,41 @@ export const routes = {
       method: 'POST',
       path: '/api/accounts/me/characters/:characterId/waypoint',
       auth: 'account',
+      scope: { resource: 'account', action: 'write' },
       body: dto.WaypointRequest,
+    }),
+  },
+
+  jumps: {
+    /** Ships with a jump drive and the version of the k-space dataset. */
+    meta: route({
+      method: 'GET',
+      path: '/api/jumps',
+      auth: 'account',
+      scope: { resource: 'universe', action: 'read' },
+      summary: 'Ships with a jump drive and the k-space dataset version',
+      response: dto.JumpMetaDto,
+    }),
+    /** Known space for the planner's map; `?v=<version>` answers are cached for good. */
+    universe: route({
+      method: 'GET',
+      path: '/api/jumps/universe',
+      auth: 'account',
+      scope: { resource: 'universe', action: 'read' },
+      summary: 'Known space for the jump planner map (columnar)',
+      query: dto.JumpUniverseQuery,
+      response: dto.JumpUniverseDto,
+    }),
+    /** A capital jump route between two known-space systems; changes nothing. */
+    plan: route({
+      method: 'POST',
+      path: '/api/jumps/plan',
+      auth: 'account',
+      scope: { resource: 'universe', action: 'read' },
+      summary: 'Plan a capital jump route between two known-space systems',
+      status: 200,
+      body: dto.JumpPlanRequest,
+      response: dto.JumpPlanDto,
     }),
   },
 
@@ -507,6 +897,7 @@ export const routes = {
       method: 'GET',
       path: '/api/maps/:mapId/systems/:solarSystemId/signatures',
       auth: 'account',
+      scope: { resource: 'signatures', action: 'read' },
       mapRole: 'viewer',
       response: z.array(dto.SignatureDto),
     }),
@@ -514,6 +905,7 @@ export const routes = {
       method: 'POST',
       path: '/api/maps/:mapId/systems/:solarSystemId/signatures',
       auth: 'account',
+      scope: { resource: 'signatures', action: 'write' },
       mapRole: 'member',
       body: dto.AddSignatureRequest,
       response: dto.SignatureDto,
@@ -522,6 +914,8 @@ export const routes = {
       method: 'POST',
       path: '/api/maps/:mapId/systems/:solarSystemId/signatures/paste',
       auth: 'account',
+      scope: { resource: 'signatures', action: 'write' },
+      status: 200,
       mapRole: 'member',
       body: dto.PasteSignaturesRequest,
       response: dto.PasteSignaturesResult,
@@ -530,6 +924,7 @@ export const routes = {
       method: 'PATCH',
       path: '/api/maps/:mapId/signatures/:signatureId',
       auth: 'account',
+      scope: { resource: 'signatures', action: 'write' },
       mapRole: 'member',
       body: dto.UpdateSignatureRequest,
       response: dto.SignatureDto,
@@ -538,7 +933,55 @@ export const routes = {
       method: 'DELETE',
       path: '/api/maps/:mapId/signatures/:signatureId',
       auth: 'account',
+      scope: { resource: 'signatures', action: 'write' },
       mapRole: 'member',
+    }),
+  },
+
+  /** Shares between maps: a source map's admins offer, the target map's admins accept. */
+  sharing: {
+    list: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/shares',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'manage' },
+      mapRole: 'admin',
+      response: dto.MapSharesDto,
+    }),
+    offer: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/shares',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'manage' },
+      mapRole: 'admin',
+      body: dto.OfferShareRequest,
+      response: dto.MapShareDto,
+    }),
+    update: route({
+      method: 'PATCH',
+      path: '/api/maps/:mapId/shares/:shareId',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'manage' },
+      mapRole: 'admin',
+      body: dto.UpdateShareRequest,
+      response: dto.MapShareDto,
+    }),
+    accept: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/shares/:shareId/accept',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'manage' },
+      mapRole: 'admin',
+      body: dto.AcceptShareRequest,
+      response: dto.MapShareDto,
+    }),
+    /** Revokes a share or declines an offer (either side's admins). */
+    revoke: route({
+      method: 'DELETE',
+      path: '/api/maps/:mapId/shares/:shareId',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'manage' },
+      mapRole: 'admin',
     }),
   },
 
@@ -547,6 +990,7 @@ export const routes = {
       method: 'GET',
       path: '/api/maps/:mapId/access-rules',
       auth: 'account',
+      scope: { resource: 'access', action: 'manage' },
       mapRole: 'admin',
       response: z.array(dto.AccessRuleDto),
     }),
@@ -554,6 +998,7 @@ export const routes = {
       method: 'POST',
       path: '/api/maps/:mapId/access-rules',
       auth: 'account',
+      scope: { resource: 'access', action: 'manage' },
       mapRole: 'admin',
       body: dto.CreateAccessRuleRequest,
       response: dto.AccessRuleDto,
@@ -562,6 +1007,7 @@ export const routes = {
       method: 'DELETE',
       path: '/api/maps/:mapId/access-rules/:ruleId',
       auth: 'account',
+      scope: { resource: 'access', action: 'manage' },
       mapRole: 'admin',
     }),
   },
@@ -571,6 +1017,7 @@ export const routes = {
       method: 'GET',
       path: '/api/maps/:mapId/characters',
       auth: 'account',
+      scope: { resource: 'tracking', action: 'read' },
       mapRole: 'viewer',
       response: z.array(dto.CharacterPresenceDto),
     }),
@@ -578,6 +1025,7 @@ export const routes = {
       method: 'PUT',
       path: '/api/maps/:mapId/tracking',
       auth: 'account',
+      scope: { resource: 'tracking', action: 'write' },
       mapRole: 'member',
       body: dto.SetTrackingRequest,
     }),
@@ -588,6 +1036,7 @@ export const routes = {
       method: 'GET',
       path: '/api/maps/:mapId/webhooks',
       auth: 'account',
+      scope: { resource: 'webhooks', action: 'manage' },
       mapRole: 'admin',
       response: z.array(dto.WebhookDto),
     }),
@@ -595,6 +1044,7 @@ export const routes = {
       method: 'POST',
       path: '/api/maps/:mapId/webhooks',
       auth: 'account',
+      scope: { resource: 'webhooks', action: 'manage' },
       mapRole: 'admin',
       body: dto.CreateWebhookRequest,
       response: dto.CreatedWebhookDto,
@@ -603,6 +1053,7 @@ export const routes = {
       method: 'PATCH',
       path: '/api/maps/:mapId/webhooks/:webhookId',
       auth: 'account',
+      scope: { resource: 'webhooks', action: 'manage' },
       mapRole: 'admin',
       body: dto.UpdateWebhookRequest,
       response: dto.WebhookDto,
@@ -611,12 +1062,14 @@ export const routes = {
       method: 'DELETE',
       path: '/api/maps/:mapId/webhooks/:webhookId',
       auth: 'account',
+      scope: { resource: 'webhooks', action: 'manage' },
       mapRole: 'admin',
     }),
     deliveries: route({
       method: 'GET',
       path: '/api/maps/:mapId/webhooks/:webhookId/deliveries',
       auth: 'account',
+      scope: { resource: 'webhooks', action: 'manage' },
       mapRole: 'admin',
       response: z.array(dto.WebhookDeliveryDto),
     }),
@@ -625,6 +1078,8 @@ export const routes = {
       method: 'POST',
       path: '/api/maps/:mapId/webhooks/:webhookId/test',
       auth: 'account',
+      scope: { resource: 'webhooks', action: 'manage' },
+      status: 200,
       mapRole: 'admin',
       response: dto.WebhookDeliveryDto,
     }),
@@ -635,12 +1090,14 @@ export const routes = {
       method: 'GET',
       path: '/api/admin/plugins',
       auth: 'admin',
+      scope: { resource: 'admin', action: 'read' },
       response: z.array(dto.PluginDto),
     }),
     install: route({
       method: 'POST',
       path: '/api/admin/plugins',
       auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
       body: dto.InstallPluginRequest,
       response: dto.PluginDto,
     }),
@@ -648,15 +1105,23 @@ export const routes = {
       method: 'PUT',
       path: '/api/admin/plugins/:pluginId/enabled',
       auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
       body: dto.SetPluginEnabledRequest,
       response: dto.PluginDto,
     }),
-    uninstall: route({ method: 'DELETE', path: '/api/admin/plugins/:pluginId', auth: 'admin' }),
+    uninstall: route({
+      method: 'DELETE',
+      path: '/api/admin/plugins/:pluginId',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
+    }),
     /** Body: the raw .tgz with `content-type: application/gzip` (or application/octet-stream). */
     upload: route({
       method: 'POST',
       path: '/api/admin/plugins/upload',
       auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
+      upload: 'application/gzip',
       response: dto.PluginDto,
     }),
     /** First-party plugins and themes shipped with the server. */
@@ -664,12 +1129,14 @@ export const routes = {
       method: 'GET',
       path: '/api/admin/plugins/catalog',
       auth: 'admin',
+      scope: { resource: 'admin', action: 'read' },
       response: z.array(dto.CatalogEntryDto),
     }),
     settings: route({
       method: 'GET',
       path: '/api/admin/plugins/:pluginId/settings',
       auth: 'admin',
+      scope: { resource: 'admin', action: 'read' },
       query: dto.PluginSettingsQuery,
       response: dto.PluginSettingsDto,
     }),
@@ -677,6 +1144,7 @@ export const routes = {
       method: 'PUT',
       path: '/api/admin/plugins/:pluginId/settings',
       auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
       body: dto.UpdatePluginSettingsRequest,
       response: dto.PluginSettingsDto,
     }),
@@ -685,10 +1153,17 @@ export const routes = {
       method: 'GET',
       path: '/api/plugins/web',
       auth: 'account',
+      scope: 'session',
       response: z.array(dto.PluginWebDto),
     }),
     /** Files of a plugin's web part (the folder of its web entry). `url` in `web` points here. */
-    asset: route({ method: 'GET', path: '/api/plugins/:pluginId/assets/:file', auth: 'account' }),
+    asset: route({
+      method: 'GET',
+      path: '/api/plugins/:pluginId/assets/:file',
+      auth: 'account',
+      scope: 'session',
+      download: true,
+    }),
   },
 
   /**
@@ -700,6 +1175,7 @@ export const routes = {
       method: 'GET',
       path: '/api/maps/:mapId/history',
       auth: 'account',
+      scope: { resource: 'audit', action: 'read' },
       mapRole: 'viewer',
       query: dto.AuditQuery,
       response: dto.AuditPageDto,
@@ -709,6 +1185,7 @@ export const routes = {
       method: 'GET',
       path: '/api/maps/:mapId/systems/:solarSystemId/history',
       auth: 'account',
+      scope: { resource: 'audit', action: 'read' },
       mapRole: 'viewer',
       query: dto.AuditQuery,
       response: dto.AuditPageDto,
@@ -717,6 +1194,7 @@ export const routes = {
       method: 'GET',
       path: '/api/maps/:mapId/connections/:connectionId/history',
       auth: 'account',
+      scope: { resource: 'audit', action: 'read' },
       mapRole: 'viewer',
       query: dto.AuditQuery,
       response: dto.AuditPageDto,
@@ -726,6 +1204,8 @@ export const routes = {
       method: 'GET',
       path: '/api/maps/:mapId/history/export',
       auth: 'account',
+      scope: { resource: 'audit', action: 'read' },
+      download: true,
       mapRole: 'viewer',
       query: dto.AuditExportQuery,
     }),
@@ -737,6 +1217,8 @@ export const routes = {
       method: 'POST',
       path: '/api/maps/:mapId/history/:eventId/revert',
       auth: 'account',
+      scope: { resource: 'audit', action: 'write' },
+      status: 200,
       mapRole: 'member',
       response: dto.AuditRevertDto,
     }),
@@ -748,6 +1230,7 @@ export const routes = {
       method: 'GET',
       path: '/api/admin/audit',
       auth: 'admin',
+      scope: { resource: 'admin', action: 'read' },
       query: dto.AuditQuery,
       response: dto.AuditPageDto,
     }),
@@ -755,6 +1238,8 @@ export const routes = {
       method: 'GET',
       path: '/api/admin/audit/export',
       auth: 'admin',
+      scope: { resource: 'admin', action: 'read' },
+      download: true,
       query: dto.AuditExportQuery,
     }),
     /** Checks the hash chain of every stream (or `?stream=`). */
@@ -762,7 +1247,58 @@ export const routes = {
       method: 'POST',
       path: '/api/admin/audit/verify',
       auth: 'admin',
+      scope: { resource: 'admin', action: 'read' },
+      status: 200,
       response: dto.AuditVerifyDto,
+    }),
+  },
+
+  /** Anonymous product telemetry (see docs/telemetry.md). */
+  telemetry: {
+    /** Whether the web app reports usage, and whether to show the admin the notice about it. */
+    client: route({
+      method: 'GET',
+      path: '/api/telemetry',
+      auth: 'account',
+      scope: 'none',
+      response: telemetry.TelemetryClientDto,
+    }),
+    /**
+     * Usage events from the web app, checked against the allow-list and forwarded without the
+     * request's IP or anything else about the browser. 400 when any event is not on the list.
+     */
+    ingest: route({
+      method: 'POST',
+      path: '/api/telemetry/e',
+      auth: 'account',
+      scope: 'session',
+      status: 202,
+      body: telemetry.TelemetryIngestRequest,
+      response: telemetry.TelemetryIngestResultDto,
+    }),
+    /** Status, instance id, the last payloads sent and the heartbeat as it would be sent now. */
+    status: route({
+      method: 'GET',
+      path: '/api/admin/telemetry',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'read' },
+      response: telemetry.TelemetryStatusDto,
+    }),
+    /** The admin switch; recorded on the instance audit as `telemetry.changed`. */
+    setEnabled: route({
+      method: 'PUT',
+      path: '/api/admin/telemetry/enabled',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
+      body: telemetry.SetTelemetryEnabledRequest,
+      response: telemetry.TelemetryStatusDto,
+    }),
+    /** The admin has read the notice about telemetry; it is not shown to them again. */
+    dismissNotice: route({
+      method: 'POST',
+      path: '/api/admin/telemetry/notice',
+      auth: 'admin',
+      scope: 'session',
     }),
   },
 
@@ -771,23 +1307,32 @@ export const routes = {
       method: 'GET',
       path: '/api/accounts/me/presence',
       auth: 'account',
+      scope: 'session',
       response: dto.PresenceSettingsDto,
     }),
     updateSettings: route({
       method: 'PUT',
       path: '/api/accounts/me/presence',
       auth: 'account',
+      scope: 'session',
       body: dto.UpdatePresenceSettingsRequest,
       response: dto.PresenceSettingsDto,
     }),
   },
 
   themes: {
-    list: route({ method: 'GET', path: '/api/themes', auth: 'public', response: dto.ThemesDto }),
+    list: route({
+      method: 'GET',
+      path: '/api/themes',
+      auth: 'public',
+      scope: 'none',
+      response: dto.ThemesDto,
+    }),
     select: route({
       method: 'PUT',
       path: '/api/accounts/me/theme',
       auth: 'account',
+      scope: 'session',
       body: dto.SelectThemeRequest,
       response: dto.ThemesDto,
     }),
@@ -795,6 +1340,7 @@ export const routes = {
       method: 'PUT',
       path: '/api/admin/themes/default',
       auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
       body: dto.SetDefaultThemeRequest,
       response: dto.ThemesDto,
     }),
@@ -802,6 +1348,7 @@ export const routes = {
       method: 'POST',
       path: '/api/admin/themes',
       auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
       body: dto.InstallPluginRequest,
       response: dto.ThemeDto,
     }),
@@ -810,9 +1357,251 @@ export const routes = {
       method: 'POST',
       path: '/api/admin/themes/upload',
       auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
+      upload: 'application/gzip',
       response: dto.ThemeDto,
     }),
-    uninstall: route({ method: 'DELETE', path: '/api/admin/themes/:themeId', auth: 'admin' }),
+    uninstall: route({
+      method: 'DELETE',
+      path: '/api/admin/themes/:themeId',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
+    }),
+  },
+  /**
+   * Personal access tokens: made by a signed-in account in its settings, acting as that account
+   * and never more (the scopes only narrow). Managing keys needs a browser session.
+   */
+  apiKeys: {
+    list: route({
+      method: 'GET',
+      path: '/api/accounts/me/api-keys',
+      auth: 'account',
+      scope: 'session',
+      summary: 'Your personal access tokens',
+      response: z.array(dto.ApiKeyDto),
+    }),
+    create: route({
+      method: 'POST',
+      path: '/api/accounts/me/api-keys',
+      auth: 'account',
+      scope: 'session',
+      summary: 'Make a personal access token (the token is shown once)',
+      body: dto.CreateApiKeyRequest,
+      response: dto.CreatedApiKeyDto,
+    }),
+    update: route({
+      method: 'PATCH',
+      path: '/api/accounts/me/api-keys/:keyId',
+      auth: 'account',
+      scope: 'session',
+      summary: 'Rename a token or change its IP allow-list and rate limit',
+      body: dto.UpdateApiKeyRequest,
+      response: dto.ApiKeyDto,
+    }),
+    rotate: route({
+      method: 'POST',
+      path: '/api/accounts/me/api-keys/:keyId/rotate',
+      auth: 'account',
+      status: 200,
+      scope: 'session',
+      summary: 'Replace the secret of a token; the old one stops working at once',
+      response: dto.CreatedApiKeyDto,
+    }),
+    revoke: route({
+      method: 'DELETE',
+      path: '/api/accounts/me/api-keys/:keyId',
+      auth: 'account',
+      scope: 'session',
+      summary: 'Revoke a token',
+    }),
+    /** Every key of the instance, personal and service (instance admins), to find and revoke. */
+    adminList: route({
+      method: 'GET',
+      path: '/api/admin/api-keys',
+      auth: 'admin',
+      scope: 'session',
+      summary: 'Every API key of the instance',
+      response: z.array(dto.ApiKeyDto),
+    }),
+    adminRevoke: route({
+      method: 'DELETE',
+      path: '/api/admin/api-keys/:keyId',
+      auth: 'admin',
+      scope: 'session',
+      summary: 'Revoke any key',
+    }),
+    /** Service keys: their own principal with an instance role and map roles an admin gives them. */
+    createService: route({
+      method: 'POST',
+      path: '/api/admin/service-keys',
+      auth: 'admin',
+      scope: 'session',
+      summary: 'Make a service key (the token is shown once)',
+      body: dto.CreateServiceKeyRequest,
+      response: dto.CreatedApiKeyDto,
+    }),
+    updateService: route({
+      method: 'PATCH',
+      path: '/api/admin/service-keys/:keyId',
+      auth: 'admin',
+      scope: 'session',
+      summary: 'Rename a service key or change its IP allow-list and rate limit',
+      body: dto.UpdateApiKeyRequest,
+      response: dto.ApiKeyDto,
+    }),
+    rotateService: route({
+      method: 'POST',
+      path: '/api/admin/service-keys/:keyId/rotate',
+      auth: 'admin',
+      status: 200,
+      scope: 'session',
+      summary: 'Replace the secret of a service key',
+      response: dto.CreatedApiKeyDto,
+    }),
+  },
+
+  /** A map's public link (`/p/<token>`) and what it shows; map admins. */
+  publicLink: {
+    get: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/public-link',
+      auth: 'account',
+      mapRole: 'admin',
+      scope: { resource: 'maps', action: 'manage' },
+      summary: 'Public link and AI agent reach of a map',
+      response: dto.PublicLinkDto,
+    }),
+    update: route({
+      method: 'PATCH',
+      path: '/api/maps/:mapId/public-link',
+      auth: 'account',
+      mapRole: 'admin',
+      scope: { resource: 'maps', action: 'manage' },
+      summary: 'Switch the public link on or off and choose what it shows',
+      body: dto.UpdatePublicLinkRequest,
+      response: dto.PublicLinkDto,
+    }),
+    regenerate: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/public-link/regenerate',
+      auth: 'account',
+      status: 200,
+      mapRole: 'admin',
+      scope: { resource: 'maps', action: 'manage' },
+      summary: 'Make a new public link; the old one stops working',
+      response: dto.PublicLinkDto,
+    }),
+  },
+
+  /** Read without a session; rate limited per client address. */
+  public: {
+    map: route({
+      method: 'GET',
+      path: '/api/public/maps/:token',
+      auth: 'public',
+      scope: 'none',
+      summary: 'A public map: what its link shows, and the stream to follow it live',
+      response: dto.PublicMapViewDto,
+    }),
+  },
+
+  /**
+   * OAuth 2.1 for the MCP endpoint (docs/mcp.md). The metadata documents are under
+   * `/.well-known/` (RFC 8414, RFC 9728); the authorization endpoint is the web page
+   * `/oauth/authorize`, which uses `describe` and `decide`.
+   */
+  oauth: {
+    register: route({
+      method: 'POST',
+      path: '/api/oauth/register',
+      auth: 'public',
+      scope: 'none',
+      summary: 'Dynamic client registration (RFC 7591), public clients only',
+      body: dto.OAuthRegisterRequest,
+      response: dto.OAuthRegisteredClientDto,
+    }),
+    token: route({
+      method: 'POST',
+      path: '/api/oauth/token',
+      auth: 'public',
+      scope: 'none',
+      status: 200,
+      summary: 'Exchange a code (with its PKCE verifier) or a refresh token for tokens',
+      body: dto.OAuthTokenRequest,
+      bodyContentType: 'application/x-www-form-urlencoded',
+      response: dto.OAuthTokenResponse,
+    }),
+    describe: route({
+      method: 'GET',
+      path: '/api/oauth/authorize',
+      auth: 'account',
+      scope: 'session',
+      summary: 'Check an authorization request and say what the consent page shows',
+      query: dto.OAuthAuthorizeQuery,
+      response: dto.OAuthAuthorizeRequestDto,
+    }),
+    decide: route({
+      method: 'POST',
+      path: '/api/oauth/authorize',
+      auth: 'account',
+      scope: 'session',
+      status: 200,
+      summary: 'Approve (possibly narrowed) or decline; answers where the browser goes next',
+      body: dto.OAuthAuthorizeDecision,
+      response: dto.OAuthRedirectDto,
+    }),
+    grants: route({
+      method: 'GET',
+      path: '/api/accounts/me/oauth-grants',
+      auth: 'account',
+      scope: 'session',
+      summary: 'MCP clients you approved',
+      response: z.array(dto.OAuthGrantDto),
+    }),
+    revokeGrant: route({
+      method: 'DELETE',
+      path: '/api/accounts/me/oauth-grants/:grantId',
+      auth: 'account',
+      scope: 'session',
+      summary: 'Revoke an approval and every token it gave',
+    }),
+  },
+
+  /** This API, described. */
+  docs: {
+    openapi: route({
+      method: 'GET',
+      path: '/api/openapi.json',
+      auth: 'public',
+      scope: 'none',
+      summary: 'OpenAPI 3.1 description of this API',
+      response: z.record(z.string(), z.unknown()),
+    }),
+    asyncapi: route({
+      method: 'GET',
+      path: '/api/asyncapi.json',
+      auth: 'public',
+      scope: 'none',
+      summary: 'AsyncAPI 3.0 description of the WebSocket protocol and webhooks',
+      response: z.record(z.string(), z.unknown()),
+    }),
+    ui: route({
+      method: 'GET',
+      path: '/api/docs',
+      auth: 'public',
+      scope: 'none',
+      summary: 'Interactive API reference',
+      contentType: 'text/html',
+    }),
+    asset: route({
+      method: 'GET',
+      path: '/api/docs/assets/*',
+      auth: 'public',
+      scope: 'none',
+      summary: 'Files of the API reference page',
+      download: true,
+    }),
   },
 } as const;
 

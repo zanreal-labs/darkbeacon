@@ -4,6 +4,7 @@ import {
   type LabelDto,
   type Position,
   type ShipSize,
+  type SystemLabelDto,
   type UniverseSystemDto,
 } from '@darkbeacon/shared';
 import { ValidationError } from '@darkbeacon/core';
@@ -34,7 +35,7 @@ export function defaultShipSize(
   a: UniverseSystemDto | null,
   b: UniverseSystemDto | null,
 ): ShipSize {
-  if (type !== 'wormhole') return 'xlarge';
+  if (type !== 'wormhole') return 'capital';
   const classes = [a?.whClass, b?.whClass];
   if (classes.includes(SHATTERED_FRIGATE)) return 'small';
   if (classes.includes(C1)) return 'medium';
@@ -51,17 +52,27 @@ export function nextPosition(existing: readonly Position[]): Position {
   return { x: right.x + SYSTEM_SPACING.x, y: right.y + SYSTEM_SPACING.y };
 }
 
-/** Label ids and names must be unique within a map. */
-export function validateLabels(labels: readonly LabelDto[]): void {
+/** Ids and names (any case) must be unique within a list. */
+function validateUnique(list: ReadonlyArray<{ id: string; name: string }>, what: string): void {
   const ids = new Set<string>();
   const names = new Set<string>();
-  for (const label of labels) {
-    if (ids.has(label.id)) throw new ValidationError(`Duplicate label id ${label.id}`);
-    const name = label.name.toLowerCase();
-    if (names.has(name)) throw new ValidationError(`Duplicate label name ${label.name}`);
-    ids.add(label.id);
+  for (const item of list) {
+    if (ids.has(item.id)) throw new ValidationError(`Duplicate ${what} id ${item.id}`);
+    const name = item.name.trim().toLowerCase();
+    if (names.has(name)) throw new ValidationError(`Duplicate ${what} name ${item.name}`);
+    ids.add(item.id);
     names.add(name);
   }
+}
+
+/** Tag ids and names must be unique within a map (Tags are `labels` in the data). */
+export function validateLabels(labels: readonly LabelDto[]): void {
+  validateUnique(labels, 'tag');
+}
+
+/** Label ids and names must be unique within a map: other maps match Labels by name. */
+export function validateSystemLabels(labels: readonly SystemLabelDto[]): void {
+  validateUnique(labels, 'label');
 }
 
 /** True when `patch` would change any field of `current`. */

@@ -51,7 +51,7 @@ import {
   type PluginSettingsSchemas,
   type PluginSettingsValues,
 } from '@darkbeacon/plugins';
-import { redactSecrets, type MapSnapshot } from '@darkbeacon/shared';
+import { isMergedCopy, redactSecrets, type MapSnapshot } from '@darkbeacon/shared';
 import { readJson } from './installer.js';
 import { manifestPath } from './manifest-file.js';
 import type { EventConsumer } from '../platform/event-consumers.js';
@@ -101,6 +101,8 @@ export interface PluginHostDeps {
   /** `ctx.secrets`: a sealing box per plugin (keyed from SECRET_KEY). */
   secrets?: (pluginId: string) => { seal(text: string): string; open(sealed: string): string | null };
   logger?: (pluginId: string) => PluginLogger;
+  /** `ctx.metrics.delivery`: records a plugin's notification deliveries (telemetry). */
+  delivered?: (channel: string, ok: boolean) => void;
   /** Failures in a row (handlers, routes, notifiers) after which a plugin is disabled. Default 5. */
   failureThreshold?: number;
   /** How long `register()` may take. Default 30 s. */
@@ -364,6 +366,10 @@ export class PluginHost {
         forMap: <T>(mapId: string) => this.settings(id, mapId) as Promise<T>,
       },
       logger: loaded.logger,
+      metrics: Object.freeze({
+        delivery: (channel: string, outcome: 'ok' | 'failed') =>
+          this.deps.delivered?.(channel, outcome === 'ok'),
+      }),
       http: { route: (route: PluginRoute) => this.addRoute(loaded, route) },
       audit: Object.freeze({
         configChanged: (request: PluginHttpRequest, change: PluginConfigChange) =>
@@ -484,6 +490,8 @@ export class PluginHost {
       types: consumer.events,
       handle: async (event) => {
         if (loaded.stopped || !isActiveOn(loaded.plugin, mapIdOf(event))) return;
+        // On a map that merges others, plugins follow its own changes, not the merged copies.
+        if (isMergedCopy(event)) return;
         try {
           await consumer.handle(event);
           loaded.failures = 0;
@@ -535,6 +543,7 @@ export class PluginHost {
         // The instance audit (sign-ins, settings...) is for instance admins, never plugins.
         if (event.stream === AUDIT_STREAM) return;
         if (loaded.stopped || !isActiveOn(loaded.plugin, mapIdOf(event))) return;
+        if (isMergedCopy(event)) return;
         try {
           await handler(event);
           loaded.failures = 0;

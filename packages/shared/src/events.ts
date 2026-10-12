@@ -3,9 +3,36 @@ import type { DomainEvent } from '@darkbeacon/core';
 import type { AccessRuleDto } from './dto/access.js';
 import type { InstanceRole } from './dto/identity.js';
 import type { PluginDto } from './dto/plugins.js';
-import type { ConnectionDto, LabelDto, MapDto, MapSystemDto, SignatureDto } from './dto/mapping.js';
+import type {
+  ConnectionDto,
+  LabelDto,
+  MapDto,
+  MapSystemDto,
+  SignatureDto,
+  SystemLabelDto,
+} from './dto/mapping.js';
+import type { MassMode, PassageSource } from './dto/passages.js';
 import type { HubDto, MapExitDto } from './dto/routing.js';
 import type { CharacterPresenceDto } from './dto/tracking.js';
+import type { MapShareDto, MapSourceDto } from './dto/sharing.js';
+import type { McpMode } from './dto/publishing.js';
+import type { ShareScope } from './share-scope.js';
+
+/** A passage as events carry it. */
+export interface PassageEventData {
+  connectionId: string;
+  characterId: number | null;
+  shipTypeId: number | null;
+  mass?: number | null;
+  from?: number;
+  to?: number;
+  passageId?: string;
+  source?: PassageSource;
+  massMode?: MassMode;
+  higgs?: boolean;
+  entangler?: boolean;
+  note?: string | null;
+}
 
 export const DomainEventSchema = z.object({
   id: z.string(),
@@ -13,7 +40,7 @@ export const DomainEventSchema = z.object({
   stream: z.string(),
   type: z.string(),
   occurredAt: z.number().int(),
-  actor: z.object({ kind: z.enum(['account', 'apiToken', 'system', 'plugin']), id: z.string() }),
+  actor: z.object({ kind: z.enum(['account', 'apiToken', 'public', 'system', 'plugin']), id: z.string() }),
   data: z.unknown(),
   v: z.literal(1),
 });
@@ -39,18 +66,16 @@ export interface EventPayloads {
   'connection.updated': ConnectionDto;
   'connection.removed': { id: string };
   /**
-   * A tracked character jumped through a connection on the map. `mass` (hull mass in kg, null for
-   * unknown ships), `from`, `to` and `passageId` were added later and are optional for readers.
+   * A ship went through a connection on the map: a tracked character's jump, or one logged by
+   * hand (`source: 'manual'`, `characterId` null). `mass` (kg, null for unknown ships), `from`,
+   * `to` and `passageId` were added later, and `source`, `massMode`, `higgs`, `entangler` and
+   * `note` after them; all are optional for readers.
    */
-  'connection.passage': {
-    connectionId: string;
-    characterId: number;
-    shipTypeId: number | null;
-    mass?: number | null;
-    from?: number;
-    to?: number;
-    passageId?: string;
-  };
+  'connection.passage': PassageEventData;
+  /** A passage's mass mode (cold, hot, custom), modifiers or note changed. */
+  'connection.passage_updated': PassageEventData & { passageId: string };
+  /** A passage was deleted (logged by mistake). */
+  'connection.passage_removed': { passageId: string; connectionId: string };
   'signature.added': SignatureDto;
   'signature.updated': SignatureDto;
   'signature.removed': { id: string; solarSystemId: number };
@@ -68,7 +93,23 @@ export interface EventPayloads {
   'map.created': MapDto;
   /** Last event of a map stream: the map and everything on it is gone. */
   'map.removed': { id: string };
+  /** The map's Tags were replaced (manager+). */
   'labels.changed': { labels: LabelDto[] };
+  /** The map's Labels (WH1, WH2...) were replaced (manager+). */
+  'system_labels.changed': { systemLabels: SystemLabelDto[] };
+  /** On the source's and the target's stream: a source admin offered the map to another map. */
+  'map.share.offered': MapShareDto;
+  /** On both streams: the target's admin accepted; the target merges the source from now on. */
+  'map.share.accepted': MapShareDto;
+  /** On both streams: level, scopes or hidden changed. */
+  'map.share.changed': MapShareDto;
+  /** On both streams: the share ended (revoked by either side, or an offer declined). */
+  'map.share.revoked': MapShareDto;
+  /**
+   * The maps merged into this one changed (published after the merged objects themselves were
+   * added or removed); an empty list on a standard map means it no longer merges anything.
+   */
+  'map.sources_changed': { sources: MapSourceDto[] };
   /** The chain's exits changed (recomputed after connection and system changes). */
   'routes.exits_changed': { exits: MapExitDto[] };
   /** The map's own hubs were replaced (manager+). */
@@ -77,6 +118,20 @@ export interface EventPayloads {
   'ping.removed': { id: string };
   'access.rule_added': AccessRuleDto;
   'access.rule_removed': { id: string };
+  /**
+   * The map's public link or MCP reach changed (map admins). The link's token is never in the
+   * event: map viewers and webhooks see that it changed, not the link itself.
+   */
+  'access.public_link_changed': {
+    mapId: string;
+    enabled: boolean;
+    slug: string | null;
+    scopes: ShareScope[];
+    noindex: boolean;
+    mcpMode: McpMode;
+    /** True when the change made a new link (the old one stopped working). */
+    regenerated: boolean;
+  };
   /** Instance stream: an account's instance role changed. */
   'access.role_changed': { accountId: string; role: InstanceRole };
   /**
@@ -101,6 +156,8 @@ export const EVENT_TYPES = [
   'connection.updated',
   'connection.removed',
   'connection.passage',
+  'connection.passage_updated',
+  'connection.passage_removed',
   'signature.added',
   'signature.updated',
   'signature.removed',
@@ -114,12 +171,19 @@ export const EVENT_TYPES = [
   'map.created',
   'map.removed',
   'labels.changed',
+  'system_labels.changed',
+  'map.share.offered',
+  'map.share.accepted',
+  'map.share.changed',
+  'map.share.revoked',
+  'map.sources_changed',
   'routes.exits_changed',
   'routes.hubs_changed',
   'ping.created',
   'ping.removed',
   'access.rule_added',
   'access.rule_removed',
+  'access.public_link_changed',
   'access.role_changed',
   'access.account_changed',
   'character.unlinked',

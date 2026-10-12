@@ -1,6 +1,7 @@
 import { sameValue, type ChangeReverter, type StoredEvent } from '@darkbeacon/audit';
 import { ConflictError, type Actor } from '@darkbeacon/core';
 import type {
+  BookmarkNumberUseCases,
   ConnectionUseCases,
   MappingPorts,
   MapUseCases,
@@ -13,6 +14,7 @@ import type {
   MapDto,
   MapSystemDto,
   SignatureDto,
+  SystemLabelDto,
   UpdateConnectionRequest,
   UpdateSignatureRequest,
   UpdateSystemRequest,
@@ -26,6 +28,8 @@ const SYSTEM_FIELDS = [
   'status',
   'description',
   'labelIds',
+  'systemLabelIds',
+  'customLabel',
   'locked',
 ] as const satisfies ReadonlyArray<keyof UpdateSystemRequest>;
 const CONNECTION_FIELDS = [
@@ -53,6 +57,8 @@ export interface MappingUseCaseSet {
   systems: SystemUseCases;
   connections: ConnectionUseCases;
   signatures: SignatureUseCases;
+  /** Reverts of a wormhole's bookmark number; without it they are refused. */
+  numbers?: BookmarkNumberUseCases;
 }
 
 /**
@@ -72,6 +78,7 @@ export class MappingReverter implements ChangeReverter {
     'signature.updated',
     'signature.removed',
     'labels.changed',
+    'system_labels.changed',
     'map.settings_changed',
   ] as const;
 
@@ -122,6 +129,16 @@ export class MappingReverter implements ChangeReverter {
         const { id } = event.data as ConnectionDto;
         const current = await this.ports.connections.findById(mapId, id);
         if (!current) throw new ConflictError('The connection is gone');
+        const number = diff.bookmarkNumber;
+        if (number && !CONNECTION_FIELDS.some((f) => diff[f]) && this.uc.numbers) {
+          // A number given by hand or by renumbering: back to the number it had, if it can be.
+          if (!sameValue(current.bookmarkNumber ?? null, number.after))
+            throw new ConflictError(CHANGED_SINCE);
+          if (typeof number.before !== 'number') throw new ConflictError('It had no number before');
+          if (diff.bookmarkParent) throw new ConflictError('It is reached from another system now');
+          await this.uc.numbers.setNumber(actor, mapId, id, number.before);
+          return;
+        }
         await this.uc.connections.update(actor, mapId, id, this.backPatch(diff, current, CONNECTION_FIELDS));
         return;
       }
@@ -178,6 +195,14 @@ export class MappingReverter implements ChangeReverter {
         if (!current || !change) throw new ConflictError('Nothing to revert');
         if (!sameValue(current.labels, change.after)) throw new ConflictError(CHANGED_SINCE);
         await this.uc.maps.setLabels(actor, mapId, (change.before ?? []) as LabelDto[]);
+        return;
+      }
+      case 'system_labels.changed': {
+        const current = await this.ports.maps.findById(mapId);
+        const change = diff.systemLabels;
+        if (!current || !change) throw new ConflictError('Nothing to revert');
+        if (!sameValue(current.systemLabels, change.after)) throw new ConflictError(CHANGED_SINCE);
+        await this.uc.maps.setSystemLabels(actor, mapId, (change.before ?? []) as SystemLabelDto[]);
         return;
       }
       case 'map.settings_changed': {

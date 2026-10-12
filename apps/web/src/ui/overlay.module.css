@@ -172,7 +172,29 @@
   border-top: 1px solid var(--dbk-color-border);
 }
 
-.close {
+/* A large dialog laid out by its caller (DialogSheet). */
+.sheet {
+  width: min(calc(100vw - 32px), var(--dialog-width, 960px));
+  height: min(calc(100dvh - 48px), var(--dialog-height, 720px));
+  overflow: hidden;
+}
+
+@media (max-width: 767px) {
+  .sheet {
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100dvh;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    transform: none;
+    animation: sheetIn var(--dbk-motion-normal) var(--dbk-motion-easing);
+  }
+}
+
+/* Two classes: the button's own `position: relative` must not win, whichever stylesheet loads last. */
+.dialog .close {
   position: absolute;
   top: var(--dbk-space-3);
   right: var(--dbk-space-3);
@@ -278,6 +300,13 @@
   from {
     opacity: 0;
     transform: translate(-50%, -48%) scale(0.98);
+  }
+}
+
+@keyframes sheetIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
   }
 }
 

@@ -5,6 +5,7 @@ import { describeEachDialect } from '@darkbeacon/db/testing';
 import { InProcessEventBus } from '../adapters/events/in-process-event-bus.js';
 import { KyselyEventLog } from '../adapters/events/kysely-event-log.js';
 import { EventConsumers, type EventConsumer } from './event-consumers.js';
+import { MaintenanceMode } from './maintenance.js';
 
 let running: EventConsumers[] = [];
 afterEach(async () => {
@@ -20,7 +21,14 @@ describeEachDialect('EventConsumers', (t) => {
       log.append([newEvent({ stream, type, actor: { kind: 'system', id: 't' }, data: {}, occurredAt: 1 })]);
     const start = async (...consumers: EventConsumer[]) => startLed(singleProcess, ...consumers);
     const startLed = async (leadership: Leadership, ...consumers: EventConsumer[]) => {
-      const runner = new EventConsumers(database, log, bus, new ManualClock(), leadership);
+      const runner = new EventConsumers(
+        database,
+        log,
+        bus,
+        new ManualClock(),
+        new MaintenanceMode(),
+        leadership,
+      );
       for (const consumer of consumers) runner.register(consumer);
       await runner.onApplicationBootstrap();
       running.push(runner);

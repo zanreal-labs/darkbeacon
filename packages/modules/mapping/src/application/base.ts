@@ -1,4 +1,5 @@
 import {
+  ConflictError,
   actorRef,
   mapStream,
   newEvent,
@@ -15,9 +16,12 @@ import {
 import type { EventPayloads, EventType } from '@darkbeacon/shared';
 import type { MapSystem } from '../domain/map.js';
 import type {
+  ChainOverlay,
+  ChangeStamps,
   ConnectionRepository,
   MapRepository,
   PassageRepository,
+  PilotDirectory,
   SignatureRepository,
   SystemRepository,
   UniverseCatalog,
@@ -30,6 +34,12 @@ export interface MappingPorts {
   connections: ConnectionRepository;
   signatures: SignatureRepository;
   passages: PassageRepository;
+  /** Names of the pilots of tracked jumps; absent: passages show no names. */
+  pilots?: PilotDirectory;
+  /** Field change times and deletions, for maps that merge this one. */
+  stamps: ChangeStamps;
+  /** Merged chains of maps that merge others (sharing); absent: every map shows its own rows. */
+  overlay?: ChainOverlay;
   universe: UniverseCatalog;
   access: MapAccess;
   events: EventLog;
@@ -47,8 +57,21 @@ export class EventBatch {
     private readonly now: number,
   ) {}
 
-  /** `before`: the entity before an update, or the one removed (for the audit trail). */
+  /**
+   * `before`: the entity before an update, or the one removed (for the audit trail). A
+   * connection added in this batch and updated again (numbered) is published once, as it ends up.
+   */
   add<K extends EventType>(type: K, data: EventPayloads[K], before?: unknown): void {
+    if (type === 'connection.updated') {
+      const id = (data as EventPayloads['connection.updated']).id;
+      const added = this.events.find(
+        (e) => e.type === 'connection.added' && (e.data as EventPayloads['connection.added']).id === id,
+      );
+      if (added) {
+        added.data = data;
+        return;
+      }
+    }
     this.events.push(
       newEvent({
         stream: mapStream(this.mapId),
@@ -69,6 +92,17 @@ export abstract class MappingUseCases {
   protected async authorize(actor: Actor | null, mapId: string, min: GrantingMapRole): Promise<Actor> {
     await requireMapRole(this.ports.access, actor, mapId, min);
     return actor!;
+  }
+
+  /**
+   * Throws unless the actor may change the map's own systems, connections and signatures:
+   * member+, on a map that has objects of its own (a composite only shows other maps').
+   */
+  protected async authorizeEdit(actor: Actor | null, mapId: string): Promise<Actor> {
+    const who = await this.authorize(actor, mapId, 'member');
+    if ((await this.ports.maps.findById(mapId))?.kind === 'composite')
+      throw new ConflictError('This map merges other maps; change them through it');
+    return who;
   }
 
   /**

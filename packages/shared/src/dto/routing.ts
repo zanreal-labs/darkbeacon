@@ -61,14 +61,23 @@ export const ConnectionIntelDto = z.object({
   mass: z.object({
     /** Nominal total mass of the type (the game varies it by ±10 %). */
     total: z.number().nullable(),
-    /** Mass of recorded passages since the mass status was last set (kg). */
+    /** Mass of recorded passages since the mass status was last set or the counter reset (kg). */
     passed: z.number(),
+    /** From when passages count: the mass status set or the counter reset; null counts all. */
+    since: Timestamp.nullable(),
     /** Recorded passages since then, and how many of them had an unknown ship. */
     passages: z.number().int(),
     unknownPassages: z.number().int(),
     /** Estimate: what the mass status allows when it was set, minus what passed since. */
     remaining: z.number().nullable(),
     remainingFraction: z.number().nullable(),
+    /**
+     * The honest range of what is left: the status band of a total that varies ±10 %, minus what
+     * passed since (unknown ships count as anything up to the max jump mass). Null when unknown.
+     */
+    range: z.object({ min: z.number(), max: z.number() }).nullable(),
+    /** More went through than the status allowed: the status was set late, or passages are missing. */
+    overdrawn: z.boolean(),
     /** Frigate holes regain their mass, so they never run out. */
     regenerates: z.boolean(),
     /** The status the estimate implies (> 50 % fresh, 10-50 % reduced, < 10 % critical). */
@@ -78,6 +87,8 @@ export const ConnectionIntelDto = z.object({
     /** When the map first saw the hole: the connection or one of its signatures, whichever is older. */
     firstSeenAt: Timestamp,
     lifetimeHours: z.number().nullable(),
+    /** `type`: the wormhole type's lifetime; `class`: the default for the classes it joins. */
+    lifetimeFrom: z.enum(['type', 'class']).nullable().optional(),
     eolAt: Timestamp.nullable(),
     /** Latest moment the hole can still exist; null when neither the type nor EOL is known. */
     expiresBy: Timestamp.nullable(),
@@ -90,20 +101,6 @@ export const ConnectionIntelDto = z.object({
   urgency: Urgency,
 });
 export type ConnectionIntelDto = z.infer<typeof ConnectionIntelDto>;
-
-/** A ship that went through a connection, recorded from tracked characters' jumps. */
-export const PassageDto = z.object({
-  id: Id,
-  connectionId: Id,
-  characterId: EveId,
-  shipTypeId: EveId.nullable(),
-  /** Hull mass of the ship (kg), null when the ship type is unknown. */
-  mass: z.number().nullable(),
-  from: EveId,
-  to: EveId,
-  occurredAt: Timestamp,
-});
-export type PassageDto = z.infer<typeof PassageDto>;
 
 // --- Routes --------------------------------------------------------------------------------
 
@@ -184,9 +181,18 @@ export const HubDto = z.object({
 });
 export type HubDto = z.infer<typeof HubDto>;
 
+/** The kind of space a whole route runs through; `mixed` when it crosses more than one kind. */
+export const RouteSpace = z.enum(['high', 'low', 'null', 'mixed']);
+export type RouteSpace = z.infer<typeof RouteSpace>;
+
 export const HubDistanceDto = HubDto.extend({
   /** Jumps from the asked system; null when the mode allows no route. */
   jumps: z.number().int().nullable(),
+  /**
+   * For an exit's `nearest` hub: the space the route runs through, start and hub included
+   * (`high` only when every system on it is high-sec). Absent elsewhere.
+   */
+  space: RouteSpace.optional(),
 });
 export type HubDistanceDto = z.infer<typeof HubDistanceDto>;
 

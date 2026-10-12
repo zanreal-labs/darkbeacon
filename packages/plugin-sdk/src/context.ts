@@ -181,6 +181,15 @@ export interface PluginCommands {
   run(name: string, input: unknown): Promise<unknown>;
 }
 
+/** Instance metrics a plugin may add to; attributes are fixed so they stay low-cardinality. */
+export interface PluginMetrics {
+  /**
+   * One notification delivered to an outside service, or a failed attempt. `channel` is a short
+   * name such as `discord` (lower case letters, digits, `-` and `_`).
+   */
+  delivery(channel: string, outcome: 'ok' | 'failed'): void;
+}
+
 export interface PluginContext<P extends PluginPortName = PluginPortName> {
   readonly plugin: { id: string; version: string };
   /** Only the ports declared in the manifest. */
@@ -203,6 +212,8 @@ export interface PluginContext<P extends PluginPortName = PluginPortName> {
   readonly commands: PluginCommands;
   readonly settings: PluginSettings;
   readonly logger: PluginLogger;
+  /** Measurements the instance exports when its operator turns telemetry on (free otherwise). */
+  readonly metrics: PluginMetrics;
   readonly http: { route(route: PluginRoute): void };
   /**
    * Records who changed the plugin's configuration through one of its routes. Pass the request

@@ -1,5 +1,6 @@
 import {
   INSTANCE_STREAM,
+  grantOf,
   newId,
   parseStream,
   type Actor,
@@ -11,6 +12,7 @@ import type { Database } from '@darkbeacon/db';
 import {
   ClientMessage,
   isEventOfType,
+  scopesAllow,
   type PresenceSettingsDto,
   type PresenceStatePatch,
   type ServerMessage,
@@ -43,6 +45,8 @@ export interface HubOptions {
    */
   recheckMs?: number;
   onError?: (error: unknown) => void;
+  /** Runs work in a trace span (telemetry); subscriptions and catch-ups are traced with it. */
+  trace?: <T>(name: string, attributes: Record<string, string>, work: () => Promise<T>) => Promise<T>;
 }
 
 const REPLAY_PAGE = 500;
@@ -56,6 +60,10 @@ class Subscription {
     readonly stream: string,
     readonly connection: Connection,
     public lastSeq: number,
+    /** Where events come from: the stream itself, or the source of a view stream. */
+    readonly source: string = stream,
+    /** Filters events of a view stream. */
+    readonly project: ((event: DomainEvent) => Promise<DomainEvent | null>) | null = null,
   ) {}
 
   enqueue(task: () => Promise<void>, onError: (error: unknown) => void): void {
@@ -81,6 +89,7 @@ class Connection {
     readonly send: Send,
     /** Closes the transport: the session behind the connection ended. */
     readonly end: () => void,
+    readonly client: { ip: string | null } = { ip: null },
   ) {
     this.queue = resolveActor().then((actor) => {
       this.actor = actor;
@@ -128,8 +137,13 @@ export class RealtimeHub {
    * `resolveActor` is called on connect and again when access may have changed; `end` closes
    * the transport once a signed-in connection's session no longer resolves.
    */
-  connect(resolveActor: () => Promise<Actor | null>, send: Send, end: () => void = () => {}): HubConnection {
-    const connection = new Connection(resolveActor, send, end);
+  connect(
+    resolveActor: () => Promise<Actor | null>,
+    send: Send,
+    end: () => void = () => {},
+    client: { ip: string | null } = { ip: null },
+  ): HubConnection {
+    const connection = new Connection(resolveActor, send, end, client);
     this.connections.add(connection);
     return {
       receive: (raw) => this.serialize(connection, () => this.receive(connection, raw)),
@@ -140,6 +154,11 @@ export class RealtimeHub {
   /** How many subscriptions on this process follow `stream` (a map someone has open). */
   followers(stream: string): number {
     return this.byStream.get(stream)?.size ?? 0;
+  }
+
+  /** Open connections (sockets). */
+  get connectionCount(): number {
+    return this.connections.size;
   }
 
   close(): void {
@@ -169,7 +188,17 @@ export class RealtimeHub {
       connection.send({ op: 'unsubscribed', stream: message.stream });
     } else if (message.op === 'presence') await this.presence(connection, message.stream, message.state);
     else if (message.op === 'presence.leave') this.leavePresence(connection, message.stream);
-    else await this.subscribe(connection, message.stream, message.sinceSeq);
+    else {
+      const { stream, sinceSeq } = message;
+      await this.traced('ws subscribe', stream, () => this.subscribe(connection, stream, sinceSeq));
+    }
+  }
+
+  private traced<T>(name: string, stream: string, work: () => Promise<T>): Promise<T> {
+    const trace = this.options.trace;
+    return trace
+      ? trace(name, { 'darkbeacon.stream.kind': parseStream(stream)?.kind ?? 'unknown' }, work)
+      : work();
   }
 
   /**
@@ -227,20 +256,43 @@ export class RealtimeHub {
       connection.send({ op: 'error', stream, code: 'bad_request', message: 'Too many subscriptions' });
       return;
     }
+    const parsed = parseStream(stream);
+    const kind = parsed ? this.options.registry.stream(parsed.kind) : undefined;
+    if (parsed && kind?.admit && !kind.admit(parsed.id, connection.client)) {
+      connection.send({
+        op: 'error',
+        stream,
+        code: 'bad_request',
+        message: 'Too many subscriptions; slow down',
+      });
+      return;
+    }
     const denied = await this.denial(connection, stream);
     if (denied) {
       connection.send({ op: 'error', stream, ...denied });
       return;
     }
+    let source = stream;
+    let project: Subscription['project'] = null;
+    if (parsed && kind?.view) {
+      const view = kind.view;
+      const resolved = await view.source(parsed.id);
+      if (!resolved) {
+        connection.send({ op: 'error', stream, code: 'forbidden', message: 'You cannot follow this stream' });
+        return;
+      }
+      source = resolved;
+      project = (event) => view.project(parsed.id, event, stream);
+    }
     this.drop(connection, stream);
-    const sub = new Subscription(stream, connection, sinceSeq ?? 0);
+    const sub = new Subscription(stream, connection, sinceSeq ?? 0, source, project);
     connection.subscriptions.set(stream, sub);
-    let set = this.byStream.get(stream);
-    if (!set) this.byStream.set(stream, (set = new Set()));
+    let set = this.byStream.get(source);
+    if (!set) this.byStream.set(source, (set = new Set()));
     set.add(sub);
     // Registered before catching up, so live events queue behind the catch-up and are de-duplicated by seq.
     sub.enqueue(
-      () => this.catchUp(sub, sinceSeq),
+      () => this.traced('ws catch-up', stream, () => this.catchUp(sub, sinceSeq)),
       (error) => this.fail(sub, error),
     );
   }
@@ -254,10 +306,10 @@ export class RealtimeHub {
 
   private async catchUp(sub: Subscription, sinceSeq: number | undefined): Promise<void> {
     const { log } = this.options;
-    const head = await log.headSeq(sub.stream);
+    const head = await log.headSeq(sub.source);
     let replayable = sinceSeq !== undefined && sinceSeq <= head && head - sinceSeq <= this.maxReplay;
     if (replayable && sinceSeq! < head) {
-      const oldest = await log.oldestSeq(sub.stream);
+      const oldest = await log.oldestSeq(sub.source);
       replayable = oldest !== null && oldest <= sinceSeq! + 1;
     }
     if (replayable) await this.replay(sub);
@@ -274,8 +326,8 @@ export class RealtimeHub {
 
   private async replay(sub: Subscription): Promise<void> {
     for (;;) {
-      const events = await this.options.log.readSince(sub.stream, sub.lastSeq, REPLAY_PAGE);
-      for (const event of events) this.deliver(sub, event);
+      const events = await this.options.log.readSince(sub.source, sub.lastSeq, REPLAY_PAGE);
+      for (const event of events) await this.deliver(sub, event);
       if (events.length < REPLAY_PAGE || !sub.active) return;
     }
   }
@@ -294,6 +346,20 @@ export class RealtimeHub {
     const parsed = parseStream(stream);
     const kind = parsed && this.options.registry.stream(parsed.kind);
     if (!parsed || !kind) return { code: 'unknown_stream', message: `Unknown stream ${stream}` };
+    // A credential follows a map stream only with read scopes on everything there (the stream
+    // carries every kind of map event), the instance stream with `account:read`.
+    const grant = grantOf(actor);
+    if (grant) {
+      const allowed =
+        parsed.kind === 'map'
+          ? scopesAllow(grant.scopes, { resource: '*', action: 'read' }, parsed.id)
+          : parsed.kind === 'instance'
+            ? scopesAllow(grant.scopes, { resource: 'account', action: 'read' }, null)
+            : parsed.kind === 'audit'
+              ? scopesAllow(grant.scopes, { resource: 'admin', action: 'read' }, null)
+              : true;
+      if (!allowed) return { code: 'forbidden', message: 'This API key lacks the scopes for this stream' };
+    }
     if (await kind.authorize(actor, parsed.id)) return null;
     return actor
       ? { code: 'forbidden', message: 'You cannot follow this stream' }
@@ -310,9 +376,10 @@ export class RealtimeHub {
   ): Promise<{ seq: number; data: Record<string, unknown> }> {
     const { kind, id } = parseStream(stream)!;
     const { database, log, registry } = this.options;
+    const source = (await registry.stream(kind)?.view?.source(id)) ?? stream;
     return database.transaction(
       async () => {
-        const seq = await log.headSeq(stream);
+        const seq = await log.headSeq(source);
         const data: Record<string, unknown> = {};
         for (const provider of registry.snapshotProviders(kind))
           Object.assign(data, await provider(id, actor));
@@ -322,10 +389,16 @@ export class RealtimeHub {
     );
   }
 
-  private deliver(sub: Subscription, event: DomainEvent, frame?: () => string): void {
+  private async deliver(sub: Subscription, event: DomainEvent, frame?: () => string): Promise<void> {
     if (!sub.active || event.seq <= sub.lastSeq) return;
     sub.lastSeq = event.seq;
-    sub.connection.send({ op: 'event', event }, frame?.());
+    // Shown as stored: the frame serialized once for everyone following the stream.
+    if (!sub.project) {
+      sub.connection.send({ op: 'event', event }, frame?.());
+      return;
+    }
+    const shown = await sub.project(event);
+    if (shown && sub.active) sub.connection.send({ op: 'event', event: shown });
   }
 
   private dispatch(event: DomainEvent): void {
@@ -335,7 +408,7 @@ export class RealtimeHub {
     for (const sub of this.byStream.get(event.stream) ?? []) {
       sub.enqueue(
         async () => {
-          if (event.seq === sub.lastSeq + 1) this.deliver(sub, event, frame);
+          if (event.seq === sub.lastSeq + 1) await this.deliver(sub, event, frame);
           else if (event.seq > sub.lastSeq) await this.replay(sub); // fill the gap from the log
         },
         (error) => this.fail(sub, error),
@@ -351,8 +424,8 @@ export class RealtimeHub {
     } else if (event.type.startsWith('access.')) {
       for (const connection of this.connections) {
         if (
-          [...connection.subscriptions.keys()].some(
-            (s) => event.stream === INSTANCE_STREAM || s === event.stream,
+          [...connection.subscriptions.values()].some(
+            (s) => event.stream === INSTANCE_STREAM || s.source === event.stream,
           )
         ) {
           this.reauthorize(connection);
@@ -408,9 +481,9 @@ export class RealtimeHub {
     if (!sub) return;
     sub.active = false;
     connection.subscriptions.delete(stream);
-    const set = this.byStream.get(stream);
+    const set = this.byStream.get(sub.source);
     set?.delete(sub);
-    if (set?.size === 0) this.byStream.delete(stream);
+    if (set?.size === 0) this.byStream.delete(sub.source);
   }
 
   private disconnect(connection: Connection): void {

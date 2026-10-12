@@ -15,6 +15,7 @@ export const ApiErrorCode = z.enum([
   'bad_request',
   'internal',
   'unavailable',
+  'rate_limited',
 ]);
 export type ApiErrorCode = z.infer<typeof ApiErrorCode>;
 
@@ -35,6 +36,14 @@ export const HealthDto = z.object({
   web: z.enum(['ok', 'off']),
 });
 export type HealthDto = z.infer<typeof HealthDto>;
+
+/** `/api/ready`: the instance can serve requests (database reachable, migrations applied). */
+export const ReadyDto = z.object({
+  status: z.literal('ready'),
+  database: z.enum(['sqlite', 'postgres']),
+  migrations: z.object({ applied: z.number().int().nonnegative(), pending: z.number().int().nonnegative() }),
+});
+export type ReadyDto = z.infer<typeof ReadyDto>;
 
 /**
  * The state of a realtime stream at `seq`, read over REST so a server-rendered page can show it

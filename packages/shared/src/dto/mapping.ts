@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { MapRole } from './access.js';
-import { BookmarkTemplate } from './bookmarks.js';
+import { BookmarkNumbering, BookmarkTemplate } from './bookmarks.js';
 import { EveId, Id, Timestamp } from './common.js';
 
 export const MapScope = z.enum(['wormhole', 'high', 'low', 'null', 'pochven']);
@@ -11,11 +11,18 @@ export const MapSettings = z.object({
   scopes: z.array(MapScope).default(['wormhole']),
   /** Default bookmark label template of the map (see `bookmarks.ts`); absent means `{sig}`. */
   bookmarkTemplate: BookmarkTemplate.optional(),
+  /** How `{n}` numbers wormholes (see `bookmarks.ts`); absent means found order, gaps kept. */
+  bookmarkNumbering: BookmarkNumbering.optional(),
 });
 export type MapSettings = z.infer<typeof MapSettings>;
 
 export const Color = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'expected #rrggbb');
 
+/**
+ * A **Tag** of the map (Staging, Sites, Hostile, Exit): a named, coloured marker with a description,
+ * set on systems through `MapSystemDto.labelIds`. Called "labels" in the data for history's sake;
+ * everything users see says Tags (see docs/decisions.md).
+ */
 export const LabelDto = z.object({
   id: Id,
   name: z.string().trim().min(1).max(32),
@@ -24,26 +31,59 @@ export const LabelDto = z.object({
 });
 export type LabelDto = z.infer<typeof LabelDto>;
 
+/**
+ * A **Label** of the map (WH1, WH2, A, B...): a short neutral text marker, as in Wanderer, set on
+ * systems through `MapSystemDto.systemLabelIds`. Managers keep the list; the description says what
+ * a short name stands for.
+ */
+export const SystemLabelDto = z.object({
+  id: Id,
+  name: z.string().trim().min(1).max(8),
+  description: z.string().trim().max(120).default(''),
+});
+export type SystemLabelDto = z.infer<typeof SystemLabelDto>;
+
+/** The Labels every new map starts with. Ids are only unique within a map, so they can be fixed. */
+export const DEFAULT_SYSTEM_LABELS: readonly SystemLabelDto[] = [
+  { id: 'wh1', name: 'WH1', description: '' },
+  { id: 'wh2', name: 'WH2', description: '' },
+  { id: 'wh3', name: 'WH3', description: '' },
+];
+
+/** Longest custom label of a system: a word, like "bait" or "scout". */
+export const CUSTOM_LABEL_MAX = 16;
+
 export const Slug = z
   .string()
   .min(2)
   .max(48)
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'lowercase letters, digits and dashes');
 
+/**
+ * `standard`: a map of its own systems (it may merge shared maps too); `composite`: a map with no
+ * objects of its own that merges other maps (an alliance chain). Absent means `standard`.
+ */
+export const MapKind = z.enum(['standard', 'composite']);
+export type MapKind = z.infer<typeof MapKind>;
+
 export const MapDto = z.object({
   id: Id,
   slug: Slug,
   name: z.string(),
+  kind: MapKind.optional(),
   ownerAccountId: Id,
   settings: MapSettings,
+  /** The map's Tags. */
   labels: z.array(LabelDto),
+  /** The map's Labels (WH1, WH2...). */
+  systemLabels: z.array(SystemLabelDto),
   createdAt: Timestamp,
   updatedAt: Timestamp,
 });
 export type MapDto = z.infer<typeof MapDto>;
 
 /** GET /api/maps item: a map plus the caller's effective role. */
-export const MapSummaryDto = MapDto.pick({ id: true, slug: true, name: true }).extend({
+export const MapSummaryDto = MapDto.pick({ id: true, slug: true, name: true, kind: true }).extend({
   role: MapRole.exclude(['blocked']),
 });
 export type MapSummaryDto = z.infer<typeof MapSummaryDto>;
@@ -51,6 +91,7 @@ export type MapSummaryDto = z.infer<typeof MapSummaryDto>;
 export const CreateMapRequest = z.object({
   name: z.string().trim().min(1).max(64),
   slug: Slug.optional(),
+  kind: MapKind.optional(),
 });
 export type CreateMapRequest = z.infer<typeof CreateMapRequest>;
 
@@ -61,9 +102,28 @@ export const UpdateMapRequest = z.object({
 });
 export type UpdateMapRequest = z.infer<typeof UpdateMapRequest>;
 
-/** PUT /api/maps/:mapId/labels replaces the whole list (manager+). */
+/** PUT /api/maps/:mapId/labels replaces the whole list of Tags (manager+). */
 export const SetLabelsRequest = z.object({ labels: z.array(LabelDto).max(64) });
 export type SetLabelsRequest = z.infer<typeof SetLabelsRequest>;
+
+/** PUT /api/maps/:mapId/system-labels replaces the whole list of Labels, in order (manager+). */
+export const SetSystemLabelsRequest = z.object({ systemLabels: z.array(SystemLabelDto).max(32) });
+export type SetSystemLabelsRequest = z.infer<typeof SetSystemLabelsRequest>;
+
+/**
+ * Where a merged object comes from: the maps holding it and whose write is newest. Only on maps that
+ * merge others; names come from `MapSnapshot.sources`.
+ */
+export const ProvenanceDto = z.object({
+  /** Source ids (`MapSourceDto.id`) holding the object, in source order. */
+  sources: z.array(Id),
+  /** The source whose change is the newest, and when it was made. */
+  updatedBy: Id,
+  updatedAt: Timestamp,
+  /** True when a read-write source (or the map itself) holds it, so its editors may change it. */
+  writable: z.boolean(),
+});
+export type ProvenanceDto = z.infer<typeof ProvenanceDto>;
 
 export const Position = z.object({ x: z.number().finite(), y: z.number().finite() });
 export type Position = z.infer<typeof Position>;
@@ -87,16 +147,24 @@ export const MapSystemDto = z.object({
   position: Position,
   customName: z.string().nullable(),
   temporaryName: z.string().nullable(),
+  /** Free-text tag of old; kept for compatibility, no longer shown or edited (Tags replace it). */
   tag: z.string().nullable(),
   status: SystemStatus,
   /** Markdown. */
   description: z.string(),
+  /** The system's Tags (ids of `MapDto.labels`). */
   labelIds: z.array(Id),
+  /** The system's Labels (ids of `MapDto.systemLabels`). */
+  systemLabelIds: z.array(Id),
+  /** One free-text label of the system ("bait"), shown after its Labels; null for none. */
+  customLabel: z.string().nullable(),
   locked: z.boolean(),
   /** Hidden systems keep their intel; nothing routes to them. */
   visible: z.boolean(),
   createdAt: Timestamp,
   updatedAt: Timestamp,
+  /** On maps that merge other maps only. */
+  provenance: ProvenanceDto.optional(),
 });
 export type MapSystemDto = z.infer<typeof MapSystemDto>;
 
@@ -112,6 +180,8 @@ export const UpdateSystemRequest = z
     status: SystemStatus,
     description: z.string().max(10_000),
     labelIds: z.array(Id).max(16),
+    systemLabelIds: z.array(Id).max(32),
+    customLabel: z.string().trim().max(CUSTOM_LABEL_MAX).nullable(),
     locked: z.boolean(),
     visible: z.boolean(),
   })
@@ -134,8 +204,12 @@ export type TimeStatus = z.infer<typeof TimeStatus>;
 /** In-game: fresh > 50 %, reduced 10-50 %, critical < 10 % of mass left. */
 export const MassStatus = z.enum(['fresh', 'reduced', 'critical']);
 export type MassStatus = z.infer<typeof MassStatus>;
-/** Largest ship class that fits: small = frigates, medium = up to battlecruisers, large = battleships, xlarge = capitals/freighters. */
-export const ShipSize = z.enum(['small', 'medium', 'large', 'xlarge']);
+/**
+ * Largest ship class that fits, from the max jump mass: small = frigates and destroyers (5 000 t),
+ * medium = up to battlecruisers and industrials (62 000 t), large = battleships (375 000-410 000 t),
+ * xlarge = freighters (1 000 000 t), capital = capitals (2 000 000 t).
+ */
+export const ShipSize = z.enum(['small', 'medium', 'large', 'xlarge', 'capital']);
 export type ShipSize = z.infer<typeof ShipSize>;
 export const Bubbled = z.enum(['none', 'source', 'target', 'both']);
 export type Bubbled = z.infer<typeof Bubbled>;
@@ -159,8 +233,17 @@ export const ConnectionDto = z.object({
    * passages from then on. Optional: connections from before it existed lack it.
    */
   massStatusAt: Timestamp.nullable().optional(),
+  /**
+   * `{n}` of a wormhole: its number among the wormholes out of `bookmarkParent`, the system it is
+   * reached from in the chain. Kept by the server, the same for everyone; null for stargates and
+   * bridges. Optional: connections from before numbering lack it.
+   */
+  bookmarkNumber: z.number().int().positive().nullable().optional(),
+  bookmarkParent: EveId.nullable().optional(),
   createdAt: Timestamp,
   updatedAt: Timestamp,
+  /** On maps that merge other maps only. */
+  provenance: ProvenanceDto.optional(),
 });
 export type ConnectionDto = z.infer<typeof ConnectionDto>;
 
@@ -201,6 +284,8 @@ export const SignatureDto = z.object({
   connectionId: Id.nullable(),
   createdAt: Timestamp,
   updatedAt: Timestamp,
+  /** On maps that merge other maps only. */
+  provenance: ProvenanceDto.optional(),
 });
 export type SignatureDto = z.infer<typeof SignatureDto>;
 

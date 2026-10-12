@@ -10,13 +10,17 @@ import {
   buildPath,
   DEFAULT_BOOKMARK_TEMPLATE,
   renderBookmarkTemplate,
+  DEFAULT_BOOKMARK_NUMBERING,
   routes,
+  type BookmarkOrder,
   type BookmarkVariable,
   type MapDto,
+  type UpdateMapPreferencesRequest,
 } from '@darkbeacon/shared';
 import { api, ApiError } from '../lib/api';
 import { mapKey } from '../lib/session-keys';
 import { Button, Card, CardBody, CardFooter, CardHeader, Input, useToast } from '../ui';
+import { BookmarkNumberingCard, OrderPicker } from './BookmarkNumbering';
 import { useMapPreferences } from './useMapPreferences';
 import styles from './BookmarkSettings.module.css';
 
@@ -26,6 +30,8 @@ const BUSY_SAMPLE = {
   sig: 'XYZ-777',
   sig3: 'XYZ',
   chainIndex: '2b',
+  n: '2',
+  N: '02',
   destClass: 'HS',
   type: 'B274',
   size: 'F',
@@ -149,19 +155,39 @@ export function TemplatePicker({
 }
 
 /**
- * Bookmark labels: the map's default (managers) and the viewer's own override. Both take effect
- * on every open map at once.
+ * Bookmark labels: the map's default (managers), its `{n}` numbering and the viewer's own
+ * template and order. All take effect on every open map at once.
  */
-export function BookmarkLabelSettings({ map, canManage }: { map: MapDto; canManage: boolean }) {
+export function BookmarkLabelSettings({
+  map,
+  canManage,
+  canEdit = canManage,
+}: {
+  map: MapDto;
+  canManage: boolean;
+  /** May renumber and move numbers by hand (members); defaults to `canManage`. */
+  canEdit?: boolean;
+}) {
   const toast = useToast();
   const client = useQueryClient();
   const { preferences, settled, update } = useMapPreferences(map.id);
   const mapDefault = map.settings.bookmarkTemplate ?? DEFAULT_BOOKMARK_TEMPLATE;
   const [shared, setShared] = useState(mapDefault);
+  // The map may arrive again (a refetch, another manager's change): start from the new default.
+  const [seenDefault, setSeenDefault] = useState(mapDefault);
+  if (seenDefault !== mapDefault) {
+    setSeenDefault(mapDefault);
+    setShared(mapDefault);
+  }
   const [own, setOwn] = useState<string | null>(preferences.bookmarkTemplate);
   const [ownTouched, setOwnTouched] = useState(false);
+  const [ownOrder, setOwnOrder] = useState<BookmarkOrder | null>(null);
+  const [orderTouched, setOrderTouched] = useState(false);
   const [busy, setBusy] = useState<'map' | 'own' | null>(null);
   const ownValue = ownTouched ? own : preferences.bookmarkTemplate;
+  const savedOrder = preferences.bookmarkOrder ?? null;
+  const ownOrderValue = orderTouched ? ownOrder : savedOrder;
+  const mapOrder = (map.settings.bookmarkNumbering ?? DEFAULT_BOOKMARK_NUMBERING).order;
 
   const saveMap = async (template: string | null) => {
     setBusy('map');
@@ -184,14 +210,22 @@ export function BookmarkLabelSettings({ map, canManage }: { map: MapDto; canMana
     }
   };
 
-  const saveOwn = async (template: string | null) => {
+  const templateChanged = ownTouched && ownValue !== preferences.bookmarkTemplate;
+  const orderChanged = orderTouched && ownOrderValue !== savedOrder;
+
+  const saveOwn = async () => {
     setBusy('own');
     try {
-      await update({ bookmarkTemplate: template });
-      setOwn(template);
+      const patch: UpdateMapPreferencesRequest = {};
+      if (templateChanged) patch.bookmarkTemplate = ownValue;
+      if (orderChanged) patch.bookmarkOrder = ownOrderValue;
+      await update(patch);
+      setOwn(ownValue);
       setOwnTouched(false);
+      setOrderTouched(false);
+      const following = ownValue === null && ownOrderValue === null;
       toast({
-        title: template ? 'Your bookmark labels saved' : 'Following the map default',
+        title: following ? 'Following the map default' : 'Your bookmark labels saved',
         tone: 'success',
       });
     } catch (error) {
@@ -243,10 +277,17 @@ export function BookmarkLabelSettings({ map, canManage }: { map: MapDto; canMana
         )}
       </Card>
 
+      <BookmarkNumberingCard
+        map={map}
+        canManage={canManage}
+        canEdit={canEdit}
+        template={ownValue ?? shared}
+      />
+
       <Card>
         <CardHeader
           title="Just for you"
-          description="Your own template wins over the map default on every screen you use. A system's temporary name always shows instead."
+          description="Your own template and numbering order win over the map's on every screen you use. A system's temporary name always shows instead."
         />
         <CardBody>
           <div className={styles.follow} role="radiogroup" aria-label="Your bookmark labels">
@@ -289,18 +330,35 @@ export function BookmarkLabelSettings({ map, canManage }: { map: MapDto; canMana
               }}
             />
           )}
+          <div className={styles.ownOrder}>
+            <span className={styles.customLabel}>Your numbering order</span>
+            <OrderPicker
+              label="Your numbering order"
+              value={ownOrderValue}
+              follow={mapOrder}
+              disabled={!settled}
+              onChange={(order) => {
+                setOwnOrder(order);
+                setOrderTouched(true);
+              }}
+            />
+            {ownOrderValue !== null && ownOrderValue !== mapOrder && (
+              <p className={styles.optionText} role="note">
+                Counted on your screen only, so your numbers may not match what the rest of the fleet sees.
+              </p>
+            )}
+          </div>
         </CardBody>
         <CardFooter>
           <Button
             variant="primary"
             loading={busy === 'own'}
             disabled={
-              !ownTouched ||
-              ownValue === preferences.bookmarkTemplate ||
-              (ownValue !== null && validate(ownValue) !== null) ||
+              !(templateChanged || orderChanged) ||
+              (templateChanged && ownValue !== null && validate(ownValue) !== null) ||
               busy !== null
             }
-            onClick={() => void saveOwn(ownValue)}
+            onClick={() => void saveOwn()}
           >
             Save mine
           </Button>

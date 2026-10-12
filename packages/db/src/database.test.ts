@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { sql } from 'kysely';
-import { cachePreparedStatements, createDatabase } from './database.js';
+import { createDatabase } from './database.js';
+import { cachePreparedStatements } from './sqlite.js';
 import { bool, isUniqueViolation, json } from './portable.js';
 import { describeEachDialect } from './testing.js';
 
@@ -35,6 +36,39 @@ describeEachDialect('Database', (t) => {
       .orderBy('stream')
       .execute();
     expect(rows.map((r) => r.stream)).toEqual(['a', 'b']);
+  });
+
+  it('holds reads, writes and snapshots while the SQLite file is used exclusively', async () => {
+    if (t.dialect !== 'sqlite') return;
+    const order: string[] = [];
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const exclusive = t.db.exclusive(async (file) => {
+      order.push('exclusive');
+      // Swapping files closes every connection; they come back with the file.
+      file.close();
+      file.open();
+      await held;
+      order.push('exclusive done');
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const read = t.db
+      .db<Tables>()
+      .selectFrom('event_stream')
+      .selectAll()
+      .execute()
+      .then(() => order.push('read'));
+    const snapshot = t.db
+      .transaction(() => t.db.db<Tables>().selectFrom('event_stream').selectAll().execute(), {
+        readOnly: true,
+      })
+      .then(() => order.push('snapshot'));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(order).toEqual(['exclusive']);
+    release();
+    await Promise.all([exclusive, read, snapshot]);
+    expect(order.slice(0, 2)).toEqual(['exclusive', 'exclusive done']);
+    expect(order).toHaveLength(4);
   });
 
   it('reads outside a transaction without waiting for one, and sees every commit', async () => {

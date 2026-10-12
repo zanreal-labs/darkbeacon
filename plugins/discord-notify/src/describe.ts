@@ -17,19 +17,19 @@ export const COLORS = {
   /** color-accent */
   connection: 0x38c6d6,
   /** security-high: a way out to known space */
-  exit: 0x3fd47a,
+  exit: 0x00ef47,
   /** edge-time-eol */
-  eol: 0xcf7cf2,
+  eol: 0xb25ee0,
   /** edge-mass-critical */
-  critical: 0xf05252,
-  /** status-hostile, edge-bubble */
-  danger: 0xf05252,
+  critical: 0xff4040,
+  /** status-hostile */
+  danger: 0xd26060,
   /** status-occupied */
-  kill: 0xef8a3c,
+  kill: 0xb58157,
   /** status-warning */
-  ping: 0xf0c541,
+  ping: 0xc4a64a,
   /** status-friendly */
-  arrival: 0x3fbf7f,
+  arrival: 0x5e9e7d,
 } as const;
 
 export interface Embed {
@@ -60,7 +60,8 @@ const SHIP_SIZE: Record<ConnectionDto['shipSize'], string> = {
   small: 'Frigates only',
   medium: 'Up to battlecruisers',
   large: 'Up to battleships',
-  xlarge: 'Capitals',
+  xlarge: 'Up to freighters',
+  capital: 'Capitals',
 };
 
 /** C1-C6, HS, LS, NS, Thera, C13, Drifter, Pochven. */

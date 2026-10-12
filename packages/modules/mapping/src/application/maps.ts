@@ -6,10 +6,20 @@ import {
   requireActor,
   type Actor,
 } from '@darkbeacon/core';
-import type { CreateMapRequest, LabelDto, MapSummaryDto, UpdateMapRequest } from '@darkbeacon/shared';
+import {
+  DEFAULT_BOOKMARK_NUMBERING,
+  DEFAULT_SYSTEM_LABELS,
+  type BookmarkNumbering,
+  type CreateMapRequest,
+  type LabelDto,
+  type MapSummaryDto,
+  type SystemLabelDto,
+  type UpdateMapRequest,
+} from '@darkbeacon/shared';
 import type { ChainMap } from '../domain/map.js';
-import { changes, slugify, validateLabels } from '../domain/rules.js';
-import { MappingUseCases } from './base.js';
+import { changes, slugify, validateLabels, validateSystemLabels } from '../domain/rules.js';
+import { MappingUseCases, type EventBatch } from './base.js';
+import { renumberBookmarks } from './bookmark-numbers.js';
 
 export class MapUseCases extends MappingUseCases {
   /** Maps the actor can at least view, sorted by name. */
@@ -18,7 +28,13 @@ export class MapUseCases extends MappingUseCases {
     const roles = new Map(grants.map((g) => [g.mapId, g.role]));
     const maps = await this.ports.maps.listByIds([...roles.keys()]);
     return maps
-      .map((m) => ({ id: m.id, slug: m.slug, name: m.name, role: roles.get(m.id)! }))
+      .map((m) => ({
+        id: m.id,
+        slug: m.slug,
+        name: m.name,
+        ...(m.kind ? { kind: m.kind } : {}),
+        role: roles.get(m.id)!,
+      }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }
 
@@ -42,9 +58,11 @@ export class MapUseCases extends MappingUseCases {
       id: newId(),
       slug: request.slug ?? (await this.freeSlug(slugify(request.name))),
       name: request.name,
+      ...(request.kind === 'composite' ? { kind: 'composite' as const } : {}),
       ownerAccountId: account.id,
       settings: { scopes: ['wormhole'] },
       labels: [],
+      systemLabels: DEFAULT_SYSTEM_LABELS.map((l) => ({ ...l })),
       createdAt: now,
       updatedAt: now,
     };
@@ -71,6 +89,9 @@ export class MapUseCases extends MappingUseCases {
           ...(request.settings?.bookmarkTemplate
             ? { bookmarkTemplate: request.settings.bookmarkTemplate }
             : {}),
+          ...(request.settings?.bookmarkNumbering
+            ? { bookmarkNumbering: request.settings.bookmarkNumbering }
+            : {}),
         },
       };
       if (!changes(current, next)) return current;
@@ -78,13 +99,14 @@ export class MapUseCases extends MappingUseCases {
       next.updatedAt = this.ports.clock.now();
       await this.ports.maps.update(next);
       events.add('map.settings_changed', next, current);
+      await this.applyNumbering(events, current, next);
       return next;
     });
   }
 
   /**
-   * Replaces the label list (manager+). Systems lose the labels that no longer exist; hidden
-   * systems are updated silently.
+   * Replaces the Tags (`labels` in the data, manager+). Systems lose the tags that no longer
+   * exist; hidden systems are updated silently.
    */
   async setLabels(actor: Actor | null, mapId: string, labels: LabelDto[]): Promise<LabelDto[]> {
     const who = await this.authorize(actor, mapId, 'manager');
@@ -109,6 +131,36 @@ export class MapUseCases extends MappingUseCases {
   }
 
   /**
+   * Replaces the Labels (WH1, WH2..., manager+); their order is the order systems show them in.
+   * Systems lose the labels that no longer exist; hidden systems are updated silently.
+   */
+  async setSystemLabels(
+    actor: Actor | null,
+    mapId: string,
+    systemLabels: SystemLabelDto[],
+  ): Promise<SystemLabelDto[]> {
+    const who = await this.authorize(actor, mapId, 'manager');
+    validateSystemLabels(systemLabels);
+    return this.write(who, mapId, async (events) => {
+      const current = await this.load(mapId);
+      if (!changes(current, { systemLabels })) return current.systemLabels;
+      const now = this.ports.clock.now();
+      await this.ports.maps.update({ ...current, systemLabels, updatedAt: now });
+      events.add('system_labels.changed', { systemLabels }, { systemLabels: current.systemLabels });
+
+      const kept = new Set(systemLabels.map((l) => l.id));
+      for (const system of await this.ports.systems.list(mapId)) {
+        const systemLabelIds = system.systemLabelIds.filter((id) => kept.has(id));
+        if (systemLabelIds.length === system.systemLabelIds.length) continue;
+        const next = { ...system, systemLabelIds, updatedAt: now };
+        await this.ports.systems.update(next);
+        if (next.visible) events.add('system.updated', next, system);
+      }
+      return systemLabels;
+    });
+  }
+
+  /**
    * The map's default bookmark label template (manager+), published with the map settings so
    * every open map relabels at once; null goes back to the built-in default.
    */
@@ -126,6 +178,44 @@ export class MapUseCases extends MappingUseCases {
       await this.ports.maps.update(next);
       events.add('map.settings_changed', next, current);
       return next;
+    });
+  }
+
+  /**
+   * The map's `{n}` numbering (manager+); null goes back to found order with gaps kept. A new
+   * order numbers every system's wormholes again in it; turning on renumber on close closes the
+   * gaps there are.
+   */
+  async setBookmarkNumbering(
+    actor: Actor | null,
+    mapId: string,
+    numbering: BookmarkNumbering | null,
+  ): Promise<ChainMap> {
+    const who = await this.authorize(actor, mapId, 'manager');
+    return this.write(who, mapId, async (events) => {
+      const current = await this.load(mapId);
+      const { bookmarkNumbering: _old, ...settings } = current.settings;
+      const next: ChainMap = {
+        ...current,
+        settings: numbering === null ? settings : { ...settings, bookmarkNumbering: numbering },
+      };
+      if (!changes(current, next)) return current;
+      next.updatedAt = this.ports.clock.now();
+      await this.ports.maps.update(next);
+      events.add('map.settings_changed', next, current);
+      await this.applyNumbering(events, current, next);
+      return next;
+    });
+  }
+
+  /** After a settings change: renumber everything in a new order, else keep (or close gaps). */
+  private async applyNumbering(events: EventBatch, before: ChainMap, after: ChainMap): Promise<void> {
+    const was = before.settings.bookmarkNumbering ?? DEFAULT_BOOKMARK_NUMBERING;
+    const is = after.settings.bookmarkNumbering ?? DEFAULT_BOOKMARK_NUMBERING;
+    if (was.order === is.order && was.renumberOnClose === is.renumberOnClose) return;
+    await renumberBookmarks(this.ports, events, after.id, {
+      numbering: is,
+      renumber: was.order === is.order ? 'none' : 'all',
     });
   }
 

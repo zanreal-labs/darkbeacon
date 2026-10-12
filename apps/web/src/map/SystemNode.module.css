@@ -1,39 +1,33 @@
 /*
  * Every node has the same box: as wide as the widest system name of the game next to the widest
- * class pill (invisible sizers set it), three rows of fixed height. Nothing in it can make it grow.
+ * designation pill and a pilot count (invisible sizers set it), two rows of fixed height. The
+ * background is the plain node surface; the 3 px border is the status.
  */
 .node {
   position: relative;
   display: grid;
   grid-template-columns: max-content;
   grid-auto-rows: auto;
-  row-gap: 5px;
+  row-gap: 4px;
   width: max-content;
   min-width: var(--dbk-node-min-width);
   padding: var(--dbk-node-padding);
-  border: var(--dbk-node-border-width) solid var(--dbk-node-border);
+  border: var(--dbk-node-border-width) solid var(--node-status, var(--dbk-node-border));
   border-radius: var(--dbk-node-radius);
-  background: var(--node-tint, var(--dbk-node-bg));
+  background: var(--dbk-node-bg);
   box-shadow: var(--dbk-shadow-small);
   color: var(--dbk-node-text);
   font-size: var(--map-text-secondary, 13px);
   line-height: 1.3;
   touch-action: none;
-  transition:
-    border-color var(--dbk-motion-fast) var(--dbk-motion-easing),
-    box-shadow var(--dbk-motion-fast) var(--dbk-motion-easing);
+  transition: box-shadow var(--dbk-motion-fast) var(--dbk-motion-easing);
 }
 
-.node:hover {
-  border-color: var(--dbk-color-border-strong);
-}
-
-/* Selected: an accent outline, nothing else changes. */
+/* Selected: an accent outline outside the status border, which keeps its colour. */
 .node[data-selected] {
-  border-color: var(--dbk-node-selected-border);
   box-shadow:
-    0 0 0 2px var(--dbk-node-selected-border),
-    0 0 0 6px color-mix(in oklab, var(--dbk-node-selected-border) 22%, transparent);
+    0 0 0 2px var(--dbk-color-canvas),
+    0 0 0 4px var(--dbk-node-selected-border);
 }
 
 .node[data-hidden] {
@@ -59,7 +53,7 @@
 .row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   height: 24px;
 }
 
@@ -75,14 +69,18 @@
   visibility: hidden;
 }
 
+/* The designation pill: solid, fixed width, dark bold monospace text on the EVE colour. */
 .pill {
   flex: none;
-  padding: 0 6px;
+  min-width: 4.4ch;
+  padding: 0 5px;
   border-radius: var(--dbk-radius-small);
+  color: var(--dbk-node-pill-text);
+  font-family: var(--dbk-font-family-mono);
   font-size: var(--map-text-secondary, 13px);
-  font-weight: 750;
+  font-weight: 800;
   line-height: 20px;
-  font-variant-numeric: tabular-nums;
+  text-align: center;
   white-space: nowrap;
 }
 
@@ -95,179 +93,23 @@
   min-width: 0;
   overflow: hidden;
   font-size: var(--map-text-name, 15px);
-  font-weight: 650;
+  font-weight: 600;
   line-height: 22px;
   letter-spacing: -0.01em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.line {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  height: 21px;
-  overflow: hidden;
-}
-
-.statics {
-  flex-wrap: nowrap;
-}
-
-.statics li {
-  font-size: var(--map-text-secondary, 13px);
-  line-height: 19px;
-}
-
-.exit {
-  flex: none;
-  padding: 0 6px;
-  border-radius: var(--dbk-radius-small);
-  background: var(--dbk-node-text);
-  color: var(--dbk-node-bg);
-  font-size: var(--map-text-secondary, 13px);
-  font-weight: 750;
-  line-height: 19px;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-}
-
-.labels {
-  display: flex;
-  gap: 4px;
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.label {
+.pilots {
   display: inline-flex;
+  flex: none;
   align-items: center;
-  gap: 4px;
-  min-width: 0;
-  max-width: 96px;
-  padding: 0 6px;
-  border-radius: var(--dbk-radius-small);
-  background: color-mix(in oklab, var(--label-color) 18%, var(--dbk-node-bg));
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--label-color) 45%, transparent);
-  color: var(--dbk-node-text);
-  font-size: var(--map-text-secondary, 13px);
-  font-weight: 550;
-  line-height: 19px;
-  cursor: help;
-}
-
-.label::before {
-  content: '';
-  flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 2px;
-  background: var(--label-color);
-}
-
-.labelName {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.more {
-  flex: none;
-  color: var(--dbk-color-text-muted);
-  font-size: var(--map-text-secondary, 13px);
-  font-weight: 650;
-  line-height: 19px;
-  cursor: help;
-}
-
-.badges {
-  display: inline-flex;
   gap: 3px;
   margin-left: auto;
-}
-
-.badges:empty {
-  display: none;
-}
-
-/* ---- Above and below the box ---- */
-.above {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 4px);
-  left: 0;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 6px;
-  pointer-events: none;
-}
-
-.bookmark {
-  overflow: hidden;
-  max-width: 62%;
-  padding: 1px 6px;
-  border: 1px solid var(--dbk-color-border-strong);
-  border-radius: var(--dbk-radius-small);
-  background: var(--dbk-color-surface-raised);
-  color: var(--dbk-color-text);
-  font-family: var(--dbk-font-family-mono);
-  font-size: var(--map-text-bookmark, 13px);
-  font-weight: 600;
-  line-height: 18px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: copy;
-  pointer-events: auto;
-}
-
-.bookmark:hover {
-  border-color: var(--dbk-color-accent);
-}
-
-.bookmark:focus-visible {
-  outline: 2px solid var(--dbk-color-focus);
-  outline-offset: 1px;
-}
-
-.here,
-.pilots {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 5px;
-  margin-left: auto;
-  padding: 1px 8px 1px 2px;
-  border-radius: 999px;
+  color: var(--dbk-color-text-muted);
   font-size: var(--map-text-secondary, 13px);
   font-weight: 700;
-  line-height: 18px;
-  white-space: nowrap;
-  pointer-events: auto;
   font-variant-numeric: tabular-nums;
-}
-
-.here {
-  background: var(--dbk-color-accent);
-  color: var(--dbk-color-accent-contrast);
-  box-shadow: var(--dbk-shadow-small);
-}
-
-.here img {
-  border-radius: 50%;
-}
-
-.hereCount {
-  opacity: 0.85;
-}
-
-.pilots {
-  padding-left: 6px;
-  border: 1px solid var(--dbk-color-border-strong);
-  background: var(--dbk-color-surface-raised);
-  color: var(--dbk-color-text);
 }
 
 .pilots svg {
@@ -275,41 +117,159 @@
   height: 13px;
 }
 
-.bubble {
-  position: absolute;
-  right: -11px;
-  bottom: -11px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: 2px solid var(--dbk-edge-bubble);
-  border-radius: 50%;
-  background: color-mix(in oklab, var(--dbk-edge-bubble) 22%, var(--dbk-color-surface-raised));
-  color: var(--dbk-edge-bubble);
+.pilots[data-mine] {
+  color: var(--dbk-color-accent-text);
 }
 
-.bubble svg {
+.line {
+  display: flex;
+  align-items: center;
+  height: 20px;
+  overflow: hidden;
+}
+
+/* A locked system: a small muted padlock at the end of the statics line. */
+.lock {
+  display: inline-flex;
+  flex: none;
+  margin-left: auto;
+  color: var(--dbk-color-text-muted);
+}
+
+.lock svg {
   width: 14px;
   height: 14px;
 }
 
+/* Statics as plain text: "D845 HS", no chips. */
+.statics {
+  display: flex;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  white-space: nowrap;
+}
+
+.statics li {
+  display: inline-flex;
+  gap: 4px;
+  font-family: var(--dbk-font-family-mono);
+  font-size: var(--map-text-secondary, 13px);
+  line-height: 20px;
+  cursor: help;
+}
+
+.code {
+  color: var(--dbk-node-text);
+  font-weight: 600;
+}
+
+.to {
+  font-weight: 800;
+}
+
+/* ---- Above and below the box, left-aligned with its left edge: framed chips, big enough to read
+   at a glance. Labels (WH1) and the custom label are plain text in a neutral frame, the bookmark
+   code and the hub are neutral grey, a Tag is framed in its own colour. */
+.above {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: calc(-1 * var(--dbk-node-border-width));
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 180%;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.labels {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.label,
+.systemLabel,
+.bookmark,
+.hub {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border: 2px solid var(--dbk-node-border);
+  border-radius: 6px;
+  background: var(--dbk-node-bg);
+  color: var(--dbk-node-text);
+  font-size: var(--map-text-chip, 14px);
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* A Label from the map's list (WH1, WH2...): inverted, so it reads first at a glance. */
+.systemLabel {
+  border-color: var(--dbk-node-text);
+  background: var(--dbk-node-text);
+  color: var(--dbk-node-bg);
+  font-weight: 800;
+  pointer-events: auto;
+  cursor: help;
+}
+
+/* The free-text custom label stays a plain neutral chip. */
+.systemLabel[data-custom] {
+  border-color: color-mix(in oklab, var(--dbk-node-text) 45%, var(--dbk-node-border));
+  background: var(--dbk-node-bg);
+  color: var(--dbk-node-text);
+}
+
+.label {
+  border-color: color-mix(in oklab, var(--label-color) 70%, var(--dbk-node-border));
+  pointer-events: auto;
+  cursor: help;
+}
+
+.bookmark {
+  font-family: var(--dbk-font-family-mono);
+  cursor: copy;
+  pointer-events: auto;
+}
+
+.bookmark:hover {
+  border-color: var(--dbk-node-selected-border);
+}
+
+.bookmark:focus-visible {
+  outline: 2px solid var(--dbk-color-focus);
+  outline-offset: 1px;
+}
+
+.badges {
+  display: inline-flex;
+  gap: 3px;
+  pointer-events: auto;
+}
+
+.badges:empty {
+  display: none;
+}
+
 .hub {
   position: absolute;
-  top: calc(100% + 4px);
-  left: 50%;
-  padding: 1px 8px;
-  border: 1px solid var(--dbk-color-border-strong);
-  border-radius: 999px;
-  background: var(--dbk-color-surface-raised);
-  color: var(--dbk-color-text);
-  font-size: var(--map-text-secondary, 13px);
-  font-weight: 650;
-  line-height: 18px;
-  white-space: nowrap;
-  transform: translateX(-50%);
+  top: calc(100% + 6px);
+  left: calc(-1 * var(--dbk-node-border-width));
   font-variant-numeric: tabular-nums;
+}
+
+.square {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
 }
 
 .handle {

@@ -5,6 +5,7 @@ import type {
   MapSnapshot,
   MapSummaryDto,
   MeDto,
+  PassageDto,
   SignatureDto,
   StreamSnapshotDto,
 } from '@darkbeacon/shared';
@@ -54,13 +55,29 @@ describeEachDialect('demo mode over HTTP', (t) => {
     expect(me.characters.map((c) => c.id)).toContain(me.account.mainCharacterId);
 
     const maps = (await request('GET', '/api/maps', first.cookie)).body as MapSummaryDto[];
-    expect(maps).toEqual([expect.objectContaining({ name: 'Demo chain', role: 'admin' })]);
+    expect(maps.map((m) => [m.name, m.role, m.kind ?? 'standard'])).toEqual([
+      ['Alliance chain', 'admin', 'composite'],
+      ['Corp A chain', 'admin', 'standard'],
+      ['Corp B chain', 'admin', 'standard'],
+      ['Demo chain', 'admin', 'standard'],
+    ]);
+    const demo = maps.find((m) => m.name === 'Demo chain')!;
 
     const parts = app.get(RealtimeRegistry).snapshotProviders('map');
     const snapshot = {} as Required<MapSnapshot>;
-    for (const part of parts) Object.assign(snapshot, await part(maps[0]!.id, { kind: 'plugin', id: 't' }));
+    for (const part of parts) Object.assign(snapshot, await part(demo.id, { kind: 'plugin', id: 't' }));
     expect(snapshot.systems).toHaveLength(8);
     expect(snapshot.map.labels.map((l) => l.name)).toEqual(['Staging', 'Sites', 'Hostile', 'Exit']);
+    // Labels: the default WH1 to WH3 on the three holes out of home, and one custom label.
+    expect(snapshot.map.systemLabels.map((l) => l.name)).toEqual(['WH1', 'WH2', 'WH3']);
+    const labelled = (name: string) => {
+      const id = snapshot.map.systemLabels.find((l) => l.name === name)!.id;
+      return snapshot.systems.filter((s) => s.systemLabelIds.includes(id)).map((s) => s.solarSystemId);
+    };
+    expect([labelled('WH1'), labelled('WH2'), labelled('WH3')]).toEqual([[30001376], [30002537], [31000399]]);
+    expect(
+      snapshot.systems.filter((s) => s.customLabel).map((s) => [s.solarSystemId, s.customLabel]),
+    ).toEqual([[30001376, 'bait']]);
     const c = snapshot.connections;
     expect(c).toHaveLength(7);
     expect(c.some((x) => x.timeStatus === 'eol')).toBe(true);
@@ -71,17 +88,49 @@ describeEachDialect('demo mode over HTTP', (t) => {
     const signatures = snapshot.signatures as SignatureDto[];
     expect(signatures.filter((s) => s.connectionId !== null).length).toBeGreaterThanOrEqual(5);
 
-    // A second visit gets a new session for the same account and no second map.
+    // A rolling crew's jumps, logged by hand: a Megathron and an Orca through the high-sec static.
+    const d845 = c.find((x) => x.source === 31002531 && x.target === 30001376)!;
+    const passages = (
+      await request('GET', `/api/maps/${demo.id}/connections/${d845.id}/passages`, first.cookie)
+    ).body as PassageDto[];
+    expect(passages.map((p) => [p.shipName, p.massMode, p.source])).toEqual([
+      ['Orca', 'hot', 'manual'],
+      ['Orca', 'cold', 'manual'],
+      ['Megathron', 'hot', 'manual'],
+      ['Megathron', 'cold', 'manual'],
+    ]);
+
+    // The alliance chain merges both corporations' maps: one node per system, the later mass wins.
+    const alliance = {} as Required<MapSnapshot>;
+    const allianceId = maps.find((m) => m.name === 'Alliance chain')!.id;
+    for (const part of parts) Object.assign(alliance, await part(allianceId, { kind: 'plugin', id: 't' }));
+    expect(alliance.sources.map((s) => s.name)).toEqual(['Alliance chain', 'Corp A chain', 'Corp B chain']);
+    const ids = alliance.systems.map((s) => s.solarSystemId);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toHaveLength(5);
+    const overlap = alliance.connections.find(
+      (x) => [x.source, x.target].sort().join() === [31000399, 31001924].sort().join(),
+    )!;
+    expect(overlap).toMatchObject({ massStatus: 'critical', provenance: { writable: true } });
+    expect(overlap.provenance!.sources).toHaveLength(2);
+
+    // A second visit gets a new session for the same account and no second set of maps.
     const second = await request('POST', '/api/auth/demo');
     expect((second.body as MeDto).account.id).toBe(me.account.id);
     expect(second.cookie).not.toBe(first.cookie);
-    expect((await request('GET', '/api/maps', second.cookie)).body).toHaveLength(1);
+    expect((await request('GET', '/api/maps', second.cookie)).body).toHaveLength(4);
+    // `/` still opens the demo chain.
+    expect((await request('GET', '/api/accounts/me/landing', second.cookie)).body).toMatchObject({
+      slug: 'demo-chain',
+    });
   });
 
   it('serves a map snapshot over REST to whoever may follow the stream', async () => {
     await start({ DEMO_MODE: 'true' });
     const { cookie } = await request('POST', '/api/auth/demo');
-    const [map] = (await request('GET', '/api/maps', cookie)).body as MapSummaryDto[];
+    const map = ((await request('GET', '/api/maps', cookie)).body as MapSummaryDto[]).find(
+      (m) => m.name === 'Demo chain',
+    );
     const path = `/api/streams/${encodeURIComponent(`map:${map!.id}`)}/snapshot`;
 
     const snapshot = await request('GET', path, cookie);
