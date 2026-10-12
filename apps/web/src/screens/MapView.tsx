@@ -24,6 +24,7 @@ import { connectionMenu, paneMenu, systemMenu } from '../map/menus';
 import { systemDisplayName } from '../map/SystemNode';
 import { useMapStore } from '../map/useMapStore';
 import { SystemSidebar } from '../map/sidebar/SystemSidebar';
+import { SignatureLayer } from '../map/signatures/SignatureLayer';
 import { filterableSources, permissionsFor, withoutSources } from '../map/sharing/chain';
 import { ProvenanceLine, provenanceText } from '../map/sharing/ProvenanceLine';
 import { SourceFilter, useHiddenSources } from '../map/sharing/SourceFilter';
@@ -314,6 +315,8 @@ export function MapView({
           note={<ProvenanceLine provenance={system.provenance} sources={state.sources} />}
         />
       )}
+
+      <SignatureLayer mapId={map.id} state={state} universe={universe} store={store} canEdit={can.edit} />
 
       <ul className={styles.notices} aria-live="polite">
         {store.notices.map((n) => (

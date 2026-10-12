@@ -274,7 +274,9 @@ describe('SystemSidebar', () => {
 
     paste(document.body, 'ABC-123\tCosmic Signature\tWormhole\t\t0.0%\t2.1 AU');
     expect(await screen.findByText('3 new / 1 updated')).toBeTruthy();
-    expect(bodies).toEqual([{ text: 'ABC-123\tCosmic Signature\tWormhole\t\t0.0%\t2.1 AU', mode: 'merge' }]);
+    expect(bodies).toEqual([
+      { text: 'ABC-123\tCosmic Signature\tWormhole\t\t0.0%\t2.1 AU', mode: 'replace' },
+    ]);
   });
 
   it('lists who is in the system, mine first and highlighted, with their ships', () => {

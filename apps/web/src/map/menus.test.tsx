@@ -178,6 +178,7 @@ describe('connection menu', () => {
       '—',
       'Dangerous',
       'Mass saved',
+      'Link signatures…',
       '—',
       'Remove connection',
     ]);
@@ -208,7 +209,7 @@ describe('connection menu', () => {
       ['c1', { bubbled: 'target' }],
       ['c1', { dangerous: true }],
     ]);
-    expect(commands.removeConnection).toHaveBeenCalledWith('c1');
+    expect(commands.removeConnection).toHaveBeenCalledWith('c1', { withSignatures: false });
   });
 
   it('leaves out wormhole states on a gate, and everything for a viewer', () => {
@@ -227,9 +228,21 @@ describe('connection menu', () => {
 describe('pane menu', () => {
   it('adds a system for members; everyone can fit the chain and center on themselves', () => {
     const ctx = { onAddSystem: vi.fn(), onFitChain: vi.fn(), onCenterOnMe: vi.fn() };
-    expect(rows(paneMenu({ ...ctx, can: mapPermissions('viewer') }))).toEqual(['Fit chain', 'Center on me']);
+    expect(rows(paneMenu({ ...ctx, can: mapPermissions('viewer') }))).toEqual([
+      'Fit chain',
+      'Center on me',
+      '—',
+      'Wormhole types…',
+    ]);
     const member = paneMenu({ ...ctx, can: mapPermissions('member') });
-    expect(rows(member)).toEqual(['Add system here…', '—', 'Fit chain', 'Center on me']);
+    expect(rows(member)).toEqual([
+      'Add system here…',
+      '—',
+      'Fit chain',
+      'Center on me',
+      '—',
+      'Wormhole types…',
+    ]);
     pick(member, 'Fit chain');
     expect(ctx.onFitChain).toHaveBeenCalledOnce();
   });

@@ -309,6 +309,12 @@
   align-items: center;
 }
 
+.sectionActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .sectionBody {
   padding: 0 16px 12px;
 }
@@ -644,22 +650,6 @@
 .table th:last-child,
 .table td:last-child {
   padding-right: 10px;
-}
-
-.table th:nth-child(1) {
-  width: 80px;
-}
-
-.table th:nth-child(2) {
-  width: 90px;
-}
-
-.table th:nth-child(4) {
-  width: 40px;
-}
-
-.table th:nth-child(5) {
-  width: 32px;
 }
 
 .table td {

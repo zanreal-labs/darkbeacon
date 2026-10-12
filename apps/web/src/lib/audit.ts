@@ -43,6 +43,7 @@ const SYSTEM_PROCESSES: Record<string, string> = {
   'bookmark-numbers': 'Bookmark numbering',
   mapping: 'Mapping',
   passages: 'Passage log',
+  'signature-sweep': 'Old signature sweep',
 };
 
 export function channelLabel(channel: AuditChannelDto): string {
@@ -83,6 +84,14 @@ const FIELD_LABELS: Record<string, string> = {
   group: 'Group',
   name: 'Name',
   connectionId: 'Linked connection',
+  tempName: 'Temporary name',
+  destination: 'Leads to class',
+  text: 'Comment',
+  typeName: 'Structure type',
+  owner: 'Owner',
+  endsAt: 'Timer',
+  notes: 'Notes',
+  signatureRetentionDays: 'Signatures kept',
   bookmarkNumber: 'Bookmark number',
   bookmarkParent: 'Numbered from',
   role: 'Role',
@@ -138,12 +147,21 @@ const HIDDEN = new Set([
   'source',
   'target',
   'createdBy',
+  'updatedBy',
+  'author',
+  'typeId',
 ]);
 
 const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 function value(field: string, v: unknown, names: AuditNames): string {
   if (field === 'eventRetentionDays') return typeof v === 'number' ? `${v} days` : 'Forever';
+  if (field === 'endsAt' && typeof v === 'number')
+    return `${new Date(v).toISOString().slice(0, 16).replace('T', ' ')} EVE`;
+  if (field === 'owner' && typeof v === 'object' && v !== null) {
+    const o = v as { name?: string; ticker?: string | null };
+    return o.ticker ? `[${o.ticker}] ${o.name ?? ''}`.trim() : (o.name ?? 'set');
+  }
   if (v === null || v === undefined || v === '') return '—';
   if (typeof v === 'boolean') return v ? 'Yes' : 'No';
   if ((field === 'location' || field === 'bookmarkParent') && typeof v === 'number')
@@ -217,7 +235,12 @@ const PROVIDERS: Record<string, string> = {
 export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditReading {
   const d = (entry.op === 'delete' ? (entry.removed ?? {}) : {}) as Record<string, unknown>;
   const data = { ...d, ...Object.fromEntries(Object.entries(entry.diff).map(([k, c]) => [k, c.after])) };
-  const systemId = entry.entity?.kind === 'system' ? Number(entry.entity.id) : undefined;
+  const systemId =
+    entry.entity?.kind === 'system'
+      ? Number(entry.entity.id)
+      : typeof data.solarSystemId === 'number'
+        ? data.solarSystemId
+        : undefined;
   const system = systemId ? (names.system?.(systemId) ?? 'a system') : 'a system';
   const via = channelLabel(entry.channel);
   const who =
@@ -369,6 +392,16 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
       return read('changed a signature', 'intel');
     case 'signature.removed':
       return read(`removed signature ${String(data.eveId ?? '')}`.trim(), 'intel');
+    case 'comment.added':
+      return read(`commented on ${system}`, 'intel');
+    case 'comment.removed':
+      return read(`removed a comment on ${system}`, 'intel');
+    case 'structure.added':
+      return read(`noted the structure ${String(data.name ?? '')}`.trim(), 'intel');
+    case 'structure.updated':
+      return read(`changed the structure ${String(data.name ?? '')}`.trim(), 'intel');
+    case 'structure.removed':
+      return read(`removed the structure ${String(data.name ?? '')}`.trim(), 'intel');
     case 'character.moved':
     case 'character.jumped':
       return read(`moved to ${value('location', entry.diff.location?.after, names)}`, 'tracking');

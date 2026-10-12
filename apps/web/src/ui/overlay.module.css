@@ -193,7 +193,8 @@
   }
 }
 
-.close {
+/* Scoped to the dialog so it wins over the button's own position whatever order the CSS loads in. */
+.dialog > .close {
   position: absolute;
   top: var(--dbk-space-3);
   right: var(--dbk-space-3);

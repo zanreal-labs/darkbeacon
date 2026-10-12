@@ -49,6 +49,8 @@ import type { ToastInput } from '../ui';
 import { SHIP_SIZE_LABEL } from './ConnectionEdge';
 import { STATUS_LABEL } from './nodeFacts';
 import type { MapStore } from './useMapStore';
+import { connectionSignatureItems, paneSignatureItems } from './menus/signatures';
+import { signaturePrefs } from './signatures/prefs';
 
 /*
  * The map's context menus. Short top levels with the details in submenus; only what the user
@@ -407,6 +409,7 @@ export function connectionMenu(ctx: ConnectionMenuContext): MenuItem[] {
         onSelect: () => update({ massSaved: !c.massSaved }),
       });
   }
+  flags.push(...connectionSignatureItems(c, can));
   flags.push(...more(ctx.plugins, (close) => ({ mapId: ctx.mapId, connectionId: c.id, close })));
   const remove: MenuItem[] = can.edit
     ? [
@@ -415,7 +418,8 @@ export function connectionMenu(ctx: ConnectionMenuContext): MenuItem[] {
           label: 'Remove connection',
           icon: <Trash2 />,
           danger: true,
-          onSelect: () => void store.removeConnection(c.id),
+          onSelect: () =>
+            void store.removeConnection(c.id, { withSignatures: signaturePrefs().deleteConnectionWithSigs }),
         },
       ]
     : [];
@@ -445,6 +449,7 @@ export function paneMenu(ctx: PaneMenuContext): MenuItem[] {
         onSelect: ctx.onCenterOnMe,
       },
     ],
+    paneSignatureItems(),
   );
 }
 

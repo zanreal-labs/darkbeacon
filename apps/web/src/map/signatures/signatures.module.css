@@ -1,0 +1,470 @@
+/* Signatures: the table's extra columns and states, the editor, type labels. */
+
+.table {
+  user-select: none;
+}
+
+.table th.colId {
+  width: 80px;
+}
+
+.table th.colGroup {
+  width: 74px;
+}
+
+.table th.colAge {
+  width: 60px;
+}
+
+/* The info cell holds several things; it never pushes into the next column. */
+.table td {
+  overflow: hidden;
+}
+
+.table th.colAuthor {
+  width: 96px;
+}
+
+.table th.colActions {
+  width: 86px;
+}
+
+.sortButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.sortButton:hover {
+  color: var(--dbk-color-text);
+}
+
+.sortButton svg {
+  width: 11px;
+  height: 11px;
+}
+
+.table th[class*='num'] .sortButton {
+  flex-direction: row-reverse;
+}
+
+.table tbody tr {
+  cursor: default;
+}
+
+.table tbody tr[data-selected] td {
+  background: var(--dbk-color-accent-subtle);
+}
+
+.table tbody tr[data-selected]:hover td {
+  background: color-mix(in srgb, var(--dbk-color-accent-subtle) 70%, var(--dbk-color-surface-hover));
+}
+
+/* A hole inside a bubble: amber tint and a bar on the left, as in Wanderer. */
+.table tbody tr[data-bubbled] td {
+  background: color-mix(in srgb, var(--dbk-color-warning) 12%, transparent);
+}
+
+.table tbody tr[data-bubbled] td:first-child {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--dbk-color-warning) 85%, transparent);
+}
+
+.table tbody tr[data-removed] td {
+  background: var(--dbk-color-danger-subtle);
+  color: var(--dbk-color-text-muted);
+  text-decoration: line-through;
+}
+
+/* Colour by group: wormholes, sites and the not yet scanned. */
+[data-color] .table tr[data-group='wormhole'] td:first-child {
+  color: var(--dbk-security-wormhole);
+}
+
+[data-color] .table tr[data-group='unknown'] td:first-child {
+  color: var(--dbk-color-danger);
+}
+
+[data-color]
+  .table
+  tr:is(
+    [data-group='combat'],
+    [data-group='relic'],
+    [data-group='data'],
+    [data-group='gas'],
+    [data-group='ore']
+  )
+  td:first-child {
+  color: var(--dbk-color-success);
+}
+
+/* Added cell of new rows: bright under a minute, strong under ten. */
+.table td[data-fresh='fresh'] {
+  color: var(--dbk-color-warning) !important;
+  font-weight: 700;
+}
+
+.table td[data-fresh='recent'] {
+  color: color-mix(in srgb, var(--dbk-color-warning) 70%, var(--dbk-color-text-muted)) !important;
+  font-weight: 600;
+}
+
+.group {
+  overflow: hidden;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.info {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.info > * {
+  flex: none;
+}
+
+.info > .grow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.info > svg,
+.iconNote {
+  flex: none;
+  width: 13px;
+  height: 13px;
+}
+
+.iconNote {
+  display: inline-flex;
+  color: var(--dbk-color-text-subtle);
+}
+
+.iconNote svg {
+  width: 13px;
+  height: 13px;
+}
+
+.tempName {
+  font-weight: 650;
+}
+
+.iconEol {
+  color: var(--dbk-edge-time-eol);
+}
+
+.iconReduced {
+  color: var(--dbk-edge-mass-reduced);
+}
+
+.iconCritical {
+  color: var(--dbk-edge-mass-critical);
+}
+
+.iconBubble {
+  color: var(--dbk-color-warning);
+}
+
+.resolved {
+  color: var(--dbk-color-text-muted);
+  font-family: var(--dbk-font-family-mono);
+  font-size: var(--dbk-font-size-small);
+}
+
+.urgency {
+  flex: none;
+  padding: 0 4px;
+  border-radius: var(--dbk-radius-small);
+  font-size: var(--dbk-font-size-xs);
+  font-weight: 600;
+}
+
+.urgency[data-urgency='warning'] {
+  background: var(--dbk-color-warning-subtle);
+  color: var(--dbk-color-warning);
+}
+
+.urgency[data-urgency='critical'] {
+  background: var(--dbk-color-danger-subtle);
+  color: var(--dbk-color-danger);
+}
+
+.description {
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+}
+
+.author {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  height: 30px;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+}
+
+.actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0;
+}
+
+.linkButton {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dbk-radius-small);
+  background: none;
+  color: var(--dbk-color-text-subtle);
+  cursor: pointer;
+}
+
+.linkButton svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Not linked yet: the one action a wormhole row asks for, so it shows. */
+tr[data-group='wormhole'] .linkButton:not([data-linked]) {
+  color: var(--dbk-color-accent-text);
+}
+
+.linkButton:hover,
+.linkButton:focus-visible {
+  background: var(--dbk-color-surface-active);
+  color: var(--dbk-color-text);
+}
+
+.ghost {
+  font-size: var(--dbk-font-size-small);
+}
+
+.undoBar,
+.selectionBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 16px 8px;
+  padding: 4px 4px 4px 10px;
+  border-radius: var(--dbk-radius);
+  font-size: var(--dbk-font-size-small);
+}
+
+.undoBar {
+  background: var(--dbk-color-danger-subtle);
+  color: var(--dbk-color-text);
+}
+
+.selectionBar {
+  background: var(--dbk-color-accent-subtle);
+}
+
+.hiddenNote {
+  margin: 6px 16px 0;
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-xs);
+}
+
+/* Touch screens have no hover: row actions stay visible. */
+@media (hover: none) {
+  .table :global(tbody tr) button {
+    opacity: 1;
+  }
+}
+
+/* ---- Type labels ---- */
+
+.typeLabel {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  font-family: var(--dbk-font-family-mono);
+}
+
+.typeCode {
+  font-weight: 600;
+}
+
+.typeDest {
+  font-size: var(--dbk-font-size-small);
+  font-weight: 650;
+}
+
+.leadsOption {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.leadsOption > span:first-child {
+  min-width: 4ch;
+  font-family: var(--dbk-font-family-mono);
+  font-size: var(--dbk-font-size-small);
+  font-weight: 650;
+}
+
+/* ---- Editor ---- */
+
+.editor {
+  display: grid;
+  gap: 12px;
+}
+
+/* ---- Node marker (badge slot above the node) ---- */
+
+.nodeBubble {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--dbk-color-surface-raised);
+  color: var(--dbk-color-warning);
+  box-shadow: 0 0 0 1px var(--dbk-color-warning);
+}
+
+.nodeBubble svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* ---- Dialogs of the map (link prompts, wormhole reference) ---- */
+
+.linkList {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.linkChoice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--dbk-radius);
+  background: none;
+  color: var(--dbk-color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.linkChoice:hover,
+.linkChoice:focus-visible {
+  border-color: var(--dbk-color-border);
+  background: var(--dbk-color-surface-hover);
+}
+
+.linkChoice[aria-pressed='true'] {
+  border-color: var(--dbk-color-accent);
+  background: var(--dbk-color-accent-subtle);
+}
+
+.linkChoice .sigCode {
+  font-family: var(--dbk-font-family-mono);
+  font-weight: 650;
+}
+
+.muted {
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+}
+
+.reference {
+  display: grid;
+  gap: 10px;
+}
+
+.referenceScroll {
+  max-height: min(60vh, 520px);
+  overflow: auto;
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+}
+
+.referenceTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--dbk-font-size-small);
+}
+
+.referenceTable th {
+  position: sticky;
+  top: 0;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--dbk-color-border);
+  background: var(--dbk-color-surface-raised);
+  color: var(--dbk-color-text-subtle);
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.referenceTable td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--dbk-color-border);
+  white-space: nowrap;
+}
+
+.referenceTable tbody tr:hover td {
+  background: var(--dbk-color-surface-hover);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  white-space: normal;
+}
+
+.chip {
+  padding: 0 4px;
+  border-radius: var(--dbk-radius-small);
+  background: var(--dbk-color-surface-hover);
+  font-family: var(--dbk-font-family-mono);
+  font-size: var(--dbk-font-size-xs);
+  font-weight: 650;
+}
+
+.chip[data-respawn='static'] {
+  background: var(--dbk-color-success-subtle);
+  color: var(--dbk-color-success);
+}
+
+.chip[data-respawn='reverse'] {
+  background: var(--dbk-color-accent-subtle);
+  color: var(--dbk-color-accent-text);
+}
+
+/* Where a wormhole leads keeps a few letters when the row is tight. */
+.info > button.grow {
+  min-width: 7ch;
+}
