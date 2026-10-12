@@ -1,4 +1,4 @@
-import type { UniverseSystemDto } from '@darkbeacon/shared';
+import type { HullClassDto, UniverseSystemDto, WormholeTypeDto } from '@darkbeacon/shared';
 
 export type UniverseSystem = UniverseSystemDto;
 
@@ -9,4 +9,12 @@ export interface UniverseCatalog {
   searchSystems(query: string, limit: number): UniverseSystem[];
   /** True when a stargate links the two systems. */
   gateLinked(a: number, b: number): boolean;
+  /** A wormhole type by code (case-insensitive), K162 included; null when unknown. */
+  wormholeType(code: string): WormholeTypeDto | null;
+  /** Every wormhole type, by code. */
+  wormholeTypes(): WormholeTypeDto[];
+  /** The hull classes `WormholeTypeDto.fits` refers to, lightest first. */
+  hullClasses(): HullClassDto[];
+  /** Hull mass (kg) of a ship type, null when the type is not a known ship. */
+  shipMass(shipTypeId: number): number | null;
 }

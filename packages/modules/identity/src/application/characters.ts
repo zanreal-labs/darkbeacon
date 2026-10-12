@@ -133,6 +133,13 @@ export class CharacterService {
     return character ? { name: character.name, accountId: character.accountId } : null;
   }
 
+  /** ESI scopes the character's stored grant holds; empty without a working token. */
+  async scopes(characterId: number): Promise<string[]> {
+    const character = await this.deps.characters.findById(characterId);
+    if (!character?.tokenValid) return [];
+    return (await this.deps.characters.getTokens(characterId))?.scopes ?? [];
+  }
+
   /**
    * A valid ESI access token, refreshed when it is about to expire. EVE rotates refresh tokens,
    * so concurrent callers share one refresh. Null when the character has no working token.

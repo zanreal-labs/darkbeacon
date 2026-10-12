@@ -17,6 +17,7 @@ import type { MapSystem } from '../domain/map.js';
 import type {
   ConnectionRepository,
   MapRepository,
+  PassageRepository,
   SignatureRepository,
   SystemRepository,
   UniverseCatalog,
@@ -28,6 +29,7 @@ export interface MappingPorts {
   systems: SystemRepository;
   connections: ConnectionRepository;
   signatures: SignatureRepository;
+  passages: PassageRepository;
   universe: UniverseCatalog;
   access: MapAccess;
   events: EventLog;

@@ -24,6 +24,7 @@
     "@darkbeacon/notifications": "workspace:*",
     "@darkbeacon/plugin-sdk": "workspace:*",
     "@darkbeacon/plugins": "workspace:*",
+    "@darkbeacon/routing": "workspace:*",
     "@darkbeacon/sde": "workspace:*",
     "@darkbeacon/shared": "workspace:*",
     "@darkbeacon/theme-sdk": "workspace:*",

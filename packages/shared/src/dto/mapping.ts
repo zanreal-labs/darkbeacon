@@ -150,6 +150,11 @@ export const ConnectionDto = z.object({
   bubbled: Bubbled,
   /** When the connection was marked EOL, null otherwise. */
   eolAt: Timestamp.nullable(),
+  /**
+   * When the mass status was last set, null while it was never changed. Mass estimates count
+   * passages from then on. Optional: connections from before it existed lack it.
+   */
+  massStatusAt: Timestamp.nullable().optional(),
   createdAt: Timestamp,
   updatedAt: Timestamp,
 });

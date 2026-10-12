@@ -17,7 +17,7 @@ import {
 } from '@darkbeacon/core';
 import type { AccountDto, AdminAccountDto, CharacterDto, EventPayloads, MeDto } from '@darkbeacon/shared';
 import type { Account, LinkedCharacter } from '../domain/account.js';
-import { effectiveInstanceRole, initialInstanceRole } from '../domain/rules.js';
+import { effectiveInstanceRole, initialInstanceRole, WAYPOINT_SCOPE } from '../domain/rules.js';
 import type { AccountRepository } from '../ports/account-repository.js';
 import type { CharacterRepository } from '../ports/character-repository.js';
 import type { DiscordGuildPolicy, DiscordLinkRepository } from '../ports/discord-link-repository.js';
@@ -89,7 +89,14 @@ export class AccountService {
     const main = characters.some((c) => c.id === account.mainCharacterId) ? account.mainCharacterId : null;
     return {
       account: { ...toAccountDto(account, instanceRole), mainCharacterId: main ?? null },
-      characters: characters.map(toCharacterDto),
+      characters: await Promise.all(
+        characters.map(async (character) => ({
+          ...toCharacterDto(character),
+          canSetWaypoints:
+            character.tokenValid &&
+            ((await this.deps.characters.getTokens(character.id))?.scopes.includes(WAYPOINT_SCOPE) ?? false),
+        })),
+      ),
     };
   }
 

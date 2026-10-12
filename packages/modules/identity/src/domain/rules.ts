@@ -10,11 +10,19 @@ export const PENDING_AUTH_TTL_MS = 10 * 60 * 1000;
 /** Refresh EVE access tokens this long before they expire. */
 export const TOKEN_REFRESH_MARGIN_MS = 60 * 1000;
 
-/** ESI scopes requested when linking a character: location, ship and online status for tracking. */
+/** Lets the app set the in-game destination and waypoints of a character. */
+export const WAYPOINT_SCOPE = 'esi-ui.write_waypoint.v1';
+
+/**
+ * ESI scopes requested when linking a character: location, ship and online status for tracking,
+ * and the autopilot waypoints for routes. Characters linked before a scope was added lack it until
+ * they are linked again.
+ */
 export const EVE_SCOPES: readonly string[] = [
   'esi-location.read_location.v1',
   'esi-location.read_ship_type.v1',
   'esi-location.read_online.v1',
+  WAYPOINT_SCOPE,
 ];
 
 /** The first account of an instance becomes its owner. */

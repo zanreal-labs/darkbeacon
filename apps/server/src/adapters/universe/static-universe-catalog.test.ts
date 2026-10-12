@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { WORMHOLE_TYPES, type WormholeDestination } from '@darkbeacon/shared';
 import { StaticUniverseCatalog } from './static-universe-catalog.js';
 
 const small = new StaticUniverseCatalog(
@@ -61,5 +62,70 @@ describe('StaticUniverseCatalog', () => {
     expect(catalog.getSystem(30000142)).toMatchObject({ name: 'Jita', regionName: 'The Forge' });
     expect(catalog.gateLinked(30000142, 30000144)).toBe(true);
     expect(catalog.getSystem(31002531)).toMatchObject({ name: 'J014348', statics: ['D845', 'U210'] });
+  });
+
+  it('serves every wormhole type with its SDE attributes and the hulls that fit', () => {
+    const catalog = StaticUniverseCatalog.load('/nonexistent');
+    expect(catalog.wormholeType(' d845 ')).toEqual({
+      code: 'D845',
+      destination: 'hs',
+      targetClass: 7,
+      lifetimeHours: 24,
+      totalMass: 5_000_000_000,
+      maxJumpMass: 375_000_000,
+      massRegeneration: 0,
+      fits: [
+        'frigate',
+        'destroyer',
+        'battlecruiser',
+        'cruiser',
+        'industrial',
+        'battleship',
+        'industrialCommand',
+      ],
+      shipSize: 'large',
+    });
+    expect(catalog.wormholeType('E004')).toMatchObject({
+      destination: 'c1',
+      lifetimeHours: 4.5,
+      maxJumpMass: 5_000_000,
+      fits: ['frigate', 'destroyer'],
+      shipSize: 'small',
+    });
+    expect(catalog.wormholeType('C248')).toMatchObject({ shipSize: 'xlarge' });
+    expect(catalog.wormholeType('C248')?.fits).toContain('capital');
+    expect(catalog.wormholeType('B274')?.fits).not.toContain('freighter');
+    expect(catalog.wormholeType('K162')).toMatchObject({ destination: null, totalMass: null, fits: [] });
+    // Region-bound types lead where the shared table says.
+    expect(catalog.wormholeType('C729')).toMatchObject({ targetClass: -1, destination: 'pochven' });
+    expect(catalog.wormholeType('XXXX')).toBeNull();
+    expect(catalog.hullClasses().map((h) => h.id)).toContain('capital');
+    expect(catalog.shipMass(587)).toBe(1_067_000); // Rifter
+    expect(catalog.shipMass(1)).toBeNull();
+  });
+
+  it('agrees with the shared wormhole table on every destination', () => {
+    const catalog = StaticUniverseCatalog.load('/nonexistent');
+    const classes: Record<WormholeDestination, number[]> = {
+      c1: [1],
+      c2: [2],
+      c3: [3],
+      c4: [4],
+      c5: [5],
+      c6: [6],
+      hs: [7],
+      ls: [8],
+      ns: [9],
+      thera: [12],
+      c13: [13],
+      drifter: [14, 15, 16, 17, 18],
+      pochven: [25],
+    };
+    for (const type of catalog.wormholeTypes()) {
+      if (type.code === 'K162' || type.targetClass === -1) continue;
+      const listed = WORMHOLE_TYPES[type.code];
+      expect(listed, type.code).toBeDefined();
+      expect(classes[listed!], type.code).toContain(type.targetClass);
+    }
   });
 });

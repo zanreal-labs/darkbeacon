@@ -14,9 +14,11 @@ import { KyselyEventLog } from '../events/kysely-event-log.js';
 import {
   KyselyConnectionRepository,
   KyselyMapRepository,
+  KyselyPassageRepository,
   KyselySignatureRepository,
   KyselySystemRepository,
 } from './kysely-repositories.js';
+import { loadWormholeData } from '@darkbeacon/sde';
 import { StaticUniverseCatalog } from '../universe/static-universe-catalog.js';
 import { MappingMapOwnership } from './map-ownership.js';
 
@@ -30,74 +32,81 @@ export const SYSTEMS = {
   c5: 31000104,
 } as const;
 
-export function fixtureUniverse(): StaticUniverseCatalog {
-  return new StaticUniverseCatalog({
-    source: 'fixture',
-    regions: [
-      { id: 10000002, name: 'The Forge' },
-      { id: 11000001, name: 'A-R00001' },
-    ],
-    constellations: [
-      { id: 20000020, name: 'Kimotoro', regionId: 10000002 },
-      { id: 21000001, name: 'A-C00001', regionId: 11000001 },
-    ],
-    systems: [
-      {
-        id: SYSTEMS.jita,
-        name: 'Jita',
-        regionId: 10000002,
-        constellationId: 20000020,
-        security: 0.95,
-        whClass: 7,
-        gates: [SYSTEMS.perimeter],
-      },
-      {
-        id: SYSTEMS.perimeter,
-        name: 'Perimeter',
-        regionId: 10000002,
-        constellationId: 20000020,
-        security: 0.95,
-        whClass: 7,
-        gates: [SYSTEMS.jita],
-      },
-      {
-        id: SYSTEMS.c2,
-        name: 'J100101',
-        regionId: 11000001,
-        constellationId: 21000001,
-        security: -0.99,
-        whClass: 2,
-        gates: [],
-      },
-      {
-        id: SYSTEMS.c1,
-        name: 'J100102',
-        regionId: 11000001,
-        constellationId: 21000001,
-        security: -0.99,
-        whClass: 1,
-        gates: [],
-      },
-      {
-        id: SYSTEMS.shattered,
-        name: 'J100103',
-        regionId: 11000001,
-        constellationId: 21000001,
-        security: -0.99,
-        whClass: 13,
-        gates: [],
-      },
-      {
-        id: SYSTEMS.c5,
-        name: 'J100104',
-        regionId: 11000001,
-        constellationId: 21000001,
-        security: -0.99,
-        whClass: 5,
-        gates: [],
-      },
-    ],
-  });
+/** The fixture systems, with the real wormhole types, hull classes and ship masses. */
+export function fixtureUniverse(
+  statics: Record<number, { statics?: string[]; effect?: string | null }> = {},
+): StaticUniverseCatalog {
+  const wormholes = { ...loadWormholeData(), systems: statics };
+  return new StaticUniverseCatalog(
+    {
+      source: 'fixture',
+      regions: [
+        { id: 10000002, name: 'The Forge' },
+        { id: 11000001, name: 'A-R00001' },
+      ],
+      constellations: [
+        { id: 20000020, name: 'Kimotoro', regionId: 10000002 },
+        { id: 21000001, name: 'A-C00001', regionId: 11000001 },
+      ],
+      systems: [
+        {
+          id: SYSTEMS.jita,
+          name: 'Jita',
+          regionId: 10000002,
+          constellationId: 20000020,
+          security: 0.95,
+          whClass: 7,
+          gates: [SYSTEMS.perimeter],
+        },
+        {
+          id: SYSTEMS.perimeter,
+          name: 'Perimeter',
+          regionId: 10000002,
+          constellationId: 20000020,
+          security: 0.95,
+          whClass: 7,
+          gates: [SYSTEMS.jita],
+        },
+        {
+          id: SYSTEMS.c2,
+          name: 'J100101',
+          regionId: 11000001,
+          constellationId: 21000001,
+          security: -0.99,
+          whClass: 2,
+          gates: [],
+        },
+        {
+          id: SYSTEMS.c1,
+          name: 'J100102',
+          regionId: 11000001,
+          constellationId: 21000001,
+          security: -0.99,
+          whClass: 1,
+          gates: [],
+        },
+        {
+          id: SYSTEMS.shattered,
+          name: 'J100103',
+          regionId: 11000001,
+          constellationId: 21000001,
+          security: -0.99,
+          whClass: 13,
+          gates: [],
+        },
+        {
+          id: SYSTEMS.c5,
+          name: 'J100104',
+          regionId: 11000001,
+          constellationId: 21000001,
+          security: -0.99,
+          whClass: 5,
+          gates: [],
+        },
+      ],
+    },
+    wormholes,
+  );
 }
 
 /** MapAccess where the owner is admin of their maps, plus explicit grants. */
@@ -143,6 +152,7 @@ export function mappingTestPorts(database: Database) {
     systems: new KyselySystemRepository(database),
     connections: new KyselyConnectionRepository(database),
     signatures: new KyselySignatureRepository(database),
+    passages: new KyselyPassageRepository(database),
     universe: fixtureUniverse(),
     access,
     events: new KyselyEventLog(database, bus),

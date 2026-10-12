@@ -6,9 +6,10 @@ import type {
   UpdateSignatureRequest,
 } from '@darkbeacon/shared';
 import type { Signature } from '../domain/map.js';
+import { signatureTypeCode } from '../domain/intel.js';
 import { changes, defined } from '../domain/rules.js';
 import { parseSignaturePaste } from '../domain/signature-paste.js';
-import { MappingUseCases } from './base.js';
+import { MappingUseCases, type EventBatch } from './base.js';
 
 /** Signatures belong to a visible system; a hidden system's signatures are kept but unreachable. */
 export class SignatureUseCases extends MappingUseCases {
@@ -50,7 +51,10 @@ export class SignatureUseCases extends MappingUseCases {
     });
   }
 
-  /** Linking a connection makes the signature a wormhole; the connection must touch its system. */
+  /**
+   * Linking a connection makes the signature a wormhole; the connection must touch its system. A
+   * linked signature with a known wormhole type (not K162) gives the connection that type's size.
+   */
   async update(
     actor: Actor | null,
     mapId: string,
@@ -77,8 +81,21 @@ export class SignatureUseCases extends MappingUseCases {
       const next: Signature = { ...current, ...patch, updatedAt: this.ports.clock.now() };
       await this.ports.signatures.update(next);
       events.add('signature.updated', next);
+      if (patch.connectionId !== undefined || patch.type !== undefined) await this.inheritType(next, events);
       return next;
     });
+  }
+
+  /** Sets the size of the signature's connection from its wormhole type's max jump mass. */
+  private async inheritType(signature: Signature, events: EventBatch): Promise<void> {
+    const code = signatureTypeCode(signature);
+    if (!signature.connectionId || !code || code === 'K162') return;
+    const size = this.ports.universe.wormholeType(code)?.shipSize;
+    const connection = await this.ports.connections.findById(signature.mapId, signature.connectionId);
+    if (!size || !connection || connection.type !== 'wormhole' || connection.shipSize === size) return;
+    const next = { ...connection, shipSize: size, updatedAt: this.ports.clock.now() };
+    await this.ports.connections.update(next);
+    events.add('connection.updated', next);
   }
 
   async remove(actor: Actor | null, mapId: string, signatureId: string): Promise<void> {
