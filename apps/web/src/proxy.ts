@@ -21,7 +21,7 @@ function redirectTo(request: NextRequest, path: string): NextResponse {
 }
 
 /** The app's pages; anything else (robots.txt, scanners probing /wp-login.php) is a plain 404. */
-const PAGE = /^\/(?:account|admin|maps|dev\/components)?\/?$|^\/m\/[^/]+\/?$/;
+const PAGE = /^\/(?:account|admin|maps|jump|dev\/components)?\/?$|^\/m\/[^/]+\/?$/;
 
 /**
  * Where `/` goes for this session (the account's star, the instance default, the last opened

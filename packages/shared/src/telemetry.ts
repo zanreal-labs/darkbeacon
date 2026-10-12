@@ -67,7 +67,7 @@ export function viewportBucket(width: number): ViewportBucket {
   return 'desktop';
 }
 
-export const TelemetryPage = z.enum(['map', 'maps', 'account', 'admin', 'map_settings']);
+export const TelemetryPage = z.enum(['map', 'maps', 'account', 'admin', 'map_settings', 'jump']);
 /** Tabs of the admin page and of a map's settings. */
 export const TelemetrySection = z.enum([
   'instance',
