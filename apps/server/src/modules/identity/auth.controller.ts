@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, Inject, Logger, Post, Query, Req, Res } from '@nestjs/common';
-import { isDomainError, requireAccount, type Actor } from '@wormwright/core';
+import { isDomainError, requireAccount, type Actor } from '@darkbeacon/core';
 import {
   AccountService,
   CharacterService,
@@ -9,8 +9,8 @@ import {
   SESSION_TTL_MS,
   SessionService,
   type PendingAuth,
-} from '@wormwright/identity';
-import { DevLoginRequest, nestPath, routes, type AuthProvidersDto, type MeDto } from '@wormwright/shared';
+} from '@darkbeacon/identity';
+import { DevLoginRequest, nestPath, routes, type AuthProvidersDto, type MeDto } from '@darkbeacon/shared';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { SecretBox } from '../../adapters/identity/secret-box.js';
 import type { AppConfig } from '../../config/config.js';
@@ -19,9 +19,11 @@ import { ZodPipe } from '../../platform/http.js';
 import { APP_CONFIG } from '../../platform/tokens.js';
 import {
   clearCookie,
+  LEGACY_SESSION_COOKIE,
   openPending,
   PENDING_COOKIE,
   readCookie,
+  readSessionCookie,
   sealPending,
   serializeCookie,
   SESSION_COOKIE,
@@ -128,8 +130,8 @@ export class AuthController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<void> {
-    await this.sessions.logout(readCookie(request, SESSION_COOKIE));
-    reply.header('set-cookie', clearCookie(SESSION_COOKIE, { secure: this.secure }));
+    await this.sessions.logout(readSessionCookie(request));
+    this.clearSession(reply);
   }
 
   @Post(nestPath(routes.auth.logoutEverywhere.path))
@@ -139,7 +141,7 @@ export class AuthController {
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<void> {
     await this.sessions.logoutEverywhere(requireAccount(actor).id);
-    reply.header('set-cookie', clearCookie(SESSION_COOKIE, { secure: this.secure }));
+    this.clearSession(reply);
   }
 
   /** Remembers the round trip in a sealed cookie and returns the provider URL. */
@@ -167,6 +169,11 @@ export class AuthController {
       reply,
       serializeCookie(SESSION_COOKIE, token, { maxAgeSeconds: SESSION_TTL_MS / 1000, secure: this.secure }),
     );
+  }
+
+  private clearSession(reply: FastifyReply): void {
+    this.addCookie(reply, clearCookie(SESSION_COOKIE, { secure: this.secure }));
+    this.addCookie(reply, clearCookie(LEGACY_SESSION_COOKIE, { secure: this.secure }));
   }
 
   private addCookie(reply: FastifyReply, cookie: string): void {

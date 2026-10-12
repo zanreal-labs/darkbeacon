@@ -16,7 +16,7 @@ export interface TokenInfo {
 }
 
 /**
- * Every themeable value. Components read them as CSS custom properties (`--ww-<name>`);
+ * Every themeable value. Components read them as CSS custom properties (`--dbk-<name>`);
  * a theme must define all of them, so no feature disappears in another theme.
  */
 export const TOKENS = {
@@ -119,11 +119,11 @@ export type TokenValues = Record<TokenName, string>;
 
 export const TOKEN_NAMES = Object.keys(TOKENS) as TokenName[];
 
-export function cssVarName(token: TokenName): `--ww-${TokenName}` {
-  return `--ww-${token}`;
+export function cssVarName(token: TokenName): `--dbk-${TokenName}` {
+  return `--dbk-${token}`;
 }
 
-/** `var(--ww-<token>)`, for inline styles and CSS-in-TS. */
+/** `var(--dbk-<token>)`, for inline styles and CSS-in-TS. */
 export function cssVar(token: TokenName): string {
   return `var(${cssVarName(token)})`;
 }

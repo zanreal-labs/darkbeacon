@@ -1,4 +1,4 @@
-import { ManualClock, type Actor } from '@wormwright/core';
+import { ManualClock, type Actor } from '@darkbeacon/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { TrackingCleanup } from '../application/cleanup.js';
 import { blankPresence, ListMapCharacters, SetTracking } from '../application/tracking.js';

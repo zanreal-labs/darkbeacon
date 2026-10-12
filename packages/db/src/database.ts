@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import SQLite from 'better-sqlite3';
 import { Kysely, PostgresDialect, SqliteDialect, type Transaction } from 'kysely';
 import pg from 'pg';
-import type { UnitOfWork } from '@wormwright/core';
+import type { UnitOfWork } from '@darkbeacon/core';
 import { migrateToLatest } from './migrator.js';
 
 export type Dialect = 'sqlite' | 'postgres';

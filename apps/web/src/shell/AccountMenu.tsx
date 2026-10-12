@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router';
 import { LogOut, Plus, Settings } from 'lucide-react';
-import { routes, type MeDto } from '@wormwright/shared';
+import { routes, type MeDto } from '@darkbeacon/shared';
 import { useLogout, useProviders } from '../lib/session';
 import {
   Avatar,

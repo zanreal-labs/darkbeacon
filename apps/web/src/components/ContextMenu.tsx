@@ -9,7 +9,7 @@ export type MenuItem =
       kind: 'choice';
       label: string;
       value: string;
-      /** `color` is any CSS colour, usually `var(--ww-...)`. */
+      /** `color` is any CSS colour, usually `var(--dbk-...)`. */
       options: { value: string; label: string; color?: string }[];
       onSelect(value: string): void;
     }

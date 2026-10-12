@@ -1,11 +1,11 @@
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { ManualClock, newEvent, type Actor, type DomainEvent } from '@wormwright/core';
-import { describeEachDialect } from '@wormwright/db/testing';
-import { NotifierRegistry } from '@wormwright/notifications';
-import type { PluginLogger } from '@wormwright/plugin-sdk';
-import { PluginAdmin, newInstalledPlugin, type InstalledPlugin } from '@wormwright/plugins';
+import { ManualClock, newEvent, type Actor, type DomainEvent } from '@darkbeacon/core';
+import { describeEachDialect } from '@darkbeacon/db/testing';
+import { NotifierRegistry } from '@darkbeacon/notifications';
+import type { PluginLogger } from '@darkbeacon/plugin-sdk';
+import { PluginAdmin, newInstalledPlugin, type InstalledPlugin } from '@darkbeacon/plugins';
 import { InProcessEventBus } from '../adapters/events/in-process-event-bus.js';
 import { KyselyEventLog } from '../adapters/events/kysely-event-log.js';
 import {
@@ -25,7 +25,7 @@ import {
 import { PluginCommandRegistry } from './plugin-commands.js';
 import { PluginHost, PluginPortProviders } from './plugin-host.js';
 import { FilePluginSettingsSchemas } from './settings-schemas.js';
-import { PluginManifestSchema } from '@wormwright/plugin-sdk';
+import { PluginManifestSchema } from '@darkbeacon/plugin-sdk';
 
 const admin: Actor = { kind: 'account', id: 'boss', instanceRole: 'admin' };
 const quiet: PluginLogger = { debug() {}, info() {}, warn() {}, error() {} };
@@ -42,8 +42,8 @@ describeEachDialect('PluginHost', (t) => {
   let host: PluginHost;
 
   beforeEach(() => {
-    delete (globalThis as { __wwPlugins?: unknown }).__wwPlugins;
-    dir = tempDir('ww-host-');
+    delete (globalThis as { __dbkPlugins?: unknown }).__dbkPlugins;
+    dir = tempDir('dbk-host-');
     clock = new ManualClock();
     bus = new InProcessEventBus(() => undefined);
     log = new KyselyEventLog(t.db, bus);
@@ -95,7 +95,7 @@ describeEachDialect('PluginHost', (t) => {
   ): Promise<InstalledPlugin> {
     const full = pluginManifest(id, { events: ['system.*'], ...manifest });
     writeFiles(join(dir, id), {
-      'wormwright-plugin.json': full,
+      'darkbeacon-plugin.json': full,
       'server.js': fixtureServer(options.marker),
       ...options.files,
     });
@@ -240,7 +240,7 @@ describeEachDialect('PluginHost', (t) => {
     clock.advance(1);
     writeFileSync(join(dir, 'fx', 'server.js'), fixtureServer(2));
     writeFiles(join(dir, 'fx'), {
-      'wormwright-plugin.json': pluginManifest('fx', { version: '1.1.0', events: ['system.*'] }),
+      'darkbeacon-plugin.json': pluginManifest('fx', { version: '1.1.0', events: ['system.*'] }),
     });
     const current = (await plugins.findById('fx'))!;
     await plugins.save({

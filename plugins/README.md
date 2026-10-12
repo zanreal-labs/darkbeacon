@@ -1,7 +1,7 @@
 # Plugins and themes
 
 First-party packages. They form the catalogue an admin installs from (`catalog:<folder>`), and
-each plugin is built against `@wormwright/plugin-sdk` only.
+each plugin is built against `@darkbeacon/plugin-sdk` only.
 
 | Folder           | What it shows                                                                        |
 | ---------------- | ------------------------------------------------------------------------------------ |
@@ -11,7 +11,7 @@ each plugin is built against `@wormwright/plugin-sdk` only.
 
 ## Writing a plugin
 
-A plugin is an npm package (or a `.tgz`) with `wormwright-plugin.json` at its root:
+A plugin is an npm package (or a `.tgz`) with `darkbeacon-plugin.json` at its root:
 
 ```json
 {
@@ -45,6 +45,6 @@ A plugin is an npm package (or a `.tgz`) with `wormwright-plugin.json` at its ro
 
 ## Writing a theme
 
-A theme package has `wormwright-theme.json` with `id`, `name`, `version`, `colorScheme`
+A theme package has `darkbeacon-theme.json` with `id`, `name`, `version`, `colorScheme`
 (`light`/`dark`), `extends` (a built-in theme: `default`, `dark`, `contrast`) and `tokens`, a map of
-token names from `@wormwright/theme-sdk` to CSS values. No code is loaded.
+token names from `@darkbeacon/theme-sdk` to CSS values. No code is loaded.

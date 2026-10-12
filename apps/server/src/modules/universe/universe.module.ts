@@ -1,7 +1,7 @@
 import { Controller, Get, Global, Inject, Logger, Module, Param, Query } from '@nestjs/common';
-import { NotFoundError, requireAccount, type Actor } from '@wormwright/core';
-import type { UniverseCatalog } from '@wormwright/mapping';
-import { EveId, nestPath, routes, UniverseSearchQuery, type UniverseSystemDto } from '@wormwright/shared';
+import { NotFoundError, requireAccount, type Actor } from '@darkbeacon/core';
+import type { UniverseCatalog } from '@darkbeacon/mapping';
+import { EveId, nestPath, routes, UniverseSearchQuery, type UniverseSystemDto } from '@darkbeacon/shared';
 import { z } from 'zod';
 import { StaticUniverseCatalog } from '../../adapters/universe/static-universe-catalog.js';
 import { CurrentActor } from '../../platform/actor.js';

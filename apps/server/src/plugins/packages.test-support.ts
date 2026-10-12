@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { c as createTar } from 'tar';
 
-export function tempDir(prefix = 'ww-'): string {
+export function tempDir(prefix = 'dbk-'): string {
   return mkdtempSync(join(tmpdir(), prefix));
 }
 
@@ -30,12 +30,12 @@ export function pluginManifest(id: string, extra: Record<string, unknown> = {}) 
 }
 
 /**
- * Server code of the test plugin. It reports into `globalThis.__wwPlugins[<id>]` so tests can
+ * Server code of the test plugin. It reports into `globalThis.__dbkPlugins[<id>]` so tests can
  * see what the plugin received; `marker` tells two versions apart.
  */
 export function fixtureServer(marker = 1): string {
   return `
-const seen = (globalThis.__wwPlugins ??= {});
+const seen = (globalThis.__dbkPlugins ??= {});
 let id;
 export default {
   async register(ctx) {
@@ -90,5 +90,5 @@ export interface FixtureLog {
 }
 
 export function fixtureLogs(): Record<string, FixtureLog> {
-  return ((globalThis as { __wwPlugins?: Record<string, FixtureLog> }).__wwPlugins ??= {});
+  return ((globalThis as { __dbkPlugins?: Record<string, FixtureLog> }).__dbkPlugins ??= {});
 }

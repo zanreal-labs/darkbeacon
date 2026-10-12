@@ -1,5 +1,5 @@
 {
-  "name": "@wormwright/shared",
+  "name": "@darkbeacon/shared",
   "version": "0.0.0",
   "private": true,
   "description": "Zod schemas, DTOs, REST routes and the WebSocket protocol",
@@ -16,6 +16,6 @@
   },
   "dependencies": {
     "zod": "^4.6.5",
-    "@wormwright/core": "workspace:*"
+    "@darkbeacon/core": "workspace:*"
   }
 }

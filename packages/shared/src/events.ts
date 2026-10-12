@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { DomainEvent } from '@wormwright/core';
+import type { DomainEvent } from '@darkbeacon/core';
 import type { AccessRuleDto } from './dto/access.js';
 import type { InstanceRole } from './dto/identity.js';
 import type { PluginDto } from './dto/plugins.js';

@@ -5,17 +5,18 @@ import { join, relative, sep } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
-import { ValidationError } from '@wormwright/core';
-import { MANIFEST_FILE, parseManifest, type PluginManifest } from '@wormwright/plugin-sdk';
+import { ValidationError } from '@darkbeacon/core';
+import { MANIFEST_FILE, parseManifest, type PluginManifest } from '@darkbeacon/plugin-sdk';
 import type {
   CatalogEntry,
   PackageSource,
   PluginInstaller,
   PluginManifestSummary,
   StagedPackage,
-} from '@wormwright/plugins';
-import { THEME_MANIFEST_FILE, parseThemeManifest } from '@wormwright/theme-sdk';
+} from '@darkbeacon/plugins';
+import { THEME_MANIFEST_FILE, parseThemeManifest } from '@darkbeacon/theme-sdk';
 import { x as extractTar } from 'tar';
+import { hasManifest, manifestPath } from './manifest-file.js';
 
 /** First-party packages (`plugins/` at the repository root), seen from apps/server/(src|dist)/plugins/. */
 export const CATALOG_DIR = fileURLToPath(new URL('../../../../plugins', import.meta.url));
@@ -192,13 +193,11 @@ export async function unpack(data: Uint8Array, root: string): Promise<void> {
   if (unpacked > MAX_UNPACKED) throw new ValidationError('Package is too large once unpacked');
 }
 
-const MANIFESTS = [MANIFEST_FILE, THEME_MANIFEST_FILE];
-
 /** The manifest sits at the root, or in the one folder npm tarballs wrap packages in (`package/`). */
 async function packageRoot(root: string): Promise<string> {
-  if (MANIFESTS.some((m) => existsSync(join(root, m)))) return root;
+  if (hasManifest(root)) return root;
   const dirs = (await readdir(root, { withFileTypes: true })).filter((d) => d.isDirectory());
-  if (dirs.length === 1 && MANIFESTS.some((m) => existsSync(join(root, dirs[0]!.name, m)))) {
+  if (dirs.length === 1 && hasManifest(join(root, dirs[0]!.name))) {
     return join(root, dirs[0]!.name);
   }
   throw new ValidationError(`The package has no ${MANIFEST_FILE} or ${THEME_MANIFEST_FILE}`);
@@ -206,13 +205,16 @@ async function packageRoot(root: string): Promise<string> {
 
 /** Reads and validates the manifest of an unpacked package. */
 export async function readPackage(directory: string): Promise<StagedPackage> {
-  if (existsSync(join(directory, THEME_MANIFEST_FILE))) {
-    const result = parseThemeManifest(await readJson(join(directory, THEME_MANIFEST_FILE)));
+  const themeFile = manifestPath(directory, 'theme');
+  if (themeFile) {
+    const result = parseThemeManifest(await readJson(themeFile));
     if (!result.ok) throw new ValidationError('Invalid theme manifest', result.errors);
     const { id, name, version, colorScheme, extends: base, tokens } = result.manifest;
     return { kind: 'theme', directory, theme: { id, name, version, colorScheme, extends: base, tokens } };
   }
-  const result = parseManifest(await readJson(join(directory, MANIFEST_FILE)));
+  const pluginFile = manifestPath(directory, 'plugin');
+  if (!pluginFile) throw new ValidationError(`The package has no ${MANIFEST_FILE} or ${THEME_MANIFEST_FILE}`);
+  const result = parseManifest(await readJson(pluginFile));
   if (!result.ok) throw new ValidationError('Invalid plugin manifest', result.errors);
   const m = result.manifest;
   for (const file of [m.server, m.web, m.settings, m.migrations]) {

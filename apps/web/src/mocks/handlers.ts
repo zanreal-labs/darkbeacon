@@ -9,8 +9,8 @@ import {
   type MapSnapshot,
   type SignatureDto,
   type SignatureGroup,
-} from '@wormwright/shared';
-import { builtInThemes } from '@wormwright/theme-sdk';
+} from '@darkbeacon/shared';
+import { builtInThemes } from '@darkbeacon/theme-sdk';
 import { createMockDb, UNIVERSE, type MockDb } from './data';
 
 /**

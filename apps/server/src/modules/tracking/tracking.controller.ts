@@ -1,7 +1,7 @@
 import { Body, Controller, Get, HttpCode, Inject, Param, Put } from '@nestjs/common';
-import type { Actor } from '@wormwright/core';
-import { nestPath, routes, SetTrackingRequest, type CharacterPresenceDto } from '@wormwright/shared';
-import { ListMapCharacters, SetTracking } from '@wormwright/tracking';
+import type { Actor } from '@darkbeacon/core';
+import { nestPath, routes, SetTrackingRequest, type CharacterPresenceDto } from '@darkbeacon/shared';
+import { ListMapCharacters, SetTracking } from '@darkbeacon/tracking';
 import { CurrentActor } from '../../platform/actor.js';
 import { ZodPipe } from '../../platform/http.js';
 

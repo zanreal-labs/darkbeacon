@@ -13,8 +13,8 @@ import {
   type ReactNode,
 } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { WebSlot, WebSlotProps } from '@wormwright/plugin-sdk';
-import { routes, type PluginWebDto } from '@wormwright/shared';
+import type { WebSlot, WebSlotProps } from '@darkbeacon/plugin-sdk';
+import { routes, type PluginWebDto } from '@darkbeacon/shared';
 import { api } from '../lib/api';
 import { loadWebPlugins, PluginRegistry, type SlotEntry } from './registry';
 
@@ -22,6 +22,8 @@ const RegistryContext = createContext(new PluginRegistry());
 
 declare global {
   // The host React instance for plugin web modules, which must not bundle their own.
+  var darkbeacon: { react: typeof React } | undefined;
+  /** The same object under the name plugins built before the rename to Darkbeacon look for. */
   var wormwright: { react: typeof React } | undefined;
 }
 
@@ -45,7 +47,8 @@ export function PluginsProvider({
   });
   useEffect(() => {
     if (!list.data?.length) return;
-    globalThis.wormwright ??= { react: React };
+    globalThis.darkbeacon ??= { react: React };
+    globalThis.wormwright ??= globalThis.darkbeacon;
     void loadWebPlugins(registry, list.data).then((failures) => {
       for (const f of failures) console.warn(`plugin ${f.id} failed to load: ${f.error}`);
     });

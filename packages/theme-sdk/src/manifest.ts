@@ -20,7 +20,9 @@ export const ThemeManifestSchema = z.object({
 export type ThemeManifest = z.infer<typeof ThemeManifestSchema>;
 
 /** File name of the manifest at the root of a theme package. */
-export const THEME_MANIFEST_FILE = 'wormwright-theme.json';
+export const THEME_MANIFEST_FILE = 'darkbeacon-theme.json';
+/** The manifest name from before the rename to Darkbeacon; still read, with a deprecation warning. */
+export const LEGACY_THEME_MANIFEST_FILE = 'wormwright-theme.json';
 
 export type ThemeManifestResult = { ok: true; manifest: ThemeManifest } | { ok: false; errors: string[] };
 

@@ -1,4 +1,4 @@
-import type { Clock, EventLog } from '@wormwright/core';
+import type { Clock, EventLog } from '@darkbeacon/core';
 import type { Account, Session } from '../domain/account.js';
 import { SESSION_TOUCH_MS, SESSION_TTL_MS } from '../domain/rules.js';
 import type { AccountRepository } from '../ports/account-repository.js';

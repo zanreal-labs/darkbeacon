@@ -1,5 +1,5 @@
 // Loaded by the browser as a plain ES module: no imports at runtime, React comes from the host.
-import type { WebPlugin, WebPluginApi } from '@wormwright/plugin-sdk';
+import type { WebPlugin, WebPluginApi } from '@darkbeacon/plugin-sdk';
 import type { MapStats } from './server.js';
 
 function statsWidget(api: WebPluginApi) {

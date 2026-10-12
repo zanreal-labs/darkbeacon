@@ -1,4 +1,4 @@
-import { ExternalAuthError } from '@wormwright/identity';
+import { ExternalAuthError } from '@darkbeacon/identity';
 
 export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 

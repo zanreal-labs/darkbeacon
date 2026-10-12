@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveMapRole } from '@wormwright/core';
+import { resolveMapRole } from '@darkbeacon/core';
 import { grantsFor, parseSubject, subjectKeys, type AccessRule, type AccessSubjects } from './access-rule.js';
 import { adminByDiscord, DEFAULT_INSTANCE_SETTINGS } from './instance-settings.js';
 

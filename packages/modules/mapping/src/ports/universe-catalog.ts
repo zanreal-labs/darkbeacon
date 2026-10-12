@@ -1,4 +1,4 @@
-import type { UniverseSystemDto } from '@wormwright/shared';
+import type { UniverseSystemDto } from '@darkbeacon/shared';
 
 export type UniverseSystem = UniverseSystemDto;
 

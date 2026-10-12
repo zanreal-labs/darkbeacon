@@ -12,8 +12,8 @@ import {
   type EventLog,
   type MapAccess,
   type UnitOfWork,
-} from '@wormwright/core';
-import type { AccessRuleDto, CreateAccessRuleRequest, EventPayloads } from '@wormwright/shared';
+} from '@darkbeacon/core';
+import type { AccessRuleDto, CreateAccessRuleRequest, EventPayloads } from '@darkbeacon/shared';
 import { parseSubject, toAccessRuleDto, type AccessRule } from '../domain/access-rule.js';
 import type { AccessRuleRepository } from '../ports/access-rule-repository.js';
 

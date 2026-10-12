@@ -1,6 +1,6 @@
 import { beforeEach, expect, it } from 'vitest';
-import { mapStream, type DomainEvent } from '@wormwright/core';
-import { describeEachDialect } from '@wormwright/db/testing';
+import { mapStream, type DomainEvent } from '@darkbeacon/core';
+import { describeEachDialect } from '@darkbeacon/db/testing';
 import {
   ConnectionUseCases,
   MapSnapshotQuery,
@@ -8,7 +8,7 @@ import {
   SignatureUseCases,
   SystemUseCases,
   type ChainMap,
-} from '@wormwright/mapping';
+} from '@darkbeacon/mapping';
 import { account, mappingTestPorts, SYSTEMS } from './testing.js';
 
 const alice = account('alice');

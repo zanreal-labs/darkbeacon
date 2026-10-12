@@ -11,9 +11,9 @@ import {
   type EventBus,
   type EventLog,
   type MapAccess,
-} from '@wormwright/core';
-import type { Database } from '@wormwright/db';
-import type { NotifierRegistry } from '@wormwright/notifications';
+} from '@darkbeacon/core';
+import type { Database } from '@darkbeacon/db';
+import type { NotifierRegistry } from '@darkbeacon/notifications';
 import {
   MANIFEST_FILE,
   eventAllowed,
@@ -30,7 +30,7 @@ import {
   type PluginRoute,
   type ServerPlugin,
   type UniverseReader,
-} from '@wormwright/plugin-sdk';
+} from '@darkbeacon/plugin-sdk';
 import {
   isActiveOn,
   pluginRevision,
@@ -40,9 +40,10 @@ import {
   type PluginRepository,
   type PluginSettingsSchemas,
   type PluginSettingsValues,
-} from '@wormwright/plugins';
-import type { MapSnapshot } from '@wormwright/shared';
+} from '@darkbeacon/plugins';
+import type { MapSnapshot } from '@darkbeacon/shared';
 import { readJson } from './installer.js';
+import { manifestPath } from './manifest-file.js';
 import type { PluginCommandRegistry } from './plugin-commands.js';
 import { runPluginMigrations } from './plugin-migrations.js';
 
@@ -195,7 +196,8 @@ export class PluginHost {
   private async load(plugin: InstalledPlugin): Promise<void> {
     const dir = this.deps.pluginDir(plugin.id);
     const logger = this.deps.logger?.(plugin.id) ?? nestLogger(plugin.id);
-    const parsed = parseManifest(await readJson(join(dir, MANIFEST_FILE)).catch(() => null));
+    const file = manifestPath(dir, 'plugin');
+    const parsed = parseManifest(file ? await readJson(file).catch(() => null) : null);
     if (!parsed.ok) {
       await this.disable(plugin.id, `Invalid manifest: ${parsed.errors.join('; ')}`, 1, logger);
       return;

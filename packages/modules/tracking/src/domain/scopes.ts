@@ -1,4 +1,4 @@
-import type { MapScope } from '@wormwright/shared';
+import type { MapScope } from '@darkbeacon/shared';
 
 /** The map scope a system belongs to, from its SDE wormhole class; null when unknown. */
 export function scopeOf(whClass: number | null | undefined): MapScope | null {

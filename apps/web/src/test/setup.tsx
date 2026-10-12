@@ -3,7 +3,7 @@ import { cleanup, render, type RenderOptions } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw/http';
 import { setupServer } from 'msw/node';
-import { routes } from '@wormwright/shared';
+import { routes } from '@darkbeacon/shared';
 import type { ReactElement, ReactNode } from 'react';
 import { RealtimeClient } from '../lib/realtime';
 import { RealtimeProvider } from '../lib/RealtimeProvider';

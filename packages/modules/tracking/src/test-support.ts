@@ -1,5 +1,5 @@
 // In-memory ports for the module's own tests. Not part of the public API.
-import type { DomainEvent, MapRole, NewEvent } from '@wormwright/core';
+import type { DomainEvent, MapRole, NewEvent } from '@darkbeacon/core';
 import type { CharacterPresence, TrackedCharacter } from './domain/presence.js';
 import type {
   CharacterTokenSource,

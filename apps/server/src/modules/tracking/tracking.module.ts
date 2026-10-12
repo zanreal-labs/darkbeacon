@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { Logger, Module } from '@nestjs/common';
-import type { Clock, EventLog, MapAccess, UnitOfWork } from '@wormwright/core';
-import { Database } from '@wormwright/db';
+import type { Clock, EventLog, MapAccess, UnitOfWork } from '@darkbeacon/core';
+import { Database } from '@darkbeacon/db';
 import {
   AutoMapper,
   ListMapCharacters,
@@ -13,9 +13,9 @@ import {
   type EsiGateway,
   type TrackingRepository,
   type UniverseLookup,
-} from '@wormwright/tracking';
-import { ConnectionUseCases, SystemUseCases, type MappingPorts } from '@wormwright/mapping';
-import { CharacterService } from '@wormwright/identity';
+} from '@darkbeacon/tracking';
+import { ConnectionUseCases, SystemUseCases, type MappingPorts } from '@darkbeacon/mapping';
+import { CharacterService } from '@darkbeacon/identity';
 import { HttpEsiGateway } from '../../adapters/tracking/http-esi-gateway.js';
 import { MappingAutoMapTarget } from '../../adapters/tracking/mapping-auto-map-target.js';
 import { KyselyTrackingRepository } from '../../adapters/tracking/kysely-tracking-repository.js';
@@ -65,7 +65,7 @@ const { version } = JSON.parse(readFileSync(new URL('../../../package.json', imp
     {
       provide: ESI_GATEWAY,
       useFactory: (config: AppConfig, clock: Clock) =>
-        new HttpEsiGateway({ clock, userAgent: `Wormwright/${version} (+${config.publicUrl})` }),
+        new HttpEsiGateway({ clock, userAgent: `Darkbeacon/${version} (+${config.publicUrl})` }),
       inject: [APP_CONFIG, CLOCK],
     },
     {

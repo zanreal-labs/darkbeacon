@@ -1,5 +1,5 @@
 import { createElement, useEffect, useState } from 'react';
-import type { HostReact, SlotComponent, WebPlugin, WebPluginApi, WebSlot } from '@wormwright/plugin-sdk';
+import type { HostReact, SlotComponent, WebPlugin, WebPluginApi, WebSlot } from '@darkbeacon/plugin-sdk';
 
 /** The host React handed to plugins; they must not bundle a copy of their own. */
 const hostReact = { createElement, useState, useEffect } as unknown as HostReact;

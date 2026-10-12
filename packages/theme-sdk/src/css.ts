@@ -1,7 +1,7 @@
 import { TOKEN_NAMES, cssVarName } from './tokens.js';
 import type { Theme } from './themes.js';
 
-/** `selector { --ww-token: value; ... color-scheme: ... }` */
+/** `selector { --dbk-token: value; ... color-scheme: ... }` */
 export function themeToCss(theme: Theme, selector = ':root'): string {
   const lines = TOKEN_NAMES.map((name) => `  ${cssVarName(name)}: ${theme.tokens[name]};`);
   return `${selector} {\n  color-scheme: ${theme.colorScheme};\n${lines.join('\n')}\n}\n`;

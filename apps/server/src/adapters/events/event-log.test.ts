@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { newEvent, type DomainEvent } from '@wormwright/core';
-import { describeEachDialect } from '@wormwright/db/testing';
+import { newEvent, type DomainEvent } from '@darkbeacon/core';
+import { describeEachDialect } from '@darkbeacon/db/testing';
 import { InProcessEventBus } from './in-process-event-bus.js';
 import { KyselyEventLog } from './kysely-event-log.js';
 

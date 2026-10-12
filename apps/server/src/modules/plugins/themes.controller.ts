@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Post, Put } from '@nestjs/common';
-import type { Actor } from '@wormwright/core';
-import { ThemeAdmin, parsePackageSource, type InstalledTheme, type ThemeOverview } from '@wormwright/plugins';
+import type { Actor } from '@darkbeacon/core';
+import { ThemeAdmin, parsePackageSource, type InstalledTheme, type ThemeOverview } from '@darkbeacon/plugins';
 import {
   InstallPluginRequest,
   SelectThemeRequest,
@@ -9,8 +9,8 @@ import {
   routes,
   type ThemeDto,
   type ThemesDto,
-} from '@wormwright/shared';
-import { builtInThemes, resolveTheme, type ThemeManifest } from '@wormwright/theme-sdk';
+} from '@darkbeacon/shared';
+import { builtInThemes, resolveTheme, type ThemeManifest } from '@darkbeacon/theme-sdk';
 import { CurrentActor } from '../../platform/actor.js';
 import { ZodPipe } from '../../platform/http.js';
 import { uploadedPackage } from './plugins.controller.js';

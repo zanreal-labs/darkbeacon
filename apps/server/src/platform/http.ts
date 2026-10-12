@@ -6,8 +6,8 @@ import {
   type ExceptionFilter,
   type PipeTransform,
 } from '@nestjs/common';
-import { isDomainError, type ErrorCode } from '@wormwright/core';
-import type { ApiErrorBody, ApiErrorCode } from '@wormwright/shared';
+import { isDomainError, type ErrorCode } from '@darkbeacon/core';
+import type { ApiErrorBody, ApiErrorCode } from '@darkbeacon/shared';
 import type { FastifyReply } from 'fastify';
 import { ZodError, type z } from 'zod';
 

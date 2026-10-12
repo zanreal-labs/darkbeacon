@@ -27,7 +27,7 @@ export function resolveThemePreference(
 
 /** Derived colours reference other tokens, so theme packages that change a base colour get them too. */
 const mix = (token: TokenName, percent: number, over = 'transparent') =>
-  `color-mix(in oklab, var(--ww-${token}) ${percent}%, ${over})`;
+  `color-mix(in oklab, var(--dbk-${token}) ${percent}%, ${over})`;
 
 /** Values shared by light and dark. */
 const shared = {

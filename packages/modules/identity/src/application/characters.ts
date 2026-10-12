@@ -11,7 +11,7 @@ import {
   type Clock,
   type EventLog,
   type UnitOfWork,
-} from '@wormwright/core';
+} from '@darkbeacon/core';
 import type { CharacterTokens, LinkedCharacter } from '../domain/account.js';
 import { ExternalAuthError } from '../domain/errors.js';
 import type { PendingAuth } from '../domain/pending-auth.js';

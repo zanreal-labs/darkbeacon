@@ -77,7 +77,7 @@ describe('portable helpers', () => {
   it('uses WAL for file databases', async () => {
     const { mkdtempSync } = await import('node:fs');
     const { tmpdir } = await import('node:os');
-    const db = await createDatabase({ dataDir: mkdtempSync(`${tmpdir()}/ww-`) });
+    const db = await createDatabase({ dataDir: mkdtempSync(`${tmpdir()}/dbk-`) });
     const result = await sql<{ journal_mode: string }>`pragma journal_mode`.execute(db.kysely);
     expect(result.rows[0]?.journal_mode).toBe('wal');
     await db.close();

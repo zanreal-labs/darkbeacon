@@ -1,11 +1,11 @@
-import { bool, json, type Database } from '@wormwright/db';
+import { bool, json, type Database } from '@darkbeacon/db';
 import type {
   InstalledPlugin,
   InstalledTheme,
   PluginManifestSummary,
   PluginRepository,
   ThemeRepository,
-} from '@wormwright/plugins';
+} from '@darkbeacon/plugins';
 
 export interface PluginTables {
   plugin: {

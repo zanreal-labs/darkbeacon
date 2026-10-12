@@ -1,5 +1,5 @@
 // Runs from DATA_DIR/plugins, where no packages are installed: SDK imports are types only.
-import type { ServerPlugin } from '@wormwright/plugin-sdk';
+import type { ServerPlugin } from '@darkbeacon/plugin-sdk';
 
 export interface MapStats {
   systems: number;

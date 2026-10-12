@@ -11,7 +11,7 @@ import type {
   PluginDto,
   SignatureDto,
   UniverseSystemDto,
-} from '@wormwright/shared';
+} from '@darkbeacon/shared';
 
 /**
  * Sample data for the mocked API (`vite --mode mock` and tests). Wormhole names are made up;

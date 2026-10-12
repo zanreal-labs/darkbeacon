@@ -8,8 +8,8 @@ import {
   requireInstanceRole,
   type Actor,
   type ActorRef,
-} from '@wormwright/core';
-import type { CatalogEntryDto, PluginDto, PluginSettingsDto } from '@wormwright/shared';
+} from '@darkbeacon/core';
+import type { CatalogEntryDto, PluginDto, PluginSettingsDto } from '@darkbeacon/shared';
 import {
   disableAfterFailures,
   isActiveOn,

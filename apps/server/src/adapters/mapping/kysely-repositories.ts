@@ -1,5 +1,5 @@
-import { ConflictError } from '@wormwright/core';
-import { bool, isUniqueViolation, json, type Database } from '@wormwright/db';
+import { ConflictError } from '@darkbeacon/core';
+import { bool, isUniqueViolation, json, type Database } from '@darkbeacon/db';
 import type {
   ChainMap,
   Connection,
@@ -9,7 +9,7 @@ import type {
   Signature,
   SignatureRepository,
   SystemRepository,
-} from '@wormwright/mapping';
+} from '@darkbeacon/mapping';
 
 export interface MappingTables {
   maps: {

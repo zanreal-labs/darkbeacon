@@ -3,10 +3,10 @@ import type {
   AccessRuleRepository,
   InstanceSettings,
   InstanceSettingsRepository,
-} from '@wormwright/access';
-import type { MapRole } from '@wormwright/core';
-import { json, type Database } from '@wormwright/db';
-import type { AccessSubjectKind } from '@wormwright/shared';
+} from '@darkbeacon/access';
+import type { MapRole } from '@darkbeacon/core';
+import { json, type Database } from '@darkbeacon/db';
+import type { AccessSubjectKind } from '@darkbeacon/shared';
 
 export interface AccessTables {
   access_rule: {

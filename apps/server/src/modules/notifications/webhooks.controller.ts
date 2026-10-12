@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post } from '@nestjs/common';
-import type { Actor } from '@wormwright/core';
-import { WebhookAdmin } from '@wormwright/notifications';
+import type { Actor } from '@darkbeacon/core';
+import { WebhookAdmin } from '@darkbeacon/notifications';
 import {
   CreateWebhookRequest,
   UpdateWebhookRequest,
@@ -9,7 +9,7 @@ import {
   type CreatedWebhookDto,
   type WebhookDeliveryDto,
   type WebhookDto,
-} from '@wormwright/shared';
+} from '@darkbeacon/shared';
 import { CurrentActor } from '../../platform/actor.js';
 import { ZodPipe } from '../../platform/http.js';
 

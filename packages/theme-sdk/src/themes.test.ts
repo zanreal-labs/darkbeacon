@@ -15,7 +15,7 @@ describe('themes', () => {
     const css = themeToCss(darkTheme);
     expect(css).toContain(':root {');
     expect(css).toContain('color-scheme: dark;');
-    expect(css).toContain('--ww-edge-time-eol: #cf7cf2;');
+    expect(css).toContain('--dbk-edge-time-eol: #cf7cf2;');
     expect(themesToCss(builtInThemes)).toContain('[data-theme="contrast"]');
   });
 
@@ -25,7 +25,7 @@ describe('themes', () => {
     expect(lightTheme.tokens['font-family']).toBe(darkTheme.tokens['font-family']);
     expect(lightTheme.tokens['color-bg']).not.toBe(darkTheme.tokens['color-bg']);
     // Derived colours follow whatever accent a theme sets.
-    expect(darkTheme.tokens['color-accent-subtle']).toContain('var(--ww-color-accent)');
+    expect(darkTheme.tokens['color-accent-subtle']).toContain('var(--dbk-color-accent)');
   });
 
   it('resolve the system preference from the operating system', () => {

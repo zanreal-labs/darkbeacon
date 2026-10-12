@@ -4,22 +4,22 @@
 
 .danger {
   fill: none;
-  stroke: var(--ww-edge-dangerous);
-  stroke-width: calc(var(--ww-edge-width) * 5);
+  stroke: var(--dbk-edge-dangerous);
+  stroke-width: calc(var(--dbk-edge-width) * 5);
   stroke-linecap: round;
 }
 
 /* A thin solid core in the EOL colour inside the dashed line, so EOL reads at any mass colour. */
 .eol {
   fill: none;
-  stroke: var(--ww-edge-time-eol);
-  stroke-width: calc(var(--ww-edge-width) / 2);
+  stroke: var(--dbk-edge-time-eol);
+  stroke-width: calc(var(--dbk-edge-width) / 2);
   pointer-events: none;
 }
 
 .bubble {
-  fill: var(--ww-edge-bubble);
-  stroke: var(--ww-color-canvas);
+  fill: var(--dbk-edge-bubble);
+  stroke: var(--dbk-color-canvas);
   stroke-width: 1.5;
 }
 
@@ -32,32 +32,32 @@
 
 .chip {
   padding: 0 5px;
-  border: 1px solid var(--ww-color-border);
+  border: 1px solid var(--dbk-color-border);
   border-radius: 999px;
-  background: var(--ww-color-surface-raised);
-  color: var(--ww-color-text-muted);
+  background: var(--dbk-color-surface-raised);
+  color: var(--dbk-color-text-muted);
   font-size: 10px;
   font-weight: 600;
   line-height: 15px;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-  box-shadow: var(--ww-shadow-small);
+  box-shadow: var(--dbk-shadow-small);
 }
 
 .chip[data-kind='eol'] {
-  border-color: color-mix(in oklab, var(--ww-edge-time-eol) 55%, transparent);
-  background: color-mix(in oklab, var(--ww-edge-time-eol) 14%, var(--ww-color-surface-raised));
-  color: color-mix(in oklab, var(--ww-edge-time-eol) 72%, var(--ww-color-text));
+  border-color: color-mix(in oklab, var(--dbk-edge-time-eol) 55%, transparent);
+  background: color-mix(in oklab, var(--dbk-edge-time-eol) 14%, var(--dbk-color-surface-raised));
+  color: color-mix(in oklab, var(--dbk-edge-time-eol) 72%, var(--dbk-color-text));
 }
 
 .chip[data-kind='reduced'] {
-  border-color: color-mix(in oklab, var(--ww-edge-mass-reduced) 55%, transparent);
-  background: color-mix(in oklab, var(--ww-edge-mass-reduced) 14%, var(--ww-color-surface-raised));
-  color: color-mix(in oklab, var(--ww-edge-mass-reduced) 72%, var(--ww-color-text));
+  border-color: color-mix(in oklab, var(--dbk-edge-mass-reduced) 55%, transparent);
+  background: color-mix(in oklab, var(--dbk-edge-mass-reduced) 14%, var(--dbk-color-surface-raised));
+  color: color-mix(in oklab, var(--dbk-edge-mass-reduced) 72%, var(--dbk-color-text));
 }
 
 .chip[data-kind='critical'] {
-  border-color: color-mix(in oklab, var(--ww-edge-mass-critical) 55%, transparent);
-  background: color-mix(in oklab, var(--ww-edge-mass-critical) 14%, var(--ww-color-surface-raised));
-  color: color-mix(in oklab, var(--ww-edge-mass-critical) 72%, var(--ww-color-text));
+  border-color: color-mix(in oklab, var(--dbk-edge-mass-critical) 55%, transparent);
+  background: color-mix(in oklab, var(--dbk-edge-mass-critical) 14%, var(--dbk-color-surface-raised));
+  color: color-mix(in oklab, var(--dbk-edge-mass-critical) 72%, var(--dbk-color-text));
 }

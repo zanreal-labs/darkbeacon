@@ -1,5 +1,5 @@
-import { NotFoundError, type Actor } from '@wormwright/core';
-import type { MapSnapshot } from '@wormwright/shared';
+import { NotFoundError, type Actor } from '@darkbeacon/core';
+import type { MapSnapshot } from '@darkbeacon/shared';
 import { MappingUseCases } from './base.js';
 
 export type MappingSnapshot = Required<Pick<MapSnapshot, 'map' | 'systems' | 'connections' | 'signatures'>>;

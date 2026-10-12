@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
-import { describeEachDialect } from '@wormwright/db/testing';
-import type { Account, LinkedCharacter } from '@wormwright/identity';
+import { describeEachDialect } from '@darkbeacon/db/testing';
+import type { Account, LinkedCharacter } from '@darkbeacon/identity';
 import {
   KyselyAccountRepository,
   KyselyCharacterRepository,

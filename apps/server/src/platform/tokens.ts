@@ -1,6 +1,6 @@
 /**
  * DI tokens for ports (interfaces cannot be tokens). Inject with `@Inject(EVENT_LOG)`.
- * `Database` (from @wormwright/db) is its own token and is also the UnitOfWork.
+ * `Database` (from @darkbeacon/db) is its own token and is also the UnitOfWork.
  */
 export const APP_CONFIG = 'AppConfig';
 export const CLOCK = 'Clock';

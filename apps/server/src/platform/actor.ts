@@ -5,7 +5,7 @@ import {
   type CanActivate,
   type ExecutionContext,
 } from '@nestjs/common';
-import type { Actor } from '@wormwright/core';
+import type { Actor } from '@darkbeacon/core';
 
 export interface RequestLike {
   headers: Record<string, string | string[] | undefined>;

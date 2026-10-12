@@ -1,23 +1,23 @@
 .canvas {
   position: absolute;
   inset: 0;
-  background: var(--ww-color-canvas);
+  background: var(--dbk-color-canvas);
   /* React Flow reads these; without the -default suffix they win over its built-in light/dark values. */
-  --xy-background-color: var(--ww-color-canvas);
-  --xy-background-pattern-color: var(--ww-color-canvas-grid);
-  --xy-edge-stroke: var(--ww-edge-color);
-  --xy-edge-stroke-width: var(--ww-edge-width);
-  --xy-edge-stroke-selected: var(--ww-edge-selected);
-  --xy-connectionline-stroke: var(--ww-edge-selected);
-  --xy-connectionline-stroke-width: var(--ww-edge-width);
-  --xy-controls-button-background-color: var(--ww-color-surface);
-  --xy-controls-button-background-color-hover: var(--ww-color-surface-hover);
-  --xy-controls-button-color: var(--ww-color-text);
-  --xy-controls-button-color-hover: var(--ww-color-text);
-  --xy-controls-button-border-color: var(--ww-color-border);
+  --xy-background-color: var(--dbk-color-canvas);
+  --xy-background-pattern-color: var(--dbk-color-canvas-grid);
+  --xy-edge-stroke: var(--dbk-edge-color);
+  --xy-edge-stroke-width: var(--dbk-edge-width);
+  --xy-edge-stroke-selected: var(--dbk-edge-selected);
+  --xy-connectionline-stroke: var(--dbk-edge-selected);
+  --xy-connectionline-stroke-width: var(--dbk-edge-width);
+  --xy-controls-button-background-color: var(--dbk-color-surface);
+  --xy-controls-button-background-color-hover: var(--dbk-color-surface-hover);
+  --xy-controls-button-color: var(--dbk-color-text);
+  --xy-controls-button-color-hover: var(--dbk-color-text);
+  --xy-controls-button-border-color: var(--dbk-color-border);
   --xy-controls-box-shadow: none;
-  --xy-selection-background-color: color-mix(in srgb, var(--ww-color-accent) 12%, transparent);
-  --xy-selection-border: 1px dashed var(--ww-color-accent);
+  --xy-selection-background-color: color-mix(in srgb, var(--dbk-color-accent) 12%, transparent);
+  --xy-selection-border: 1px dashed var(--dbk-color-accent);
 }
 
 /* The node component draws its own box. */
@@ -30,10 +30,10 @@
 }
 
 .canvas :global(.react-flow__controls) {
-  margin: var(--ww-space-3);
-  border: 1px solid var(--ww-color-border);
-  border-radius: var(--ww-radius);
-  box-shadow: var(--ww-shadow-medium);
+  margin: var(--dbk-space-3);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+  box-shadow: var(--dbk-shadow-medium);
   overflow: hidden;
 }
 
@@ -41,17 +41,17 @@
   width: 28px;
   height: 28px;
   padding: 6px;
-  border-bottom-color: var(--ww-color-border);
+  border-bottom-color: var(--dbk-color-border);
 }
 
 .canvas :global(.react-flow__controls-button svg) {
   max-width: 11px;
   max-height: 11px;
-  fill: var(--ww-color-text-muted);
+  fill: var(--dbk-color-text-muted);
 }
 
 .canvas :global(.react-flow__controls-button:hover svg) {
-  fill: var(--ww-color-text);
+  fill: var(--dbk-color-text);
 }
 
 @media (max-width: 760px) {

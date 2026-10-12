@@ -1,4 +1,4 @@
-export type { Clock, EventLog, UnitOfWork } from '@wormwright/core';
+export type { Clock, EventLog, UnitOfWork } from '@darkbeacon/core';
 export type * from './account-repository.js';
 export type * from './character-repository.js';
 export type * from './discord-link-repository.js';

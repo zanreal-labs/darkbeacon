@@ -1,4 +1,4 @@
-import type { InstanceSettingsDto } from '@wormwright/shared';
+import type { InstanceSettingsDto } from '@darkbeacon/shared';
 
 export type InstanceSettings = InstanceSettingsDto;
 

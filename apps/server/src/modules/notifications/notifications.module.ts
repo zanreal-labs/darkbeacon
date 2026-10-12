@@ -7,11 +7,11 @@ import {
   type OnApplicationShutdown,
   type OnModuleInit,
 } from '@nestjs/common';
-import { InstanceSettingsService } from '@wormwright/access';
-import type { Clock, MapAccess } from '@wormwright/core';
-import { Database } from '@wormwright/db';
-import { NotifierRegistry, WebhookAdmin, WebhookDispatcher } from '@wormwright/notifications';
-import { isEventOfType } from '@wormwright/shared';
+import { InstanceSettingsService } from '@darkbeacon/access';
+import type { Clock, MapAccess } from '@darkbeacon/core';
+import { Database } from '@darkbeacon/db';
+import { NotifierRegistry, WebhookAdmin, WebhookDispatcher } from '@darkbeacon/notifications';
+import { isEventOfType } from '@darkbeacon/shared';
 import { HttpWebhookSender } from '../../adapters/notifications/http-webhook-sender.js';
 import { KyselyWebhookRepository } from '../../adapters/notifications/kysely-webhook-repository.js';
 import { SecretBox } from '../../adapters/notifications/secret-box.js';

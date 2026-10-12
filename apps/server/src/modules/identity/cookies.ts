@@ -1,10 +1,15 @@
-import type { PendingAuth } from '@wormwright/identity';
+import type { PendingAuth } from '@darkbeacon/identity';
 import type { SecretBox } from '../../adapters/identity/secret-box.js';
 import type { RequestLike } from '../../platform/actor.js';
 
-export const SESSION_COOKIE = 'ww_session';
+export const SESSION_COOKIE = 'dbk_session';
+/**
+ * The session cookie's name before the rename to Darkbeacon. Still read so nobody is signed out by the
+ * upgrade; it is never set again and lapses with its 30-day Max-Age.
+ */
+export const LEGACY_SESSION_COOKIE = 'ww_session';
 /** Holds the sealed state of an OAuth round trip; scoped to /api/auth. */
-export const PENDING_COOKIE = 'ww_oauth';
+export const PENDING_COOKIE = 'dbk_oauth';
 
 export interface CookieOptions {
   maxAgeSeconds: number;
@@ -27,6 +32,11 @@ export function readCookie(request: RequestLike, name: string): string | null {
     }
   }
   return null;
+}
+
+/** The session token from the cookie, or from the pre-rename cookie when that is all the browser has. */
+export function readSessionCookie(request: RequestLike): string | null {
+  return readCookie(request, SESSION_COOKIE) ?? readCookie(request, LEGACY_SESSION_COOKIE);
 }
 
 /** httpOnly, SameSite=Lax: sent on top-level navigations (OAuth callbacks), never on cross-site POSTs. */

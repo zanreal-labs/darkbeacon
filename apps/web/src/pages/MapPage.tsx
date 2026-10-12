@@ -8,7 +8,7 @@ import {
   type MapDto,
   type MapSummaryDto,
   type UniverseSystemDto,
-} from '@wormwright/shared';
+} from '@darkbeacon/shared';
 import {
   AlertTriangle,
   Info,

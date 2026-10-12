@@ -6,14 +6,14 @@ image, never on the host.
 
 ```sh
 # A demo instance and one without demo mode (for the sign-in page), on a private network.
-docker network create ww-shots
-docker build -t wormwright:shots .
-docker run -d --rm --name ww-demo --network ww-shots -e DEMO_MODE=true -e ALLOW_DEMO_MODE=true wormwright:shots
-docker run -d --rm --name ww-login --network ww-shots \
-  -e DISCORD_CLIENT_ID=0 -e DISCORD_CLIENT_SECRET=x -e EVE_CLIENT_ID=0 -e EVE_CLIENT_SECRET=x wormwright:shots
+docker network create dbk-shots
+docker build -t darkbeacon:shots .
+docker run -d --rm --name dbk-demo --network dbk-shots -e DEMO_MODE=true -e ALLOW_DEMO_MODE=true darkbeacon:shots
+docker run -d --rm --name dbk-login --network dbk-shots \
+  -e DISCORD_CLIENT_ID=0 -e DISCORD_CLIENT_SECRET=x -e EVE_CLIENT_ID=0 -e EVE_CLIENT_SECRET=x darkbeacon:shots
 
-docker run --rm --network ww-shots --ipc=host -v "$PWD":/work -w /tmp \
-  -e BASE=http://ww-demo:3000 -e LOGIN_BASE=http://ww-login:3000 \
+docker run --rm --network dbk-shots --ipc=host -v "$PWD":/work -w /tmp \
+  -e BASE=http://dbk-demo:3000 -e LOGIN_BASE=http://dbk-login:3000 \
   mcr.microsoft.com/playwright:v1.55.0-noble \
   sh -c 'npm i --no-audit --no-fund playwright@1.55.0 >/dev/null && cp /work/tools/screenshots/shoot.mjs . && node shoot.mjs'
 ```

@@ -1,7 +1,7 @@
-import type { Actor } from '@wormwright/core';
-import type { ConnectionUseCases, MappingPorts, SystemUseCases } from '@wormwright/mapping';
-import type { Position } from '@wormwright/shared';
-import type { AutoMapTarget, RecordedJump } from '@wormwright/tracking';
+import type { Actor } from '@darkbeacon/core';
+import type { ConnectionUseCases, MappingPorts, SystemUseCases } from '@darkbeacon/mapping';
+import type { Position } from '@darkbeacon/shared';
+import type { AutoMapTarget, RecordedJump } from '@darkbeacon/tracking';
 
 /** Room a system node needs; a spot closer than this to another system is taken. */
 const GAP = { x: 160, y: 70 };

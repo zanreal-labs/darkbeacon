@@ -1,4 +1,4 @@
-import { NotFoundError, UnauthenticatedError, ValidationError, type Clock } from '@wormwright/core';
+import { NotFoundError, UnauthenticatedError, ValidationError, type Clock } from '@darkbeacon/core';
 import type { PendingAuth } from '../domain/pending-auth.js';
 import { PENDING_AUTH_TTL_MS, safeReturnTo } from '../domain/rules.js';
 import { pkceChallenge, randomToken, sameSecret } from './crypto.js';

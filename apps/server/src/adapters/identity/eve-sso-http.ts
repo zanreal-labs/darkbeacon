@@ -1,6 +1,6 @@
 import { createPublicKey, verify, type JsonWebKey, type KeyObject } from 'node:crypto';
-import type { Clock } from '@wormwright/core';
-import { ExternalAuthError, type EveIdentity, type EveSso, type EveTokenSet } from '@wormwright/identity';
+import type { Clock } from '@darkbeacon/core';
+import { ExternalAuthError, type EveIdentity, type EveSso, type EveTokenSet } from '@darkbeacon/identity';
 import { requestToken, type FetchLike, type OAuthClient } from './oauth-http.js';
 
 export const EVE_METADATA_URL = 'https://login.eveonline.com/.well-known/oauth-authorization-server';

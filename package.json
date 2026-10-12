@@ -1,5 +1,5 @@
 {
-  "name": "wormwright",
+  "name": "darkbeacon",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.34.6",
@@ -7,14 +7,14 @@
     "node": ">=24"
   },
   "scripts": {
-    "build": "tsc -b && pnpm --filter @wormwright/web build",
-    "typecheck": "tsc -b && pnpm --filter @wormwright/web typecheck",
+    "build": "tsc -b && pnpm --filter @darkbeacon/web build",
+    "typecheck": "tsc -b && pnpm --filter @darkbeacon/web typecheck",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
     "test": "vitest run",
     "test:pg": "TEST_DIALECTS=postgres vitest run",
     "test:watch": "vitest",
-    "dev": "concurrently -k -n server,web -c blue,magenta \"pnpm --filter @wormwright/server dev\" \"pnpm --filter @wormwright/web dev\""
+    "dev": "concurrently -k -n server,web -c blue,magenta \"pnpm --filter @darkbeacon/server dev\" \"pnpm --filter @darkbeacon/web dev\""
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

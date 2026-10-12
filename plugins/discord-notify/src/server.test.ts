@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { DomainEvent, Notifier, PluginContext } from '@wormwright/plugin-sdk';
+import type { DomainEvent, Notifier, PluginContext } from '@darkbeacon/plugin-sdk';
 import plugin, { describe as describeEvent, wants, type DiscordSettings } from './server.js';
 
 const HOOK = 'https://discord.com/api/webhooks/1/abc';
@@ -9,7 +9,7 @@ function fakeContext(
 ) {
   const handlers = new Map<string, (event: DomainEvent) => Promise<void> | void>();
   const provided: Notifier[] = [];
-  const base = { events: ['system.added'], username: 'Wormwright', ...settings };
+  const base = { events: ['system.added'], username: 'Darkbeacon', ...settings };
   const ctx = {
     plugin: { id: 'discord-notify', version: '1.0.0' },
     ports: {
@@ -71,7 +71,7 @@ describe('discord-notify', () => {
     const [url, init] = posted.mock.calls[0]!;
     expect(url).toBe(HOOK);
     expect(JSON.parse(String(init.body))).toMatchObject({
-      username: 'Wormwright',
+      username: 'Darkbeacon',
       embeds: [
         {
           title: 'Home chain: system.added',

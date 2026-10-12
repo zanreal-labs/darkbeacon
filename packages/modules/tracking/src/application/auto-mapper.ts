@@ -1,5 +1,5 @@
-import { hasMapRole, parseStream, type DomainEvent } from '@wormwright/core';
-import { isEventOfType } from '@wormwright/shared';
+import { hasMapRole, parseStream, type DomainEvent } from '@darkbeacon/core';
+import { isEventOfType } from '@darkbeacon/shared';
 import { jumpInScope } from '../domain/scopes.js';
 import type { AutoMapTarget, MapAccess, TrackingRepository, UniverseLookup } from '../ports/index.js';
 

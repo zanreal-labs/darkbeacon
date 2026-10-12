@@ -1,5 +1,5 @@
-import type { Clock } from '@wormwright/core';
-import type { EsiGateway, EsiLocation, EsiOnline, EsiResult, EsiShip } from '@wormwright/tracking';
+import type { Clock } from '@darkbeacon/core';
+import type { EsiGateway, EsiLocation, EsiOnline, EsiResult, EsiShip } from '@darkbeacon/tracking';
 
 /** ESI version contract (`X-Compatibility-Date`); see https://esi.evetech.net/meta/compatibility-dates. */
 export const ESI_COMPATIBILITY_DATE = '2026-08-18';
@@ -18,7 +18,7 @@ type Route = 'location' | 'ship' | 'online';
 
 export interface HttpEsiGatewayOptions {
   clock: Clock;
-  /** Identifies the instance to CCP, e.g. `Wormwright/0.1.0 (+https://map.example.org)`. */
+  /** Identifies the instance to CCP, e.g. `Darkbeacon/0.1.0 (+https://map.example.org)`. */
   userAgent: string;
   baseUrl?: string;
   fetch?: typeof fetch;

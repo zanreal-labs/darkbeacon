@@ -1,4 +1,4 @@
-import { ManualClock } from '@wormwright/core';
+import { ManualClock } from '@darkbeacon/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ESI_COMPATIBILITY_DATE, HttpEsiGateway } from './http-esi-gateway.js';
 
@@ -45,7 +45,7 @@ describe('HttpEsiGateway', () => {
     answers = [];
     esi = new HttpEsiGateway({
       clock,
-      userAgent: 'Wormwright/test',
+      userAgent: 'Darkbeacon/test',
       baseUrl: 'https://esi.test',
       fetch: fakeFetch(answers, sent),
     });
@@ -70,7 +70,7 @@ describe('HttpEsiGateway', () => {
       headers: {
         accept: 'application/json',
         authorization: 'Bearer token',
-        'user-agent': 'Wormwright/test',
+        'user-agent': 'Darkbeacon/test',
         'x-compatibility-date': ESI_COMPATIBILITY_DATE,
       },
     });

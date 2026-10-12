@@ -7,8 +7,8 @@ import {
   type EdgeProps,
   type InternalNode,
 } from '@xyflow/react';
-import type { ConnectionDto, ShipSize } from '@wormwright/shared';
-import { cssVar, type TokenName } from '@wormwright/theme-sdk';
+import type { ConnectionDto, ShipSize } from '@darkbeacon/shared';
+import { cssVar, type TokenName } from '@darkbeacon/theme-sdk';
 import { PluginSlot } from '../plugins/PluginSlot';
 import { along, floatingEnds, type Rect } from './geometry';
 import styles from './ConnectionEdge.module.css';
@@ -98,7 +98,7 @@ export const ConnectionEdge = memo(function ConnectionEdge({
         interactionWidth={18}
         style={{
           stroke: cssVar(strokeToken(c, selected)),
-          strokeWidth: 'var(--ww-edge-width)',
+          strokeWidth: 'var(--dbk-edge-width)',
           strokeDasharray: eol ? '7 5' : undefined,
         }}
       />

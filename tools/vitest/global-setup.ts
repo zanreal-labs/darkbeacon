@@ -1,4 +1,4 @@
-import { dropTestSchemas } from '@wormwright/db/testing';
+import { dropTestSchemas } from '@darkbeacon/db/testing';
 
 // Removes Postgres test schemas left by this or an earlier run.
 export async function setup(): Promise<void> {

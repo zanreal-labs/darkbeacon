@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { routes, type UniverseSystemDto } from '@wormwright/shared';
-import { cssVar } from '@wormwright/theme-sdk';
+import { routes, type UniverseSystemDto } from '@darkbeacon/shared';
+import { cssVar } from '@darkbeacon/theme-sdk';
 import { Search } from 'lucide-react';
 import { api } from '../lib/api';
 import { systemClass } from '../lib/universe';

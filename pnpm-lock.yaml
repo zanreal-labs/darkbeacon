@@ -59,40 +59,40 @@ importers:
       '@nestjs/websockets':
         specifier: ^12.1.2
         version: 12.1.2(@nestjs/common@12.1.2(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.1.2)(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      '@wormwright/access':
+      '@darkbeacon/access':
         specifier: workspace:*
         version: link:../../packages/modules/access
-      '@wormwright/core':
+      '@darkbeacon/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@wormwright/db':
+      '@darkbeacon/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@wormwright/identity':
+      '@darkbeacon/identity':
         specifier: workspace:*
         version: link:../../packages/modules/identity
-      '@wormwright/mapping':
+      '@darkbeacon/mapping':
         specifier: workspace:*
         version: link:../../packages/modules/mapping
-      '@wormwright/notifications':
+      '@darkbeacon/notifications':
         specifier: workspace:*
         version: link:../../packages/modules/notifications
-      '@wormwright/plugin-sdk':
+      '@darkbeacon/plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
-      '@wormwright/plugins':
+      '@darkbeacon/plugins':
         specifier: workspace:*
         version: link:../../packages/modules/plugins
-      '@wormwright/sde':
+      '@darkbeacon/sde':
         specifier: workspace:*
         version: link:../../packages/sde
-      '@wormwright/shared':
+      '@darkbeacon/shared':
         specifier: workspace:*
         version: link:../../packages/shared
-      '@wormwright/theme-sdk':
+      '@darkbeacon/theme-sdk':
         specifier: workspace:*
         version: link:../../packages/theme-sdk
-      '@wormwright/tracking':
+      '@darkbeacon/tracking':
         specifier: workspace:*
         version: link:../../packages/modules/tracking
       fastify:
@@ -153,13 +153,13 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^6.1.2
         version: 6.1.2(vite@8.3.4(@types/node@24.19.2))
-      '@wormwright/plugin-sdk':
+      '@darkbeacon/plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
-      '@wormwright/shared':
+      '@darkbeacon/shared':
         specifier: workspace:*
         version: link:../../packages/shared
-      '@wormwright/theme-sdk':
+      '@darkbeacon/theme-sdk':
         specifier: workspace:*
         version: link:../../packages/theme-sdk
       '@xyflow/react':
@@ -198,7 +198,7 @@ importers:
 
   packages/db:
     dependencies:
-      '@wormwright/core':
+      '@darkbeacon/core':
         specifier: workspace:*
         version: link:../core
       better-sqlite3:
@@ -220,10 +220,10 @@ importers:
 
   packages/modules/access:
     dependencies:
-      '@wormwright/core':
+      '@darkbeacon/core':
         specifier: workspace:*
         version: link:../../core
-      '@wormwright/shared':
+      '@darkbeacon/shared':
         specifier: workspace:*
         version: link:../../shared
       zod:
@@ -232,10 +232,10 @@ importers:
 
   packages/modules/identity:
     dependencies:
-      '@wormwright/core':
+      '@darkbeacon/core':
         specifier: workspace:*
         version: link:../../core
-      '@wormwright/shared':
+      '@darkbeacon/shared':
         specifier: workspace:*
         version: link:../../shared
       zod:
@@ -244,10 +244,10 @@ importers:
 
   packages/modules/mapping:
     dependencies:
-      '@wormwright/core':
+      '@darkbeacon/core':
         specifier: workspace:*
         version: link:../../core
-      '@wormwright/shared':
+      '@darkbeacon/shared':
         specifier: workspace:*
         version: link:../../shared
       zod:
@@ -256,10 +256,10 @@ importers:
 
   packages/modules/notifications:
     dependencies:
-      '@wormwright/core':
+      '@darkbeacon/core':
         specifier: workspace:*
         version: link:../../core
-      '@wormwright/shared':
+      '@darkbeacon/shared':
         specifier: workspace:*
         version: link:../../shared
       zod:
@@ -268,10 +268,10 @@ importers:
 
   packages/modules/plugins:
     dependencies:
-      '@wormwright/core':
+      '@darkbeacon/core':
         specifier: workspace:*
         version: link:../../core
-      '@wormwright/shared':
+      '@darkbeacon/shared':
         specifier: workspace:*
         version: link:../../shared
       zod:
@@ -280,10 +280,10 @@ importers:
 
   packages/modules/tracking:
     dependencies:
-      '@wormwright/core':
+      '@darkbeacon/core':
         specifier: workspace:*
         version: link:../../core
-      '@wormwright/shared':
+      '@darkbeacon/shared':
         specifier: workspace:*
         version: link:../../shared
       zod:
@@ -292,10 +292,10 @@ importers:
 
   packages/plugin-sdk:
     dependencies:
-      '@wormwright/core':
+      '@darkbeacon/core':
         specifier: workspace:*
         version: link:../core
-      '@wormwright/shared':
+      '@darkbeacon/shared':
         specifier: workspace:*
         version: link:../shared
       kysely:
@@ -309,7 +309,7 @@ importers:
 
   packages/shared:
     dependencies:
-      '@wormwright/core':
+      '@darkbeacon/core':
         specifier: workspace:*
         version: link:../core
       zod:
@@ -324,13 +324,13 @@ importers:
 
   plugins/discord-notify:
     devDependencies:
-      '@wormwright/plugin-sdk':
+      '@darkbeacon/plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
 
   plugins/sample-widget:
     devDependencies:
-      '@wormwright/plugin-sdk':
+      '@darkbeacon/plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
 

@@ -1,4 +1,4 @@
-import type { MapRole } from '@wormwright/shared';
+import type { MapRole } from '@darkbeacon/shared';
 
 const RANK: Record<MapRole, number> = { blocked: 0, viewer: 1, member: 2, manager: 3, admin: 4 };
 

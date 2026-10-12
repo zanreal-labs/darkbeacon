@@ -10,7 +10,7 @@ import {
   type OnSelectionChangeParams,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import type { LabelDto, UniverseSystemDto } from '@wormwright/shared';
+import type { LabelDto, UniverseSystemDto } from '@darkbeacon/shared';
 import type { MapPermissions } from '../lib/roles';
 import { useTheme } from '../theme/ThemeProvider';
 import { ConnectionEdge, type ConnectionEdgeType } from './ConnectionEdge';

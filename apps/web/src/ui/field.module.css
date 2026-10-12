@@ -6,60 +6,60 @@
 }
 
 .label {
-  color: var(--ww-color-text);
-  font-size: var(--ww-font-size-small);
+  color: var(--dbk-color-text);
+  font-size: var(--dbk-font-size-small);
   font-weight: 500;
 }
 
 .optional {
-  margin-left: var(--ww-space-1);
-  color: var(--ww-color-text-subtle);
+  margin-left: var(--dbk-space-1);
+  color: var(--dbk-color-text-subtle);
   font-weight: 400;
 }
 
 .hint {
-  color: var(--ww-color-text-muted);
-  font-size: var(--ww-font-size-small);
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
 }
 
 .fieldError {
-  color: var(--ww-color-danger);
-  font-size: var(--ww-font-size-small);
+  color: var(--dbk-color-danger);
+  font-size: var(--dbk-font-size-small);
 }
 
 .control {
   display: flex;
   align-items: center;
-  gap: var(--ww-space-2);
+  gap: var(--dbk-space-2);
   width: 100%;
   min-width: 0;
-  height: var(--ww-control-height);
-  padding: 0 var(--ww-space-3);
-  border: 1px solid var(--ww-color-border);
-  border-radius: var(--ww-radius);
-  background: var(--ww-color-surface);
-  box-shadow: var(--ww-shadow-small);
-  color: var(--ww-color-text);
+  height: var(--dbk-control-height);
+  padding: 0 var(--dbk-space-3);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+  background: var(--dbk-color-surface);
+  box-shadow: var(--dbk-shadow-small);
+  color: var(--dbk-color-text);
   transition:
-    border-color var(--ww-motion-fast) var(--ww-motion-easing),
-    box-shadow var(--ww-motion-fast) var(--ww-motion-easing);
+    border-color var(--dbk-motion-fast) var(--dbk-motion-easing),
+    box-shadow var(--dbk-motion-fast) var(--dbk-motion-easing);
 }
 
 .control:hover:not(:has(:disabled), [data-disabled], :disabled) {
-  border-color: var(--ww-color-border-strong);
+  border-color: var(--dbk-color-border-strong);
 }
 
 .control:focus-within,
 .control:focus-visible,
 .control[data-state='open'] {
   outline: none;
-  border-color: var(--ww-color-focus);
-  box-shadow: 0 0 0 3px var(--ww-color-accent-subtle);
+  border-color: var(--dbk-color-focus);
+  box-shadow: 0 0 0 3px var(--dbk-color-accent-subtle);
 }
 
 .control[aria-invalid='true'],
 .control:has([aria-invalid='true']) {
-  border-color: var(--ww-color-danger);
+  border-color: var(--dbk-color-danger);
 }
 
 .control:has(:disabled),
@@ -73,13 +73,13 @@
   flex: none;
   width: 15px;
   height: 15px;
-  color: var(--ww-color-text-subtle);
+  color: var(--dbk-color-text-subtle);
 }
 
 .sm {
-  height: var(--ww-control-height-small);
-  padding: 0 var(--ww-space-2);
-  font-size: var(--ww-font-size-small);
+  height: var(--dbk-control-height-small);
+  padding: 0 var(--dbk-space-2);
+  font-size: var(--dbk-font-size-small);
 }
 
 .bare {
@@ -95,19 +95,19 @@
 }
 
 .bare::placeholder {
-  color: var(--ww-color-text-subtle);
+  color: var(--dbk-color-text-subtle);
 }
 
 .textarea {
   height: auto;
   min-height: 80px;
-  padding: var(--ww-space-2) var(--ww-space-3);
+  padding: var(--dbk-space-2) var(--dbk-space-3);
   align-items: stretch;
 }
 
 .textarea textarea {
   resize: vertical;
-  line-height: var(--ww-line-height);
+  line-height: var(--dbk-line-height);
 }
 
 .selectTrigger {
@@ -118,7 +118,7 @@
 }
 
 .selectTrigger[data-placeholder] {
-  color: var(--ww-color-text-subtle);
+  color: var(--dbk-color-text-subtle);
 }
 
 .selectValue {
@@ -132,7 +132,7 @@
 .check {
   display: inline-flex;
   align-items: flex-start;
-  gap: var(--ww-space-2);
+  gap: var(--dbk-space-2);
   cursor: pointer;
 }
 
@@ -154,18 +154,18 @@
   height: 16px;
   margin-top: 2px;
   padding: 0;
-  border: 1px solid var(--ww-color-border-strong);
-  border-radius: var(--ww-radius-small);
-  background: var(--ww-color-surface);
-  color: var(--ww-color-accent-contrast);
+  border: 1px solid var(--dbk-color-border-strong);
+  border-radius: var(--dbk-radius-small);
+  background: var(--dbk-color-surface);
+  color: var(--dbk-color-accent-contrast);
   cursor: inherit;
-  transition: background var(--ww-motion-fast) var(--ww-motion-easing);
+  transition: background var(--dbk-motion-fast) var(--dbk-motion-easing);
 }
 
 .checkbox[data-state='checked'],
 .checkbox[data-state='indeterminate'] {
-  border-color: var(--ww-color-accent);
-  background: var(--ww-color-accent);
+  border-color: var(--dbk-color-accent);
+  background: var(--dbk-color-accent);
 }
 
 .checkbox svg {
@@ -183,13 +183,13 @@
   padding: 0;
   border: 0;
   border-radius: 999px;
-  background: var(--ww-color-border-strong);
+  background: var(--dbk-color-border-strong);
   cursor: inherit;
-  transition: background var(--ww-motion-fast) var(--ww-motion-easing);
+  transition: background var(--dbk-motion-fast) var(--dbk-motion-easing);
 }
 
 .switch[data-state='checked'] {
-  background: var(--ww-color-accent);
+  background: var(--dbk-color-accent);
 }
 
 .thumb {
@@ -200,7 +200,7 @@
   background: #fff;
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
   transform: translateX(2px);
-  transition: transform var(--ww-motion-fast) var(--ww-motion-easing);
+  transition: transform var(--dbk-motion-fast) var(--dbk-motion-easing);
 }
 
 .switch[data-state='checked'] .thumb {
@@ -216,32 +216,32 @@
   max-height: 300px;
   overflow-y: auto;
   margin: 0;
-  padding: var(--ww-space-1);
+  padding: var(--dbk-space-1);
   list-style: none;
-  border: 1px solid var(--ww-color-border);
-  border-radius: var(--ww-radius-large);
-  background: var(--ww-color-surface-raised);
-  box-shadow: var(--ww-shadow-medium);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius-large);
+  background: var(--dbk-color-surface-raised);
+  box-shadow: var(--dbk-shadow-medium);
 }
 
 .option {
   display: flex;
   align-items: center;
-  gap: var(--ww-space-2);
+  gap: var(--dbk-space-2);
   min-height: 32px;
-  padding: 0 var(--ww-space-2);
-  border-radius: var(--ww-radius);
+  padding: 0 var(--dbk-space-2);
+  border-radius: var(--dbk-radius);
   cursor: pointer;
 }
 
 .option[aria-selected='true'] {
-  background: var(--ww-color-surface-hover);
+  background: var(--dbk-color-surface-hover);
 }
 
 .listboxEmpty {
-  padding: var(--ww-space-3) var(--ww-space-2);
-  color: var(--ww-color-text-muted);
-  font-size: var(--ww-font-size-small);
+  padding: var(--dbk-space-3) var(--dbk-space-2);
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
 }
 
 .combobox {

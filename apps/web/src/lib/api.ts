@@ -1,4 +1,4 @@
-import { ApiErrorBody, type ApiErrorCode } from '@wormwright/shared';
+import { ApiErrorBody, type ApiErrorCode } from '@darkbeacon/shared';
 
 export class ApiError extends Error {
   constructor(

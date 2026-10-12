@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post } from '@nestjs/common';
-import { AccessRules, InstanceSettingsService } from '@wormwright/access';
-import type { Actor } from '@wormwright/core';
+import { AccessRules, InstanceSettingsService } from '@darkbeacon/access';
+import type { Actor } from '@darkbeacon/core';
 import {
   CreateAccessRuleRequest,
   nestPath,
@@ -8,7 +8,7 @@ import {
   UpdateInstanceSettingsRequest,
   type AccessRuleDto,
   type InstanceSettingsDto,
-} from '@wormwright/shared';
+} from '@darkbeacon/shared';
 import { CurrentActor } from '../../platform/actor.js';
 import { ZodPipe } from '../../platform/http.js';
 

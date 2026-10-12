@@ -1,7 +1,7 @@
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { describeEachDialect } from '@wormwright/db/testing';
+import { describeEachDialect } from '@darkbeacon/db/testing';
 import type {
   AccessRuleDto,
   AdminAccountDto,
@@ -9,7 +9,7 @@ import type {
   MapDto,
   MeDto,
   ServerMessage,
-} from '@wormwright/shared';
+} from '@darkbeacon/shared';
 import WebSocket from 'ws';
 import {
   DISCORD_CLIENT,
@@ -122,8 +122,8 @@ describeEachDialect('identity and access over HTTP', (t) => {
       network.approveDiscord(discordUser('1001', 'alice'), challenge),
     );
     expect(landed).toBe('/m/home');
-    expect(alice.cookies.has('ww_session')).toBe(true);
-    expect(alice.cookies.has('ww_oauth')).toBe(false);
+    expect(alice.cookies.has('dbk_session')).toBe(true);
+    expect(alice.cookies.has('dbk_oauth')).toBe(false);
 
     const me = await alice.json<MeDto>('/api/accounts/me');
     expect(me.account).toMatchObject({ discordId: '1001', name: 'alice', instanceRole: 'owner' });
@@ -174,6 +174,20 @@ describeEachDialect('identity and access over HTTP', (t) => {
     expect((await alice.json<MeDto>('/api/accounts/me')).account.mainCharacterId).toBeNull();
 
     expect((await alice.request('/api/auth/logout', { method: 'POST' })).status).toBe(204);
+    expect(alice.cookies.has('dbk_session')).toBe(false);
+    expect((await alice.request('/api/accounts/me')).status).toBe(401);
+  });
+
+  it('keeps a session from the cookie name used before the rename', async () => {
+    const alice = browser();
+    await alice.oauth('/api/auth/discord/login', (challenge) =>
+      network.approveDiscord(discordUser('1001', 'alice'), challenge),
+    );
+    alice.cookies.set('ww_session', alice.cookies.get('dbk_session')!);
+    alice.cookies.delete('dbk_session');
+    expect((await alice.json<MeDto>('/api/accounts/me')).account.name).toBe('alice');
+
+    expect((await alice.request('/api/auth/logout', { method: 'POST' })).status).toBe(204);
     expect(alice.cookies.has('ww_session')).toBe(false);
     expect((await alice.request('/api/accounts/me')).status).toBe(401);
   });
@@ -189,7 +203,7 @@ describeEachDialect('identity and access over HTTP', (t) => {
     // The round-trip cookie is single use.
     const replay = await mallory.request(`/api/auth/discord/callback?code=${code}&state=${state}`);
     expect(replay.headers.get('location')).toMatch(/auth_error=/);
-    expect(mallory.cookies.has('ww_session')).toBe(false);
+    expect(mallory.cookies.has('dbk_session')).toBe(false);
 
     const cancelled = await browser().request('/api/auth/discord/callback?error=access_denied');
     expect(cancelled.headers.get('location')).toMatch(/auth_error=Discord/);

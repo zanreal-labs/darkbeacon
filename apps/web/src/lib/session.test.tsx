@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw/http';
-import { routes } from '@wormwright/shared';
+import { routes } from '@darkbeacon/shared';
 import { meFixture } from '../test/fixtures';
 import { renderWithProviders, setupMockServer } from '../test/setup';
 import { useMe } from './session';
@@ -50,7 +50,7 @@ describe('useMe', () => {
     renderWithProviders(<Who />);
     expect(await screen.findByText('signed out')).toBeTruthy();
 
-    sessionStorage.setItem('ww-demo-signed-out', '1');
+    sessionStorage.setItem('dbk-demo-signed-out', '1');
     server.use(
       http.get(routes.auth.providers.path, () => HttpResponse.json({ discord: true, eve: true, demo: true })),
     );

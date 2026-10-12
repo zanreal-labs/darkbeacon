@@ -1,4 +1,4 @@
-import { ServerMessage } from '@wormwright/shared';
+import { ServerMessage } from '@darkbeacon/shared';
 
 export type StreamMessage = Extract<ServerMessage, { op: 'snapshot' | 'event' | 'subscribed' | 'error' }>;
 export type StreamListener = (message: StreamMessage) => void;

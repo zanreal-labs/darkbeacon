@@ -1,5 +1,5 @@
-import type { ActorKind, DomainEvent, EventBus, EventLog, NewEvent } from '@wormwright/core';
-import { json, type Database } from '@wormwright/db';
+import type { ActorKind, DomainEvent, EventBus, EventLog, NewEvent } from '@darkbeacon/core';
+import { json, type Database } from '@darkbeacon/db';
 
 export interface EventTables {
   event_stream: { stream: string; head_seq: number };

@@ -4,7 +4,7 @@ import { buildUniverse, formatUniverse, parseJsonl, SDE_FILES, type SdeInput } f
 import { UNIVERSE_DATA_FILE } from './index.js';
 import { readZipEntries } from './zip.js';
 
-// Builds data/universe.json: `pnpm --filter @wormwright/sde universe [--from <url|zip>] [--out <file>]`.
+// Builds data/universe.json: `pnpm --filter @darkbeacon/sde universe [--from <url|zip>] [--out <file>]`.
 
 const LATEST = 'https://developers.eveonline.com/static-data/eve-online-static-data-latest-jsonl.zip';
 
@@ -18,7 +18,7 @@ const { values } = parseArgs({
 async function fetchZip(source: string): Promise<Buffer> {
   if (!/^https?:\/\//.test(source)) return readFile(source);
   console.log(`downloading ${source}`);
-  const response = await fetch(source, { headers: { 'user-agent': 'Wormwright SDE builder' } });
+  const response = await fetch(source, { headers: { 'user-agent': 'Darkbeacon SDE builder' } });
   if (!response.ok) throw new Error(`download failed: ${response.status} ${response.statusText}`);
   return Buffer.from(await response.arrayBuffer());
 }

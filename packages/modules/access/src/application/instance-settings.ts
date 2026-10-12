@@ -1,5 +1,5 @@
-import { requireInstanceRole, type Actor, type UnitOfWork } from '@wormwright/core';
-import type { UpdateInstanceSettingsRequest } from '@wormwright/shared';
+import { requireInstanceRole, type Actor, type UnitOfWork } from '@darkbeacon/core';
+import type { UpdateInstanceSettingsRequest } from '@darkbeacon/shared';
 import {
   adminByDiscord,
   DEFAULT_INSTANCE_SETTINGS,

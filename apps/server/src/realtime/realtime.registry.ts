@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { INSTANCE_STREAM, type Actor } from '@wormwright/core';
+import { INSTANCE_STREAM, type Actor } from '@darkbeacon/core';
 
 export interface StreamKind {
   /** May `actor` subscribe to `<kind>:<id>`? Called on subscribe and again after `access.*` events. */

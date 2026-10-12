@@ -1,4 +1,4 @@
-import type { SignatureGroup } from '@wormwright/shared';
+import type { SignatureGroup } from '@darkbeacon/shared';
 
 /**
  * Parser for the clipboard of the in-game probe scanner. Each line is tab separated:

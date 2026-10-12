@@ -9,7 +9,7 @@ import {
   ReactFlowProvider,
   type Node as FlowNode,
 } from '@xyflow/react';
-import type { ConnectionDto } from '@wormwright/shared';
+import type { ConnectionDto } from '@darkbeacon/shared';
 import { connectionFixture, MAP_ID } from '../test/fixtures';
 import { installFlowMocks, renderWithProviders } from '../test/setup';
 import { ConnectionEdge, strokeToken, type ConnectionEdgeType } from './ConnectionEdge';
@@ -62,7 +62,7 @@ describe('ConnectionEdge', () => {
     expect(container.querySelector('[data-underlay]')).toBeNull();
     expect(container.querySelectorAll('[data-bubble]')).toHaveLength(0);
     const path = container.querySelector<SVGPathElement>('.react-flow__edge-path')!;
-    expect(path.style.stroke).toBe('var(--ww-edge-color)');
+    expect(path.style.stroke).toBe('var(--dbk-edge-color)');
     expect(path.style.strokeDasharray).toBe('');
     // The line runs between the node borders, not their centres.
     expect(path.getAttribute('d')).toBe('M 160,30 L 400,30');
@@ -95,7 +95,7 @@ describe('ConnectionEdge', () => {
     ]);
 
     const path = container.querySelector<SVGPathElement>('.react-flow__edge-path')!;
-    expect(path.style.stroke).toBe('var(--ww-edge-mass-critical)');
+    expect(path.style.stroke).toBe('var(--dbk-edge-mass-critical)');
     expect(path.style.strokeDasharray).not.toBe('');
     expect(screen.getByText('EOL 1h30m')).toBeTruthy();
     expect(screen.getByText('critical')).toBeTruthy();

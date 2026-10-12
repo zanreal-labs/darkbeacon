@@ -34,7 +34,7 @@ import {
   type UpdateMapRequest,
   type WebhookDeliveryDto,
   type WebhookDto,
-} from '@wormwright/shared';
+} from '@darkbeacon/shared';
 import { api, ApiError } from '../lib/api';
 import { mapPermissions } from '../lib/roles';
 import { relativeTime } from '../lib/time';
@@ -275,18 +275,20 @@ function GeneralSettings({ map }: { map: MapDto }) {
                 />
               </Field>
             </div>
-            <fieldset style={{ border: 0, margin: 0, padding: 0, display: 'grid', gap: 'var(--ww-space-2)' }}>
+            <fieldset
+              style={{ border: 0, margin: 0, padding: 0, display: 'grid', gap: 'var(--dbk-space-2)' }}
+            >
               <legend
                 className="muted"
                 style={{
-                  fontSize: 'var(--ww-font-size-small)',
+                  fontSize: 'var(--dbk-font-size-small)',
                   fontWeight: 500,
-                  marginBottom: 'var(--ww-space-2)',
+                  marginBottom: 'var(--dbk-space-2)',
                 }}
               >
                 Auto-mapping adds systems in
               </legend>
-              <div className={styles.grid} style={{ gap: 'var(--ww-space-3)' }}>
+              <div className={styles.grid} style={{ gap: 'var(--dbk-space-3)' }}>
                 {MapScope.options.map((s) => (
                   <Checkbox
                     key={s}
@@ -345,7 +347,7 @@ function DeleteMap({ map }: { map: MapDto }) {
           </Button>
         }
       />
-      <div style={{ height: 'var(--ww-space-4)' }} />
+      <div style={{ height: 'var(--dbk-space-4)' }} />
       <Dialog
         open={open}
         onOpenChange={(next) => {
@@ -818,8 +820,8 @@ function Webhooks({ map }: { map: MapDto }) {
     <Stack>
       {created && (
         <Callout tone="success" title="Webhook created. Copy its signing secret now">
-          <div style={{ display: 'grid', gap: 'var(--ww-space-2)', marginTop: 'var(--ww-space-1)' }}>
-            It is shown only once. Use it to check the <code>x-wormwright-signature</code> header.
+          <div style={{ display: 'grid', gap: 'var(--dbk-space-2)', marginTop: 'var(--dbk-space-1)' }}>
+            It is shown only once. Use it to check the <code>x-darkbeacon-signature</code> header.
             <SecretValue value={created.secret} />
             <div>
               <Button size="sm" variant="ghost" onClick={() => setCreated(null)}>
@@ -1000,7 +1002,7 @@ function WebhookRow({
               ))}
             </ul>
           ) : (
-            <p className="muted" style={{ fontSize: 'var(--ww-font-size-small)' }}>
+            <p className="muted" style={{ fontSize: 'var(--dbk-font-size-small)' }}>
               Nothing sent yet.
             </p>
           ))}
@@ -1079,7 +1081,7 @@ function CreateWebhookDialog({
               required
               type="url"
               autoFocus
-              placeholder="https://example.com/hooks/wormwright"
+              placeholder="https://example.com/hooks/darkbeacon"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
             />
@@ -1088,9 +1090,9 @@ function CreateWebhookDialog({
             <legend
               className="muted"
               style={{
-                fontSize: 'var(--ww-font-size-small)',
+                fontSize: 'var(--dbk-font-size-small)',
                 fontWeight: 500,
-                marginBottom: 'var(--ww-space-2)',
+                marginBottom: 'var(--dbk-space-2)',
               }}
             >
               Events
@@ -1109,7 +1111,7 @@ function CreateWebhookDialog({
               ))}
             </div>
           </fieldset>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--ww-space-2)' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--dbk-space-2)' }}>
             <DialogClose asChild>
               <Button variant="ghost">Cancel</Button>
             </DialogClose>

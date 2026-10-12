@@ -1,9 +1,9 @@
 {
-  "name": "@wormwright/theme-amarr",
+  "name": "@darkbeacon/theme-amarr",
   "version": "1.0.0",
   "private": true,
   "description": "Gold on dark bronze, built on the dark theme",
   "files": [
-    "wormwright-theme.json"
+    "darkbeacon-theme.json"
   ]
 }

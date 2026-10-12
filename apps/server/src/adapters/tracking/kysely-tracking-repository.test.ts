@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
-import { describeEachDialect } from '@wormwright/db/testing';
-import type { CharacterPresence } from '@wormwright/tracking';
+import { describeEachDialect } from '@darkbeacon/db/testing';
+import type { CharacterPresence } from '@darkbeacon/tracking';
 import { KyselyTrackingRepository } from './kysely-tracking-repository.js';
 
 // EVE ids and epoch ms both exceed 32 bits.

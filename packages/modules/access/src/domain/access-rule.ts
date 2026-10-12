@@ -1,5 +1,5 @@
-import { err, ok, type MapRole, type Result, type RoleGrant } from '@wormwright/core';
-import type { AccessRuleDto, AccessSubjectKind } from '@wormwright/shared';
+import { err, ok, type MapRole, type Result, type RoleGrant } from '@darkbeacon/core';
+import type { AccessRuleDto, AccessSubjectKind } from '@darkbeacon/shared';
 
 /** Grants `role` on a map to everyone matching the subject. */
 export interface AccessRule {

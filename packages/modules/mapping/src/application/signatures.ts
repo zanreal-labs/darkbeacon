@@ -1,10 +1,10 @@
-import { ConflictError, NotFoundError, ValidationError, newId, type Actor } from '@wormwright/core';
+import { ConflictError, NotFoundError, ValidationError, newId, type Actor } from '@darkbeacon/core';
 import type {
   AddSignatureRequest,
   PasteSignaturesRequest,
   PasteSignaturesResult,
   UpdateSignatureRequest,
-} from '@wormwright/shared';
+} from '@darkbeacon/shared';
 import type { Signature } from '../domain/map.js';
 import { changes, defined } from '../domain/rules.js';
 import { parseSignaturePaste } from '../domain/signature-paste.js';

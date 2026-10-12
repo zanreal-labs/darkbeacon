@@ -1,4 +1,4 @@
-import { NotFoundError, type Actor } from '@wormwright/core';
+import { NotFoundError, type Actor } from '@darkbeacon/core';
 
 export type CommandHandler = (actor: Actor, input: unknown) => Promise<unknown>;
 

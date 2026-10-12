@@ -2,15 +2,15 @@ import { createHmac } from 'node:crypto';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { ManualClock, newEvent, type Actor, type DomainEvent, type MapAccess } from '@wormwright/core';
-import { describeEachDialect } from '@wormwright/db/testing';
+import { ManualClock, newEvent, type Actor, type DomainEvent, type MapAccess } from '@darkbeacon/core';
+import { describeEachDialect } from '@darkbeacon/db/testing';
 import {
   WEBHOOK_HEADERS,
   WEBHOOK_MAX_ATTEMPTS,
   WebhookAdmin,
   WebhookDispatcher,
   type WebhookSender,
-} from '@wormwright/notifications';
+} from '@darkbeacon/notifications';
 import { HttpWebhookSender, isPublicAddress } from './http-webhook-sender.js';
 import { KyselyWebhookRepository, type WebhookTables } from './kysely-webhook-repository.js';
 import { SecretBox } from './secret-box.js';

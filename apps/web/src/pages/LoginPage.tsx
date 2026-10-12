@@ -1,6 +1,6 @@
 import { Navigate, useSearchParams } from 'react-router';
 import { Compass } from 'lucide-react';
-import { routes } from '@wormwright/shared';
+import { routes } from '@darkbeacon/shared';
 import { useEnterDemo, useMe, useProviders } from '../lib/session';
 import { LogoMark } from '../shell/Logo';
 import { ThemeMenu } from '../shell/ThemeMenu';
@@ -49,7 +49,7 @@ export function LoginPage() {
       <header className={styles.top}>
         <span className={styles.brand}>
           <LogoMark size={22} />
-          Wormwright
+          Darkbeacon
         </span>
         <ThemeMenu />
       </header>
@@ -59,7 +59,7 @@ export function LoginPage() {
           <div className={styles.mark}>
             <LogoMark size={48} />
           </div>
-          <h1 className={styles.title}>Wormwright</h1>
+          <h1 className={styles.title}>Darkbeacon</h1>
           <p className={styles.pitch}>Map your wormhole chain together, live.</p>
         </div>
 

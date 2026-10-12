@@ -36,7 +36,7 @@ export function DialogContent({ title, description, children, footer, width }: D
           )}
         </div>
         {children && <div className={styles.dialogBody}>{children}</div>}
-        {!children && <div style={{ height: 'var(--ww-space-4)' }} />}
+        {!children && <div style={{ height: 'var(--dbk-space-4)' }} />}
         {footer && <div className={styles.dialogFooter}>{footer}</div>}
         <D.Close asChild>
           <IconButton className={styles.close} label="Close" icon={<X />} size="sm" tooltip={false} />

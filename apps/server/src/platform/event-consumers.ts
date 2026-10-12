@@ -12,8 +12,8 @@ import {
   type DomainEvent,
   type EventBus,
   type EventLog,
-} from '@wormwright/core';
-import { Database } from '@wormwright/db';
+} from '@darkbeacon/core';
+import { Database } from '@darkbeacon/db';
 import type { EventTables } from '../adapters/events/kysely-event-log.js';
 import { CLOCK, EVENT_BUS, EVENT_LOG } from './tokens.js';
 

@@ -1,5 +1,5 @@
 import { Contrast, Monitor, Moon, Palette, Sun } from 'lucide-react';
-import { SYSTEM_THEME_ID } from '@wormwright/theme-sdk';
+import { SYSTEM_THEME_ID } from '@darkbeacon/theme-sdk';
 import { useTheme } from '../theme/ThemeProvider';
 import {
   IconButton,

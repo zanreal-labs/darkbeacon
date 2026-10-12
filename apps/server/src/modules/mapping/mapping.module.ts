@@ -1,6 +1,6 @@
 import { Inject, Module, type OnModuleInit } from '@nestjs/common';
-import type { Clock, EventLog, MapAccess, UnitOfWork } from '@wormwright/core';
-import { Database } from '@wormwright/db';
+import type { Clock, EventLog, MapAccess, UnitOfWork } from '@darkbeacon/core';
+import { Database } from '@darkbeacon/db';
 import {
   ConnectionUseCases,
   MapSnapshotQuery,
@@ -10,7 +10,7 @@ import {
   type MapRepository,
   type MappingPorts,
   type UniverseCatalog,
-} from '@wormwright/mapping';
+} from '@darkbeacon/mapping';
 import {
   KyselyConnectionRepository,
   KyselyMapRepository,

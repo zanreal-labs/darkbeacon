@@ -5,10 +5,10 @@ import {
   type GrantingMapRole,
   type MapAccess,
   type MapRole,
-} from '@wormwright/core';
-import type { MapOwnership } from '@wormwright/access';
-import type { Database } from '@wormwright/db';
-import type { MappingPorts } from '@wormwright/mapping';
+} from '@darkbeacon/core';
+import type { MapOwnership } from '@darkbeacon/access';
+import type { Database } from '@darkbeacon/db';
+import type { MappingPorts } from '@darkbeacon/mapping';
 import { InProcessEventBus } from '../events/in-process-event-bus.js';
 import { KyselyEventLog } from '../events/kysely-event-log.js';
 import {

@@ -1,9 +1,9 @@
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { newEvent, type EventLog } from '@wormwright/core';
-import { describeEachDialect } from '@wormwright/db/testing';
-import type { ServerMessage } from '@wormwright/shared';
+import { newEvent, type EventLog } from '@darkbeacon/core';
+import { describeEachDialect } from '@darkbeacon/db/testing';
+import type { ServerMessage } from '@darkbeacon/shared';
 import WebSocket from 'ws';
 import { createApp } from './app.js';
 import { parseEnv } from './config/config.js';

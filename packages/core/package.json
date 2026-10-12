@@ -1,5 +1,5 @@
 {
-  "name": "@wormwright/core",
+  "name": "@darkbeacon/core",
   "version": "0.0.0",
   "private": true,
   "description": "Shared kernel: ids, Result, clock, event envelope, authorization primitives, errors",

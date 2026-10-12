@@ -6,7 +6,7 @@ import type {
   MapSystemDto,
   SignatureDto,
   TypedEvent,
-} from '@wormwright/shared';
+} from '@darkbeacon/shared';
 import type { StreamMessage } from '../lib/realtime';
 
 export interface MapState {

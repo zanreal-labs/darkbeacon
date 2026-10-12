@@ -1,5 +1,5 @@
 // In-memory ports for unit tests of this module. Not part of the public API.
-import type { DomainEvent, EventLog, NewEvent, UnitOfWork } from '@wormwright/core';
+import type { DomainEvent, EventLog, NewEvent, UnitOfWork } from '@darkbeacon/core';
 import type {
   Account,
   CharacterTokens,

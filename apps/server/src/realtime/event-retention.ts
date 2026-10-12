@@ -5,7 +5,7 @@ import {
   type OnApplicationBootstrap,
   type OnModuleDestroy,
 } from '@nestjs/common';
-import type { Clock, EventLog } from '@wormwright/core';
+import type { Clock, EventLog } from '@darkbeacon/core';
 import { CLOCK, EVENT_LOG } from '../platform/tokens.js';
 
 const DAY = 24 * 60 * 60 * 1000;

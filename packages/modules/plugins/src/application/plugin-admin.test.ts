@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { ManualClock, type Actor } from '@wormwright/core';
+import { ManualClock, type Actor } from '@darkbeacon/core';
 import type { PluginManifestSummary } from '../domain/plugin.js';
 import { parsePackageSource } from '../domain/source.js';
 import { PluginAdmin } from './plugin-admin.js';
@@ -78,7 +78,7 @@ describe('PluginAdmin', () => {
 
     expect(await install('1.1.0')).toMatchObject({ version: '1.1.0', enabled: true, error: null });
     expect(plugins.rows.get('pinger')).toMatchObject({
-      settings: { url: 'x', username: 'Wormwright' },
+      settings: { url: 'x', username: 'Darkbeacon' },
       installedAt: clock.now(),
     });
 
@@ -193,17 +193,17 @@ describe('PluginAdmin', () => {
 describe('parsePackageSource', () => {
   it('understands catalogue entries and npm specs', () => {
     expect(parsePackageSource('catalog:discord-notify')).toEqual({ kind: 'catalog', name: 'discord-notify' });
-    expect(parsePackageSource('wormwright-plugin-x')).toEqual({
+    expect(parsePackageSource('darkbeacon-plugin-x')).toEqual({
       kind: 'npm',
-      name: 'wormwright-plugin-x',
+      name: 'darkbeacon-plugin-x',
       version: null,
     });
-    expect(parsePackageSource('@acme/ww-plugin@1.2.3')).toEqual({
+    expect(parsePackageSource('@acme/dbk-plugin@1.2.3')).toEqual({
       kind: 'npm',
-      name: '@acme/ww-plugin',
+      name: '@acme/dbk-plugin',
       version: '1.2.3',
     });
-    expect(parsePackageSource('@acme/ww-plugin@next')).toMatchObject({ version: 'next' });
+    expect(parsePackageSource('@acme/dbk-plugin@next')).toMatchObject({ version: 'next' });
   });
 
   it('rejects anything else', () => {

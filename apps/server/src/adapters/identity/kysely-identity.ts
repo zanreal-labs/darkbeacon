@@ -1,5 +1,5 @@
-import type { InstanceRole } from '@wormwright/core';
-import { bool, json, type Database } from '@wormwright/db';
+import type { InstanceRole } from '@darkbeacon/core';
+import { bool, json, type Database } from '@darkbeacon/db';
 import type {
   Account,
   AccountRepository,
@@ -11,7 +11,7 @@ import type {
   LinkedCharacter,
   Session,
   SessionRepository,
-} from '@wormwright/identity';
+} from '@darkbeacon/identity';
 import type { SecretBox } from './secret-box.js';
 
 export interface IdentityTables {

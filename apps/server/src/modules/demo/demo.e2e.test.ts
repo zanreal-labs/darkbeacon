@@ -1,6 +1,6 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { describeEachDialect } from '@wormwright/db/testing';
-import type { AuthProvidersDto, MapSnapshot, MapSummaryDto, MeDto, SignatureDto } from '@wormwright/shared';
+import { describeEachDialect } from '@darkbeacon/db/testing';
+import type { AuthProvidersDto, MapSnapshot, MapSummaryDto, MeDto, SignatureDto } from '@darkbeacon/shared';
 import { afterEach, expect, it } from 'vitest';
 import { createApp } from '../../app.js';
 import { parseEnv } from '../../config/config.js';

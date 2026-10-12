@@ -1,4 +1,4 @@
-import type { PluginDto } from '@wormwright/shared';
+import type { PluginDto } from '@darkbeacon/shared';
 
 /**
  * What the core keeps from a plugin manifest. The installer validates the manifest with

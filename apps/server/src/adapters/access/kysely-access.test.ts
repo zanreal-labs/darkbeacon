@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
-import type { AccessRule } from '@wormwright/access';
-import { describeEachDialect } from '@wormwright/db/testing';
+import type { AccessRule } from '@darkbeacon/access';
+import { describeEachDialect } from '@darkbeacon/db/testing';
 import { KyselyAccessRuleRepository, KyselyInstanceSettingsRepository } from './kysely-access.js';
 
 let n = 0;

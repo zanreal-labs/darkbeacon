@@ -1,5 +1,8 @@
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:crypto';
 
+// The product's former name. Changing it would change every derived key and lock out the secrets already stored.
+const HKDF_SALT = 'wormwright';
+
 /**
  * AES-256-GCM for small secrets at rest, keyed from SECRET_KEY. `purpose` separates keys,
  * so a value sealed for one use cannot be opened as another.
@@ -8,7 +11,7 @@ export class SecretBox {
   private readonly key: Buffer;
 
   constructor(secretKey: string, purpose: string) {
-    this.key = Buffer.from(hkdfSync('sha256', secretKey, 'wormwright', purpose, 32));
+    this.key = Buffer.from(hkdfSync('sha256', secretKey, HKDF_SALT, purpose, 32));
   }
 
   /** `v1.<iv>.<tag>.<ciphertext>`, base64url parts. */

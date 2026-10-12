@@ -1,4 +1,4 @@
-import type { DomainEvent, EventLog, NewEvent, UnitOfWork } from '@wormwright/core';
+import type { DomainEvent, EventLog, NewEvent, UnitOfWork } from '@darkbeacon/core';
 import type { InstalledPlugin } from '../domain/plugin.js';
 import type { PackageSource } from '../domain/source.js';
 import type { InstalledTheme } from '../domain/theme.js';
@@ -58,7 +58,7 @@ export class FakeSchemas implements PluginSettingsSchemas {
   validate = async (_p: InstalledPlugin, values: Record<string, unknown>) =>
     typeof values.url === 'number'
       ? { ok: false as const, errors: [{ path: 'url', message: 'Expected string' }] }
-      : { ok: true as const, value: { username: 'Wormwright', ...values } };
+      : { ok: true as const, value: { username: 'Darkbeacon', ...values } };
 }
 
 export class MemoryLog implements EventLog {

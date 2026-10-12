@@ -1,10 +1,10 @@
-import type { Clock } from '@wormwright/core';
+import type { Clock } from '@darkbeacon/core';
 import {
   ExternalAuthError,
   type DiscordGrant,
   type DiscordProfile,
   type IdentityProvider,
-} from '@wormwright/identity';
+} from '@darkbeacon/identity';
 import { requestToken, type FetchLike, type OAuthClient, type TokenResponse } from './oauth-http.js';
 
 const AUTHORIZE_URL = 'https://discord.com/oauth2/authorize';

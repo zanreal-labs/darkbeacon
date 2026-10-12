@@ -7,9 +7,9 @@ import {
   type OnModuleDestroy,
   type OnModuleInit,
 } from '@nestjs/common';
-import { InstanceSettingsService } from '@wormwright/access';
-import type { Clock, EventLog, UnitOfWork } from '@wormwright/core';
-import { Database } from '@wormwright/db';
+import { InstanceSettingsService } from '@darkbeacon/access';
+import type { Clock, EventLog, UnitOfWork } from '@darkbeacon/core';
+import { Database } from '@darkbeacon/db';
 import {
   AccountService,
   CharacterService,
@@ -20,7 +20,7 @@ import {
   type CharacterRepository,
   type DiscordLinkRepository,
   type IdentityProvider,
-} from '@wormwright/identity';
+} from '@darkbeacon/identity';
 import { DiscordHttpProvider } from '../../adapters/identity/discord-http.js';
 import { EveSsoHttp } from '../../adapters/identity/eve-sso-http.js';
 import {
@@ -36,7 +36,7 @@ import { ActorResolverRegistry } from '../../platform/actor.js';
 import { APP_CONFIG, CLOCK, EVENT_LOG, HTTP_FETCH, UNIT_OF_WORK } from '../../platform/tokens.js';
 import { AccountsController, AdminAccountsController } from './accounts.controller.js';
 import { AuthController } from './auth.controller.js';
-import { readCookie, SESSION_COOKIE } from './cookies.js';
+import { readSessionCookie } from './cookies.js';
 import { PENDING_BOX } from './identity.tokens.js';
 
 const DISCORD = 'identity.Discord';
@@ -185,7 +185,7 @@ export class IdentityModule implements OnModuleInit, OnApplicationBootstrap, OnM
 
   onModuleInit(): void {
     this.actors.use(async (request) => {
-      const resolved = await this.sessions.resolve(readCookie(request, SESSION_COOKIE));
+      const resolved = await this.sessions.resolve(readSessionCookie(request));
       if (!resolved) return null;
       if (this.discordLogin.enabled) {
         // Keeps Discord roles fresh without delaying the request.

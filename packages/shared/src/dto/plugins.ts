@@ -23,7 +23,7 @@ export type PluginDto = z.infer<typeof PluginDto>;
 
 /**
  * `source` is `catalog:<name>` for a package shipped with the server, or an npm package name
- * with an optional exact version or tag (`wormwright-plugin-x`, `@scope/x@1.2.0`).
+ * with an optional exact version or tag (`darkbeacon-plugin-x`, `@scope/x@1.2.0`).
  * Uploaded .tgz files go to the `upload` routes instead.
  */
 export const InstallPluginRequest = z.object({ source: z.string().trim().min(1) });

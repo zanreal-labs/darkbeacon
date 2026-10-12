@@ -5,11 +5,11 @@ import {
   InstanceSettingsService,
   type AccessRuleRepository,
   type AccessSubjectsSource,
-} from '@wormwright/access';
-import { hasMapRole, type Clock, type EventLog, type UnitOfWork } from '@wormwright/core';
-import { Database } from '@wormwright/db';
-import { AccountService } from '@wormwright/identity';
-import { isEventOfType } from '@wormwright/shared';
+} from '@darkbeacon/access';
+import { hasMapRole, type Clock, type EventLog, type UnitOfWork } from '@darkbeacon/core';
+import { Database } from '@darkbeacon/db';
+import { AccountService } from '@darkbeacon/identity';
+import { isEventOfType } from '@darkbeacon/shared';
 import {
   KyselyAccessRuleRepository,
   KyselyInstanceSettingsRepository,

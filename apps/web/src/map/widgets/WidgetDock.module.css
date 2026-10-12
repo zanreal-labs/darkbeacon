@@ -23,29 +23,29 @@
 }
 
 .dock[data-open] .frame {
-  border-left: 1px solid var(--ww-color-border);
-  background: var(--ww-color-surface);
+  border-left: 1px solid var(--dbk-color-border);
+  background: var(--dbk-color-surface);
 }
 
 .dock:not([data-open]) .frame {
   align-self: flex-start;
   width: auto;
-  margin: var(--ww-space-3) var(--ww-space-3) 0 auto;
-  border: 1px solid var(--ww-color-border);
-  border-radius: var(--ww-radius-large);
-  background: var(--ww-color-surface);
-  box-shadow: var(--ww-shadow-medium);
+  margin: var(--dbk-space-3) var(--dbk-space-3) 0 auto;
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius-large);
+  background: var(--dbk-color-surface);
+  box-shadow: var(--dbk-shadow-medium);
 }
 
 .header {
   display: flex;
   align-items: center;
-  gap: var(--ww-space-1);
-  padding: var(--ww-space-2);
+  gap: var(--dbk-space-1);
+  padding: var(--dbk-space-2);
 }
 
 .dock[data-open] .header {
-  border-bottom: 1px solid var(--ww-color-border);
+  border-bottom: 1px solid var(--dbk-color-border);
 }
 
 .tabs {
@@ -60,20 +60,20 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: var(--ww-control-height-small);
-  padding: 0 var(--ww-space-2);
+  height: var(--dbk-control-height-small);
+  padding: 0 var(--dbk-space-2);
   border: 0;
-  border-radius: var(--ww-radius);
+  border-radius: var(--dbk-radius);
   background: none;
-  color: var(--ww-color-text-muted);
+  color: var(--dbk-color-text-muted);
   font: inherit;
-  font-size: var(--ww-font-size-small);
+  font-size: var(--dbk-font-size-small);
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
   transition:
-    background var(--ww-motion-fast) var(--ww-motion-easing),
-    color var(--ww-motion-fast) var(--ww-motion-easing);
+    background var(--dbk-motion-fast) var(--dbk-motion-easing),
+    color var(--dbk-motion-fast) var(--dbk-motion-easing);
 }
 
 .tab svg {
@@ -82,22 +82,22 @@
 }
 
 .tab:hover {
-  background: var(--ww-color-surface-hover);
-  color: var(--ww-color-text);
+  background: var(--dbk-color-surface-hover);
+  color: var(--dbk-color-text);
 }
 
 .tab[aria-selected='true'] {
-  background: var(--ww-color-surface-active);
-  color: var(--ww-color-text);
+  background: var(--dbk-color-surface-active);
+  color: var(--dbk-color-text);
 }
 
 .count {
   min-width: 16px;
   padding: 0 4px;
   border-radius: 999px;
-  background: var(--ww-color-surface-active);
-  color: var(--ww-color-text-muted);
-  font-family: var(--ww-font-family-mono);
+  background: var(--dbk-color-surface-active);
+  color: var(--dbk-color-text-muted);
+  font-family: var(--dbk-font-family-mono);
   font-size: 10px;
   line-height: 16px;
   text-align: center;
@@ -105,13 +105,13 @@
 }
 
 .tab[aria-selected='true'] .count {
-  background: var(--ww-color-accent-subtle);
-  color: var(--ww-color-accent-text);
+  background: var(--dbk-color-accent-subtle);
+  color: var(--dbk-color-accent-text);
 }
 
 .collapse {
   flex: none;
-  color: var(--ww-color-text-subtle);
+  color: var(--dbk-color-text-subtle);
 }
 
 .panel {
@@ -142,10 +142,10 @@
 
   .header,
   .dock[data-open] .header {
-    padding: 0 var(--ww-space-1) env(safe-area-inset-bottom);
-    border-top: 1px solid var(--ww-color-border);
+    padding: 0 var(--dbk-space-1) env(safe-area-inset-bottom);
+    border-top: 1px solid var(--dbk-color-border);
     border-bottom: 0;
-    background: var(--ww-color-bg-subtle);
+    background: var(--dbk-color-bg-subtle);
   }
 
   .collapse {
@@ -158,7 +158,7 @@
     gap: 2px;
     height: 52px;
     background: none !important;
-    font-size: var(--ww-font-size-xs);
+    font-size: var(--dbk-font-size-xs);
   }
 
   .tab svg {
@@ -167,7 +167,7 @@
   }
 
   .tab[aria-selected='true'] {
-    color: var(--ww-color-accent-text);
+    color: var(--dbk-color-accent-text);
   }
 
   .count {
@@ -185,9 +185,9 @@
 
   .panel {
     max-height: 58dvh;
-    border-top: 1px solid var(--ww-color-border);
-    border-radius: var(--ww-radius-large) var(--ww-radius-large) 0 0;
-    background: var(--ww-color-surface);
-    box-shadow: var(--ww-shadow-large);
+    border-top: 1px solid var(--dbk-color-border);
+    border-radius: var(--dbk-radius-large) var(--dbk-radius-large) 0 0;
+    background: var(--dbk-color-surface);
+    box-shadow: var(--dbk-shadow-large);
   }
 }

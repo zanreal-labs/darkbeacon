@@ -7,7 +7,7 @@ import {
   type CharacterDto,
   type CharacterPresenceDto,
   type UniverseSystemDto,
-} from '@wormwright/shared';
+} from '@darkbeacon/shared';
 import { api, ApiError } from '../../lib/api';
 import type { MapPermissions } from '../../lib/roles';
 import { Callout, CharacterAvatar, EmptyState, Switch } from '../../ui';

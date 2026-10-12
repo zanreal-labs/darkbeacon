@@ -1,4 +1,4 @@
-import { INSTANCE_STREAM, newEvent, type ActorRef, type NewEvent } from '@wormwright/core';
+import { INSTANCE_STREAM, newEvent, type ActorRef, type NewEvent } from '@darkbeacon/core';
 import type { GuildRole } from '../domain/account.js';
 
 /** Identity's own changes (token refresh, role sync) are recorded as this actor. */

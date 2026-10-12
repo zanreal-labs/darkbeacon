@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 /**
  * Static universe data built from CCP's Static Data Export (SDE) by
- * `pnpm --filter @wormwright/sde universe`. The result is committed as `data/universe.json`.
+ * `pnpm --filter @darkbeacon/sde universe`. The result is committed as `data/universe.json`.
  */
 export interface SdeSolarSystem {
   id: number;

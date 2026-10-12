@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { ManualClock, type AccountActor } from '@wormwright/core';
+import { ManualClock, type AccountActor } from '@darkbeacon/core';
 import { ExternalAuthError } from '../domain/errors.js';
 import { SESSION_TOUCH_MS, SESSION_TTL_MS, safeReturnTo, GUILD_ROLES_TTL_MS } from '../domain/rules.js';
 import type { EveSso, EveTokenSet } from '../ports/eve-sso.js';

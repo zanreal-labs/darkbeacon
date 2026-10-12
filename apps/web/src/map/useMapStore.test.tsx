@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { act, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw/http';
-import { buildPath, routes, type MapSystemDto } from '@wormwright/shared';
+import { buildPath, routes, type MapSystemDto } from '@darkbeacon/shared';
 import { connectionFixture, eventMessage, MAP_ID, systemFixture } from '../test/fixtures';
 import { FakeSocket, fakeRealtime, renderWithProviders, setupMockServer } from '../test/setup';
 import { useMapStore } from './useMapStore';

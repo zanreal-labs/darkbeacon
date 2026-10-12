@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fastifyStatic from '@fastify/static';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import type { ApiErrorBody } from '@wormwright/shared';
+import type { ApiErrorBody } from '@darkbeacon/shared';
 
 /** apps/web/dist, seen from apps/server/(src|dist)/web/. */
 export const WEB_DIST = fileURLToPath(new URL('../../../web/dist', import.meta.url));

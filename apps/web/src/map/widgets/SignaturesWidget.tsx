@@ -7,7 +7,7 @@ import {
   SignatureGroup,
   type PasteSignaturesResult,
   type SignatureDto,
-} from '@wormwright/shared';
+} from '@darkbeacon/shared';
 import { api } from '../../lib/api';
 import type { MapPermissions } from '../../lib/roles';
 import { shortAge } from '../../lib/time';

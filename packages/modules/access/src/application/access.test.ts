@@ -6,7 +6,7 @@ import {
   type EventLog,
   type NewEvent,
   type UnitOfWork,
-} from '@wormwright/core';
+} from '@darkbeacon/core';
 import type { AccessRule, AccessSubjects } from '../domain/access-rule.js';
 import type { InstanceSettings } from '../domain/instance-settings.js';
 import type { AccessRuleRepository } from '../ports/access-rule-repository.js';

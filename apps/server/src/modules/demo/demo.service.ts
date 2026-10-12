@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { AccountService, DemoLogin, type SignedIn } from '@wormwright/identity';
-import { ConnectionUseCases, MapUseCases, SignatureUseCases, SystemUseCases } from '@wormwright/mapping';
+import { AccountService, DemoLogin, type SignedIn } from '@darkbeacon/identity';
+import { ConnectionUseCases, MapUseCases, SignatureUseCases, SystemUseCases } from '@darkbeacon/mapping';
 import { seedDemoChain } from './demo-chain.js';
 
 /**

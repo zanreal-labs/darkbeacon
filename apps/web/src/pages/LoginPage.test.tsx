@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { screen } from '@testing-library/react';
 import { http, HttpResponse } from 'msw/http';
 import { createMemoryRouter, RouterProvider } from 'react-router';
-import { routes } from '@wormwright/shared';
+import { routes } from '@darkbeacon/shared';
 import { renderWithProviders, setupMockServer } from '../test/setup';
 import { TooltipProvider } from '../ui';
 import { LoginPage } from './LoginPage';

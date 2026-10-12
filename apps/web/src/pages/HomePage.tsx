@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, Map as MapIcon, Plus, Settings, Waypoints } from 'lucide-react';
-import { routes, type CreateMapRequest, type MapDto, type MapSummaryDto } from '@wormwright/shared';
+import { routes, type CreateMapRequest, type MapDto, type MapSummaryDto } from '@darkbeacon/shared';
 import { api, ApiError } from '../lib/api';
 import { mapPermissions } from '../lib/roles';
 import { useDemoMode } from '../lib/session';

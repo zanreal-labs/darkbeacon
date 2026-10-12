@@ -7,8 +7,8 @@ import {
   type OnApplicationShutdown,
 } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
-import { systemClock, type EventBus } from '@wormwright/core';
-import { createDatabase, Database } from '@wormwright/db';
+import { systemClock, type EventBus } from '@darkbeacon/core';
+import { createDatabase, Database } from '@darkbeacon/db';
 import { InProcessEventBus } from '../adapters/events/in-process-event-bus.js';
 import { KyselyEventLog } from '../adapters/events/kysely-event-log.js';
 import type { AppConfig } from '../config/config.js';

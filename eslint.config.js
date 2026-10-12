@@ -2,7 +2,7 @@ import js from '@eslint/js';
 import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
-import wormwright from './tools/eslint/boundaries.js';
+import darkbeacon from './tools/eslint/boundaries.js';
 
 export default tseslint.config(
   { ignores: ['**/dist/**', '**/node_modules/**', 'coverage/**', '**/*.d.ts', '.claude/**'] },
@@ -10,9 +10,9 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   {
     languageOptions: { ecmaVersion: 2024, sourceType: 'module', globals: globals.node },
-    plugins: { wormwright },
+    plugins: { darkbeacon },
     rules: {
-      'wormwright/boundaries': 'error',
+      'darkbeacon/boundaries': 'error',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       '@typescript-eslint/consistent-type-imports': ['error', { fixStyle: 'inline-type-imports' }],
     },

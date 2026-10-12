@@ -1,4 +1,4 @@
-import type { InstanceRole } from '@wormwright/core';
+import type { InstanceRole } from '@darkbeacon/core';
 
 /** A person, identified by their Discord user (dev-login accounts have no Discord id). */
 export interface Account {

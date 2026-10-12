@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post, Put } from '@nestjs/common';
-import type { Actor } from '@wormwright/core';
-import { ConnectionUseCases, MapUseCases, SignatureUseCases, SystemUseCases } from '@wormwright/mapping';
+import type { Actor } from '@darkbeacon/core';
+import { ConnectionUseCases, MapUseCases, SignatureUseCases, SystemUseCases } from '@darkbeacon/mapping';
 import {
   AddConnectionRequest,
   AddSignatureRequest,
@@ -16,7 +16,7 @@ import {
   UpdateMapRequest,
   UpdateSignatureRequest,
   UpdateSystemRequest,
-} from '@wormwright/shared';
+} from '@darkbeacon/shared';
 import { z } from 'zod';
 import { CurrentActor } from '../../platform/actor.js';
 import { ZodPipe } from '../../platform/http.js';

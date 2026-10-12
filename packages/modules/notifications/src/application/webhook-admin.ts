@@ -5,7 +5,7 @@ import {
   newId,
   requireMapRole,
   type Actor,
-} from '@wormwright/core';
+} from '@darkbeacon/core';
 import {
   EVENT_TYPES,
   type CreateWebhookRequest,
@@ -13,7 +13,7 @@ import {
   type UpdateWebhookRequest,
   type WebhookDeliveryDto,
   type WebhookDto,
-} from '@wormwright/shared';
+} from '@darkbeacon/shared';
 import {
   isDeliverableUrl,
   newWebhookSecret,

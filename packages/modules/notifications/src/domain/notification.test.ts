@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DomainEvent } from '@wormwright/core';
+import type { DomainEvent } from '@darkbeacon/core';
 import {
   WEBHOOK_MAX_ATTEMPTS,
   isDeliverableUrl,

@@ -1,10 +1,10 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { ManualClock, type EventLog, type MapAccess } from '@wormwright/core';
-import { describeEachDialect } from '@wormwright/db/testing';
-import type { CharacterService } from '@wormwright/identity';
-import type { ConnectionDto, MapDto, MapSnapshot, MapSystemDto, MeDto } from '@wormwright/shared';
-import { TrackingPoller, type TrackingRepository } from '@wormwright/tracking';
-import { FakeEsi } from '@wormwright/tracking/testing';
+import { ManualClock, type EventLog, type MapAccess } from '@darkbeacon/core';
+import { describeEachDialect } from '@darkbeacon/db/testing';
+import type { CharacterService } from '@darkbeacon/identity';
+import type { ConnectionDto, MapDto, MapSnapshot, MapSystemDto, MeDto } from '@darkbeacon/shared';
+import { TrackingPoller, type TrackingRepository } from '@darkbeacon/tracking';
+import { FakeEsi } from '@darkbeacon/tracking/testing';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createApp } from '../../app.js';
 import { parseEnv } from '../../config/config.js';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DomainEvent, PluginContext, PluginRoute, WebPluginApi } from '@wormwright/plugin-sdk';
+import type { DomainEvent, PluginContext, PluginRoute, WebPluginApi } from '@darkbeacon/plugin-sdk';
 import plugin from './server.js';
 import webPlugin from './web.js';
 

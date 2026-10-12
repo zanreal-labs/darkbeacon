@@ -1,6 +1,6 @@
 import { useQueries } from '@tanstack/react-query';
-import { buildPath, routes, type UniverseSystemDto } from '@wormwright/shared';
-import type { TokenName } from '@wormwright/theme-sdk';
+import { buildPath, routes, type UniverseSystemDto } from '@darkbeacon/shared';
+import type { TokenName } from '@darkbeacon/theme-sdk';
 import { api } from './api';
 
 export const universeKey = (id: number) => ['universe', id] as const;

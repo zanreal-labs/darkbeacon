@@ -1,4 +1,4 @@
-# Wormwright
+# Darkbeacon
 
 A self-hosted wormhole and chain mapper for EVE Online. One container, one login (Discord), EVE characters
 linked through EVE SSO, and every change streamed live to everyone looking at the map.
@@ -10,8 +10,8 @@ The engineering contract is [`docs/SPEC.md`](docs/SPEC.md); choices the spec lea
 
 ```sh
 cp .env.example .env        # fill in PUBLIC_URL and the Discord/EVE applications
-docker build -t wormwright .
-docker run -p 3000:3000 -v ww-data:/data --env-file .env wormwright
+docker build -t darkbeacon .
+docker run -p 3000:3000 -v dbk-data:/data --env-file .env darkbeacon
 ```
 
 Open `http://localhost:3000`. The first account to sign in becomes the instance owner. Data lives in the
@@ -21,10 +21,10 @@ the server generates one and keeps it in `/data/secret.key`.
 ### Demo mode: a preview without Discord or EVE
 
 ```sh
-docker build -t wormwright:dev .
-docker run -d --name wormwright-preview -p 127.0.0.1::3000 -v wormwright-preview:/data \
-  -e DEMO_MODE=true -e ALLOW_DEMO_MODE=true -e PUBLIC_URL=http://localhost wormwright:dev
-docker port wormwright-preview 3000      # the random loopback port it landed on
+docker build -t darkbeacon:dev .
+docker run -d --name darkbeacon-preview -p 127.0.0.1::3000 -v darkbeacon-preview:/data \
+  -e DEMO_MODE=true -e ALLOW_DEMO_MODE=true -e PUBLIC_URL=http://localhost darkbeacon:dev
+docker port darkbeacon-preview 3000      # the random loopback port it landed on
 ```
 
 Open that address and you are in: there is no sign-in form. With `DEMO_MODE=true` every visit without a
@@ -39,8 +39,8 @@ Anyone who can reach the instance gets in, so the server refuses `DEMO_MODE` wit
 deprecated aliases. Fake characters have no ESI token, so they can be tracked on a map but never move.
 Scripts that need several people can sign in named local accounts with
 `POST /api/auth/dev {"name": "...", "character": {"name": "..."}}` (demo mode only). Plugins and themes shipped
-with the server are installed from Admin > Plugins and Admin > Themes. `docker rm -f wormwright-preview` stops
-it; the `wormwright-preview` volume keeps the data.
+with the server are installed from Admin > Plugins and Admin > Themes. `docker rm -f darkbeacon-preview` stops
+it; the `darkbeacon-preview` volume keeps the data.
 
 ### Appearance
 
@@ -64,13 +64,13 @@ dc run --rm dev pnpm test          # vitest; DB tests run on SQLite and Postgres
 dc run --rm dev pnpm test:pg       # Postgres only
 dc run --rm dev pnpm build         # server/packages to dist, web app to apps/web/dist
 dc run --rm dev pnpm format        # prettier --write
-dc run --rm dev pnpm --filter @wormwright/sde universe   # rebuild universe.json from CCP's SDE (~100 MB download)
+dc run --rm dev pnpm --filter @darkbeacon/sde universe   # rebuild universe.json from CCP's SDE (~100 MB download)
 
 dc up app                          # API (watch mode) + Vite, DEMO_MODE=true
 dc port app 5173                   # the random loopback port of the web app
 
 # The web app alone, against an in-browser mock of the API and WebSocket:
-dc run --rm -p 127.0.0.1::5173 dev pnpm --filter @wormwright/web dev:mock
+dc run --rm -p 127.0.0.1::5173 dev pnpm --filter @darkbeacon/web dev:mock
 ```
 
 No fixed host ports are published; `dc port` prints where the app landed.
@@ -119,7 +119,7 @@ plugins/*              first-party plugins (plugin-sdk only)
 
 3. **Adapters** (Kysely repositories, HTTP clients) go in `apps/server/src/adapters/<m>/`. Query through
    `database.db<Tables>()` so you join the caller's transaction. Test them with
-   `describeEachDialect` from `@wormwright/db/testing`, which gives each test a fresh database on both
+   `describeEachDialect` from `@darkbeacon/db/testing`, which gives each test a fresh database on both
    SQLite and Postgres.
 
 4. **The Nest module** goes in `apps/server/src/modules/<m>/` and is registered with one line in

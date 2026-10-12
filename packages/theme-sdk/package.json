@@ -1,5 +1,5 @@
 {
-  "name": "@wormwright/theme-sdk",
+  "name": "@darkbeacon/theme-sdk",
   "version": "0.0.0",
   "private": true,
   "description": "Theme token catalogue, built-in themes and CSS generator",

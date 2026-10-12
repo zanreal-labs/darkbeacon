@@ -6,7 +6,7 @@ const root = resolve(import.meta.dirname, '../..');
 const modules = existsSync(resolve(root, 'packages/modules'))
   ? readdirSync(resolve(root, 'packages/modules'))
   : [];
-const modulePackages = new Set(modules.map((m) => `@wormwright/${m}`));
+const modulePackages = new Set(modules.map((m) => `@darkbeacon/${m}`));
 
 // Frameworks and I/O libraries that domain/application code must not touch.
 const IO =
@@ -41,7 +41,7 @@ function check(file, source) {
       if (target.area !== 'module')
         return 'a module must not reach outside its package with a relative import';
       if (target.name !== from.name)
-        return `import @wormwright/${target.name} (its public API), not its files`;
+        return `import @darkbeacon/${target.name} (its public API), not its files`;
       if (from.layer !== 'root' && !MAY_IMPORT[from.layer].includes(target.layer)) {
         return `${from.layer} must not import ${target.layer}`;
       }
@@ -53,47 +53,47 @@ function check(file, source) {
   }
 
   const pkg = packageOf(source);
-  if (pkg.startsWith('@wormwright/') && /\/(src|dist)(\/|$)/.test(source)) {
+  if (pkg.startsWith('@darkbeacon/') && /\/(src|dist)(\/|$)/.test(source)) {
     return 'import a package by its public entry, not its files';
   }
   switch (from.area) {
     case 'module':
-      if (IO.test(source) || pkg === '@wormwright/db')
+      if (IO.test(source) || pkg === '@darkbeacon/db')
         return 'modules stay framework- and I/O-free; use a port';
       if (
         from.layer === 'domain' &&
-        pkg.startsWith('@wormwright/') &&
-        !['@wormwright/core', '@wormwright/shared'].includes(pkg)
+        pkg.startsWith('@darkbeacon/') &&
+        !['@darkbeacon/core', '@darkbeacon/shared'].includes(pkg)
       ) {
-        return 'domain may only use @wormwright/core and @wormwright/shared';
+        return 'domain may only use @darkbeacon/core and @darkbeacon/shared';
       }
-      if (pkg === `@wormwright/${from.name}`) return 'use a relative import inside the module';
+      if (pkg === `@darkbeacon/${from.name}`) return 'use a relative import inside the module';
       if (
         !modulePackages.has(pkg) &&
-        pkg.startsWith('@wormwright/') &&
-        !['@wormwright/core', '@wormwright/shared'].includes(pkg)
+        pkg.startsWith('@darkbeacon/') &&
+        !['@darkbeacon/core', '@darkbeacon/shared'].includes(pkg)
       ) {
         return `modules may not depend on ${pkg}`;
       }
       return null;
     case 'packages':
-      if (from.name === 'core' && pkg.startsWith('@wormwright/')) return 'core depends on nothing internal';
-      if (from.name === 'shared' && pkg.startsWith('@wormwright/') && pkg !== '@wormwright/core') {
-        return 'shared may only use @wormwright/core';
+      if (from.name === 'core' && pkg.startsWith('@darkbeacon/')) return 'core depends on nothing internal';
+      if (from.name === 'shared' && pkg.startsWith('@darkbeacon/') && pkg !== '@darkbeacon/core') {
+        return 'shared may only use @darkbeacon/core';
       }
       return null;
     case 'plugins':
       if (
-        pkg.startsWith('@wormwright/') &&
-        !['@wormwright/plugin-sdk', '@wormwright/theme-sdk'].includes(pkg)
+        pkg.startsWith('@darkbeacon/') &&
+        !['@darkbeacon/plugin-sdk', '@darkbeacon/theme-sdk'].includes(pkg)
       ) {
-        return 'plugins are built against @wormwright/plugin-sdk only';
+        return 'plugins are built against @darkbeacon/plugin-sdk only';
       }
       return null;
     case 'apps':
       if (
         from.name === 'web' &&
-        (pkg === '@wormwright/db' || pkg === '@wormwright/core' || modulePackages.has(pkg))
+        (pkg === '@darkbeacon/db' || pkg === '@darkbeacon/core' || modulePackages.has(pkg))
       ) {
         return 'the web app may use shared, theme-sdk and plugin-sdk only';
       }
@@ -121,4 +121,4 @@ const rule = {
   },
 };
 
-export default { meta: { name: 'wormwright' }, rules: { boundaries: rule } };
+export default { meta: { name: 'darkbeacon' }, rules: { boundaries: rule } };

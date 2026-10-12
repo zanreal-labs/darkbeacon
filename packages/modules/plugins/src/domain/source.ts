@@ -1,4 +1,4 @@
-import { ValidationError } from '@wormwright/core';
+import { ValidationError } from '@darkbeacon/core';
 
 /** Where a plugin or theme package comes from. */
 export type PackageSource =

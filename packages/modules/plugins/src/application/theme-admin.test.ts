@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { ManualClock, type Actor } from '@wormwright/core';
+import { ManualClock, type Actor } from '@darkbeacon/core';
 import { ThemeAdmin } from './theme-admin.js';
 import { FakeInstaller, MemoryThemes, directUow } from './fakes.test-support.js';
 

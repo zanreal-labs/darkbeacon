@@ -7,7 +7,7 @@ export const ThemeDto = z.object({
   version: z.string().nullable(),
   colorScheme: z.enum(['light', 'dark']),
   builtIn: z.boolean(),
-  /** Every token of the catalogue (`color-bg` -> value); write them as `--ww-<token>`. */
+  /** Every token of the catalogue (`color-bg` -> value); write them as `--dbk-<token>`. */
   tokens: z.record(z.string(), z.string()),
 });
 export type ThemeDto = z.infer<typeof ThemeDto>;

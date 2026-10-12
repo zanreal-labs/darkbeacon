@@ -1,5 +1,5 @@
-import { bool, json, type Database } from '@wormwright/db';
-import type { Webhook, WebhookDelivery, WebhookRepository } from '@wormwright/notifications';
+import { bool, json, type Database } from '@darkbeacon/db';
+import type { Webhook, WebhookDelivery, WebhookRepository } from '@darkbeacon/notifications';
 import type { SecretBox } from './secret-box.js';
 
 export interface WebhookTables {

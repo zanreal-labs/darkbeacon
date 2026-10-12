@@ -8,7 +8,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
-import { routes, type ThemesDto } from '@wormwright/shared';
+import { routes, type ThemesDto } from '@darkbeacon/shared';
 import {
   builtInThemes,
   resolveThemePreference,
@@ -17,10 +17,11 @@ import {
   themesToCss,
   type Theme,
   type TokenValues,
-} from '@wormwright/theme-sdk';
+} from '@darkbeacon/theme-sdk';
 
-// Renamed from `ww-theme` when `system` became the default, so old copies of a picked light theme do not stick.
-const STORAGE_KEY = 'ww-theme-preference';
+const STORAGE_KEY = 'dbk-theme-preference';
+/** The key from before the rename to Darkbeacon; read once and moved, so nobody's choice is lost. */
+const LEGACY_STORAGE_KEY = 'ww-theme-preference';
 const DARK_QUERY = '(prefers-color-scheme: dark)';
 const CONTRAST_QUERY = '(prefers-contrast: more)';
 
@@ -53,7 +54,14 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 function storedPreference(): string | null {
   try {
-    return localStorage.getItem(STORAGE_KEY);
+    const current = localStorage.getItem(STORAGE_KEY);
+    if (current !== null) return current;
+    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (legacy !== null) {
+      localStorage.setItem(STORAGE_KEY, legacy);
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+    }
+    return legacy;
   } catch {
     // Storage can be unavailable (private mode).
     return null;
@@ -108,9 +116,9 @@ function apply(themeId: string, colorScheme: 'light' | 'dark'): void {
 
 /** Writes every built-in theme's tokens as CSS variables. Call before the first render to avoid a flash. */
 export function installThemes(): void {
-  if (!document.getElementById('ww-themes')) {
+  if (!document.getElementById('dbk-themes')) {
     const style = document.createElement('style');
-    style.id = 'ww-themes';
+    style.id = 'dbk-themes';
     style.textContent = themesToCss(builtInThemes);
     document.head.prepend(style);
   }
@@ -122,10 +130,10 @@ export function installThemes(): void {
 
 /** CSS for themes installed on the server (theme packages), next to the built-in ones. */
 function installPackageThemes(themes: readonly Theme[]): void {
-  let style = document.getElementById('ww-package-themes');
+  let style = document.getElementById('dbk-package-themes');
   if (!style) {
     style = document.createElement('style');
-    style.id = 'ww-package-themes';
+    style.id = 'dbk-package-themes';
     document.head.append(style);
   }
   style.textContent = themes.map((t) => themeToCss(t, `[data-theme="${t.id}"]`)).join('');

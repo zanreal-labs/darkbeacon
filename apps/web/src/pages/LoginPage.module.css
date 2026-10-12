@@ -5,7 +5,7 @@
   min-height: 100dvh;
   overflow: hidden;
   isolation: isolate;
-  background: var(--ww-color-bg);
+  background: var(--dbk-color-bg);
 }
 
 /* ---- Sky: CSS-only stars and a soft nebula, coloured from tokens so both modes work ---- */
@@ -20,7 +20,7 @@
 .starsFar {
   position: absolute;
   inset: -50%;
-  --star: color-mix(in oklab, var(--ww-color-text) 55%, transparent);
+  --star: color-mix(in oklab, var(--dbk-color-text) 55%, transparent);
   background-image:
     radial-gradient(1px 1px at 20px 30px, var(--star), transparent 60%),
     radial-gradient(1px 1px at 120px 80px, var(--star), transparent 60%),
@@ -34,7 +34,7 @@
 }
 
 .starsFar {
-  --star: color-mix(in oklab, var(--ww-color-text) 35%, transparent);
+  --star: color-mix(in oklab, var(--dbk-color-text) 35%, transparent);
   background-size: 180px 170px;
   opacity: 0.4;
   animation-duration: 400s;
@@ -51,20 +51,20 @@
   background:
     radial-gradient(
       60% 45% at 50% 42%,
-      color-mix(in oklab, var(--ww-color-accent) 22%, transparent),
+      color-mix(in oklab, var(--dbk-color-accent) 22%, transparent),
       transparent 70%
     ),
     radial-gradient(
       40% 35% at 30% 65%,
-      color-mix(in oklab, var(--ww-security-wormhole) 16%, transparent),
+      color-mix(in oklab, var(--dbk-security-wormhole) 16%, transparent),
       transparent 70%
     ),
     radial-gradient(
       35% 30% at 72% 30%,
-      color-mix(in oklab, var(--ww-security-special) 12%, transparent),
+      color-mix(in oklab, var(--dbk-security-special) 12%, transparent),
       transparent 70%
     ),
-    radial-gradient(120% 90% at 50% 120%, var(--ww-color-bg) 40%, transparent);
+    radial-gradient(120% 90% at 50% 120%, var(--dbk-color-bg) 40%, transparent);
   filter: blur(8px);
 }
 
@@ -79,13 +79,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--ww-space-3) var(--ww-space-4);
+  padding: var(--dbk-space-3) var(--dbk-space-4);
 }
 
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: var(--ww-space-2);
+  gap: var(--dbk-space-2);
   font-weight: 600;
 }
 
@@ -93,14 +93,14 @@
   display: grid;
   align-content: center;
   justify-items: center;
-  gap: var(--ww-space-6);
-  padding: var(--ww-space-5) var(--ww-space-4) 10vh;
+  gap: var(--dbk-space-6);
+  padding: var(--dbk-space-5) var(--dbk-space-4) 10vh;
 }
 
 .hero {
   display: grid;
   justify-items: center;
-  gap: var(--ww-space-2);
+  gap: var(--dbk-space-2);
   text-align: center;
 }
 
@@ -109,13 +109,13 @@
   place-items: center;
   width: 80px;
   height: 80px;
-  margin-bottom: var(--ww-space-3);
-  border: 1px solid color-mix(in oklab, var(--ww-color-accent) 30%, var(--ww-color-border));
+  margin-bottom: var(--dbk-space-3);
+  border: 1px solid color-mix(in oklab, var(--dbk-color-accent) 30%, var(--dbk-color-border));
   border-radius: 22px;
-  background: color-mix(in oklab, var(--ww-color-surface) 70%, transparent);
+  background: color-mix(in oklab, var(--dbk-color-surface) 70%, transparent);
   box-shadow:
-    0 0 0 6px color-mix(in oklab, var(--ww-color-accent) 6%, transparent),
-    0 18px 50px color-mix(in oklab, var(--ww-color-accent) 22%, transparent);
+    0 0 0 6px color-mix(in oklab, var(--dbk-color-accent) 6%, transparent),
+    0 18px 50px color-mix(in oklab, var(--dbk-color-accent) 22%, transparent);
   backdrop-filter: blur(8px);
 }
 
@@ -126,28 +126,28 @@
 }
 
 .pitch {
-  color: var(--ww-color-text-muted);
-  font-size: var(--ww-font-size-large);
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-large);
 }
 
 .actions {
   display: grid;
-  gap: var(--ww-space-3);
+  gap: var(--dbk-space-3);
   width: min(100%, 360px);
 }
 
 .note {
-  color: var(--ww-color-text-muted);
-  font-size: var(--ww-font-size-small);
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
   text-align: center;
 }
 
 .setup code {
   padding: 1px 4px;
-  border-radius: var(--ww-radius-small);
-  background: var(--ww-color-surface-hover);
-  color: var(--ww-color-text);
-  font-size: var(--ww-font-size-small);
+  border-radius: var(--dbk-radius-small);
+  background: var(--dbk-color-surface-hover);
+  color: var(--dbk-color-text);
+  font-size: var(--dbk-font-size-small);
 }
 
 .url {
@@ -155,8 +155,8 @@
 }
 
 .footer {
-  padding: var(--ww-space-4);
-  color: var(--ww-color-text-subtle);
-  font-size: var(--ww-font-size-xs);
+  padding: var(--dbk-space-4);
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-xs);
   text-align: center;
 }

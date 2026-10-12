@@ -3,7 +3,7 @@ export * from './manifest.js';
 export * from './settings.js';
 export * from './web.js';
 // Event and DTO types, so plugins depend on the SDK alone.
-export type { DomainEvent } from '@wormwright/core';
+export type { DomainEvent } from '@darkbeacon/core';
 export type {
   ConnectionDto,
   EventPayloads,
@@ -13,4 +13,4 @@ export type {
   SignatureDto,
   TypedEvent,
   UniverseSystemDto,
-} from '@wormwright/shared';
+} from '@darkbeacon/shared';

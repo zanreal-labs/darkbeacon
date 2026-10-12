@@ -1,7 +1,7 @@
 import { memo, type CSSProperties } from 'react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
-import type { LabelDto, MapSystemDto, UniverseSystemDto } from '@wormwright/shared';
-import { cssVar } from '@wormwright/theme-sdk';
+import type { LabelDto, MapSystemDto, UniverseSystemDto } from '@darkbeacon/shared';
+import { cssVar } from '@darkbeacon/theme-sdk';
 import { EyeOff, Lock, StickyNote, Users } from 'lucide-react';
 import { systemClass } from '../lib/universe';
 import { PluginSlot } from '../plugins/PluginSlot';

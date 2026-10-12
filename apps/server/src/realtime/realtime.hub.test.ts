@@ -1,8 +1,8 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { newEvent, type Actor } from '@wormwright/core';
-import type { Database } from '@wormwright/db';
-import { describeEachDialect } from '@wormwright/db/testing';
-import type { ServerMessage } from '@wormwright/shared';
+import { newEvent, type Actor } from '@darkbeacon/core';
+import type { Database } from '@darkbeacon/db';
+import { describeEachDialect } from '@darkbeacon/db/testing';
+import type { ServerMessage } from '@darkbeacon/shared';
 import { InProcessEventBus } from '../adapters/events/in-process-event-bus.js';
 import { KyselyEventLog } from '../adapters/events/kysely-event-log.js';
 import { RealtimeHub } from './realtime.hub.js';

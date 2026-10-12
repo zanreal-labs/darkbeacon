@@ -1,4 +1,4 @@
-import { matchesFilter, mapStream, type DomainEvent } from '@wormwright/core';
+import { matchesFilter, mapStream, type DomainEvent } from '@darkbeacon/core';
 
 export interface Notification {
   mapId: string | null;
@@ -51,11 +51,11 @@ export function webhookWants(webhook: Webhook, event: DomainEvent): boolean {
 
 export const WEBHOOK_HEADERS = {
   /** `sha256=<hex HMAC-SHA256 of "<timestamp>.<body>">` */
-  signature: 'x-wormwright-signature',
+  signature: 'x-darkbeacon-signature',
   /** Epoch ms of this attempt; receivers should reject old ones. */
-  timestamp: 'x-wormwright-timestamp',
-  event: 'x-wormwright-event',
-  delivery: 'x-wormwright-delivery',
+  timestamp: 'x-darkbeacon-timestamp',
+  event: 'x-darkbeacon-event',
+  delivery: 'x-darkbeacon-delivery',
 } as const;
 
 /** Signs `<timestamp>.<body>`, so a captured request cannot be replayed later with a new timestamp. */

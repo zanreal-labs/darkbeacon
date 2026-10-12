@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router';
 import { LogOut, MoreHorizontal, Plus, Star, Unlink, UserRound } from 'lucide-react';
-import { buildPath, routes, type CharacterDto, type MeDto } from '@wormwright/shared';
+import { buildPath, routes, type CharacterDto, type MeDto } from '@darkbeacon/shared';
 import { api, ApiError } from '../lib/api';
 import { meKey, useLogout, useMe, useProviders } from '../lib/session';
 import { eveLinkHref, ROLE_LABEL } from '../shell/AccountMenu';
@@ -58,10 +58,10 @@ export function AccountPage() {
 
         <Card>
           <CardBody>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--ww-space-3)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--dbk-space-3)' }}>
               <Avatar src={account.avatarUrl} name={account.name} size={48} />
               <div style={{ display: 'grid', gap: 2, minWidth: 0, flex: 1 }}>
-                <strong style={{ fontSize: 'var(--ww-font-size-large)' }}>{account.name}</strong>
+                <strong style={{ fontSize: 'var(--dbk-font-size-large)' }}>{account.name}</strong>
                 <span className="muted">
                   {account.discordId ? 'Signed in with Discord' : 'Local demo account, not linked to Discord'}
                 </span>

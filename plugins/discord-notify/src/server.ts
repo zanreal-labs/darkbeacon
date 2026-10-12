@@ -7,7 +7,7 @@ import type {
   PluginContext,
   ServerPlugin,
   SignatureDto,
-} from '@wormwright/plugin-sdk';
+} from '@darkbeacon/plugin-sdk';
 
 type Ports = 'maps' | 'universe';
 type Ctx = PluginContext<Ports>;

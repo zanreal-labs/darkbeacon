@@ -1,4 +1,4 @@
-import type { MeDto, ConnectionDto, MapSystemDto, SignatureDto } from '@wormwright/shared';
+import type { MeDto, ConnectionDto, MapSystemDto, SignatureDto } from '@darkbeacon/shared';
 
 export const MAP_ID = 'map-1';
 

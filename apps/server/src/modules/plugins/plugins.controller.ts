@@ -15,8 +15,8 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
-import { NotFoundError, ValidationError, type Actor } from '@wormwright/core';
-import { PluginAdmin, parsePackageSource, pluginRevision } from '@wormwright/plugins';
+import { NotFoundError, ValidationError, type Actor } from '@darkbeacon/core';
+import { PluginAdmin, parsePackageSource, pluginRevision } from '@darkbeacon/plugins';
 import {
   InstallPluginRequest,
   PluginSettingsQuery,
@@ -28,7 +28,7 @@ import {
   type PluginDto,
   type PluginSettingsDto,
   type PluginWebDto,
-} from '@wormwright/shared';
+} from '@darkbeacon/shared';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { FilePluginInstaller } from '../../plugins/installer.js';
 import { PluginHost } from '../../plugins/plugin-host.js';

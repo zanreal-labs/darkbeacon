@@ -1,5 +1,5 @@
-import { bool, type Database } from '@wormwright/db';
-import type { CharacterPresence, TrackedCharacter, TrackingRepository } from '@wormwright/tracking';
+import { bool, type Database } from '@darkbeacon/db';
+import type { CharacterPresence, TrackedCharacter, TrackingRepository } from '@darkbeacon/tracking';
 
 export interface TrackingTables {
   tracked_character: { map_id: string; character_id: number; account_id: string; since: number };

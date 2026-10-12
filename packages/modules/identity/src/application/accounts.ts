@@ -14,8 +14,8 @@ import {
   type EventLog,
   type InstanceRole,
   type UnitOfWork,
-} from '@wormwright/core';
-import type { AccountDto, AdminAccountDto, CharacterDto, EventPayloads, MeDto } from '@wormwright/shared';
+} from '@darkbeacon/core';
+import type { AccountDto, AdminAccountDto, CharacterDto, EventPayloads, MeDto } from '@darkbeacon/shared';
 import type { Account, LinkedCharacter } from '../domain/account.js';
 import { effectiveInstanceRole, initialInstanceRole } from '../domain/rules.js';
 import type { AccountRepository } from '../ports/account-repository.js';

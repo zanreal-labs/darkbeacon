@@ -5,9 +5,9 @@ import {
   type OnModuleDestroy,
   type OnModuleInit,
 } from '@nestjs/common';
-import type { EventBus } from '@wormwright/core';
-import { isEventOfType } from '@wormwright/shared';
-import { AutoMapper, ListMapCharacters, TrackingCleanup, TrackingPoller } from '@wormwright/tracking';
+import type { EventBus } from '@darkbeacon/core';
+import { isEventOfType } from '@darkbeacon/shared';
+import { AutoMapper, ListMapCharacters, TrackingCleanup, TrackingPoller } from '@darkbeacon/tracking';
 import type { AppConfig } from '../../config/config.js';
 import { EventConsumers } from '../../platform/event-consumers.js';
 import { APP_CONFIG, EVENT_BUS } from '../../platform/tokens.js';

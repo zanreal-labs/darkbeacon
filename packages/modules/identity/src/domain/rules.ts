@@ -1,4 +1,4 @@
-import type { InstanceRole } from '@wormwright/core';
+import type { InstanceRole } from '@darkbeacon/core';
 
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 /** Sessions slide and `lastSeenAt` updates at most this often, so most requests do not write. */

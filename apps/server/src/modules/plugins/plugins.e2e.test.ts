@@ -1,9 +1,9 @@
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import type { Actor } from '@wormwright/core';
-import { describeEachDialect } from '@wormwright/db/testing';
-import type { PluginDto, PluginWebDto, ThemeDto, ThemesDto } from '@wormwright/shared';
+import type { Actor } from '@darkbeacon/core';
+import { describeEachDialect } from '@darkbeacon/db/testing';
+import type { PluginDto, PluginWebDto, ThemeDto, ThemesDto } from '@darkbeacon/shared';
 import { createApp } from '../../app.js';
 import { parseEnv } from '../../config/config.js';
 import { ActorResolverRegistry } from '../../platform/actor.js';
@@ -26,7 +26,7 @@ describeEachDialect('plugins and themes over HTTP', (t) => {
 
   beforeEach(async () => {
     const config = {
-      ...parseEnv({ NODE_ENV: 'test', DATA_DIR: tempDir('ww-data-') }),
+      ...parseEnv({ NODE_ENV: 'test', DATA_DIR: tempDir('dbk-data-') }),
       secretKey: 'x'.repeat(32),
     };
     app = await createApp(config, { database: t.db, logger: false, webDist: '/nonexistent' });
@@ -68,7 +68,7 @@ describeEachDialect('plugins and themes over HTTP', (t) => {
 
     const tgz = await packTgz(
       writeFiles(tempDir(), {
-        'wormwright-plugin.json': pluginManifest('fx', { web: 'web/web.js', events: ['system.*'] }),
+        'darkbeacon-plugin.json': pluginManifest('fx', { web: 'web/web.js', events: ['system.*'] }),
         'server.js': fixtureServer(),
         'web/web.js': 'export default { register(api) {} };',
       }),
@@ -156,7 +156,7 @@ describeEachDialect('plugins and themes over HTTP', (t) => {
       'admin',
       await packTgz(
         writeFiles(tempDir(), {
-          'wormwright-theme.json': {
+          'darkbeacon-theme.json': {
             id: 'sunset',
             name: 'Sunset',
             version: '1.0.0',

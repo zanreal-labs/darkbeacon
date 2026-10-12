@@ -43,7 +43,7 @@ describe('config', () => {
   });
 
   it('generates and keeps a secret key in DATA_DIR', async () => {
-    const dir = mkdtempSync(`${tmpdir()}/ww-config-`);
+    const dir = mkdtempSync(`${tmpdir()}/dbk-config-`);
     const first = await loadConfig({ DATA_DIR: dir });
     const second = await loadConfig({ DATA_DIR: dir });
     expect(first.secretKey.length).toBeGreaterThanOrEqual(32);

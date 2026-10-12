@@ -1,12 +1,12 @@
 import { join } from 'node:path';
-import { settingsValidator, type SettingsValidator } from '@wormwright/plugin-sdk';
+import { settingsValidator, type SettingsValidator } from '@darkbeacon/plugin-sdk';
 import {
   pluginRevision,
   type InstalledPlugin,
   type PluginSettingsSchemas,
   type PluginSettingsValues,
   type SettingsCheck,
-} from '@wormwright/plugins';
+} from '@darkbeacon/plugins';
 import { readJson } from './installer.js';
 
 /** Reads `settings.schema.json` (or whatever the manifest names) from the plugin directory once per revision. */

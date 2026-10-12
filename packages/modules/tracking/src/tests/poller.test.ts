@@ -1,4 +1,4 @@
-import { ManualClock, type MapRole } from '@wormwright/core';
+import { ManualClock, type MapRole } from '@darkbeacon/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   fakeAccess,

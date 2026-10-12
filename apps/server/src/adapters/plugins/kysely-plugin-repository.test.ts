@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
-import { describeEachDialect } from '@wormwright/db/testing';
-import { newInstalledPlugin, type InstalledTheme } from '@wormwright/plugins';
+import { describeEachDialect } from '@darkbeacon/db/testing';
+import { newInstalledPlugin, type InstalledTheme } from '@darkbeacon/plugins';
 import { KyselyPluginRepository, KyselyThemeRepository } from './kysely-plugin-repository.js';
 
 const manifest = {

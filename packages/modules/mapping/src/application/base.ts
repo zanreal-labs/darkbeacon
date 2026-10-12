@@ -11,8 +11,8 @@ import {
   type MapAccess,
   type NewEvent,
   type UnitOfWork,
-} from '@wormwright/core';
-import type { EventPayloads, EventType } from '@wormwright/shared';
+} from '@darkbeacon/core';
+import type { EventPayloads, EventType } from '@darkbeacon/shared';
 import type { MapSystem } from '../domain/map.js';
 import type {
   ConnectionRepository,

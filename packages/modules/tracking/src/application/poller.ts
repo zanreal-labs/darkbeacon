@@ -1,4 +1,4 @@
-import { hasMapRole, mapStream, newEvent, type ActorRef } from '@wormwright/core';
+import { hasMapRole, mapStream, newEvent, type ActorRef } from '@darkbeacon/core';
 import { observe, type Observation, type TrackedCharacter } from '../domain/presence.js';
 import type {
   CharacterTokenSource,

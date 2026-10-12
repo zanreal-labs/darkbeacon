@@ -1,5 +1,5 @@
-import type { ConnectionType, LabelDto, Position, ShipSize, UniverseSystemDto } from '@wormwright/shared';
-import { ValidationError } from '@wormwright/core';
+import type { ConnectionType, LabelDto, Position, ShipSize, UniverseSystemDto } from '@darkbeacon/shared';
+import { ValidationError } from '@darkbeacon/core';
 
 /** "Home Chain #2" -> "home-chain-2". Falls back to "map" when nothing usable is left. */
 export function slugify(name: string): string {

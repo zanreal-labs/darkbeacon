@@ -1,5 +1,5 @@
-import { ConflictError, NotFoundError, ValidationError, type Clock, type UnitOfWork } from '@wormwright/core';
-import type { DevLoginRequest } from '@wormwright/shared';
+import { ConflictError, NotFoundError, ValidationError, type Clock, type UnitOfWork } from '@darkbeacon/core';
+import type { DevLoginRequest } from '@darkbeacon/shared';
 import type { Account } from '../domain/account.js';
 import type { PendingAuth } from '../domain/pending-auth.js';
 import { devCharacterId } from '../domain/rules.js';

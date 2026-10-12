@@ -6,8 +6,8 @@ import type {
   SystemStatus,
   UniverseSystemDto,
   UpdateSystemRequest,
-} from '@wormwright/shared';
-import { cssVar } from '@wormwright/theme-sdk';
+} from '@darkbeacon/shared';
+import { cssVar } from '@darkbeacon/theme-sdk';
 import type { MapPermissions } from '../../lib/roles';
 import { systemClass } from '../../lib/universe';
 import { Button, Field, Input, Select, StatusDot, Textarea } from '../../ui';
@@ -31,7 +31,7 @@ const STATUS_SELECT = statusOptions.map((o) => ({
   value: o.value,
   label: o.label,
   icon: (
-    <span className={styles.statusDot} style={{ background: o.color ?? 'var(--ww-color-border-strong)' }} />
+    <span className={styles.statusDot} style={{ background: o.color ?? 'var(--dbk-color-border-strong)' }} />
   ),
 }));
 

@@ -1,14 +1,14 @@
 /* Shared layout for the admin and map settings pages. */
 
 .tabs {
-  margin-bottom: var(--ww-space-5);
+  margin-bottom: var(--dbk-space-5);
 }
 
 /* Key / value facts (version, database). */
 .facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: var(--ww-space-3);
+  gap: var(--dbk-space-3);
   margin: 0;
 }
 
@@ -16,15 +16,15 @@
   display: grid;
   gap: 2px;
   min-width: 0;
-  padding: var(--ww-space-3);
-  border: 1px solid var(--ww-color-border);
-  border-radius: var(--ww-radius);
-  background: var(--ww-color-bg-subtle);
+  padding: var(--dbk-space-3);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+  background: var(--dbk-color-bg-subtle);
 }
 
 .fact dt {
-  color: var(--ww-color-text-subtle);
-  font-size: var(--ww-font-size-xs);
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-xs);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -42,12 +42,12 @@
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: var(--ww-space-4);
+  gap: var(--dbk-space-4);
 }
 
 .formStack {
   display: grid;
-  gap: var(--ww-space-4);
+  gap: var(--dbk-space-4);
 }
 
 /* A form row whose button lines up with the inputs. */
@@ -55,7 +55,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: var(--ww-space-3);
+  gap: var(--dbk-space-3);
 }
 
 .inline > :not(button) {
@@ -65,28 +65,28 @@
 
 .footerNote {
   margin-right: auto;
-  color: var(--ww-color-text-muted);
-  font-size: var(--ww-font-size-small);
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
 }
 
 .rowActions {
   display: flex;
   flex: none;
   align-items: center;
-  gap: var(--ww-space-2);
+  gap: var(--dbk-space-2);
 }
 
 .chips {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--ww-space-1);
-  margin-top: var(--ww-space-1);
+  gap: var(--dbk-space-1);
+  margin-top: var(--dbk-space-1);
 }
 
 .rowNotes {
   display: grid;
-  gap: var(--ww-space-2);
-  margin-top: var(--ww-space-2);
+  gap: var(--dbk-space-2);
+  margin-top: var(--dbk-space-2);
 }
 
 .rowBody {
@@ -100,31 +100,31 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--ww-space-2);
+  gap: var(--dbk-space-2);
   font-weight: 500;
 }
 
 .rowMeta {
-  color: var(--ww-color-text-muted);
-  font-size: var(--ww-font-size-small);
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
 }
 
 .version {
-  color: var(--ww-color-text-subtle);
-  font-size: var(--ww-font-size-small);
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-small);
 }
 
 .danger {
-  border-color: color-mix(in oklab, var(--ww-color-danger) 35%, var(--ww-color-border));
+  border-color: color-mix(in oklab, var(--dbk-color-danger) 35%, var(--dbk-color-border));
 }
 
 /* A row inside a card body list, top-aligned for multi-line content. */
 .item {
   display: flex;
   align-items: flex-start;
-  gap: var(--ww-space-3);
-  padding: var(--ww-space-3) var(--ww-space-4);
-  border-top: 1px solid var(--ww-color-border);
+  gap: var(--dbk-space-3);
+  padding: var(--dbk-space-3) var(--dbk-space-4);
+  border-top: 1px solid var(--dbk-color-border);
 }
 
 .item:first-child {
@@ -147,9 +147,9 @@
   place-items: center;
   width: 32px;
   height: 32px;
-  border-radius: var(--ww-radius);
-  background: var(--ww-color-surface-hover);
-  color: var(--ww-color-text-muted);
+  border-radius: var(--dbk-radius);
+  background: var(--dbk-color-surface-hover);
+  color: var(--dbk-color-text-muted);
 }
 
 .subjectIcon svg {
@@ -162,9 +162,9 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) minmax(0, 2fr) auto;
   align-items: center;
-  gap: var(--ww-space-2);
-  padding: var(--ww-space-2) var(--ww-space-4);
-  border-top: 1px solid var(--ww-color-border);
+  gap: var(--dbk-space-2);
+  padding: var(--dbk-space-2) var(--dbk-space-4);
+  border-top: 1px solid var(--dbk-color-border);
 }
 
 .labelRow:first-child {
@@ -176,9 +176,9 @@
   width: 32px;
   height: 32px;
   overflow: hidden;
-  border: 1px solid var(--ww-color-border);
-  border-radius: var(--ww-radius);
-  box-shadow: var(--ww-shadow-small);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+  box-shadow: var(--dbk-shadow-small);
   cursor: pointer;
 }
 
@@ -195,7 +195,7 @@
 .preview {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--ww-space-1);
+  gap: var(--dbk-space-1);
 }
 
 .labelPreview {
@@ -203,10 +203,10 @@
   align-items: center;
   gap: 5px;
   padding: 0 6px;
-  border-radius: var(--ww-radius-small);
+  border-radius: var(--dbk-radius-small);
   background: color-mix(in oklab, var(--label-color) 16%, transparent);
-  color: var(--ww-color-text);
-  font-size: var(--ww-font-size-xs);
+  color: var(--dbk-color-text);
+  font-size: var(--dbk-font-size-xs);
   font-weight: 500;
   line-height: 20px;
 }
@@ -222,12 +222,12 @@
 .secret {
   display: flex;
   align-items: center;
-  gap: var(--ww-space-2);
-  padding: var(--ww-space-2) var(--ww-space-3);
-  border: 1px solid var(--ww-color-border);
-  border-radius: var(--ww-radius);
-  background: var(--ww-color-bg-subtle);
-  font-size: var(--ww-font-size-small);
+  gap: var(--dbk-space-2);
+  padding: var(--dbk-space-2) var(--dbk-space-3);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+  background: var(--dbk-color-bg-subtle);
+  font-size: var(--dbk-font-size-small);
   word-break: break-all;
 }
 
@@ -238,29 +238,29 @@
 .eventPicker {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: var(--ww-space-2);
+  gap: var(--dbk-space-2);
 }
 
 .deliveries {
-  margin: var(--ww-space-2) 0 0;
+  margin: var(--dbk-space-2) 0 0;
   padding: 0;
   list-style: none;
-  font-size: var(--ww-font-size-small);
+  font-size: var(--dbk-font-size-small);
 }
 
 .delivery {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: var(--ww-space-2);
+  gap: var(--dbk-space-2);
   padding: 6px 0;
-  border-top: 1px dashed var(--ww-color-border);
+  border-top: 1px dashed var(--dbk-color-border);
 }
 
 .url {
   overflow: hidden;
-  font-family: var(--ww-font-family-mono);
-  font-size: var(--ww-font-size-small);
+  font-family: var(--dbk-font-family-mono);
+  font-size: var(--dbk-font-size-small);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -277,7 +277,7 @@
 
   .item {
     flex-wrap: wrap;
-    padding: var(--ww-space-3);
+    padding: var(--dbk-space-3);
   }
 
   .rowActions {

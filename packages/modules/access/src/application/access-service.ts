@@ -6,7 +6,7 @@ import {
   type GrantingMapRole,
   type MapAccess,
   type MapRole,
-} from '@wormwright/core';
+} from '@darkbeacon/core';
 import { grantsFor, subjectKeys, type AccessRule } from '../domain/access-rule.js';
 import type { AccessRuleRepository } from '../ports/access-rule-repository.js';
 import type { AccessSubjectsSource, MapOwnership } from '../ports/access-subjects.js';

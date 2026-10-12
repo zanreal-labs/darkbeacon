@@ -16,7 +16,7 @@
       "type": "string",
       "description": "Name the messages are posted under.",
       "maxLength": 80,
-      "default": "Wormwright"
+      "default": "Darkbeacon"
     }
   },
   "additionalProperties": false

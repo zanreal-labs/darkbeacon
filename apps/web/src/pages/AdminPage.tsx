@@ -11,7 +11,7 @@ import {
   type ThemeDto,
   type ThemesDto,
   type UpdateInstanceRoleRequest,
-} from '@wormwright/shared';
+} from '@darkbeacon/shared';
 import { api, ApiError } from '../lib/api';
 import { meKey, useMe } from '../lib/session';
 import { relativeTime } from '../lib/time';
@@ -532,7 +532,7 @@ function PluginsTab() {
                   mono
                   value={source}
                   onChange={(e) => setSource(e.target.value)}
-                  placeholder="wormwright-plugin-example@1.0.0"
+                  placeholder="darkbeacon-plugin-example@1.0.0"
                 />
               </Field>
               <Button type="submit" icon={<Plus />} loading={install.isPending} disabled={!source.trim()}>

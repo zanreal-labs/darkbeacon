@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router';
 import { ChevronLeft, ChevronRight, Map as MapIcon, Shield, UserRound } from 'lucide-react';
-import type { MeDto } from '@wormwright/shared';
+import type { MeDto } from '@darkbeacon/shared';
 import { useConnectionStatus, useRealtime } from '../lib/RealtimeProvider';
 import { isInstanceAdmin, useDemoMode } from '../lib/session';
 import { PluginsProvider } from '../plugins/PluginSlot';
@@ -14,11 +14,11 @@ import { ThemeMenu } from './ThemeMenu';
 import styles from './AppShell.module.css';
 
 const STATUS = {
-  open: { label: 'Live', color: 'var(--ww-color-success)', hint: 'Changes from others appear instantly.' },
-  connecting: { label: 'Connecting', color: 'var(--ww-color-warning)', hint: 'Reconnecting to the server…' },
+  open: { label: 'Live', color: 'var(--dbk-color-success)', hint: 'Changes from others appear instantly.' },
+  connecting: { label: 'Connecting', color: 'var(--dbk-color-warning)', hint: 'Reconnecting to the server…' },
   closed: {
     label: 'Offline',
-    color: 'var(--ww-color-danger)',
+    color: 'var(--dbk-color-danger)',
     hint: 'Not connected. Retrying in the background.',
   },
 } as const;
@@ -129,7 +129,7 @@ export function AppShell({ me, children }: { me: MeDto; children: ReactNode }) {
             Skip to content
           </a>
           <nav className={styles.rail} aria-label="Main">
-            <Link to="/" className={styles.logo} aria-label="Wormwright home">
+            <Link to="/" className={styles.logo} aria-label="Darkbeacon home">
               <LogoMark size={26} />
             </Link>
             {nav.map((item) => (
@@ -141,7 +141,7 @@ export function AppShell({ me, children }: { me: MeDto; children: ReactNode }) {
             ))}
           </nav>
           <header className={styles.topbar}>
-            <Link to="/" className={styles.mobileLogo} aria-label="Wormwright home">
+            <Link to="/" className={styles.mobileLogo} aria-label="Darkbeacon home">
               <LogoMark size={22} />
             </Link>
             <Breadcrumbs />

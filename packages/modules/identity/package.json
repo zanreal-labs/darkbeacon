@@ -1,5 +1,5 @@
 {
-  "name": "@wormwright/identity",
+  "name": "@darkbeacon/identity",
   "version": "0.0.0",
   "private": true,
   "description": "Accounts, sessions, Discord login, EVE character linking",
@@ -15,8 +15,8 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@wormwright/core": "workspace:*",
-    "@wormwright/shared": "workspace:*",
+    "@darkbeacon/core": "workspace:*",
+    "@darkbeacon/shared": "workspace:*",
     "zod": "^4.6.5"
   }
 }

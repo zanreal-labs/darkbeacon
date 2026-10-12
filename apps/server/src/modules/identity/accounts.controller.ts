@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Post, Put } from '@nestjs/common';
-import type { Actor } from '@wormwright/core';
-import { AccountService, CharacterService } from '@wormwright/identity';
+import type { Actor } from '@darkbeacon/core';
+import { AccountService, CharacterService } from '@darkbeacon/identity';
 import {
   EveId,
   nestPath,
@@ -10,7 +10,7 @@ import {
   UpdateInstanceRoleRequest,
   type AdminAccountDto,
   type MeDto,
-} from '@wormwright/shared';
+} from '@darkbeacon/shared';
 import { z } from 'zod';
 import { CurrentActor } from '../../platform/actor.js';
 import { ZodPipe } from '../../platform/http.js';

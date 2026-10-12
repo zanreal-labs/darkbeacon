@@ -1,4 +1,4 @@
-# Wormwright — engineering spec (v0)
+# Darkbeacon — engineering spec (v0)
 
 A self-hosted wormhole and chain mapper for EVE Online, written from scratch. Not a fork of Wanderer and no
 code is taken from it. This file is the contract every module builds against: when something here and your own
@@ -124,7 +124,7 @@ interface DomainEvent<T = unknown> {
 
 ## Plugins (native)
 
-- A plugin is an npm package (or .tgz) with `wormwright-plugin.json` manifest:
+- A plugin is an npm package (or .tgz) with `darkbeacon-plugin.json` manifest:
   `{ id, name, version, sdk: "^1.0", server?: "dist/server.js", web?: "dist/web.js", ports: [...], events: [...],
   settings?: "settings.schema.json", migrations?: "migrations/" }`.
 - Installed by an admin from the panel (catalogue entry, npm name, or uploaded .tgz) into `/data/plugins`.
@@ -154,4 +154,4 @@ edited in the admin tab.
 ## Container
 
 Multi-stage `Dockerfile`; final image runs `node apps/server/dist/main.js`, serves `apps/web/dist`, exposes
-`PORT`, declares volume `/data`. `docker run -p 3000:3000 -v ww-data:/data --env-file .env <image>` must work.
+`PORT`, declares volume `/data`. `docker run -p 3000:3000 -v dbk-data:/data --env-file .env <image>` must work.

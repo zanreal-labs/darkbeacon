@@ -8,8 +8,8 @@ import {
   type ConnectionDto,
   type LabelDto,
   type MapSystemDto,
-} from '@wormwright/shared';
-import { cssVar } from '@wormwright/theme-sdk';
+} from '@darkbeacon/shared';
+import { cssVar } from '@darkbeacon/theme-sdk';
 import { AlertTriangle, Copy, EyeOff, Lock, PencilLine, PiggyBank, Trash2 } from 'lucide-react';
 import type { MenuItem } from '../components/ContextMenu';
 import type { MapPermissions } from '../lib/roles';

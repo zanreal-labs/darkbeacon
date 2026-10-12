@@ -1,7 +1,7 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { ManualClock } from '@wormwright/core';
-import { ExternalAuthError, pkceChallenge } from '@wormwright/identity';
+import { ManualClock } from '@darkbeacon/core';
+import { ExternalAuthError, pkceChallenge } from '@darkbeacon/identity';
 import { DiscordHttpProvider } from './discord-http.js';
 import { EveSsoHttp } from './eve-sso-http.js';
 import { DISCORD_CLIENT, EVE_CLIENT, FakeNetwork, type EveCharacter } from './fake-network.js';

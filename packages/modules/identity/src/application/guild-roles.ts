@@ -1,4 +1,4 @@
-import type { Clock, EventLog } from '@wormwright/core';
+import type { Clock, EventLog } from '@darkbeacon/core';
 import type { DiscordLink, GuildRole } from '../domain/account.js';
 import { ExternalAuthError } from '../domain/errors.js';
 import { GUILD_ROLES_TTL_MS, TOKEN_REFRESH_MARGIN_MS } from '../domain/rules.js';

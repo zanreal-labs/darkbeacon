@@ -1,5 +1,5 @@
-import type { MapOwnership } from '@wormwright/access';
-import type { MapRepository } from '@wormwright/mapping';
+import type { MapOwnership } from '@darkbeacon/access';
+import type { MapRepository } from '@darkbeacon/mapping';
 
 /** The access module's MapOwnership port, answered from mapping's map repository. */
 export class MappingMapOwnership implements MapOwnership {

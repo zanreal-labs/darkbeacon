@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { describeEachDialect } from '@wormwright/db/testing';
-import type { MapDto, MapSnapshot, MapSystemDto, ServerMessage } from '@wormwright/shared';
+import { describeEachDialect } from '@darkbeacon/db/testing';
+import type { MapDto, MapSnapshot, MapSystemDto, ServerMessage } from '@darkbeacon/shared';
 import WebSocket from 'ws';
 import { SYSTEMS } from '../../adapters/mapping/testing.js';
 import { createApp } from '../../app.js';
@@ -14,7 +14,7 @@ import { ActorResolverRegistry } from '../../platform/actor.js';
 
 /** universe.json in the data directory, the way an operator would provide it. */
 function dataDirWithUniverse(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'ww-mapping-'));
+  const dir = mkdtempSync(join(tmpdir(), 'dbk-mapping-'));
   const system = (id: number, name: string, whClass: number) => ({
     id,
     name,

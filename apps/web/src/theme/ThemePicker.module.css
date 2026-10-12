@@ -1,39 +1,39 @@
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: var(--ww-space-3);
+  gap: var(--dbk-space-3);
 }
 
 .card {
   display: grid;
   gap: 2px;
-  padding: var(--ww-space-2);
-  border: 1px solid var(--ww-color-border);
-  border-radius: var(--ww-radius-large);
-  background: var(--ww-color-surface);
-  color: var(--ww-color-text);
+  padding: var(--dbk-space-2);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius-large);
+  background: var(--dbk-color-surface);
+  color: var(--dbk-color-text);
   font: inherit;
   text-align: left;
   cursor: pointer;
   transition:
-    border-color var(--ww-motion-fast) var(--ww-motion-easing),
-    box-shadow var(--ww-motion-fast) var(--ww-motion-easing);
+    border-color var(--dbk-motion-fast) var(--dbk-motion-easing),
+    box-shadow var(--dbk-motion-fast) var(--dbk-motion-easing);
 }
 
 .card:hover {
-  border-color: var(--ww-color-border-strong);
+  border-color: var(--dbk-color-border-strong);
 }
 
 .card[data-state='checked'] {
-  border-color: var(--ww-color-accent);
-  box-shadow: 0 0 0 1px var(--ww-color-accent);
+  border-color: var(--dbk-color-accent);
+  box-shadow: 0 0 0 1px var(--dbk-color-accent);
 }
 
 .split {
   display: grid;
   grid-template-columns: 1fr 1fr;
   overflow: hidden;
-  border-radius: var(--ww-radius);
+  border-radius: var(--dbk-radius);
 }
 
 .split .preview {
@@ -42,20 +42,20 @@
 
 .split .preview:first-child {
   border-right-width: 0;
-  border-radius: var(--ww-radius) 0 0 var(--ww-radius);
+  border-radius: var(--dbk-radius) 0 0 var(--dbk-radius);
 }
 
 .split .preview:last-child {
-  border-radius: 0 var(--ww-radius) var(--ww-radius) 0;
+  border-radius: 0 var(--dbk-radius) var(--dbk-radius) 0;
 }
 
 .preview {
   display: flex;
   height: 64px;
-  margin-bottom: var(--ww-space-2);
+  margin-bottom: var(--dbk-space-2);
   overflow: hidden;
   border: 1px solid;
-  border-radius: var(--ww-radius);
+  border-radius: var(--dbk-radius);
 }
 
 .previewRail {
@@ -97,7 +97,7 @@
 
 .check {
   display: inline-flex;
-  color: var(--ww-color-accent-text);
+  color: var(--dbk-color-accent-text);
 }
 
 .check svg {
@@ -106,6 +106,6 @@
 }
 
 .hint {
-  color: var(--ww-color-text-muted);
-  font-size: var(--ww-font-size-small);
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
 }

@@ -1,11 +1,11 @@
-import { newId, type Actor } from '@wormwright/core';
-import type { ConnectionUseCases, MapUseCases, SignatureUseCases, SystemUseCases } from '@wormwright/mapping';
+import { newId, type Actor } from '@darkbeacon/core';
+import type { ConnectionUseCases, MapUseCases, SignatureUseCases, SystemUseCases } from '@darkbeacon/mapping';
 import type {
   AddSignatureRequest,
   LabelDto,
   UpdateConnectionRequest,
   UpdateSystemRequest,
-} from '@wormwright/shared';
+} from '@darkbeacon/shared';
 
 /** Systems of the demo chain (real SDE ids). Wormhole types and statics follow the game data. */
 const HOME = 31002531; // J014348, C3 Red Giant, statics D845 (high-sec) and U210 (low-sec)

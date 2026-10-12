@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import type { UniverseCatalog, UniverseSystem } from '@wormwright/mapping';
-import { loadUniverseData, UNIVERSE_DATA_FILE, type UniverseData } from '@wormwright/sde';
+import type { UniverseCatalog, UniverseSystem } from '@darkbeacon/mapping';
+import { loadUniverseData, UNIVERSE_DATA_FILE, type UniverseData } from '@darkbeacon/sde';
 
 /** UniverseCatalog over the dataset built from the SDE, held in memory. */
 export class StaticUniverseCatalog implements UniverseCatalog {
@@ -31,7 +31,7 @@ export class StaticUniverseCatalog implements UniverseCatalog {
 
   /**
    * `universe.json` from the data directory when an operator put one there, else the dataset
-   * committed in `@wormwright/sde`. Each file is parsed once per process.
+   * committed in `@darkbeacon/sde`. Each file is parsed once per process.
    */
   static load(dataDir: string): StaticUniverseCatalog {
     const custom = join(dataDir, 'universe.json');

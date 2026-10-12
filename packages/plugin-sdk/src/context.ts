@@ -1,6 +1,6 @@
-import type { Clock, DomainEvent, MapRole } from '@wormwright/core';
+import type { Clock, DomainEvent, MapRole } from '@darkbeacon/core';
 import type { Kysely } from 'kysely';
-import type { ConnectionDto, MapDto, MapSystemDto, UniverseSystemDto } from '@wormwright/shared';
+import type { ConnectionDto, MapDto, MapSystemDto, UniverseSystemDto } from '@darkbeacon/shared';
 import type { PluginPortName } from './manifest.js';
 
 /** Read access to maps the plugin is enabled on. */

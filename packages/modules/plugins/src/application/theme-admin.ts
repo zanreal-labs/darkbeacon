@@ -4,7 +4,7 @@ import {
   requireAccount,
   requireInstanceRole,
   type Actor,
-} from '@wormwright/core';
+} from '@darkbeacon/core';
 import type { PackageSource } from '../domain/source.js';
 import {
   DEFAULT_THEME_ID,

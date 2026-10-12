@@ -1,5 +1,5 @@
-import { ConflictError, NotFoundError, ValidationError, type Actor } from '@wormwright/core';
-import type { AddSystemRequest, MoveSystemsRequest, UpdateSystemRequest } from '@wormwright/shared';
+import { ConflictError, NotFoundError, ValidationError, type Actor } from '@darkbeacon/core';
+import type { AddSystemRequest, MoveSystemsRequest, UpdateSystemRequest } from '@darkbeacon/shared';
 import type { Connection, MapSystem } from '../domain/map.js';
 import { changes, defined, nextPosition } from '../domain/rules.js';
 import { MappingUseCases, type EventBatch, type MappingPorts } from './base.js';

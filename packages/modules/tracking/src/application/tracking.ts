@@ -6,8 +6,8 @@ import {
   requireAccount,
   requireMapRole,
   type Actor,
-} from '@wormwright/core';
-import type { CharacterPresenceDto, SetTrackingRequest } from '@wormwright/shared';
+} from '@darkbeacon/core';
+import type { CharacterPresenceDto, SetTrackingRequest } from '@darkbeacon/shared';
 import type { CharacterPresence } from '../domain/presence.js';
 import type {
   CharacterTokenSource,

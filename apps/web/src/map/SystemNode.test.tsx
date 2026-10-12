@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { screen } from '@testing-library/react';
 import { ReactFlow, ReactFlowProvider } from '@xyflow/react';
-import type { LabelDto, UniverseSystemDto } from '@wormwright/shared';
+import type { LabelDto, UniverseSystemDto } from '@darkbeacon/shared';
 import { installFlowMocks, renderWithProviders } from '../test/setup';
 import { MAP_ID, systemFixture } from '../test/fixtures';
 import { SystemNode, type SystemNodeData, type SystemNodeType } from './SystemNode';
@@ -57,7 +57,7 @@ describe('SystemNode', () => {
 
     const box = container.querySelector<HTMLElement>('[data-status]')!;
     expect(box.dataset.status).toBe('hostile');
-    expect(box.style.getPropertyValue('--status-color')).toBe('var(--ww-status-hostile)');
+    expect(box.style.getPropertyValue('--status-color')).toBe('var(--dbk-status-hostile)');
   });
 
   it('puts the real name second when a custom name is set, and shows the description and lock icons', () => {

@@ -1,6 +1,6 @@
 import { Controller, HttpCode, Inject, Post, Req, Res } from '@nestjs/common';
-import { AccountService, SESSION_TTL_MS } from '@wormwright/identity';
-import { nestPath, routes, type MeDto } from '@wormwright/shared';
+import { AccountService, SESSION_TTL_MS } from '@darkbeacon/identity';
+import { nestPath, routes, type MeDto } from '@darkbeacon/shared';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { AppConfig } from '../../config/config.js';
 import { APP_CONFIG } from '../../platform/tokens.js';

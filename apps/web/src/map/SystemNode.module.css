@@ -1,12 +1,12 @@
 .node {
   position: relative;
-  min-width: var(--ww-node-min-width);
+  min-width: var(--dbk-node-min-width);
   max-width: 220px;
-  padding: var(--ww-node-padding);
+  padding: var(--dbk-node-padding);
   padding-left: 12px;
-  border: var(--ww-node-border-width) solid var(--ww-node-border);
-  border-radius: var(--ww-node-radius);
-  background-color: var(--ww-node-bg);
+  border: var(--dbk-node-border-width) solid var(--dbk-node-border);
+  border-radius: var(--dbk-node-radius);
+  background-color: var(--dbk-node-bg);
   /* status stripe, plus a faint wash of the status colour */
   background-image:
     linear-gradient(to right, var(--status-color) 3px, transparent 3px),
@@ -15,25 +15,25 @@
       color-mix(in oklab, var(--status-color) 7%, transparent)
     );
   background-clip: padding-box;
-  box-shadow: var(--ww-shadow-small);
-  color: var(--ww-node-text);
-  font-size: var(--ww-font-size-xs);
+  box-shadow: var(--dbk-shadow-small);
+  color: var(--dbk-node-text);
+  font-size: var(--dbk-font-size-xs);
   line-height: 1.35;
   touch-action: none;
   transition:
-    border-color var(--ww-motion-fast) var(--ww-motion-easing),
-    box-shadow var(--ww-motion-fast) var(--ww-motion-easing);
+    border-color var(--dbk-motion-fast) var(--dbk-motion-easing),
+    box-shadow var(--dbk-motion-fast) var(--dbk-motion-easing);
 }
 
 .node:hover {
-  border-color: var(--ww-color-border-strong);
+  border-color: var(--dbk-color-border-strong);
 }
 
 .node[data-selected] {
-  border-color: var(--ww-node-selected-border);
+  border-color: var(--dbk-node-selected-border);
   box-shadow:
-    0 0 0 1px var(--ww-node-selected-border),
-    0 0 0 5px color-mix(in oklab, var(--ww-node-selected-border) 18%, transparent);
+    0 0 0 1px var(--dbk-node-selected-border),
+    0 0 0 5px color-mix(in oklab, var(--dbk-node-selected-border) 18%, transparent);
 }
 
 .node[data-hidden] {
@@ -52,14 +52,14 @@
 
 .class {
   flex: none;
-  font-size: var(--ww-font-size-xs);
+  font-size: var(--dbk-font-size-xs);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
 .name {
   overflow: hidden;
-  font-size: var(--ww-font-size);
+  font-size: var(--dbk-font-size);
   font-weight: 600;
   letter-spacing: -0.005em;
   text-overflow: ellipsis;
@@ -69,10 +69,10 @@
 .tag {
   flex: none;
   padding: 0 4px;
-  border: 1px solid var(--ww-node-border);
-  border-radius: var(--ww-radius-small);
-  color: var(--ww-color-text-muted);
-  font-family: var(--ww-font-family-mono);
+  border: 1px solid var(--dbk-node-border);
+  border-radius: var(--dbk-radius-small);
+  color: var(--dbk-color-text-muted);
+  font-family: var(--dbk-font-family-mono);
   font-size: 10px;
   font-weight: 600;
   line-height: 15px;
@@ -84,7 +84,7 @@
   gap: 4px;
   margin-left: auto;
   padding-left: 4px;
-  color: var(--ww-color-text-subtle);
+  color: var(--dbk-color-text-subtle);
 }
 
 .icons span {
@@ -98,7 +98,7 @@
 
 .sub {
   margin-top: 1px;
-  color: var(--ww-color-text-muted);
+  color: var(--dbk-color-text-muted);
 }
 
 .subtitle {
@@ -115,9 +115,9 @@
   margin-left: auto;
   padding: 0 5px;
   border-radius: 999px;
-  background: var(--ww-color-accent-subtle);
-  color: var(--ww-color-accent-text);
-  font-family: var(--ww-font-family-mono);
+  background: var(--dbk-color-accent-subtle);
+  color: var(--dbk-color-accent-text);
+  font-family: var(--dbk-font-family-mono);
   font-weight: 600;
   line-height: 16px;
 }
@@ -141,9 +141,9 @@
   align-items: center;
   gap: 4px;
   padding: 0 5px;
-  border-radius: var(--ww-radius-small);
+  border-radius: var(--dbk-radius-small);
   background: color-mix(in oklab, var(--label-color) 16%, transparent);
-  color: var(--ww-node-text);
+  color: var(--dbk-node-text);
   font-size: 10px;
   font-weight: 500;
   line-height: 16px;
@@ -171,10 +171,10 @@
 .handle {
   width: 9px;
   height: 9px;
-  border: 2px solid var(--ww-node-bg);
-  background: var(--ww-node-selected-border);
+  border: 2px solid var(--dbk-node-bg);
+  background: var(--dbk-node-selected-border);
   opacity: 0;
-  transition: opacity var(--ww-motion-fast) var(--ww-motion-easing);
+  transition: opacity var(--dbk-motion-fast) var(--dbk-motion-easing);
 }
 
 .node:hover .handle:global(.connectable),

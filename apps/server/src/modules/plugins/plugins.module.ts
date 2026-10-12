@@ -9,13 +9,13 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
-import { ValidationError, type Clock, type EventBus, type EventLog, type MapAccess } from '@wormwright/core';
-import { Database } from '@wormwright/db';
-import { NotifierRegistry } from '@wormwright/notifications';
-import type { UniverseCatalog } from '@wormwright/mapping';
-import { PluginAdmin, ThemeAdmin } from '@wormwright/plugins';
-import { isEventOfType, type MapSnapshot } from '@wormwright/shared';
-import { builtInThemes, SYSTEM_THEME_ID } from '@wormwright/theme-sdk';
+import { ValidationError, type Clock, type EventBus, type EventLog, type MapAccess } from '@darkbeacon/core';
+import { Database } from '@darkbeacon/db';
+import { NotifierRegistry } from '@darkbeacon/notifications';
+import type { UniverseCatalog } from '@darkbeacon/mapping';
+import { PluginAdmin, ThemeAdmin } from '@darkbeacon/plugins';
+import { isEventOfType, type MapSnapshot } from '@darkbeacon/shared';
+import { builtInThemes, SYSTEM_THEME_ID } from '@darkbeacon/theme-sdk';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {

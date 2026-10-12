@@ -11,7 +11,7 @@ import {
   type UpdateConnectionRequest,
   type UpdateSignatureRequest,
   type UpdateSystemRequest,
-} from '@wormwright/shared';
+} from '@darkbeacon/shared';
 import { api, ApiError } from '../lib/api';
 import { useStream } from '../lib/RealtimeProvider';
 import { applyMapMessage, emptyMapState, type MapState } from './mapState';

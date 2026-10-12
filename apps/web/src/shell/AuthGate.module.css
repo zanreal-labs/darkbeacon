@@ -2,7 +2,7 @@
   display: grid;
   place-items: center;
   min-height: 100dvh;
-  padding: var(--ww-space-4);
+  padding: var(--dbk-space-4);
 }
 
 .boot {
@@ -17,15 +17,15 @@
   display: flex;
   justify-content: center;
   padding-top: 13px;
-  border-right: 1px solid var(--ww-color-border);
-  background: var(--ww-color-bg-subtle);
+  border-right: 1px solid var(--dbk-color-border);
+  background: var(--dbk-color-bg-subtle);
 }
 
 .bootTop {
   display: flex;
   align-items: center;
-  padding: 0 var(--ww-space-4);
-  border-bottom: 1px solid var(--ww-color-border);
+  padding: 0 var(--dbk-space-4);
+  border-bottom: 1px solid var(--dbk-color-border);
 }
 
 @media (max-width: 767px) {

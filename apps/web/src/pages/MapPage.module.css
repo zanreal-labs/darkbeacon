@@ -2,18 +2,18 @@
   position: relative;
   height: 100%;
   overflow: hidden;
-  background: var(--ww-color-canvas);
+  background: var(--dbk-color-canvas);
 }
 
 .topbar {
   position: absolute;
   z-index: 7;
-  top: var(--ww-space-3);
-  left: var(--ww-space-3);
-  right: var(--ww-space-3);
+  top: var(--dbk-space-3);
+  left: var(--dbk-space-3);
+  right: var(--dbk-space-3);
   display: flex;
   align-items: center;
-  gap: var(--ww-space-2);
+  gap: var(--dbk-space-2);
   pointer-events: none;
 }
 
@@ -23,7 +23,7 @@
 }
 
 .topbar[data-dock] {
-  right: calc(360px + var(--ww-space-3));
+  right: calc(360px + var(--dbk-space-3));
 }
 
 .topbar > * {
@@ -36,7 +36,7 @@
 }
 
 .toolButton {
-  box-shadow: var(--ww-shadow-medium);
+  box-shadow: var(--dbk-shadow-medium);
 }
 
 .saving {
@@ -44,13 +44,13 @@
   align-items: center;
   gap: 6px;
   height: 26px;
-  padding: 0 var(--ww-space-2);
-  border: 1px solid var(--ww-color-border);
+  padding: 0 var(--dbk-space-2);
+  border: 1px solid var(--dbk-color-border);
   border-radius: 999px;
-  background: var(--ww-color-surface);
-  box-shadow: var(--ww-shadow-small);
-  color: var(--ww-color-text-muted);
-  font-size: var(--ww-font-size-small);
+  background: var(--dbk-color-surface);
+  box-shadow: var(--dbk-shadow-small);
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
   white-space: nowrap;
 }
 
@@ -61,8 +61,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--ww-space-2);
-  color: var(--ww-color-text-muted);
+  gap: var(--dbk-space-2);
+  color: var(--dbk-color-text-muted);
   pointer-events: none;
 }
 
@@ -73,10 +73,10 @@
   top: 50%;
   left: 50%;
   width: min(440px, calc(100% - 32px));
-  border: 1px solid var(--ww-color-border);
-  border-radius: var(--ww-radius-large);
-  background: var(--ww-color-surface);
-  box-shadow: var(--ww-shadow-large);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius-large);
+  background: var(--dbk-color-surface);
+  box-shadow: var(--dbk-shadow-large);
   transform: translate(-50%, -50%);
 }
 
@@ -91,13 +91,13 @@
   left: 50%;
   display: flex;
   align-items: center;
-  gap: var(--ww-space-2);
+  gap: var(--dbk-space-2);
   max-width: min(480px, calc(100% - 32px));
-  padding: var(--ww-space-2) var(--ww-space-3);
-  border: 1px solid color-mix(in oklab, var(--ww-color-danger) 40%, var(--ww-color-border));
-  border-radius: var(--ww-radius);
-  background: color-mix(in oklab, var(--ww-color-danger) 8%, var(--ww-color-surface));
-  box-shadow: var(--ww-shadow-medium);
+  padding: var(--dbk-space-2) var(--dbk-space-3);
+  border: 1px solid color-mix(in oklab, var(--dbk-color-danger) 40%, var(--dbk-color-border));
+  border-radius: var(--dbk-radius);
+  background: color-mix(in oklab, var(--dbk-color-danger) 8%, var(--dbk-color-surface));
+  box-shadow: var(--dbk-shadow-medium);
   transform: translateX(-50%);
 }
 
@@ -105,16 +105,16 @@
   flex: none;
   width: 16px;
   height: 16px;
-  color: var(--ww-color-danger);
+  color: var(--dbk-color-danger);
 }
 
 .notices {
   position: absolute;
   z-index: 30;
   left: 50%;
-  bottom: var(--ww-space-4);
+  bottom: var(--dbk-space-4);
   display: grid;
-  gap: var(--ww-space-2);
+  gap: var(--dbk-space-2);
   width: min(420px, calc(100% - 32px));
   margin: 0;
   padding: 0;
@@ -125,14 +125,14 @@
 .toast {
   display: flex;
   align-items: center;
-  gap: var(--ww-space-2);
-  padding: var(--ww-space-2) var(--ww-space-2) var(--ww-space-2) var(--ww-space-3);
-  border: 1px solid var(--ww-color-border);
-  border-radius: var(--ww-radius-large);
-  background: var(--ww-color-surface-raised);
-  box-shadow: var(--ww-shadow-large);
-  color: var(--ww-color-text);
-  animation: toastIn var(--ww-motion-normal) var(--ww-motion-easing);
+  gap: var(--dbk-space-2);
+  padding: var(--dbk-space-2) var(--dbk-space-2) var(--dbk-space-2) var(--dbk-space-3);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius-large);
+  background: var(--dbk-color-surface-raised);
+  box-shadow: var(--dbk-shadow-large);
+  color: var(--dbk-color-text);
+  animation: toastIn var(--dbk-motion-normal) var(--dbk-motion-easing);
 }
 
 @keyframes toastIn {
@@ -146,7 +146,7 @@
   flex: none;
   width: 16px;
   height: 16px;
-  color: var(--ww-color-danger);
+  color: var(--dbk-color-danger);
 }
 
 .toastText {
@@ -158,7 +158,7 @@
   .topbar,
   .topbar:not([data-dock]),
   .topbar[data-dock] {
-    right: var(--ww-space-3);
+    right: var(--dbk-space-3);
   }
 
   .topbar > :first-child {

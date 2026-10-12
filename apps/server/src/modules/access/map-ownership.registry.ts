@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { MapOwnership } from '@wormwright/access';
+import type { MapOwnership } from '@darkbeacon/access';
 
 /**
  * Where the access module learns who owns a map. The mapping module installs its adapter with

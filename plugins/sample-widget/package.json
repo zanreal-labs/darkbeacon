@@ -1,5 +1,5 @@
 {
-  "name": "@wormwright/plugin-sample-widget",
+  "name": "@darkbeacon/plugin-sample-widget",
   "version": "1.0.0",
   "private": true,
   "description": "A small map widget showing what was added to the map since the server started",
@@ -7,12 +7,12 @@
   "files": [
     "dist/server.js",
     "dist/web.js",
-    "wormwright-plugin.json"
+    "darkbeacon-plugin.json"
   ],
   "scripts": {
     "build": "tsc -b"
   },
   "devDependencies": {
-    "@wormwright/plugin-sdk": "workspace:*"
+    "@darkbeacon/plugin-sdk": "workspace:*"
   }
 }

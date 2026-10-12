@@ -4,6 +4,8 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { LEGACY_MANIFEST_FILE } from '@darkbeacon/plugin-sdk';
+import { LEGACY_THEME_MANIFEST_FILE } from '@darkbeacon/theme-sdk';
 import { CATALOG_DIR, FilePluginInstaller } from './installer.js';
 import { packTgz, pluginManifest, tempDir, writeFiles } from './packages.test-support.js';
 
@@ -14,8 +16,8 @@ describe('FilePluginInstaller', () => {
   let installer: FilePluginInstaller;
 
   beforeEach(() => {
-    pluginsDir = tempDir('ww-plugins-');
-    installer = new FilePluginInstaller({ pluginsDir, catalogDir: tempDir('ww-catalog-') });
+    pluginsDir = tempDir('dbk-plugins-');
+    installer = new FilePluginInstaller({ pluginsDir, catalogDir: tempDir('dbk-catalog-') });
   });
 
   const upload = async (files: Record<string, string | object>, prefix?: string) =>
@@ -25,7 +27,7 @@ describe('FilePluginInstaller', () => {
 
   it('stages an uploaded plugin, then commits and replaces it', async () => {
     const staged = await upload({
-      'wormwright-plugin.json': pluginManifest('fx', { ports: ['clock'], events: ['system.*'] }),
+      'darkbeacon-plugin.json': pluginManifest('fx', { ports: ['clock'], events: ['system.*'] }),
       'server.js': 'export default { register() {} }',
     });
     expect(staged).toMatchObject({
@@ -38,7 +40,7 @@ describe('FilePluginInstaller', () => {
 
     const v2 = await upload(
       {
-        'wormwright-plugin.json': pluginManifest('fx', { version: '2.0.0' }),
+        'darkbeacon-plugin.json': pluginManifest('fx', { version: '2.0.0' }),
         'server.js': 'export default { register() { return 2 } }',
       },
       '',
@@ -51,24 +53,36 @@ describe('FilePluginInstaller', () => {
     expect(existsSync(join(pluginsDir, 'fx'))).toBe(false);
   });
 
+  it('still accepts manifests under the old file names', async () => {
+    const legacyPlugin = await upload({
+      [LEGACY_MANIFEST_FILE]: pluginManifest('old', { events: ['system.*'] }),
+      'server.js': 'export default { register() {} }',
+    });
+    expect(legacyPlugin).toMatchObject({ kind: 'plugin', manifest: { id: 'old', server: 'server.js' } });
+    expect(await upload({ [LEGACY_THEME_MANIFEST_FILE]: theme }, '')).toMatchObject({
+      kind: 'theme',
+      theme: { id: 'sunset' },
+    });
+  });
+
   it('stages a theme package', async () => {
-    expect(await upload({ 'wormwright-theme.json': theme })).toMatchObject({
+    expect(await upload({ 'darkbeacon-theme.json': theme })).toMatchObject({
       kind: 'theme',
       theme: { id: 'sunset', extends: 'default', colorScheme: 'light' },
     });
   });
 
   it('refuses broken packages and cleans up after them', async () => {
-    await expect(upload({ 'wormwright-plugin.json': { id: 'Bad Id' } })).rejects.toMatchObject({
+    await expect(upload({ 'darkbeacon-plugin.json': { id: 'Bad Id' } })).rejects.toMatchObject({
       code: 'validation',
       message: 'Invalid plugin manifest',
     });
-    await expect(upload({ 'wormwright-plugin.json': pluginManifest('fx') })).rejects.toThrow(
+    await expect(upload({ 'darkbeacon-plugin.json': pluginManifest('fx') })).rejects.toThrow(
       'names server.js, which is not in the package',
     );
-    await expect(upload({ 'readme.md': 'hi' })).rejects.toThrow('has no wormwright-plugin.json');
+    await expect(upload({ 'readme.md': 'hi' })).rejects.toThrow('has no darkbeacon-plugin.json');
     await expect(
-      upload({ 'wormwright-plugin.json': pluginManifest('fx', { sdk: '^2.0' }), 'server.js': '' }),
+      upload({ 'darkbeacon-plugin.json': pluginManifest('fx', { sdk: '^2.0' }), 'server.js': '' }),
     ).rejects.toMatchObject({ details: [expect.stringContaining('not compatible')] });
     await expect(
       installer.stage({ kind: 'upload', data: Buffer.from('not a tarball') }),
@@ -80,7 +94,7 @@ describe('FilePluginInstaller', () => {
 
   it('skips links inside packages', async () => {
     const dir = writeFiles(tempDir(), {
-      'wormwright-plugin.json': pluginManifest('fx'),
+      'darkbeacon-plugin.json': pluginManifest('fx'),
       'server.js': 'export default { register() {} }',
     });
     symlinkSync('/etc/hostname', join(dir, 'leak'));
@@ -97,14 +111,14 @@ describe('FilePluginInstaller', () => {
     beforeEach(async () => {
       tarball = await packTgz(
         writeFiles(tempDir(), {
-          'wormwright-plugin.json': pluginManifest('from-npm', { version: '1.2.0' }),
+          'darkbeacon-plugin.json': pluginManifest('from-npm', { version: '1.2.0' }),
           'server.js': 'export default { register() {} }',
         }),
       );
       integrity = `sha512-${createHash('sha512').update(tarball).digest('base64')}`;
       server = createServer((req, res) => {
         const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-        if (req.url === '/@acme%2fww-plugin') {
+        if (req.url === '/@acme%2fdbk-plugin') {
           res.setHeader('content-type', 'application/json');
           res.end(
             JSON.stringify({
@@ -130,13 +144,13 @@ describe('FilePluginInstaller', () => {
     });
 
     it('downloads the latest version and checks its integrity', async () => {
-      const staged = await installer.stage({ kind: 'npm', name: '@acme/ww-plugin', version: null });
+      const staged = await installer.stage({ kind: 'npm', name: '@acme/dbk-plugin', version: null });
       expect(staged).toMatchObject({ kind: 'plugin', manifest: { id: 'from-npm', version: '1.2.0' } });
       await expect(
-        installer.stage({ kind: 'npm', name: '@acme/ww-plugin', version: '1.1.0' }),
+        installer.stage({ kind: 'npm', name: '@acme/dbk-plugin', version: '1.1.0' }),
       ).rejects.toThrow('does not match its integrity hash');
       await expect(
-        installer.stage({ kind: 'npm', name: '@acme/ww-plugin', version: '9.9.9' }),
+        installer.stage({ kind: 'npm', name: '@acme/dbk-plugin', version: '9.9.9' }),
       ).rejects.toThrow('no version "9.9.9"');
       await expect(installer.stage({ kind: 'npm', name: 'missing', version: null })).rejects.toThrow(
         'npm has no package "missing"',
@@ -145,9 +159,9 @@ describe('FilePluginInstaller', () => {
   });
 
   it('lists built catalogue packages and installs them without sources', async () => {
-    const catalogDir = tempDir('ww-catalog-');
+    const catalogDir = tempDir('dbk-catalog-');
     writeFiles(catalogDir, {
-      'built/wormwright-plugin.json': pluginManifest('built', {
+      'built/darkbeacon-plugin.json': pluginManifest('built', {
         server: 'dist/server.js',
         description: 'Hi',
       }),
@@ -156,8 +170,8 @@ describe('FilePluginInstaller', () => {
       'built/dist/.tsbuildinfo': '',
       'built/src/server.ts': 'export {}',
       'built/node_modules/x/index.js': '',
-      'unbuilt/wormwright-plugin.json': pluginManifest('unbuilt', { server: 'dist/server.js' }),
-      'theme-sunset/wormwright-theme.json': theme,
+      'unbuilt/darkbeacon-plugin.json': pluginManifest('unbuilt', { server: 'dist/server.js' }),
+      'theme-sunset/darkbeacon-theme.json': theme,
       'notes/readme.md': 'not a package',
     });
     installer = new FilePluginInstaller({ pluginsDir, catalogDir });
@@ -180,7 +194,7 @@ describe('FilePluginInstaller', () => {
       },
     ]);
     const staged = await installer.stage({ kind: 'catalog', name: 'built' });
-    expect(readdirSync(staged.directory).sort()).toEqual(['dist', 'wormwright-plugin.json']);
+    expect(readdirSync(staged.directory).sort()).toEqual(['darkbeacon-plugin.json', 'dist']);
     expect(readdirSync(join(staged.directory, 'dist'))).toEqual(['server.js']);
     await expect(installer.stage({ kind: 'catalog', name: 'nope' })).rejects.toThrow('No catalogue entry');
   });

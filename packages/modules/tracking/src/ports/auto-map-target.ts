@@ -1,4 +1,4 @@
-import type { MapScope } from '@wormwright/shared';
+import type { MapScope } from '@darkbeacon/shared';
 
 export interface RecordedJump {
   mapId: string;

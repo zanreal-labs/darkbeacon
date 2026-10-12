@@ -1,6 +1,6 @@
 import { RadioGroup } from 'radix-ui';
 import { Check } from 'lucide-react';
-import { builtInThemes, SYSTEM_THEME_ID, type Theme, type TokenName } from '@wormwright/theme-sdk';
+import { builtInThemes, SYSTEM_THEME_ID, type Theme, type TokenName } from '@darkbeacon/theme-sdk';
 import { useTheme } from './ThemeProvider';
 import styles from './ThemePicker.module.css';
 

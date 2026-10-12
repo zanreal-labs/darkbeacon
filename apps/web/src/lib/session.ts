@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { routes, type AuthProvidersDto, type MeDto } from '@wormwright/shared';
+import { routes, type AuthProvidersDto, type MeDto } from '@darkbeacon/shared';
 import { api, ApiError } from './api';
 import { useOptionalRealtime } from './RealtimeProvider';
 
@@ -7,7 +7,7 @@ export const meKey = ['me'] as const;
 export const providersKey = ['auth-providers'] as const;
 
 /** Set after an explicit sign-out in demo mode, so the next visit lands on the sign-in page. */
-const DEMO_OPT_OUT_KEY = 'ww-demo-signed-out';
+const DEMO_OPT_OUT_KEY = 'dbk-demo-signed-out';
 
 function demoOptedOut(): boolean {
   try {

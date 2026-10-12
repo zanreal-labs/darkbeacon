@@ -16,7 +16,7 @@ export function AuthGate() {
   if (me.isError) {
     return (
       <div className={styles.center}>
-        <ErrorState title="Can't reach Wormwright" error={me.error} onRetry={() => void me.refetch()} />
+        <ErrorState title="Can't reach Darkbeacon" error={me.error} onRetry={() => void me.refetch()} />
       </div>
     );
   }
@@ -34,7 +34,7 @@ export function AuthGate() {
 /** Shown for the moment it takes to read the session (or to sign in the demo account). */
 function BootScreen() {
   return (
-    <div className={styles.boot} aria-busy="true" aria-label="Loading Wormwright">
+    <div className={styles.boot} aria-busy="true" aria-label="Loading Darkbeacon">
       <div className={styles.bootRail}>
         <LogoMark size={26} />
       </div>

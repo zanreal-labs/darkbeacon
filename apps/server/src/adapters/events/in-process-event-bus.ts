@@ -4,7 +4,7 @@ import {
   type EventBus,
   type EventFilter,
   type EventHandler,
-} from '@wormwright/core';
+} from '@darkbeacon/core';
 
 type ErrorReporter = (error: unknown, event: DomainEvent) => void;
 

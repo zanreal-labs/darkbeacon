@@ -5,9 +5,9 @@ import {
   type DomainEvent,
   type EventBus,
   type EventLog,
-} from '@wormwright/core';
-import type { Database } from '@wormwright/db';
-import { ClientMessage, isEventOfType, type ServerMessage, type WsErrorCode } from '@wormwright/shared';
+} from '@darkbeacon/core';
+import type { Database } from '@darkbeacon/db';
+import { ClientMessage, isEventOfType, type ServerMessage, type WsErrorCode } from '@darkbeacon/shared';
 import type { RealtimeRegistry } from './realtime.registry.js';
 
 export interface HubOptions {
@@ -73,7 +73,7 @@ export interface HubConnection {
 /**
  * The realtime protocol, independent of the transport: subscribe with `sinceSeq`, replay from
  * the event log or send a snapshot, then forward live events from the bus without gaps or
- * duplicates. See `@wormwright/shared` protocol.ts.
+ * duplicates. See `@darkbeacon/shared` protocol.ts.
  */
 export class RealtimeHub {
   private readonly connections = new Set<Connection>();

@@ -2,7 +2,7 @@ import { lookup as dnsLookup, type LookupAddress } from 'node:dns';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { BlockList, isIP, type LookupFunction } from 'node:net';
-import type { WebhookSender } from '@wormwright/notifications';
+import type { WebhookSender } from '@darkbeacon/notifications';
 
 /**
  * Addresses a webhook must not reach unless the admin allows private networks. Two lists,

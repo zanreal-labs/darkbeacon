@@ -1,6 +1,6 @@
 import { Global, Logger, Module } from '@nestjs/common';
-import type { EventBus, EventLog } from '@wormwright/core';
-import { Database } from '@wormwright/db';
+import type { EventBus, EventLog } from '@darkbeacon/core';
+import { Database } from '@darkbeacon/db';
 import { EVENT_BUS, EVENT_LOG } from '../platform/tokens.js';
 import { EventRetention } from './event-retention.js';
 import { RealtimeGateway } from './realtime.gateway.js';

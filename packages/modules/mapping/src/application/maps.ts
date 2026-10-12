@@ -5,8 +5,8 @@ import {
   requireAccount,
   requireActor,
   type Actor,
-} from '@wormwright/core';
-import type { CreateMapRequest, LabelDto, MapSummaryDto, UpdateMapRequest } from '@wormwright/shared';
+} from '@darkbeacon/core';
+import type { CreateMapRequest, LabelDto, MapSummaryDto, UpdateMapRequest } from '@darkbeacon/shared';
 import type { ChainMap } from '../domain/map.js';
 import { changes, slugify, validateLabels } from '../domain/rules.js';
 import { MappingUseCases } from './base.js';

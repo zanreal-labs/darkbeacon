@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { Controller, Get, Inject } from '@nestjs/common';
-import { Database } from '@wormwright/db';
-import { nestPath, routes, type HealthDto } from '@wormwright/shared';
+import { Database } from '@darkbeacon/db';
+import { nestPath, routes, type HealthDto } from '@darkbeacon/shared';
 
 const { version } = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as {
   version: string;

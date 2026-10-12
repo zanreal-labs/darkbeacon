@@ -1,5 +1,5 @@
-import { ConflictError, NotFoundError, ValidationError, newId, type Actor } from '@wormwright/core';
-import type { AddConnectionRequest, UpdateConnectionRequest } from '@wormwright/shared';
+import { ConflictError, NotFoundError, ValidationError, newId, type Actor } from '@darkbeacon/core';
+import type { AddConnectionRequest, UpdateConnectionRequest } from '@darkbeacon/shared';
 import type { Connection } from '../domain/map.js';
 import { changes, defaultShipSize, defined } from '../domain/rules.js';
 import { MappingUseCases } from './base.js';

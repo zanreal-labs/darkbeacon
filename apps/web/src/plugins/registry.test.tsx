@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
-import { defineWebPlugin } from '@wormwright/plugin-sdk';
+import { defineWebPlugin } from '@darkbeacon/plugin-sdk';
 import '../test/setup';
 import { PluginSlot } from './PluginSlot';
 import { loadWebPlugins, PluginRegistry } from './registry';

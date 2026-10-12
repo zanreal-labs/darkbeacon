@@ -1,5 +1,5 @@
 {
-  "name": "@wormwright/db",
+  "name": "@darkbeacon/db",
   "version": "0.0.0",
   "private": true,
   "description": "Kysely factory, dialect switch, migrations",
@@ -20,7 +20,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@wormwright/core": "workspace:*",
+    "@darkbeacon/core": "workspace:*",
     "kysely": "^0.29.6",
     "better-sqlite3": "^13.0.3",
     "pg": "^8.23.1"

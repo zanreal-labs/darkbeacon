@@ -1,7 +1,7 @@
 import { afterEach, expect, it } from 'vitest';
-import { ManualClock, newEvent, type DomainEvent } from '@wormwright/core';
-import type { Database } from '@wormwright/db';
-import { describeEachDialect } from '@wormwright/db/testing';
+import { ManualClock, newEvent, type DomainEvent } from '@darkbeacon/core';
+import type { Database } from '@darkbeacon/db';
+import { describeEachDialect } from '@darkbeacon/db/testing';
 import { InProcessEventBus } from '../adapters/events/in-process-event-bus.js';
 import { KyselyEventLog } from '../adapters/events/kysely-event-log.js';
 import { EventConsumers, type EventConsumer } from './event-consumers.js';

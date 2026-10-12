@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw/http';
-import { routes } from '@wormwright/shared';
+import { routes } from '@darkbeacon/shared';
 import { renderWithProviders, setupMockServer } from '../test/setup';
 import { ThemePicker } from './ThemePicker';
 import { useTheme } from './ThemeProvider';
@@ -54,6 +54,15 @@ describe('ThemeProvider', () => {
     expect(screen.getByRole('status')).toHaveProperty('textContent', 'system:dark');
   });
 
+  it('moves a choice saved under the old key', () => {
+    fakeSystem(false);
+    localStorage.setItem('ww-theme-preference', 'dark');
+    renderWithProviders(<Current />);
+    expect(screen.getByRole('status')).toHaveProperty('textContent', 'dark:dark');
+    expect(localStorage.getItem('dbk-theme-preference')).toBe('dark');
+    expect(localStorage.getItem('ww-theme-preference')).toBeNull();
+  });
+
   it('keeps an explicit choice when the system changes', async () => {
     const system = fakeSystem(true);
     renderWithProviders(
@@ -67,7 +76,7 @@ describe('ThemeProvider', () => {
     system.set(false);
     system.set(true);
     expect(document.documentElement.dataset.theme).toBe('default');
-    expect(localStorage.getItem('ww-theme-preference')).toBe('default');
+    expect(localStorage.getItem('dbk-theme-preference')).toBe('default');
 
     await userEvent.click(screen.getByRole('radio', { name: /System/ }));
     await waitFor(() => expect(document.documentElement.dataset.theme).toBe('dark'));

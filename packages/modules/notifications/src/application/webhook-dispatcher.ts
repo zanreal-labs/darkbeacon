@@ -1,4 +1,4 @@
-import { newId, parseStream, type DomainEvent } from '@wormwright/core';
+import { newId, parseStream, type DomainEvent } from '@darkbeacon/core';
 import {
   WEBHOOK_HEADERS,
   WEBHOOK_RETRY_DELAYS,
@@ -112,7 +112,7 @@ export class WebhookDispatcher {
     const timestamp = this.deps.clock.now();
     const headers = {
       'content-type': 'application/json',
-      'user-agent': 'Wormwright-Webhooks',
+      'user-agent': 'Darkbeacon-Webhooks',
       [WEBHOOK_HEADERS.signature]: await signWebhookPayload(webhook.secret, timestamp, delivery.payload),
       [WEBHOOK_HEADERS.timestamp]: String(timestamp),
       [WEBHOOK_HEADERS.event]: delivery.eventType,

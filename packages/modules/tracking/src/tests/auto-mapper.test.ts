@@ -1,5 +1,5 @@
-import { newEvent, type DomainEvent, type MapRole } from '@wormwright/core';
-import type { MapScope } from '@wormwright/shared';
+import { newEvent, type DomainEvent, type MapRole } from '@darkbeacon/core';
+import type { MapScope } from '@darkbeacon/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { AutoMapper } from '../application/auto-mapper.js';
 import type { RecordedJump, UniverseLookup } from '../ports/index.js';

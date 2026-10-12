@@ -1,8 +1,8 @@
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { Database } from '@wormwright/db';
-import type { PluginMigration } from '@wormwright/plugin-sdk';
+import type { Database } from '@darkbeacon/db';
+import type { PluginMigration } from '@darkbeacon/plugin-sdk';
 import type { PluginTables } from '../adapters/plugins/kysely-plugin-repository.js';
 
 /**

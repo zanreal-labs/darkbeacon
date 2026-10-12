@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw/http';
-import { buildPath, routes, type SignatureDto } from '@wormwright/shared';
+import { buildPath, routes, type SignatureDto } from '@darkbeacon/shared';
 import { mapPermissions } from '../../lib/roles';
 import { MAP_ID, signatureFixture } from '../../test/fixtures';
 import { renderWithProviders, setupMockServer } from '../../test/setup';

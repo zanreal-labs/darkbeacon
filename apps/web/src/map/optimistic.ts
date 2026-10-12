@@ -1,4 +1,4 @@
-import type { TypedEvent } from '@wormwright/shared';
+import type { TypedEvent } from '@darkbeacon/shared';
 import type { MapState } from './mapState';
 
 /**

@@ -1,4 +1,4 @@
-import type { CharacterPresenceDto } from '@wormwright/shared';
+import type { CharacterPresenceDto } from '@darkbeacon/shared';
 
 export type CharacterPresence = CharacterPresenceDto;
 
