@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { boundsOf, fitViewport } from './geometry';
+import { boundsOf, clearOf, distanceToRect, fitViewport } from './geometry';
 
 const screen = { width: 1000, height: 600 };
 const none = { top: 0, right: 0, bottom: 0, left: 0 };
@@ -45,5 +45,18 @@ describe('boundsOf', () => {
       ]),
     ).toEqual({ x: -40, y: 20, width: 150, height: 120 });
     expect(boundsOf([])).toBeNull();
+  });
+});
+
+describe('clearOf', () => {
+  it('moves a circle along a shallow diagonal until it clears the node corner', () => {
+    const node = { x: 0, y: 0, width: 240, height: 60 };
+    // Leaves the bottom edge near the right corner, heading down and right at a shallow angle.
+    const from = { x: 200, y: 60 };
+    const to = { x: 600, y: 160 };
+    const at = clearOf(from, to, node, 20, 4, 25);
+    expect(distanceToRect(at, node)).toBeGreaterThanOrEqual(24);
+    // A fixed 25 px would have overlapped the node.
+    expect(Math.hypot(at.x - from.x, at.y - from.y)).toBeGreaterThan(25);
   });
 });

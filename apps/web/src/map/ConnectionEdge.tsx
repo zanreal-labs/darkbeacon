@@ -12,7 +12,7 @@ import {
 import type { ConnectionDto, ShipSize } from '@darkbeacon/shared';
 import { PluginSlot } from '../plugins/PluginSlot';
 import { edgeInnerStyle, edgeOuterStyle, edgeVisual, SHIP_SIZE_TEXT, type EdgeVisual } from './edgeStyle';
-import { along, floatingEnds, type Point, type Rect } from './geometry';
+import { clearOf, floatingEnds, type Point, type Rect } from './geometry';
 import styles from './ConnectionEdge.module.css';
 
 export interface ConnectionEdgeData extends Record<string, unknown> {
@@ -47,6 +47,8 @@ function rectOf(node: InternalNode): Rect {
 export const BUBBLE_RADIUS = 20;
 /** The bubble's centre sits this far past the node border along the line: never on the node. */
 export const BUBBLE_OFFSET = BUBBLE_RADIUS + 5;
+/** Clear space between the ring and the node, whatever the angle of the line. */
+export const BUBBLE_GAP = 4;
 
 /** Re-renders once a minute while `on`, so EOL estimates count down. */
 function useMinuteClock(on: boolean): number {
@@ -115,12 +117,17 @@ export const ConnectionEdge = memo(function ConnectionEdge({
   const c = data.connection;
   const visual = edgeVisual(c, now);
   const inner = edgeInnerStyle(visual);
-  const { from, to } = floatingEnds(rectOf(sourceNode), rectOf(targetNode));
+  const sourceRect = rectOf(sourceNode);
+  const targetRect = rectOf(targetNode);
+  const { from, to } = floatingEnds(sourceRect, targetRect);
   const path = `M ${from.x},${from.y} L ${to.x},${to.y}`;
   const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
   const bubbles = visual.bubbles.map((end) => ({
     end,
-    at: end === 'source' ? along(from, to, BUBBLE_OFFSET) : along(to, from, BUBBLE_OFFSET),
+    at:
+      end === 'source'
+        ? clearOf(from, to, sourceRect, BUBBLE_RADIUS, BUBBLE_GAP, BUBBLE_OFFSET)
+        : clearOf(to, from, targetRect, BUBBLE_RADIUS, BUBBLE_GAP, BUBBLE_OFFSET),
   }));
 
   return (
