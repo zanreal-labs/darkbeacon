@@ -33,7 +33,7 @@ import { useMe, useProviders } from '../lib/session';
 import { track } from '../lib/telemetry';
 import { useTheme } from '../theme/ThemeProvider';
 import { useToast } from '../ui';
-import { ConnectionEdge, type ConnectionEdgeType } from './ConnectionEdge';
+import { ConnectionEdge, type ConnectionEdgeType, type ConnectionTraffic } from './ConnectionEdge';
 import { boundsOf, fitViewport, type Point, type Rect } from './geometry';
 import { MapControls } from './MapControls';
 import { DEFAULT_ZOOM, FIT_MIN_ZOOM, mapTypeVars } from './mapType';
@@ -114,6 +114,10 @@ interface Props {
   can: MapPermissions;
   store: Pick<MapStore, 'moveSystems' | 'addConnection'>;
   onSelect(solarSystemId: number | null): void;
+  /** A connection was clicked (selected) or let go. */
+  onSelectConnection?(connectionId: string | null): void;
+  /** Passages and mass used per connection, for the hover card. */
+  traffic?: ReadonlyMap<string, ConnectionTraffic>;
   focus: FocusRequest | null;
   onMenu(target: MenuTarget, x: number, y: number): void;
   /** Pixels on the right covered by the widget panel; views keep systems out from under it. */
@@ -154,6 +158,8 @@ export function MapCanvas({
   can,
   store,
   onSelect,
+  onSelectConnection,
+  traffic,
   focus,
   onMenu,
   coveredRight = 0,
@@ -293,10 +299,16 @@ export function MapCanvas({
           source: String(c.source),
           target: String(c.target),
           selected: selected.has(c.id),
-          data: { mapId, connection: c, sourceName: name(c.source), targetName: name(c.target) },
+          data: {
+            mapId,
+            connection: c,
+            sourceName: name(c.source),
+            targetName: name(c.target),
+            traffic: traffic?.get(c.id),
+          },
         }));
     });
-  }, [state.connections, state.systems, universe, mapId, setEdges]);
+  }, [state.connections, state.systems, universe, mapId, setEdges, traffic]);
 
   /** Rectangles of the given nodes (all when omitted), as React Flow measured them. */
   const rectsOf = useCallback(
@@ -443,6 +455,26 @@ export function MapCanvas({
     if (dx > 0 || dy > 0) void rf.setViewport({ x: x - dx, y: y - dy, zoom }, { duration: 250 });
   }, [coveredRight, coveredBottom, selectedId, rf]);
 
+  // The same for a selected connection: its middle stays out from under the panel.
+  const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
+  useEffect(() => {
+    const box = canvasRef.current?.getBoundingClientRect();
+    const edge = selectedEdge === null ? undefined : rf.getEdge(selectedEdge);
+    const a = edge ? rf.getNode(edge.source) : undefined;
+    const b = edge ? rf.getNode(edge.target) : undefined;
+    if (!box || !a || !b || (coveredRight === 0 && coveredBottom === 0)) return;
+    const { x, y, zoom } = rf.getViewport();
+    const mid = (n: typeof a) => ({
+      x: n.position.x + (n.measured?.width ?? 230) / 2,
+      y: n.position.y + (n.measured?.height ?? 90) / 2,
+    });
+    const px = x + ((mid(a).x + mid(b).x) / 2) * zoom;
+    const py = y + ((mid(a).y + mid(b).y) / 2) * zoom;
+    const dx = Math.max(0, px - (box.width - coveredRight - 80));
+    const dy = Math.max(0, py - (box.height - coveredBottom - 80));
+    if (dx > 0 || dy > 0) void rf.setViewport({ x: x - dx, y: y - dy, zoom }, { duration: 250 });
+  }, [coveredRight, coveredBottom, selectedEdge, rf]);
+
   const [legend, setLegendState] = useState(false);
   useEffect(() => {
     // After hydration: the server cannot know this browser's choice.
@@ -502,6 +534,7 @@ export function MapCanvas({
     if (focus.id === null) {
       handledFocus.current = focus.n;
       setNodes((ns) => ns.map((n) => (n.selected ? { ...n, selected: false } : n)));
+      setEdges((es) => es.map((e) => (e.selected ? { ...e, selected: false } : e)));
       return;
     }
     const id = String(focus.id);
@@ -509,6 +542,7 @@ export function MapCanvas({
     if (!node) return; // not rendered yet; runs again when the nodes change
     handledFocus.current = focus.n;
     setNodes((ns) => ns.map((n) => (!!n.selected === (n.id === id) ? n : { ...n, selected: n.id === id })));
+    setEdges((es) => es.map((e) => (e.selected ? { ...e, selected: false } : e)));
     if (focus.center) {
       void rf.setCenter(
         node.position.x + (node.measured?.width ?? 230) / 2,
@@ -516,7 +550,7 @@ export function MapCanvas({
         { duration: 300, zoom: rf.getZoom() },
       );
     }
-  }, [focus, nodes, rf, setNodes]);
+  }, [focus, nodes, rf, setNodes, setEdges]);
 
   const cancelPress = () => {
     if (press.current) clearTimeout(press.current.timer);
@@ -554,8 +588,16 @@ export function MapCanvas({
     }
   };
 
-  const onSelectionChange = ({ nodes: selected }: OnSelectionChangeParams) => {
+  const onSelectionChange = ({ nodes: selected, edges: edgesSelected }: OnSelectionChangeParams) => {
     setSelectedId(selected.length === 1 ? selected[0]!.id : null);
+    // A click on a connection selects it alone; the sidebar then shows the connection.
+    const edge = selected.length === 0 && edgesSelected.length === 1 ? edgesSelected[0]!.id : null;
+    setSelectedEdge(edge);
+    if (edge && !edge.startsWith('pending:')) {
+      onSelectConnection?.(edge);
+      return;
+    }
+    onSelectConnection?.(null);
     onSelect(selected.length === 1 ? Number(selected[0]!.id) : null);
   };
 

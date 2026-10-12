@@ -487,6 +487,39 @@ export const routes = {
       query: dto.UniverseLookupQuery,
       response: z.array(dto.UniverseSystemDto),
     }),
+    /** Published ships by name with what changes their jump mass (SDE). */
+    searchShips: route({
+      method: 'GET',
+      path: '/api/universe/ships',
+      auth: 'account',
+      scope: { resource: 'universe', action: 'read' },
+      query: dto.ShipSearchQuery,
+      response: z.array(dto.ShipTypeDto),
+    }),
+    /** What prop modules, Higgs Anchors and the mass entangler do, and ships people roll with. */
+    shipCatalog: route({
+      method: 'GET',
+      path: '/api/universe/ships/catalog',
+      auth: 'account',
+      scope: { resource: 'universe', action: 'read' },
+      response: dto.ShipCatalogDto,
+    }),
+    /** A pasted fit (EFT) weighed cold and hot. */
+    fitMass: route({
+      method: 'POST',
+      path: '/api/universe/ships/fit-mass',
+      auth: 'account',
+      scope: { resource: 'universe', action: 'read' },
+      body: dto.FitMassRequest,
+      response: dto.FitMassDto,
+    }),
+    getShip: route({
+      method: 'GET',
+      path: '/api/universe/ships/:shipTypeId',
+      auth: 'account',
+      scope: { resource: 'universe', action: 'read' },
+      response: dto.ShipTypeDto,
+    }),
     /** Every wormhole type with its SDE attributes, and the hull classes "fits" refers to. */
     wormholes: route({
       method: 'GET',
@@ -697,6 +730,15 @@ export const routes = {
       mapRole: 'viewer',
       response: z.array(dto.ConnectionIntelDto),
     }),
+    /** One connection with its type, mass and time estimates (the sidebar's Connection section). */
+    intelOne: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/connections/:connectionId/intel',
+      auth: 'account',
+      scope: { resource: 'connections', action: 'read' },
+      mapRole: 'viewer',
+      response: dto.ConnectionIntelDto,
+    }),
     /** Ships recorded going through a connection, newest first. */
     passages: route({
       method: 'GET',
@@ -705,6 +747,51 @@ export const routes = {
       scope: { resource: 'connections', action: 'read' },
       mapRole: 'viewer',
       response: z.array(dto.PassageDto),
+    }),
+    /** "Log a jump" for pilots nobody tracks; on a merged map it goes to the map that takes new objects. */
+    logPassages: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/connections/:connectionId/passages',
+      auth: 'account',
+      scope: { resource: 'connections', action: 'write' },
+      mapRole: 'member',
+      body: dto.LogPassagesRequest,
+      response: z.array(dto.PassageDto),
+    }),
+    /** Passages count from now on, against the mass status as it is (earlier ones stay in the log). */
+    resetPassages: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/connections/:connectionId/passages/reset',
+      auth: 'account',
+      scope: { resource: 'connections', action: 'write' },
+      mapRole: 'member',
+    }),
+    /** How a passage's mass counts (cold, hot, custom), its modules and note. */
+    updatePassage: route({
+      method: 'PATCH',
+      path: '/api/maps/:mapId/connections/:connectionId/passages/:passageId',
+      auth: 'account',
+      scope: { resource: 'connections', action: 'write' },
+      mapRole: 'member',
+      body: dto.UpdatePassageRequest,
+      response: dto.PassageDto,
+    }),
+    removePassage: route({
+      method: 'DELETE',
+      path: '/api/maps/:mapId/connections/:connectionId/passages/:passageId',
+      auth: 'account',
+      scope: { resource: 'connections', action: 'write' },
+      mapRole: 'member',
+    }),
+    /** A rolling plan for the connection with the crew's ships. */
+    rollPlan: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/connections/:connectionId/roll-plan',
+      auth: 'account',
+      scope: { resource: 'connections', action: 'read' },
+      mapRole: 'viewer',
+      body: dto.RollPlanRequest,
+      response: dto.RollPlanDto,
     }),
   },
 
