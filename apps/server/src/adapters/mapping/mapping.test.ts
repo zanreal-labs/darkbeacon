@@ -125,7 +125,7 @@ describeEachDialect('mapping use cases', (t) => {
     const seq = await head();
     const a = await systems.add(bob, map.id, { solarSystemId: SYSTEMS.c2, position: { x: 10, y: 20 } });
     const b = await systems.add(bob, map.id, { solarSystemId: SYSTEMS.c5 });
-    expect(b.position).toEqual({ x: 230, y: 20 });
+    expect(b.position).toEqual({ x: 290, y: 20 });
     // Adding again is a no-op.
     expect(await systems.add(bob, map.id, { solarSystemId: SYSTEMS.c2 })).toEqual(a);
     expect(await eventsSince(seq)).toEqual([

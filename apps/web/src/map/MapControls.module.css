@@ -1,0 +1,112 @@
+.panel {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--dbk-space-2);
+  margin: var(--dbk-space-3);
+}
+
+.bar {
+  display: flex;
+  flex-direction: column;
+  padding: 3px;
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius-large);
+  background: var(--dbk-color-surface);
+  box-shadow: var(--dbk-shadow-medium);
+}
+
+.bar [data-active] {
+  background: var(--dbk-color-accent-subtle);
+  color: var(--dbk-color-accent-text);
+}
+
+.divider {
+  height: 1px;
+  margin: 3px 4px;
+  background: var(--dbk-color-border);
+}
+
+/* ---- Legend ---- */
+.legend {
+  width: 248px;
+  max-height: calc(100dvh - 220px);
+  overflow-y: auto;
+  padding: var(--dbk-space-3);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius-large);
+  background: var(--dbk-color-surface);
+  box-shadow: var(--dbk-shadow-large);
+  color: var(--dbk-color-text);
+  font-size: var(--dbk-font-size-small);
+  animation: legendIn var(--dbk-motion-normal) var(--dbk-motion-easing);
+}
+
+@keyframes legendIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .legend {
+    animation: none;
+  }
+}
+
+.legendTitle {
+  margin: 0 0 var(--dbk-space-1);
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.legendList {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 var(--dbk-space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.legendList:last-child {
+  margin-bottom: 0;
+}
+
+.legendRow {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  align-items: center;
+  gap: var(--dbk-space-2);
+  min-height: 22px;
+}
+
+.legendRow > :first-child {
+  justify-self: center;
+}
+
+.sample {
+  display: block;
+  width: 40px;
+  height: 16px;
+  overflow: visible;
+}
+
+/* Phones: pinch zooms, so only fit and the legend; above the dock's tab bar. */
+@media (max-width: 760px) {
+  .panel {
+    margin-bottom: calc(64px + env(safe-area-inset-bottom));
+  }
+
+  .zoom,
+  .zoom + .zoom + .divider {
+    display: none;
+  }
+
+  .legend {
+    width: min(248px, calc(100vw - 88px));
+    max-height: calc(100dvh - 260px);
+  }
+}

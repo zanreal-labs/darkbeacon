@@ -4,12 +4,12 @@ import type { Position } from '@darkbeacon/shared';
 import type { AutoMapTarget, RecordedJump } from '@darkbeacon/tracking';
 
 /** Room a system node needs; a spot closer than this to another system is taken. */
-const GAP = { x: 160, y: 70 };
+const GAP = { x: 240, y: 110 };
 
 /** Next free spot to the right of `anchor`, moving down until it covers no other system. */
 export function spotNear(anchor: Position, taken: Position[]): Position {
-  const spot = { x: anchor.x + 220, y: anchor.y };
-  while (taken.some((p) => Math.abs(p.x - spot.x) < GAP.x && Math.abs(p.y - spot.y) < GAP.y)) spot.y += 80;
+  const spot = { x: anchor.x + 280, y: anchor.y };
+  while (taken.some((p) => Math.abs(p.x - spot.x) < GAP.x && Math.abs(p.y - spot.y) < GAP.y)) spot.y += 120;
   return spot;
 }
 

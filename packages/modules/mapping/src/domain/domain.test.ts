@@ -77,7 +77,7 @@ describe('rules', () => {
         { x: 10, y: 5 },
         { x: 300, y: 40 },
       ]),
-    ).toEqual({ x: 520, y: 40 });
+    ).toEqual({ x: 580, y: 40 });
   });
 
   it('rejects duplicate labels', () => {

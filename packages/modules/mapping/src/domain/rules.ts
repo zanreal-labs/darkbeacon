@@ -35,7 +35,7 @@ export function defaultShipSize(
 }
 
 /** Spacing used to place a system that was added without a position. */
-export const SYSTEM_SPACING = { x: 220, y: 0 };
+export const SYSTEM_SPACING = { x: 280, y: 0 };
 
 /** Next free spot to the right of everything already placed. */
 export function nextPosition(existing: readonly Position[]): Position {

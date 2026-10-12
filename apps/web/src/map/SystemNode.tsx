@@ -7,6 +7,7 @@ import { cssVar } from '@darkbeacon/theme-sdk';
 import { EyeOff, Lock, StickyNote, Users } from 'lucide-react';
 import { systemClass } from '../lib/universe';
 import { PluginSlot } from '../plugins/PluginSlot';
+import { EffectBadge, StaticChips } from './WormholeFacts';
 import styles from './SystemNode.module.css';
 
 export interface SystemNodeData extends Record<string, unknown> {
@@ -39,6 +40,8 @@ export const SystemNode = memo(function SystemNode({
   const name = systemDisplayName(system, info);
   // The real name goes on the second line when a custom name hides it.
   const subtitle = name !== info?.name ? info?.name : info?.regionName;
+  const effect = info?.effect ?? null;
+  const statics = info?.statics ?? [];
   const statusColor = system.status === 'unknown' ? 'transparent' : cssVar(`status-${system.status}`);
 
   return (
@@ -62,7 +65,7 @@ export const SystemNode = memo(function SystemNode({
       <div className={styles.row}>
         <span
           className={styles.class}
-          style={{ color: cssVar(cls.token) }}
+          style={{ '--class-color': cssVar(cls.token) } as CSSProperties}
           title={
             info ? `${info.regionName} · ${info.constellationName} · ${info.security.toFixed(2)}` : undefined
           }
@@ -89,9 +92,10 @@ export const SystemNode = memo(function SystemNode({
           )}
         </span>
       </div>
-      {(subtitle || characters > 0) && (
+      {(subtitle || effect || characters > 0) && (
         <div className={styles.sub}>
-          <span className={styles.subtitle}>{subtitle}</span>
+          <EffectBadge effect={effect} />
+          {subtitle && <span className={styles.subtitle}>{subtitle}</span>}
           {characters > 0 && (
             <span className={styles.characters} title={`${characters} tracked here`}>
               <Users aria-hidden />
@@ -100,6 +104,7 @@ export const SystemNode = memo(function SystemNode({
           )}
         </div>
       )}
+      <StaticChips statics={statics} className={styles.statics} />
       {labels.length > 0 && (
         <ul className={styles.labels}>
           {labels.map((l) => (

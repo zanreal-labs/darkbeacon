@@ -90,8 +90,8 @@ describe('ConnectionEdge', () => {
 
     const bubbles = [...container.querySelectorAll<SVGCircleElement>('[data-bubble]')];
     expect(bubbles.map((b) => [b.dataset.bubble, b.getAttribute('cx')])).toEqual([
-      ['source', '169'],
-      ['target', '391'],
+      ['source', '171'],
+      ['target', '389'],
     ]);
 
     const path = container.querySelector<SVGPathElement>('.react-flow__edge-path')!;

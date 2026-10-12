@@ -1,0 +1,57 @@
+.statics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A chip that reads at a glance: the type in the text colour, the destination in its class colour. */
+.static {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 0 6px;
+  border: 1px solid color-mix(in oklab, var(--static-color) 45%, transparent);
+  border-radius: var(--dbk-radius-small);
+  background: color-mix(in oklab, var(--static-color) 12%, transparent);
+  color: var(--dbk-node-text);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.statics[data-size='panel'] .static {
+  font-size: var(--dbk-font-size-small);
+  line-height: 22px;
+  padding: 0 8px;
+}
+
+.code {
+  letter-spacing: 0.01em;
+}
+
+.to {
+  color: color-mix(in oklab, var(--static-color) 78%, var(--dbk-node-text));
+  font-weight: 700;
+}
+
+.effect {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  color: color-mix(in oklab, var(--dbk-security-special) 80%, var(--dbk-node-text));
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.effect svg {
+  width: 12px;
+  height: 12px;
+}

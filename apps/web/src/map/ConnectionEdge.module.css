@@ -20,25 +20,26 @@
 .bubble {
   fill: var(--dbk-edge-bubble);
   stroke: var(--dbk-color-canvas);
-  stroke-width: 1.5;
+  stroke-width: 2;
 }
 
 .label {
   position: absolute;
   display: flex;
-  gap: 3px;
+  gap: 4px;
   pointer-events: none;
 }
 
+/* Opaque, bordered and in the text colour, so the chips read on any line colour in both modes. */
 .chip {
-  padding: 0 5px;
-  border: 1px solid var(--dbk-color-border);
+  padding: 0 6px;
+  border: 1px solid var(--dbk-color-border-strong);
   border-radius: 999px;
   background: var(--dbk-color-surface-raised);
-  color: var(--dbk-color-text-muted);
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 15px;
+  color: var(--dbk-color-text);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 18px;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
   box-shadow: var(--dbk-shadow-small);
@@ -47,17 +48,17 @@
 .chip[data-kind='eol'] {
   border-color: color-mix(in oklab, var(--dbk-edge-time-eol) 55%, transparent);
   background: color-mix(in oklab, var(--dbk-edge-time-eol) 14%, var(--dbk-color-surface-raised));
-  color: color-mix(in oklab, var(--dbk-edge-time-eol) 72%, var(--dbk-color-text));
+  color: color-mix(in oklab, var(--dbk-edge-time-eol) 60%, var(--dbk-color-text));
 }
 
 .chip[data-kind='reduced'] {
   border-color: color-mix(in oklab, var(--dbk-edge-mass-reduced) 55%, transparent);
   background: color-mix(in oklab, var(--dbk-edge-mass-reduced) 14%, var(--dbk-color-surface-raised));
-  color: color-mix(in oklab, var(--dbk-edge-mass-reduced) 72%, var(--dbk-color-text));
+  color: color-mix(in oklab, var(--dbk-edge-mass-reduced) 60%, var(--dbk-color-text));
 }
 
 .chip[data-kind='critical'] {
   border-color: color-mix(in oklab, var(--dbk-edge-mass-critical) 55%, transparent);
   background: color-mix(in oklab, var(--dbk-edge-mass-critical) 14%, var(--dbk-color-surface-raised));
-  color: color-mix(in oklab, var(--dbk-edge-mass-critical) 72%, var(--dbk-color-text));
+  color: color-mix(in oklab, var(--dbk-edge-mass-critical) 60%, var(--dbk-color-text));
 }

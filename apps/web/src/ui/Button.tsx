@@ -98,11 +98,24 @@ export interface IconButtonProps extends Omit<ButtonProps, 'icon' | 'trailingIco
   children?: ReactNode;
   /** Set false when a surrounding element already explains the button. */
   tooltip?: boolean;
+  /** Where the tooltip opens (above by default). */
+  tooltipSide?: 'top' | 'right' | 'bottom' | 'left';
 }
 
 /** A square button with only an icon; `label` is its accessible name and tooltip. */
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  { label, icon, tooltip = true, variant = 'ghost', size = 'md', className, asChild, children, ...rest },
+  {
+    label,
+    icon,
+    tooltip = true,
+    tooltipSide,
+    variant = 'ghost',
+    size = 'md',
+    className,
+    asChild,
+    children,
+    ...rest
+  },
   ref,
 ) {
   const classes = cx(styles.button, VARIANT[variant], SIZE[size], styles.icon, className);
@@ -130,7 +143,13 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
         {...rest}
       />
     );
-  return tooltip ? <Tooltip content={label}>{button}</Tooltip> : button;
+  return tooltip ? (
+    <Tooltip content={label} side={tooltipSide}>
+      {button}
+    </Tooltip>
+  ) : (
+    button
+  );
 });
 
 /** Inline spinner for loading states outside buttons. */

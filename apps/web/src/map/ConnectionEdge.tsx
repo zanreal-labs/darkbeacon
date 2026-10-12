@@ -54,7 +54,7 @@ function eolAge(eolAt: number | null, now = Date.now()): string {
   return minutes < 60 ? `EOL ${minutes}m` : `EOL ${Math.floor(minutes / 60)}h${minutes % 60}m`;
 }
 
-const BUBBLE_OFFSET = 9;
+const BUBBLE_OFFSET = 11;
 
 /**
  * The one connection edge: a straight line between node borders. EOL is dashed, mass and type
@@ -97,7 +97,7 @@ export const ConnectionEdge = memo(function ConnectionEdge({
       <BaseEdge
         id={id}
         path={path}
-        interactionWidth={18}
+        interactionWidth={20}
         style={{
           stroke: cssVar(strokeToken(c, selected)),
           strokeWidth: 'var(--dbk-edge-width)',
@@ -106,7 +106,7 @@ export const ConnectionEdge = memo(function ConnectionEdge({
       />
       {eol && <path d={path} className={styles.eol} />}
       {ends.map(({ end, at }) => (
-        <circle key={end} cx={at.x} cy={at.y} r={4.5} className={styles.bubble} data-bubble={end}>
+        <circle key={end} cx={at.x} cy={at.y} r={5.5} className={styles.bubble} data-bubble={end}>
           <title>Bubbled at the {end === 'source' ? 'source' : 'target'} end</title>
         </circle>
       ))}

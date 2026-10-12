@@ -14,6 +14,7 @@ import type { MapPermissions } from '../../lib/roles';
 import { systemClass } from '../../lib/universe';
 import { Button, Field, Input, Select, StatusDot, Textarea } from '../../ui';
 import { statusOptions } from '../menus';
+import { EffectBadge, StaticChips } from '../WormholeFacts';
 import type { MapStore } from '../useMapStore';
 import styles from './widgets.module.css';
 
@@ -117,6 +118,12 @@ export function SystemInfoWidget({ system, info, labels, can, store, focusToken 
         </div>
         {shownName && <p className={`${styles.realName} mono`}>{realName}</p>}
         {info && <SystemFacts info={info} />}
+        {info && (info.statics.length > 0 || info.effect) && (
+          <div className={styles.wormhole}>
+            <EffectBadge effect={info.effect} />
+            <StaticChips statics={info.statics} size="panel" />
+          </div>
+        )}
       </header>
 
       {can.edit ? (

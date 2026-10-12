@@ -37,7 +37,8 @@ export function along(a: Point, b: Point, distance: number): Point {
   return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
 }
 
-const NODE_BOX = { width: 200, height: 72 };
+/** Room a system node takes, with a margin; the node is 168-264 px wide and grows with statics and labels. */
+const NODE_BOX = { width: 260, height: 104 };
 
 /** Nudges a new system down until it does not cover another one. */
 export function freeSpot(at: Point, taken: Point[]): Point {
@@ -48,4 +49,50 @@ export function freeSpot(at: Point, taken: Point[]): Point {
     spot.y += NODE_BOX.height + 16;
   }
   return spot;
+}
+
+export interface Viewport {
+  x: number;
+  y: number;
+  zoom: number;
+}
+
+export interface Padding {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+/**
+ * The viewport that shows `bounds` inside `screen` minus `padding`, zoomed between `minZoom` and
+ * `maxZoom`. When the content only fits below `minZoom`, it stays at `minZoom` centred on `anchor`
+ * (the home system, say) or else on the middle of the content, so systems stay readable.
+ */
+export function fitViewport(
+  bounds: Rect,
+  screen: { width: number; height: number },
+  padding: Padding,
+  { minZoom, maxZoom, anchor }: { minZoom: number; maxZoom: number; anchor?: Point },
+): Viewport {
+  const width = Math.max(1, screen.width - padding.left - padding.right);
+  const height = Math.max(1, screen.height - padding.top - padding.bottom);
+  const fits = Math.min(width / Math.max(1, bounds.width), height / Math.max(1, bounds.height));
+  const zoom = Math.min(maxZoom, Math.max(minZoom, fits));
+  const focus = fits < minZoom && anchor ? anchor : center(bounds);
+  return {
+    x: padding.left + width / 2 - focus.x * zoom,
+    y: padding.top + height / 2 - focus.y * zoom,
+    zoom,
+  };
+}
+
+/** Smallest rectangle around all `rects`; null for none. */
+export function boundsOf(rects: readonly Rect[]): Rect | null {
+  if (rects.length === 0) return null;
+  const left = Math.min(...rects.map((r) => r.x));
+  const top = Math.min(...rects.map((r) => r.y));
+  const right = Math.max(...rects.map((r) => r.x + r.width));
+  const bottom = Math.max(...rects.map((r) => r.y + r.height));
+  return { x: left, y: top, width: right - left, height: bottom - top };
 }

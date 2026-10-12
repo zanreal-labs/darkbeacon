@@ -531,3 +531,11 @@
   color: var(--dbk-color-text-muted);
   font-size: var(--dbk-font-size-small);
 }
+
+.wormhole {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dbk-space-2);
+  margin-top: var(--dbk-space-2);
+}

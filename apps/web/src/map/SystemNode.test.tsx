@@ -84,6 +84,18 @@ describe('SystemNode', () => {
     expect(container.querySelector('[data-hidden]')).toBeTruthy();
   });
 
+  it('shows statics as chips with their destination, and the wormhole effect', () => {
+    renderNode({ info: { ...info, statics: ['D845', 'U210', 'Q999'], effect: 'redGiant' } });
+    const statics = screen.getByRole('list', { name: 'Statics' });
+    expect([...statics.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+      'D845HS',
+      'U210LS',
+      'Q999',
+    ]);
+    expect(screen.getByTitle('Static D845 to HS')).toBeTruthy();
+    expect(screen.getByText('Red Giant').getAttribute('title')).toMatch(/^Red Giant: /);
+  });
+
   it('offers connection handles only when the user may connect', () => {
     const { container, unmount } = renderNode({}, true);
     expect(container.querySelectorAll('.react-flow__handle.connectable')).toHaveLength(4);

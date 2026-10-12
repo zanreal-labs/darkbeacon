@@ -60,8 +60,7 @@ export async function seedDemoChain(actor: Actor, mapping: DemoMapping): Promise
       tag: 'HOME',
       labelIds: [staging.id],
       locked: true,
-      description:
-        'Statics: D845 to high-sec, U210 to low-sec.\nRed Giant: bigger smartbombs and overheating bonuses.',
+      description: 'Home hole: citadel, fleet hangar and the POCOs. Both statics rolled at downtime.',
     },
     {
       id: MAGNETAR,
@@ -69,7 +68,7 @@ export async function seedDemoChain(actor: Actor, mapping: DemoMapping): Promise
       y: 160,
       status: 'empty',
       labelIds: [ratting.id],
-      description: 'Statics: B274 to high-sec, O477 to C3. Two unrun relic sites, nobody home.',
+      description: 'Two unrun relic sites, nobody home.',
     },
     {
       id: PULSAR,
@@ -78,7 +77,7 @@ export async function seedDemoChain(actor: Actor, mapping: DemoMapping): Promise
       status: 'hostile',
       labelIds: [hostile.id],
       temporaryName: 'Pulsar C5',
-      description: 'Static: D364 to C2. Capital-capable group lives here; Rattlesnakes on d-scan.',
+      description: 'Capital-capable group lives here; Rattlesnakes on d-scan.',
     },
     { id: EC_P8R, x: -40, y: 300, status: 'warning', description: 'Gate camp on the Pure Blind side.' },
     {
@@ -96,7 +95,7 @@ export async function seedDemoChain(actor: Actor, mapping: DemoMapping): Promise
       x: 1100,
       y: 200,
       status: 'empty',
-      description: 'Static: N110 to high-sec. Black Hole: missiles fly slower, ships fly faster.',
+      description: 'Quiet C1, a short cut to high-sec.',
     },
   ];
   for (const { id, x, y, ...attributes } of systems) {

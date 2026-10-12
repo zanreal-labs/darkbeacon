@@ -10,12 +10,6 @@
   --xy-edge-stroke-selected: var(--dbk-edge-selected);
   --xy-connectionline-stroke: var(--dbk-edge-selected);
   --xy-connectionline-stroke-width: var(--dbk-edge-width);
-  --xy-controls-button-background-color: var(--dbk-color-surface);
-  --xy-controls-button-background-color-hover: var(--dbk-color-surface-hover);
-  --xy-controls-button-color: var(--dbk-color-text);
-  --xy-controls-button-color-hover: var(--dbk-color-text);
-  --xy-controls-button-border-color: var(--dbk-color-border);
-  --xy-controls-box-shadow: none;
   --xy-selection-background-color: color-mix(in srgb, var(--dbk-color-accent) 12%, transparent);
   --xy-selection-border: 1px dashed var(--dbk-color-accent);
 }
@@ -27,35 +21,4 @@
   border-radius: 0;
   background: none;
   box-shadow: none;
-}
-
-.canvas :global(.react-flow__controls) {
-  margin: var(--dbk-space-3);
-  border: 1px solid var(--dbk-color-border);
-  border-radius: var(--dbk-radius);
-  box-shadow: var(--dbk-shadow-medium);
-  overflow: hidden;
-}
-
-.canvas :global(.react-flow__controls-button) {
-  width: 28px;
-  height: 28px;
-  padding: 6px;
-  border-bottom-color: var(--dbk-color-border);
-}
-
-.canvas :global(.react-flow__controls-button svg) {
-  max-width: 11px;
-  max-height: 11px;
-  fill: var(--dbk-color-text-muted);
-}
-
-.canvas :global(.react-flow__controls-button:hover svg) {
-  fill: var(--dbk-color-text);
-}
-
-@media (max-width: 760px) {
-  .canvas :global(.react-flow__controls) {
-    display: none;
-  }
 }

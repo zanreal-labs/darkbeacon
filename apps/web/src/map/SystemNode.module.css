@@ -1,15 +1,15 @@
 .node {
   position: relative;
   min-width: var(--dbk-node-min-width);
-  max-width: 220px;
+  max-width: 264px;
   padding: var(--dbk-node-padding);
-  padding-left: 12px;
+  padding-left: 14px;
   border: var(--dbk-node-border-width) solid var(--dbk-node-border);
   border-radius: var(--dbk-node-radius);
   background-color: var(--dbk-node-bg);
   /* status stripe, plus a faint wash of the status colour */
   background-image:
-    linear-gradient(to right, var(--status-color) 3px, transparent 3px),
+    linear-gradient(to right, var(--status-color) 4px, transparent 4px),
     linear-gradient(
       color-mix(in oklab, var(--status-color) 7%, transparent),
       color-mix(in oklab, var(--status-color) 7%, transparent)
@@ -17,8 +17,8 @@
   background-clip: padding-box;
   box-shadow: var(--dbk-shadow-small);
   color: var(--dbk-node-text);
-  font-size: var(--dbk-font-size-xs);
-  line-height: 1.35;
+  font-size: 12px;
+  line-height: 1.4;
   touch-action: none;
   transition:
     border-color var(--dbk-motion-fast) var(--dbk-motion-easing),
@@ -50,32 +50,39 @@
   min-width: 0;
 }
 
+/* The class reads first: a small solid-tinted badge in the class colour. */
 .class {
   flex: none;
-  font-size: var(--dbk-font-size-xs);
+  padding: 0 5px;
+  border-radius: var(--dbk-radius-small);
+  background: color-mix(in oklab, var(--class-color) 16%, transparent);
+  color: color-mix(in oklab, var(--class-color) 85%, var(--dbk-node-text));
+  font-size: 12px;
   font-weight: 700;
+  line-height: 20px;
   font-variant-numeric: tabular-nums;
 }
 
 .name {
   overflow: hidden;
-  font-size: var(--dbk-font-size);
-  font-weight: 600;
-  letter-spacing: -0.005em;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 20px;
+  letter-spacing: -0.01em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .tag {
   flex: none;
-  padding: 0 4px;
+  padding: 0 5px;
   border: 1px solid var(--dbk-node-border);
   border-radius: var(--dbk-radius-small);
   color: var(--dbk-color-text-muted);
   font-family: var(--dbk-font-family-mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
-  line-height: 15px;
+  line-height: 17px;
 }
 
 .icons {
@@ -92,12 +99,12 @@
 }
 
 .icons svg {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
 }
 
 .sub {
-  margin-top: 1px;
+  margin-top: 2px;
   color: var(--dbk-color-text-muted);
 }
 
@@ -113,25 +120,29 @@
   align-items: center;
   gap: 3px;
   margin-left: auto;
-  padding: 0 5px;
+  padding: 0 6px;
   border-radius: 999px;
   background: var(--dbk-color-accent-subtle);
   color: var(--dbk-color-accent-text);
-  font-family: var(--dbk-font-family-mono);
   font-weight: 600;
-  line-height: 16px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
 }
 
 .characters svg {
-  width: 11px;
-  height: 11px;
+  width: 12px;
+  height: 12px;
+}
+
+.statics {
+  margin-top: 6px;
 }
 
 .labels {
   display: flex;
   flex-wrap: wrap;
-  gap: 3px;
-  margin: 5px 0 0;
+  gap: 4px;
+  margin: 6px 0 0;
   padding: 0;
   list-style: none;
 }
@@ -140,13 +151,13 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 0 5px;
+  padding: 0 6px;
   border-radius: var(--dbk-radius-small);
   background: color-mix(in oklab, var(--label-color) 16%, transparent);
   color: var(--dbk-node-text);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
-  line-height: 16px;
+  line-height: 18px;
   cursor: help;
 }
 
@@ -169,8 +180,8 @@
 }
 
 .handle {
-  width: 9px;
-  height: 9px;
+  width: 11px;
+  height: 11px;
   border: 2px solid var(--dbk-node-bg);
   background: var(--dbk-node-selected-border);
   opacity: 0;

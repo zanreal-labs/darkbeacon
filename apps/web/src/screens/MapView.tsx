@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useReactFlow } from '@xyflow/react';
 import type { MapDto, MapSummaryDto, StreamSnapshotDto, UniverseSystemDto } from '@darkbeacon/shared';
@@ -34,6 +34,9 @@ import { SlotItem, useSlot } from '../plugins/PluginSlot';
 import { Button, EmptyState, IconButton, Spinner } from '../ui';
 import styles from './MapPage.module.css';
 
+/** The phone dock's sheet at its tallest: 58 % of the screen above the 52 px tab bar. */
+const sheetHeight = () => (typeof window === 'undefined' ? 0 : Math.round(window.innerHeight * 0.58) + 52);
+
 interface OpenMenu {
   target: MenuTarget;
   x: number;
@@ -56,10 +59,10 @@ export function MapView({
   const rf = useReactFlow();
   const can = mapPermissions(role);
   const [selected, setSelected] = useState<number | null>(null);
-  const [dock, setDock] = useState(() => ({
-    tab: 'system',
-    open: typeof window !== 'undefined' && !window.matchMedia?.('(max-width: 760px)').matches,
-  }));
+  // The dock starts closed, so the first view has the whole width for the chain; on wide screens
+  // the first selection opens it, unless the user already opened or closed it themselves.
+  const [dock, setDock] = useState({ tab: 'system', open: false });
+  const dockTouched = useRef(false);
   // Phones get the bottom dock, which covers nothing the view needs to avoid.
   const wide = typeof window !== 'undefined' && !window.matchMedia?.('(max-width: 760px)').matches;
   const [menu, setMenu] = useState<OpenMenu | null>(null);
@@ -157,7 +160,7 @@ export function MapView({
 
   /** Next to the selected system, or in the middle of the visible canvas. */
   const defaultPosition = () => {
-    if (system) return { x: system.position.x + 240, y: system.position.y };
+    if (system) return { x: system.position.x + 280, y: system.position.y };
     const bounds = document.querySelector('.react-flow')?.getBoundingClientRect();
     if (!bounds) return { x: 0, y: 0 };
     const panel = dock.open && bounds.width > 760 ? 360 : 0;
@@ -255,10 +258,15 @@ export function MapView({
         universe={universe}
         can={can}
         store={store}
-        onSelect={setSelected}
+        onSelect={(id) => {
+          setSelected(id);
+          if (id !== null && wide && !dockTouched.current)
+            setDock((d) => (d.open ? d : { ...d, open: true }));
+        }}
         focus={focusNode}
         onMenu={openMenu}
         coveredRight={dock.open && wide ? 360 : 0}
+        coveredBottom={dock.open && !wide ? sheetHeight() : 0}
       />
 
       <div className={styles.topbar} data-dock={dock.open && wide ? 'open' : undefined}>
@@ -331,7 +339,10 @@ export function MapView({
         tabs={tabs}
         active={dock.tab}
         open={dock.open}
-        onChange={(tab, open) => setDock({ tab, open })}
+        onChange={(tab, open) => {
+          dockTouched.current = true;
+          setDock({ tab, open });
+        }}
       />
 
       <ul className={styles.notices} aria-live="polite">
