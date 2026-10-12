@@ -151,6 +151,79 @@
   flex: 1;
 }
 
+/* ---- Map switcher: the map's name in the top bar ---- */
+.switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: min(420px, 50vw);
+  height: 32px;
+  margin-left: calc(-1 * var(--dbk-space-2));
+  padding: 0 var(--dbk-space-2);
+  border: 0;
+  border-radius: var(--dbk-radius);
+  background: none;
+  color: var(--dbk-color-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.switcher:hover,
+.switcher[data-state='open'] {
+  background: var(--dbk-color-surface-hover);
+}
+
+.switcherName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.switcherStar {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  color: var(--dbk-status-warning);
+  fill: currentColor;
+}
+
+.switcherChevron {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--dbk-color-text-subtle);
+}
+
+.switcherMenu {
+  min-width: 260px;
+  max-width: min(360px, calc(100vw - 32px));
+}
+
+.switcherItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dbk-space-2);
+  min-width: 0;
+}
+
+.switcherItem > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Keeps names aligned with the checked one. */
+.menuIconSpace {
+  flex: none;
+  width: 16px;
+}
+
+.crumbParent {
+  min-width: 0;
+}
+
 .demo {
   display: inline-flex;
   border-radius: var(--dbk-radius-small);

@@ -76,6 +76,12 @@ export const getProviders = cache(() => serverGet(routes.auth.providers));
 /** The maps the visitor can see, with their role on each. */
 export const getMaps = cache(() => serverGet(routes.maps.list));
 
+/** What signed-in pages need to know about the instance (default map, sign-in method, bot). */
+export const getInstance = cache(() => serverGet(routes.instance.info));
+
+/** Where `/` sends the visitor. */
+export const getLanding = cache(() => serverGet(routes.accounts.landing));
+
 export const getMapBySlug = cache((slug: string) =>
   serverFind(routes.maps.bySlug, buildPath(routes.maps.bySlug.path, { slug })),
 );

@@ -16,13 +16,21 @@ export interface NavItem {
   label: string;
   icon: ReactNode;
   end?: boolean;
+  /** Other paths the item counts as current on. */
+  also?: readonly string[];
 }
 
 /** A rail icon link; static in the prerendered shell, marked current once the URL is known. */
 export function RailLink({ item }: { item: NavItem }) {
   const link = (current: boolean) =>
     current ? (
-      <NavLink href={item.href} end={item.end} className={styles.railLink} aria-label={item.label}>
+      <NavLink
+        href={item.href}
+        end={item.end}
+        also={item.also}
+        className={styles.railLink}
+        aria-label={item.label}
+      >
         {item.icon}
       </NavLink>
     ) : (
@@ -54,14 +62,21 @@ export function TabLink({ item }: { item: NavItem }) {
         </Link>
       }
     >
-      <NavLink href={item.href} end={item.end} className={styles.tab}>
+      <NavLink href={item.href} end={item.end} also={item.also} className={styles.tab}>
         {body}
       </NavLink>
     </Suspense>
   );
 }
 
-export const MAPS_NAV: NavItem = { href: '/', label: 'Maps', icon: <MapIcon />, end: true };
+/** Goes to `/`, which opens the account's map straight away (All maps is in the map switcher). */
+export const MAPS_NAV: NavItem = {
+  href: '/',
+  label: 'Map',
+  icon: <MapIcon />,
+  end: true,
+  also: ['/m/', '/maps'],
+};
 export const ADMIN_NAV: NavItem = { href: '/admin', label: 'Admin', icon: <Shield /> };
 export const ACCOUNT_NAV: NavItem = { href: '/account', label: 'Account', icon: <UserRound /> };
 

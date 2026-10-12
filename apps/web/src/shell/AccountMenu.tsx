@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { LogOut, Plus, Settings } from 'lucide-react';
 import { routes, type MeDto } from '@darkbeacon/shared';
+import { accountImage } from '../lib/account';
 import { useLogout, useMe, useProviders } from '../lib/session';
 import {
   Avatar,
@@ -35,15 +36,20 @@ export function AccountMenu({ me: rendered }: { me: MeDto }) {
   return (
     <Menu>
       <MenuTrigger className={styles.accountTrigger} aria-label={`Account: ${account.name}`}>
-        <Avatar src={account.avatarUrl} name={account.name} size={28} />
+        <Avatar src={accountImage(me)} name={account.name} size={28} />
       </MenuTrigger>
       <MenuContent className={styles.accountMenu}>
         <div className={styles.accountHeader}>
-          <Avatar src={account.avatarUrl} name={account.name} size={36} />
+          <Avatar src={accountImage(me)} name={account.name} size={36} />
           <div className={styles.accountHeading}>
             <strong>{account.name}</strong>
             <span className="muted">
-              {account.discordId ? 'Discord' : 'Local account'} · {ROLE_LABEL[account.instanceRole]}
+              {providers.data?.loginMethod === 'eve'
+                ? 'EVE Online'
+                : account.discordId
+                  ? 'Discord'
+                  : 'Local account'}{' '}
+              · {ROLE_LABEL[account.instanceRole]}
             </span>
           </div>
         </div>

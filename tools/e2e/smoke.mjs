@@ -48,30 +48,44 @@ async function run() {
     assert.equal(health.web, 'ok');
   });
 
-  await check('first HTML for / is the prerendered shell, signed in, with the rest streamed', async () => {
-    // As a browser opening the page: only page visits get a demo session.
+  await check('/ goes straight to the map, signed in, before any HTML', async () => {
     const response = await fetch(`${BASE}/`, {
       redirect: 'manual',
       headers: { 'sec-fetch-dest': 'document' },
     });
-    assert.equal(response.status, 200, 'no redirect to the sign-in page');
-    assert.equal(response.headers.get('x-nextjs-prerender'), '1', 'served from the static shell');
-    assert.equal(response.headers.get('x-nextjs-postponed'), '1', 'with dynamic parts resumed');
+    await response.body?.cancel();
+    assert.equal(response.status, 307);
+    assert.equal(new URL(response.headers.get('location'), BASE).pathname, `/m/${MAP}`);
     assert.match(response.headers.getSetCookie().join('\n'), /dbk_session=/, 'signed in on the server');
-    const { html, seen } = await readStreamed(response, {
-      rail: 'aria-label="Darkbeacon home"',
-      skeleton: 'aria-label="Loading maps"',
-      account: 'aria-label="Account: Demo pilot"',
-      maps: 'Demo chain',
-    });
-    assert.ok(html.startsWith('<!DOCTYPE html>'));
-    for (const part of ['rail', 'skeleton', 'account', 'maps'])
-      assert.ok(part in seen, `${part} in the HTML`);
-    assert.ok(seen.rail <= seen.account, 'the shell comes before the streamed account');
-    assert.ok(html.indexOf('aria-label="Loading maps"') < html.indexOf('Demo chain'), 'fallback first');
-    assert.match(html, /<style id="dbk-themes">/);
-    assert.match(html, /prefers-color-scheme: dark/);
   });
+
+  await check(
+    'first HTML of All maps is the prerendered shell, signed in, with the rest streamed',
+    async () => {
+      // As a browser opening the page: only page visits get a demo session.
+      const response = await fetch(`${BASE}/maps`, {
+        redirect: 'manual',
+        headers: { 'sec-fetch-dest': 'document' },
+      });
+      assert.equal(response.status, 200, 'no redirect to the sign-in page');
+      assert.equal(response.headers.get('x-nextjs-prerender'), '1', 'served from the static shell');
+      assert.equal(response.headers.get('x-nextjs-postponed'), '1', 'with dynamic parts resumed');
+      assert.match(response.headers.getSetCookie().join('\n'), /dbk_session=/, 'signed in on the server');
+      const { html, seen } = await readStreamed(response, {
+        rail: 'aria-label="Darkbeacon home"',
+        skeleton: 'aria-label="Loading maps"',
+        account: 'aria-label="Account: Demo pilot"',
+        maps: 'Demo chain',
+      });
+      assert.ok(html.startsWith('<!DOCTYPE html>'));
+      for (const part of ['rail', 'skeleton', 'account', 'maps'])
+        assert.ok(part in seen, `${part} in the HTML`);
+      assert.ok(seen.rail <= seen.account, 'the shell comes before the streamed account');
+      assert.ok(html.indexOf('aria-label="Loading maps"') < html.indexOf('Demo chain'), 'fallback first');
+      assert.match(html, /<style id="dbk-themes">/);
+      assert.match(html, /prefers-color-scheme: dark/);
+    },
+  );
 
   await check('crawlers, scanners and HEAD requests get no demo session', async () => {
     const asks = [
@@ -177,21 +191,24 @@ async function run() {
       (frame) => frame === page.mainFrame() && navigations.push(new URL(frame.url()).pathname),
     );
 
-    await check('a demo visit lands in the app, signed in, without a sign-in page', async () => {
+    await check('a demo visit lands on the map, signed in, without a sign-in page or a list', async () => {
       await page.goto(`${BASE}/`);
-      await page.getByRole('link', { name: /^Demo chain/ }).waitFor({ timeout: 15_000 });
+      await page.waitForURL(`**/m/${MAP}`);
+      await page.locator('.react-flow__node').first().waitFor({ timeout: 15_000 });
       await page.getByRole('button', { name: 'Account: Demo pilot' }).waitFor();
       assert.ok(!navigations.includes('/login'), `navigations: ${navigations.join(', ')}`);
+      assert.ok(!navigations.includes('/maps'), `navigations: ${navigations.join(', ')}`);
     });
 
-    await check('the maps list opens the map and back without a full page load', async () => {
+    await check('the map switcher opens All maps and back without a full page load', async () => {
       // A full load would drop this marker.
       await page.evaluate(() => (globalThis.__sameDocument = true));
+      await page.getByRole('button', { name: /switch map/i }).click();
+      await page.getByRole('menuitem', { name: 'All maps' }).click();
+      await page.waitForURL('**/maps');
       await page.getByRole('link', { name: /^Demo chain/ }).click();
       await page.waitForURL(`**/m/${MAP}`);
       await page.locator('.react-flow__node').first().waitFor({ timeout: 15_000 });
-      await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Maps' }).click();
-      await page.getByRole('link', { name: /^Demo chain/ }).waitFor();
       assert.equal(await page.evaluate(() => globalThis.__sameDocument), true);
     });
 
@@ -264,6 +281,11 @@ async function run() {
       await page.getByRole('heading', { name: 'Admin', exact: true }).waitFor();
       await page.goto(`${BASE}/account`);
       await page.getByRole('heading', { name: 'Account', exact: true }).waitFor();
+      await page.getByText('This device').first().waitFor();
+      await page.goto(`${BASE}/maps`);
+      await page.getByRole('heading', { name: 'All maps', exact: true }).waitFor();
+      await page.goto(`${BASE}/m/${MAP}/settings?tab=notifications`);
+      await page.getByRole('heading', { name: 'Webhooks', exact: true }).waitFor();
       await page.waitForTimeout(500);
       assert.deepEqual(errors, []);
     });

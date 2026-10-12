@@ -9,8 +9,9 @@
 
 ![The demo chain in the dark theme](docs/screenshots/map--desktop-dark.png)
 
-A self-hosted wormhole and chain mapper for EVE Online. One container, one login (Discord), EVE characters
-linked through EVE SSO, and every change streamed live to everyone looking at the map.
+A self-hosted wormhole and chain mapper for EVE Online. One container, one login (EVE Online or Discord),
+every EVE character of a pilot on one account, and every change streamed live to everyone looking at the
+map, and to Discord.
 
 The engineering contract is [`docs/SPEC.md`](docs/SPEC.md); choices the spec leaves open are logged in
 [`docs/decisions.md`](docs/decisions.md).
@@ -26,6 +27,15 @@ docker run -p 3000:3000 -v dbk-data:/data --env-file .env darkbeacon
 Open `http://localhost:3000`. The first account to sign in becomes the instance owner. Data lives in the
 `/data` volume (SQLite by default; set `DATABASE_URL=postgres://...` to use Postgres). Without `SECRET_KEY`
 the server generates one and keeps it in `/data/secret.key`.
+
+Only an EVE application (`EVE_CLIENT_ID`, `EVE_CLIENT_SECRET`, callback `<PUBLIC_URL>/api/auth/eve/callback`)
+is needed: people then sign in with any of their characters, and alts added while signed in join the same
+account. With a Discord application as well, Discord becomes the way in (an admin can switch back to EVE in
+Admin, Instance) and Discord roles can grant map access. A Discord bot (Admin, Instance) is optional: with
+it, servers, roles and channels are picked from lists, and map notifications can post without a webhook.
+`/` opens your map straight away (the one you star, the instance default, or the one you used last); every
+map is under All maps in the map switcher. Discord notifications are on by default and set up per map in
+its Notifications tab.
 
 The container runs one process tree behind one port: the API server (NestJS) listens on `PORT`, answers
 `/api` and `/ws` itself and starts the web app's server (Next.js) on a loopback port only it knows, passing

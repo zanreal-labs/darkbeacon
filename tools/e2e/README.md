@@ -1,10 +1,11 @@
 # End-to-end smoke test
 
-`smoke.mjs` checks a running instance in demo mode from the outside: the first HTML for `/` is the
-prerendered shell with the signed-in parts streamed into it, the system colour scheme is right
-without any script, a saved theme applies before the page renders, a visit lands in the app
-signed in (no sign-in page), the map renders from the server's snapshot and a change made by
-another browser arrives live. It also checks that crawlers and scanners get no demo session, that
+`smoke.mjs` checks a running instance in demo mode from the outside: `/` redirects straight to the
+map before any HTML, the first HTML of All maps is the prerendered shell with the signed-in parts
+streamed into it, the system colour scheme is right without any script, a saved theme applies
+before the page renders, a visit lands on the map signed in (no sign-in page, no list), the map
+switcher reaches All maps without a full page load, the map renders from the server's snapshot
+and a change made by another browser arrives live. It also checks that crawlers and scanners get no demo session, that
 sign-in redirects never leave the site, that a new browser starts with the account's theme and
 that a plugin widget fits in the map dock. It runs inside the Playwright image, never on the host.
 

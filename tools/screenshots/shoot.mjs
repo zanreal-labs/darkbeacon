@@ -12,6 +12,8 @@ import { chromium } from 'playwright';
 
 const BASE = process.env.BASE ?? 'http://app:3000';
 const LOGIN_BASE = process.env.LOGIN_BASE || undefined;
+/** Optional: an instance with EVE SSO and no Discord, whose sign-in page offers EVE Online. */
+const EVE_LOGIN_BASE = process.env.EVE_LOGIN_BASE || undefined;
 const OUT = process.env.OUT ?? '/work/docs/screenshots';
 const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY) : null;
 const SCHEMES = (process.env.SCHEMES ?? 'light,dark').split(',');
@@ -29,7 +31,27 @@ const failures = [];
 
 async function shot(page, name, scheme, size, options = {}) {
   const file = join(OUT, `${name}--${size}-${scheme}.png`);
+  // The page scrolls inside the shell's <main>; let it grow so a full-page shot shows everything.
+  const unclip = options.fullPage
+    ? await page.evaluate(() => {
+        const main = globalThis.document.getElementById('main');
+        const shell = main?.parentElement;
+        if (!main || !shell) return false;
+        main.style.overflow = 'visible';
+        shell.style.height = 'auto';
+        shell.style.minHeight = '100dvh';
+        return true;
+      })
+    : false;
   await page.screenshot({ path: file, ...options });
+  if (unclip) {
+    await page.evaluate(() => {
+      const main = globalThis.document.getElementById('main');
+      main.style.overflow = '';
+      main.parentElement.style.height = '';
+      main.parentElement.style.minHeight = '';
+    });
+  }
   console.log('  ', file.replace(`${OUT}/`, ''));
 }
 
@@ -101,7 +123,7 @@ async function run() {
         await open(p, `${LOGIN_BASE ?? BASE}/login`);
         await p
           .getByRole('button', { name: /discord|explore the demo/i })
-          .or(p.getByRole('link', { name: /discord/i }))
+          .or(p.getByRole('link', { name: /discord|eve online/i }))
           .first()
           .waitFor();
         await settle(p);
@@ -109,8 +131,35 @@ async function run() {
         await login.close();
       });
 
-      await scene('maps', async () => {
+      // An instance whose people sign in with EVE Online (no Discord configured).
+      if (EVE_LOGIN_BASE) {
+        await scene('signin-eve', async () => {
+          const login = await browser.newContext({
+            viewport,
+            colorScheme: scheme,
+            reducedMotion: 'reduce',
+            deviceScaleFactor: phone ? 2 : 1,
+          });
+          const p = await login.newPage();
+          await open(p, `${EVE_LOGIN_BASE}/login`);
+          await p.getByRole('link', { name: 'Log in with EVE Online' }).waitFor();
+          await p.waitForFunction(() =>
+            [...globalThis.document.images].every((img) => img.complete && img.naturalWidth > 0),
+          );
+          await settle(p);
+          await shot(p, 'signin-eve', scheme, size);
+          await login.close();
+        });
+      }
+
+      await scene('landing', async () => {
+        // `/` opens the map straight away: no list in between.
         await open(page, `${BASE}/`);
+        if (!new URL(page.url()).pathname.startsWith('/m/')) throw new Error(`/ landed on ${page.url()}`);
+      });
+
+      await scene('maps', async () => {
+        await open(page, `${BASE}/maps`);
         await page.getByText('Demo chain').first().waitFor({ timeout: 15_000 });
         await settle(page);
         await s('maps');
@@ -120,6 +169,13 @@ async function run() {
         await open(page, `${BASE}/m/${MAP}`);
         await waitForMap(page);
         await s('map');
+
+        // The map switcher on the map's name in the top bar.
+        await page.getByRole('button', { name: /switch map/i }).click();
+        await settle(page);
+        await s('map-switcher');
+        await page.keyboard.press('Escape');
+        await settle(page, 200);
 
         // Select the home system so the dock has content.
         const home = page.locator('.react-flow__node', { hasText: /J014348|Home/ }).first();
@@ -249,6 +305,13 @@ async function run() {
         await page.getByRole('heading', { level: 1 }).first().waitFor({ timeout: 15_000 });
         await settle(page, 600);
         await s('account', { fullPage: true });
+      });
+
+      await scene('components', async () => {
+        await open(page, `${BASE}/dev/components`);
+        await page.getByRole('heading', { name: 'Components' }).waitFor({ timeout: 15_000 });
+        await settle(page, 600);
+        await s('components', { fullPage: true });
       });
 
       await scene('not-found', async () => {

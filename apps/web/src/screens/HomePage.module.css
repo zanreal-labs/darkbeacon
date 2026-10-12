@@ -23,7 +23,8 @@
   gap: var(--dbk-space-3);
   min-height: 60px;
   padding: var(--dbk-space-2) var(--dbk-space-3);
-  padding-right: 52px;
+  /* Room for the row's star and settings buttons, which sit over it. */
+  padding-right: 88px;
   border-radius: var(--dbk-radius);
   color: inherit;
   text-decoration: none;
@@ -46,7 +47,7 @@
   height: 36px;
   border: 1px solid var(--dbk-color-border);
   border-radius: var(--dbk-radius);
-  background: var(--dbk-color-bg-subtle);
+  background: var(--dbk-color-surface);
   color: var(--dbk-color-accent-text);
 }
 
@@ -69,9 +70,9 @@
   white-space: nowrap;
 }
 
-.slug {
+.meta {
   overflow: hidden;
-  color: var(--dbk-color-text-subtle);
+  color: var(--dbk-color-text-muted);
   font-size: var(--dbk-font-size-small);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -84,14 +85,24 @@
   color: var(--dbk-color-text-subtle);
 }
 
-/* Sits over the row's right padding, so the row stays one link. */
-.settings {
+/* Over the row's right padding, so the row stays one link. */
+.rowActions {
   position: absolute;
   right: var(--dbk-space-3);
+  display: flex;
+  gap: var(--dbk-space-1);
 }
 
-.item:has(.settings) .chevron {
+.item:has(.rowActions) .chevron {
   display: none;
+}
+
+.starred {
+  color: var(--dbk-status-warning);
+}
+
+.starred svg {
+  fill: currentColor;
 }
 
 .skeletonRow {
@@ -117,17 +128,64 @@
   gap: var(--dbk-space-4);
 }
 
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--dbk-space-2);
+}
+
 .prefix {
   padding-left: var(--dbk-space-1);
   color: var(--dbk-color-text-subtle);
   font-size: var(--dbk-font-size-small);
 }
 
-.formFooter {
-  display: flex;
-  justify-content: flex-end;
+/* `/` while it looks for the map to open. */
+.landing {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--dbk-space-3);
+  height: 100%;
+}
+
+/* The first-map screen. */
+.first {
+  display: grid;
+  justify-items: center;
   gap: var(--dbk-space-2);
-  margin: var(--dbk-space-1) calc(-1 * var(--dbk-space-5)) calc(-1 * var(--dbk-space-4));
-  padding: var(--dbk-space-3) var(--dbk-space-5);
-  border-top: 1px solid var(--dbk-color-border);
+  margin: var(--dbk-space-6) 0 var(--dbk-space-5);
+  text-align: center;
+}
+
+.first p {
+  max-width: 440px;
+  text-wrap: balance;
+}
+
+.firstIcon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: var(--dbk-space-2);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius-large);
+  background: var(--dbk-color-surface);
+  color: var(--dbk-color-accent-text);
+}
+
+.firstIcon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.firstForm {
+  padding: var(--dbk-space-4);
+}
+
+.firstNote {
+  margin-top: var(--dbk-space-3);
+  font-size: var(--dbk-font-size-small);
+  text-align: center;
 }

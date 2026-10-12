@@ -1,32 +1,37 @@
 import { Suspense } from 'react';
+import { redirect } from 'next/navigation';
 import { HydrationBoundary } from '@tanstack/react-query';
-import { mapsKey, meKey, providersKey } from '../../lib/session-keys';
-import { getMaps, getMe, getProviders, prefilled } from '../../server/api';
-import { HomePage, HomePageSkeleton } from '../../screens/HomePage';
+import { meKey, providersKey } from '../../lib/session-keys';
+import { getLanding, getMe, getProviders, prefilled } from '../../server/api';
+import { FirstMapPage, LandingSkeleton } from '../../screens/HomePage';
 import { SignInRedirect } from '../../shell/Session';
 
-/** `/`: the maps you can see. The heading is prerendered; the list streams in. */
-export default function MapsRoute() {
+/**
+ * `/`: the map this account opens (its star, the instance default, the last opened, the only
+ * one). The proxy redirects before any HTML; this is the fallback, and the first-map screen
+ * when the account can see no map yet.
+ */
+export default function LandingRoute() {
   return (
-    <Suspense fallback={<HomePageSkeleton />}>
-      <Maps />
+    <Suspense fallback={<LandingSkeleton />}>
+      <Landing />
     </Suspense>
   );
 }
 
-async function Maps() {
+async function Landing() {
   const me = await getMe();
   if (!me) return <SignInRedirect />;
-  const [maps, providers] = await Promise.all([getMaps(), getProviders()]);
+  const [landing, providers] = await Promise.all([getLanding(), getProviders()]);
+  if (landing.slug) redirect(`/m/${encodeURIComponent(landing.slug)}`);
   return (
     <HydrationBoundary
       state={prefilled([
         [meKey, me],
-        [mapsKey, maps],
         [providersKey, providers],
       ])}
     >
-      <HomePage />
+      <FirstMapPage />
     </HydrationBoundary>
   );
 }

@@ -11,18 +11,21 @@ docker build -t darkbeacon:shots .
 docker run -d --rm --name dbk-demo --network dbk-shots -e DEMO_MODE=true -e ALLOW_DEMO_MODE=true darkbeacon:shots
 docker run -d --rm --name dbk-login --network dbk-shots \
   -e DISCORD_CLIENT_ID=0 -e DISCORD_CLIENT_SECRET=x -e EVE_CLIENT_ID=0 -e EVE_CLIENT_SECRET=x darkbeacon:shots
+# Without Discord, people sign in with EVE Online.
+docker run -d --rm --name dbk-eve --network dbk-shots -e EVE_CLIENT_ID=0 -e EVE_CLIENT_SECRET=x darkbeacon:shots
 
 docker run --rm --network dbk-shots --ipc=host -v "$PWD":/work -w /tmp \
-  -e BASE=http://dbk-demo:3000 -e LOGIN_BASE=http://dbk-login:3000 \
+  -e BASE=http://dbk-demo:3000 -e LOGIN_BASE=http://dbk-login:3000 -e EVE_LOGIN_BASE=http://dbk-eve:3000 \
   mcr.microsoft.com/playwright:v1.55.0-noble \
   sh -c 'npm i --no-audit --no-fund playwright@1.55.0 >/dev/null && cp /work/tools/screenshots/shoot.mjs . && node shoot.mjs'
 
-docker rm -f dbk-demo dbk-login && docker network rm dbk-shots
+docker rm -f dbk-demo dbk-login dbk-eve && docker network rm dbk-shots
 ```
 
 Every navigation waits for the network to go idle, so the page is hydrated before the tool clicks
 anything; shots use reduced motion. Besides the screens it takes close-ups of nodes and an edge, the
 dock tabs, the context menus and the connection legend.
 
-`ONLY=<regex>` limits the run to some scenes (`signin`, `maps`, `map`, `map-settings`, `admin`,
-`account`, `not-found`); `SIZES` and `SCHEMES` take comma separated lists.
+`ONLY=<regex>` limits the run to some scenes (`signin`, `signin-eve`, `landing`, `maps`, `map`,
+`map-settings`, `admin`, `account`, `components`, `not-found`); `SIZES` and `SCHEMES` take comma
+separated lists. `landing` takes no picture: it fails when `/` does not open a map.

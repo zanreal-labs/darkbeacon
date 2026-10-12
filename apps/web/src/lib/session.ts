@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { routes, type AuthProvidersDto, type MeDto } from '@darkbeacon/shared';
+import { buildPath, routes, type AuthProvidersDto, type MeDto, type SessionDto } from '@darkbeacon/shared';
 import { api, ApiError } from './api';
 import { useOptionalRealtime } from './RealtimeProvider';
-import { meKey, providersKey } from './session-keys';
+import { meKey, providersKey, sessionsKey } from './session-keys';
 
 export { isInstanceAdmin, meKey, providersKey } from './session-keys';
 
@@ -53,6 +53,24 @@ export function useEnterDemo() {
       queryClient.setQueryData(meKey, me);
       realtime?.reconnect();
     },
+  });
+}
+
+/** The account's signed-in browsers and devices. */
+export function useSessions() {
+  return useQuery({
+    queryKey: sessionsKey,
+    queryFn: () => api<SessionDto[]>(routes.accounts.sessions.path),
+  });
+}
+
+/** Ends one session (another device); the list refreshes. */
+export function useRevokeSession() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (sessionId: string) =>
+      api<void>(buildPath(routes.accounts.revokeSession.path, { sessionId }), { method: 'DELETE' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: sessionsKey }),
   });
 }
 

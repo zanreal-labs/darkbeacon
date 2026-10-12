@@ -170,6 +170,27 @@
   width: min(100%, 360px);
 }
 
+/* CCP's "Log in with EVE Online" image, as their SSO docs ask; 270x45. */
+.eveButton {
+  display: block;
+  justify-self: center;
+  width: 270px;
+  height: 45px;
+  border-radius: 4px;
+  box-shadow: var(--dbk-shadow-small);
+  transition: transform var(--dbk-motion-fast) var(--dbk-motion-easing);
+}
+
+.eveButton:hover {
+  transform: translateY(-1px);
+}
+
+.eveButton img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .note {
   color: var(--dbk-color-text-muted);
   font-size: var(--dbk-font-size-small);

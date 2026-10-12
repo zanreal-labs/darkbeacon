@@ -113,7 +113,7 @@ export class AccountService {
     const main = characters.some((c) => c.id === account.mainCharacterId) ? account.mainCharacterId : null;
     return {
       account: { ...toAccountDto(account, instanceRole), mainCharacterId: main ?? null },
-      characters: characters.map((c) => toCharacterDto(c, scopes.get(c.id) ?? [])),
+      characters: characters.map((c) => toCharacterDto(c, scopes.get(c.id))),
     };
   }
 
@@ -354,7 +354,11 @@ export class AccountService {
   }
 
   private async adminDto(account: Account): Promise<AdminAccountDto> {
-    return { ...toAccountDto(account, await this.effectiveRole(account)), lastSeenAt: account.lastSeenAt };
+    return {
+      ...toAccountDto(account, await this.effectiveRole(account)),
+      mainCharacterId: account.mainCharacterId ?? null,
+      lastSeenAt: account.lastSeenAt,
+    };
   }
 
   private async roleChanged(actor: Actor, account: Account): Promise<void> {
