@@ -61,18 +61,20 @@
   pointer-events: none;
 }
 
-/* The size letter: the only text on a connection. */
+/* The size letter: the only text on a connection. An inverted neutral chip with a canvas
+   outline, so it stands out on any line without adding a colour. */
 .size {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
-  height: 18px;
-  padding: 0 4px;
-  border-radius: 4px;
-  background: var(--dbk-color-canvas);
-  color: var(--dbk-color-text);
-  font-size: var(--map-text-edge, 12.5px);
+  min-width: 24px;
+  height: 22px;
+  padding: 0 5px;
+  border: 2px solid var(--dbk-color-canvas);
+  border-radius: 6px;
+  background: var(--dbk-node-text);
+  color: var(--dbk-color-canvas);
+  font-size: var(--map-text-chip, 14px);
   font-weight: 800;
   line-height: 1;
   white-space: nowrap;

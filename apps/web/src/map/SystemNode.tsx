@@ -11,7 +11,7 @@ import {
   type UniverseSystemDto,
 } from '@darkbeacon/shared';
 import { cssVar } from '@darkbeacon/theme-sdk';
-import { Users } from 'lucide-react';
+import { Lock, Users } from 'lucide-react';
 import { PluginSlot } from '../plugins/PluginSlot';
 import { useToast } from '../ui';
 import {
@@ -233,6 +233,11 @@ export const SystemNode = memo(function SystemNode({
 
       <div className={`${styles.line} ${styles.fill}`}>
         <StaticsText statics={info?.statics ?? []} />
+        {system.locked && (
+          <span className={styles.lock} title="Locked: cannot be moved or removed" data-locked>
+            <Lock aria-label="Locked" />
+          </span>
+        )}
       </div>
 
       {hub && (

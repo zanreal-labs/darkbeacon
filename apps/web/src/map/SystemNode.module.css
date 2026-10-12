@@ -128,6 +128,19 @@
   overflow: hidden;
 }
 
+/* A locked system: a small muted padlock at the end of the statics line. */
+.lock {
+  display: inline-flex;
+  flex: none;
+  margin-left: auto;
+  color: var(--dbk-color-text-muted);
+}
+
+.lock svg {
+  width: 14px;
+  height: 14px;
+}
+
 /* Statics as plain text: "D845 HS", no chips. */
 .statics {
   display: flex;
@@ -197,8 +210,7 @@
 }
 
 .label {
-  border-color: var(--label-color);
-  background: color-mix(in oklab, var(--label-color) 22%, var(--dbk-node-bg));
+  border-color: color-mix(in oklab, var(--label-color) 70%, var(--dbk-node-border));
   pointer-events: auto;
   cursor: help;
 }
