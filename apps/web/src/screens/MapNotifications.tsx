@@ -257,7 +257,11 @@ function DiscordSettings({ map, state }: { map: MapDto; state: DiscordNotifyStat
               <fieldset className={styles.fieldset}>
                 <legend className={styles.legend}>Mentions</legend>
                 <div className={styles.grid}>
-                  <Field label="Mention" hint="Only for the urgent kinds ticked below.">
+                  <Field
+                    className={styles.narrow}
+                    label="Mention"
+                    hint="Only for the urgent kinds ticked below."
+                  >
                     <Select
                       value={settings.mention.kind}
                       options={[
@@ -277,7 +281,7 @@ function DiscordSettings({ map, state }: { map: MapDto; state: DiscordNotifyStat
                     />
                   </Field>
                   {settings.mention.kind === 'role' && state.target.kind === 'channel' && (
-                    <Field label="Role">
+                    <Field className={styles.narrow} label="Role">
                       <RoleSelect
                         guildId={state.target.guildId}
                         value={settings.mention.roleId}

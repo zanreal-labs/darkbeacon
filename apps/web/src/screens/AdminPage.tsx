@@ -643,6 +643,16 @@ function PluginsTab() {
   const toast = useToast();
   const key = ['admin-plugins'];
   const plugins = useQuery({ queryKey: key, queryFn: () => api<PluginDto[]>(routes.plugins.list.path) });
+  // First-party plugins at the version shipped here: their database use is the server's own.
+  const catalog = useQuery({
+    queryKey: ['admin-catalog'],
+    queryFn: () => api<CatalogEntryDto[]>(routes.plugins.catalog.path),
+  });
+  const shipped = new Set(
+    (catalog.data ?? [])
+      .filter((e) => e.kind === 'plugin' && e.installedVersion === e.version)
+      .map((e) => e.id),
+  );
   const [source, setSource] = useState('');
   const [removing, setRemoving] = useState<PluginDto | null>(null);
   const refresh = () =>
@@ -689,7 +699,7 @@ function PluginsTab() {
       <Card>
         <CardHeader
           title="Installed plugins"
-          description="New plugins start switched off. Switching applies at once; a new version reloads the plugin."
+          description="Plugins you install start switched off; the ones shipped with this server start on. Switching applies at once; a new version reloads the plugin."
         />
         <CardBody flush>
           {plugins.isPending ? (
@@ -725,7 +735,11 @@ function PluginsTab() {
                     {p.description && <div className={styles.rowMeta}>{p.description}</div>}
                     <div className={styles.chips} aria-label="Permissions">
                       {p.ports.map((port) => (
-                        <Badge key={port} variant="outline" tone={port === 'db' ? 'danger' : 'neutral'}>
+                        <Badge
+                          key={port}
+                          variant="outline"
+                          tone={port === 'db' && !shipped.has(p.id) ? 'danger' : 'neutral'}
+                        >
                           {port}
                         </Badge>
                       ))}
@@ -735,9 +749,9 @@ function PluginsTab() {
                         </Badge>
                       )}
                     </div>
-                    {(p.ports.includes('db') || p.error) && (
+                    {((p.ports.includes('db') && !shipped.has(p.id)) || p.error) && (
                       <div className={styles.rowNotes}>
-                        {p.ports.includes('db') && (
+                        {p.ports.includes('db') && !shipped.has(p.id) && (
                           <Callout tone="warning" title="Full database access">
                             This plugin can read and change every table, including sessions and tokens. Switch
                             it on only if you trust its author.

@@ -370,3 +370,8 @@
     justify-content: flex-end;
   }
 }
+
+/* A short control that would look lost at full width. */
+.narrow {
+  max-width: 320px;
+}
