@@ -21,8 +21,8 @@ export interface CredentialGrant {
   credentialId: string;
   /** The key's name, for the audit trail ("via key <name>"). */
   name: string;
-  /** `pat` personal access token, `svc` service key. */
-  kind: 'pat' | 'svc';
+  /** `pat` personal access token, `svc` service key, `oauth` an OAuth client a person approved. */
+  kind: 'pat' | 'svc' | 'oauth';
   /** How the request came in: the REST API or the MCP endpoint. */
   channel: 'api' | 'mcp';
   /** The scopes as granted, for checks at the edge (routes, MCP tools). */

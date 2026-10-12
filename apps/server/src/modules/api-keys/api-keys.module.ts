@@ -8,6 +8,7 @@ import { HmacTokenSecrets, KyselyApiKeyRepository } from '../../adapters/api-key
 import type { AppConfig } from '../../config/config.js';
 import { ActorResolverRegistry, isMcpPath } from '../../platform/actor.js';
 import { APP_CONFIG, CLOCK, EVENT_LOG, MAP_ACCESS, UNIT_OF_WORK } from '../../platform/tokens.js';
+import { TOKEN_PREFIX } from '@darkbeacon/shared';
 import { MappingModule } from '../mapping/mapping.module.js';
 import { MAP_REPOSITORY } from '../mapping/mapping.tokens.js';
 import { AdminApiKeysController, ApiKeysController } from './api-keys.controller.js';
@@ -81,7 +82,7 @@ export class ApiKeysModule implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
-    this.actors.useBearer(async (token, request) => {
+    this.actors.useBearer([TOKEN_PREFIX.pat, TOKEN_PREFIX.svc], async (token, request) => {
       const channel = isMcpPath(request.url) ? 'mcp' : 'api';
       const resolved = await this.keys.authenticate(token, { ip: request.ip ?? null, channel });
       return {

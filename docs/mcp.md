@@ -19,7 +19,7 @@ An instance admin chooses the mode in **Admin → API access → AI agents**:
 | Mode            | Who can connect                                                               |
 | --------------- | ----------------------------------------------------------------------------- |
 | `off` (default) | nobody; `/mcp` answers 404                                                    |
-| `authenticated` | clients with an API key (`Authorization: Bearer dbk_…`)                       |
+| `authenticated` | clients that sign in (OAuth) or carry an API key (`Authorization: Bearer`)    |
 | `public`        | the above, and anonymous clients, read-only, for public maps opened to agents |
 
 Each map narrows it in **Map settings → Sharing → AI agents**: `off` (no agent sees the map, with any
@@ -28,18 +28,29 @@ only while the map's public link is on, and only what the link shows).
 
 ## Connecting a client
 
-Make a key first: **Account → API keys → New key**. For an assistant that should only read, pick _Read
+Clients that support MCP authorization (Claude Desktop and claude.ai custom connectors, Claude Code, the
+MCP Inspector, VS Code) only need the URL, `https://map.example.com/mcp`: they find the sign-in on their
+own (see [OAuth](#oauth)), open the instance in a browser, you sign in as usual, check what the client may
+do (and on which maps), and approve. The approval shows in **Account → Connected apps**, where it is
+revoked.
+
+```sh
+claude mcp add --transport http darkbeacon https://map.example.com/mcp
+```
+
+For scripts and clients without OAuth, use an API key: **Account → API keys → New key**. For an assistant that should only read, pick _Read
 everything_ and switch on _Read-only_; for one that records signatures, add `signatures:write` (and
 `connections:write`, `systems:write` for connections and notes), ideally only on the map it works on.
 
-**Claude Code**
+**Claude Code** with a key:
 
 ```sh
 claude mcp add --transport http darkbeacon https://map.example.com/mcp \
   --header "Authorization: Bearer dbk_pat_..."
 ```
 
-**Claude Desktop** (through the `mcp-remote` bridge, which adds the header), in `claude_desktop_config.json`:
+**Claude Desktop** with a key (through the `mcp-remote` bridge, which adds the header), in
+`claude_desktop_config.json`:
 
 ```json
 {
@@ -124,30 +135,41 @@ is for); keep it `authenticated` otherwise.
 
 ## Security
 
-- `Authorization: Bearer` only; browser sessions never authenticate `/mcp`. Invalid keys get a 401 with a
-  `WWW-Authenticate: Bearer` challenge, as for the REST API.
+- `Authorization: Bearer` only (API keys or OAuth access tokens); browser sessions never authenticate
+  `/mcp`. Invalid tokens get a 401 with a `WWW-Authenticate: Bearer` challenge, as for the REST API.
 - A browser `Origin` other than the instance's (or an allowed CORS origin) is refused with 403, against DNS
   rebinding and cross-site pages, as the transport spec requires.
 - Keys are narrowed per tool by their scopes, and per map by the map's own MCP mode.
 
-## OAuth (planned)
+## OAuth
 
-The authorization part of the spec (OAuth 2.1, Protected Resource Metadata per RFC 9728, Client ID
-Metadata Documents or dynamic registration, PKCE, resource indicators) is optional for MCP servers; this
-endpoint uses API keys for now, which every client above supports. The plan, so that clients can connect
-with a browser sign-in instead of pasting a key:
+Darkbeacon is the authorization server of its own `/mcp` (MCP authorization, spec 2026-07-28: OAuth 2.1,
+RFC 9728 Protected Resource Metadata, RFC 8414 server metadata, Client ID Metadata Documents and RFC 7591
+dynamic registration, PKCE, RFC 8707 resource indicators, RFC 9207 `iss`). Sign-in is the instance's own
+(Discord or EVE); nothing else is configured.
 
-1. Darkbeacon becomes its own authorization server for `/mcp`: `/.well-known/oauth-protected-resource/mcp`
-   (resource = `<PUBLIC_URL>/mcp`, `authorization_servers` = the instance) and
-   `/.well-known/oauth-authorization-server` (`authorization_endpoint`, `token_endpoint`,
-   `code_challenge_methods_supported: [S256]`, `client_id_metadata_document_supported`,
-   `authorization_response_iss_parameter_supported`, `scopes_supported` = the scope list in `api.md`).
-2. Clients identify themselves with a Client ID Metadata Document (an HTTPS URL fetched through the same
-   address checks as webhooks); dynamic registration only if a client needs it.
-3. `/api/oauth/authorize` is a page of the web app: the person signs in as usual (Discord or EVE), sees the
-   client, the scopes it asks for and the maps they reach (by name), narrows them and approves. The code
-   is single use, bound to the PKCE challenge, the redirect URI and the resource.
-4. The token endpoint issues a short-lived access token (an API key of a third kind, `dbk_oat_`, with the
-   approved scopes and audience `/mcp`, kept like other keys) and a rotating refresh token. Approvals show
-   in Account → API keys and are revoked there. The 401 challenge then carries `resource_metadata`, and
-   403 `insufficient_scope` names the scopes for step-up.
+1. Without a token (mode `authenticated`), `/mcp` answers 401 with
+   `WWW-Authenticate: Bearer resource_metadata="<PUBLIC_URL>/.well-known/oauth-protected-resource/mcp", scope="*:read"`.
+2. `/.well-known/oauth-protected-resource/mcp` names the resource (`<PUBLIC_URL>/mcp`) and the
+   authorization server (the instance); `/.well-known/oauth-authorization-server` lists the endpoints:
+   `<PUBLIC_URL>/oauth/authorize` (a page), `/api/oauth/token`, `/api/oauth/register`, S256 only, public
+   clients only (`token_endpoint_auth_method: none`), `client_id_metadata_document_supported`,
+   `authorization_response_iss_parameter_supported`, and the scopes a client may ask for.
+3. A client identifies with the HTTPS URL of its metadata document (fetched from public addresses only,
+   no redirects, 16 KiB at most, kept an hour) or registers dynamically. Redirect URIs are https, loopback
+   http (any port, RFC 8252) or a native app scheme, matched exactly.
+4. `/oauth/authorize` asks the person to sign in (if needed), shows the client, where it sends them back,
+   and what it asks for in words; they may limit it to some maps (picked by name) and make it read-only,
+   then allow or cancel. Administration scopes are never granted to MCP clients; a client that asks for no
+   scope gets read access.
+5. The code is single use, five minutes, bound to the client, the redirect URI, the PKCE challenge and the
+   resource. Using a code twice revokes the approval.
+6. The token endpoint (`application/x-www-form-urlencoded`) issues an access token `dbk_oat_…` (one hour)
+   and a refresh token `dbk_ort_…` (30 days, rotating; a refresh token used twice revokes the approval).
+   Access tokens act as the person, narrowed by the approved scopes like a personal access token, and only
+   on `/mcp` (anywhere else they are refused).
+7. Approvals are listed and revoked in **Account → Connected apps**; creating and revoking them is in the
+   instance audit. Writes made through them show "via MCP (<client name>)" in the map history.
+
+In mode `public`, a client without a token is served anonymously (public maps only) and is never asked to
+sign in; add a key or switch the instance to `authenticated` for clients that should act as someone.

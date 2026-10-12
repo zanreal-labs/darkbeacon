@@ -223,6 +223,34 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
   'api_key.updated': { data: { ...apiKey, name: 'Bot 2' }, before: apiKey },
   'api_key.rotated': { data: { id: 'k1', name: 'Bot', kind: 'pat', ownerAccountId: 'a' } },
   'api_key.revoked': { data: { id: 'k1', name: 'Bot', kind: 'pat', ownerAccountId: 'a' }, before: apiKey },
+  'oauth.grant_created': {
+    data: {
+      id: 'g1',
+      accountId: 'a',
+      clientId: 'https://client.example/meta',
+      clientName: 'Claude',
+      scopes: ['*:read'],
+      readOnly: true,
+    },
+  },
+  'oauth.grant_revoked': {
+    data: {
+      id: 'g1',
+      accountId: 'a',
+      clientId: 'c',
+      clientName: 'Claude',
+      scopes: ['*:read'],
+      readOnly: true,
+    },
+    before: {
+      id: 'g1',
+      accountId: 'a',
+      clientId: 'c',
+      clientName: 'Claude',
+      scopes: ['*:read'],
+      readOnly: true,
+    },
+  },
 };
 
 const facts = { accountId: 'a', accountName: 'Alice', characterId: 9, characterName: 'Alice Main' };

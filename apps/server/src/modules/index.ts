@@ -16,5 +16,6 @@ export const featureModules: Array<Type | DynamicModule> = [
   (await import('./api-keys/api-keys.module.js')).ApiKeysModule,
   (await import('./sharing/sharing.module.js')).SharingModule,
   (await import('./docs/docs.module.js')).DocsModule,
+  (await import('./oauth/oauth.module.js')).OAuthModule,
   (await import('../mcp/mcp.module.js')).McpModule,
 ];

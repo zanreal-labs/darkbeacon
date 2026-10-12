@@ -9,7 +9,12 @@ import type { AppConfig } from './config/config.js';
 import { installCors } from './platform/cors.js';
 import type { PlatformOptions } from './platform/platform.module.js';
 import { rewriteVersionedUrl } from './platform/route-index.js';
-import { installUpgradeRouting, installWebProxy, type WebUpstream } from './web/web-proxy.js';
+import {
+  WELL_KNOWN_PATHS,
+  installUpgradeRouting,
+  installWebProxy,
+  type WebUpstream,
+} from './web/web-proxy.js';
 
 export interface CreateAppOptions extends PlatformOptions {
   logger?: false | LogLevel[];
@@ -44,8 +49,13 @@ export async function createApp(
     }),
     { logger: options.logger ?? ['log', 'warn', 'error'] },
   );
-  // The MCP endpoint lives at /mcp, outside the REST prefix.
-  app.setGlobalPrefix('api', { exclude: [{ path: 'mcp', method: RequestMethod.ALL }] });
+  // The MCP endpoint lives at /mcp and the OAuth metadata under /.well-known, outside the REST prefix.
+  app.setGlobalPrefix('api', {
+    exclude: [
+      { path: 'mcp', method: RequestMethod.ALL },
+      ...WELL_KNOWN_PATHS.map((path) => ({ path: path.slice(1), method: RequestMethod.GET })),
+    ],
+  });
   app.useWebSocketAdapter(new WsAdapter(app));
   app.enableShutdownHooks();
   const logger = new Logger('Web');

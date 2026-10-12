@@ -34,6 +34,8 @@ export interface RouteDef {
   deprecated?: true;
   /** Media type of a response that is not JSON (the docs page). */
   contentType?: string;
+  /** Media type of the body when it is not JSON (the OAuth token endpoint takes a form). */
+  bodyContentType?: string;
   /** Success status when it is not the default (201 for POST with a body, else 200; 204 without one). */
   status?: 200;
 }
@@ -1169,6 +1171,68 @@ export const routes = {
       scope: 'none',
       summary: 'A public map: what its link shows, and the stream to follow it live',
       response: dto.PublicMapViewDto,
+    }),
+  },
+
+  /**
+   * OAuth 2.1 for the MCP endpoint (docs/mcp.md). The metadata documents are under
+   * `/.well-known/` (RFC 8414, RFC 9728); the authorization endpoint is the web page
+   * `/oauth/authorize`, which uses `describe` and `decide`.
+   */
+  oauth: {
+    register: route({
+      method: 'POST',
+      path: '/api/oauth/register',
+      auth: 'public',
+      scope: 'none',
+      summary: 'Dynamic client registration (RFC 7591), public clients only',
+      body: dto.OAuthRegisterRequest,
+      response: dto.OAuthRegisteredClientDto,
+    }),
+    token: route({
+      method: 'POST',
+      path: '/api/oauth/token',
+      auth: 'public',
+      scope: 'none',
+      status: 200,
+      summary: 'Exchange a code (with its PKCE verifier) or a refresh token for tokens',
+      body: dto.OAuthTokenRequest,
+      bodyContentType: 'application/x-www-form-urlencoded',
+      response: dto.OAuthTokenResponse,
+    }),
+    describe: route({
+      method: 'GET',
+      path: '/api/oauth/authorize',
+      auth: 'account',
+      scope: 'session',
+      summary: 'Check an authorization request and say what the consent page shows',
+      query: dto.OAuthAuthorizeQuery,
+      response: dto.OAuthAuthorizeRequestDto,
+    }),
+    decide: route({
+      method: 'POST',
+      path: '/api/oauth/authorize',
+      auth: 'account',
+      scope: 'session',
+      status: 200,
+      summary: 'Approve (possibly narrowed) or decline; answers where the browser goes next',
+      body: dto.OAuthAuthorizeDecision,
+      response: dto.OAuthRedirectDto,
+    }),
+    grants: route({
+      method: 'GET',
+      path: '/api/accounts/me/oauth-grants',
+      auth: 'account',
+      scope: 'session',
+      summary: 'MCP clients you approved',
+      response: z.array(dto.OAuthGrantDto),
+    }),
+    revokeGrant: route({
+      method: 'DELETE',
+      path: '/api/accounts/me/oauth-grants/:grantId',
+      auth: 'account',
+      scope: 'session',
+      summary: 'Revoke an approval and every token it gave',
     }),
   },
 

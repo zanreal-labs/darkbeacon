@@ -63,6 +63,7 @@ const TAGS: Record<string, string> = {
   sharing: 'Public links of maps',
   public: 'Public maps (no sign-in)',
   docs: 'This description',
+  oauth: 'OAuth 2.1 for the MCP endpoint',
 };
 
 const ERROR_RESPONSES: Record<string, string> = {
@@ -283,7 +284,9 @@ export function buildOpenApi(options: OpenApiOptions): JsonSchema {
       if (route.body)
         operation.requestBody = {
           required: true,
-          content: { 'application/json': { schema: book.of(route.body, 'input') } },
+          content: {
+            [route.bodyContentType ?? 'application/json']: { schema: book.of(route.body, 'input') },
+          },
         };
       else if (route.upload)
         operation.requestBody = {

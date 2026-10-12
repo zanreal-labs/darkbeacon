@@ -24,10 +24,10 @@ import {
   type UniverseCatalog,
 } from '@darkbeacon/mapping';
 import { RouteQueries } from '@darkbeacon/routing';
+import { OAuthServer } from '@darkbeacon/oauth';
 import { MapSharing } from '@darkbeacon/sharing';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { AppConfig } from '../config/config.js';
-import { challenge } from '../platform/actor.js';
 import { LIMITS, RateLimiter } from '../platform/rate-limiter.js';
 import { APP_CONFIG, UNIVERSE_CATALOG } from '../platform/tokens.js';
 import { RealtimeHub } from '../realtime/realtime.hub.js';
@@ -66,6 +66,7 @@ export class McpController implements OnModuleDestroy {
     @Inject(RealtimeHub) hub: RealtimeHub,
     @Inject(UNIVERSE_CATALOG) universe: UniverseCatalog,
     @Optional() @Inject(MapSharing) sharing: MapSharing | null,
+    @Optional() @Inject(OAuthServer) private readonly oauth: OAuthServer | null,
   ) {
     this.publicOrigin = new URL(config.publicUrl).origin;
     const deps: McpDeps = {
@@ -109,13 +110,14 @@ export class McpController implements OnModuleDestroy {
     const caller = callerFor(request.actor ?? null);
     if (caller.kind === 'anonymous') {
       if (mode !== 'public') {
+        // RFC 9728 / MCP authorization: point OAuth clients at the protected resource metadata.
+        const metadata = this.oauth
+          ? `, resource_metadata="${this.config.publicUrl}/.well-known/oauth-protected-resource/mcp", scope="*:read"`
+          : '';
         void reply
           .status(401)
-          .header(
-            'www-authenticate',
-            challenge('invalid_token', 'An API key is required: Authorization: Bearer dbk_…'),
-          )
-          .send({ error: { code: 'unauthenticated', message: 'An API key is required' } });
+          .header('www-authenticate', `Bearer realm="darkbeacon"${metadata}`)
+          .send({ error: { code: 'unauthenticated', message: 'Sign in (OAuth) or use an API key' } });
         return;
       }
       const limit = this.limiter.take(`mcp-public:${request.clientIp ?? 'unknown'}`, LIMITS.publicReads);

@@ -58,14 +58,15 @@ export function bearerToken(request: RequestLike): string | null {
 @Injectable()
 export class ActorResolverRegistry {
   private resolver: ActorResolver = () => Promise.resolve(null);
-  private bearer: BearerResolver | null = null;
+  private readonly bearers: Array<{ prefixes: readonly string[]; resolve: BearerResolver }> = [];
 
   use(resolver: ActorResolver): void {
     this.resolver = resolver;
   }
 
-  useBearer(resolver: BearerResolver): void {
-    this.bearer = resolver;
+  /** Installs the resolver for tokens starting with one of `prefixes` (API keys, OAuth tokens). */
+  useBearer(prefixes: readonly string[], resolver: BearerResolver): void {
+    this.bearers.push({ prefixes, resolve: resolver });
   }
 
   /** The session behind the cookies (ignores any bearer token). */
@@ -75,9 +76,9 @@ export class ActorResolverRegistry {
 
   /** Verifies a bearer token (throws when it is not valid). */
   verifyBearer(token: string, request: RequestLike): Promise<BearerResolution> {
-    if (!this.bearer)
-      return Promise.reject(new UnauthenticatedError('API keys are not enabled on this server'));
-    return this.bearer(token, request);
+    const bearer = this.bearers.find((b) => b.prefixes.some((p) => token.startsWith(p)));
+    if (!bearer) return Promise.reject(new UnauthenticatedError('Invalid API key'));
+    return bearer.resolve(token, request);
   }
 
   /**

@@ -24,6 +24,7 @@
     "@darkbeacon/identity": "workspace:*",
     "@darkbeacon/mapping": "workspace:*",
     "@darkbeacon/notifications": "workspace:*",
+    "@darkbeacon/oauth": "workspace:*",
     "@darkbeacon/plugin-sdk": "workspace:*",
     "@darkbeacon/plugins": "workspace:*",
     "@darkbeacon/routing": "workspace:*",

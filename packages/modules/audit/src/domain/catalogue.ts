@@ -291,6 +291,16 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
     entity: byId('apiKey'),
     refs: (d) => ref('account', d.ownerAccountId),
   },
+  'oauth.grant_created': {
+    op: 'create',
+    entity: byId('oauthGrant'),
+    refs: (d) => ref('account', d.accountId),
+  },
+  'oauth.grant_revoked': {
+    op: 'delete',
+    entity: byId('oauthGrant'),
+    refs: (d) => ref('account', d.accountId),
+  },
 };
 
 /** Types the plugins and future modules add are audited as activity with their data as new. */

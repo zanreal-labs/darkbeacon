@@ -96,7 +96,7 @@ export class HttpWebhookSender implements WebhookSender {
   }
 }
 
-const publicOnlyLookup: LookupFunction = (hostname, options, callback) => {
+export const publicOnlyLookup: LookupFunction = (hostname, options, callback) => {
   dnsLookup(
     hostname,
     options,

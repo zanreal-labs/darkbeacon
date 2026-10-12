@@ -50,6 +50,9 @@
       "path": "packages/modules/sharing"
     },
     {
+      "path": "packages/modules/oauth"
+    },
+    {
       "path": "apps/server"
     },
     {

@@ -56,6 +56,19 @@ export interface AuditEventPayloads {
   /** A new secret for the same key; the old one stopped working at once. */
   'api_key.rotated': { id: string; name: string; kind: ApiKeyKind; ownerAccountId: string | null };
   'api_key.revoked': { id: string; name: string; kind: ApiKeyKind; ownerAccountId: string | null };
+  /** A person approved an OAuth client (an MCP client) to act for them, with these scopes. */
+  'oauth.grant_created': OAuthGrantAuditDto;
+  /** The approval was revoked (by the person, or because a code or refresh token was replayed). */
+  'oauth.grant_revoked': OAuthGrantAuditDto;
+}
+
+export interface OAuthGrantAuditDto {
+  id: string;
+  accountId: string;
+  clientId: string;
+  clientName: string;
+  scopes: string[];
+  readOnly: boolean;
 }
 
 export type AuditEventType = keyof AuditEventPayloads;
@@ -78,4 +91,6 @@ export const AUDIT_EVENT_TYPES = [
   'api_key.updated',
   'api_key.rotated',
   'api_key.revoked',
+  'oauth.grant_created',
+  'oauth.grant_revoked',
 ] as const satisfies readonly AuditEventType[];

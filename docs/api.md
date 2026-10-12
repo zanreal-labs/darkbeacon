@@ -62,7 +62,8 @@ dbk_svc_<lookup:12><secret:32><checksum:6>      service key
 
 All parts are base62. The token is shown once. The server keeps the lookup part (to find the key) and an
 HMAC-SHA256 of the secret part with a pepper derived from `SECRET_KEY`; the checksum is CRC32 of everything
-before it. Secret scanners can match `\bdbk_(pat|svc)_[0-9A-Za-z]{50}\b` and verify the checksum. A leaked
+before it. OAuth tokens of MCP clients (`dbk_oat_`, `dbk_ort_`, see [`mcp.md`](mcp.md)) have the same shape. Secret
+scanners can match `\bdbk_(pat|svc|oat|ort)_[0-9A-Za-z]{50}\b` and verify the checksum. A leaked
 token? Revoke it in the web app; that takes effect on the next request.
 
 ## Scopes
