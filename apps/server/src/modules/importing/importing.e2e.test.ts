@@ -6,6 +6,7 @@ import {
   WANDERER_EXPORT_CONTENT_TYPE,
   type AccessRuleDto,
   type AuditPageDto,
+  type HubsDto,
   type ImportJobDto,
   type ImportPlanDto,
   type ImportSyncDto,
@@ -13,6 +14,7 @@ import {
   type MeDto,
   type StreamSnapshotDto,
   type WandererTestResultDto,
+  type WebhookDto,
 } from '@darkbeacon/shared';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { FakeNetwork } from '../../adapters/identity/fake-network.js';
@@ -165,6 +167,52 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
       'Staging',
     ]);
     expect(map.map.settings.scopes).toEqual(['wormhole']);
+    // The map's description, shown in the list of maps.
+    expect(map.map.description).toBe('Our main chain');
+    const listed = await owner.json<Array<{ id: string; description?: string }>>('/api/maps');
+    expect(listed.find((m) => m.id === mapId)?.description).toBe('Our main chain');
+    // Hubs the map's users set in Wanderer, most used first (another map's user settings ignored).
+    const hubs = await owner.json<HubsDto>(`/api/maps/${mapId}/hubs`);
+    expect(hubs.map.map((h) => h.solarSystemId)).toEqual([30000142, 30002187, 30002659]);
+    // Webhook subscriptions come over switched off, with Darkbeacon's events; kills have no match.
+    const hooks = await owner.json<WebhookDto[]>(`/api/maps/${mapId}/webhooks`);
+    expect(hooks.map((h) => [h.url, h.enabled]).sort()).toEqual([
+      ['https://bots.example.org/darkbeacon', false],
+      ['https://hooks.example.com/wanderer/chain?token=abc', false],
+    ]);
+    expect(hooks.find((h) => h.url.includes('/chain'))!.events.sort()).toEqual([
+      'connection.added',
+      'connection.removed',
+      'connection.updated',
+      'signature.added',
+      'signature.removed',
+      'signature.updated',
+      'system.added',
+      'system.removed',
+    ]);
+    expect(hooks.find((h) => h.url.includes('bots.'))!.events).toContain('system.*');
+    // An admin gets a new signing secret (nobody saw the first one) and switches it on.
+    const bot = hooks.find((h) => h.url.includes('bots.'))!;
+    const rotated = await owner.json<WebhookDto & { secret: string }>(
+      `/api/maps/${mapId}/webhooks/${bot.id}/rotate-secret`,
+      { method: 'POST' },
+    );
+    expect(rotated.secret.length).toBeGreaterThan(20);
+    const on = await owner.json<WebhookDto>(`/api/maps/${mapId}/webhooks/${bot.id}`, {
+      method: 'PATCH',
+      json: { enabled: true },
+    });
+    expect(on.enabled).toBe(true);
+    expect(job.warnings.some((w) => /webhooks were added switched off/.test(w))).toBe(true);
+    expect(preview.counts.webhooks).toBe(2);
+    expect(
+      preview.report.some(
+        (l) => l.bucket === 'dropped' && /map_kill/.test(l.what) && /zKillboard/.test(l.why ?? ''),
+      ),
+    ).toBe(true);
+    // Wanderer's signing secrets are never read; the report shows hosts, never paths or tokens.
+    expect(JSON.stringify(preview)).not.toContain('wanderer-secret-never-read');
+    expect(JSON.stringify(preview.report)).not.toContain('token=abc');
     const eol = map.connections.find((c) => c.timeStatus === 'eol')!;
     expect(eol.eolAt).toBeLessThan(Date.now());
     expect(map.connections.some((c) => c.type === 'gate')).toBe(true);
@@ -258,6 +306,11 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
 
     // Here: a new tag on the home system. In Wanderer: new notes on another system, one hole gone.
     await owner.json(`/api/maps/${mapId}/systems/31002531`, { method: 'PATCH', json: { tag: 'HOME' } });
+    // Here too: our own description, and one imported webhook deleted.
+    await owner.json(`/api/maps/${mapId}`, { method: 'PATCH', json: { description: 'Ours now' } });
+    const hooks = await owner.json<WebhookDto[]>(`/api/maps/${mapId}/webhooks`);
+    await owner.request(`/api/maps/${mapId}/webhooks/${hooks[0]!.id}`, { method: 'DELETE' });
+    wanderer.map.map.description = 'Wanderer changed it';
     const c5 = wanderer.map.systems.find((s) => s.solar_system_id === 31001924)!;
     c5.description = 'Moved out, empty now';
     c5.updated_at = new Date().toISOString();
@@ -289,6 +342,9 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
     expect(after.connections).toHaveLength(before.connections.length);
     expect((await owner.json<AccessRuleDto[]>(`/api/maps/${mapId}/access-rules`)).length).toBe(6);
     expect(home.position).toEqual(after.systems.find((s) => s.solarSystemId === 31002531)!.position);
+    // Our description stays; the deleted webhook is not added again, the other not doubled.
+    expect(after.map.description).toBe('Ours now');
+    expect(await owner.json<WebhookDto[]>(`/api/maps/${mapId}/webhooks`)).toHaveLength(1);
 
     // Asked to remove what Wanderer removed: only that hole goes.
     const third = await owner.json<ImportJobDto>('/api/imports/wanderer', { method: 'POST', json: source() });

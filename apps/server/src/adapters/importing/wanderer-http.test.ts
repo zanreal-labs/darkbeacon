@@ -79,7 +79,17 @@ describe('WandererHttpSource against a fake Wanderer', () => {
       'passages',
       'access',
       'map',
+      'hubs',
+      'webhooks',
     ]);
+    // Hubs from the map's user settings, most used first; webhooks without their secrets.
+    expect(dump.hubs).toEqual([30000142, 30002187, 30002659]);
+    expect(dump.webhooks!.map((w) => [w.id, w.events.length, w.active])).toEqual([
+      ['wh-chain', 6, true],
+      ['wh-kills', 1, true],
+      ['wh-all', 1, false],
+    ]);
+    expect(JSON.stringify(dump)).not.toContain('wanderer-secret-never-read');
     // Comment authors come with the comments (JSON:API include), passages one by one.
     expect(dump.comments[0]).toMatchObject({ authorName: 'CCP Bartender', authorEveId: '2112625428' });
     expect(dump.passages).toHaveLength(5);

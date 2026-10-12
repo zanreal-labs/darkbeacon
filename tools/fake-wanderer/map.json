@@ -2359,5 +2359,55 @@
       "eve_id": "2116161003",
       "name": "Fleet Boss"
     }
+  ],
+  "user_settings": [
+    {
+      "id": "us-1",
+      "map_id": "5f8c2a10-7d3e-4b8e-9c1a-2b3c4d5e6f70",
+      "character_eve_id": 2112625428,
+      "hubs": ["30000142", "30002187"]
+    },
+    {
+      "id": "us-2",
+      "map_id": "5f8c2a10-7d3e-4b8e-9c1a-2b3c4d5e6f70",
+      "character_eve_id": 2112625429,
+      "hubs": ["30000142", "30002659"]
+    },
+    {
+      "id": "us-3",
+      "map_id": "00000000-0000-4000-8000-000000000000",
+      "character_eve_id": 2112625430,
+      "hubs": ["30002510"]
+    }
+  ],
+  "webhooks": [
+    {
+      "id": "wh-chain",
+      "url": "https://hooks.example.com/wanderer/chain?token=abc",
+      "events": [
+        "add_system",
+        "deleted_system",
+        "connection_added",
+        "connection_removed",
+        "connection_updated",
+        "signatures_updated"
+      ],
+      "active": true,
+      "secret": "wanderer-secret-never-read"
+    },
+    {
+      "id": "wh-kills",
+      "url": "https://hooks.example.com/wanderer/kills",
+      "events": ["map_kill"],
+      "active": true,
+      "secret": "wanderer-secret-never-read"
+    },
+    {
+      "id": "wh-all",
+      "url": "https://bots.example.org/darkbeacon",
+      "events": ["*"],
+      "active": false,
+      "secret": "wanderer-secret-never-read"
+    }
   ]
 }

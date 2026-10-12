@@ -21,8 +21,13 @@ export interface WandererMapDump {
    */
   passages?: WandererPassage[];
   acls: WandererAcl[];
-  /** Wanderer map hubs (solar system ids), from the settings export. */
+  /**
+   * Wanderer map hubs (solar system ids): the settings export's `hubs`, or the hubs the map's
+   * users set (`map_user_settings`), most used first.
+   */
   hubs: number[];
+  /** The map's webhook subscriptions (API only; their signing secrets are never read). */
+  webhooks?: WandererWebhook[];
   /** Names of the map's own system labels by id (export version 2: `map.system_labels`). */
   labelNames: Record<string, string>;
   /** Tracked characters Wanderer listed (they are reported, not imported). */
@@ -130,6 +135,15 @@ export interface WandererPassage {
   characterEveId: number;
   shipTypeId: number | null;
   at: number | null;
+}
+
+export interface WandererWebhook {
+  /** Wanderer's id of the subscription; null when it gives none (the URL stands in). */
+  id: string | null;
+  url: string;
+  /** Wanderer event names (`add_system`, `connection_updated`, `*`...). */
+  events: string[];
+  active: boolean;
 }
 
 export interface WandererAcl {
@@ -413,6 +427,38 @@ export function readAll<T>(
   return out;
 }
 
+/** A webhook subscription (`GET /api/maps/:map/webhooks`): `url`, `events`, `active`. */
+export function readWebhook(row: unknown): WandererWebhook | null {
+  if (!isRow(row)) return null;
+  const url = text(row.url);
+  if (!url) return null;
+  const events = Array.isArray(row.events)
+    ? row.events.map(text).filter((e): e is string => e !== null)
+    : typeof row.events === 'string'
+      ? split(row.events)
+      : [];
+  return { id: text(row.id), url: url.trim(), events, active: bool(row.active) ?? true };
+}
+
+/**
+ * Hubs of a map's user settings (`map_user_settings`, attribute `hubs`: solar system ids as
+ * strings), most used first.
+ */
+export function readUserHubs(rows: unknown, mapId: string | null): number[] {
+  if (!Array.isArray(rows)) return [];
+  const uses = new Map<number, number>();
+  for (const row of rows) {
+    if (!isRow(row)) continue;
+    if (mapId && text(row.map_id) && text(row.map_id) !== mapId) continue;
+    const hubs = Array.isArray(row.hubs) ? row.hubs : [];
+    for (const hub of hubs) {
+      const id = eveIdNumber(hub);
+      if (id) uses.set(id, (uses.get(id) ?? 0) + 1);
+    }
+  }
+  return [...uses].sort((a, b) => b[1] - a[1]).map(([id]) => id);
+}
+
 /** An empty dump to fill. */
 export function emptyDump(source: ImportSourceDto, readAt: number): WandererMapDump {
   return {
@@ -431,6 +477,7 @@ export function emptyDump(source: ImportSourceDto, readAt: number): WandererMapD
     passages: [],
     acls: [],
     hubs: [],
+    webhooks: [],
     labelNames: {},
     trackedCharacters: 0,
     warnings: [],

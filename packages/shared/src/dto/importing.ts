@@ -87,6 +87,8 @@ export const ImportCountsDto = z.object({
   labels: z.number().int(),
   accessRules: z.number().int(),
   hubs: z.number().int(),
+  /** Webhook subscriptions that come over (switched off). Optional: older jobs lack it. */
+  webhooks: z.number().int().optional(),
 });
 export type ImportCountsDto = z.infer<typeof ImportCountsDto>;
 

@@ -8,6 +8,8 @@ import type { ConnectionDto, LabelDto, MapDto, MapSystemDto, SignatureDto } from
 import type { HubDto, MapExitDto } from './dto/routing.js';
 import type { CharacterPresenceDto } from './dto/tracking.js';
 import type { MapShareDto, MapSourceDto } from './dto/sharing.js';
+import type { McpMode } from './dto/publishing.js';
+import type { ShareScope } from './share-scope.js';
 
 export const DomainEventSchema = z.object({
   id: z.string(),
@@ -15,7 +17,7 @@ export const DomainEventSchema = z.object({
   stream: z.string(),
   type: z.string(),
   occurredAt: z.number().int(),
-  actor: z.object({ kind: z.enum(['account', 'apiToken', 'system', 'plugin']), id: z.string() }),
+  actor: z.object({ kind: z.enum(['account', 'apiToken', 'public', 'system', 'plugin']), id: z.string() }),
   data: z.unknown(),
   v: z.literal(1),
 });
@@ -92,6 +94,20 @@ export interface EventPayloads {
   'ping.removed': { id: string };
   'access.rule_added': AccessRuleDto;
   'access.rule_removed': { id: string };
+  /**
+   * The map's public link or MCP reach changed (map admins). The link's token is never in the
+   * event: map viewers and webhooks see that it changed, not the link itself.
+   */
+  'access.public_link_changed': {
+    mapId: string;
+    enabled: boolean;
+    slug: string | null;
+    scopes: ShareScope[];
+    noindex: boolean;
+    mcpMode: McpMode;
+    /** True when the change made a new link (the old one stopped working). */
+    regenerated: boolean;
+  };
   /** Instance stream: an account's instance role changed. */
   'access.role_changed': { accountId: string; role: InstanceRole };
   /**
@@ -160,6 +176,7 @@ export const EVENT_TYPES = [
   'ping.removed',
   'access.rule_added',
   'access.rule_removed',
+  'access.public_link_changed',
   'access.role_changed',
   'access.account_changed',
   'character.unlinked',

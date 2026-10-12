@@ -1,0 +1,184 @@
+/* API keys, service keys and the scope builder (account page, admin API access tab). */
+
+.keyIcon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+  color: var(--dbk-color-text-muted);
+}
+
+.keyIcon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.keyIcon[data-inactive] {
+  opacity: 0.6;
+}
+
+.metaLines {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.metaLine {
+  overflow-wrap: anywhere;
+}
+
+.prefix {
+  color: var(--dbk-color-text);
+  font-family: var(--dbk-font-family-mono);
+}
+
+.actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--dbk-space-1);
+}
+
+/* One permission per line: what it covers on the left, the action on the right. */
+.resources {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+  list-style: none;
+}
+
+.resource {
+  display: flex;
+  align-items: center;
+  gap: var(--dbk-space-3);
+  padding: var(--dbk-space-2) var(--dbk-space-3);
+  border-top: 1px solid var(--dbk-color-border);
+}
+
+.resource:first-child {
+  border-top: 0;
+}
+
+.resourceText {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.resourceName {
+  font-weight: 500;
+}
+
+.resourceHint {
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+}
+
+.resourceAction {
+  flex: none;
+  width: 132px;
+}
+
+.summary {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: var(--dbk-space-3);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+  font-size: var(--dbk-font-size-small);
+  list-style: none;
+}
+
+.summaryTitle {
+  color: var(--dbk-color-text-muted);
+  font-weight: 600;
+}
+
+/* A picked map with its role (service keys). */
+.grants {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.grant {
+  display: flex;
+  align-items: center;
+  gap: var(--dbk-space-2);
+  padding: var(--dbk-space-2) 0;
+  border-top: 1px dashed var(--dbk-color-border);
+}
+
+.grant:first-child {
+  border-top: 0;
+}
+
+.grantName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.grantRole {
+  flex: none;
+  width: 132px;
+}
+
+/* A value to copy: a token, an address, a command. */
+.copy {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--dbk-space-2);
+  padding: var(--dbk-space-2) var(--dbk-space-3);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+  background: var(--dbk-color-bg-subtle);
+  font-size: var(--dbk-font-size-small);
+}
+
+.copy code {
+  flex: 1;
+  min-width: 0;
+  padding-top: 4px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.copyLabel {
+  margin-bottom: var(--dbk-space-1);
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+  font-weight: 500;
+}
+
+.inlineFields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  align-items: start;
+  gap: var(--dbk-space-4);
+}
+
+@media (max-width: 640px) {
+  .resource {
+    flex-wrap: wrap;
+  }
+
+  .resourceAction {
+    width: 100%;
+  }
+
+  .grantRole {
+    width: 112px;
+  }
+}

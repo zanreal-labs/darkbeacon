@@ -122,6 +122,20 @@ export function createFakeWanderer(map, options = {}) {
     if (token !== map.apiKey) return json(res, 401, { error: 'Unauthorized' });
 
     const slugParam = url.searchParams.get('slug') ?? url.searchParams.get('map_id');
+    // Webhook subscriptions (https://wanderer.ltd/news/webhooks): `url`, `events`, `active`; the
+    // signing secret is Wanderer's own and never listed.
+    const hooks = /^\/api\/maps\/([^/]+)\/webhooks$/.exec(url.pathname);
+    if (hooks) {
+      if (!slugOk(decodeURIComponent(hooks[1]))) return json(res, 404, { error: 'Map not found' });
+      if (options.webhooks === false) return json(res, 403, { error: 'Webhooks are disabled' });
+      return json(res, 200, {
+        data: (map.webhooks ?? []).map(({ secret: _secret, ...hook }) => ({
+          ...hook,
+          map_id: map.map.id,
+          inserted_at: '2025-03-01T10:00:00.000000Z',
+        })),
+      });
+    }
     const m = /^\/api\/maps\/([^/]+)\/(systems|connections|signatures|structures)$/.exec(url.pathname);
     if (m) {
       if (!slugOk(decodeURIComponent(m[1]))) return json(res, 404, { error: 'Map not found' });
@@ -192,6 +206,21 @@ export function createFakeWanderer(map, options = {}) {
         );
         return json(res, 200, withCharacters(url, body, map.passages));
       }
+      case '/api/v1/map_user_settings':
+        // Each user's own settings; hubs are solar system ids as strings.
+        return json(
+          res,
+          200,
+          page(
+            url,
+            (map.user_settings ?? []).map(({ id, ...attributes }) => ({
+              id,
+              type: 'map_user_settings',
+              attributes: { ...attributes, settings: '{}' },
+            })),
+            '/api/v1/map_user_settings',
+          ),
+        );
       case '/api/v1/map_system_signatures':
         return json(
           res,

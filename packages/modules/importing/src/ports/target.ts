@@ -17,6 +17,7 @@ export interface TargetMap {
   id: string;
   slug: string;
   name: string;
+  description: string;
   labels: LabelDto[];
   settings: MapSettings;
   /** `composite` maps only show other maps' chains; nothing is imported into them. */
@@ -76,6 +77,8 @@ export interface ChainTarget {
   ): Promise<'created' | 'unchanged' | 'skipped'>;
   ensureLabels(actor: Actor, mapId: string, labels: ReadonlyArray<Omit<LabelDto, 'id'>>): Promise<LabelDto[]>;
   setScopes(actor: Actor, mapId: string, scopes: MapScope[]): Promise<void>;
+  /** The map's description (map admins). */
+  setDescription(actor: Actor, mapId: string, description: string): Promise<void>;
   hideSystem(actor: Actor, mapId: string, solarSystemId: number): Promise<void>;
   removeConnection(actor: Actor, mapId: string, connectionId: string): Promise<void>;
   removeSignature(actor: Actor, mapId: string, signatureId: string): Promise<void>;
@@ -92,6 +95,14 @@ export interface AccessTarget {
     rule: { subjectKind: 'character' | 'corporation' | 'alliance'; subjectId: string; role: MapRole },
   ): Promise<AccessRuleDto>;
   remove(actor: Actor, mapId: string, ruleId: string): Promise<void>;
+}
+
+/** The map's webhooks, through the notifications module (map admins only). */
+export interface WebhookTarget {
+  /** Ids of the map's webhooks. */
+  ids(actor: Actor, mapId: string): Promise<string[]>;
+  /** Adds a webhook switched off; returns its id. */
+  addDisabled(actor: Actor, mapId: string, webhook: { url: string; events: string[] }): Promise<string>;
 }
 
 export interface EveName {

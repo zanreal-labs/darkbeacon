@@ -86,7 +86,9 @@ Everything a Wanderer map holds comes over 1:1. Where Darkbeacon had no place fo
 | System comments                                                                     | One titled block per comment in the system's notes ("Comment by Jane, 2026-10-11 18:00 UTC (Wanderer)").                                                                            |
 | ACL members: characters, corporations, alliances                                    | Access rules on the map by EVE id (see [Access](#access)).                                                                                                                          |
 | Map scope (wormholes, stargates, all, none)                                         | Auto-mapping scopes.                                                                                                                                                                |
-| Map hubs (settings export)                                                          | Map hubs (up to 20).                                                                                                                                                                |
+| Map hubs (settings export), the hubs the map's users set for their routes           | Map hubs (up to 20, most used first); routes in the sidebar measure from them.                                                                                                      |
+| The map's description                                                               | The map's description (Map settings, General), shown in the list of maps.                                                                                                           |
+| Webhook subscriptions (address and events)                                          | Webhooks of the map, **added switched off** with the Darkbeacon events that tell the same thing (see [Webhooks](#webhooks)).                                                        |
 
 ## What does not migrate, and why
 
@@ -99,9 +101,9 @@ Everything a Wanderer map holds comes over 1:1. Where Darkbeacon had no place fo
 - **Connections to hidden systems** and a second connection between the same two systems: a hidden system
   has no connections in either mapper, and a pair of systems has one connection.
 - **Kills.** They are zKillboard data that Darkbeacon reads live for the systems on the map.
-- **Routes, webhooks, map subscriptions and licences.** They are settings of the Wanderer service, not of the
-  chain; set up webhooks and Discord notifications again in the map's settings.
-- **The map's description.** Darkbeacon maps have none; the report shows it.
+- **Webhook events Darkbeacon does not send**: `map_kill` (kills are read live from zKillboard) and any event
+  Wanderer adds later; the report names them. Wanderer's webhook secrets are never read.
+- **Map subscriptions and licences.** They are the Wanderer service's billing, not part of the chain.
 - **ACLs whose members the map key cannot read**, unless you give their ACL API keys.
 
 The mapping report of every import lists exactly what came over, what was approximated and what was left out,
@@ -127,6 +129,27 @@ systems of a connection, system and signature id, the subject of an access rule)
 - **Removals** (asked for) remove only what an earlier import brought and nobody changed here since.
 - **Access rules**: a subject without a rule gets one; a rule an earlier import added and nobody changed
   follows Wanderer's role; any other rule here is kept as it is.
+
+## Webhooks
+
+A Wanderer webhook comes over as a webhook of the map with the same address, switched off: Darkbeacon signs
+every delivery with its own secret (header `x-darkbeacon-signature`) and sends its own event shapes, so the
+receiver has to be set up for them first. In **Map settings, Webhooks** a map admin takes a **New signing
+secret** (shown once), sets the receiver up with it, checks it with **Test** and switches the webhook on.
+Events map like this:
+
+| Wanderer                                                       | Darkbeacon                                                     |
+| -------------------------------------------------------------- | -------------------------------------------------------------- |
+| `add_system`, `deleted_system`, `system_metadata_changed`      | `system.added`, `system.removed`, `system.updated`             |
+| `connection_added`, `connection_removed`, `connection_updated` | `connection.added`, `connection.removed`, `connection.updated` |
+| `signature_added`, `signature_removed`                         | `signature.added`, `signature.removed`                         |
+| `signatures_updated`                                           | `signature.added`, `signature.updated`, `signature.removed`    |
+| `acl_member_added`, `acl_member_removed`, `acl_member_updated` | `access.rule_added`, `access.rule_removed` (both for updated)  |
+| `*` (or no events)                                             | `system.*`, `connection.*`, `signature.*`, access rule events  |
+| `map_kill`                                                     | none (left out, see above)                                     |
+
+Each Wanderer webhook is added once: a later import or sync does not add it again, even when it was deleted
+here. Webhooks need a map admin.
 
 ## Access
 
@@ -182,6 +205,10 @@ Wanderer's API and formats as documented by the Wanderer team, read for interope
   offset pagination (`page[limit]`, `page[offset]`), `map_system_comments` and `map_system_signatures`.
 - [User Guide: Public API Endpoints for Map Data](https://wanderer.ltd/news/map-public-api): where the map
   API key is generated (map settings).
+- [Real-Time Events API: Server-Sent Events and Webhooks](https://wanderer.ltd/news/webhooks): `GET
+/api/maps/:map/webhooks` (`url`, `events`, `active`) and the event names; self-hosted instances need
+  `WANDERER_WEBHOOKS_ENABLED`, without it there are no webhooks to read. The JSON:API `map_user_settings`
+  resource (API modernization guide) carries each user's `hubs`.
 - [User Guide: Characters & ACL API Endpoints](https://wanderer.ltd/news/acl-api) and the access lists guide
   ([GitHub](https://github.com/wanderer-industries/wanderer/blob/main/priv/posts/2024/08-04-access-lists-guide.md)):
   ACL roles admin, manager, member, viewer, blocked.

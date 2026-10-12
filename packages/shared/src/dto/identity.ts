@@ -145,5 +145,9 @@ export const InstanceInfoDto = z.object({
   discordRoles: z.boolean(),
   /** A Discord bot is connected: servers, roles and channels are picked from lists. */
   discordBot: z.boolean(),
+  /** Map admins may make maps public (optional: added later). */
+  publicMaps: z.boolean().optional(),
+  /** How far AI agents reach the instance (`/mcp`); optional: added later. */
+  mcpMode: z.enum(['off', 'authenticated', 'public']).optional(),
 });
 export type InstanceInfoDto = z.infer<typeof InstanceInfoDto>;

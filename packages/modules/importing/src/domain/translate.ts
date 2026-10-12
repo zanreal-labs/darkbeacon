@@ -1,21 +1,23 @@
-import type {
-  Bubbled,
-  ConnectionType,
-  ImportCountsDto,
-  ImportReportLineDto,
-  MapScope,
-  LifetimeMark,
-  MassStatus,
-  Position,
-  ShipSize,
-  SignatureGroup,
-  SignatureKind,
-  SystemStatus,
-  TimeStatus,
+import {
+  MAP_DESCRIPTION_MAX,
+  type Bubbled,
+  type ConnectionType,
+  type ImportCountsDto,
+  type ImportReportLineDto,
+  type MapScope,
+  type LifetimeMark,
+  type MassStatus,
+  type Position,
+  type ShipSize,
+  type SignatureGroup,
+  type SignatureKind,
+  type SystemStatus,
+  type TimeStatus,
 } from '@darkbeacon/shared';
 import { planAccess, type PlannedAccessRule } from './acl.js';
 import { spreadLayout } from './layout.js';
 import { ReportBuilder } from './report.js';
+import { planWebhooks, type PlannedWebhook } from './webhooks.js';
 import type {
   WandererComment,
   WandererConnection,
@@ -134,6 +136,10 @@ export interface ImportPlan {
   hubs: number[];
   /** Auto-mapping scopes from the Wanderer map scope; null when unknown. */
   scopes: MapScope[] | null;
+  /** The map's description; null when Wanderer has none. */
+  description: string | null;
+  /** Webhook subscriptions, added switched off. */
+  webhooks: PlannedWebhook[];
   /** The factor positions were spread by (keep it for later pulls, so nothing jumps). */
   layoutScale: number;
 }
@@ -523,8 +529,12 @@ export function translate(dump: WandererMapDump, context: TranslateContext): Tra
   if (dump.map.scope && !scopes)
     report.dropped('setting', `Map scope "${dump.map.scope}"`, 'Darkbeacon has no equivalent');
   else if (scopes) report.mapped('setting', 'Auto-mapping scope');
-  if (dump.map.description)
-    report.dropped('setting', 'Map description', 'Darkbeacon maps have no description');
+  let description = dump.map.description?.trim() || null;
+  if (description && description.length > MAP_DESCRIPTION_MAX) {
+    report.approximated('setting', 'Map description', `Shortened to ${MAP_DESCRIPTION_MAX} characters`);
+    description = `${description.slice(0, MAP_DESCRIPTION_MAX - 1)}…`;
+  } else if (description) report.mapped('setting', 'Map description');
+  const webhooks = planWebhooks(dump.webhooks ?? [], report);
   if (dump.trackedCharacters > 0)
     report.dropped(
       'character',
@@ -544,6 +554,8 @@ export function translate(dump: WandererMapDump, context: TranslateContext): Tra
     access,
     hubs,
     scopes,
+    description,
+    webhooks,
     layoutScale: layout.scale,
   };
   const counts: ImportCountsDto = {
@@ -557,6 +569,7 @@ export function translate(dump: WandererMapDump, context: TranslateContext): Tra
     labels: plan.labels.length,
     accessRules: access.length,
     hubs: hubs.length,
+    webhooks: webhooks.length,
   };
   return { plan, report: report.build(), counts };
 }

@@ -39,10 +39,16 @@ export const Slug = z
 export const MapKind = z.enum(['standard', 'composite']);
 export type MapKind = z.infer<typeof MapKind>;
 
+/** Longest map description. */
+export const MAP_DESCRIPTION_MAX = 1000;
+const MapDescription = z.string().trim().max(MAP_DESCRIPTION_MAX);
+
 export const MapDto = z.object({
   id: Id,
   slug: Slug,
   name: z.string(),
+  /** What the map is for, shown in the list of maps; absent when empty. */
+  description: z.string().optional(),
   kind: MapKind.optional(),
   ownerAccountId: Id,
   settings: MapSettings,
@@ -53,7 +59,13 @@ export const MapDto = z.object({
 export type MapDto = z.infer<typeof MapDto>;
 
 /** GET /api/maps item: a map plus the caller's effective role. */
-export const MapSummaryDto = MapDto.pick({ id: true, slug: true, name: true, kind: true }).extend({
+export const MapSummaryDto = MapDto.pick({
+  id: true,
+  slug: true,
+  name: true,
+  description: true,
+  kind: true,
+}).extend({
   role: MapRole.exclude(['blocked']),
 });
 export type MapSummaryDto = z.infer<typeof MapSummaryDto>;
@@ -62,12 +74,15 @@ export const CreateMapRequest = z.object({
   name: z.string().trim().min(1).max(64),
   slug: Slug.optional(),
   kind: MapKind.optional(),
+  description: MapDescription.optional(),
 });
 export type CreateMapRequest = z.infer<typeof CreateMapRequest>;
 
 export const UpdateMapRequest = z.object({
   name: z.string().trim().min(1).max(64).optional(),
   slug: Slug.optional(),
+  /** An empty string clears it. */
+  description: MapDescription.optional(),
   settings: MapSettings.partial().optional(),
 });
 export type UpdateMapRequest = z.infer<typeof UpdateMapRequest>;

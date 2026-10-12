@@ -63,6 +63,8 @@ import {
   Tooltip,
   useToast,
 } from '../ui';
+import { ApiKeysCard } from './ApiKeysCard';
+import { ConnectedAppsCard } from './ConnectedAppsCard';
 import styles from './AccountPage.module.css';
 
 function errorText(error: unknown): string {
@@ -70,7 +72,7 @@ function errorText(error: unknown): string {
 }
 
 const TITLE = 'Account';
-const DESCRIPTION = 'Your sign-in, EVE characters and preferences.';
+const DESCRIPTION = 'Your sign-in, EVE characters, preferences and API keys.';
 
 /** The account page as it looks while the account streams in. */
 export function AccountPageSkeleton() {
@@ -119,6 +121,9 @@ export function AccountPage({ authError = null }: { authError?: string | null })
         <Collaboration />
 
         <Sessions />
+
+        <ApiKeysCard />
+        <ConnectedAppsCard />
       </Stack>
     </Page>
   );

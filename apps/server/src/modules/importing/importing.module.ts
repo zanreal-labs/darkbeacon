@@ -28,6 +28,7 @@ import {
   type MappingPorts,
   type UniverseCatalog,
 } from '@darkbeacon/mapping';
+import { WebhookAdmin } from '@darkbeacon/notifications';
 import { HubAdmin, RouteQueries } from '@darkbeacon/routing';
 import type { FastifyInstance } from 'fastify';
 import {
@@ -40,6 +41,7 @@ import {
   CatalogSystemNames,
   EveDirectoryNames,
   MappingChainTarget,
+  MapWebhooksTarget,
 } from '../../adapters/importing/targets.js';
 import { WandererFileSource, WandererHttpSource } from '../../adapters/importing/wanderer-http.js';
 import { SecretBox } from '../../adapters/notifications/secret-box.js';
@@ -173,6 +175,7 @@ export class ImportingRuntime implements OnModuleInit, OnApplicationBootstrap, O
         imports: ChainImportUseCases,
         access: MapAccess,
         rules: AccessRules,
+        webhooks: WebhookAdmin,
         hubs: HubAdmin,
         routes: RouteQueries,
         eve: EveDirectoryService,
@@ -198,6 +201,7 @@ export class ImportingRuntime implements OnModuleInit, OnApplicationBootstrap, O
             routes,
           ),
           access: new AccessRulesTarget(rules),
+          webhooks: new MapWebhooksTarget(webhooks),
           names: new EveDirectoryNames(eve),
           universe: new CatalogSystemNames(universe),
           jobs: new KyselyImportJobRepository(database),
@@ -226,6 +230,7 @@ export class ImportingRuntime implements OnModuleInit, OnApplicationBootstrap, O
         ChainImportUseCases,
         MAP_ACCESS,
         AccessRules,
+        WebhookAdmin,
         HubAdmin,
         RouteQueries,
         EveDirectoryService,

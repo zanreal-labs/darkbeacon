@@ -1,4 +1,6 @@
-import type { AuditChannelDto, AuditEntryDto } from '@darkbeacon/shared';
+import type { AuditChannelDto, AuditEntryDto, ShareScope } from '@darkbeacon/shared';
+import { describeScopes } from './scope-builder';
+import { SHARE_SCOPE_TEXT } from './share-scopes';
 
 /**
  * Plain-language readings of audit entries, shared by the admin Audit tab and the map's history
@@ -50,7 +52,9 @@ export function channelLabel(channel: AuditChannelDto): string {
     case 'web':
       return 'Web';
     case 'api':
-      return 'API token';
+      return 'API key';
+    case 'mcp':
+      return 'MCP';
     case 'plugin':
       return channel.id ? `Plugin ${channel.id}` : 'Plugin';
     default:
@@ -119,6 +123,18 @@ const FIELD_LABELS: Record<string, string> = {
   subjectKind: 'Who',
   subjectId: 'Subject',
   reason: 'Reason',
+  scopes: 'Permissions',
+  readOnly: 'Read only',
+  expiresAt: 'Expires',
+  allowedIps: 'Allowed addresses',
+  rateLimitPerMinute: 'Requests a minute',
+  instanceRole: 'Instance role',
+  mapGrants: 'Map roles',
+  allMapsRole: 'Role on every map',
+  noindex: 'Hidden from search engines',
+  mcpMode: 'AI agents',
+  secret: 'Token',
+  clientName: 'App',
 };
 
 /** Fields that hold ids or internals: shown as "set" / "changed", never as the raw value. */
@@ -129,6 +145,7 @@ const OPAQUE = new Set([
   'subjectId',
   'disabledMapIds',
   'labelIds',
+  'mapGrants',
 ]);
 /** Fields that are noise in a change list. */
 const HIDDEN = new Set([
@@ -145,12 +162,50 @@ const HIDDEN = new Set([
   'source',
   'target',
   'createdBy',
+  'kind',
+  'regenerated',
 ]);
 
 const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
+const API_KEY_VERBS: Record<string, string> = {
+  'api_key.created': 'made',
+  'api_key.updated': 'changed',
+  'api_key.rotated': 'rotated',
+  'api_key.revoked': 'revoked',
+};
+
+const MCP_MODES: Record<string, string> = {
+  off: 'Off',
+  authenticated: 'API keys only',
+  public: 'Public too',
+};
+
+/** API key scopes in words (maps by name), or what a public link shows. */
+function scopesValue(v: unknown[], names: AuditNames): string {
+  const list = v.map(String);
+  if (list.length === 0) return 'none';
+  if (!list.some((s) => s.includes(':')))
+    return list.map((s) => SHARE_SCOPE_TEXT[s as ShareScope]?.label ?? titleCase(s)).join(', ');
+  const ids = [...new Set(list.flatMap((s) => /^map:([^:]+):/.exec(s)?.[1] ?? []))];
+  const maps = ids.map((id) => ({ id, name: names.map?.(id) ?? 'a map' }));
+  const text = describeScopes(list, maps, { everyMap: 'every map' }).join('; ');
+  return text.length > 120 ? `${text.slice(0, 117)}…` : text;
+}
+
+/** How a change came in when it was not the web app: "via key Spreadsheet", "via MCP (Client)". */
+function viaSuffix(channel: AuditChannelDto): string {
+  if (channel.kind === 'api') return channel.name ? ` via key ${channel.name}` : ' via an API key';
+  if (channel.kind === 'mcp') return channel.name ? ` via MCP (${channel.name})` : ' via MCP';
+  return '';
+}
+
 function value(field: string, v: unknown, names: AuditNames): string {
   if (field === 'eventRetentionDays') return typeof v === 'number' ? `${v} days` : 'Forever';
+  if (field === 'expiresAt') return typeof v === 'number' ? new Date(v).toLocaleDateString() : 'Never';
+  if (field === 'rateLimitPerMinute' && v === null) return 'Default';
+  if (field === 'mcpMode' && typeof v === 'string') return MCP_MODES[v] ?? v;
+  if (field === 'scopes' && Array.isArray(v)) return scopesValue(v, names);
   if (v === null || v === undefined || v === '') return '—';
   if (typeof v === 'boolean') return v ? 'Yes' : 'No';
   if ((field === 'location' || field === 'bookmarkParent') && typeof v === 'number')
@@ -177,7 +232,10 @@ function value(field: string, v: unknown, names: AuditNames): string {
 export function changeLines(entry: AuditEntryDto, names: AuditNames = {}): AuditChangeLine[] {
   const lines: AuditChangeLine[] = [];
   for (const [field, change] of Object.entries(entry.diff)) {
-    const label = FIELD_LABELS[field];
+    const label =
+      entry.type === 'access.public_link_changed' && field === 'scopes'
+        ? 'What the link shows'
+        : FIELD_LABELS[field];
     if (HIDDEN.has(field) || label === undefined) continue;
     const before = value(field, change.before, names);
     const after = value(field, change.after, names);
@@ -240,7 +298,7 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
   const mapName = entry.mapId ? (names.map?.(entry.mapId) ?? 'a map') : 'a map';
   const read = (what: string, category: AuditCategory): AuditReading => ({
     who,
-    what,
+    what: what + viaSuffix(entry.channel),
     category,
     changes: changeLines(entry, names),
     via,
@@ -342,6 +400,30 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
       return read('changed the backup settings', 'instance');
     case 'character.unlinked':
       return read('unlinked a character', 'access');
+    case 'api_key.created':
+    case 'api_key.updated':
+    case 'api_key.rotated':
+    case 'api_key.revoked': {
+      const noun = data.kind === 'svc' ? 'service key' : 'API key';
+      const name = typeof data.name === 'string' ? data.name : null;
+      const verb = API_KEY_VERBS[entry.type] ?? 'changed';
+      return read(name ? `${verb} the ${noun} ${name}` : `${verb} an ${noun}`, 'access');
+    }
+    case 'access.public_link_changed':
+      return read(
+        entry.diff.regenerated?.after === true
+          ? `made a new public link for ${mapName}`
+          : entry.diff.enabled?.after === true
+            ? `made ${mapName} public`
+            : entry.diff.enabled?.after === false
+              ? `switched off the public link of ${mapName}`
+              : `changed the public link of ${mapName}`,
+        'access',
+      );
+    case 'oauth.grant_created':
+      return read(`let ${String(data.clientName ?? 'an app')} use Darkbeacon as them`, 'access');
+    case 'oauth.grant_revoked':
+      return read(`disconnected ${String(data.clientName ?? 'an app')}`, 'access');
     case 'map.created':
       return read(`created ${mapName}`, 'map');
     case 'map.settings_changed':
@@ -421,7 +503,7 @@ export const INSTANCE_AUDIT_KINDS = [
   {
     value: 'access',
     label: 'Roles and access',
-    types: ['access.*', 'character.unlinked', 'account.*'],
+    types: ['access.*', 'character.unlinked', 'account.*', 'api_key.*', 'oauth.*'],
   },
   { value: 'plugins', label: 'Plugins', types: ['plugin.*'] },
   { value: 'instance', label: 'Settings and themes', types: ['settings.*', 'theme.*', 'discord_bot.*'] },

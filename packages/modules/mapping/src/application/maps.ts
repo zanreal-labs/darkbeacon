@@ -30,6 +30,7 @@ export class MapUseCases extends MappingUseCases {
         id: m.id,
         slug: m.slug,
         name: m.name,
+        ...(m.description ? { description: m.description } : {}),
         ...(m.kind ? { kind: m.kind } : {}),
         role: roles.get(m.id)!,
       }))
@@ -56,6 +57,7 @@ export class MapUseCases extends MappingUseCases {
       id: newId(),
       slug: request.slug ?? (await this.freeSlug(slugify(request.name))),
       name: request.name,
+      ...(request.description ? { description: request.description } : {}),
       ...(request.kind === 'composite' ? { kind: 'composite' as const } : {}),
       ownerAccountId: account.id,
       settings: { scopes: ['wormhole'] },
@@ -71,13 +73,16 @@ export class MapUseCases extends MappingUseCases {
     });
   }
 
-  /** Name, slug and settings (admin). */
+  /** Name, slug, description and settings (admin). */
   async update(actor: Actor | null, mapId: string, request: UpdateMapRequest): Promise<ChainMap> {
     const who = await this.authorize(actor, mapId, 'admin');
     return this.write(who, mapId, async (events) => {
       const current = await this.load(mapId);
+      const { description: _description, ...rest } = current;
+      const description = request.description ?? current.description ?? '';
       const next: ChainMap = {
-        ...current,
+        ...rest,
+        ...(description ? { description } : {}),
         name: request.name ?? current.name,
         slug: request.slug ?? current.slug,
         settings: {

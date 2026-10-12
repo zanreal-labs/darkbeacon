@@ -13,6 +13,8 @@ import {
   readSignature,
   readStructure,
   readSystem,
+  readUserHubs,
+  readWebhook,
   SourceError,
   text,
   type MapImportSource,
@@ -49,7 +51,7 @@ const USER_AGENT = 'Darkbeacon-import (+https://github.com/darkbeacon; reads one
 const RETRIES_5XX = 2;
 const RETRIES_429 = 3;
 const MAX_PAGES = 200;
-const PAGE = { signatures: 200, comments: 100, passages: 200 };
+const PAGE = { signatures: 200, comments: 100, passages: 200, settings: 100 };
 
 /**
  * Reads a map from a Wanderer instance over its public API with the map's API key (Bearer).
@@ -160,12 +162,32 @@ export class WandererHttpSource implements MapImportSource {
     const map = await this.optional(api, `/api/v1/maps/${slug}`, () => undefined, 'Map');
     const attributes =
       isRow(map) && isRow(map.data) && isRow(map.data.attributes) ? map.data.attributes : null;
+    const mapId = isRow(map) && isRow(map.data) ? text(map.data.id) : null;
     if (attributes) {
       dump.map.name = text(attributes.name);
       dump.map.description = text(attributes.description);
       dump.map.scope = text(attributes.scope);
       dump.source.name = dump.map.name;
     }
+
+    // Hubs are each user's own in Wanderer; the map takes the ones its users set, most used first.
+    onStep?.('hubs');
+    dump.hubs = readUserHubs(
+      await this.jsonApiAll(api, '/api/v1/map_user_settings', PAGE.settings, () => undefined, 'Hubs'),
+      mapId,
+    );
+
+    // Webhooks need WANDERER_WEBHOOKS_ENABLED on a self-hosted instance; without it they are
+    // simply not there. Their secrets are never read: Darkbeacon signs with its own.
+    onStep?.('webhooks');
+    const webhooks = await this.optional(
+      api,
+      `/api/maps/${encodeURIComponent(mapId ?? api.slug)}/webhooks`,
+      () => undefined,
+      'Webhooks',
+    );
+    dump.webhooks = readAll(dataList(webhooks), readWebhook, 'webhooks', dump.rejected);
+
     const characters = await this.optional(
       api,
       `/api/map/characters?slug=${slug}`,

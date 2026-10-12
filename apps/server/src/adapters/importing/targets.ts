@@ -8,6 +8,7 @@ import type {
   EveNames,
   SystemNames,
   TargetMap,
+  WebhookTarget,
 } from '@darkbeacon/importing';
 import type {
   ChainImportUseCases,
@@ -17,6 +18,7 @@ import type {
   SystemUseCases,
   UniverseCatalog,
 } from '@darkbeacon/mapping';
+import type { WebhookAdmin } from '@darkbeacon/notifications';
 import type { HubAdmin, RouteQueries } from '@darkbeacon/routing';
 import type { MapDto } from '@darkbeacon/shared';
 
@@ -32,6 +34,7 @@ const target = (map: MapDto): TargetMap => ({
   id: map.id,
   slug: map.slug,
   name: map.name,
+  description: map.description ?? '',
   labels: map.labels,
   settings: map.settings,
   kind: map.kind === 'composite' ? 'composite' : 'map',
@@ -97,6 +100,10 @@ export class MappingChainTarget implements ChainTarget {
     await this.mapping.maps.update(actor, mapId, { settings: { scopes } });
   }
 
+  async setDescription(actor: Actor, mapId: string, description: string): Promise<void> {
+    await this.mapping.maps.update(actor, mapId, { description });
+  }
+
   hideSystem(actor: Actor, mapId: string, solarSystemId: number): Promise<void> {
     return this.mapping.systems.remove(actor, mapId, solarSystemId);
   }
@@ -115,6 +122,23 @@ export class MappingChainTarget implements ChainTarget {
 
   async setHubs(actor: Actor, mapId: string, solarSystemIds: number[]): Promise<void> {
     await this.hubAdmin.setMapHubs(actor, mapId, solarSystemIds);
+  }
+}
+
+/** The map's webhooks through the notifications module's use cases (map admins). */
+export class MapWebhooksTarget implements WebhookTarget {
+  constructor(private readonly webhooks: WebhookAdmin) {}
+
+  async ids(actor: Actor, mapId: string): Promise<string[]> {
+    return (await this.webhooks.list(actor, mapId)).map((w) => w.id);
+  }
+
+  async addDisabled(
+    actor: Actor,
+    mapId: string,
+    webhook: { url: string; events: string[] },
+  ): Promise<string> {
+    return (await this.webhooks.create(actor, mapId, webhook, { enabled: false })).id;
   }
 }
 

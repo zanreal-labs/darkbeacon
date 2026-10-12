@@ -284,6 +284,7 @@ const COUNT_LABELS: Array<[keyof ImportCountsDto, string]> = [
   ['labels', 'Labels'],
   ['accessRules', 'Access rules'],
   ['hubs', 'Hubs'],
+  ['webhooks', 'Webhooks (switched off)'],
 ];
 
 const BUCKETS: Array<{ bucket: ImportReportLineDto['bucket']; title: string; tone: Tone }> = [

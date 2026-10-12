@@ -224,6 +224,11 @@ function MapRow({
         </span>
         <span className={styles.main}>
           <span className={styles.name}>{map.name}</span>
+          {map.description && (
+            <span className={styles.description} title={map.description}>
+              {map.description}
+            </span>
+          )}
           {(starred || instanceDefault || lastOpened) && (
             <span className={styles.meta}>
               {starred ? 'Opens first for you' : instanceDefault ? 'Opens first for everyone' : 'Opened last'}

@@ -23,6 +23,7 @@ export interface MappingTables {
     id: string;
     slug: string;
     name: string;
+    description: string;
     owner_account_id: string;
     /** `standard` or `composite`. */
     kind: string;
@@ -148,6 +149,11 @@ export class KyselyMapRepository extends Repository implements MapRepository {
       .orderBy('name')
       .execute();
     return rows.map(mapFromRow);
+  }
+
+  async allIds(): Promise<string[]> {
+    const rows = await this.db.selectFrom('maps').select('id').orderBy('created_at').orderBy('id').execute();
+    return rows.map((r) => r.id);
   }
 
   async insert(map: ChainMap): Promise<void> {
@@ -532,6 +538,7 @@ function mapToRow(map: ChainMap): MapRow {
     id: map.id,
     slug: map.slug,
     name: map.name,
+    description: map.description ?? '',
     kind: map.kind ?? 'standard',
     owner_account_id: map.ownerAccountId,
     settings: json.encode(map.settings),
@@ -546,6 +553,7 @@ function mapFromRow(row: MapRow): ChainMap {
     id: row.id,
     slug: row.slug,
     name: row.name,
+    ...(row.description ? { description: row.description } : {}),
     ...(row.kind === 'composite' ? { kind: 'composite' as const } : {}),
     ownerAccountId: row.owner_account_id,
     settings: json.decode<ChainMap['settings']>(row.settings)!,

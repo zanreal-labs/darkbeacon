@@ -7,7 +7,7 @@ import type {
   SecretSealer,
 } from '../ports/repositories.js';
 import type { MapImportSource } from '../ports/source.js';
-import type { AccessTarget, ChainTarget, EveNames, SystemNames } from '../ports/target.js';
+import type { AccessTarget, ChainTarget, EveNames, SystemNames, WebhookTarget } from '../ports/target.js';
 
 /** Everything the import use cases need, wired by the composition root. */
 export interface ImportingDeps {
@@ -15,6 +15,7 @@ export interface ImportingDeps {
   sources: { api: MapImportSource; file: MapImportSource };
   target: ChainTarget;
   access: AccessTarget;
+  webhooks: WebhookTarget;
   names: EveNames;
   universe: SystemNames;
   jobs: ImportJobRepository;

@@ -417,7 +417,7 @@ export class ImportRunner {
     if (reached('settings')) {
       await job.phase('settings');
       await this.item(job, 'settings', 'Map settings', () =>
-        this.settings(actor, mapId, plan, links, r, role, step),
+        this.settings(actor, mapId, plan, links, r, role, step, (m) => job.warn(m)),
       );
     }
 
@@ -439,6 +439,7 @@ export class ImportRunner {
     r: ImportJobRecord,
     role: MapRole | null,
     step: (kind: 'settings', what: 'created' | 'updated' | 'unchanged' | 'skipped') => void,
+    warn: (message: string) => void,
   ): Promise<void> {
     const { deps } = this;
     const key = sourceKey(r.source);
@@ -453,6 +454,8 @@ export class ImportRunner {
         } else step('settings', 'unchanged');
       }
     }
+    if (plan.description) await this.description(actor, mapId, plan.description, links, r, role, step);
+    if (plan.webhooks.length > 0) await this.webhooks(actor, mapId, plan, links, r, role, step, warn);
     if (plan.scopes) {
       const map = await deps.target.map(actor, mapId);
       const base = links.get('setting', 'scopes')?.written;
@@ -467,6 +470,72 @@ export class ImportRunner {
       }
       if (ours) await this.link(mapId, key, 'setting', 'scopes', 'scopes', plan.scopes, null);
     }
+  }
+
+  /**
+   * The map's description: a new map takes Wanderer's; an existing one takes it when it has none
+   * or still has what an earlier import wrote (it was not changed here since).
+   */
+  private async description(
+    actor: Actor,
+    mapId: string,
+    description: string,
+    links: LinkIndex,
+    r: ImportJobRecord,
+    role: MapRole | null,
+    step: (kind: 'settings', what: 'created' | 'updated' | 'unchanged' | 'skipped') => void,
+  ): Promise<void> {
+    const { deps } = this;
+    const key = sourceKey(r.source);
+    const map = await deps.target.map(actor, mapId);
+    const base = links.get('setting', 'description')?.written;
+    const ours = map.description === '' || (typeof base === 'string' && base === map.description);
+    if (map.description === description) step('settings', 'unchanged');
+    else if (!hasMapRole(role, 'admin') || !ours) step('settings', 'skipped');
+    else {
+      await deps.target.setDescription(actor, mapId, description);
+      step('settings', map.description === '' ? 'created' : 'updated');
+    }
+    if (ours) await this.link(mapId, key, 'setting', 'description', 'description', description, null);
+  }
+
+  /**
+   * Webhook subscriptions, added switched off once per Wanderer subscription: Darkbeacon signs with
+   * its own secret and sends its own event shapes, so an admin switches them on when the receiver
+   * is ready. One removed here is not added again.
+   */
+  private async webhooks(
+    actor: Actor,
+    mapId: string,
+    plan: ImportPlan,
+    links: LinkIndex,
+    r: ImportJobRecord,
+    role: MapRole | null,
+    step: (kind: 'settings', what: 'created' | 'updated' | 'unchanged' | 'skipped') => void,
+    warn: (message: string) => void,
+  ): Promise<void> {
+    const { deps } = this;
+    const key = sourceKey(r.source);
+    if (!hasMapRole(role, 'admin')) {
+      warn('Webhooks need a map admin; they were left out');
+      for (let i = 0; i < plan.webhooks.length; i++) step('settings', 'skipped');
+      return;
+    }
+    let added = 0;
+    for (const hook of plan.webhooks) {
+      if (links.get('webhook', hook.key)) {
+        step('settings', 'unchanged');
+        continue;
+      }
+      const id = await deps.webhooks.addDisabled(actor, mapId, { url: hook.url, events: hook.events });
+      await this.link(mapId, key, 'webhook', hook.key, id, { events: hook.events }, null);
+      step('settings', 'created');
+      added++;
+    }
+    if (added > 0)
+      warn(
+        `${added === 1 ? 'A webhook was' : `${added} webhooks were`} added switched off: switch ${added === 1 ? 'it' : 'them'} on in Map settings, Webhooks, once the receiver expects Darkbeacon's events and secret`,
+      );
   }
 
   /** Removes what came from Wanderer, is gone there and was not changed here since. */

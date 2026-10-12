@@ -244,9 +244,58 @@ describe('translating a Wanderer map', () => {
     expect(line(report, 'dropped', /Unknown solar system/)?.examples).toEqual(['99999999']);
     expect(line(report, 'dropped', /Unreadable row/)?.count).toBe(1);
     expect(line(report, 'dropped', /Tracked characters \(3\)/)).toBeDefined();
-    expect(line(report, 'dropped', /Map description/)).toBeDefined();
+    expect(plan.description).toBe(apiDump().map.description);
+    expect(line(report, 'mapped', /Map description/)).toBeDefined();
     // Every line says what and, unless it came over as it was, why.
     for (const l of report) if (l.bucket !== 'mapped') expect(l.why, l.what).toBeTruthy();
+  });
+
+  it('brings webhooks over switched off, with the Darkbeacon events that match', () => {
+    const dump = apiDump();
+    dump.webhooks = [
+      {
+        id: 'a',
+        url: 'https://hooks.example.com/x?token=t',
+        events: ['add_system', 'signatures_updated'],
+        active: true,
+      },
+      { id: 'b', url: 'https://hooks.example.com/kills', events: ['map_kill'], active: true },
+      { id: 'c', url: 'ftp://files.example.com/', events: ['*'], active: true },
+      {
+        id: 'd',
+        url: 'https://all.example.com/',
+        events: ['*', 'acl_member_updated', 'rally_point_added'],
+        active: false,
+      },
+      { id: null, url: 'https://none.example.com/', events: [], active: true },
+    ];
+    const { plan, report, counts } = translate(dump, { systemName });
+    expect(plan.webhooks.map((w) => [w.key, w.events])).toEqual([
+      ['a', ['system.added', 'signature.added', 'signature.updated', 'signature.removed']],
+      ['d', ['system.*', 'connection.*', 'signature.*', 'access.rule_added', 'access.rule_removed']],
+      [
+        'url:https://none.example.com/',
+        ['system.*', 'connection.*', 'signature.*', 'access.rule_added', 'access.rule_removed'],
+      ],
+    ]);
+    expect(counts.webhooks).toBe(3);
+    expect(line(report, 'approximated', /Webhook \(added switched off\)/)?.count).toBe(3);
+    expect(line(report, 'dropped', /map_kill/)?.why).toMatch(/zKillboard/);
+    expect(line(report, 'dropped', /no event Darkbeacon sends/)?.examples).toEqual([
+      'https://hooks.example.com/…',
+    ]);
+    expect(line(report, 'dropped', /not http or https/)).toBeDefined();
+    expect(line(report, 'dropped', /rally_point_added/)).toBeDefined();
+    // Paths and queries (tokens) never reach the report.
+    expect(JSON.stringify(report)).not.toContain('token=t');
+  });
+
+  it('shortens a map description past the limit', () => {
+    const dump = apiDump();
+    dump.map.description = 'x'.repeat(1500);
+    const { plan, report } = translate(dump, { systemName });
+    expect(plan.description).toHaveLength(1000);
+    expect(line(report, 'approximated', /Map description/)?.why).toMatch(/1000/);
   });
 
   it('gives the same plan for the same map', () => {

@@ -159,6 +159,27 @@ await page.goto(`${BASE}/m/home-chain?settings=import`, { waitUntil: 'networkidl
 await page.getByText('Syncing from Wanderer').waitFor({ timeout: 15_000 });
 await shot('08-settings-import');
 
+step("the description, the users' hubs and the webhooks (switched off) came over");
+await page.goto(`${BASE}/m/home-chain?settings=general`, { waitUntil: 'networkidle' });
+assert.equal(await page.getByRole('textbox', { name: 'Description' }).inputValue(), 'Our main chain');
+const hubs = await (await page.request.get(`${BASE}/api/maps/${await mapId()}/hubs`)).json();
+assert.deepEqual(
+  hubs.map.map((h) => h.solarSystemId),
+  [30000142, 30002187, 30002659],
+);
+await page.goto(`${BASE}/m/home-chain?settings=webhooks`, { waitUntil: 'networkidle' });
+await page.getByText('https://bots.example.org/darkbeacon').waitFor({ timeout: 15_000 });
+const switches = page.getByRole('switch');
+assert.equal(await switches.count(), 2, 'two imported webhooks');
+for (let i = 0; i < 2; i++) assert.equal(await switches.nth(i).getAttribute('aria-checked'), 'false');
+await shot('08b-settings-webhooks');
+await page.getByRole('button', { name: 'New signing secret' }).first().click();
+await page.getByText('New signing secret. Copy it now').waitFor({ timeout: 15_000 });
+await shot('08c-webhook-new-secret');
+await page.goto(`${BASE}/maps`, { waitUntil: 'networkidle' });
+await page.getByText('Our main chain').waitFor({ timeout: 15_000 });
+await shot('08d-all-maps-description');
+
 step('history names the source');
 const history = await page.request.get(`${BASE}/api/maps/${await mapId()}/history?types=import.*`);
 const entries = (await history.json()).entries;
