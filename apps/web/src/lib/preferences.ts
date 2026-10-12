@@ -110,17 +110,25 @@ export function readBrowserOptions(): Record<string, unknown> {
 
 /** Writes mirrored options into this browser; `replace` first removes the ones not given. */
 export function writeBrowserOptions(options: Record<string, unknown>, replace = false): void {
+  const changed: string[] = [];
   try {
     if (replace)
       for (const key of Object.keys(readBrowserOptions()))
-        if (!(key in options)) window.localStorage.removeItem(key);
+        if (!(key in options)) {
+          window.localStorage.removeItem(key);
+          changed.push(key);
+        }
     for (const [key, value] of Object.entries(options)) {
       if (!MIRRORED(key)) continue;
-      window.localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+      // Everything the app keeps there is JSON (see `writeStored`), strings included.
+      window.localStorage.setItem(key, JSON.stringify(value));
+      changed.push(key);
     }
   } catch {
     // Storage blocked: the options stay on the server.
   }
+  // Parts that listen for changes from other tabs (signature options) take these at once.
+  for (const key of changed) window.dispatchEvent(new StorageEvent('storage', { key }));
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>

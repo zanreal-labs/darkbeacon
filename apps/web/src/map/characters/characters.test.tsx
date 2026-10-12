@@ -124,8 +124,15 @@ describe('preferences file', () => {
     expect(parsePreferencesFile(JSON.stringify(file))).toEqual(file.preferences);
     expect(parsePreferencesFile('{"x":1}')).toMatch(/not a Darkbeacon preferences export/);
     expect(parsePreferencesFile('nope')).toMatch(/not JSON/);
+    const told: Array<string | null> = [];
+    const listen = (e: StorageEvent) => told.push(e.key);
+    window.addEventListener('storage', listen);
     writeBrowserOptions({ 'dbk-routes-tab': 'my' }, true);
+    window.removeEventListener('storage', listen);
     expect(readBrowserOptions()).toEqual({ 'dbk-routes-tab': 'my' });
+    expect(window.localStorage.getItem('dbk-routes-tab')).toBe('"my"');
+    // Parts that follow other tabs' changes (signature options) hear about these too.
+    expect(told.sort()).toEqual(['dbk-map-legend', 'dbk-routes-tab']);
     expect(window.localStorage.getItem('dbk-sidebar-width')).toBe('400');
   });
 });
