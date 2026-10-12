@@ -84,6 +84,8 @@ describeEachDialect('presence over /ws', (t) => {
     const a = await open(alice.cookie, stream);
     const b = await open(bob.cookie, stream);
     a.send({});
+    // Alice is in the room before Bob joins, so Bob's first list has her (no race between joins).
+    await vi.waitFor(() => expect(a.presence().length).toBeGreaterThan(0));
     b.send({ cursor: { x: 100, y: 50 }, editing: { kind: 'system', id: '31000005', field: 'status' } });
 
     await vi.waitFor(() =>
