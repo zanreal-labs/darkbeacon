@@ -2,24 +2,59 @@
 
 import {
   Bubbled,
+  buildPath,
   ConnectionType,
   MassStatus,
+  routes,
   ShipSize,
   SystemStatus,
   TimeStatus,
+  type CharacterDto,
   type ConnectionDto,
   type LabelDto,
   type MapSystemDto,
+  type WaypointRequest,
 } from '@darkbeacon/shared';
 import { cssVar } from '@darkbeacon/theme-sdk';
-import { AlertTriangle, Copy, EyeOff, Lock, PencilLine, PiggyBank, Trash2 } from 'lucide-react';
+import {
+  CircleDashed,
+  CircleDot,
+  Clock,
+  Copy,
+  EyeOff,
+  LocateFixed,
+  Lock,
+  LockOpen,
+  MapPinPlus,
+  Maximize,
+  Navigation,
+  PencilLine,
+  PiggyBank,
+  Plus,
+  Puzzle,
+  Route,
+  Ship,
+  Tag,
+  Tags,
+  Trash2,
+  TriangleAlert,
+  Weight,
+} from 'lucide-react';
 import type { MenuItem } from '../components/ContextMenu';
+import { api, ApiError } from '../lib/api';
 import type { MapPermissions } from '../lib/roles';
 import { SlotItem } from '../plugins/PluginSlot';
 import type { SlotEntry } from '../plugins/registry';
+import type { ToastInput } from '../ui';
 import { SHIP_SIZE_LABEL } from './ConnectionEdge';
 import { STATUS_LABEL } from './nodeFacts';
 import type { MapStore } from './useMapStore';
+
+/*
+ * The map's context menus. Short top levels with the details in submenus; only what the user
+ * may do is shown (the server checks again). Notes, signatures and intel live in the dock, not
+ * here. Plugin items go into one "More" submenu at the bottom.
+ */
 
 export const statusOptions = SystemStatus.options.map((s) => ({
   value: s,
@@ -28,6 +63,28 @@ export const statusOptions = SystemStatus.options.map((s) => ({
 }));
 
 type Commands = Pick<MapStore, 'updateSystem' | 'removeSystem' | 'updateConnection' | 'removeConnection'>;
+type Notify = (toast: ToastInput) => void;
+
+const sep: MenuItem = { kind: 'separator' };
+
+/** Joins groups of items with separators, leaving out the empty ones. */
+function groups(...parts: MenuItem[][]): MenuItem[] {
+  return parts.filter((p) => p.length > 0).flatMap((p, i) => (i === 0 ? p : [sep, ...p]));
+}
+
+function radios<T extends string>(
+  values: readonly T[],
+  current: T,
+  row: (v: T) => Omit<Extract<MenuItem, { kind: 'radio' }>, 'kind' | 'checked' | 'onSelect'>,
+  onSelect: (v: T) => void,
+): MenuItem[] {
+  return values.map((v) => ({
+    kind: 'radio',
+    checked: v === current,
+    onSelect: () => onSelect(v),
+    ...row(v),
+  }));
+}
 
 export interface SystemMenuContext {
   mapId: string;
@@ -37,181 +94,375 @@ export interface SystemMenuContext {
   can: MapPermissions;
   store: Commands;
   plugins: readonly SlotEntry<'systemContextMenu'>[];
-  onEdit(): void;
+  /** The user's own characters; those whose EVE grant allows it can set the in-game route. */
+  characters?: readonly CharacterDto[];
+  notify?: Notify;
+  /** Opens the map's label settings (managers). */
+  onManageLabels?(): void;
 }
 
-/** Only the actions the user may perform; the server checks again. */
 export function systemMenu(ctx: SystemMenuContext): MenuItem[] {
   const { system, can, store } = ctx;
   const id = system.solarSystemId;
-  const items: MenuItem[] = [];
+  const update = (patch: Parameters<Commands['updateSystem']>[1]) => void store.updateSystem(id, patch);
+
+  const edit: MenuItem[] = [];
   if (can.edit) {
-    items.push({
-      kind: 'choice',
+    const status = statusOptions.find((o) => o.value === system.status);
+    edit.push({
+      kind: 'submenu',
       label: 'Status',
-      value: system.status,
-      options: statusOptions,
-      onSelect: (status) => void store.updateSystem(id, { status: status as SystemStatus }),
+      icon: <CircleDot />,
+      hint: status?.label,
+      hintSwatch: { color: status?.color },
+      items: statusOptions.map((o) => ({
+        kind: 'radio',
+        label: o.label,
+        checked: o.value === system.status,
+        swatch: { color: o.color },
+        onSelect: () => update({ status: o.value }),
+      })),
     });
-    if (ctx.labels.length > 0) {
-      items.push({
-        kind: 'multi',
+    const manage = can.manage && ctx.onManageLabels;
+    if (ctx.labels.length > 0 || manage) {
+      const on = system.labelIds.filter((l) => ctx.labels.some((label) => label.id === l)).length;
+      edit.push({
+        kind: 'submenu',
         label: 'Labels',
-        options: ctx.labels.map((l) => ({
-          value: l.id,
-          label: l.name,
-          color: l.color,
-          checked: system.labelIds.includes(l.id),
-          title: l.description || undefined,
-        })),
-        onToggle: (labelId) => {
-          const on = system.labelIds.includes(labelId);
-          void store.updateSystem(id, {
-            labelIds: on ? system.labelIds.filter((l) => l !== labelId) : [...system.labelIds, labelId],
-          });
-        },
+        icon: <Tags />,
+        hint: on > 0 ? String(on) : undefined,
+        items: groups(
+          ctx.labels.map((l) => ({
+            kind: 'check',
+            label: l.name,
+            title: l.description || undefined,
+            checked: system.labelIds.includes(l.id),
+            swatch: { color: l.color, shape: 'square' },
+            onSelect: () =>
+              update({
+                labelIds: system.labelIds.includes(l.id)
+                  ? system.labelIds.filter((x) => x !== l.id)
+                  : [...system.labelIds, l.id],
+              }),
+          })),
+          manage ? [{ kind: 'action', label: 'Manage labels…', onSelect: ctx.onManageLabels! }] : [],
+        ),
       });
     }
-    items.push({ kind: 'separator' });
-    items.push({
-      kind: 'action',
-      label: 'Edit name, tag and notes…',
-      icon: <PencilLine />,
-      onSelect: ctx.onEdit,
-    });
-    items.push({
-      kind: 'toggle',
-      label: 'Hidden',
-      icon: <EyeOff />,
-      checked: !system.visible,
-      onSelect: () => void store.updateSystem(id, { visible: !system.visible }),
-    });
+    edit.push(
+      {
+        kind: 'input',
+        label: 'Tag',
+        icon: <Tag />,
+        value: system.tag ?? '',
+        hint: system.tag ?? undefined,
+        placeholder: 'Tag, e.g. C3a',
+        maxLength: 16,
+        onSubmit: (tag) => update({ tag: tag || null }),
+      },
+      {
+        kind: 'input',
+        label: 'Rename',
+        icon: <PencilLine />,
+        value: system.customName ?? '',
+        placeholder: ctx.name,
+        maxLength: 64,
+        onSubmit: (customName) => update({ customName: customName || null }),
+      },
+    );
   }
   if (can.manage) {
-    items.push({
-      kind: 'toggle',
-      label: 'Locked',
-      icon: <Lock />,
-      checked: system.locked,
-      onSelect: () => void store.updateSystem(id, { locked: !system.locked }),
+    edit.push({
+      kind: 'action',
+      label: system.locked ? 'Unlock' : 'Lock',
+      icon: system.locked ? <LockOpen /> : <Lock />,
+      onSelect: () => update({ locked: !system.locked }),
     });
   }
-  items.push({
+  // A locked system cannot be hidden (the server refuses), so the toggle goes with the lock.
+  if (can.edit && !system.locked) {
+    edit.push({
+      kind: 'check',
+      label: 'Hide from routes',
+      icon: <EyeOff />,
+      checked: !system.visible,
+      onSelect: () => update({ visible: !system.visible }),
+    });
+  }
+
+  const go: MenuItem[] = [];
+  const pilots = (ctx.characters ?? []).filter((c) => c.canSetWaypoints && c.tokenValid);
+  if (pilots.length > 0) {
+    const route = (c: CharacterDto): MenuItem[] => [
+      {
+        kind: 'action',
+        label: 'Set destination',
+        icon: <Navigation />,
+        onSelect: () => void setWaypoint(c, id, ctx.name, 'destination', ctx.notify),
+      },
+      {
+        kind: 'action',
+        label: 'Add waypoint',
+        icon: <MapPinPlus />,
+        onSelect: () => void setWaypoint(c, id, ctx.name, 'waypoint', ctx.notify),
+      },
+    ];
+    go.push({
+      kind: 'submenu',
+      label: 'Set destination',
+      icon: <Navigation />,
+      items:
+        pilots.length === 1
+          ? route(pilots[0]!)
+          : pilots.flatMap((c): MenuItem[] => [{ kind: 'label', label: c.name }, ...route(c)]),
+    });
+  }
+  go.push({
     kind: 'action',
     label: 'Copy name',
     icon: <Copy />,
-    onSelect: () => void navigator.clipboard?.writeText(ctx.name).catch(() => {}),
+    onSelect: () =>
+      void navigator.clipboard
+        ?.writeText(ctx.name)
+        .then(() => ctx.notify?.({ title: `Copied ${ctx.name}`, tone: 'success', duration: 2000 }))
+        .catch(() => {}),
   });
-  pushPlugins(items, ctx.plugins, (close) => ({ mapId: ctx.mapId, solarSystemId: id, close }));
-  if (can.edit && !system.locked) {
-    items.push({ kind: 'separator' });
-    items.push({
-      kind: 'action',
-      label: 'Remove from map',
-      icon: <Trash2 />,
-      danger: true,
-      onSelect: () => void store.removeSystem(id),
+  go.push(...more(ctx.plugins, (close) => ({ mapId: ctx.mapId, solarSystemId: id, close })));
+
+  const remove: MenuItem[] =
+    can.edit && !system.locked
+      ? [
+          {
+            kind: 'action',
+            label: 'Remove from map',
+            icon: <Trash2 />,
+            danger: true,
+            onSelect: () => void store.removeSystem(id),
+          },
+        ]
+      : [];
+  return groups(edit, go, remove);
+}
+
+async function setWaypoint(
+  character: CharacterDto,
+  solarSystemId: number,
+  name: string,
+  mode: WaypointRequest['mode'],
+  notify?: Notify,
+) {
+  try {
+    await api<void>(buildPath(routes.routing.waypoint.path, { characterId: String(character.id) }), {
+      method: 'POST',
+      json: { solarSystemId, mode } satisfies WaypointRequest,
+    });
+    notify?.({
+      title: mode === 'destination' ? `Destination set to ${name}` : `${name} added as a waypoint`,
+      description: character.name,
+      tone: 'success',
+    });
+  } catch (error) {
+    notify?.({
+      title: mode === 'destination' ? 'Could not set the destination' : 'Could not add the waypoint',
+      description: error instanceof ApiError ? error.message : undefined,
+      tone: 'danger',
     });
   }
-  return items;
 }
 
 export interface ConnectionMenuContext {
   mapId: string;
   connection: ConnectionDto;
+  /** Display names of the two ends, for the bubble options. */
+  names?: { source: string; target: string };
   can: MapPermissions;
   store: Commands;
   plugins: readonly SlotEntry<'connectionContextMenu'>[];
 }
 
-const choice = <T extends string>(
-  label: string,
-  value: T,
-  values: readonly T[],
-  names: Record<T, string>,
-  onSelect: (v: T) => void,
-): MenuItem => ({
-  kind: 'choice',
-  label,
-  value,
-  options: values.map((v) => ({ value: v, label: names[v] })),
-  onSelect: (v) => onSelect(v as T),
-});
+const MASS_LABEL: Record<MassStatus, string> = { fresh: 'Fresh', reduced: 'Reduced', critical: 'Critical' };
+/** The same colours as the line on the map (edgeStyle). */
+const MASS_COLOR: Record<MassStatus, string> = {
+  fresh: cssVar('edge-color'),
+  reduced: cssVar('edge-mass-reduced'),
+  critical: cssVar('edge-mass-critical'),
+};
+const TIME_LABEL: Record<TimeStatus, string> = { normal: 'Normal', eol: 'End of life' };
+const SIZE_NAME: Record<ShipSize, string> = {
+  small: 'Frigate',
+  medium: 'Medium',
+  large: 'Large',
+  xlarge: 'Capital',
+};
+const TYPE_LABEL: Record<ConnectionType, string> = {
+  wormhole: 'Wormhole',
+  gate: 'Gate',
+  bridge: 'Jump bridge',
+};
 
 export function connectionMenu(ctx: ConnectionMenuContext): MenuItem[] {
   const { connection: c, can, store } = ctx;
   const update = store.updateConnection.bind(null, c.id);
-  const items: MenuItem[] = [];
+  const wormhole = c.type === 'wormhole';
+  const names = ctx.names ?? { source: 'source', target: 'target' };
+  const BUBBLED_LABEL: Record<Bubbled, string> = {
+    none: 'None',
+    source: `Near ${names.source}`,
+    target: `Near ${names.target}`,
+    both: 'Both ends',
+  };
+
+  const state: MenuItem[] = [];
+  const flags: MenuItem[] = [];
   if (can.edit) {
-    items.push(
-      choice('Time', c.timeStatus, TimeStatus.options, { normal: 'Normal', eol: 'EOL' }, (timeStatus) =>
-        update({ timeStatus }),
-      ),
-      choice(
-        'Mass',
-        c.massStatus,
-        MassStatus.options,
-        { fresh: 'Fresh', reduced: 'Reduced', critical: 'Critical' },
-        (massStatus) => update({ massStatus }),
-      ),
-      choice('Ship size', c.shipSize, ShipSize.options, SHIP_SIZE_LABEL, (shipSize) => update({ shipSize })),
-      choice(
-        'Type',
-        c.type,
-        ConnectionType.options,
-        { wormhole: 'Wormhole', gate: 'Gate', bridge: 'Bridge' },
-        (type) => update({ type }),
-      ),
-      choice(
-        'Bubbled',
-        c.bubbled,
-        Bubbled.options,
-        { none: 'None', source: 'Source', target: 'Target', both: 'Both' },
-        (bubbled) => update({ bubbled }),
-      ),
-      { kind: 'separator' },
+    if (wormhole) {
+      state.push(
+        {
+          kind: 'submenu',
+          label: 'Mass',
+          icon: <Weight />,
+          hint: MASS_LABEL[c.massStatus],
+          hintSwatch: { color: MASS_COLOR[c.massStatus], shape: 'line' },
+          items: radios(
+            MassStatus.options,
+            c.massStatus,
+            (v) => ({ label: MASS_LABEL[v], swatch: { color: MASS_COLOR[v], shape: 'line' } }),
+            (massStatus) => update({ massStatus }),
+          ),
+        },
+        {
+          kind: 'submenu',
+          label: 'Time',
+          icon: <Clock />,
+          hint: c.timeStatus === 'eol' ? 'EOL' : 'Normal',
+          items: radios(
+            TimeStatus.options,
+            c.timeStatus,
+            (v) => ({
+              label: TIME_LABEL[v],
+              hint: v === 'eol' ? 'under 4 h' : undefined,
+              swatch: {
+                color: cssVar(v === 'eol' ? 'edge-time-eol' : 'edge-color'),
+                shape: 'line',
+                dashed: v === 'eol',
+              },
+            }),
+            (timeStatus) => update({ timeStatus }),
+          ),
+        },
+        {
+          kind: 'submenu',
+          label: 'Size',
+          icon: <Ship />,
+          hint: SHIP_SIZE_LABEL[c.shipSize],
+          items: radios(
+            ShipSize.options,
+            c.shipSize,
+            (v) => ({ label: SIZE_NAME[v], hint: SHIP_SIZE_LABEL[v] }),
+            (shipSize) => update({ shipSize }),
+          ),
+        },
+      );
+    }
+    state.push(
       {
-        kind: 'toggle',
-        label: 'Dangerous',
-        icon: <AlertTriangle />,
-        checked: c.dangerous,
-        onSelect: () => update({ dangerous: !c.dangerous }),
+        kind: 'submenu',
+        label: 'Bubbled',
+        icon: <CircleDashed />,
+        hint: c.bubbled === 'none' ? undefined : c.bubbled === 'both' ? 'Both' : BUBBLED_LABEL[c.bubbled],
+        items: radios(
+          Bubbled.options,
+          c.bubbled,
+          (v) => ({ label: BUBBLED_LABEL[v] }),
+          (bubbled) => update({ bubbled }),
+        ),
       },
       {
-        kind: 'toggle',
+        kind: 'submenu',
+        label: 'Type',
+        icon: <Route />,
+        hint: TYPE_LABEL[c.type],
+        items: radios(
+          ConnectionType.options,
+          c.type,
+          (v) => ({ label: TYPE_LABEL[v] }),
+          (type) => update({ type }),
+        ),
+      },
+    );
+    flags.push({
+      kind: 'check',
+      label: 'Dangerous',
+      icon: <TriangleAlert />,
+      checked: c.dangerous,
+      onSelect: () => update({ dangerous: !c.dangerous }),
+    });
+    if (wormhole)
+      flags.push({
+        kind: 'check',
         label: 'Mass saved',
         icon: <PiggyBank />,
         checked: c.massSaved,
         onSelect: () => update({ massSaved: !c.massSaved }),
-      },
-    );
+      });
   }
-  pushPlugins(items, ctx.plugins, (close) => ({ mapId: ctx.mapId, connectionId: c.id, close }));
-  if (can.edit) {
-    items.push({ kind: 'separator' });
-    items.push({
-      kind: 'action',
-      label: 'Remove connection',
-      icon: <Trash2 />,
-      danger: true,
-      onSelect: () => void store.removeConnection(c.id),
-    });
-  }
-  return items;
+  flags.push(...more(ctx.plugins, (close) => ({ mapId: ctx.mapId, connectionId: c.id, close })));
+  const remove: MenuItem[] = can.edit
+    ? [
+        {
+          kind: 'action',
+          label: 'Remove connection',
+          icon: <Trash2 />,
+          danger: true,
+          onSelect: () => void store.removeConnection(c.id),
+        },
+      ]
+    : [];
+  return groups(state, flags, remove);
 }
 
-function pushPlugins<S extends 'systemContextMenu' | 'connectionContextMenu'>(
-  items: MenuItem[],
+export interface PaneMenuContext {
+  can: MapPermissions;
+  /** Starts adding a system at the pointer. */
+  onAddSystem(): void;
+  onFitChain(): void;
+  onCenterOnMe(): void;
+}
+
+export function paneMenu(ctx: PaneMenuContext): MenuItem[] {
+  return groups(
+    ctx.can.edit
+      ? [{ kind: 'action', label: 'Add system here…', icon: <Plus />, onSelect: ctx.onAddSystem }]
+      : [],
+    [
+      { kind: 'action', label: 'Fit chain', icon: <Maximize />, shortcut: 'F', onSelect: ctx.onFitChain },
+      {
+        kind: 'action',
+        label: 'Center on me',
+        icon: <LocateFixed />,
+        shortcut: 'C',
+        onSelect: ctx.onCenterOnMe,
+      },
+    ],
+  );
+}
+
+/** Plugin items, all in one "More" submenu at the bottom. */
+function more<S extends 'systemContextMenu' | 'connectionContextMenu'>(
   entries: readonly SlotEntry<S>[],
   props: (close: () => void) => Parameters<SlotEntry<S>['component']>[0],
-) {
-  if (entries.length === 0) return;
-  items.push({ kind: 'separator' });
-  for (const entry of entries) {
-    items.push({
-      kind: 'custom',
-      key: entry.key,
-      render: (close) => <SlotItem entry={entry} props={props(close)} />,
-    });
-  }
+): MenuItem[] {
+  if (entries.length === 0) return [];
+  return [
+    {
+      kind: 'submenu',
+      label: 'More',
+      icon: <Puzzle />,
+      items: entries.map((entry) => ({
+        kind: 'custom',
+        key: entry.key,
+        render: (close) => <SlotItem entry={entry} props={props(close)} />,
+      })),
+    },
+  ];
 }

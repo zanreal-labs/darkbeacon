@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useReactFlow } from '@xyflow/react';
 import {
   SYSTEM_PLACEMENT,
@@ -29,7 +30,7 @@ import { useUniverseSystems } from '../lib/universe';
 import { AddSystemSearch } from '../map/AddSystemSearch';
 import { MapCanvas, type FocusRequest, type MenuTarget } from '../map/MapCanvas';
 import { freeSpot } from '../map/geometry';
-import { connectionMenu, systemMenu } from '../map/menus';
+import { connectionMenu, paneMenu, systemMenu } from '../map/menus';
 import { systemDisplayName } from '../map/SystemNode';
 import { useMapStore } from '../map/useMapStore';
 import { LocalWidget } from '../map/widgets/LocalWidget';
@@ -37,7 +38,7 @@ import { SignaturesWidget } from '../map/widgets/SignaturesWidget';
 import { SystemInfoWidget } from '../map/widgets/SystemInfoWidget';
 import { WidgetDock, type DockTab } from '../map/widgets/WidgetDock';
 import { SlotItem, useSlot } from '../plugins/PluginSlot';
-import { Button, EmptyState, IconButton, Spinner } from '../ui';
+import { Button, EmptyState, IconButton, Spinner, useToast } from '../ui';
 import styles from './MapPage.module.css';
 
 /** The phone dock's sheet at its tallest: 58 % of the screen above the 52 px tab bar. */
@@ -63,6 +64,8 @@ export function MapView({
   const { state } = store;
   const me = useMe();
   const rf = useReactFlow();
+  const router = useRouter();
+  const toast = useToast();
   const can = mapPermissions(role);
   const [selected, setSelected] = useState<number | null>(null);
   // The dock starts closed, so the first view has the whole width for the chain; on wide screens
@@ -115,10 +118,9 @@ export function MapView({
           can,
           store,
           plugins: systemPlugins,
-          onEdit: () => {
-            setDock({ tab: 'system', open: true });
-            setFocus((f) => ({ ...f, name: f.name + 1 }));
-          },
+          characters: me.data?.characters,
+          notify: toast,
+          onManageLabels: () => router.push(`/m/${map.slug}/settings?tab=labels`),
         }),
       };
     }
@@ -131,22 +133,26 @@ export function MapView({
       };
       return {
         title: `${end(connection.source)} ↔ ${end(connection.target)}`,
-        items: connectionMenu({ mapId: map.id, connection, can, store, plugins: connectionPlugins }),
+        items: connectionMenu({
+          mapId: map.id,
+          connection,
+          names: { source: end(connection.source), target: end(connection.target) },
+          can,
+          store,
+          plugins: connectionPlugins,
+        }),
       };
     }
-    if (!can.edit) return null;
     return {
-      items: [
-        {
-          kind: 'action',
-          label: 'Add a system here…',
-          icon: <Plus />,
-          onSelect: () => {
-            setAddAt(target.flow);
-            setFocus((f) => ({ ...f, search: f.search + 1 }));
-          },
+      items: paneMenu({
+        can,
+        onAddSystem: () => {
+          setAddAt(target.flow);
+          setFocus((f) => ({ ...f, search: f.search + 1 }));
         },
-      ],
+        onFitChain: target.fitChain,
+        onCenterOnMe: target.centerOnMe,
+      }),
     };
   })();
 
