@@ -29,7 +29,7 @@ import {
   type UniverseSystemDto,
 } from '@darkbeacon/shared';
 import type { MapPermissions } from '../lib/roles';
-import { useMe } from '../lib/session';
+import { useMe, useProviders } from '../lib/session';
 import { track } from '../lib/telemetry';
 import { useTheme } from '../theme/ThemeProvider';
 import { useToast } from '../ui';
@@ -51,6 +51,8 @@ const LONG_PRESS_MS = 500;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2;
 const FIT_MAX_ZOOM = 1;
+/** A map never opens closer than this, whatever view was saved: the chain comes first. */
+const OPEN_MAX_ZOOM = 1.1;
 /** How long the view rests before it is saved for this account. */
 const SAVE_VIEW_AFTER_MS = 800;
 
@@ -159,6 +161,7 @@ export function MapCanvas({
   readOnly = false,
 }: Props) {
   const { theme } = useTheme();
+  const demo = useProviders({ enabled: !readOnly }).data?.demo ?? false;
   const toast = useToast();
   const me = useMe({ enabled: !readOnly });
   const {
@@ -346,7 +349,7 @@ export function MapCanvas({
     if (isViewport(preferences.viewport)) {
       // Saved as the point in the middle of the view, so it fits a phone and a desktop alike.
       const { x, y, zoom } = preferences.viewport;
-      centerOn({ x, y }, zoom, false);
+      centerOn({ x, y }, Math.min(zoom, OPEN_MAX_ZOOM), false);
       return;
     }
     // A chain that fits on screen at the readable zoom opens centred as a whole.
@@ -477,7 +480,8 @@ export function MapCanvas({
   );
 
   const saveViewport = (viewport: Viewport) => {
-    if (readOnly || !opened.current) return;
+    // The demo account is shared by every visitor: one person's view must not become everyone's.
+    if (readOnly || !opened.current || demo) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       const box = visibleBox();

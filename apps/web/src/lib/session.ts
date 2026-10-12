@@ -28,12 +28,13 @@ export function useMe({ enabled = true }: { enabled?: boolean } = {}) {
   });
 }
 
-export function useProviders() {
+export function useProviders({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: providersKey,
     queryFn: () => api<AuthProvidersDto>(routes.auth.providers.path),
     retry: 1,
     staleTime: Infinity,
+    enabled,
   });
 }
 
