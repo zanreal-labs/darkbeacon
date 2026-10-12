@@ -22,3 +22,26 @@ export function placeFree(hint: Position | null, taken: readonly Position[]): Po
   while (taken.some((p) => covers(p, spot))) spot = { x: spot.x, y: spot.y + SYSTEM_PLACEMENT.y };
   return spot;
 }
+
+/** A position from a source's own layout, if the value is one. */
+export function asPosition(value: unknown): Position | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const { x, y } = value as { x?: unknown; y?: unknown };
+  return typeof x === 'number' && typeof y === 'number' ? { x, y } : null;
+}
+
+/**
+ * Where a system goes next to a neighbour already on the merged map: as far from it as the source
+ * holding both has it. Sources lay themselves out differently, so only offsets within one source
+ * mean something.
+ */
+export function besideNeighbour(
+  own: Position,
+  neighbourInSource: Position,
+  neighbourPlaced: Position,
+): Position {
+  return {
+    x: neighbourPlaced.x + own.x - neighbourInSource.x,
+    y: neighbourPlaced.y + own.y - neighbourInSource.y,
+  };
+}

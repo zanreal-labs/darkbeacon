@@ -15,12 +15,11 @@ import {
 } from '@darkbeacon/shared';
 import type { FeedSelector } from '../domain/feed.js';
 import { parseRefId, refId, sameOrigin } from '../domain/keys.js';
-import { placeFree } from '../domain/layout.js';
+import { asPosition, besideNeighbour, placeFree } from '../domain/layout.js';
 import { ChainMerge } from '../domain/merge.js';
 import { shareScopes, type Share } from '../domain/shares.js';
 import {
   entitiesOf,
-  positionHint,
   SELF,
   sourceDto,
   ViewState,
@@ -431,33 +430,63 @@ export class ChainMerger {
     map.layout = layout;
   }
 
-  /** Systems new to the map get a position on its own layout: where their source has them, without covering others. */
+  /**
+   * Systems new to the map get a position on its own layout: next to a neighbour already placed,
+   * at the offset their source has between them (the map's own systems keep their places that
+   * way), else where their first source has them; never covering another system.
+   */
   private place(
     map: MergedMap,
     refs: Set<string>,
     layout: Map<number, Position>,
     placed: Array<{ solarSystemId: number; position: Position }>,
   ): void {
-    const fresh: Array<{ id: number; hint: Position | null; order: number }> = [];
     const order = new Map(map.merge.sourceIds().map((id, i) => [id, i]));
+    const pending: Array<{ id: number; ref: string; holders: string[]; order: number }> = [];
     for (const ref of refs) {
       const { kind, key } = parseRefId(ref);
       if (kind !== 'system') continue;
       const id = Number(key);
       if (layout.has(id)) continue;
-      const object = map.merge.objects(ref)[0];
-      if (!object) continue;
-      fresh.push({ id, hint: positionHint(object), order: order.get(object.holders[0]!) ?? 0 });
+      const holders = map.merge.holders(ref);
+      if (holders.length === 0) continue;
+      pending.push({ id, ref, holders, order: order.get(holders[0]!) ?? 0 });
     }
-    if (fresh.length === 0) return;
-    // The map's own systems first (they keep their spots), then by source, then by id.
-    fresh.sort((a, b) => a.order - b.order || a.id - b.id);
+    if (pending.length === 0) return;
+    // The map's own systems first, then by source, then by id.
+    pending.sort((a, b) => a.order - b.order || a.id - b.id);
     const taken = [...layout.values()];
-    for (const { id, hint } of fresh) {
-      const position = placeFree(hint, taken);
+    const put = (id: number, spot: Position | null) => {
+      const position = placeFree(spot, taken);
       layout.set(id, position);
       taken.push(position);
       placed.push({ solarSystemId: id, position });
+    };
+    const beside = (item: (typeof pending)[number]): Position | null => {
+      for (const source of item.holders) {
+        const own = asPosition(map.merge.sourceField(source, item.ref, 'pos'));
+        if (!own) continue;
+        for (const neighbour of map.merge.neighbours(item.id)) {
+          const placedAt = layout.get(neighbour);
+          const there = asPosition(map.merge.sourceField(source, refId('system', String(neighbour)), 'pos'));
+          if (placedAt && there) return besideNeighbour(own, there, placedAt);
+        }
+      }
+      return null;
+    };
+    while (pending.length > 0) {
+      let progressed = false;
+      for (const item of [...pending]) {
+        const spot = beside(item);
+        if (!spot) continue;
+        put(item.id, spot);
+        pending.splice(pending.indexOf(item), 1);
+        progressed = true;
+      }
+      if (progressed) continue;
+      // Nothing next to a placed neighbour: the first one goes where its first source has it.
+      const first = pending.shift()!;
+      put(first.id, asPosition(map.merge.sourceField(first.holders[0]!, first.ref, 'pos')));
     }
   }
 }

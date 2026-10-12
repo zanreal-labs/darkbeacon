@@ -61,7 +61,8 @@ describeEachDialect('merged chains over HTTP and /ws', (t) => {
       expect(r.status, `${method} ${path}: ${r.status === 204 ? '' : await r.clone().text()}`).toBeLessThan(
         300,
       );
-      return (r.status === 204 ? undefined : await r.json()) as T;
+      const text = await r.text();
+      return (text ? JSON.parse(text) : undefined) as T;
     };
     const status = async (method: string, path: string, json?: unknown) =>
       (
@@ -172,7 +173,7 @@ describeEachDialect('merged chains over HTTP and /ws', (t) => {
       await carol.call<StreamSnapshotDto>('GET', `/api/streams/${encodeURIComponent(stream)}/snapshot`)
     ).data as MapSnapshot;
     const edge = merged.connections!.find((c) => c.source === Math.min(C2, C5))!;
-    await dave.call('PATCH', `/api/maps/${alliance.id}/chain/connections/${encodeURIComponent(edge.id)}`, {
+    await dave.call('PATCH', `/api/maps/${alliance.id}/connections/${encodeURIComponent(edge.id)}`, {
       massStatus: 'critical',
     });
     const inCorp = await alice.call<{ connections: ConnectionDto[] }>(
@@ -190,8 +191,15 @@ describeEachDialect('merged chains over HTTP and /ws', (t) => {
         }),
       ),
     );
-    // Its own plain routes refuse: the composite has no objects of its own.
-    expect(await dave.status('POST', `/api/maps/${alliance.id}/systems`, { solarSystemId: C1 })).toBe(409);
+    // The plain map routes work on the composite too: adding C1 back writes it to Corp A.
+    await dave.call('POST', `/api/maps/${alliance.id}/systems`, { solarSystemId: C1 });
+    await vi.waitFor(async () => {
+      const corpNow = await alice.call<StreamSnapshotDto>(
+        'GET',
+        `/api/streams/${encodeURIComponent(`map:${corp.id}`)}/snapshot`,
+      );
+      expect((corpNow.data as MapSnapshot).systems!.map((s) => s.solarSystemId)).toContain(C1);
+    });
 
     // Revoked: the source's objects leave the composite at once.
     await alice.call('DELETE', `/api/maps/${corp.id}/shares/${offered.id}`);

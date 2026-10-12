@@ -37,7 +37,7 @@ import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
 import { MappingModule } from '../mapping/mapping.module.js';
 import { CHAIN_OVERLAY, MAPPING_PORTS } from '../mapping/mapping.tokens.js';
 import { TrackingModule } from '../tracking/tracking.module.js';
-import { ChainController, SharesController } from './sharing.controllers.js';
+import { SharesController } from './sharing.controllers.js';
 
 export const SHARING_PORTS = 'SharingPorts';
 
@@ -50,7 +50,7 @@ export const SHARING_PORTS = 'SharingPorts';
  */
 @Module({
   imports: [MappingModule, TrackingModule],
-  controllers: [SharesController, ChainController],
+  controllers: [SharesController],
   providers: [
     {
       provide: SHARING_PORTS,

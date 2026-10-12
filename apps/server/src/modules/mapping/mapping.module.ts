@@ -44,6 +44,7 @@ import {
   SignaturesController,
   SystemsController,
 } from './mapping.controllers.js';
+import { MergedWriteRouter } from './merged-writes.js';
 import { CHAIN_OVERLAY, MAP_OWNERSHIP, MAP_REPOSITORY, MAPPING_PORTS } from './mapping.tokens.js';
 
 const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
@@ -112,6 +113,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
         CHAIN_OVERLAY,
       ],
     },
+    MergedWriteRouter,
     useCase(MapUseCases),
     useCase(SystemUseCases),
     useCase(ConnectionUseCases),

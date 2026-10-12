@@ -125,6 +125,22 @@ export class ChainMerge {
     return [...new Set(out)];
   }
 
+  /** A field of one source's copy (positions: every map lays itself out, so they compare only within a source). */
+  sourceField(sourceId: string, ref: string, field: string): unknown {
+    return this.sources.get(sourceId)?.copies.get(ref)?.fields[field]?.v;
+  }
+
+  /** Systems linked to this one by a connection that is live somewhere. */
+  neighbours(solarSystemId: number): number[] {
+    const out = new Set<number>();
+    for (const ref of this.bySystem.get(solarSystemId) ?? []) {
+      const { kind, key } = parseRefId(ref);
+      if (kind !== 'connection' || this.live(ref).length === 0) continue;
+      for (const s of parsePair(key) ?? []) if (s !== solarSystemId) out.add(s);
+    }
+    return [...out].sort((a, b) => a - b);
+  }
+
   /** Sources holding a live copy of the ref, in source order. */
   holders(ref: string): string[] {
     return this.live(ref).map((c) => c.sourceId);
