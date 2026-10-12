@@ -76,8 +76,14 @@ export class AuthController {
   }
 
   @Get(nestPath(routes.auth.discordLogin.path))
-  async discordLogin(@Query('returnTo') returnTo: unknown, @Res() reply: FastifyReply): Promise<void> {
-    await this.redirect(reply, '/', async () => this.begin(reply, await this.discord.start(returnTo)));
+  async discordLogin(
+    @Query('returnTo') returnTo: unknown,
+    @Query('invite') invite: unknown,
+    @Res() reply: FastifyReply,
+  ): Promise<void> {
+    await this.redirect(reply, '/', async () =>
+      this.begin(reply, await this.discord.start(returnTo, invite)),
+    );
   }
 
   @Get(nestPath(routes.auth.discordConnect.path))
@@ -128,8 +134,14 @@ export class AuthController {
   }
 
   @Get(nestPath(routes.auth.eveSignIn.path))
-  async eveSignIn(@Query('returnTo') returnTo: unknown, @Res() reply: FastifyReply): Promise<void> {
-    await this.redirect(reply, '/login', async () => this.begin(reply, await this.eveSignin.start(returnTo)));
+  async eveSignIn(
+    @Query('returnTo') returnTo: unknown,
+    @Query('invite') invite: unknown,
+    @Res() reply: FastifyReply,
+  ): Promise<void> {
+    await this.redirect(reply, '/login', async () =>
+      this.begin(reply, await this.eveSignin.start(returnTo, invite)),
+    );
   }
 
   @Get(nestPath(routes.auth.eveLogin.path))

@@ -87,6 +87,11 @@ export class InstanceSettingsService {
     return effectiveLoginMethod(await this.current(), this.discordConfigured);
   }
 
+  /** Who may sign up (identity's `SignUpRules`). */
+  async signInPolicy(): Promise<NonNullable<InstanceSettings['signIn']>> {
+    return (await this.current()).signIn ?? DEFAULT_INSTANCE_SETTINGS.signIn!;
+  }
+
   /** Discord roles grant map access and instance admin only where people sign in with Discord. */
   async discordRoles(): Promise<boolean> {
     return (await this.loginMethod()) === 'discord';

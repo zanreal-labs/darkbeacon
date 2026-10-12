@@ -95,6 +95,8 @@ export class WebhookAdmin {
       ...(input.url !== undefined ? { url: input.url } : {}),
       ...(input.events !== undefined ? { events: [...new Set(input.events)] } : {}),
       ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
+      // Turned on again by a person: it starts with a clean slate.
+      ...(input.enabled === true && !webhook.enabled ? { consecutiveFailures: 0, disabledReason: null } : {}),
     };
     await this.deps.uow.transaction(async () => {
       await this.deps.webhooks.update(updated);
@@ -103,18 +105,23 @@ export class WebhookAdmin {
     return toWebhookDto(updated);
   }
 
-  /**
-   * A new signing secret, returned only here (the old one stops working at once). Imported
-   * webhooks need one: nobody saw the secret they were created with.
-   */
+  /** A new signing secret, shown once; the old one stops working at once. */
   async rotateSecret(actor: Actor | null, mapId: string, webhookId: string): Promise<CreatedWebhookDto> {
     const webhook = await this.require(actor, mapId, webhookId);
-    const updated: Webhook = { ...webhook, secret: newWebhookSecret() };
+    const rotated: Webhook = { ...webhook, secret: newWebhookSecret() };
     await this.deps.uow.transaction(async () => {
-      await this.deps.webhooks.update(updated);
-      await this.record(actor!, 'webhook.updated', auditDto(updated), auditDto(webhook));
+      await this.deps.webhooks.update(rotated);
+      await this.deps.events.append([
+        newEvent({
+          stream: AUDIT_STREAM,
+          type: 'webhook.secret_rotated',
+          actor: actorRef(actor!),
+          data: { id: webhook.id, mapId },
+          occurredAt: this.deps.clock.now(),
+        }),
+      ]);
     });
-    return { ...toWebhookDto(updated), secret: updated.secret };
+    return { ...toWebhookDto(rotated), secret: rotated.secret };
   }
 
   async remove(actor: Actor | null, mapId: string, webhookId: string): Promise<void> {
@@ -198,6 +205,8 @@ export function toWebhookDto(webhook: Webhook): WebhookDto {
     events: webhook.events,
     enabled: webhook.enabled,
     createdAt: webhook.createdAt,
+    consecutiveFailures: webhook.consecutiveFailures ?? 0,
+    disabledReason: webhook.disabledReason ?? null,
   };
 }
 

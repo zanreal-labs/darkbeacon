@@ -257,6 +257,10 @@ describeEachDialect('identity and access over HTTP', (t) => {
       mcpMode: 'off',
       apiCorsOrigins: [],
       publicMaps: true,
+      mapCreation: 'everyone',
+      apiAccess: true,
+      webhooksEnabled: true,
+      signIn: { mode: 'open', corporationIds: [], allianceIds: [], guildIds: [] },
     });
     expect(
       (await bob.request('/api/admin/settings', { method: 'PATCH', json: { adminGuildId: 'x' } })).status,

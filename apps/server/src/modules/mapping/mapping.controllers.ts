@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post, Put } from '@nestjs/common';
+import { AccessRules } from '@darkbeacon/access';
 import type { Actor } from '@darkbeacon/core';
 import {
   BookmarkNumberUseCases,
@@ -45,7 +46,10 @@ const systemId = new ZodPipe(z.coerce.number().pipe(EveId));
 
 @Controller()
 export class MapsController {
-  constructor(@Inject(MapUseCases) private readonly maps: MapUseCases) {}
+  constructor(
+    @Inject(MapUseCases) private readonly maps: MapUseCases,
+    @Inject(AccessRules) private readonly rules: AccessRules,
+  ) {}
 
   @Get(nestPath(routes.maps.list.path))
   list(@CurrentActor() actor: Actor | null) {
@@ -53,8 +57,17 @@ export class MapsController {
   }
 
   @Post(nestPath(routes.maps.create.path))
-  create(@CurrentActor() actor: Actor | null, @Body(new ZodPipe(CreateMapRequest)) body: CreateMapRequest) {
-    return this.maps.create(actor, body);
+  async create(
+    @CurrentActor() actor: Actor | null,
+    @Body(new ZodPipe(CreateMapRequest)) body: CreateMapRequest,
+  ) {
+    const { starterRule, ...request } = body;
+    // Checked first, so a refused rule creates no map.
+    if (starterRule) await this.rules.checkStarter(actor, starterRule);
+    const map = await this.maps.create(actor, request);
+    // The first rule, for the creator's own corporation or alliance (checked by access).
+    if (starterRule) await this.rules.addStarter(actor, map.id, starterRule);
+    return map;
   }
 
   @Get(nestPath(routes.maps.bySlug.path))

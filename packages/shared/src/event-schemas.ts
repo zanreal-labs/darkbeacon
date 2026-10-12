@@ -105,6 +105,10 @@ export const EVENT_DATA_SCHEMAS: Record<EventType, z.ZodType> = {
   'character.unlinked': z.object({ characterId: EveId }),
   'plugin.updated': PluginDto,
   'plugin.removed': z.object({ id: z.string() }),
+  'access.rule_changed': AccessRuleDto,
+  'access.owner_changed': z.object({ mapId: Id, ownerAccountId: Id, previousOwnerAccountId: Id }),
+  'map.trashed': z.object({ id: Id, deletedAt: Timestamp }),
+  'map.restored': MapDto,
   'routes.bridges_changed': z.object({
     added: z.array(BridgeDto),
     updated: z.array(BridgeDto),

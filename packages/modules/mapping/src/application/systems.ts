@@ -71,6 +71,9 @@ export class SystemUseCases extends MappingUseCases {
       const current = await this.ports.systems.find(mapId, solarSystemId);
       if (!current || (!current.visible && request.visible !== true)) throw new NotFoundError('System');
       const patch = defined(request);
+      // Locking and unlocking is for managers, as in Wanderer (`lock_system`).
+      if (patch.locked !== undefined && patch.locked !== current.locked)
+        await this.authorize(who, mapId, 'manager');
       if (patch.labelIds) await this.checkLabels(mapId, patch.labelIds);
       if (patch.systemLabelIds) {
         patch.systemLabelIds = [...new Set(patch.systemLabelIds)];

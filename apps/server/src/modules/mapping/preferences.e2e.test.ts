@@ -5,6 +5,7 @@ import { mapStream, type EventLog } from '@darkbeacon/core';
 import { describeEachDialect } from '@darkbeacon/db/testing';
 import type { MapDto, MapPreferencesDto } from '@darkbeacon/shared';
 import { EVENT_LOG } from '../../platform/tokens.js';
+import { MapUseCases } from '@darkbeacon/mapping';
 import { createApp } from '../../app.js';
 import { parseEnv } from '../../config/config.js';
 import { ActorResolverRegistry } from '../../platform/actor.js';
@@ -111,6 +112,8 @@ describeEachDialect('map preferences and bookmark templates over HTTP', (t) => {
     const map = (await call('POST', '/api/maps', 'alice', { name: 'Chain' })).body as MapDto;
     await call('PATCH', `/api/maps/${map.id}/preferences`, 'alice', { viewport: { x: 1, y: 2, zoom: 1 } });
     expect((await call('DELETE', `/api/maps/${map.id}`, 'alice')).status).toBe(204);
+    // Deleting is soft; purging takes the preferences.
+    await app.get(MapUseCases).purge({ kind: 'account', id: 'root', instanceRole: 'admin' }, map.id);
     const rows = await t.db
       .db<{ map_preferences: { map_id: string } }>()
       .selectFrom('map_preferences')

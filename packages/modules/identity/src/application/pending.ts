@@ -7,7 +7,7 @@ import { ExternalAuthError } from '../domain/errors.js';
 /** Fresh state and PKCE verifier for a redirect to an OAuth provider. */
 export async function beginPendingAuth(
   clock: Clock,
-  input: Pick<PendingAuth, 'kind' | 'accountId'> & { returnTo: unknown },
+  input: Pick<PendingAuth, 'kind' | 'accountId'> & { returnTo: unknown; invite?: unknown },
 ): Promise<{ pending: PendingAuth; codeChallenge: string }> {
   const pending: PendingAuth = {
     kind: input.kind,
@@ -16,6 +16,10 @@ export async function beginPendingAuth(
     returnTo: safeReturnTo(input.returnTo),
     accountId: input.accountId,
     expiresAt: clock.now() + PENDING_AUTH_TTL_MS,
+    // Only something that looks like an invite token is carried along.
+    ...(typeof input.invite === 'string' && /^[\w-]{16,64}$/.test(input.invite)
+      ? { invite: input.invite }
+      : {}),
   };
   return { pending, codeChallenge: await pkceChallenge(pending.codeVerifier) };
 }

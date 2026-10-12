@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { MapRole } from './access.js';
+import { StarterAccessRule } from './access-rules.js';
 import { BookmarkNumbering, BookmarkTemplate } from './bookmarks.js';
 import { EveId, Id, Timestamp } from './common.js';
 
@@ -13,6 +14,13 @@ export const MapSettings = z.object({
   bookmarkTemplate: BookmarkTemplate.optional(),
   /** How `{n}` numbers wormholes (see `bookmarks.ts`); absent means found order, gaps kept. */
   bookmarkNumbering: BookmarkNumbering.optional(),
+  /**
+   * Wanderer's "only tracked characters": nobody opens the map until every character of theirs
+   * that may be tracked here is tracked. Absent: off.
+   */
+  onlyTrackedCharacters: z.boolean().optional(),
+  /** Wanderer's `restrict_offline_showing`: offline characters are shown to managers and up only. */
+  offlineForManagersOnly: z.boolean().optional(),
 });
 export type MapSettings = z.infer<typeof MapSettings>;
 
@@ -85,6 +93,8 @@ export const MapDto = z.object({
   systemLabels: z.array(SystemLabelDto),
   createdAt: Timestamp,
   updatedAt: Timestamp,
+  /** Set while the map is deleted but can still be restored (instance admins only see it then). */
+  deletedAt: Timestamp.nullable().optional(),
 });
 export type MapDto = z.infer<typeof MapDto>;
 
@@ -105,6 +115,8 @@ export const CreateMapRequest = z.object({
   slug: Slug.optional(),
   kind: MapKind.optional(),
   description: MapDescription.optional(),
+  /** A first access rule for the creator's own corporation or alliance. */
+  starterRule: StarterAccessRule.optional(),
 });
 export type CreateMapRequest = z.infer<typeof CreateMapRequest>;
 

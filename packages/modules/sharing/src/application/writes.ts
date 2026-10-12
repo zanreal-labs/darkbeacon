@@ -81,6 +81,8 @@ export class ChainWrites {
     if (map.merge.holders(ref).length === 0) throw new NotFoundError('System');
     const composite = map.info.kind === 'composite';
     const local = composite ? map.local.get(solarSystemId) : undefined;
+    // Locking and unlocking is for managers, as on any map.
+    if (request.locked !== undefined) await requireMapRole(this.ports.access, who, mapId, 'manager');
     const unlocking = request.locked === false;
     if (local?.locked && !unlocking && (request.position || request.visible === false))
       throw new ConflictError('The system is locked');

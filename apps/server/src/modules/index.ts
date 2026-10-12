@@ -25,4 +25,5 @@ export const featureModules: Array<Type | DynamicModule> = [
   (await import('./docs/docs.module.js')).DocsModule,
   (await import('./oauth/oauth.module.js')).OAuthModule,
   (await import('../mcp/mcp.module.js')).McpModule,
+  (await import('./wanderer-compat/wanderer-compat.module.js')).WandererCompatModule,
 ];

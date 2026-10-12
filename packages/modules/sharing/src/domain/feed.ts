@@ -79,8 +79,12 @@ export function feedSignal(event: Pick<DomainEvent, 'type' | 'data'>): FeedSigna
     case 'character.ship_changed':
     case 'character.online_changed':
       return { kind: 'objects', selectors: [{ kind: 'character', key: String(d.characterId) }] };
-    // Labels cross by name: a renamed or removed one reads differently everywhere.
+    // A deleted map leaves the maps that merge it (its source reads empty), and comes back with
+    // a restore: both read the map again, like a rename. Labels cross by name: a renamed or
+    // removed one reads differently everywhere.
     case 'map.settings_changed':
+    case 'map.trashed':
+    case 'map.restored':
     case 'system_labels.changed':
       return { kind: 'renamed' };
     case 'map.removed':

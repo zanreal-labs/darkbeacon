@@ -1,4 +1,6 @@
-import { NotFoundError, type Clock, type EventLog } from '@darkbeacon/core';
+import { ForbiddenError, NotFoundError, type Clock, type EventLog } from '@darkbeacon/core';
+
+const DISABLED = 'This account is disabled. Ask an admin of this instance.';
 import type { SessionDto } from '@darkbeacon/shared';
 import type { Account, Session } from '../domain/account.js';
 import { describeUserAgent, SESSION_TOUCH_MS, SESSION_TTL_MS } from '../domain/rules.js';
@@ -22,6 +24,7 @@ export class SessionService {
   constructor(private readonly deps: SessionDeps) {}
 
   async create(accountId: string, userAgent: string | null): Promise<{ token: string; session: Session }> {
+    if ((await this.deps.accounts.findById(accountId))?.disabledAt) throw new ForbiddenError(DISABLED);
     const token = randomToken();
     const now = this.deps.clock.now();
     const session: Session = {
@@ -48,7 +51,8 @@ export class SessionService {
       return null;
     }
     const account = await this.deps.accounts.findById(session.accountId);
-    if (!account) return null;
+    // A disabled account's sessions are dead (they are deleted too, when it is disabled).
+    if (!account || account.disabledAt) return null;
     if (now - session.lastSeenAt >= SESSION_TOUCH_MS) {
       await this.deps.sessions.touch(session.id, now, now + SESSION_TTL_MS);
       await this.deps.accounts.touch(account.id, now);

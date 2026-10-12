@@ -159,6 +159,56 @@ Changes made with a key show in the map's history as the account (or the service
   with `x-darkbeacon-signature: sha256=<hex>` = HMAC-SHA256 of `<x-darkbeacon-timestamp>.<raw body>` with
   the webhook secret. The payload of each event type is in `webhooks` and `components.schemas.Event_*` of
   the OpenAPI description.
+- **Server-Sent Events** `GET /api/streams/map:<id>/sse`: the same subscription as the WebSocket, for
+  clients that only read. Frames are `event: <type>`, `id: <seq>`, `data: <event envelope>`; reconnecting
+  with `Last-Event-ID` (or `?sinceSeq=`) resumes without gaps. Without either the stream starts at the
+  newest event (`?snapshot=true` sends a `snapshot` frame first). `?types=system.*,connection.*` filters.
+  At most 20 open streams per address and 10 per key.
+- **Events since** `GET /api/maps/:mapId/events?sinceSeq=<n>&limit=<1-1000>&types=`: a page of the map's
+  events after a seq, oldest first, with `nextSeq`, `headSeq`, `more`, and `gap` when the log no longer
+  holds what came after `sinceSeq` (read the snapshot again).
+
+## Batches and connections by their systems
+
+- `POST /api/maps/:mapId/batch` with `{"systems":[{"solarSystemId":…, …fields}], "connections":[{"source":…,
+"target":…, …fields}]}` adds or changes everything in one transaction: all of it, or nothing when one
+  change is refused.
+- `POST /api/maps/:mapId/batch/delete` with `{"systems":[ids], "connections":[id or {"source","target"}]}`.
+- `GET | PATCH | DELETE /api/maps/:mapId/connections/between/:source/:target` (either direction).
+
+## Map files
+
+`GET /api/maps/:mapId/export` (managers; `?accessRules=true` for admins) downloads the map as a
+`darkbeacon.map` v1 file: everything on it, hidden systems with their notes included. `POST
+/api/maps/import` with `{"document": <file>}` makes a new map from it (send files over 1 MB as
+`content-type: application/vnd.darkbeacon.map+json`, up to 32 MB). `POST /api/maps/:mapId/duplicate`
+does both in one step. `GET /api/maps/:mapId/settings/export` and `POST …/settings/import` carry the
+settings and labels alone.
+
+## Wanderer-compatible API
+
+Bots written for Wanderer's public map API keep working against Darkbeacon with two changes: the base
+URL, and the key.
+
+| Wanderer                                | Darkbeacon                                                                                                     |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Map API key (Map settings → Public API) | An API key (Account → API keys, or a service key from Admin → API access) with the scope `map:<map id>:*:read` |
+| `?map_id=<uuid>`                        | `?map_id=<Darkbeacon map id>`, or `?slug=<map address>` as before                                              |
+
+Answered, read-only, in Wanderer's JSON shapes and errors (`{"error": "…"}`):
+`GET /api/map/systems`, `/api/map/system?id=<solar system id>`, `/api/map/connections`,
+`/api/map/characters`, `/api/map/user_characters`, and `GET /api/maps/<id or slug>/systems`,
+`/connections`, `/tracked-characters`. Statuses, mass, time, size and type are Wanderer's integers;
+`labels` is the JSON string Wanderer's map writes, with Darkbeacon label names.
+
+`GET /api/maps/<id or slug>/events/stream` is Wanderer's SSE stream: a `connected` frame, then
+`event: <wanderer type>`, `id: <ULID>`, `data: {"id","type","map_id","timestamp","payload"}`; `events=`
+filters by Wanderer names, `last_event_id=<ULID>` sends the events after it first (the last 1000).
+Darkbeacon events map to `add_system`, `deleted_system`, `system_metadata_changed`,
+`connection_added|updated|removed`, `character_added|removed`, `signature_added|removed` and
+`acl_member_added|updated|removed` (character, corporation and alliance rules). Kills and rally points
+come when Darkbeacon has them. Writes, structure timers, audit and ACL endpoints of Wanderer's API are not
+answered: use Darkbeacon's own.
 
 ## Browsers on other sites (CORS)
 

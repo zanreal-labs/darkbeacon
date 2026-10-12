@@ -83,7 +83,12 @@ export const AuthProvidersDto = z.object({
 });
 export type AuthProvidersDto = z.infer<typeof AuthProvidersDto>;
 
-export const AdminAccountDto = AccountDto.extend({ lastSeenAt: Timestamp.nullable() });
+export const AdminAccountDto = AccountDto.extend({
+  lastSeenAt: Timestamp.nullable(),
+  /** Set while an instance admin has disabled the account (optional: added later). */
+  disabledAt: Timestamp.nullable().optional(),
+  disabledReason: z.string().nullable().optional(),
+});
 export type AdminAccountDto = z.infer<typeof AdminAccountDto>;
 
 export const UpdateInstanceRoleRequest = z.object({ role: z.enum(['admin', 'user']) });
@@ -149,5 +154,7 @@ export const InstanceInfoDto = z.object({
   publicMaps: z.boolean().optional(),
   /** How far AI agents reach the instance (`/mcp`); optional: added later. */
   mcpMode: z.enum(['off', 'authenticated', 'public']).optional(),
+  /** Who may create maps (optional: added later; absent means everyone). */
+  mapCreation: z.enum(['everyone', 'admins']).optional(),
 });
 export type InstanceInfoDto = z.infer<typeof InstanceInfoDto>;

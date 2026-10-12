@@ -11,6 +11,8 @@ import type {
   DiscordLink,
   DiscordLinkRepository,
   GuildRole,
+  Invite,
+  InviteRepository,
   LinkedCharacter,
   Session,
   SessionRepository,
@@ -30,6 +32,19 @@ export interface IdentityTables {
     created_at: number;
     updated_at: number;
     last_seen_at: number | null;
+    disabled_at: number | null;
+    disabled_reason: string | null;
+  };
+  invite: {
+    id: string;
+    token_hash: string;
+    note: string | null;
+    created_by: string;
+    created_at: number;
+    expires_at: number | null;
+    max_uses: number | null;
+    uses: number;
+    revoked_at: number | null;
   };
   session: {
     id: string;
@@ -91,6 +106,8 @@ function toAccount(row: AccountRow): Account {
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
     lastSeenAt: row.last_seen_at === null ? null : Number(row.last_seen_at),
+    disabledAt: row.disabled_at === null || row.disabled_at === undefined ? null : Number(row.disabled_at),
+    disabledReason: row.disabled_reason ?? null,
   };
 }
 
@@ -107,6 +124,8 @@ function fromAccount(a: Account): AccountRow {
     created_at: a.createdAt,
     updated_at: a.updatedAt,
     last_seen_at: a.lastSeenAt,
+    disabled_at: a.disabledAt ?? null,
+    disabled_reason: a.disabledReason ?? null,
   };
 }
 
@@ -414,6 +433,11 @@ export class KyselyCharacterRepository implements CharacterRepository {
     return row ? toCharacter(row) : null;
   }
 
+  async listAll(): Promise<LinkedCharacter[]> {
+    const rows = await this.db.selectFrom('eve_character').selectAll().orderBy('name').execute();
+    return rows.map(toCharacter);
+  }
+
   async listForAccount(accountId: string): Promise<LinkedCharacter[]> {
     const rows = await this.db
       .selectFrom('eve_character')
@@ -510,5 +534,86 @@ export class KyselyCharacterRepository implements CharacterRepository {
       .where('character_id', 'in', [...characterIds])
       .execute();
     return new Map(rows.map((r) => [Number(r.character_id), json.decode<string[]>(r.scopes) ?? []]));
+  }
+}
+
+type InviteRow = IdentityTables['invite'];
+
+function toInvite(row: InviteRow): Invite {
+  const n = (v: number | null) => (v === null ? null : Number(v));
+  return {
+    id: row.id,
+    tokenHash: row.token_hash,
+    note: row.note,
+    createdBy: row.created_by,
+    createdAt: Number(row.created_at),
+    expiresAt: n(row.expires_at),
+    maxUses: n(row.max_uses),
+    uses: Number(row.uses),
+    revokedAt: n(row.revoked_at),
+  };
+}
+
+export class KyselyInviteRepository implements InviteRepository {
+  constructor(private readonly database: Database) {}
+
+  private get db() {
+    return this.database.db<IdentityTables>();
+  }
+
+  async insert(invite: Invite): Promise<void> {
+    await this.db
+      .insertInto('invite')
+      .values({
+        id: invite.id,
+        token_hash: invite.tokenHash,
+        note: invite.note,
+        created_by: invite.createdBy,
+        created_at: invite.createdAt,
+        expires_at: invite.expiresAt,
+        max_uses: invite.maxUses,
+        uses: invite.uses,
+        revoked_at: invite.revokedAt,
+      })
+      .execute();
+  }
+
+  async list(): Promise<Invite[]> {
+    const rows = await this.db.selectFrom('invite').selectAll().orderBy('created_at', 'desc').execute();
+    return rows.map(toInvite);
+  }
+
+  async findById(id: string): Promise<Invite | null> {
+    const row = await this.db.selectFrom('invite').selectAll().where('id', '=', id).executeTakeFirst();
+    return row ? toInvite(row) : null;
+  }
+
+  async findByTokenHash(hash: string): Promise<Invite | null> {
+    const row = await this.db
+      .selectFrom('invite')
+      .selectAll()
+      .where('token_hash', '=', hash)
+      .executeTakeFirst();
+    return row ? toInvite(row) : null;
+  }
+
+  async update(invite: Invite): Promise<void> {
+    await this.db
+      .updateTable('invite')
+      .set({ note: invite.note, uses: invite.uses, revoked_at: invite.revokedAt })
+      .where('id', '=', invite.id)
+      .execute();
+  }
+
+  async use(id: string, now: number): Promise<boolean> {
+    const result = await this.db
+      .updateTable('invite')
+      .set((eb) => ({ uses: eb('uses', '+', 1) }))
+      .where('id', '=', id)
+      .where('revoked_at', 'is', null)
+      .where((eb) => eb.or([eb('expires_at', 'is', null), eb('expires_at', '>', now)]))
+      .where((eb) => eb.or([eb('max_uses', 'is', null), eb('uses', '<', eb.ref('max_uses'))]))
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows) > 0;
   }
 }

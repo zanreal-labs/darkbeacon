@@ -16,14 +16,10 @@ import {
   ArrowUp,
   Bell,
   Bookmark,
-  Building2,
   Copy,
-  Flag,
   Globe,
-  Hash,
   Import,
   KeyRound,
-  Lock,
   Network,
   Plus,
   Route,
@@ -34,34 +30,23 @@ import {
   Trash2,
   TriangleAlert,
   Type,
-  UserRound,
+  Users,
   Waypoints,
   Webhook,
   X,
 } from 'lucide-react';
-import {
-  AccountPicker,
-  BotHint,
-  EvePicker,
-  GuildSelect,
-  RoleSelect,
-  type AccountOption,
-  type EveOption,
-} from '../components/pickers';
-import { useInstance } from '../lib/maps';
-import { useMe } from '../lib/session';
 import { DiscordNotifications } from './MapNotifications';
 import { MapPublicLinkSettings } from './MapPublicLink';
 import { MapSharing } from './MapSharing';
+import { MapAccessSection } from './MapAccess';
+import { MapCharactersSection } from './MapCharacters';
+import { MapTransferSection } from './MapTransfer';
 import {
-  AccessSubjectKind,
   buildPath,
   MAP_DESCRIPTION_MAX,
-  MapRole,
+  type MapRole,
   MapScope,
   routes,
-  type AccessRuleDto,
-  type CreateAccessRuleRequest,
   type CreatedWebhookDto,
   type LabelDto,
   type MapDto,
@@ -80,13 +65,11 @@ import { BookmarkLabelSettings } from '../map/BookmarkSettings';
 import { BridgesSettings, RoutesSettings } from '../map/routes/RoutingSettings';
 import { PluginSlot } from '../plugins/PluginSlot';
 import {
-  Avatar,
   Badge,
   Button,
   Callout,
   Card,
   CardBody,
-  CardFooter,
   CardHeader,
   Checkbox,
   ConfirmDialog,
@@ -101,7 +84,6 @@ import {
   Field,
   IconButton,
   Input,
-  Select,
   Skeleton,
   SkeletonRows,
   Stack,
@@ -138,9 +120,19 @@ const SECTIONS: readonly Section[] = [
     id: 'access',
     title: 'Access',
     icon: <ShieldCheck />,
+    render: (map, can) => (
+      <Pane>
+        <MapAccessSection key={map.id} map={map} can={can} />
+      </Pane>
+    ),
+  },
+  {
+    id: 'characters',
+    title: 'Characters',
+    icon: <Users />,
     render: (map) => (
       <Pane>
-        <AccessRules map={map} />
+        <MapCharactersSection map={map} />
       </Pane>
     ),
   },
@@ -233,6 +225,16 @@ const SECTIONS: readonly Section[] = [
     render: (map) => (
       <Pane>
         <MapImportSettings map={map} />
+      </Pane>
+    ),
+  },
+  {
+    id: 'transfer',
+    title: 'Copy and hand over',
+    icon: <Copy />,
+    render: (map, can) => (
+      <Pane>
+        <MapTransferSection map={map} can={can} />
       </Pane>
     ),
   },
@@ -497,7 +499,7 @@ function DeleteMap({ map }: { map: MapDto }) {
     <Card className={styles.danger}>
       <CardHeader
         title="Delete this map"
-        description="Removes the map with its systems, connections, signatures, access rules and webhooks, for everyone. This cannot be undone."
+        description="Closes the map for everyone at once. An instance admin can still bring it back, with everything on it, from Admin, Maps."
         actions={
           <Button variant="danger" icon={<Trash2 />} onClick={() => setOpen(true)}>
             Delete map…
@@ -513,7 +515,7 @@ function DeleteMap({ map }: { map: MapDto }) {
       >
         <DialogContent
           title={`Delete ${map.name}?`}
-          description="Everyone loses this map at once. Type its name to confirm."
+          description="Everyone loses this map at once; an instance admin can restore it. Type its name to confirm."
           width={440}
           footer={
             <>
@@ -857,286 +859,6 @@ function TagSettings({ map }: { map: MapDto }) {
   );
 }
 
-// ---- Access -----------------------------------------------------------------------------------
-
-const SUBJECT: Record<AccessSubjectKind, { label: string; icon: ReactNode; unknown: string }> = {
-  corporation: { label: 'Corporation', icon: <Building2 />, unknown: 'A corporation ESI does not know' },
-  alliance: { label: 'Alliance', icon: <Flag />, unknown: 'An alliance ESI does not know' },
-  character: { label: 'Character', icon: <UserRound />, unknown: 'A character ESI does not know' },
-  discordRole: { label: 'Discord role', icon: <Hash />, unknown: 'A Discord role the bot cannot see' },
-  account: { label: 'Person', icon: <KeyRound />, unknown: 'An account that was removed' },
-};
-
-const ROLE_LABEL: Record<MapRole, string> = {
-  viewer: 'Viewer',
-  member: 'Member',
-  manager: 'Manager',
-  admin: 'Admin',
-  blocked: 'Blocked',
-};
-
-const ROLE_HINT: Record<MapRole, string> = {
-  viewer: 'Sees the map',
-  member: 'Maps systems and signatures',
-  manager: 'Also locks systems and edits labels and tags',
-  admin: 'Also settings, access and notifications',
-  blocked: 'Refused, whatever else matches',
-};
-
-type Subject =
-  | { kind: 'character' | 'corporation' | 'alliance'; picked: EveOption | null }
-  | { kind: 'account'; picked: AccountOption | null }
-  | { kind: 'discordRole'; guildId: string | null; roleId: string | null };
-
-function emptySubject(kind: AccessSubjectKind): Subject {
-  if (kind === 'account') return { kind, picked: null };
-  if (kind === 'discordRole') return { kind, guildId: null, roleId: null };
-  return { kind, picked: null };
-}
-
-function subjectRequest(
-  subject: Subject,
-): Pick<CreateAccessRuleRequest, 'subjectKind' | 'subjectId' | 'guildId'> | null {
-  switch (subject.kind) {
-    case 'account':
-      return subject.picked
-        ? { subjectKind: 'account', subjectId: subject.picked.account.id, guildId: null }
-        : null;
-    case 'discordRole':
-      return subject.guildId && subject.roleId
-        ? { subjectKind: 'discordRole', subjectId: subject.roleId, guildId: subject.guildId }
-        : null;
-    default:
-      return subject.picked
-        ? { subjectKind: subject.kind, subjectId: String(subject.picked.entity.id), guildId: null }
-        : null;
-  }
-}
-
-function AccessRules({ map }: { map: MapDto }) {
-  const queryClient = useQueryClient();
-  const toast = useToast();
-  const me = useMe();
-  const instance = useInstance();
-  const key = ['access-rules', map.id];
-  const rules = useQuery({
-    queryKey: key,
-    queryFn: () => api<AccessRuleDto[]>(buildPath(routes.access.list.path, { mapId: map.id })),
-  });
-  const discordRoles = instance.data?.discordRoles ?? false;
-  const bot = instance.data?.discordBot ?? false;
-  const kinds = AccessSubjectKind.options.filter((k) => k !== 'discordRole' || discordRoles);
-  const [subject, setSubject] = useState<Subject>(emptySubject('corporation'));
-  const [role, setRole] = useState<MapRole>('member');
-  const [removing, setRemoving] = useState<AccessRuleDto | null>(null);
-  const add = useMutation({
-    mutationFn: (body: CreateAccessRuleRequest) =>
-      api<AccessRuleDto>(buildPath(routes.access.add.path, { mapId: map.id }), {
-        method: 'POST',
-        json: body,
-      }),
-    onSuccess: (rule) => {
-      setSubject(emptySubject(subject.kind));
-      void queryClient.invalidateQueries({ queryKey: key });
-      toast({
-        title: `${rule.subject?.name ?? 'Rule'} added as ${ROLE_LABEL[rule.role].toLowerCase()}`,
-        tone: 'success',
-      });
-    },
-  });
-  const remove = useMutation({
-    mutationFn: (ruleId: string) =>
-      api<void>(buildPath(routes.access.remove.path, { mapId: map.id, ruleId }), { method: 'DELETE' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: key }),
-    onError: (error) =>
-      toast({
-        title: 'Could not remove the rule',
-        description: errorText(error, 'Try again.'),
-        tone: 'danger',
-      }),
-  });
-
-  const request = subjectRequest(subject);
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    if (request) add.mutate({ ...request, role });
-  };
-  const admin = me.data?.account.instanceRole === 'owner' || me.data?.account.instanceRole === 'admin';
-
-  return (
-    <Stack>
-      <Card>
-        <CardHeader
-          title="Who can open this map"
-          description="The highest matching rule wins. A blocked character or person is refused whatever else matches."
-        />
-        <CardBody flush>
-          {rules.isPending ? (
-            <SkeletonRows count={2} />
-          ) : rules.isError ? (
-            <ErrorState compact error={rules.error} onRetry={() => void rules.refetch()} />
-          ) : rules.data.length === 0 ? (
-            <EmptyState
-              compact
-              icon={<Lock />}
-              title="Only you can see this map"
-              description={
-                discordRoles
-                  ? 'Add a rule below to let your corporation, alliance or a Discord role in.'
-                  : 'Add a rule below to let your corporation, your alliance or a pilot in.'
-              }
-            />
-          ) : (
-            <ul className={styles.list}>
-              {rules.data.map((r) => (
-                <li key={r.id} className={`${styles.item} ${styles.itemCenter}`}>
-                  {r.subject?.imageUrl ? (
-                    <Avatar
-                      src={r.subject.imageUrl}
-                      name={r.subject.name}
-                      size={32}
-                      shape={
-                        r.subjectKind === 'character' || r.subjectKind === 'account' ? 'circle' : 'rounded'
-                      }
-                    />
-                  ) : (
-                    <span className={styles.subjectIcon} aria-hidden>
-                      {SUBJECT[r.subjectKind].icon}
-                    </span>
-                  )}
-                  <div className={styles.rowBody}>
-                    <div className={styles.rowTitle}>
-                      {r.subject?.name ?? <span className="muted">{SUBJECT[r.subjectKind].unknown}</span>}
-                      {r.subject?.detail && <span className={styles.version}>{r.subject.detail}</span>}
-                    </div>
-                    <div className={styles.rowMeta}>{SUBJECT[r.subjectKind].label}</div>
-                  </div>
-                  <div className={styles.rowActions}>
-                    <Badge
-                      tone={
-                        r.role === 'blocked'
-                          ? 'danger'
-                          : r.role === 'admin' || r.role === 'manager'
-                            ? 'accent'
-                            : 'neutral'
-                      }
-                    >
-                      {ROLE_LABEL[r.role]}
-                    </Badge>
-                    <IconButton
-                      size="sm"
-                      label={`Remove the rule for ${r.subject?.name ?? SUBJECT[r.subjectKind].label.toLowerCase()}`}
-                      icon={<Trash2 />}
-                      onClick={() => setRemoving(r)}
-                    />
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardBody>
-      </Card>
-
-      <Card>
-        <form onSubmit={submit} aria-label="Add access rule">
-          <CardHeader title="Add a rule" description="Find them by name." />
-          <CardBody>
-            <div className={styles.ruleGrid}>
-              <Field label="Who">
-                <Select
-                  value={subject.kind}
-                  options={kinds.map((k) => ({ value: k, label: SUBJECT[k].label, icon: SUBJECT[k].icon }))}
-                  onValueChange={(k) => {
-                    add.reset();
-                    setSubject(emptySubject(k as AccessSubjectKind));
-                  }}
-                />
-              </Field>
-              {subject.kind === 'account' ? (
-                <Field
-                  label="Person"
-                  error={add.error ? errorText(add.error, 'Could not add the rule.') : undefined}
-                >
-                  <AccountPicker
-                    value={subject.picked}
-                    onChange={(picked) => setSubject({ kind: 'account', picked })}
-                  />
-                </Field>
-              ) : subject.kind === 'discordRole' ? (
-                bot ? (
-                  <>
-                    <Field label="Discord server">
-                      <GuildSelect
-                        value={subject.guildId}
-                        onChange={(guildId) => setSubject({ kind: 'discordRole', guildId, roleId: null })}
-                      />
-                    </Field>
-                    <Field
-                      label="Role"
-                      error={add.error ? errorText(add.error, 'Could not add the rule.') : undefined}
-                    >
-                      <RoleSelect
-                        guildId={subject.guildId}
-                        value={subject.roleId}
-                        onChange={(roleId) => setSubject({ ...subject, roleId })}
-                      />
-                    </Field>
-                  </>
-                ) : (
-                  <div className={styles.ruleWide}>
-                    <Callout tone="neutral" title="Discord roles need the bot">
-                      <BotHint admin={admin} />
-                    </Callout>
-                  </div>
-                )
-              ) : (
-                <Field
-                  label={SUBJECT[subject.kind].label}
-                  error={add.error ? errorText(add.error, 'Could not add the rule.') : undefined}
-                >
-                  <EvePicker
-                    category={subject.kind}
-                    value={subject.picked}
-                    onChange={(picked) => setSubject({ kind: subject.kind, picked } as Subject)}
-                  />
-                </Field>
-              )}
-              <Field label="Map role" hint={ROLE_HINT[role]}>
-                <Select
-                  value={role}
-                  options={MapRole.options.map((r) => ({ value: r, label: ROLE_LABEL[r] }))}
-                  onValueChange={(r) => setRole(r as MapRole)}
-                />
-              </Field>
-            </div>
-          </CardBody>
-          <CardFooter>
-            <Button
-              type="submit"
-              variant="primary"
-              icon={<Plus />}
-              loading={add.isPending}
-              disabled={!request}
-            >
-              Add rule
-            </Button>
-          </CardFooter>
-        </form>
-      </Card>
-
-      <ConfirmDialog
-        open={removing !== null}
-        onOpenChange={(open) => !open && setRemoving(null)}
-        title={`Remove the rule for ${removing?.subject?.name ?? 'them'}?`}
-        description="People who got in only through it lose access at once."
-        confirmLabel="Remove rule"
-        tone="danger"
-        onConfirm={() => removing && remove.mutateAsync(removing.id)}
-      />
-    </Stack>
-  );
-}
-
 // ---- Webhooks ---------------------------------------------------------------------------------
 
 const EVENT_GROUPS = [
@@ -1365,6 +1087,11 @@ function WebhookRow({
         <div className={styles.url} title={hook.url}>
           {hook.url}
         </div>
+        {hook.disabledReason && !hook.enabled && (
+          <Callout tone="warning" title="Turned off by the server">
+            {hook.disabledReason}. Check the endpoint, then switch it on again.
+          </Callout>
+        )}
         <div className={styles.chips}>
           {eventsLabel(hook.events).map((e) => (
             <Badge key={e} variant="outline">

@@ -20,6 +20,7 @@ import {
   EveLogin,
   GuildRoleSync,
   SessionService,
+  SignUpGate,
   type CharacterRepository,
   type DiscordLinkRepository,
   type IdentityProvider,
@@ -33,6 +34,7 @@ import {
   KyselyCharacterRepository,
   KyselyDiscordBotStore,
   KyselyDiscordLinkRepository,
+  KyselyInviteRepository,
   KyselySessionRepository,
 } from '../../adapters/identity/kysely-identity.js';
 import { DiscordDirectoryController, EveDirectoryController } from './directory.controller.js';
@@ -45,6 +47,7 @@ import { AuditDirectoryRegistry } from '../../platform/audit.js';
 import { MaintenanceMode } from '../../platform/maintenance.js';
 import { APP_CONFIG, CLOCK, EVENT_LOG, HTTP_FETCH, UNIT_OF_WORK } from '../../platform/tokens.js';
 import { AccountsController, AdminAccountsController } from './accounts.controller.js';
+import { AdminIdentityController } from './admin-identity.controller.js';
 import { AuthController, oauthCallbackUrl } from './auth.controller.js';
 import { readSessionCookie } from './cookies.js';
 import { PENDING_BOX } from './identity.tokens.js';
@@ -67,6 +70,7 @@ const DISCORD_LINKS = 'identity.DiscordLinkRepository';
     AuthController,
     AccountsController,
     AdminAccountsController,
+    AdminIdentityController,
     EveDirectoryController,
     DiscordDirectoryController,
   ],
@@ -154,8 +158,31 @@ const DISCORD_LINKS = 'identity.DiscordLinkRepository';
         accounts: AccountService,
         sessions: SessionService,
         settings: InstanceSettingsService,
-      ) => new EveLogin({ characters, accounts, sessions, loginPolicy: settings }),
-      inject: [CharacterService, AccountService, SessionService, InstanceSettingsService],
+        signUp: SignUpGate,
+      ) => new EveLogin({ characters, accounts, sessions, loginPolicy: settings, signUp }),
+      inject: [CharacterService, AccountService, SessionService, InstanceSettingsService, SignUpGate],
+    },
+    {
+      provide: SignUpGate,
+      useFactory: (
+        db: Database,
+        settings: InstanceSettingsService,
+        accounts: KyselyAccountRepository,
+        discord: IdentityProvider | null,
+        uow: UnitOfWork,
+        events: EventLog,
+        clock: Clock,
+      ) =>
+        new SignUpGate({
+          invites: new KyselyInviteRepository(db),
+          rules: settings,
+          accounts,
+          discord,
+          uow,
+          events,
+          clock,
+        }),
+      inject: [Database, InstanceSettingsService, ACCOUNTS, DISCORD, UNIT_OF_WORK, EVENT_LOG, CLOCK],
     },
     PickerAccess,
     {
@@ -190,6 +217,7 @@ const DISCORD_LINKS = 'identity.DiscordLinkRepository';
         config: AppConfig,
         settings: InstanceSettingsService,
         accountRepository: KyselyAccountRepository,
+        signUp: SignUpGate,
       ) =>
         new DiscordLogin({
           discord,
@@ -198,6 +226,7 @@ const DISCORD_LINKS = 'identity.DiscordLinkRepository';
           sessions,
           loginPolicy: settings,
           accountRepository,
+          signUp,
           clock,
           redirectUri: oauthCallbackUrl(config, 'discord'),
         }),
@@ -210,6 +239,7 @@ const DISCORD_LINKS = 'identity.DiscordLinkRepository';
         APP_CONFIG,
         InstanceSettingsService,
         ACCOUNTS,
+        SignUpGate,
       ],
     },
     {
@@ -248,6 +278,7 @@ const DISCORD_LINKS = 'identity.DiscordLinkRepository';
   exports: [
     AccountService,
     CharacterService,
+    SignUpGate,
     SessionService,
     DemoLogin,
     SignInAudit,

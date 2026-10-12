@@ -13,12 +13,50 @@ describe('map roles', () => {
     expect(hasMapRole(null, 'viewer')).toBe(false);
   });
 
-  it('picks the highest grant and lets a decisive block win', () => {
+  it('picks the highest grant', () => {
     expect(resolveMapRole([])).toBeNull();
     expect(resolveMapRole([{ role: 'viewer' }, { role: 'manager' }, { role: 'member' }])).toBe('manager');
-    expect(resolveMapRole([{ role: 'blocked' }, { role: 'member' }])).toBe('member');
+    expect(resolveMapRole([{ role: 'viewer', personal: true }, { role: 'admin' }])).toBe('admin');
+  });
+
+  it('lets a personal block beat everything', () => {
+    expect(resolveMapRole([{ role: 'admin' }, { role: 'blocked', personal: true }])).toBe('blocked');
+    expect(
+      resolveMapRole([
+        { role: 'admin', personal: true },
+        { role: 'blocked', personal: true },
+      ]),
+    ).toBe('blocked');
+  });
+
+  it('lets a group block beat every group grant, but not a personal grant', () => {
     expect(resolveMapRole([{ role: 'blocked' }])).toBe('blocked');
-    expect(resolveMapRole([{ role: 'admin' }, { role: 'blocked', decisive: true }])).toBe('blocked');
+    expect(resolveMapRole([{ role: 'blocked' }, { role: 'admin' }])).toBe('blocked');
+    expect(resolveMapRole([{ role: 'admin' }, { role: 'blocked' }, { role: 'member' }])).toBe('blocked');
+    expect(resolveMapRole([{ role: 'blocked' }, { role: 'admin' }, { role: 'viewer', personal: true }])).toBe(
+      'viewer',
+    );
+    expect(
+      resolveMapRole([
+        { role: 'blocked' },
+        { role: 'member', personal: true },
+        { role: 'manager', personal: true },
+      ]),
+    ).toBe('manager');
+  });
+
+  it('does not depend on the order of grants', () => {
+    const grants = [
+      { role: 'manager' as const, personal: true },
+      { role: 'admin' as const },
+      { role: 'blocked' as const },
+      { role: 'viewer' as const, personal: true },
+    ];
+    for (let i = 0; i < grants.length; i++) {
+      const rotated = [...grants.slice(i), ...grants.slice(0, i)];
+      expect(resolveMapRole(rotated)).toBe('manager');
+      expect(resolveMapRole(rotated.reverse())).toBe('manager');
+    }
   });
 });
 

@@ -20,6 +20,8 @@ export interface AccessSubjects {
   corporationIds: number[];
   allianceIds: number[];
   discordRoles: Array<{ guildId: string; roleId: string }>;
+  /** Disabled by an instance admin: holds no map role at all, not even on maps it owns. */
+  disabled?: boolean;
 }
 
 /** Subject keys of an account, as (kind, id) pairs for `AccessRuleRepository.listMatching`. */
@@ -48,15 +50,18 @@ export function ruleMatches(rule: AccessRule, subjects: AccessSubjects): boolean
   }
 }
 
-/** A block on one of the account's characters, or on the account itself, beats every grant. */
-export function isDecisiveBlock(rule: AccessRule): boolean {
-  return rule.role === 'blocked' && (rule.subjectKind === 'character' || rule.subjectKind === 'account');
+/**
+ * Rules naming one person (a character or an account) rather than a group. A personal block
+ * beats everything; a group block beats every group grant and yields only to personal grants.
+ */
+export function isPersonal(kind: AccessSubjectKind): boolean {
+  return kind === 'character' || kind === 'account';
 }
 
 export function grantsFor(rules: readonly AccessRule[], subjects: AccessSubjects): RoleGrant[] {
   return rules
     .filter((rule) => ruleMatches(rule, subjects))
-    .map((rule) => ({ role: rule.role, decisive: isDecisiveBlock(rule) }));
+    .map((rule) => ({ role: rule.role, personal: isPersonal(rule.subjectKind) }));
 }
 
 const EVE_ID = /^[1-9]\d{0,18}$/;

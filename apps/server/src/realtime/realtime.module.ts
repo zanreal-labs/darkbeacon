@@ -10,6 +10,8 @@ import { RealtimeGateway } from './realtime.gateway.js';
 import { RealtimeHub } from './realtime.hub.js';
 import { RealtimeRegistry } from './realtime.registry.js';
 import { SnapshotController } from './snapshot.controller.js';
+import { EventsController } from './events.controller.js';
+import { SseStreams } from './sse.js';
 
 /**
  * WebSocket gateway at /ws, with presence on map streams. Feature modules inject
@@ -17,7 +19,7 @@ import { SnapshotController } from './snapshot.controller.js';
  */
 @Global()
 @Module({
-  controllers: [SnapshotController, PresenceSettingsController],
+  controllers: [SnapshotController, PresenceSettingsController, EventsController],
   providers: [
     RealtimeRegistry,
     { provide: PresenceRooms, useFactory: () => new PresenceRooms() },
@@ -72,8 +74,9 @@ import { SnapshotController } from './snapshot.controller.js';
       ],
     },
     RealtimeGateway,
+    SseStreams,
   ],
-  exports: [RealtimeRegistry, PresenceRooms, RealtimeHub],
+  exports: [RealtimeRegistry, PresenceRooms, RealtimeHub, SseStreams],
 })
 export class RealtimeModule implements OnModuleDestroy {
   constructor(@Inject(PresenceRooms) private readonly rooms: PresenceRooms) {}

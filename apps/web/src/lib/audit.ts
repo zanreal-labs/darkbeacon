@@ -408,6 +408,29 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
         changes: [],
       };
     }
+    case 'access.rule_changed': {
+      const target = ruleSubject(data as Record<string, unknown>, names);
+      const role = String(data.role ?? '');
+      return { ...read(`made ${target} ${ROLE_WORDS[role] ?? role} of ${mapName}`, 'access'), changes: [] };
+    }
+    case 'access.owner_changed':
+      return read(`handed ${mapName} to a new owner`, 'access');
+    case 'map.trashed':
+      return read(`deleted ${mapName} (an instance admin can restore it)`, 'map');
+    case 'map.restored':
+      return read(`restored ${mapName}`, 'map');
+    case 'account.disabled_changed':
+      return read(data.disabled ? `disabled ${subject}` : `enabled ${subject} again`, 'access');
+    case 'webhook.secret_rotated':
+      return read(`gave a webhook of ${mapName} a new secret`, 'instance');
+    case 'webhook.auto_disabled':
+      return read(`turned off a failing webhook of ${mapName}`, 'instance');
+    case 'invite.created':
+      return read('made an invite link', 'access');
+    case 'invite.revoked':
+      return read('revoked an invite link', 'access');
+    case 'invite.used':
+      return read('signed up with an invite link', 'access');
     case 'account.discord_changed':
       return read(entry.diff.discord?.after ? 'connected Discord' : 'disconnected Discord', 'access');
     case 'discord_bot.changed':

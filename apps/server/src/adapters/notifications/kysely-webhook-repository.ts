@@ -11,6 +11,8 @@ export interface WebhookTables {
     secret: string;
     enabled: number;
     created_at: number;
+    consecutive_failures: number;
+    disabled_reason: string | null;
   };
   webhook_delivery: {
     id: string;
@@ -121,6 +123,8 @@ export class KyselyWebhookRepository implements WebhookRepository {
       secret: this.secrets.seal(w.secret),
       enabled: bool.encode(w.enabled),
       created_at: w.createdAt,
+      consecutive_failures: w.consecutiveFailures ?? 0,
+      disabled_reason: w.disabledReason ?? null,
     };
   }
 
@@ -133,6 +137,8 @@ export class KyselyWebhookRepository implements WebhookRepository {
       secret: this.secrets.open(r.secret),
       enabled: bool.decode(r.enabled),
       createdAt: Number(r.created_at),
+      consecutiveFailures: Number(r.consecutive_failures ?? 0),
+      disabledReason: r.disabled_reason ?? null,
     };
   }
 }

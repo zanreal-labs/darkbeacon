@@ -80,8 +80,21 @@ export class KyselyAccessRuleRepository implements AccessRuleRepository {
       .execute();
   }
 
+  async updateRole(ruleId: string, role: MapRole): Promise<void> {
+    await this.db.updateTable('access_rule').set({ role }).where('id', '=', ruleId).execute();
+  }
+
   async delete(ruleId: string): Promise<void> {
     await this.db.deleteFrom('access_rule').where('id', '=', ruleId).execute();
+  }
+
+  async countByMap(): Promise<Map<string, number>> {
+    const rows = await this.db
+      .selectFrom('access_rule')
+      .select(['map_id', (eb) => eb.fn.countAll<number | string>().as('n')])
+      .groupBy('map_id')
+      .execute();
+    return new Map(rows.map((r) => [r.map_id, Number(r.n)]));
   }
 
   async listMatching(subjects: { kind: AccessSubjectKind; id: string }[]): Promise<AccessRule[]> {

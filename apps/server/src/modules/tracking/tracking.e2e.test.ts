@@ -6,6 +6,7 @@ import type { ConnectionDto, MapDto, MapSnapshot, MapSystemDto, MeDto } from '@d
 import { TrackingPoller, type TrackingRepository } from '@darkbeacon/tracking';
 import { FakeEsi } from '@darkbeacon/tracking/testing';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { MapUseCases } from '@darkbeacon/mapping';
 import { createApp } from '../../app.js';
 import { parseEnv } from '../../config/config.js';
 import { CHARACTER_TOKENS, EVENT_LOG, MAP_ACCESS } from '../../platform/tokens.js';
@@ -247,6 +248,8 @@ describeEachDialect('tracking and universe over HTTP', (t) => {
     ]);
 
     expect((await request('DELETE', `/api/maps/${mapId}`, 'alice')).status).toBe(204);
+    // Deleting is soft; purging is what the other modules follow.
+    await app.get(MapUseCases).purge({ kind: 'account', id: 'root', instanceRole: 'admin' }, mapId);
     await vi.waitFor(async () =>
       expect([await count('access_rule'), await count('tracked_character'), await count('webhook')]).toEqual([
         0, 0, 0,
