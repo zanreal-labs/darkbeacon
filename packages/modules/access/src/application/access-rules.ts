@@ -191,13 +191,18 @@ export class AccessRules {
    */
   async addStarter(actor: Actor | null, mapId: string, starter: StarterAccessRule): Promise<AccessRuleDto> {
     const author = await this.requireAssign(actor, mapId, 'admin');
-    if (author.kind !== 'account' || !this.deps.subjects) throw new ForbiddenError();
-    const mine = await this.deps.subjects.subjectsOf(author.id);
+    await this.checkStarter(author, starter);
+    return this.add(author, mapId, { ...starter, guildId: null });
+  }
+
+  /** Throws unless the starter rule names one of the caller's own corporations or alliances. */
+  async checkStarter(actor: Actor | null, starter: StarterAccessRule): Promise<void> {
+    if (actor?.kind !== 'account' || !this.deps.subjects) throw new ForbiddenError();
+    const mine = await this.deps.subjects.subjectsOf(actor.id);
     const ids = starter.subjectKind === 'corporation' ? mine.corporationIds : mine.allianceIds;
     if (!ids.some((id) => String(id) === starter.subjectId)) {
       throw new ValidationError(`The starter rule must name your own ${starter.subjectKind}`);
     }
-    return this.add(author, mapId, { ...starter, guildId: null });
   }
 
   private async merge(
@@ -252,6 +257,11 @@ export class AccessRules {
     const dto = toAccessRuleDto(rule);
     await this.append(author, mapId, 'access.rule_added', dto);
     return dto;
+  }
+
+  /** How many rules each map has (for the instance admins' inventory; no authorization). */
+  ruleCounts(): Promise<Map<string, number>> {
+    return this.deps.rules.countByMap();
   }
 
   /** Drops the rules of a deleted map (a reaction to `map.removed`, no authorization). */

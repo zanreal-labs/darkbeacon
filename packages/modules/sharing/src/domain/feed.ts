@@ -79,7 +79,11 @@ export function feedSignal(event: Pick<DomainEvent, 'type' | 'data'>): FeedSigna
     case 'character.ship_changed':
     case 'character.online_changed':
       return { kind: 'objects', selectors: [{ kind: 'character', key: String(d.characterId) }] };
+    // A deleted map leaves the maps that merge it (its source reads empty), and comes back with
+    // a restore: both read the map again, like a rename.
     case 'map.settings_changed':
+    case 'map.trashed':
+    case 'map.restored':
       return { kind: 'renamed' };
     case 'map.removed':
       return { kind: 'removed' };

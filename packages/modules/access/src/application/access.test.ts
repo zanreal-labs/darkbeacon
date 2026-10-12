@@ -407,6 +407,10 @@ describe('InstanceSettingsService', () => {
       mcpMode: 'off',
       apiCorsOrigins: [],
       publicMaps: true,
+      mapCreation: 'everyone',
+      apiAccess: true,
+      webhooksEnabled: true,
+      signIn: { mode: 'open', corporationIds: [], allianceIds: [], guildIds: [] },
     });
     expect(await service.update(admin, { adminGuildId: 'g1', adminRoleIds: ['r1', 'r1'] })).toEqual({
       adminGuildId: 'g1',
@@ -418,6 +422,10 @@ describe('InstanceSettingsService', () => {
       mcpMode: 'off',
       apiCorsOrigins: [],
       publicMaps: true,
+      mapCreation: 'everyone',
+      apiAccess: true,
+      webhooksEnabled: true,
+      signIn: { mode: 'open', corporationIds: [], allianceIds: [], guildIds: [] },
     });
     expect((await service.update(admin, {})).adminGuildId).toBe('g1');
     // A change is recorded on the audit stream with what it was before; no change, no record.

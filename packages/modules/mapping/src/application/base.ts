@@ -24,6 +24,7 @@ import type {
   SignatureRepository,
   SystemRepository,
   UniverseCatalog,
+  MapDirectory,
 } from '../ports/index.js';
 
 /** Everything the mapping use cases need, wired by the composition root. */
@@ -38,6 +39,8 @@ export interface MappingPorts {
   /** Merged chains of maps that merge others (sharing); absent: every map shows its own rows. */
   overlay?: ChainOverlay;
   universe: UniverseCatalog;
+  /** Accounts, the map creation policy and rule counts; absent: anyone creates, no inventory names. */
+  directory?: MapDirectory;
   access: MapAccess;
   events: EventLog;
   uow: UnitOfWork;

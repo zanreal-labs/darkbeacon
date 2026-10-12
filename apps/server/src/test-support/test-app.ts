@@ -75,7 +75,7 @@ export async function startTestApp(
   const app = await createApp(config, { database, logger: false });
   const registry = app.get(ActorResolverRegistry);
   registry.use(async (req) => {
-    const match = /^(?:(admin|owner):)?(\w+)$/.exec(String(req.headers['x-test-actor'] ?? ''));
+    const match = /^(?:(admin|owner):)?([\w-]+)$/.exec(String(req.headers['x-test-actor'] ?? ''));
     if (!match) return null;
     const instanceRole: InstanceRole = (match[1] as InstanceRole | undefined) ?? 'user';
     return { kind: 'account', id: match[2]!, instanceRole };

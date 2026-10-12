@@ -8,6 +8,9 @@ import {
   type UnitOfWork,
 } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
+import { AccessRules, InstanceSettingsService } from '@darkbeacon/access';
+import { AccountService } from '@darkbeacon/identity';
+import { InstanceMapDirectory } from '../../adapters/mapping/map-directory.js';
 import {
   ChainOverlaySlot,
   BookmarkNumberUseCases,
@@ -48,6 +51,7 @@ import {
   SystemsController,
 } from './mapping.controllers.js';
 import { MergedWriteRouter } from './merged-writes.js';
+import { AdminMapsController, MapLifecycleController } from './lifecycle.controllers.js';
 import { CHAIN_OVERLAY, MAP_OWNERSHIP, MAP_REPOSITORY, MAPPING_PORTS } from './mapping.tokens.js';
 
 const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
@@ -63,6 +67,8 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
 @Module({
   controllers: [
     MapsController,
+    MapLifecycleController,
+    AdminMapsController,
     MapPreferencesController,
     SystemsController,
     ConnectionsController,
@@ -92,6 +98,9 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
         clock: Clock,
         access: MapAccess,
         overlay: ChainOverlaySlot,
+        accounts: AccountService,
+        settings: InstanceSettingsService,
+        rules: AccessRules,
       ): MappingPorts => ({
         maps,
         systems: new KyselySystemRepository(database),
@@ -105,6 +114,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
         events,
         uow,
         clock,
+        directory: new InstanceMapDirectory(accounts, settings, rules),
       }),
       inject: [
         Database,
@@ -115,6 +125,9 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
         CLOCK,
         MAP_ACCESS,
         CHAIN_OVERLAY,
+        AccountService,
+        InstanceSettingsService,
+        AccessRules,
       ],
     },
     MergedWriteRouter,

@@ -1498,6 +1498,64 @@ export const routes = {
       response: dto.CopyAccessRulesResultDto,
     }),
   },
+
+  /** Owner handover and duplicating a map. */
+  mapLifecycle: {
+    /** The owner (or an instance admin, under `adminMaps`) hands the map to another account. */
+    transferOwner: route({
+      method: 'PUT',
+      path: '/api/maps/:mapId/owner',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'manage' },
+      mapRole: 'admin',
+      body: dto.TransferMapOwnerRequest,
+      response: dto.MapDto,
+    }),
+  },
+
+  /**
+   * Every map of the instance, for instance admins: who owns it, how big it is, deleted maps to
+   * restore or purge. Never what is on a map: being instance admin grants no map role.
+   */
+  adminMaps: {
+    list: route({
+      method: 'GET',
+      path: '/api/admin/maps',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'read' },
+      response: z.array(dto.AdminMapDto),
+    }),
+    transferOwner: route({
+      method: 'PUT',
+      path: '/api/admin/maps/:mapId/owner',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
+      body: dto.TransferMapOwnerRequest,
+      response: dto.MapDto,
+    }),
+    /** Deletes a map softly, as its admins would. */
+    trash: route({
+      method: 'POST',
+      path: '/api/admin/maps/:mapId/trash',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
+    }),
+    restore: route({
+      method: 'POST',
+      path: '/api/admin/maps/:mapId/restore',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
+      status: 200,
+      response: dto.MapDto,
+    }),
+    /** Removes a deleted map for good, with everything on it (rules, shares, webhooks follow). */
+    purge: route({
+      method: 'DELETE',
+      path: '/api/admin/maps/:mapId',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
+    }),
+  },
 } as const;
 
 type PathParams<P extends string> = P extends `${string}:${infer Name}/${infer Rest}`

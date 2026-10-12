@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { MapRole } from './access.js';
+import { StarterAccessRule } from './access-rules.js';
 import { BookmarkNumbering, BookmarkTemplate } from './bookmarks.js';
 import { EveId, Id, Timestamp } from './common.js';
 
@@ -13,6 +14,13 @@ export const MapSettings = z.object({
   bookmarkTemplate: BookmarkTemplate.optional(),
   /** How `{n}` numbers wormholes (see `bookmarks.ts`); absent means found order, gaps kept. */
   bookmarkNumbering: BookmarkNumbering.optional(),
+  /**
+   * Wanderer's "only tracked characters": nobody opens the map until every character of theirs
+   * that may be tracked here is tracked. Absent: off.
+   */
+  onlyTrackedCharacters: z.boolean().optional(),
+  /** Wanderer's `restrict_offline_showing`: offline characters are shown to managers and up only. */
+  offlineForManagersOnly: z.boolean().optional(),
 });
 export type MapSettings = z.infer<typeof MapSettings>;
 
@@ -49,11 +57,21 @@ export const MapDto = z.object({
   labels: z.array(LabelDto),
   createdAt: Timestamp,
   updatedAt: Timestamp,
+  /** Shown on the maps page under the name. Optional: maps from before it existed lack it. */
+  description: z.string().max(500).optional(),
+  /** Set while the map is deleted but can still be restored (instance admins only see it then). */
+  deletedAt: Timestamp.nullable().optional(),
 });
 export type MapDto = z.infer<typeof MapDto>;
 
 /** GET /api/maps item: a map plus the caller's effective role. */
-export const MapSummaryDto = MapDto.pick({ id: true, slug: true, name: true, kind: true }).extend({
+export const MapSummaryDto = MapDto.pick({
+  id: true,
+  slug: true,
+  name: true,
+  kind: true,
+  description: true,
+}).extend({
   role: MapRole.exclude(['blocked']),
 });
 export type MapSummaryDto = z.infer<typeof MapSummaryDto>;
@@ -62,12 +80,16 @@ export const CreateMapRequest = z.object({
   name: z.string().trim().min(1).max(64),
   slug: Slug.optional(),
   kind: MapKind.optional(),
+  description: z.string().trim().max(500).optional(),
+  /** A first access rule for the creator's own corporation or alliance. */
+  starterRule: StarterAccessRule.optional(),
 });
 export type CreateMapRequest = z.infer<typeof CreateMapRequest>;
 
 export const UpdateMapRequest = z.object({
   name: z.string().trim().min(1).max(64).optional(),
   slug: Slug.optional(),
+  description: z.string().trim().max(500).optional(),
   settings: MapSettings.partial().optional(),
 });
 export type UpdateMapRequest = z.infer<typeof UpdateMapRequest>;

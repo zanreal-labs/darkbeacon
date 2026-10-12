@@ -149,5 +149,7 @@ export const InstanceInfoDto = z.object({
   publicMaps: z.boolean().optional(),
   /** How far AI agents reach the instance (`/mcp`); optional: added later. */
   mcpMode: z.enum(['off', 'authenticated', 'public']).optional(),
+  /** Who may create maps (optional: added later; absent means everyone). */
+  mapCreation: z.enum(['everyone', 'admins']).optional(),
 });
 export type InstanceInfoDto = z.infer<typeof InstanceInfoDto>;

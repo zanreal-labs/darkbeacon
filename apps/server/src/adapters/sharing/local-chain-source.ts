@@ -111,7 +111,9 @@ export class LocalChainSource implements ChainSource {
     const want = plan(selectors);
     const entries: ChainEntry[] = [];
 
-    const systems = await ports.systems.list(mapId);
+    // A deleted map (restorable) shows nothing to the maps that merge it until it is back.
+    const trashed = !!(await ports.maps.findById(mapId))?.deletedAt;
+    const systems = trashed ? [] : await ports.systems.list(mapId);
     const visible = new Map(systems.filter((s) => s.visible).map((s) => [s.solarSystemId, s]));
 
     if (want.system) {
@@ -127,9 +129,9 @@ export class LocalChainSource implements ChainSource {
       }
     }
 
-    const needConnections = want.connection || want.signature;
+    const needConnections = (want.connection || want.signature) && !trashed;
     const connections = needConnections ? await ports.connections.list(mapId) : [];
-    const signatures = want.connection || want.signature ? await ports.signatures.listForMap(mapId) : [];
+    const signatures = needConnections ? await ports.signatures.listForMap(mapId) : [];
     if (want.connection) {
       const times = await ports.stamps.fieldTimes(mapId, 'connection');
       const tombstones = await ports.stamps.tombstones(mapId, 'connection');
@@ -164,7 +166,7 @@ export class LocalChainSource implements ChainSource {
           entries.push({ kind: 'signature', key, state: 'deleted', at });
       }
     }
-    if (want.character) {
+    if (want.character && !trashed) {
       for (const character of await this.deps.characters.forMap(mapId)) {
         const key = String(character.characterId);
         if (!want.character.all && !want.character.has(key)) continue;

@@ -396,7 +396,8 @@ export class RealtimeHub {
         if (connection.actor?.kind === 'account' && connection.actor.id === accountId)
           this.reauthorize(connection);
       }
-    } else if (event.type.startsWith('access.')) {
+    } else if (event.type.startsWith('access.') || event.type === 'map.trashed') {
+      // A deleted map has nobody on it any more: its followers are checked like after a rule change.
       for (const connection of this.connections) {
         if (
           [...connection.subscriptions.values()].some(

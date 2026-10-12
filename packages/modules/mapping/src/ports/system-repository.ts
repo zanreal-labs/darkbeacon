@@ -7,4 +7,6 @@ export interface SystemRepository {
   insert(system: MapSystem): Promise<void>;
   update(system: MapSystem): Promise<void>;
   delete(mapId: string, solarSystemId: number): Promise<void>;
+  /** Visible systems per map (the admins' inventory). */
+  countVisibleByMap(): Promise<Map<string, number>>;
 }
