@@ -1,0 +1,196 @@
+/* Comments, structures and the system's history in the sidebar. */
+
+.headerActions {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.composer {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.composerBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hint {
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-xs);
+}
+
+.comments,
+.history {
+  display: grid;
+  gap: 2px;
+  margin: 0 -8px;
+  padding: 0;
+  list-style: none;
+}
+
+.comment,
+.historyItem {
+  padding: 6px 8px;
+  border-radius: var(--dbk-radius);
+}
+
+.comment:hover,
+.historyItem:hover {
+  background: var(--dbk-color-surface-hover);
+}
+
+.commentHead,
+.historyHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  font-size: var(--dbk-font-size-small);
+}
+
+.historyHead > span:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.author {
+  color: var(--dbk-color-accent-text);
+  font-weight: 600;
+}
+
+.when {
+  margin-left: auto;
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-xs);
+  white-space: nowrap;
+}
+
+.remove {
+  width: 24px;
+  height: 24px;
+  opacity: 0;
+}
+
+.comment:hover .remove,
+.historyItem:hover .remove,
+.remove:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .remove {
+    opacity: 0.6;
+  }
+}
+
+.commentBody {
+  padding-left: 24px;
+  font-size: var(--dbk-font-size);
+}
+
+.historyItem[data-reverted] {
+  opacity: 0.55;
+}
+
+.changes {
+  margin: 2px 0 0;
+  padding-left: 14px;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-xs);
+}
+
+/* ---- Structures ---- */
+
+.structures {
+  display: grid;
+  gap: 8px;
+  margin: 0 -16px;
+}
+
+.structures > label {
+  margin: 0 16px;
+}
+
+.structures > p {
+  padding: 0 16px;
+}
+
+.structureTable {
+  user-select: none;
+}
+
+.structureTable th:nth-child(2) {
+  width: 66px;
+}
+
+.structureTable th:nth-child(3) {
+  width: 76px;
+}
+
+.structureTable th:nth-child(4) {
+  width: 70px;
+}
+
+.structureTable th:nth-child(5) {
+  width: 32px;
+}
+
+.structureTable tbody tr[data-selected] td {
+  background: var(--dbk-color-accent-subtle);
+}
+
+.structureTable tbody tr[data-status='reinforced'] .status {
+  color: var(--dbk-color-danger);
+  font-weight: 600;
+}
+
+.structureTable tbody tr[data-status='anchoring'] .status,
+.structureTable tbody tr[data-status='unanchoring'] .status {
+  color: var(--dbk-color-warning);
+}
+
+.structureName,
+.owner {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.structureType {
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+}
+
+.status {
+  font-size: var(--dbk-font-size-small);
+  white-space: nowrap;
+}
+
+.timer {
+  color: var(--dbk-color-accent-text);
+}
+
+.timer[data-over] {
+  color: var(--dbk-color-danger);
+}
+
+.setTimer {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dbk-color-accent-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.ownerList {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+}
