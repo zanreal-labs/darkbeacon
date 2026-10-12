@@ -20,6 +20,8 @@ export interface AccessSubjects {
   corporationIds: number[];
   allianceIds: number[];
   discordRoles: Array<{ guildId: string; roleId: string }>;
+  /** Disabled by an instance admin: holds no map role at all, not even on maps it owns. */
+  disabled?: boolean;
 }
 
 /** Subject keys of an account, as (kind, id) pairs for `AccessRuleRepository.listMatching`. */

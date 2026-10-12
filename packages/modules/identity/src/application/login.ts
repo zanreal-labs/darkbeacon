@@ -21,6 +21,7 @@ import type { CharacterService } from './characters.js';
 import type { GuildRoleSync } from './guild-roles.js';
 import { asAuthFailure, beginPendingAuth, checkPendingAuth, requireConfigured } from './pending.js';
 import type { SessionService } from './sessions.js';
+import type { SignUpGate } from './sign-up.js';
 
 export interface SignedIn {
   /** Session token for the cookie. */
@@ -37,6 +38,8 @@ export interface DiscordLoginDeps {
   /** Without one, Discord is the login method. */
   loginPolicy?: LoginPolicy;
   accountRepository?: AccountRepository;
+  /** Who may get a new account; without one, anyone. */
+  signUp?: SignUpGate;
   clock: Clock;
   redirectUri: string;
 }
@@ -49,12 +52,13 @@ export class DiscordLogin {
     return this.deps.discord !== null;
   }
 
-  async start(returnTo: unknown): Promise<{ url: string; pending: PendingAuth }> {
+  async start(returnTo: unknown, invite?: unknown): Promise<{ url: string; pending: PendingAuth }> {
     const discord = requireConfigured(this.deps.discord, 'Discord');
     const { pending, codeChallenge } = await beginPendingAuth(this.deps.clock, {
       kind: 'discord',
       accountId: null,
       returnTo,
+      invite,
     });
     const url = discord.authorizationUrl({
       state: pending.state,
@@ -92,7 +96,17 @@ export class DiscordLogin {
       }
       account = known;
     } else {
+      const known = await this.deps.accountRepository?.findByDiscordId(grant.profile.id);
+      // A new person: sign-up may be restricted (allowed servers, invites).
+      const gate =
+        known || !this.deps.signUp
+          ? null
+          : await this.deps.signUp.check({
+              discordAccessToken: grant.accessToken,
+              invite: pending.invite ?? null,
+            });
       account = await this.deps.accounts.upsertDiscordAccount(grant.profile);
+      if (gate) await this.deps.signUp!.used(gate.inviteId, account.id);
     }
     await this.saveGrant(account.id, grant);
     const { token } = await this.deps.sessions.create(account.id, input.userAgent);
@@ -152,6 +166,8 @@ export interface EveLoginDeps {
   accounts: AccountService;
   sessions: SessionService;
   loginPolicy: LoginPolicy;
+  /** Who may get a new account; without one, anyone. */
+  signUp?: SignUpGate;
 }
 
 /**
@@ -167,9 +183,9 @@ export class EveLogin {
     return this.deps.characters.enabled;
   }
 
-  async start(returnTo: unknown): Promise<{ url: string; pending: PendingAuth }> {
+  async start(returnTo: unknown, invite?: unknown): Promise<{ url: string; pending: PendingAuth }> {
     await this.requireEveLogin();
-    return this.deps.characters.startSignIn(returnTo);
+    return this.deps.characters.startSignIn(returnTo, invite);
   }
 
   async complete(
@@ -184,7 +200,13 @@ export class EveLogin {
     await this.requireEveLogin();
     const result = await this.deps.characters.completeSignIn(input, {
       signedInAccountId: actor?.kind === 'account' ? actor.id : null,
-      createAccount: (character) => this.deps.accounts.createForCharacter(character),
+      createAccount: async (character, invite) => {
+        // A new person: sign-up may be restricted (allowed corporations and alliances, invites).
+        const gate = await this.deps.signUp?.check({ characters: [character], invite });
+        const account = await this.deps.accounts.createForCharacter(character);
+        if (gate) await this.deps.signUp!.used(gate.inviteId, account.id);
+        return account;
+      },
     });
     const account = await this.deps.accounts.find(result.accountId);
     if (!account) throw new NotFoundError('Account');

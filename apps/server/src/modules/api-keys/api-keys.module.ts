@@ -38,7 +38,8 @@ import { AdminApiKeysController, ApiKeysController } from './api-keys.controller
         const owners: KeyOwnerDirectory = {
           find: async (accountId) => {
             const account = await accounts.find(accountId);
-            if (!account) return null;
+            // A disabled account's keys stop working with it.
+            if (!account || account.disabledAt) return null;
             const actor = await accounts.actorFor(account);
             return { id: account.id, name: account.name, instanceRole: actor.instanceRole };
           },

@@ -50,11 +50,12 @@ export class AccessService implements MapAccess {
       case 'public':
         return actor.mapId === mapId ? 'viewer' : null;
       case 'account': {
-        if (owner === actor.id) return 'admin';
         const [rules, subjects] = await Promise.all([
           this.deps.rules.listForMap(mapId),
           this.deps.subjects.subjectsOf(actor.id),
         ]);
+        if (subjects.disabled) return null;
+        if (owner === actor.id) return 'admin';
         return resolveMapRole(grantsFor(rules, subjects));
       }
     }
@@ -92,6 +93,7 @@ export class AccessService implements MapAccess {
       this.deps.ownership.mapsOwnedBy(accountId),
       this.deps.subjects.subjectsOf(accountId),
     ]);
+    if (subjects.disabled) return [];
     const result = owned.map((mapId) => ({ mapId, role: 'admin' as GrantingMapRole }));
     const byMap = new Map<string, AccessRule[]>();
     for (const rule of await this.deps.rules.listMatching(subjectKeys(subjects))) {

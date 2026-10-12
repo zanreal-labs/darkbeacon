@@ -16,6 +16,22 @@ export interface Account {
   createdAt: number;
   updatedAt: number;
   lastSeenAt: number | null;
+  /** Set while an instance admin has disabled the account: no sign-in, no sessions, no keys, no maps. */
+  disabledAt?: number | null;
+  disabledReason?: string | null;
+}
+
+/** An invite link to sign up while sign-up is restricted; only the token's hash is kept. */
+export interface Invite {
+  id: string;
+  tokenHash: string;
+  note: string | null;
+  createdBy: string;
+  createdAt: number;
+  expiresAt: number | null;
+  maxUses: number | null;
+  uses: number;
+  revokedAt: number | null;
 }
 
 /** Server-side session behind the httpOnly cookie. `id` is a hash of the cookie token. */

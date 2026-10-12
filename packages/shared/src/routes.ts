@@ -1651,6 +1651,56 @@ export const routes = {
     }),
   },
 
+  /** People and characters for instance admins: disable accounts, unlink characters, invites. */
+  adminIdentity: {
+    /** Every linked EVE character with its account. */
+    characters: route({
+      method: 'GET',
+      path: '/api/admin/characters',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'read' },
+      response: z.array(dto.AdminCharacterDto),
+    }),
+    /** Takes a character off its account (its owner can link it again). */
+    unlinkCharacter: route({
+      method: 'DELETE',
+      path: '/api/admin/characters/:characterId',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
+    }),
+    /** Disables or enables an account: no sign-in, sessions, keys or map roles while disabled. */
+    setDisabled: route({
+      method: 'PUT',
+      path: '/api/admin/accounts/:accountId/disabled',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
+      body: dto.SetAccountDisabledRequest,
+      response: dto.AdminAccountDto,
+    }),
+    invites: route({
+      method: 'GET',
+      path: '/api/admin/invites',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'read' },
+      response: z.array(dto.InviteDto),
+    }),
+    /** A new invite link (shown once) for restricted sign-up. */
+    createInvite: route({
+      method: 'POST',
+      path: '/api/admin/invites',
+      auth: 'admin',
+      scope: 'session',
+      body: dto.CreateInviteRequest,
+      response: dto.CreatedInviteDto,
+    }),
+    revokeInvite: route({
+      method: 'DELETE',
+      path: '/api/admin/invites/:inviteId',
+      auth: 'admin',
+      scope: { resource: 'admin', action: 'write' },
+    }),
+  },
+
   /** More on webhooks. */
   webhookSecrets: {
     /** A new signing secret, shown once; the old one stops working at once. */

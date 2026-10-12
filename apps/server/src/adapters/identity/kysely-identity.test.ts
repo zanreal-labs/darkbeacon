@@ -48,6 +48,8 @@ describeEachDialect('identity repositories', (t) => {
       mainCharacterId: null,
       defaultMapId: null,
       recentMapIds: [],
+      disabledAt: null,
+      disabledReason: null,
     });
     expect((await repo.findByDiscordId('123'))?.id).toBe('a');
     expect((await repo.findByName('dev-bob'))?.id).toBe('b');

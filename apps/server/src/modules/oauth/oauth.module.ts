@@ -219,7 +219,8 @@ const SCOPES_SUPPORTED = [
           accounts: {
             find: async (id) => {
               const account = await accounts.find(id);
-              if (!account) return null;
+              // A disabled account's approvals stop working with it.
+              if (!account || account.disabledAt) return null;
               return {
                 id: account.id,
                 name: account.name,
