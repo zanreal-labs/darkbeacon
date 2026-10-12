@@ -41,6 +41,9 @@
       "path": "packages/modules/routing"
     },
     {
+      "path": "packages/modules/jumps"
+    },
+    {
       "path": "packages/modules/audit"
     },
     {

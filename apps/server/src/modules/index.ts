@@ -8,6 +8,7 @@ export const featureModules: Array<Type | DynamicModule> = [
   (await import('./universe/universe.module.js')).UniverseModule,
   (await import('./tracking/tracking.module.js')).TrackingModule,
   (await import('./routing/routing.module.js')).RoutingModule,
+  (await import('./jumps/jumps.module.js')).JumpsModule,
   (await import('./sharing/sharing.module.js')).SharingModule,
   (await import('./notifications/notifications.module.js')).NotificationsModule,
   (await import('./plugins/plugins.module.js')).PluginsModule,

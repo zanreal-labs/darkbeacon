@@ -199,4 +199,28 @@ describe('request features', () => {
       requestFeature({ method: 'GET', path: '/api/maps', query: {}, body: undefined, response: [] }),
     ).toBeNull();
   });
+
+  it('count planned jump routes by hull and legs, never by system', () => {
+    const feature = requestFeature({
+      method: 'POST',
+      path: '/api/jumps/plan',
+      query: {},
+      body: { shipTypeId: 28850, origin: 30002813, destination: 30003504 },
+      response: { ship: { hull: 'jump_freighter', name: 'Ark' }, route: { legs: [{}, {}, {}] } },
+    });
+    expect(feature).toEqual({ event: 'jump_planned', props: { hull: 'jump_freighter', legs: '2-5' } });
+    expect(validateTelemetryEvent(feature!.event, feature!.props)).toEqual({
+      ok: true,
+      props: feature!.props,
+    });
+    expect(
+      requestFeature({
+        method: 'POST',
+        path: '/api/jumps/plan',
+        query: {},
+        body: {},
+        response: { ship: { hull: 'titan' }, route: null },
+      }),
+    ).toEqual({ event: 'jump_planned', props: { hull: 'titan', legs: '0' } });
+  });
 });
