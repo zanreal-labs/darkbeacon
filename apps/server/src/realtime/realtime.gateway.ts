@@ -1,4 +1,5 @@
 import type { IncomingMessage } from 'node:http';
+import type { Socket } from 'node:net';
 import { Inject, type OnModuleDestroy } from '@nestjs/common';
 import { WebSocketGateway, type OnGatewayConnection, type OnGatewayDisconnect } from '@nestjs/websockets';
 import type { WebSocket } from 'ws';
@@ -13,20 +14,16 @@ export const MAX_FRAME_BYTES = 64 * 1024;
 /** Close code for a refused origin or an ended session (policy violation). */
 const POLICY_VIOLATION = 1008;
 
-/** The `/ws` transport: one hub connection per socket, plus ping/pong liveness checks. */
 /**
- * Big frames (snapshots, long replays: a 500-system chain is about 1 MB of JSON) are compressed
- * when the browser offers permessage-deflate; small ones (events, presence) go as they are. A
- * small window and memory level keep zlib at about 20 KB per socket instead of 300 KB.
+ * The `/ws` transport: one hub connection per socket, plus ping/pong liveness checks.
+ *
+ * No permessage-deflate: browsers then compress every frame they send, and inflating 150
+ * cursors at 15 Hz each (zlib on libuv's thread pool, in order per socket) cost more than a
+ * fifth of the server's CPU in load tests and held back the session hashing that shares the
+ * pool. Snapshots, the only big frames, come over HTTP with the page (gzip) and are replayed
+ * from there; a socket gets one only after a long disconnect.
  */
-export const PER_MESSAGE_DEFLATE = {
-  threshold: 16 * 1024,
-  serverMaxWindowBits: 11,
-  zlibDeflateOptions: { level: 3, memLevel: 4 },
-  concurrencyLimit: 4,
-};
-
-@WebSocketGateway({ path: '/ws', maxPayload: MAX_FRAME_BYTES, perMessageDeflate: PER_MESSAGE_DEFLATE })
+@WebSocketGateway({ path: '/ws', maxPayload: MAX_FRAME_BYTES, perMessageDeflate: false })
 export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy {
   private readonly sockets = new Map<WebSocket, { hub: HubConnection; alive: boolean }>();
   private readonly heartbeat = setInterval(() => this.checkLiveness(), HEARTBEAT_MS).unref();
@@ -47,10 +44,13 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       socket.close(POLICY_VIOLATION, 'Origin not allowed');
       return;
     }
+    const flush = coalesceWrites(socket);
     const hub = this.hub.connect(
       () => this.actors.resolve({ headers: request.headers }),
       (message, text) => {
-        if (socket.readyState === socket.OPEN) socket.send(text ?? JSON.stringify(message));
+        if (socket.readyState !== socket.OPEN) return;
+        flush();
+        socket.send(text ?? JSON.stringify(message));
       },
       () => socket.close(POLICY_VIOLATION, 'Signed out'),
     );
@@ -98,4 +98,25 @@ export function sameOrigin(request: IncomingMessage, publicOrigin: string): bool
   } catch {
     return false;
   }
+}
+
+/**
+ * Frames sent to one socket in the same turn of the event loop (an event and the presence flush,
+ * a 200-line signature paste) leave in one write instead of one system call each: the TCP
+ * socket is corked at the first frame and uncorked once the turn is over. Returns what to call
+ * before each send.
+ */
+export function coalesceWrites(socket: WebSocket): () => void {
+  // ws keeps its TCP socket as `_socket`; without one (a test double) frames go out one by one.
+  const tcp = (socket as unknown as { _socket?: Pick<Socket, 'cork' | 'uncork'> })._socket;
+  let corked = false;
+  return () => {
+    if (!tcp || corked) return;
+    corked = true;
+    tcp.cork();
+    setImmediate(() => {
+      corked = false;
+      tcp.uncork();
+    });
+  };
 }
