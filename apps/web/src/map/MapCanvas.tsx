@@ -318,7 +318,7 @@ export function MapCanvas({
 
   // First view, once systems are measured and the saved view is known.
   useEffect(() => {
-    if (opened.current || !loaded || !settled || nodes.length === 0) return;
+    if (readOnly || opened.current || !loaded || !settled || nodes.length === 0) return;
     if (!nodes.every((n) => n.measured?.width)) return; // runs again once React Flow measured them
     opened.current = true;
     if (isViewport(preferences.viewport)) {
@@ -339,7 +339,18 @@ export function MapCanvas({
     });
     const at = id !== null ? centerOfSystem(id) : null;
     if (at) centerOn(at, DEFAULT_ZOOM, false);
-  }, [loaded, settled, nodes, rf, preferences.viewport, state.systems, myLocation, centerOfSystem, centerOn]);
+  }, [
+    loaded,
+    settled,
+    nodes,
+    rf,
+    preferences.viewport,
+    state.systems,
+    myLocation,
+    centerOfSystem,
+    centerOn,
+    readOnly,
+  ]);
 
   const fitChain = useCallback(() => {
     const bounds = boundsOf(rectsOf());
@@ -356,6 +367,14 @@ export function MapCanvas({
     );
     void rf.setViewport(viewport, { duration: 250 });
   }, [rf, rectsOf, coveredRight, coveredBottom]);
+
+  // A public view has no saved view and no "me": visitors see the whole shared chain first.
+  useEffect(() => {
+    if (!readOnly || opened.current || !loaded || nodes.length === 0) return;
+    if (!nodes.every((n) => n.measured?.width)) return;
+    opened.current = true;
+    fitChain();
+  }, [readOnly, loaded, nodes, fitChain]);
 
   const centerOnMe = useCallback(() => {
     const at = myLocation ? centerOfSystem(myLocation.solarSystemId) : null;
