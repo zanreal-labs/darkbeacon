@@ -183,7 +183,7 @@ describe('reading audit entries', () => {
     ).toBe('changed the tags of a map via MCP (Desk)');
     // Entries from before keys had names.
     expect(readEntry(entry({ type: 'labels.changed', channel: { kind: 'api', id: 'k1' } })).what).toBe(
-      'changed the labels via an API key',
+      'changed the tags of a map via an API key',
     );
     expect(channelLabel({ kind: 'mcp', id: null })).toBe('MCP');
 
