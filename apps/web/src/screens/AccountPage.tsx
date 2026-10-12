@@ -1,28 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import {
-  Laptop,
-  LogOut,
-  MoreHorizontal,
-  Plus,
-  RefreshCw,
-  Smartphone,
-  Star,
-  Tablet,
-  Unlink,
-  UserRound,
-} from 'lucide-react';
-import {
-  buildPath,
-  routes,
-  type CharacterDto,
-  type EveEntityDto,
-  type MeDto,
-  type SessionDto,
-} from '@darkbeacon/shared';
+import { Laptop, LogOut, Smartphone, Star, Tablet, UserRound, UsersRound } from 'lucide-react';
+import { routes, type MeDto, type SessionDto } from '@darkbeacon/shared';
 import { accountImage } from '../lib/account';
 import { api, ApiError } from '../lib/api';
 import { usePresenceSettings } from '../lib/presence';
@@ -30,7 +13,8 @@ import { useMaps, useSetDefaultMap } from '../lib/maps';
 import { meKey, useLogout, useMe, useProviders, useRevokeSession, useSessions } from '../lib/session';
 import { relativeTime } from '../lib/time';
 import { usePageView } from '../lib/useTelemetry';
-import { eveLinkHref, ROLE_LABEL } from '../shell/AccountMenu';
+import { attentionText, charactersNeedingAttention } from '../lib/scope-health';
+import { ROLE_LABEL } from '../shell/AccountMenu';
 import { ThemePicker } from '../theme/ThemePicker';
 import {
   Avatar,
@@ -46,11 +30,6 @@ import {
   EmptyState,
   ErrorState,
   Field,
-  IconButton,
-  Menu,
-  MenuContent,
-  MenuItem,
-  MenuTrigger,
   Page,
   PageHeader,
   Row,
@@ -64,6 +43,7 @@ import {
   useToast,
 } from '../ui';
 import { ApiKeysCard } from './ApiKeysCard';
+import { MyPreferences } from './MyPreferences';
 import { ConnectedAppsCard } from './ConnectedAppsCard';
 import styles from './AccountPage.module.css';
 
@@ -106,7 +86,7 @@ export function AccountPage({ authError = null }: { authError?: string | null })
           </Callout>
         )}
         <Identity me={me.data} />
-        <Characters me={me.data} />
+        <CharactersSummary me={me.data} />
         <DefaultMap me={me.data} />
         <Card>
           <CardHeader
@@ -119,6 +99,8 @@ export function AccountPage({ authError = null }: { authError?: string | null })
         </Card>
 
         <Collaboration />
+
+        <MyPreferences />
 
         <Sessions />
 
@@ -199,78 +181,19 @@ function Identity({ me }: { me: MeDto }) {
   );
 }
 
-function useEntities(ids: number[]) {
-  const unique = [...new Set(ids)].sort((a, b) => a - b);
-  return useQuery({
-    queryKey: ['eve-entities', unique.join(',')],
-    queryFn: () => api<EveEntityDto[]>(`${routes.eve.entities.path}?ids=${unique.join(',')}`),
-    enabled: unique.length > 0,
-    staleTime: 60 * 60_000,
-  });
-}
-
-function Characters({ me }: { me: MeDto }) {
-  const queryClient = useQueryClient();
-  const toast = useToast();
-  const providers = useProviders();
-  const [unlinking, setUnlinking] = useState<CharacterDto | null>(null);
+/** My characters at a glance; the characters page manages them. */
+function CharactersSummary({ me }: { me: MeDto }) {
   const { account, characters } = me;
-  const eve = providers.data?.eve ?? false;
-  const eveMode = providers.data?.loginMethod === 'eve';
-  const groups = useEntities(
-    characters.flatMap((c) => [c.corporationId, ...(c.allianceId ? [c.allianceId] : [])]),
-  );
-  const groupName = (id: number | null) => {
-    if (!id) return null;
-    const e = groups.data?.find((g) => g.id === id);
-    return e ? `${e.name}${e.ticker ? ` [${e.ticker}]` : ''}` : null;
-  };
-
-  const setMain = useMutation({
-    mutationFn: (characterId: number) =>
-      api<MeDto>(routes.accounts.setMainCharacter.path, { method: 'PUT', json: { characterId } }),
-    onSuccess: (data, id) => {
-      queryClient.setQueryData(meKey, data);
-      const name = data.characters.find((c) => c.id === id)?.name;
-      toast({ title: `${name ?? 'Character'} is now your main`, tone: 'success' });
-    },
-    onError: (error) =>
-      toast({ title: 'Could not change the main character', description: errorText(error), tone: 'danger' }),
-  });
-  const unlink = useMutation({
-    mutationFn: (characterId: number) =>
-      api<void>(buildPath(routes.accounts.unlinkCharacter.path, { characterId }), { method: 'DELETE' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: meKey }),
-    onError: (error) => toast({ title: 'Could not unlink', description: errorText(error), tone: 'danger' }),
-  });
-
-  const linkButton = (
-    <Button asChild={eve} variant="primary" size="sm" icon={<Plus />} disabled={!eve}>
-      {eve ? (
-        <a href={eveLinkHref()}>{eveMode ? 'Add a character' : 'Link EVE character'}</a>
-      ) : (
-        'Link EVE character'
-      )}
-    </Button>
-  );
-
+  const attention = new Map(charactersNeedingAttention(me).map((a) => [a.character.id, a]));
   return (
     <Card>
       <CardHeader
         title="EVE characters"
-        description={
-          eveMode
-            ? 'Every character here signs you in to this account. Your main is who you act as on maps.'
-            : 'Linked through EVE SSO. Your main character is who you act as on maps.'
-        }
+        description="Where they are, what they allow and which maps track them is on the characters page."
         actions={
-          eve ? (
-            linkButton
-          ) : (
-            <Tooltip content="EVE SSO isn't configured on this server (EVE_CLIENT_ID / EVE_CLIENT_SECRET).">
-              <span tabIndex={0}>{linkButton}</span>
-            </Tooltip>
-          )
+          <Button asChild size="sm" icon={<UsersRound />}>
+            <Link href="/characters">Manage characters</Link>
+          </Button>
         }
       />
       <CardBody flush>
@@ -284,68 +207,28 @@ function Characters({ me }: { me: MeDto }) {
         ) : (
           <Rows>
             {characters.map((c) => {
-              const main = account.mainCharacterId === c.id;
-              const affiliation = [groupName(c.corporationId), groupName(c.allianceId)]
-                .filter(Boolean)
-                .join(' · ');
+              const a = attention.get(c.id);
               return (
                 <Row
                   key={c.id}
-                  leading={<CharacterAvatar id={c.id} name={c.name} size={36} />}
+                  leading={<CharacterAvatar id={c.id} name={c.name} size={28} />}
                   title={
                     <>
                       <span>{c.name}</span>
-                      {main && (
+                      {account.mainCharacterId === c.id && (
                         <Badge tone="accent" icon={<Star />}>
                           Main
                         </Badge>
                       )}
-                      {!c.tokenValid && <Badge tone="danger">Login expired</Badge>}
-                      {c.tokenValid && c.canSearch === false && (
-                        <Tooltip content="Linked before Darkbeacon asked for search. Link it again so name pickers can search through it.">
+                      {a?.expired && <Badge tone="danger">Login expired</Badge>}
+                      {a && !a.expired && (
+                        <Tooltip content={attentionText(a)}>
                           <span tabIndex={0}>
-                            <Badge tone="warning">Search off</Badge>
+                            <Badge tone="warning">Needs re-link</Badge>
                           </span>
                         </Tooltip>
                       )}
                     </>
-                  }
-                  meta={
-                    !c.tokenValid ? (
-                      <span className="error">Link the character again to resume tracking.</span>
-                    ) : groups.isPending && affiliation === '' ? (
-                      <Skeleton width={160} height={10} />
-                    ) : (
-                      affiliation || 'No corporation found'
-                    )
-                  }
-                  actions={
-                    <Menu>
-                      <MenuTrigger asChild>
-                        <IconButton
-                          label={`Actions for ${c.name}`}
-                          icon={<MoreHorizontal />}
-                          tooltip={false}
-                        />
-                      </MenuTrigger>
-                      <MenuContent>
-                        <MenuItem
-                          icon={<Star />}
-                          disabled={main || setMain.isPending}
-                          onSelect={() => setMain.mutate(c.id)}
-                        >
-                          Make main character
-                        </MenuItem>
-                        {eve && (
-                          <MenuItem icon={<RefreshCw />} href={eveLinkHref()}>
-                            Link again
-                          </MenuItem>
-                        )}
-                        <MenuItem icon={<Unlink />} tone="danger" onSelect={() => setUnlinking(c)}>
-                          Unlink…
-                        </MenuItem>
-                      </MenuContent>
-                    </Menu>
                   }
                 />
               );
@@ -353,19 +236,6 @@ function Characters({ me }: { me: MeDto }) {
           </Rows>
         )}
       </CardBody>
-      <ConfirmDialog
-        open={unlinking !== null}
-        onOpenChange={(open) => !open && setUnlinking(null)}
-        title={`Unlink ${unlinking?.name ?? 'character'}?`}
-        description={
-          eveMode
-            ? 'Tracking stops on every map, and the character no longer signs you in. You can add it again later.'
-            : 'Tracking stops on every map. You can link the character again later.'
-        }
-        confirmLabel="Unlink"
-        tone="danger"
-        onConfirm={() => (unlinking ? unlink.mutateAsync(unlinking.id) : undefined)}
-      />
     </Card>
   );
 }

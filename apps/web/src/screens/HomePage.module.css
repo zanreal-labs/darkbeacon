@@ -197,3 +197,14 @@
   font-size: var(--dbk-font-size-small);
   text-align: center;
 }
+
+/* Tracked characters online on the map. */
+.online {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+  font-variant-numeric: tabular-nums;
+}
