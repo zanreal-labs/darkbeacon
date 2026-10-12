@@ -79,6 +79,23 @@ Pages are served as a prerendered shell (the rail, the top bar, the page frame) 
 the parts that depend on who is looking (the account, the maps list, the map, settings) stream into it. The
 map opens on a snapshot read on the server and then stays live over the WebSocket.
 
+### Observability: Grafana, OpenTelemetry, Prometheus
+
+Traces, metrics and logs go out over OpenTelemetry as soon as an OTLP endpoint is set; nothing else to
+configure, and nothing is loaded while it is off:
+
+```sh
+docker run ... -e OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318 darkbeacon
+```
+
+A page view is one trace from the API server through the web app's server and back to the API, down to the
+SQL; log lines link to their traces; metrics cover events, the outbox backlog, webhook and Discord deliveries,
+ESI requests and limits, tracking polls, online characters, maps and WebSockets. For Prometheus, set
+`METRICS_PROMETHEUS=true` and `METRICS_TOKEN=...` and scrape `/metrics` with that bearer token.
+`docker compose -f docker-compose.observability.yml up -d --build` runs a demo instance next to Grafana's
+all-in-one `grafana/otel-lgtm` with a starter dashboard. Grafana Cloud, collectors, every variable and every
+metric: [docs/observability.md](docs/observability.md). Admin > Instance shows what is exported.
+
 ## Development
 
 Node tooling never runs on the host. Everything runs in the dev container defined by
@@ -119,8 +136,8 @@ apps/web               Next.js app (App Router, Cache Components, React Flow, Ta
 packages/core          ids, Result, Clock, DomainEvent envelope, authorization, errors, core ports
 packages/db            Kysely factory (SQLite/Postgres), Database = UnitOfWork, migrations/<module>/
 packages/shared        zod DTOs, REST routes (routes.ts), WebSocket protocol, event catalogue
-packages/modules/*     identity, access, mapping, tracking, notifications, plugins, routing
-                       (domain/application/ports)
+packages/modules/*     identity, access, mapping, tracking, notifications, plugins, routing, audit,
+                       observability (domain/application/ports)
 packages/plugin-sdk    plugin manifest, PluginContext, web slots
 packages/theme-sdk     theme tokens, built-in themes, CSS generator
 packages/sde           SDE builder and the committed datasets: universe (systems, regions, gates) and wormholes
