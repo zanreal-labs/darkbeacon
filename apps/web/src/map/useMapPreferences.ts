@@ -11,11 +11,16 @@ import {
 import { api } from '../lib/api';
 import { mapPreferencesKey } from '../lib/session-keys';
 
-const EMPTY: MapPreferencesDto = { viewport: null, bookmarkTemplate: null, updatedAt: 0 };
+const EMPTY: MapPreferencesDto = {
+  viewport: null,
+  bookmarkTemplate: null,
+  bookmarkOrder: null,
+  updatedAt: 0,
+};
 
 /**
  * The viewer's own view of a map, kept on the server per account: the last viewport and the
- * bookmark template override. Updates apply at once and are rolled back if the server refuses.
+ * bookmark template and order overrides. Updates apply at once and are rolled back if the server refuses.
  */
 export function useMapPreferences(mapId: string) {
   const client = useQueryClient();

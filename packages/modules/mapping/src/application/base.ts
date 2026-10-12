@@ -47,8 +47,21 @@ export class EventBatch {
     private readonly now: number,
   ) {}
 
-  /** `before`: the entity before an update, or the one removed (for the audit trail). */
+  /**
+   * `before`: the entity before an update, or the one removed (for the audit trail). A
+   * connection added in this batch and updated again (numbered) is published once, as it ends up.
+   */
   add<K extends EventType>(type: K, data: EventPayloads[K], before?: unknown): void {
+    if (type === 'connection.updated') {
+      const id = (data as EventPayloads['connection.updated']).id;
+      const added = this.events.find(
+        (e) => e.type === 'connection.added' && (e.data as EventPayloads['connection.added']).id === id,
+      );
+      if (added) {
+        added.data = data;
+        return;
+      }
+    }
     this.events.push(
       newEvent({
         stream: mapStream(this.mapId),

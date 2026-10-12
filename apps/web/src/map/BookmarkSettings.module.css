@@ -143,3 +143,106 @@
   color: var(--dbk-color-text-muted);
   font-size: var(--dbk-font-size-small);
 }
+
+/* Numbering: the order cards, a sample chain and the numbers by hand. */
+.orders {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: var(--dbk-space-2);
+}
+
+.ownOrder {
+  display: grid;
+  gap: var(--dbk-space-2);
+  margin-top: var(--dbk-space-3);
+}
+
+.numberingPreview {
+  display: grid;
+  gap: var(--dbk-space-2);
+}
+
+.sampleChain {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: var(--dbk-space-3);
+  padding: var(--dbk-space-2) var(--dbk-space-3);
+  border-radius: var(--dbk-radius);
+  background: var(--dbk-color-canvas);
+}
+
+.sampleHome {
+  padding: var(--dbk-space-1) var(--dbk-space-2);
+  border: 1px solid var(--dbk-color-border-strong);
+  border-radius: var(--dbk-radius-small);
+  background: var(--dbk-color-surface);
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+}
+
+.sampleHoles {
+  display: grid;
+  gap: var(--dbk-space-1);
+  margin: 0;
+  padding: 0 0 0 var(--dbk-space-3);
+  border-left: 1px solid var(--dbk-color-border-strong);
+  list-style: none;
+}
+
+.sampleHoles li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dbk-space-2);
+}
+
+.sampleFacts {
+  color: var(--dbk-color-text-muted);
+  font-family: var(--dbk-font-family-mono);
+  font-size: var(--dbk-font-size-xs);
+}
+
+.manual {
+  display: grid;
+  gap: var(--dbk-space-3);
+}
+
+.manualGroup {
+  display: grid;
+  gap: var(--dbk-space-1);
+}
+
+.manualList {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+  list-style: none;
+}
+
+.manualRow {
+  display: flex;
+  align-items: center;
+  gap: var(--dbk-space-2);
+  min-height: 36px;
+  padding: 2px var(--dbk-space-2);
+}
+
+.manualRow + .manualRow {
+  border-top: 1px solid var(--dbk-color-border);
+}
+
+.manualName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manualMoves {
+  display: flex;
+  gap: 2px;
+}

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { MapRole } from './access.js';
-import { BookmarkTemplate } from './bookmarks.js';
+import { BookmarkNumbering, BookmarkTemplate } from './bookmarks.js';
 import { EveId, Id, Timestamp } from './common.js';
 
 export const MapScope = z.enum(['wormhole', 'high', 'low', 'null', 'pochven']);
@@ -11,6 +11,8 @@ export const MapSettings = z.object({
   scopes: z.array(MapScope).default(['wormhole']),
   /** Default bookmark label template of the map (see `bookmarks.ts`); absent means `{sig}`. */
   bookmarkTemplate: BookmarkTemplate.optional(),
+  /** How `{n}` numbers wormholes (see `bookmarks.ts`); absent means found order, gaps kept. */
+  bookmarkNumbering: BookmarkNumbering.optional(),
 });
 export type MapSettings = z.infer<typeof MapSettings>;
 
@@ -163,6 +165,13 @@ export const ConnectionDto = z.object({
    * passages from then on. Optional: connections from before it existed lack it.
    */
   massStatusAt: Timestamp.nullable().optional(),
+  /**
+   * `{n}` of a wormhole: its number among the wormholes out of `bookmarkParent`, the system it is
+   * reached from in the chain. Kept by the server, the same for everyone; null for stargates and
+   * bridges. Optional: connections from before numbering lack it.
+   */
+  bookmarkNumber: z.number().int().positive().nullable().optional(),
+  bookmarkParent: EveId.nullable().optional(),
   createdAt: Timestamp,
   updatedAt: Timestamp,
 });

@@ -40,6 +40,7 @@ const SYSTEM_PROCESSES: Record<string, string> = {
   'plugin-loader': 'Plugin loader',
   plugins: 'Map cleanup',
   routing: 'Routing',
+  'bookmark-numbers': 'Bookmark numbering',
   mapping: 'Mapping',
   passages: 'Passage log',
 };
@@ -82,6 +83,8 @@ const FIELD_LABELS: Record<string, string> = {
   group: 'Group',
   name: 'Name',
   connectionId: 'Linked connection',
+  bookmarkNumber: 'Bookmark number',
+  bookmarkParent: 'Numbered from',
   role: 'Role',
   enabled: 'Enabled',
   error: 'Problem',
@@ -143,7 +146,8 @@ function value(field: string, v: unknown, names: AuditNames): string {
   if (field === 'eventRetentionDays') return typeof v === 'number' ? `${v} days` : 'Forever';
   if (v === null || v === undefined || v === '') return '—';
   if (typeof v === 'boolean') return v ? 'Yes' : 'No';
-  if (field === 'location' && typeof v === 'number') return names.system?.(v) ?? 'a known system';
+  if ((field === 'location' || field === 'bookmarkParent') && typeof v === 'number')
+    return names.system?.(v) ?? 'a known system';
   if (field === 'themeId' && typeof v === 'string') return names.theme?.(v) ?? titleCase(v);
   if (field === 'position' && typeof v === 'object') {
     const p = v as { x: number; y: number };

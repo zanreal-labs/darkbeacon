@@ -9,14 +9,21 @@ export interface MapPreferencePorts {
   clock: Clock;
 }
 
-const toDto = ({ viewport, bookmarkTemplate, updatedAt }: MapPreferences): MapPreferencesDto => ({
+const toDto = ({
   viewport,
   bookmarkTemplate,
+  bookmarkOrder,
+  updatedAt,
+}: MapPreferences): MapPreferencesDto => ({
+  viewport,
+  bookmarkTemplate,
+  bookmarkOrder: bookmarkOrder ?? null,
   updatedAt,
 });
 
 /**
- * An account's own view of a map: where it last left the canvas and its bookmark label template.
+ * An account's own view of a map: where it last left the canvas, its bookmark label template and
+ * its own `{n}` order.
  * Any role that can see the map may keep one; it is private, so no events are published.
  */
 export class MapPreferenceUseCases {
@@ -26,7 +33,9 @@ export class MapPreferenceUseCases {
     const account = requireAccount(actor);
     await requireMapRole(this.ports.access, account, mapId, 'viewer');
     const stored = await this.ports.preferences.find(mapId, account.id);
-    return stored ? toDto(stored) : { viewport: null, bookmarkTemplate: null, updatedAt: 0 };
+    return stored
+      ? toDto(stored)
+      : { viewport: null, bookmarkTemplate: null, bookmarkOrder: null, updatedAt: 0 };
   }
 
   async update(
@@ -45,6 +54,8 @@ export class MapPreferenceUseCases {
         request.bookmarkTemplate !== undefined
           ? request.bookmarkTemplate
           : (current?.bookmarkTemplate ?? null),
+      bookmarkOrder:
+        request.bookmarkOrder !== undefined ? request.bookmarkOrder : (current?.bookmarkOrder ?? null),
       updatedAt: this.ports.clock.now(),
     };
     await this.ports.preferences.save(next);
