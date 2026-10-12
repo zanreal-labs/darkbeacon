@@ -53,6 +53,9 @@ export function channelLabel(channel: AuditChannelDto): string {
     case 'plugin':
       return channel.id ? `Plugin ${channel.id}` : 'Plugin';
     default:
+      // Imports name their source: `wanderer:<host>/<slug>`.
+      if (channel.id?.startsWith('wanderer:'))
+        return `Imported from Wanderer ${channel.id.slice('wanderer:'.length)}`;
       return (channel.id && SYSTEM_PROCESSES[channel.id]) ?? 'Server';
   }
 }

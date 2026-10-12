@@ -20,3 +20,24 @@ docker run --rm --network dbk-e2e --ipc=host -v "$PWD":/work:ro -w /tmp -e BASE=
 
 docker rm -f dbk-e2e-app && docker network rm dbk-e2e
 ```
+
+## Wanderer import
+
+`import-wanderer.mjs` walks the import from Wanderer against a demo instance and the fake Wanderer
+(`tools/fake-wanderer`): it allows private networks, tests the connection, reads the 30-system map,
+checks the preview, imports into a new map that keeps syncing, follows the job, opens the map and the
+map's Import settings, and fails on any page error. Screenshots go to `OUT`.
+
+```sh
+docker network create dbk-imp
+docker run -d --rm --name dbk-wanderer --network dbk-imp -v "$PWD/tools/fake-wanderer":/fake:ro \
+  node:24-bookworm-slim node /fake/server.mjs
+docker run -d --rm --name dbk-imp-app --network dbk-imp -e DEMO_MODE=true -e ALLOW_DEMO_MODE=true darkbeacon:dev
+
+docker run --rm --network dbk-imp --ipc=host -v "$PWD":/work:ro -v "$PWD/out":/out -w /tmp \
+  -e BASE=http://dbk-imp-app:3000 -e WANDERER=http://dbk-wanderer:4010 -e OUT=/out \
+  mcr.microsoft.com/playwright:v1.55.0-noble \
+  sh -c 'npm i --no-audit --no-fund playwright@1.55.0 >/dev/null && cp /work/tools/e2e/import-wanderer.mjs . && node import-wanderer.mjs'
+
+docker rm -f dbk-imp-app dbk-wanderer && docker network rm dbk-imp
+```

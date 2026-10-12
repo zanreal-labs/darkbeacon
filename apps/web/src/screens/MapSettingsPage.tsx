@@ -12,6 +12,7 @@ import {
   Copy,
   Flag,
   Hash,
+  Import,
   KeyRound,
   Lock,
   Plus,
@@ -55,6 +56,7 @@ import {
 import { api, ApiError } from '../lib/api';
 import { mapPermissions } from '../lib/roles';
 import { relativeTime } from '../lib/time';
+import { MapImportSettings } from './MapImportSettings';
 import { useTabParam } from '../lib/useTabParam';
 import { BookmarkLabelSettings } from '../map/BookmarkSettings';
 import { PluginSlot } from '../plugins/PluginSlot';
@@ -96,7 +98,7 @@ import styles from './settings.module.css';
 
 const errorText = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback);
 
-type TabId = 'general' | 'labels' | 'bookmarks' | 'access' | 'notifications';
+type TabId = 'general' | 'labels' | 'bookmarks' | 'access' | 'notifications' | 'import';
 
 /** Map settings while they load (also the server's Suspense fallback). */
 export function MapSettingsSkeleton() {
@@ -129,6 +131,7 @@ export function MapSettingsPage({ slug }: { slug: string }) {
     { id: 'bookmarks', title: 'Bookmark labels', icon: <Bookmark />, show: can.manage },
     { id: 'access', title: 'Access', icon: <ShieldCheck />, show: can.admin },
     { id: 'notifications', title: 'Notifications', icon: <Bell />, show: can.admin },
+    { id: 'import', title: 'Import', icon: <Import />, show: can.manage },
   ];
   const visible = tabs.filter((t) => t.show);
   const [tab, setTab] = useTabParam<TabId>(
@@ -203,6 +206,9 @@ export function MapSettingsPage({ slug }: { slug: string }) {
             <AccessRules map={map.data} />
           </TabsContent>
         )}
+        <TabsContent value="import">
+          <MapImportSettings map={map.data} />
+        </TabsContent>
         {can.admin && (
           <TabsContent value="notifications">
             <Stack>

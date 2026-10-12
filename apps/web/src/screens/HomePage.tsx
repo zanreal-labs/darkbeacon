@@ -4,7 +4,7 @@ import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronRight, Map as MapIcon, Plus, Settings, Star, Waypoints } from 'lucide-react';
+import { ChevronRight, Import, Map as MapIcon, Plus, Settings, Star, Waypoints } from 'lucide-react';
 import { routes, type CreateMapRequest, type MapDto, type MapSummaryDto } from '@darkbeacon/shared';
 import { api, ApiError } from '../lib/api';
 import { useInstance, useMaps, useSetDefaultMap } from '../lib/maps';
@@ -104,13 +104,25 @@ export function MapsPage() {
       New map
     </Button>
   );
+  const importMap = (
+    <Button asChild icon={<Import />}>
+      <Link href="/import">Import from Wanderer</Link>
+    </Button>
+  );
 
   return (
     <Page width={880}>
       <PageHeader
         title={TITLE}
         description={DESCRIPTION}
-        actions={maps.data && maps.data.length > 0 ? newMap : undefined}
+        actions={
+          maps.data && maps.data.length > 0 ? (
+            <>
+              {importMap}
+              {newMap}
+            </>
+          ) : undefined
+        }
       />
       <Stack>
         {demo && (
@@ -133,8 +145,13 @@ export function MapsPage() {
             <EmptyState
               icon={<MapIcon />}
               title="No maps yet"
-              description="Create a map for your chain, or ask a map admin to give you access to theirs."
-              actions={newMap}
+              description="Create a map for your chain, bring one over from Wanderer, or ask a map admin to give you access to theirs."
+              actions={
+                <>
+                  {importMap}
+                  {newMap}
+                </>
+              }
             />
           </Card>
         ) : (
