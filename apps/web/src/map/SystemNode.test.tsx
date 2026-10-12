@@ -90,7 +90,7 @@ describe('SystemNode', () => {
     expect(pill.style.background).not.toBe('');
   });
 
-  it('writes statics as plain text and puts labels and the bookmark above the node', () => {
+  it('writes statics as plain text and puts the bookmark, then labels, above the node', () => {
     const { container } = renderNode({
       info: { ...info, statics: ['D845', 'U210'] },
       bookmark: 'ABC-123',
@@ -101,7 +101,7 @@ describe('SystemNode', () => {
     const above = screen.getByRole('list', { name: 'Labels' }).parentElement!;
     expect([...above.querySelectorAll('li')].map((li) => li.textContent)).toEqual(['Staging', 'Sites']);
     // Labels first, then the bookmark code; neither inside the node's rows.
-    expect(above.textContent).toBe('StagingSitesABC-123');
+    expect(above.textContent).toBe('ABC-123StagingSites');
     expect(container.querySelector('[data-status] > [class*="line"]')?.textContent).toBe('D845HSU210LS');
   });
 

@@ -121,7 +121,7 @@ function StaticsText({ statics }: { statics: readonly string[] }) {
 
 /**
  * The one system node, built for a glance: a neutral box whose 3 px border carries the status;
- * the designation pill and the name, the pilot count; the statics. Labels and the bookmark code
+ * the designation pill and the name, the pilot count; the statics. The bookmark code and labels
  * sit above it, the nearest hub of an exit below it. Everything else is in the tooltip.
  */
 export const SystemNode = memo(function SystemNode({
@@ -164,6 +164,16 @@ export const SystemNode = memo(function SystemNode({
       ))}
 
       <div className={styles.above}>
+        {bookmark && (
+          <button
+            type="button"
+            className={`${styles.bookmark} nodrag nopan`}
+            title={`Bookmark ${bookmark}: click to copy`}
+            onClick={copyBookmark}
+          >
+            {bookmark}
+          </button>
+        )}
         {labels.length > 0 && (
           <ul className={styles.labels} aria-label="Labels">
             {labels.map((l) => (
@@ -177,16 +187,6 @@ export const SystemNode = memo(function SystemNode({
               </li>
             ))}
           </ul>
-        )}
-        {bookmark && (
-          <button
-            type="button"
-            className={`${styles.bookmark} nodrag nopan`}
-            title={`Bookmark ${bookmark}: click to copy`}
-            onClick={copyBookmark}
-          >
-            {bookmark}
-          </button>
         )}
         <span className={styles.badges}>
           <PluginSlot slot="nodeBadge" props={{ mapId, solarSystemId: system.solarSystemId }} />
