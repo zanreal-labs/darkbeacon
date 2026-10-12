@@ -72,6 +72,10 @@ const READERS: ReadonlyArray<[RouteDef, Reader]> = [
   ],
   [routes.maps.setBookmarkTemplate, () => ({ event: 'bookmark_template_changed', props: { scope: 'map' } })],
   [
+    routes.connections.rollPlan,
+    ({ response }) => ({ event: 'roll_planned', props: { result: field(response, 'result') } }),
+  ],
+  [
     routes.maps.updatePreferences,
     ({ body }) =>
       field(body, 'bookmarkTemplate') === undefined

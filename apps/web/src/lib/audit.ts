@@ -47,6 +47,7 @@ const SYSTEM_PROCESSES: Record<string, string> = {
   'bookmark-numbers': 'Bookmark numbering',
   mapping: 'Mapping',
   passages: 'Passage log',
+  sweeper: 'Connection cleanup',
 };
 
 export function channelLabel(channel: AuditChannelDto): string {
@@ -60,6 +61,9 @@ export function channelLabel(channel: AuditChannelDto): string {
     case 'plugin':
       return channel.id ? `Plugin ${channel.id}` : 'Plugin';
     default:
+      // Imports name their source: `wanderer:<host>/<slug>`.
+      if (channel.id?.startsWith('wanderer:'))
+        return `Imported from Wanderer ${channel.id.slice('wanderer:'.length)}`;
       return (channel.id && SYSTEM_PROCESSES[channel.id]) ?? 'Server';
   }
 }
@@ -87,6 +91,10 @@ const FIELD_LABELS: Record<string, string> = {
   exits: 'Exits',
   hubs: 'Hubs',
   dangerous: 'Dangerous',
+  note: 'Note',
+  lifetime: 'Lifetime left',
+  kind: 'Kind',
+  custom: 'Custom entry',
   bubbled: 'Bubbled',
   eveId: 'Signature',
   group: 'Group',
@@ -105,6 +113,12 @@ const FIELD_LABELS: Record<string, string> = {
   webhooksToPrivateNetworks: 'Webhooks to private networks',
   loginMethod: 'Sign-in',
   defaultMapId: 'Map that opens first',
+  expiredConnectionMinutes: 'Delete expired wormholes',
+  autoEol: 'Mark EOL when lifetime runs out',
+  staleSystemMinutes: 'Hide idle systems after',
+  massMode: 'Mass counted',
+  higgs: 'Higgs Anchor',
+  entangler: 'Mass entangler',
   configured: 'Connected',
   discord: 'Discord',
   channel: 'Channel',
@@ -160,9 +174,17 @@ const HIDDEN = new Set([
   'source',
   'target',
   'createdBy',
+  'passageId',
   'kind',
   'regenerated',
 ]);
+
+/** Mass in tonnes as the game shows it: "148 400 t". */
+export function formatTonnes(kg: number): string {
+  return `${Math.round(kg / 1000)
+    .toLocaleString('en-US')
+    .replace(/,/g, ' ')} t`;
+}
 
 const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -206,6 +228,10 @@ function labelNames(ids: unknown, mapId: string | null, names: AuditNames): stri
 
 function value(field: string, v: unknown, names: AuditNames, mapId: string | null = null): string {
   if (field === 'eventRetentionDays') return typeof v === 'number' ? `${v} days` : 'Forever';
+  if (field === 'expiredConnectionMinutes')
+    return typeof v === 'number' ? (v === 0 ? 'At once' : `${v} min later`) : 'Never';
+  if (field === 'staleSystemMinutes') return typeof v === 'number' ? `${v} min` : 'Never';
+  if (field === 'mass' && typeof v === 'number') return formatTonnes(v);
   if (field === 'expiresAt') return typeof v === 'number' ? new Date(v).toLocaleDateString() : 'Never';
   if (field === 'rateLimitPerMinute' && v === null) return 'Default';
   if (field === 'mcpMode' && typeof v === 'string') return MCP_MODES[v] ?? v;
@@ -219,6 +245,7 @@ function value(field: string, v: unknown, names: AuditNames, mapId: string | nul
     const p = v as { x: number; y: number };
     return `${Math.round(p.x)}, ${Math.round(p.y)}`;
   }
+  if (field === 'lifetime' && typeof v === 'object') return `under ${(v as { mark?: string }).mark ?? '?'}`;
   if (field === 'settings' && typeof v === 'object') {
     const scopes = (v as { scopes?: string[] }).scopes;
     return scopes?.length ? scopes.map(titleCase).join(', ') : '—';
@@ -490,7 +517,13 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
     case 'connection.removed':
       return read('removed a connection', 'map');
     case 'connection.passage':
-      return read('went through a connection', 'tracking');
+      return data.source === 'manual'
+        ? read('logged a jump through a connection', 'map')
+        : read('went through a connection', 'tracking');
+    case 'connection.passage_updated':
+      return read('changed how a jump’s mass counts', 'map');
+    case 'connection.passage_removed':
+      return read('deleted a jump from the passage log', 'map');
     case 'signature.added':
       return read(`added signature ${String(data.eveId ?? '')}`.trim(), 'intel');
     case 'signature.updated':
@@ -508,6 +541,27 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
       return read('started tracking a character', 'tracking');
     case 'character.untracked':
       return read('stopped tracking a character', 'tracking');
+    case 'import.started':
+      return read(`started importing from ${String(entry.diff.imported?.after ?? 'Wanderer')}`, 'map');
+    case 'import.finished': {
+      const status = entry.diff.status?.after;
+      const source = String(entry.diff.imported?.after ?? 'Wanderer');
+      return read(
+        status === 'done'
+          ? `imported from ${source}`
+          : status === 'cancelled'
+            ? `stopped importing from ${source}`
+            : `could not import from ${source}`,
+        'map',
+      );
+    }
+    case 'import.sync_changed':
+      return read(
+        entry.diff.syncing?.after
+          ? `started syncing from ${String(entry.diff.source?.after ?? 'Wanderer')}`
+          : `stopped syncing from ${String(entry.diff.source?.after ?? 'Wanderer')}`,
+        'map',
+      );
     default:
       return read(`made a change (${entry.type})`, 'map');
   }

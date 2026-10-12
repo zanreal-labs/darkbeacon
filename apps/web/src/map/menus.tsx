@@ -5,6 +5,7 @@ import {
   buildPath,
   ConnectionType,
   CUSTOM_LABEL_MAX,
+  LifetimeMark,
   MassStatus,
   routes,
   ShipSize,
@@ -22,6 +23,7 @@ import {
   CircleDashed,
   CircleDot,
   Clock,
+  Hourglass,
   Copy,
   EyeOff,
   LocateFixed,
@@ -49,6 +51,7 @@ import { SlotItem } from '../plugins/PluginSlot';
 import type { SlotEntry } from '../plugins/registry';
 import type { ToastInput } from '../ui';
 import { SHIP_SIZE_LABEL } from './ConnectionEdge';
+import { passageMenuItems } from './menus/passages';
 import { STATUS_LABEL } from './nodeFacts';
 import type { MapStore } from './useMapStore';
 import { holderStandingMenu, type HolderStanding } from './menus/intel';
@@ -353,6 +356,8 @@ export interface ConnectionMenuContext {
   can: MapPermissions;
   store: Commands;
   plugins: readonly SlotEntry<'connectionContextMenu'>[];
+  onLogJump?(): void;
+  onPlanRoll?(): void;
 }
 
 const MASS_LABEL: Record<MassStatus, string> = { fresh: 'Fresh', reduced: 'Reduced', critical: 'Critical' };
@@ -390,7 +395,9 @@ export function connectionMenu(ctx: ConnectionMenuContext): MenuItem[] {
 
   const state: MenuItem[] = [];
   const flags: MenuItem[] = [];
-  if (can.edit) {
+  const locked = c.locked ?? false;
+  // A locked connection is changed by managers only; others see it as it is.
+  if (can.edit && (!locked || can.manage)) {
     if (wormhole) {
       state.push(
         {
@@ -424,6 +431,18 @@ export function connectionMenu(ctx: ConnectionMenuContext): MenuItem[] {
               },
             }),
             (timeStatus) => update({ timeStatus }),
+          ),
+        },
+        {
+          kind: 'submenu',
+          label: 'Lifetime left',
+          icon: <Hourglass />,
+          hint: c.lifetime ? `< ${c.lifetime.mark}` : undefined,
+          items: radios(
+            ['none', ...LifetimeMark.options] as const,
+            c.lifetime?.mark ?? 'none',
+            (v) => ({ label: v === 'none' ? 'Not marked' : `Less than ${v}` }),
+            (v) => update({ lifetime: v === 'none' ? null : v }),
           ),
         },
         {
@@ -482,19 +501,27 @@ export function connectionMenu(ctx: ConnectionMenuContext): MenuItem[] {
         onSelect: () => update({ massSaved: !c.massSaved }),
       });
   }
+  if (can.manage)
+    flags.push({
+      kind: 'action',
+      label: locked ? 'Unlock' : 'Lock',
+      icon: locked ? <LockOpen /> : <Lock />,
+      onSelect: () => update({ locked: !locked }),
+    });
   flags.push(...more(ctx.plugins, (close) => ({ mapId: ctx.mapId, connectionId: c.id, close })));
-  const remove: MenuItem[] = can.edit
-    ? [
-        {
-          kind: 'action',
-          label: 'Remove connection',
-          icon: <Trash2 />,
-          danger: true,
-          onSelect: () => void store.removeConnection(c.id),
-        },
-      ]
-    : [];
-  return groups(state, flags, remove);
+  const remove: MenuItem[] =
+    can.edit && (!locked || can.manage)
+      ? [
+          {
+            kind: 'action',
+            label: 'Remove connection',
+            icon: <Trash2 />,
+            danger: true,
+            onSelect: () => void store.removeConnection(c.id),
+          },
+        ]
+      : [];
+  return groups(state, passageMenuItems(ctx), flags, remove);
 }
 
 export interface PaneMenuContext {

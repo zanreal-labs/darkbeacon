@@ -13,11 +13,11 @@ import {
   type WormholeTypeDto,
 } from '@darkbeacon/shared';
 import type { Connection, Passage, Signature } from './map.js';
+import { connectionLifetime, EOL_WINDOW_MS } from './lifetime.js';
+import { countedPassages, countingSince, remainingMassRange } from './mass.js';
 type UniverseSystem = UniverseSystemDto;
 
 const HOUR = 60 * 60 * 1000;
-/** "Less than 4 hours remaining": what EOL means in game. */
-export const EOL_WINDOW_MS = 4 * HOUR;
 
 /** Upper bound of the mass left, as a share of the total, for each in-game mass status. */
 const MASS_CAP: Record<MassStatus, number> = { fresh: 1, reduced: 0.5, critical: 0.1 };
@@ -92,15 +92,20 @@ export interface IntelInput {
   /** Signatures linked to this connection. */
   signatures: readonly Signature[];
   /** Passages through this connection. */
-  passages: readonly Passage[];
+  passages: readonly Pick<Passage, 'occurredAt' | 'mass'>[];
   wormholeType: (code: string) => WormholeTypeDto | null;
   hullClasses: readonly HullClassDto[];
   now: number;
 }
 
-/** Everything the connections panel shows about one connection. */
-export function connectionIntel(input: IntelInput): ConnectionIntelDto {
-  const { connection: c, now } = input;
+/**
+ * A connection's wormhole type (resolved from its signatures and statics) and lifetime: what the
+ * panel shows and what the sweeper acts on.
+ */
+export function lifetimeOf(
+  input: Pick<IntelInput, 'connection' | 'source' | 'target' | 'signatures' | 'wormholeType'>,
+) {
+  const c = input.connection;
   const sigOn = (systemId: number) =>
     input.signatures.find((s) => s.solarSystemId === systemId && s.connectionId === c.id) ?? null;
   const sourceSignature = sigOn(c.source);
@@ -114,20 +119,31 @@ export function connectionIntel(input: IntelInput): ConnectionIntelDto {
     lookup: input.wormholeType,
   });
   const type = resolved ? input.wormholeType(resolved.code) : null;
-  const isWormhole = c.type === 'wormhole';
-
-  // Time: the hole is at most `lifetime` old when first seen; EOL leaves at most 4 hours.
+  // The hole is at most `lifetime` old when first seen; EOL leaves at most 4 hours.
   const firstSeenAt = Math.min(c.createdAt, ...input.signatures.map((s) => s.createdAt));
-  const bounds: number[] = [];
-  if (isWormhole && type?.lifetimeHours) bounds.push(firstSeenAt + type.lifetimeHours * HOUR);
-  if (isWormhole && c.timeStatus === 'eol') bounds.push((c.eolAt ?? c.updatedAt) + EOL_WINDOW_MS);
-  const expiresBy = bounds.length > 0 ? Math.min(...bounds) : null;
+  const lifetime = connectionLifetime({
+    connection: c,
+    firstSeenAt,
+    typeLifetimeHours: c.type === 'wormhole' ? (type?.lifetimeHours ?? null) : null,
+    sourceClass: input.source?.whClass ?? null,
+    targetClass: input.target?.whClass ?? null,
+  });
+  return { sourceSignature, targetSignature, resolved, type, firstSeenAt, lifetime };
+}
+
+/** Everything the connections panel shows about one connection. */
+export function connectionIntel(input: IntelInput): ConnectionIntelDto {
+  const { connection: c, now } = input;
+  const { sourceSignature, targetSignature, resolved, type, firstSeenAt, lifetime } = lifetimeOf(input);
+  const isWormhole = c.type === 'wormhole';
+  const expiresBy = lifetime.expiresBy;
   const remainingMs = expiresBy === null ? null : Math.max(0, expiresBy - now);
 
   // Mass: what the status allowed when it was set, minus what went through since.
-  const since = c.massStatusAt ?? null;
-  const counted = input.passages.filter((p) => since === null || p.occurredAt >= since);
+  const since = countingSince(c);
+  const counted = countedPassages(input.passages, since);
   const passed = counted.reduce((sum, p) => sum + (p.mass ?? 0), 0);
+  const unknownPassages = counted.filter((p) => p.mass === null).length;
   const total = isWormhole ? (type?.totalMass ?? null) : null;
   const regenerates =
     total !== null && type?.massRegeneration !== null && (type?.massRegeneration ?? 0) >= total;
@@ -142,6 +158,17 @@ export function connectionIntel(input: IntelInput): ConnectionIntelDto {
         : remainingFraction <= 0.5
           ? 'reduced'
           : 'fresh';
+  const range =
+    total === null
+      ? null
+      : remainingMassRange({
+          total,
+          status: c.massStatus,
+          passed,
+          unknownPassages,
+          maxJumpMass: type?.maxJumpMass ?? null,
+          regenerates,
+        });
 
   const maxJumpMass = isWormhole ? (type?.maxJumpMass ?? null) : null;
   const fitsBy = isWormhole ? (maxJumpMass ?? SIZE_JUMP_MASS[c.shipSize]) : Infinity;
@@ -183,16 +210,20 @@ export function connectionIntel(input: IntelInput): ConnectionIntelDto {
     mass: {
       total,
       passed,
+      since,
       passages: counted.length,
-      unknownPassages: counted.filter((p) => p.mass === null).length,
+      unknownPassages,
       remaining,
       remainingFraction,
+      range: range ? { min: range.min, max: range.max } : null,
+      overdrawn: range?.overdrawn ?? false,
       regenerates,
       estimatedStatus,
     },
     time: {
       firstSeenAt,
-      lifetimeHours: isWormhole ? (type?.lifetimeHours ?? null) : null,
+      lifetimeHours: lifetime.lifetimeHours,
+      lifetimeFrom: lifetime.lifetimeFrom,
       eolAt: c.eolAt,
       expiresBy,
       remainingMs,

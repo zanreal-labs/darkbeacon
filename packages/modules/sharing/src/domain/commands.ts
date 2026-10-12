@@ -10,6 +10,7 @@ import type {
   UpdateSystemRequest,
 } from '@darkbeacon/shared';
 import { connectionGroupOf } from './keys.js';
+import type { ChainPassageLog } from './passages.js';
 import { FIELD_SCOPES, fieldAllowed, type FieldScope } from './scopes.js';
 
 /**
@@ -26,7 +27,11 @@ export type ChainCommand =
   | { op: 'signature.add'; system: string; code: string; fields: Record<string, unknown> }
   | { op: 'signature.update'; key: string; fields: Record<string, unknown> }
   | { op: 'signature.remove'; key: string }
-  | { op: 'signatures.paste'; system: string; text: string; mode: PasteSignaturesRequest['mode'] };
+  | { op: 'signatures.paste'; system: string; text: string; mode: PasteSignaturesRequest['mode'] }
+  /** Jumps logged by hand through the hole between the pair (connection status scope). */
+  | { op: 'passages.log'; key: string; passage: ChainPassageLog }
+  /** Passages count from now on (connection status scope). */
+  | { op: 'passages.reset'; key: string };
 
 const defined = <T extends object>(o: T) =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Record<string, unknown>;
@@ -88,6 +93,14 @@ export function connectionFields(request: UpdateConnectionRequest): Record<strin
     massSaved: request.massSaved,
     dangerous: request.dangerous,
     bubbled,
+    note: request.note,
+    locked: request.locked,
+    lifetime:
+      request.lifetime === undefined
+        ? undefined
+        : request.lifetime === null
+          ? null
+          : { mark: request.lifetime },
   });
 }
 
@@ -106,6 +119,7 @@ export function signatureFields(request: UpdateSignatureRequest): Record<string,
     type: request.type,
     name: request.name,
     notes: request.description,
+    kind: request.kind,
     link,
   });
 }

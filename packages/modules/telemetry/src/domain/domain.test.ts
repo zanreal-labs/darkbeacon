@@ -151,6 +151,73 @@ describe('feature events', () => {
     ).toEqual(['eol', 'mass']);
   });
 
+  it('count an import by kind and size, never by where it came from', () => {
+    const channel = { kind: 'system' as const, id: 'wanderer:wanderer.example.org/secret-chain' };
+    const outcome = {
+      systems: { created: 28, updated: 2, unchanged: 0, skipped: 0, removed: 0 },
+      connections: { created: 27, updated: 0, unchanged: 1, skipped: 0, removed: 0 },
+      signatures: { created: 0, updated: 0, unchanged: 48, skipped: 0, removed: 0 },
+      access: { created: 6, updated: 0, unchanged: 0, skipped: 0, removed: 0 },
+    };
+    const source = {
+      kind: 'wanderer-api',
+      host: 'wanderer.example.org',
+      slug: 'secret-chain',
+      name: 'Secret',
+    };
+    const events = featureEvents(
+      {
+        type: 'import.finished',
+        actor: by,
+        data: { jobId: 'j', source, status: 'done', outcome, error: null },
+      },
+      { channel },
+    );
+    expect(events).toEqual([
+      {
+        event: 'import_completed',
+        props: {
+          source: 'api',
+          status: 'done',
+          systems: countBucket(30),
+          connections: countBucket(27),
+          signatures: countBucket(0),
+          access_rules: countBucket(6),
+        },
+        accountId: 'acc-1',
+      },
+    ]);
+    expect(validateTelemetryEvent('import_completed', events[0]!.props).ok).toBe(true);
+    expect(JSON.stringify(events)).not.toMatch(/secret|example/i);
+    // What the import wrote is not counted as people's edits.
+    expect(featureEvents({ type: 'system.added', actor: by, data: {} }, { channel })).toEqual([]);
+  });
+
+  it('count passages by how they were recorded, never which ship or pilot', () => {
+    const tracked = featureEvents(
+      {
+        type: 'connection.passage',
+        actor: { kind: 'system', id: 'mapping' },
+        data: { connectionId: 'c1', characterId: 90000001, shipTypeId: 641, mass: 98_400_000 },
+      },
+      {},
+    );
+    expect(tracked).toEqual([
+      { event: 'passage_logged', props: { source: 'tracked', mode: 'cold' }, accountId: null },
+    ]);
+    const manual = featureEvents(
+      {
+        type: 'connection.passage',
+        actor: by,
+        data: { connectionId: 'c1', characterId: null, shipTypeId: 28606, source: 'manual', massMode: 'hot' },
+      },
+      { channel: { kind: 'web' } },
+    );
+    expect(manual[0]?.props).toEqual({ source: 'manual', mode: 'hot' });
+    expect(JSON.stringify([...tracked, ...manual])).not.toMatch(/641|28606|90000001/);
+    for (const e of [...tracked, ...manual]) expect(validateTelemetryEvent(e.event, e.props).ok).toBe(true);
+  });
+
   it('count a revert as one history revert', () => {
     expect(featureEvents({ type: 'system.added', actor: by, data: {} }, { revertOf: 'e1' })).toEqual([
       { event: 'history_reverted', props: {}, accountId: 'acc-1' },
@@ -195,6 +262,17 @@ describe('request features', () => {
         response: { added: 7, updated: 0, removed: 1, skipped: ['x'] },
       }),
     ).toEqual({ event: 'signatures_pasted', props: { added: '6-10', updated: '0', removed: '1' } });
+    expect(
+      requestFeature({
+        method: 'POST',
+        path: '/api/maps/:mapId/connections/:connectionId/roll-plan',
+        query: {},
+        body: { ships: [{ shipTypeId: 641 }] },
+        response: { result: 'risky', reason: 'strand', steps: [] },
+      }),
+    ).toEqual({ event: 'roll_planned', props: { result: 'risky' } });
+    expect(validateTelemetryEvent('roll_planned', { result: 'ok' }).ok).toBe(true);
+    expect(validateTelemetryEvent('roll_planned', { result: 'J123456' }).ok).toBe(false);
     expect(
       requestFeature({ method: 'GET', path: '/api/maps', query: {}, body: undefined, response: [] }),
     ).toBeNull();

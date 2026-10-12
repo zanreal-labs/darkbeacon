@@ -133,7 +133,10 @@ export class SharingModule implements OnModuleInit, OnApplicationBootstrap, OnMo
   private pruneTimer: NodeJS.Timeout | undefined;
 
   onModuleInit(): void {
-    this.overlay.use({ view: (mapId) => this.merger.chain(mapId) });
+    this.overlay.use({
+      view: (mapId) => this.merger.chain(mapId),
+      passages: (mapId, connection) => this.merger.passages(mapId, connection),
+    });
     // After mapping's and tracking's parts, so merged characters replace the map's own list.
     this.registry.registerSnapshot('map', (mapId) => this.merger.snapshot(mapId));
     this.unsubscribe = this.bus.subscribe((event) => this.onEvent(event));

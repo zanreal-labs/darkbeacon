@@ -62,6 +62,16 @@ export class WebhooksController {
     return this.webhooks.deliveries(actor, mapId, webhookId);
   }
 
+  @Post(nestPath(r.rotateSecret.path))
+  @HttpCode(200)
+  rotateSecret(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Param('webhookId') webhookId: string,
+  ): Promise<CreatedWebhookDto> {
+    return this.webhooks.rotateSecret(actor, mapId, webhookId);
+  }
+
   @Post(nestPath(r.test.path))
   @HttpCode(200)
   test(

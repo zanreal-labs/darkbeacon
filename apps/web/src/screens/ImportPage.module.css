@@ -1,0 +1,236 @@
+/* The import screen: source, preview, access, target and progress cards. */
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--dbk-space-4);
+}
+
+.option {
+  margin-top: var(--dbk-space-4);
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dbk-space-2);
+  min-width: 0;
+  margin-right: auto;
+  font-size: var(--dbk-font-size-small);
+}
+
+.status svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.ok {
+  color: var(--dbk-color-success);
+}
+
+.bad {
+  color: var(--dbk-color-danger);
+}
+
+.file {
+  max-width: 100%;
+  font: inherit;
+}
+
+/* Counts of what the source holds. */
+.counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: var(--dbk-space-3);
+  margin: 0;
+}
+
+.count {
+  display: grid;
+  gap: 2px;
+  padding: var(--dbk-space-3);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+}
+
+.count dt {
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.count dd {
+  margin: 0;
+  font-size: var(--dbk-font-size-large);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* The mapping report, one fold per bucket. */
+.report {
+  display: grid;
+  gap: var(--dbk-space-2);
+  margin-top: var(--dbk-space-4);
+}
+
+.bucket {
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+}
+
+.bucket summary {
+  display: flex;
+  align-items: center;
+  gap: var(--dbk-space-2);
+  padding: var(--dbk-space-2) var(--dbk-space-3);
+  cursor: pointer;
+}
+
+.bucket ul {
+  display: grid;
+  gap: var(--dbk-space-2);
+  margin: 0;
+  padding: 0 var(--dbk-space-3) var(--dbk-space-3) var(--dbk-space-5);
+  font-size: var(--dbk-font-size-small);
+}
+
+.bucket > table,
+.bucket > p {
+  margin: 0 var(--dbk-space-3) var(--dbk-space-3);
+}
+
+.lineWhat {
+  font-weight: 500;
+}
+
+.lineCount {
+  color: var(--dbk-color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.examples {
+  display: block;
+  overflow: hidden;
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Access rules to be. */
+.access {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.accessRow {
+  display: flex;
+  align-items: center;
+  gap: var(--dbk-space-3);
+  padding: var(--dbk-space-2) var(--dbk-space-4);
+  border-top: 1px solid var(--dbk-color-border);
+}
+
+.accessRow:first-child {
+  border-top: 0;
+}
+
+.accessMain {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.accessName {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accessMeta {
+  overflow: hidden;
+  font-size: var(--dbk-font-size-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Target and options. */
+.target {
+  margin-top: var(--dbk-space-4);
+}
+
+.prefix {
+  color: var(--dbk-color-text-subtle);
+}
+
+.plan {
+  display: grid;
+  gap: var(--dbk-space-3);
+  margin-top: var(--dbk-space-4);
+  overflow-x: auto;
+}
+
+.options {
+  display: grid;
+  gap: var(--dbk-space-3);
+  margin: var(--dbk-space-4) 0;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--dbk-font-size-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.table th,
+.table td {
+  padding: var(--dbk-space-1) var(--dbk-space-2);
+  border-bottom: 1px solid var(--dbk-color-border);
+  text-align: left;
+}
+
+.table thead th {
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.table tbody th {
+  font-weight: 500;
+}
+
+/* Progress. */
+.progress {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--dbk-color-bg-subtle);
+}
+
+.progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--dbk-color-accent);
+  transition: width var(--dbk-motion-normal) var(--dbk-motion-easing);
+}
+
+.phase {
+  margin: var(--dbk-space-2) 0 var(--dbk-space-4);
+  font-size: var(--dbk-font-size-small);
+}
+
+@media (max-width: 600px) {
+  .table th:nth-child(5),
+  .table td:nth-child(5) {
+    display: none;
+  }
+}

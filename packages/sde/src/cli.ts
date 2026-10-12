@@ -12,7 +12,9 @@ import {
 import {
   buildWormholes,
   formatWormholes,
+  MASS_MODULE_GROUPS,
   parseStaticsCsv,
+  SUBSYSTEM_CATEGORY_ID,
   SHIP_CATEGORY_ID,
   WORMHOLE_GROUP_ID,
   WORMHOLE_SDE_FILES,
@@ -83,12 +85,19 @@ console.log(
   `${universe.source}: ${universe.systems.length} systems in ${universe.regions.length} regions -> ${values.out}`,
 );
 
-// types.jsonl is large: keep only wormholes, ships and the effect beacons of wormhole systems.
+// types.jsonl is large: keep only wormholes, ships, the modules that change a ship's mass and the
+// effect beacons of wormhole systems.
 const groups = read<RawGroup>(WORMHOLE_SDE_FILES.groups);
 const secondarySuns = read<RawSecondarySun>(WORMHOLE_SDE_FILES.secondarySuns);
 const beacons = new Set(secondarySuns.map((s) => s.effectBeaconTypeID));
 const shipGroups = new Set(groups.filter((g) => g.categoryID === SHIP_CATEGORY_ID).map((g) => g._key));
-const wanted = (groupId: number) => groupId === WORMHOLE_GROUP_ID || shipGroups.has(groupId);
+const moduleGroups = new Set<number>(Object.values(MASS_MODULE_GROUPS));
+// Armour plates and subsystems change a fitted ship's mass too (pasted fits).
+for (const g of groups) {
+  if (g.categoryID === SUBSYSTEM_CATEGORY_ID || g.name.en === 'Armor Plate') moduleGroups.add(g._key);
+}
+const wanted = (groupId: number) =>
+  groupId === WORMHOLE_GROUP_ID || shipGroups.has(groupId) || moduleGroups.has(groupId);
 const types = text(WORMHOLE_SDE_FILES.types)
   .split('\n')
   .filter((line) => {
@@ -97,16 +106,15 @@ const types = text(WORMHOLE_SDE_FILES.types)
     return (group !== null && wanted(Number(group[1]))) || (key !== null && beacons.has(Number(key[1])));
   })
   .map((line) => JSON.parse(line) as RawType);
-const wormholeIds = new Set(types.filter((t) => t.groupID === WORMHOLE_GROUP_ID).map((t) => t._key));
 const shipIds = new Set(types.filter((t) => shipGroups.has(t.groupID)).map((t) => t._key));
-const typeDogma = read<RawTypeDogma>(WORMHOLE_SDE_FILES.typeDogma).filter(
-  (d) => wormholeIds.has(d._key) || shipIds.has(d._key),
-);
+const withDogma = new Set(types.filter((t) => wanted(t.groupID)).map((t) => t._key));
+// Wormholes, ships and the modules that change mass: wormholes.json takes them all, kspace.json the ships.
+const typeDogma = read<RawTypeDogma>(WORMHOLE_SDE_FILES.typeDogma).filter((d) => withDogma.has(d._key));
 const input: WormholeInput = {
   meta,
   groups,
   types,
-  typeDogma: typeDogma.filter((d) => wormholeIds.has(d._key)),
+  typeDogma,
   secondarySuns,
   statics: parseStaticsCsv((await fetchBytes(values.statics)).toString('utf8')),
   staticsSource: `WormholeSystems ${STATICS_COMMIT.slice(0, 7)} (MIT)`,
@@ -119,7 +127,7 @@ if (missing.length > 0)
   console.warn(`no wormhole facts for ${missing.length} systems: ${missing.map((s) => s.name).join(', ')}`);
 await writeFile(values['wormholes-out'], formatWormholes(wormholes));
 console.log(
-  `${wormholes.types?.length} wormhole types, ${Object.keys(wormholes.systems).length} systems -> ${values['wormholes-out']}`,
+  `${wormholes.types?.length} wormhole types, ${wormholes.ships?.length} ships, ${Object.keys(wormholes.systems).length} systems -> ${values['wormholes-out']}`,
 );
 
 const kspace = buildKspace({

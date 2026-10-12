@@ -57,6 +57,12 @@ const characterRefs = (d: Fields) => [...ref('character', d.characterId)];
 const subject = (d: Fields) => num(d.characterId);
 const change = (before: unknown, after: unknown) => ({ before, after });
 
+/** `Wanderer wanderer.ltd/home-chain`, as the audit trail names where an import came from. */
+const importSource = (source: unknown): string => {
+  const s = asFields(source);
+  return s ? `Wanderer ${str(s.host)}/${str(s.slug)}` : 'Wanderer';
+};
+
 const MAP_ENTITY: Partial<AuditDescriptor> = { ignore: ['createdAt', 'updatedAt'] };
 
 const originMap = (value: unknown) => asFields(value)?.mapId;
@@ -103,8 +109,30 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
     activity: (d) => ({
       shipTypeId: change(null, d.shipTypeId ?? null),
       ...(typeof d.mass === 'number' ? { mass: change(null, d.mass) } : {}),
+      ...(typeof d.massMode === 'string' ? { massMode: change(null, d.massMode) } : {}),
+      ...(typeof d.note === 'string' && d.note ? { note: change(null, d.note) } : {}),
     }),
     subjectCharacter: subject,
+  },
+  'connection.passage_updated': {
+    op: 'update',
+    entity: byId('passage', 'passageId'),
+    refs: (d, b) => [
+      ...ref('connection', either(d, b, 'connectionId')),
+      ...characterRefs(d),
+      ...ref('system', either(d, b, 'from')),
+      ...ref('system', either(d, b, 'to')),
+    ],
+    ignore: ['passageId', 'connectionId', 'characterId', 'from', 'to', 'source', 'shipTypeId'],
+  },
+  'connection.passage_removed': {
+    op: 'delete',
+    entity: byId('passage', 'passageId'),
+    refs: (d, b) => [
+      ...ref('connection', either(d, b, 'connectionId')),
+      ...ref('system', b?.from),
+      ...ref('system', b?.to),
+    ],
   },
   'signature.added': { op: 'create', entity: byId('signature'), refs: signatureRefs, ignore: STAMPS },
   'signature.updated': { op: 'update', entity: byId('signature'), refs: signatureRefs, ignore: STAMPS },
@@ -245,6 +273,35 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
   },
   'plugin.updated': { op: 'update', entity: byId('plugin'), ignore: ['installedAt'] },
   'plugin.removed': { op: 'delete', entity: byId('plugin'), ignore: ['installedAt'] },
+  'import.started': {
+    op: 'activity',
+    entity: byId('import', 'jobId'),
+    activity: (d) => ({ imported: change(null, importSource(d.source)), mode: change(null, d.mode) }),
+  },
+  'import.finished': {
+    op: 'activity',
+    entity: byId('import', 'jobId'),
+    activity: (d) => ({
+      imported: change(null, importSource(d.source)),
+      status: change(null, d.status),
+      ...(d.error ? { error: change(null, d.error) } : {}),
+    }),
+  },
+  'import.sync_changed': {
+    op: 'activity',
+    entity: byId('importSync', 'syncId'),
+    activity: (d) => ({
+      syncing: change(!d.enabled, d.enabled),
+      source: change(null, importSource(d.source)),
+      intervalMinutes: change(null, d.intervalMinutes),
+      ...(d.reason ? { reason: change(null, d.reason) } : {}),
+    }),
+  },
+  'import.progress': {
+    op: 'update',
+    entity: byId('import'),
+    state: (d) => ({ status: d.status, phase: d.phase }),
+  },
 
   // Instance audit (the `audit:instance` stream).
   'auth.signed_in': {

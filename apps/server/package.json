@@ -18,6 +18,7 @@
     "@darkbeacon/core": "workspace:*",
     "@darkbeacon/db": "workspace:*",
     "@darkbeacon/identity": "workspace:*",
+    "@darkbeacon/importing": "workspace:*",
     "@darkbeacon/intel": "workspace:*",
     "@darkbeacon/jumps": "workspace:*",
     "@darkbeacon/mapping": "workspace:*",

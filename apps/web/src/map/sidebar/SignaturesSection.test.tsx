@@ -155,4 +155,40 @@ describe('SignaturesSection', () => {
       description: undefined,
     });
   });
+
+  it('folds anomalies and other scanner results away, filterable, and marks custom entries', async () => {
+    render(
+      <Section
+        signatures={[
+          signatureFixture('s1', SYSTEM, 'ABC-123', { group: 'wormhole' }),
+          signatureFixture('s2', SYSTEM, 'Tower 3', { custom: true, name: 'Our Raitaru' }),
+          signatureFixture('s3', SYSTEM, 'JKL-012', { kind: 'anomaly', group: 'combat', name: 'Sansha Hub' }),
+          signatureFixture('s4', SYSTEM, 'MNO-345', {
+            kind: 'anomaly',
+            group: 'ore',
+            name: 'Ordinary Deposit',
+          }),
+          signatureFixture('s5', SYSTEM, 'PQR-678', { kind: 'other', type: 'Ship · Frigate', name: 'Heron' }),
+        ]}
+      />,
+    );
+    const signatures = screen.getByRole('table', { name: 'Signatures' });
+    expect(signatures.textContent).toContain('ABC-123');
+    expect(signatures.textContent).toContain('Tower 3custom');
+    expect(signatures.textContent).not.toContain('JKL-012');
+    // Collapsed by default.
+    const fold = screen.getByRole('button', { name: /Anomalies and other results/ });
+    expect(fold.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('table', { name: 'Anomalies and other results' })).toBeNull();
+    await userEvent.click(fold);
+    const others = () => screen.getByRole('table', { name: 'Anomalies and other results' }).textContent;
+    expect(others()).toContain('JKL-012');
+    expect(others()).toContain('PQR-678');
+    await userEvent.click(screen.getByRole('button', { name: 'Ore' }));
+    expect(others()).toContain('MNO-345');
+    expect(others()).not.toContain('JKL-012');
+    await userEvent.click(screen.getByRole('button', { name: 'Other' }));
+    expect(others()).toContain('PQR-678');
+    expect(others()).not.toContain('MNO-345');
+  });
 });

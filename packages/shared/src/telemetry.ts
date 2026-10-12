@@ -78,6 +78,7 @@ export const TelemetryPage = z.enum([
   'admin',
   'map_settings',
   'oauth_consent',
+  'import',
   'jump',
 ]);
 /** Tabs of the admin page and of a map's settings. */
@@ -98,6 +99,7 @@ export const TelemetrySection = z.enum([
   'webhooks',
   'danger',
   'backups',
+  'import',
   /** Admin, API access (service keys, public maps and AI agents switches). */
   'api',
   /** Map settings, Public link. */

@@ -478,6 +478,39 @@ export const routes = {
       query: dto.UniverseLookupQuery,
       response: z.array(dto.UniverseSystemDto),
     }),
+    /** Published ships by name with what changes their jump mass (SDE). */
+    searchShips: route({
+      method: 'GET',
+      path: '/api/universe/ships',
+      auth: 'account',
+      scope: { resource: 'universe', action: 'read' },
+      query: dto.ShipSearchQuery,
+      response: z.array(dto.ShipTypeDto),
+    }),
+    /** What prop modules, Higgs Anchors and the mass entangler do, and ships people roll with. */
+    shipCatalog: route({
+      method: 'GET',
+      path: '/api/universe/ships/catalog',
+      auth: 'account',
+      scope: { resource: 'universe', action: 'read' },
+      response: dto.ShipCatalogDto,
+    }),
+    /** A pasted fit (EFT) weighed cold and hot. */
+    fitMass: route({
+      method: 'POST',
+      path: '/api/universe/ships/fit-mass',
+      auth: 'account',
+      scope: { resource: 'universe', action: 'read' },
+      body: dto.FitMassRequest,
+      response: dto.FitMassDto,
+    }),
+    getShip: route({
+      method: 'GET',
+      path: '/api/universe/ships/:shipTypeId',
+      auth: 'account',
+      scope: { resource: 'universe', action: 'read' },
+      response: dto.ShipTypeDto,
+    }),
     /** Every wormhole type with its SDE attributes, and the hull classes "fits" refers to. */
     wormholes: route({
       method: 'GET',
@@ -688,6 +721,15 @@ export const routes = {
       mapRole: 'viewer',
       response: z.array(dto.ConnectionIntelDto),
     }),
+    /** One connection with its type, mass and time estimates (the sidebar's Connection section). */
+    intelOne: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/connections/:connectionId/intel',
+      auth: 'account',
+      scope: { resource: 'connections', action: 'read' },
+      mapRole: 'viewer',
+      response: dto.ConnectionIntelDto,
+    }),
     /** Ships recorded going through a connection, newest first. */
     passages: route({
       method: 'GET',
@@ -696,6 +738,51 @@ export const routes = {
       scope: { resource: 'connections', action: 'read' },
       mapRole: 'viewer',
       response: z.array(dto.PassageDto),
+    }),
+    /** "Log a jump" for pilots nobody tracks; on a merged map it goes to the map that takes new objects. */
+    logPassages: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/connections/:connectionId/passages',
+      auth: 'account',
+      scope: { resource: 'connections', action: 'write' },
+      mapRole: 'member',
+      body: dto.LogPassagesRequest,
+      response: z.array(dto.PassageDto),
+    }),
+    /** Passages count from now on, against the mass status as it is (earlier ones stay in the log). */
+    resetPassages: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/connections/:connectionId/passages/reset',
+      auth: 'account',
+      scope: { resource: 'connections', action: 'write' },
+      mapRole: 'member',
+    }),
+    /** How a passage's mass counts (cold, hot, custom), its modules and note. */
+    updatePassage: route({
+      method: 'PATCH',
+      path: '/api/maps/:mapId/connections/:connectionId/passages/:passageId',
+      auth: 'account',
+      scope: { resource: 'connections', action: 'write' },
+      mapRole: 'member',
+      body: dto.UpdatePassageRequest,
+      response: dto.PassageDto,
+    }),
+    removePassage: route({
+      method: 'DELETE',
+      path: '/api/maps/:mapId/connections/:connectionId/passages/:passageId',
+      auth: 'account',
+      scope: { resource: 'connections', action: 'write' },
+      mapRole: 'member',
+    }),
+    /** A rolling plan for the connection with the crew's ships. */
+    rollPlan: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/connections/:connectionId/roll-plan',
+      auth: 'account',
+      scope: { resource: 'connections', action: 'read' },
+      mapRole: 'viewer',
+      body: dto.RollPlanRequest,
+      response: dto.RollPlanDto,
     }),
   },
 
@@ -944,6 +1031,95 @@ export const routes = {
     }),
   },
 
+  /** Imports of whole maps from Wanderer (docs/migrate-from-wanderer.md). */
+  imports: {
+    /** Whether a Wanderer instance answers and the map API key works. */
+    test: route({
+      method: 'POST',
+      path: '/api/imports/wanderer/test',
+      auth: 'account',
+      scope: 'session',
+      body: dto.WandererApiSourceRequest,
+      response: dto.WandererTestResultDto,
+    }),
+    /** Reads the whole map over Wanderer's API and stages it as a preview. */
+    previewApi: route({
+      method: 'POST',
+      path: '/api/imports/wanderer',
+      auth: 'account',
+      scope: 'session',
+      body: dto.WandererApiSourceRequest,
+      response: dto.ImportJobDto,
+    }),
+    /**
+     * Stages a Wanderer export file: the raw JSON as the body with content type
+     * `WANDERER_EXPORT_CONTENT_TYPE` (streamed, 25 MB at most); `?name=` the file's name.
+     */
+    previewFile: route({
+      method: 'POST',
+      path: '/api/imports/wanderer/file',
+      auth: 'account',
+      scope: 'session',
+      upload: dto.WANDERER_EXPORT_CONTENT_TYPE,
+      response: dto.ImportJobDto,
+    }),
+    get: route({
+      method: 'GET',
+      path: '/api/imports/:jobId',
+      auth: 'account',
+      scope: 'session',
+      response: dto.ImportJobDto,
+    }),
+    /** What an import into a new map or a merge into an existing one would do. */
+    plan: route({
+      method: 'POST',
+      path: '/api/imports/:jobId/plan',
+      auth: 'account',
+      scope: 'session',
+      body: dto.ImportPlanRequest,
+      response: dto.ImportPlanDto,
+    }),
+    start: route({
+      method: 'POST',
+      path: '/api/imports/:jobId/start',
+      auth: 'account',
+      scope: 'session',
+      body: dto.StartImportRequest,
+      response: dto.ImportJobDto,
+    }),
+    cancel: route({
+      method: 'POST',
+      path: '/api/imports/:jobId/cancel',
+      auth: 'account',
+      scope: 'session',
+      response: dto.ImportJobDto,
+    }),
+    /** The whole report as a JSON download (job, mapping report, outcome, `importedExtra`). */
+    report: route({
+      method: 'GET',
+      path: '/api/imports/:jobId/report',
+      auth: 'account',
+      scope: 'session',
+      download: true,
+    }),
+    /** The map's sync from Wanderer, or null. */
+    sync: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/import-sync',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'read' },
+      mapRole: 'viewer',
+      response: dto.ImportSyncDto.nullable(),
+    }),
+    stopSync: route({
+      method: 'DELETE',
+      path: '/api/maps/:mapId/import-sync',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'write' },
+      mapRole: 'manager',
+    }),
+  },
+
   webhooks: {
     list: route({
       method: 'GET',
@@ -985,6 +1161,16 @@ export const routes = {
       scope: { resource: 'webhooks', action: 'manage' },
       mapRole: 'admin',
       response: z.array(dto.WebhookDeliveryDto),
+    }),
+    /** A new signing secret, shown once in the answer; the old one stops working. */
+    rotateSecret: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/webhooks/:webhookId/rotate-secret',
+      auth: 'account',
+      scope: { resource: 'webhooks', action: 'manage' },
+      status: 200,
+      mapRole: 'admin',
+      response: dto.CreatedWebhookDto,
     }),
     /** Sends a `webhook.test` event once, without retries, and returns the delivery. */
     test: route({
