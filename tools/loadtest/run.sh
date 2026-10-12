@@ -115,9 +115,10 @@ echo "app is up"
   while true; do
     for c in "${APPS[@]}"; do
       stats=$(docker stats --no-stream --format '{{.CPUPerc}},{{.MemUsage}}' "$c" 2>/dev/null | cut -d/ -f1)
-      rss=$(docker exec "$c" sh -c 'cat /proc/[0-9]*/status 2>/dev/null' | awk '/^VmRSS/ {s+=$2} END {print s}')
+      rss=$(docker exec "$c" sh -c 'cat /proc/[0-9]*/status 2>/dev/null; true' | awk '/^VmRSS/ {s+=$2} END {print s}')
       # SQLite's write-ahead log: it should stay small when checkpoints keep up.
-      wal=$(docker exec "$c" sh -c 'wc -c < /data/app.db-wal 2>/dev/null' | awk '{print int($1/1024)}')
+      # (none on Postgres; the sampler runs under pipefail, so a missing file must not fail it)
+      wal=$(docker exec "$c" sh -c '[ -f /data/app.db-wal ] && wc -c < /data/app.db-wal || echo 0' | awk '{print int($1/1024)}')
       echo "$(date +%s),$c,$stats,$rss,$wal"
     done
     sleep 5

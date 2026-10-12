@@ -19,15 +19,19 @@ One container, 2 vCPU and 2 GB of memory, on SQLite or Postgres 17, holds a whol
 | REST traffic                     | 50 requests a second                           | reads, snapshots, moves, pastes, map pages            |
 | Signature paste                  | 200 lines                                      | one every 2 s                                         |
 
-Targets and results with that load running at once (p95 unless noted):
+Targets and results with that load running at once, on the code of this branch merged with `main` at
+`a12a927` (p95 unless noted):
 
-| Target                                      | Goal     | SQLite         | Postgres       |
-| ------------------------------------------- | -------- | -------------- | -------------- |
-| REST API                                    | < 150 ms | 16 ms (p99 37) | 20 ms (p99 66) |
-| Map snapshot, 500 systems (under load)      | < 300 ms | 32 ms          | 62 ms          |
-| Realtime fan-out (edit to every client)     | < 250 ms | 21 ms          | 47 ms          |
-| Presence fan-out (cursor to every peer)     | < 250 ms | 72 ms          | 70 ms          |
-| Server memory (API and web server together) | < 1 GB   | 802 MB peak    | 753 MB peak    |
+| Target                                      | Goal     | SQLite                         | Postgres       |
+| ------------------------------------------- | -------- | ------------------------------ | -------------- |
+| REST API                                    | < 150 ms | 30 ms (p99 84)                 | 19 ms (p99 44) |
+| Map snapshot, 500 systems (under load)      | < 300 ms | 295 ms (p50 11)                | 83 ms          |
+| Realtime fan-out (edit to every client)     | < 250 ms | 41 ms                          | 29 ms          |
+| Presence fan-out (cursor to every peer)     | < 250 ms | 85 ms                          | 71 ms          |
+| Server memory (API and web server together) | < 1 GB   | 939 MB peak; 1.06 GB at 30 min | 888 MB peak    |
+
+Memory is at the limit rather than under it: the API process levels off at about 650 MB and the Next.js
+server at about 400 MB (see [Memory over time](#memory-over-time)). Give the container 1.5 GB.
 
 Beyond this the instance degrades gracefully rather than falling over: past the ESI budget every
 character is polled a little less often (maps someone has open first), crowded maps get fewer presence
@@ -41,8 +45,8 @@ with its connections and signatures).
   their own containers (3 CPUs for the WebSocket clients, 2 for k6, 1 for the fake ESI). Numbers on a
   2 vCPU VPS are of the same order; Apple cores are fast, so leave headroom.
 - Image: the production `Dockerfile` (`darkbeacon:perf`), `NODE_ENV=production`, Next.js standalone behind
-  the API as in production. "Before" is the same harness against the image of the commit before this work
-  (plus only `ESI_BASE_URL`, so it can be pointed at the fake ESI).
+  the API as in production, telemetry off. "Before" is the same harness against `main` at `a12a927` with
+  only `ESI_BASE_URL` added (so it can be pointed at the fake ESI); "after" is this branch merged with it.
 - Data (`seed.mjs`): 3,000 accounts with 2 characters each in one alliance, a session each, 50 maps of 500
   systems (80 % wormhole space), 1,000 connections and 1,000 signatures, an alliance rule and 20 personal
   rules per map, 1,500 accounts tracking a character (10 % on two maps, 40 % on the main map), 600 online.
@@ -56,7 +60,8 @@ with its connections and signatures).
     a system on the main map twice a second, each move marked so its arrival at every client is timed;
   - k6 (`rest.k6.js`, `grafana/k6:1.3.0`) at 50 requests a second: account, maps, landing, characters,
     preferences, map, signatures and history reads (40/s), snapshots (2/s, mostly the main map), system
-    moves (5/s), 200-line signature pastes (0.5/s) and server-rendered map pages (2/s).
+    moves (5/s), 200-line signature pastes of a system's own signatures with 5 % new ones (0.5/s) and
+    server-rendered map pages (2/s).
 - Measured: k6 per-request latencies, the clients' fan-out times (sender and receivers share a clock), how
   long a fake jump takes to reach a client as `character.jumped`, how often ESI is asked for each
   character's location, CPU and RSS of the app container every 5 s, event-loop delay every 10 s, CPU
@@ -66,39 +71,44 @@ with its connections and signatures).
 
 | Metric (p95 unless noted)                           | SQLite before | SQLite after | Postgres before | Postgres after |
 | --------------------------------------------------- | ------------- | ------------ | --------------- | -------------- |
-| REST API (reads and moves)                          | 82 ms         | 16 ms        | 101 ms          | 20 ms          |
-| REST API p99                                        | 144 ms        | 37 ms        | 191 ms          | 66 ms          |
-| Map snapshot, 500 systems, under load               | 81 ms         | 32 ms        | 121 ms          | 62 ms          |
-| Map snapshot, alone (p50)                           | 10 ms         | 8 ms         | 15 ms           | 14 ms          |
-| Map page, server-rendered                           | 279 ms        | 118 ms       | 297 ms          | 127 ms         |
-| Signature paste, 200 lines                          | 89 ms         | 46 ms        | 419 ms          | 80 ms          |
-| Edit fan-out (move sent to arrival at every client) | 80 ms         | 21 ms        | 88 ms           | 47 ms          |
-| Presence fan-out (cursor to every peer)             | 82 ms         | 72 ms        | 87 ms           | 70 ms          |
-| Snapshot when 400 clients open the map              | 49 ms         | 72 ms        | 99 ms           | 79 ms          |
-| Jump reaching the map, p50                          | 5.3 s         | 2.5 s        | 6.3 s           | 2.6 s          |
-| Jump reaching the map                               | 13.6 s        | 5.1 s        | 16.1 s          | 5.3 s          |
-| Location asked for, interval                        | 20.0 s        | 5.6 s        | 19.9 s          | 5.6 s          |
-| ESI requests a second                               | 122           | 248          | 114             | 248            |
-| Received per client                                 | 219 KB/s      | 27 KB/s      | 231 KB/s        | 27 KB/s        |
-| Server CPU p50 / p95 (200 % = both cores)           | 70 / 90 %     | 47 / 87 %    | 97 / 116 %      | 45 / 94 %      |
-| Event-loop delay p99 (worst 10 s windows)           | 113 ms        | 40 ms        | 61 ms           | 18 ms          |
-| Peak RSS, API and web server together               | 771 MB        | 802 MB       | 743 MB          | 753 MB         |
+| REST API (reads and moves)                          | 527 ms        | 30 ms        | 116 ms          | 19 ms          |
+| REST API p99                                        | 947 ms        | 84 ms        | 206 ms          | 44 ms          |
+| Map snapshot, 500 systems, under load               | 749 ms        | 295 ms       | 161 ms          | 83 ms          |
+| Map snapshot, alone (p50)                           | 61 ms         | 8 ms         | 49 ms           | 17 ms          |
+| Map page, server-rendered                           | 3,233 ms      | 475 ms       | 332 ms          | 134 ms         |
+| Signature paste, 200 lines                          | 852 ms        | 58 ms        | 352 ms          | 82 ms          |
+| Edit fan-out (move sent to arrival at every client) | 516 ms        | 41 ms        | 62 ms           | 29 ms          |
+| Presence fan-out (cursor to every peer)             | 177 ms        | 85 ms        | 92 ms           | 71 ms          |
+| Snapshot when 400 clients open the map              | 9,829 ms      | 48 ms        | 877 ms          | 62 ms          |
+| Jump reaching the map, p50                          | 6.4 s         | 2.7 s        | 5.9 s           | 2.7 s          |
+| Jump reaching the map                               | 16.9 s        | 5.1 s        | 14.2 s          | 5.2 s          |
+| Location asked for, interval                        | 39.1 s        | 5.6 s        | 17.1 s          | 5.6 s          |
+| ESI requests a second                               | 91            | 248          | 111             | 248            |
+| Received per client                                 | 131 KB/s      | 26 KB/s      | 211 KB/s        | 29 KB/s        |
+| Server CPU p50 / p95 (200 % = both cores)           | 102 / 122 %   | 43 / 111 %   | 91 / 116 %      | 52 / 102 %     |
+| Event-loop delay p99 (worst 10 s windows)           | 9,588 ms      | 252 ms       | 114 ms          | 18 ms          |
+| Peak RSS, API and web server together               | 2,135 MB      | 939 MB       | 984 MB          | 888 MB         |
 
-The "after" columns do twice the tracking work of the "before" ones (each location asked for every
-5.6 s at p95 instead of every 20 s) and still use half the CPU. Edit fan-out on Postgres is the commit
-round trip plus fan-out. A map with 150 people moving now flushes presence 4 times a second instead of 15
-(the per-viewer budget), which is what cut each client's traffic eightfold; cursors stay under 100 ms old
-at p95 because every flush carries the newest position. Opening the map got slightly slower on SQLite
-(49 to 72 ms) because the poller's first pass over 1,658 characters now runs while the clients connect;
-memory is about 30 MB higher (two read connections, the statement and access caches). Of the jumps the fake ESI made on the main map, 87 % reached it as `character.jumped`; 4 % were passed by
-a second jump within the same poll (the map shows where the character ended up) and 9 % fell into the
-first and last seconds of the run (a character's first observation is a move, not a jump).
+The "after" columns do two to four times the tracking work of the "before" ones (each location asked for
+every 5.6 s at p95 instead of every 17-39 s) on half the CPU. A map with 150 people moving flushes
+presence 4 times a second instead of 15 (the per-viewer budget), which is what cut each client's traffic;
+cursors stay under 100 ms old at p95 because every flush carries the newest position. Of the jumps the
+fake ESI made on the main map, 93 % reached it as `character.jumped`; 4 % were passed by a second jump
+within the same poll (the map shows where the character ended up) and 3 % fell into the first and last
+seconds of the run (a character's first observation is a move, not a jump). SQLite's snapshot p95 under
+load sits close to the target; its median is 11 ms, the tail is reads queued behind synchronous work
+(event-log pages read by the consumers, route searches after chain changes).
 
 What the "before" columns show: tracking could not keep up (the poller started at most 8 characters at a
-time and waited for the slowest, so 600 online characters were each asked for every 10 s, 20 s at p95,
-and a jump took 14-16 s at p95, up to a minute, to reach the map), every client received 220 KB/s (the
-full list of 150 peers, re-serialized per viewer, 15 times a second), and the API process spent most of
-its busy time in that serialization and in socket writes.
+time and waited for the slowest, so a jump took 14-17 s at p95, up to a minute, to reach the map); every
+client received 130-210 KB/s (the full list of 150 peers, re-serialized per viewer, 15 times a second);
+and on `main` every map snapshot searched the universe once per known-space exit (the route space of
+each exit), so on SQLite 400 people opening a 500-system map stalled the server for seconds at a time.
+
+The same comparison against the commit this work started from (`f8748d8`, before main brought the exits'
+route space, the passages and sharing) gave REST p95 82 to 16 ms on SQLite and 101 to 20 ms on Postgres,
+edit fan-out 80 to 21 ms and 88 to 47 ms, presence 82 to 72 ms and 87 to 70 ms, jumps reaching the map
+13.6 to 5.1 s and 16.1 to 5.3 s at p95, with peak RSS around 800 MB either way.
 
 ## Bottlenecks found, and what changed
 
@@ -119,6 +129,7 @@ Each was found in a profile or a measurement first; the commits say more.
 | Event consumers: every event woke every consumer to scan every stream; a transaction each | only the consumers and the stream an event concerns; 25 events per transaction                          |
 | Auto-mapping read the whole map (twice) and all tracked characters per jump               | single-row lookups; the connection between two systems from the pair index                              |
 | Route searches over the universe back to back (100 ms at a time)                          | each yields to the event loop first                                                                     |
+| Exits (`main`): a universe search per known-space exit, on every map snapshot             | kept per state of the chain and its hubs; searches yield to the event loop                              |
 | permessage-deflate (tried for snapshots): browsers then compress every frame they send    | left off; snapshots come with the page over HTTP and sockets resume with a replay                       |
 
 Checked and fine as they are: every hot query uses an index (`node apps/server/loadtest/explain.mjs` in the
@@ -163,11 +174,11 @@ The arithmetic:
 - One tracked character offline: online every 60 s = 0.017 requests a second.
 - With the budget of 500 requests a second: `online ≤ (500 − 0.017 × offline) / 0.42`, about **1,150
   online characters** next to 1,000 offline ones, every one at the full 5 s cadence. Measured
-  (`SCENARIO=tracking`): 1,100 online next to 1,000 offline sent 409 requests a second and asked for each
-  location every 5.5 s (p95 6.9 s), at 22 % of one core. Past that, each character is polled a little less
-  often: 1,500 online next to 1,400 offline used the whole budget, location every 6.1 s (p95 8.6 s). Maps
-  someone has open keep their cadence first.
-- Cost on the server: about 5-6 % of one core per 100 ESI requests a second, including the events
+  (`SCENARIO=tracking`): 1,100 online next to 1,000 offline sent 408 requests a second and asked for each
+  location every 5.5 s (p95 7.1 s), at 25 % of one core. Past that, each character is polled a little less
+  often: 1,500 online next to 1,400 offline used the budget (472 a second), location every 6.1 s (p95
+  11 s), at 44 % of one core. Maps someone has open keep their cadence first.
+- Cost on the server: about 6-9 % of one core per 100 ESI requests a second, including the events
   of the jumps (fake ESI over plain HTTP; TLS to the real ESI adds a little).
 - Errors: at 500 requests a second the error limit allows 0.33 % errors a minute and the poller stops at
   0.17 %; an ESI outage trips the global pause long before 100 errors.
@@ -203,9 +214,11 @@ Status: implemented behind `CLUSTER=postgres`, tested with two replicas behind a
 | ESI budget                    | `RateLimiter`       | token bucket      | token bucket on the leader (the only one polling)           |
 
 On the leader only: the ESI poller, durable event consumers (auto-mapping, passages, webhooks, plugins'
-consumers, clean-ups), event retention, webhook retries, routing exits, installing bundled plugins and
+consumers, clean-ups), event retention, webhook retries, the chain sweeper, routing exits, installing bundled plugins and
 plugins' background work (`ctx.every`). Everywhere: HTTP, WebSockets and their fan-out, access caches (kept
-current by the bus), session pruning (idempotent).
+current by the bus), merged shared maps (each replica builds its own), and the idempotent prunes (sessions,
+OAuth grants, sharing tombstones). Built-in backups are SQLite's; a cluster runs on Postgres and is backed up
+with its tooling.
 
 Requirements and limits:
 
@@ -223,18 +236,32 @@ Requirements and limits:
   by peers; a lost notification costs a gap the hub fills from the log (events) or a cursor that is late
   until the next change (presence).
 
-Measured with two replicas (`SCENARIO=cluster`: Postgres, the same load through a round-robin proxy, each
-WebSocket on whichever replica it reached, 2 CPUs per replica): REST API p95 15 ms (p99 42), snapshot under
-load p95 48 ms, edit fan-out p95 36 ms (half the clients are on the other replica than the editor's
-request), presence fan-out p95 115 ms (cursors cross replicas through the relay), jumps reaching the map
-p95 5.2 s, ESI 248 requests a second from the leader alone. CPU p50 34 % on the leader (poller,
-consumers) and 26 % on the follower; RSS 670 and 580 MB. Stopping the leader (`docker stop`) in a running
+Measured with two replicas (`SCENARIO=cluster`, merged code: Postgres, the same load through a round-robin
+proxy, each WebSocket on whichever replica it reached, 2 CPUs per replica, one Postgres with 2 CPUs):
+REST API p95 31 ms (p99 76), snapshot under load p95 233 ms, edit fan-out p95 54 ms (half the clients are
+on the other replica than the editor's request), presence fan-out p95 113 ms (cursors cross replicas
+through the relay), jumps reaching the map p95 5.2 s, ESI 248 requests a second from the leader alone.
+CPU p50 44 % on the leader (poller, consumers) and 23 % on the follower; peak RSS 907 and 715 MB. Two
+replicas on one 2-CPU Postgres are not faster than one process on it at this load (the database is the
+shared part); replicas buy availability and rolling restarts, and room for more WebSocket clients. Stopping the leader (`docker stop`) in a running
 two-replica instance: the other replica logged "this replica leads" within its 2 s retry and ESI polling
 went on from there; `apps/server/src/adapters/cluster/cluster.test.ts` covers the same hand-over.
 
 ## Memory over time
 
-SOAK_RESULTS
+Thirty minutes of the full load on SQLite (`SCENARIO=soak`, merged code): latencies held (REST p95 24 ms,
+edit fan-out p95 31 ms, presence p95 76 ms, jumps reaching the map p95 5.2 s, 9,573 of them), and memory
+levelled off: the API process grew to about 645 MB in the first five minutes and stayed there (JavaScript
+heap 160-230 MB used throughout), the Next.js server to about 400 MB within ten minutes. Together
+1.03-1.06 GB from minute 12 to 30. The first ten seconds after a start held one stall of 2.6 s (startup
+work while 400 clients opened the map at once); after that the event loop's worst 10 s windows stayed
+under 120 ms.
+
+Earlier soaks found two growths that are fixed: SQLite's statement cache kept hundreds of big batch-insert
+statements (one per row count; long SQL is no longer cached), and presence rooms without a relay never
+forgot anyone who left. The harness's original pastes added 200 new signatures every 2 s, which measures
+data growth (30 minutes is 180,000 signatures) rather than steady state; pastes now rescan a system's own
+signatures.
 
 ## Running the harness
 
