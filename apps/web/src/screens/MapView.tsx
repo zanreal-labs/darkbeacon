@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useReactFlow } from '@xyflow/react';
 import {
@@ -91,10 +91,8 @@ export function MapView({
     setFocusNode((f) => ({ id: solarSystemId, center, n: (f?.n ?? 0) + 1 }));
   };
 
-  const openMenu = (target: MenuTarget, x: number, y: number) => {
-    if (target.kind === 'system') select(target.solarSystemId);
-    setMenu({ target, x, y });
-  };
+  // A right click only opens the menu: it does not select the system or open the panel.
+  const openMenu = (target: MenuTarget, x: number, y: number) => setMenu({ target, x, y });
 
   // Built on every render, so toggles in an open menu show the current state.
   const menuContent = ((): { title?: string; items: MenuItem[] } | null => {
@@ -115,6 +113,7 @@ export function MapView({
           store,
           plugins: systemPlugins,
           onEdit: () => {
+            select(sys.solarSystemId);
             setDock({ tab: 'system', open: true });
             setFocus((f) => ({ ...f, name: f.name + 1 }));
           },
