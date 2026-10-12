@@ -124,7 +124,11 @@ export class HttpEveScoutClient implements EveScoutClient {
   }
 }
 
-/** Sovereignty holders from ESI's public `GET /sovereignty/map`, read again every hour. */
+/**
+ * Sovereignty holders from ESI's public `GET /sovereignty/map`, read again every hour. When the
+ * map does not answer (ESI has answered 404 for it since 2026-10), the alliances owning the
+ * sovereignty hubs (`GET /sovereignty/structures`) stand in for the holders.
+ */
 export class EsiSovereignty implements SovereigntyLookup {
   private holders = new Map<number, number>();
   private readAt = 0;
@@ -135,20 +139,31 @@ export class EsiSovereignty implements SovereigntyLookup {
     return this.holders.get(solarSystemId) ?? null;
   }
 
-  /** Reads the map when the copy is older than an hour; true when it was read. */
+  /** Reads the holders when the copy is older than an hour; true when it was read. */
   async refresh(maxAgeMs = 60 * 60_000): Promise<boolean> {
     if (this.options.clock.now() - this.readAt < maxAgeMs) return false;
-    const response = await (this.options.fetch ?? fetch)(`${this.options.baseUrl ?? ESI}/sovereignty/map`, {
+    const map = await this.read<{ system_id: number; alliance_id?: number }>('/sovereignty/map');
+    if (map) {
+      this.holders = new Map(
+        map.flatMap((r) => (r.alliance_id ? [[r.system_id, r.alliance_id] as const] : [])),
+      );
+    } else {
+      const hubs = await this.read<{ solar_system_id: number; alliance_id: number }>(
+        '/sovereignty/structures',
+      );
+      if (!hubs) throw new Error('ESI answered neither the sovereignty map nor its structures');
+      this.holders = new Map(hubs.map((r) => [r.solar_system_id, r.alliance_id] as const));
+    }
+    this.readAt = this.options.clock.now();
+    return true;
+  }
+
+  private async read<T>(path: string): Promise<T[] | null> {
+    const response = await (this.options.fetch ?? fetch)(`${this.options.baseUrl ?? ESI}${path}`, {
       headers: headers(this.options.userAgent),
       signal: AbortSignal.timeout(20_000),
     });
-    if (!response.ok) throw new Error(`ESI answered ${response.status} for the sovereignty map`);
-    const rows = (await response.json()) as Array<{ system_id: number; alliance_id?: number }>;
-    this.holders = new Map(
-      rows.flatMap((r) => (r.alliance_id ? [[r.system_id, r.alliance_id] as const] : [])),
-    );
-    this.readAt = this.options.clock.now();
-    return true;
+    return response.ok ? ((await response.json()) as T[]) : null;
   }
 }
 

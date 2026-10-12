@@ -134,6 +134,21 @@ describe('ESI', () => {
     expect(await sov.refresh()).toBe(true);
     expect(reads).toBe(2);
   });
+
+  it('falls back to the sovereignty hubs when the map does not answer', async () => {
+    const sov = new EsiSovereignty({
+      userAgent: 'test',
+      clock: new ManualClock(),
+      fetch: (async (url: string) =>
+        url.endsWith('/sovereignty/map')
+          ? json({ error: 'Page not found' }, { status: 404 })
+          : json([
+              { solar_system_id: 30004759, alliance_id: 1354830081, structure_type_id: 32458 },
+            ])) as typeof fetch,
+    });
+    expect(await sov.refresh()).toBe(true);
+    expect(sov.holderOf(30004759)).toBe(1354830081);
+  });
 });
 
 describe('static data and identity', () => {
