@@ -61,6 +61,10 @@
   padding-top: var(--dbk-space-4);
 }
 
+.content[hidden] {
+  display: none !important;
+}
+
 .content:focus-visible {
   outline: none;
 }

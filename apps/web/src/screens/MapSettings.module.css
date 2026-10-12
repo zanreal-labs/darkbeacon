@@ -77,6 +77,12 @@
   min-height: 0;
 }
 
+/* Inactive sections stay in the DOM, empty and hidden: they share the grid area, so without this
+   they would lie over the open section and take its clicks. */
+.panel[hidden] {
+  display: none;
+}
+
 .pane {
   display: flex;
   flex: 1;
