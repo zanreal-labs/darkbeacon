@@ -459,7 +459,10 @@ export function SignaturesSection({
                   {columns.group && <td className={sig.group}>{GROUP_LABEL[s.group]}</td>}
                   <td>
                     <span className={sig.info}>
-                      {s.tempName && <strong className={sig.tempName}>{s.tempName}</strong>}
+                      {/* Once linked, the temporary name is on the system it leads to. */}
+                      {s.tempName && target === null && (
+                        <strong className={sig.tempName}>{s.tempName}</strong>
+                      )}
                       {wormhole && time === 'eol' && (
                         <Clock className={sig.iconEol} aria-label="End of life" />
                       )}
