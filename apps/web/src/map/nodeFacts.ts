@@ -1,10 +1,5 @@
-import {
-  wormholeDestination,
-  type ConnectionDto,
-  type SystemStatus,
-  type UniverseSystemDto,
-} from '@darkbeacon/shared';
-import { readableTextOn } from '@darkbeacon/theme-sdk';
+import type { MapExitDto, RouteSpace, SystemStatus, UniverseSystemDto } from '@darkbeacon/shared';
+import type { TokenName } from '@darkbeacon/theme-sdk';
 
 export const STATUS_LABEL: Record<SystemStatus, string> = {
   unknown: 'Unknown',
@@ -18,10 +13,25 @@ export const STATUS_LABEL: Record<SystemStatus, string> = {
 };
 
 /**
- * Security colours from deep blue-green at 1.0 through yellow at 0.5 to red at 0.0 and below,
- * the gradient the game's map and route planner use. Exact client values are not published, so
- * these are our own steps along it; each one is used as a pill fill with black or white text,
- * whichever passes WCAG AA, so they read the same in every theme.
+ * The node border of each status: grey by default (unknown, empty), coloured where it means
+ * something. One token each, so themes recolour them.
+ */
+export const STATUS_BORDER: Record<SystemStatus, TokenName> = {
+  unknown: 'node-border',
+  home: 'status-home',
+  friendly: 'status-friendly',
+  empty: 'node-border',
+  occupied: 'status-occupied',
+  warning: 'status-warning',
+  hostile: 'status-hostile',
+  target: 'status-target',
+};
+
+/**
+ * Security colours from blue-green at 1.0 through yellow at 0.5 to red at 0.0 and below, the
+ * gradient the game's map and route planner use. Exact client values are not published, so these
+ * are our own steps along it, all light enough for the pill's dark text to pass WCAG AA (tested),
+ * the same in every theme.
  */
 export const SECURITY_COLORS: Readonly<Record<string, string>> = {
   '1.0': '#33c7e8',
@@ -32,9 +42,9 @@ export const SECURITY_COLORS: Readonly<Record<string, string>> = {
   '0.5': '#e3d62c',
   '0.4': '#f0a12a',
   '0.3': '#ef7f2a',
-  '0.2': '#e8602c',
-  '0.1': '#de4530',
-  '0.0': '#c42a2a',
+  '0.2': '#f2703c',
+  '0.1': '#f45f4a',
+  '0.0': '#f55a5a',
 };
 
 /** Security as the game shows it: one decimal, 0.0 < s < 0.05 rounded up to 0.1. */
@@ -44,70 +54,65 @@ export function shownSecurity(security: number): number {
 }
 
 export type ClassPill =
-  | { kind: 'security'; label: string; background: string; color: string }
-  | { kind: 'class'; label: string; token: 'security-wormhole' | 'security-special' }
+  | { kind: 'security'; label: string; background: string }
+  | { kind: 'class'; label: string; token: 'pill-wormhole' | 'pill-special' }
   | { kind: 'unknown'; label: string };
 
 /** Every label a pill can show, for sizing the node (see node-sizers.ts). */
 export const PILL_LABELS = ['C6', '-1.0', '0.5', 'Thera', 'C13', 'Drifter', 'Pochven'];
 
-/** The class or security pill: wormhole classes tinted, known space filled with its security colour. */
+/**
+ * The designation pill: wormhole classes and special space filled with their colour, known space
+ * with its security colour; the text is always dark (`node-pill-text`).
+ */
 export function classPill(info: Pick<UniverseSystemDto, 'whClass' | 'security'> | undefined): ClassPill {
   if (!info) return { kind: 'unknown', label: '?' };
   const c = info.whClass;
-  if (c !== null && c >= 1 && c <= 6) return { kind: 'class', label: `C${c}`, token: 'security-wormhole' };
-  if (c === 12) return { kind: 'class', label: 'Thera', token: 'security-special' };
-  if (c === 13) return { kind: 'class', label: 'C13', token: 'security-special' };
-  if (c !== null && c >= 14 && c <= 18) return { kind: 'class', label: 'Drifter', token: 'security-special' };
-  if (c === 25) return { kind: 'class', label: 'Pochven', token: 'security-special' };
+  if (c !== null && c >= 1 && c <= 6) return { kind: 'class', label: `C${c}`, token: 'pill-wormhole' };
+  if (c === 12) return { kind: 'class', label: 'Thera', token: 'pill-special' };
+  if (c === 13) return { kind: 'class', label: 'C13', token: 'pill-special' };
+  if (c !== null && c >= 14 && c <= 18) return { kind: 'class', label: 'Drifter', token: 'pill-special' };
+  if (c === 25) return { kind: 'class', label: 'Pochven', token: 'pill-special' };
   const shown = shownSecurity(info.security);
   const step = Math.max(0, Math.min(1, shown)).toFixed(1);
   const background = SECURITY_COLORS[step]!;
-  return { kind: 'security', label: shown.toFixed(1), background, color: readableTextOn(background) };
+  return { kind: 'security', label: shown.toFixed(1), background };
 }
 
-/** H, L or N for known space by shown security; null for wormhole and special space. */
-export function knownSpaceLetter(
-  info: Pick<UniverseSystemDto, 'whClass' | 'security'> | undefined,
-): string | null {
-  if (!info) return null;
-  if (info.whClass !== null && ![7, 8, 9].includes(info.whClass)) return null;
-  const shown = shownSecurity(info.security);
-  return shown >= 0.5 ? 'H' : shown > 0 ? 'L' : 'N';
-}
-
-const DESTINATION_LETTER: Partial<Record<string, string>> = { hs: 'H', ls: 'L', ns: 'N' };
-
-/**
- * Where a system lets the chain out to known space: a known-space system the map reaches through
- * a wormhole is an exit itself ("EXIT L"); a wormhole system with statics into known space has
- * those exits ("EXIT H/L"). Empty when it is none.
- */
-export function exitLetters(
-  solarSystemId: number,
-  info: UniverseSystemDto | undefined,
-  connections: Iterable<ConnectionDto>,
-): string[] {
-  if (!info) return [];
-  const own = knownSpaceLetter(info);
-  if (own) {
-    for (const c of connections) {
-      if (c.type === 'wormhole' && (c.source === solarSystemId || c.target === solarSystemId)) return [own];
-    }
-    return [];
-  }
-  const letters = new Set(
-    info.statics.flatMap((type) => {
-      const to = wormholeDestination(type);
-      const letter = to ? DESTINATION_LETTER[to] : undefined;
-      return letter ? [letter] : [];
-    }),
-  );
-  return ['H', 'L', 'N'].filter((l) => letters.has(l));
-}
-
-/** Nearest trade hub from an exit, as the routing API answers it ("Jita 12j"). */
+/** Nearest hub under an exit, as the routing API answers it: "Jita 4j" and the route's space. */
 export interface NearestHub {
   name: string;
   jumps: number;
+  space: RouteSpace | null;
+}
+
+/** The square after the hub: only when the whole route runs through one kind of space. */
+export const ROUTE_SPACE_TOKEN: Partial<Record<RouteSpace, TokenName>> = {
+  high: 'security-high',
+  low: 'security-low',
+  null: 'security-null',
+};
+
+export const ROUTE_SPACE_TEXT: Record<RouteSpace, string> = {
+  high: 'all in high-sec',
+  low: 'all in low-sec',
+  null: 'all in null-sec',
+  mixed: 'through mixed space',
+};
+
+/**
+ * Nearest hubs of the chain's exits by system: known-space systems the chain reaches through a
+ * wormhole (the routing API's `connected` exits) that have a route to a hub.
+ */
+export function exitHubs(exits: readonly MapExitDto[] | null | undefined): Map<number, NearestHub> {
+  const hubs = new Map<number, NearestHub>();
+  for (const exit of exits ?? []) {
+    if (exit.kind !== 'connected' || !exit.nearest || exit.nearest.jumps === null) continue;
+    hubs.set(exit.solarSystemId, {
+      name: exit.nearest.name,
+      jumps: exit.nearest.jumps,
+      space: exit.nearest.space ?? null,
+    });
+  }
+  return hubs;
 }

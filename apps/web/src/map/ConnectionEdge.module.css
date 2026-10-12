@@ -2,20 +2,20 @@
   opacity: 0.6;
 }
 
-/* Dangerous: a strong red halo around the whole line. */
+/* Dangerous: a red halo beyond the line. */
 .halo {
   fill: none;
   stroke: var(--dbk-edge-dangerous);
-  stroke-width: calc(var(--dbk-edge-width) * 6);
+  stroke-width: calc(var(--dbk-edge-width) * 2.1);
   stroke-linecap: round;
   pointer-events: none;
 }
 
-/* Hover and selection light the whole line from end to end, under its own colour. */
+/* Hover and selection light the whole line from end to end, under its own colours. */
 .highlight {
   fill: none;
   stroke: var(--dbk-edge-selected);
-  stroke-width: calc(var(--dbk-edge-width) * 4);
+  stroke-width: calc(var(--dbk-edge-width) * 1.7);
   stroke-linecap: round;
   opacity: 0;
   pointer-events: none;
@@ -23,10 +23,15 @@
 }
 
 .edge[data-active] .highlight {
-  opacity: 0.35;
+  opacity: 0.45;
 }
 
-/* A bubble: big, half see-through, with a thick outline, drawn over every line at its end. */
+/* The inner core (mass), over the outer layer (time). */
+.core {
+  pointer-events: none;
+}
+
+/* A bubble: big, half see-through, with a thick outline, on the line just outside the system. */
 .bubble {
   position: absolute;
   width: 30px;
@@ -45,58 +50,21 @@
   pointer-events: none;
 }
 
-/* Opaque and bordered, so a badge reads on any line colour in both modes. */
-.badge {
+/* The size letter: the only text on a connection. */
+.size {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 22px;
-  height: 21px;
-  padding: 0 6px;
-  border: 1px solid var(--dbk-color-border-strong);
-  border-radius: 999px;
-  background: var(--dbk-color-surface-raised);
+  min-width: 20px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--dbk-color-canvas);
   color: var(--dbk-color-text);
   font-size: var(--map-text-edge, 12.5px);
-  font-weight: 700;
+  font-weight: 800;
   line-height: 1;
   white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-  box-shadow: var(--dbk-shadow-small);
-}
-
-.badge svg {
-  width: 14px;
-  height: 14px;
-}
-
-.badge[data-kind='dangerous'] {
-  border-color: var(--dbk-edge-mass-critical);
-  background: var(--dbk-edge-mass-critical);
-  color: #ffffff;
-}
-
-.badge[data-kind='eol'] {
-  border-color: color-mix(in oklab, var(--dbk-edge-time-eol) 60%, transparent);
-  background: color-mix(in oklab, var(--dbk-edge-time-eol) 14%, var(--dbk-color-surface-raised));
-  color: color-mix(in oklab, var(--dbk-edge-time-eol) 55%, var(--dbk-color-text));
-}
-
-.badge[data-kind='critical'] {
-  border-color: color-mix(in oklab, var(--dbk-edge-mass-critical) 60%, transparent);
-  background: color-mix(in oklab, var(--dbk-edge-mass-critical) 14%, var(--dbk-color-surface-raised));
-  color: color-mix(in oklab, var(--dbk-edge-mass-critical) 55%, var(--dbk-color-text));
-}
-
-.badge[data-kind='reduced'] {
-  border-color: color-mix(in oklab, var(--dbk-edge-mass-reduced) 60%, transparent);
-  background: color-mix(in oklab, var(--dbk-edge-mass-reduced) 14%, var(--dbk-color-surface-raised));
-  color: color-mix(in oklab, var(--dbk-edge-mass-reduced) 55%, var(--dbk-color-text));
-}
-
-.badge[data-kind='bridge'] {
-  border-color: var(--dbk-edge-bridge);
-  color: color-mix(in oklab, var(--dbk-edge-bridge) 60%, var(--dbk-color-text));
 }
 
 .details {

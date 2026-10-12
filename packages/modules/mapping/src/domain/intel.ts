@@ -28,6 +28,7 @@ const SIZE_JUMP_MASS: Record<ShipSize, number> = {
   medium: 62_000_000,
   large: 375_000_000,
   xlarge: 1_000_000_000,
+  capital: 2_000_000_000,
 };
 
 const WORMHOLE_CODE = /^[A-Z]\d{3}$/;

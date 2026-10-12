@@ -184,9 +184,18 @@ export const HubDto = z.object({
 });
 export type HubDto = z.infer<typeof HubDto>;
 
+/** The kind of space a whole route runs through; `mixed` when it crosses more than one kind. */
+export const RouteSpace = z.enum(['high', 'low', 'null', 'mixed']);
+export type RouteSpace = z.infer<typeof RouteSpace>;
+
 export const HubDistanceDto = HubDto.extend({
   /** Jumps from the asked system; null when the mode allows no route. */
   jumps: z.number().int().nullable(),
+  /**
+   * For an exit's `nearest` hub: the space the route runs through, start and hub included
+   * (`high` only when every system on it is high-sec). Absent elsewhere.
+   */
+  space: RouteSpace.optional(),
 });
 export type HubDistanceDto = z.infer<typeof HubDistanceDto>;
 

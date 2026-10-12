@@ -134,8 +134,12 @@ export type TimeStatus = z.infer<typeof TimeStatus>;
 /** In-game: fresh > 50 %, reduced 10-50 %, critical < 10 % of mass left. */
 export const MassStatus = z.enum(['fresh', 'reduced', 'critical']);
 export type MassStatus = z.infer<typeof MassStatus>;
-/** Largest ship class that fits: small = frigates, medium = up to battlecruisers, large = battleships, xlarge = capitals/freighters. */
-export const ShipSize = z.enum(['small', 'medium', 'large', 'xlarge']);
+/**
+ * Largest ship class that fits, from the max jump mass: small = frigates and destroyers (5 000 t),
+ * medium = up to battlecruisers and industrials (62 000 t), large = battleships (375 000-410 000 t),
+ * xlarge = freighters (1 000 000 t), capital = capitals (2 000 000 t).
+ */
+export const ShipSize = z.enum(['small', 'medium', 'large', 'xlarge', 'capital']);
 export type ShipSize = z.infer<typeof ShipSize>;
 export const Bubbled = z.enum(['none', 'source', 'target', 'both']);
 export type Bubbled = z.infer<typeof Bubbled>;

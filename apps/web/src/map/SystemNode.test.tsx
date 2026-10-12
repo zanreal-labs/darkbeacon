@@ -50,7 +50,7 @@ function renderNode(data: Partial<SystemNodeData>, connectable = true) {
 const box = (container: HTMLElement) => container.querySelector<HTMLElement>('[data-status]')!;
 
 describe('SystemNode', () => {
-  it('tints the background by status only, with the status and the rest in the tooltip', () => {
+  it('shows the status as the border only, with the rest in the tooltip', () => {
     const { container } = renderNode({
       system: systemFixture(31000001, {
         status: 'hostile',
@@ -60,7 +60,7 @@ describe('SystemNode', () => {
       }),
     });
     expect(box(container).dataset.status).toBe('hostile');
-    expect(box(container).style.getPropertyValue('--node-tint')).toBe('var(--dbk-node-status-hostile)');
+    expect(box(container).style.getPropertyValue('--node-status')).toBe('var(--dbk-status-hostile)');
     expect(screen.getByText('C3')).toBeTruthy();
     expect(screen.getByText('J100001')).toBeTruthy();
     // Tag, notes and lock are not on the node, only in its tooltip.
@@ -71,6 +71,11 @@ describe('SystemNode', () => {
     expect(title).toContain('Tag: A1');
     expect(title).toContain('Locked');
     expect(title).toContain('Notes: Rattlesnakes');
+  });
+
+  it('keeps a grey border for systems without a status', () => {
+    const { container } = renderNode({});
+    expect(box(container).style.getPropertyValue('--node-status')).toBe('var(--dbk-node-border)');
   });
 
   it('shows a custom name with the real one in the tooltip, and fills known space with its security', () => {
@@ -85,45 +90,43 @@ describe('SystemNode', () => {
     expect(pill.style.background).not.toBe('');
   });
 
-  it('shows statics, an EXIT chip, two labels and the rest as +N', () => {
-    renderNode({
+  it('writes statics as plain text and puts labels and the bookmark above the node', () => {
+    const { container } = renderNode({
       info: { ...info, statics: ['D845', 'U210'] },
-      exit: ['H', 'L'],
-      labels: [label('a', 'Staging'), label('b', 'Sites'), label('c', 'Exit'), label('d', 'Hostile')],
+      bookmark: 'ABC-123',
+      labels: [label('a', 'Staging'), label('b', 'Sites')],
     });
     const statics = screen.getByRole('list', { name: 'Statics' });
     expect([...statics.querySelectorAll('li')].map((li) => li.textContent)).toEqual(['D845HS', 'U210LS']);
-    expect(screen.getByText('EXIT H/L')).toBeTruthy();
-    const labels = screen.getByRole('list', { name: 'Labels' });
-    expect([...labels.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
-      'Staging',
-      'Sites',
-      '+2',
-    ]);
-    expect(screen.getByText('+2').getAttribute('title')).toBe('Exit, Hostile');
+    const above = screen.getByRole('list', { name: 'Labels' }).parentElement!;
+    expect([...above.querySelectorAll('li')].map((li) => li.textContent)).toEqual(['Staging', 'Sites']);
+    // Labels first, then the bookmark code; neither inside the node's rows.
+    expect(above.textContent).toBe('StagingSitesABC-123');
+    expect(container.querySelector('[data-status] > [class*="line"]')?.textContent).toBe('D845HSU210LS');
   });
 
-  it('shows the nearest hub under an exit only', () => {
-    const { unmount } = renderNode({ exit: ['H'], hub: { name: 'Jita', jumps: 12 } });
-    expect(screen.getByText('Jita 12j')).toBeTruthy();
+  it('shows the nearest hub under an exit, with a square only for one kind of space', () => {
+    const { container, unmount } = renderNode({ hub: { name: 'Jita', jumps: 4, space: 'high' } });
+    expect(screen.getByText('Jita 4j')).toBeTruthy();
+    expect(container.querySelector('[data-space="high"]')).toBeTruthy();
     unmount();
-    renderNode({ exit: [], hub: { name: 'Jita', jumps: 12 } });
-    expect(screen.queryByText('Jita 12j')).toBeNull();
+    const mixed = renderNode({ hub: { name: 'Amarr', jumps: 9, space: 'mixed' } });
+    expect(screen.getByText('Amarr 9j')).toBeTruthy();
+    expect(mixed.container.querySelector('[data-space]')).toBeNull();
+    mixed.unmount();
+    renderNode({ hub: null });
+    expect(screen.queryByText(/\dj$/)).toBeNull();
   });
 
-  it('marks where I am with my portrait, other pilots and a bubble', () => {
-    const { container } = renderNode({
-      me: { characterId: 3900000001, name: 'Ayla Vex' },
-      characters: 3,
-      bubbled: true,
-    });
-    const here = screen.getByTitle('You are here: Ayla Vex');
-    expect(here.textContent).toBe('You are here+2');
-    expect(here.querySelector('img')?.getAttribute('src')).toBe(
-      'https://images.evetech.net/characters/3900000001/portrait?size=32',
-    );
-    expect(screen.getByRole('img', { name: 'Bubbled' })).toBeTruthy();
-    expect(container.querySelector('[title="3 tracked pilots here"]')).toBeNull();
+  it('counts pilots on the right, in the accent colour where I am, with no portraits', () => {
+    const { container, unmount } = renderNode({ characters: 3, mine: true });
+    const pilots = screen.getByTitle('3 tracked pilots here, you among them');
+    expect(pilots.textContent).toBe('3');
+    expect(pilots.dataset.mine).toBe('true');
+    expect(container.querySelector('img')).toBeNull();
+    unmount();
+    renderNode({ characters: 1 });
+    expect(screen.getByTitle('1 tracked pilot here').dataset.mine).toBeUndefined();
   });
 
   it('copies the bookmark label on click', async () => {

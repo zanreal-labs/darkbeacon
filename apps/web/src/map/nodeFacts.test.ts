@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { UniverseSystemDto } from '@darkbeacon/shared';
-import { contrastRatio } from '@darkbeacon/theme-sdk';
-import { connectionFixture } from '../test/fixtures';
+import type { MapExitDto, UniverseSystemDto } from '@darkbeacon/shared';
+import { contrastRatio, darkTheme, lightTheme } from '@darkbeacon/theme-sdk';
 import { DEFAULT_ZOOM, MAP_TYPE, READABLE } from './mapType';
-import { classPill, exitLetters, PILL_LABELS, SECURITY_COLORS, shownSecurity } from './nodeFacts';
+import { classPill, exitHubs, PILL_LABELS, SECURITY_COLORS, shownSecurity } from './nodeFacts';
 import { nodeNameSizers } from './node-sizers';
 
 const sys = (extra: Partial<UniverseSystemDto>): UniverseSystemDto => ({
@@ -31,17 +30,20 @@ describe('class and security pill', () => {
     expect(classPill(sys({ whClass: 4 }))).toEqual({
       kind: 'class',
       label: 'C4',
-      token: 'security-wormhole',
+      token: 'pill-wormhole',
     });
     expect(classPill(sys({ whClass: 15 }))).toMatchObject({ label: 'Drifter' });
     expect(classPill(undefined)).toEqual({ kind: 'unknown', label: '?' });
   });
 
-  it('keeps WCAG AA text contrast on every security colour', () => {
+  it('keeps WCAG AA contrast for the dark pill text on every security colour', () => {
+    const pillText = lightTheme.tokens['node-pill-text'];
+    expect(darkTheme.tokens['node-pill-text']).toBe(pillText);
     for (const [step, color] of Object.entries(SECURITY_COLORS)) {
       const pill = classPill(sys({ whClass: null, security: Number(step) }));
       if (pill.kind !== 'security') throw new Error('expected a security pill');
-      expect(contrastRatio(pill.color, color)).toBeGreaterThanOrEqual(4.5);
+      expect(pill.background).toBe(color);
+      expect(contrastRatio(pillText, color)).toBeGreaterThanOrEqual(4.5);
     }
   });
 
@@ -54,18 +56,31 @@ describe('class and security pill', () => {
   });
 });
 
-describe('exits', () => {
-  it('marks wormhole systems with statics into known space', () => {
-    expect(exitLetters(1, sys({ statics: ['D845', 'U210'] }), [])).toEqual(['H', 'L']);
-    expect(exitLetters(1, sys({ statics: ['O477'] }), [])).toEqual([]);
+describe('exit hubs', () => {
+  const exit = (extra: Partial<MapExitDto>): MapExitDto => ({
+    kind: 'connected',
+    solarSystemId: 30002537,
+    name: 'Amamake',
+    security: 0.38,
+    whClass: 8,
+    classLabel: 'LS',
+    connectionId: 'c',
+    chainSystemId: 31000001,
+    statics: [],
+    nearest: null,
+    hubs: [],
+    ...extra,
   });
+  const jita = { solarSystemId: 30000142, name: 'Jita', security: 0.95, kind: 'trade' as const, near: null };
 
-  it('marks known space reached by a wormhole, not by a gate', () => {
-    const lowsec = sys({ id: 30002537, whClass: 8, security: 0.34 });
-    expect(exitLetters(30002537, lowsec, [connectionFixture('c', 31000001, 30002537)])).toEqual(['L']);
-    expect(
-      exitLetters(30002537, lowsec, [connectionFixture('g', 30002536, 30002537, { type: 'gate' })]),
-    ).toEqual([]);
+  it('takes the nearest hub of connected exits from the routing API', () => {
+    const hubs = exitHubs([
+      exit({ nearest: { ...jita, jumps: 4, space: 'low' } }),
+      exit({ solarSystemId: 2, nearest: { ...jita, jumps: null } }),
+      exit({ solarSystemId: 3, kind: 'static', statics: [{ code: 'D845', destination: 'hs' }] }),
+    ]);
+    expect([...hubs]).toEqual([[30002537, { name: 'Jita', jumps: 4, space: 'low' }]]);
+    expect(exitHubs(null).size).toBe(0);
   });
 });
 

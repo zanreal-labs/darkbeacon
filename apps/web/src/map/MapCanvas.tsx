@@ -36,7 +36,7 @@ import { boundsOf, fitViewport, type Point, type Rect } from './geometry';
 import { MapControls } from './MapControls';
 import { DEFAULT_ZOOM, FIT_MIN_ZOOM, mapTypeVars } from './mapType';
 import type { MapState } from './mapState';
-import { exitLetters } from './nodeFacts';
+import { exitHubs } from './nodeFacts';
 import { SystemNode, systemDisplayName, type SystemNodeType } from './SystemNode';
 import { useMapPreferences } from './useMapPreferences';
 import type { MapStore } from './useMapStore';
@@ -193,12 +193,7 @@ export function MapCanvas({
       if (c.online && c.solarSystemId !== null)
         here.set(c.solarSystemId, (here.get(c.solarSystemId) ?? 0) + 1);
     }
-    const bubbled = new Set<number>();
-    for (const c of state.connections.values()) {
-      if (c.bubbled === 'source' || c.bubbled === 'both') bubbled.add(c.source);
-      if (c.bubbled === 'target' || c.bubbled === 'both') bubbled.add(c.target);
-    }
-    const connections = [...state.connections.values()];
+    const hubs = exitHubs(state.exits);
     const labelById = new Map(labels.map((l) => [l.id, l]));
     setNodes((prev) => {
       const previous = new Map(prev.map((n) => [n.id, n]));
@@ -219,12 +214,8 @@ export function MapCanvas({
             labels: system.labelIds.flatMap((l) => labelById.get(l) ?? []),
             characters: here.get(system.solarSystemId) ?? 0,
             bookmark: bookmarks.get(system.solarSystemId) ?? null,
-            exit: exitLetters(system.solarSystemId, info, connections),
-            bubbled: bubbled.has(system.solarSystemId),
-            me:
-              myLocation?.solarSystemId === system.solarSystemId
-                ? { characterId: myLocation.characterId, name: myLocation.name }
-                : null,
+            hub: hubs.get(system.solarSystemId) ?? null,
+            mine: myLocation?.solarSystemId === system.solarSystemId,
           },
         };
       });
@@ -232,7 +223,7 @@ export function MapCanvas({
   }, [
     state.systems,
     state.characters,
-    state.connections,
+    state.exits,
     labels,
     universe,
     can.edit,

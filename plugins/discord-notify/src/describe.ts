@@ -19,9 +19,9 @@ export const COLORS = {
   /** security-high: a way out to known space */
   exit: 0x3fd47a,
   /** edge-time-eol */
-  eol: 0xcf7cf2,
+  eol: 0xb25ee0,
   /** edge-mass-critical */
-  critical: 0xf05252,
+  critical: 0xff4040,
   /** status-hostile, edge-bubble */
   danger: 0xf05252,
   /** status-occupied */
@@ -60,7 +60,8 @@ const SHIP_SIZE: Record<ConnectionDto['shipSize'], string> = {
   small: 'Frigates only',
   medium: 'Up to battlecruisers',
   large: 'Up to battleships',
-  xlarge: 'Capitals',
+  xlarge: 'Up to freighters',
+  capital: 'Capitals',
 };
 
 /** C1-C6, HS, LS, NS, Thera, C13, Drifter, Pochven. */
