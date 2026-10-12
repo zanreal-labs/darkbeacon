@@ -3,6 +3,7 @@ import { ManualClock } from '@darkbeacon/core';
 import { WAYPOINT_SCOPE, Waypoints } from '@darkbeacon/routing';
 import { StaticUniverseCatalog } from '../universe/static-universe-catalog.js';
 import { EsiPilotDirectory, HttpWaypointGateway, type CharacterLookup } from './esi-adapters.js';
+import { StaticStationCatalog } from './external-adapters.js';
 
 const JITA = 30000142;
 
@@ -20,6 +21,7 @@ const characters = (scopes: string[], token: string | null = 'token'): Character
   character: async (id) => (id === 9001 ? { name: 'Pilot', accountId: 'alice' } : null),
   scopes: async () => scopes,
   accessToken: async () => token,
+  listForAccount: async (id) => (id === 'alice' ? [{ id: 9001, name: 'Pilot' }] : []),
 });
 
 describe('ESI adapters for routing', () => {
@@ -104,5 +106,33 @@ describe('ESI adapters for routing', () => {
         universe,
       }).set(alice, 9001, { solarSystemId: JITA, mode: 'destination' }),
     ).rejects.toMatchObject({ code: 'conflict' });
+  });
+
+  it('puts a system or a station first, and sends one destination to every able character', async () => {
+    const net = recorder(() => new Response(null, { status: 204 }));
+    const universe = StaticUniverseCatalog.load('/nonexistent');
+    const waypoints = new Waypoints({
+      pilots: new EsiPilotDirectory({
+        characters: characters([WAYPOINT_SCOPE]),
+        clock: new ManualClock(),
+        userAgent: 'test',
+        fetch: net.fetch,
+      }),
+      gateway: new HttpWaypointGateway({ userAgent: 'test', fetch: net.fetch }),
+      universe,
+      stations: StaticStationCatalog.load(),
+    });
+    const alice = { kind: 'account', id: 'alice', instanceRole: 'user' } as const;
+    await waypoints.set(alice, 9001, { solarSystemId: JITA, mode: 'front' });
+    expect(net.calls[0]!.url).toContain('add_to_beginning=true&clear_other_waypoints=false');
+    // Jita IV - Moon 4 - Caldari Navy Assembly Plant
+    await waypoints.set(alice, 9001, { solarSystemId: JITA, stationId: 60003760, mode: 'waypoint' });
+    expect(net.calls[1]!.url).toContain('destination_id=60003760');
+    await expect(
+      waypoints.set(alice, 9001, { solarSystemId: 30002187, stationId: 60003760, mode: 'waypoint' }),
+    ).rejects.toMatchObject({ code: 'validation' });
+    const many = await waypoints.setMany(alice, { solarSystemId: JITA, mode: 'destination' });
+    expect(many.results).toEqual([{ characterId: 9001, name: 'Pilot', ok: true, message: null }]);
+    expect(net.calls).toHaveLength(3);
   });
 });
