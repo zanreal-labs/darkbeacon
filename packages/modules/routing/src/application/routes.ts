@@ -27,7 +27,7 @@ import { isLowSec, TRADE_HUBS } from '../domain/hubs.js';
 import { isWormholeSpace, policyFor, routeSpace, type RouteNode, type RoutePolicy } from '../domain/modes.js';
 import { closedLevels } from '../domain/security.js';
 import type { HubRepository, PilotDirectory, RoutingUniverse } from '../ports/index.js';
-import type { Router } from './router.js';
+import { yieldTurn, type Router } from './router.js';
 
 export interface RouteQueryDeps {
   router: Router;
@@ -161,6 +161,8 @@ export class RouteQueries {
   /** The kind of space the route from an exit to its nearest hub runs through. */
   private async spaceOf(mapId: string, fromId: number, hubId: number, policy: RoutePolicy) {
     const graph = await this.deps.router.graph(mapId);
+    // A search over the whole universe: one exit at a time, letting requests through between.
+    await yieldTurn();
     const steps = graph && findRoute(graph, fromId, hubId, policy);
     if (!graph || !steps) return 'mixed' as const;
     return routeSpace(steps.flatMap((step) => graph.node(step.id) ?? []));

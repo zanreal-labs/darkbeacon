@@ -213,6 +213,6 @@ export class Router {
 }
 
 /** Lets other work (requests, sockets) run before a long computation. */
-function yieldTurn(): Promise<void> {
+export function yieldTurn(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
