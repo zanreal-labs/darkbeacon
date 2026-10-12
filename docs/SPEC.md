@@ -127,10 +127,12 @@ interface DomainEvent<T = unknown> {
 
 ## Mapping (MVP slice)
 
-- Map: id, slug, name, owner account, settings (scopes: wormhole/high/low/null/pochven), labels list
-  (id, name, color, description — editable by manager+).
-- System on map: solar system id, position, custom name, temporary name, tag, status, description (markdown),
-  labels, locked, visible (hidden systems keep their intel; nothing routes to hidden systems).
+- Map: id, slug, name, owner account, settings (scopes: wormhole/high/low/null/pochven), Tags list
+  (`labels`: id, name, color, description) and Labels list (`systemLabels`: id, name ≤ 8, description;
+  WH1, WH2, WH3 to start with), both editable by manager+.
+- System on map: solar system id, position, custom name, temporary name, status, description (markdown),
+  Tags (`labelIds`), Labels (`systemLabelIds`) and one custom label, locked, visible (hidden systems keep
+  their intel; nothing routes to hidden systems). The old free-text tag is kept but not used.
 - Connection: source, target, type (wormhole|gate|bridge), time status, mass status, ship size, mass-saved flag,
   dangerous, bubbled (none|source|target|both).
 - Signature: system, eve id, group, type, name, description, linked connection, timestamps; paste parser
@@ -142,7 +144,7 @@ interface DomainEvent<T = unknown> {
 ## Sharing and composite maps
 
 - A map's admin shares it with another map (`read` or `read-write`, with scopes from `shareScope`:
-  topology, connection status, signatures, intel, characters, bookmark labels); the target's admin
+  topology, connection status, signatures, intel, characters, labels); the target's admin
   accepts (consent), either side revokes; audited as `map.share.*` on both maps' streams.
 - A composite map has no objects of its own and merges the maps shared with it (an alliance chain);
   a standard map may merge shared maps too. Viewers of a merged map gain no access to its sources.
@@ -152,7 +154,7 @@ interface DomainEvent<T = unknown> {
   shows in one line in the sidebar, never on the canvas.
 - Merged changes are published on the merged map's own stream with its own seq; edits on a merged
   map write through to read-write sources only, never past the share's scopes.
-  A composite keeps its own notes, labels and locks of systems; raising a share to read-write
+  A composite keeps its own notes, Tags and locks of systems; raising a share to read-write
   needs the target's consent again; webhooks and plugins of a map with objects of its own skip
   the merged copies.
 - Sources sit behind the `ChainSource` port in a wire-ready delta format (stable keys, stamped
