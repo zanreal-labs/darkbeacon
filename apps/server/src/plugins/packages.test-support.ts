@@ -47,6 +47,13 @@ export default {
     log.version = ctx.plugin.version;
     if (log.subscribeTo) ctx.on(log.subscribeTo, () => {});
     if (log.failRegister) throw new Error('cannot start');
+    log.publicUrl = ctx.instance.publicUrl;
+    if (log.durable) {
+      log.sealed = ctx.secrets.open(ctx.secrets.seal('secret')) === 'secret';
+      ctx.consume({ name: 'durable', events: ['system.*'], handle: async (event) => {
+        log.durable.push(event.type + '@' + event.stream);
+      } });
+    }
     ctx.on('system.*', async (event) => {
       if (event.data && event.data.fail) throw new Error('handler broke');
       log.events.push(event.type + '@' + event.stream);

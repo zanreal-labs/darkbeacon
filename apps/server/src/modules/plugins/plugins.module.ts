@@ -3,6 +3,7 @@ import {
   Global,
   Inject,
   Injectable,
+  Logger,
   Module,
   type OnApplicationBootstrap,
   type OnApplicationShutdown,
@@ -18,7 +19,10 @@ import { isEventOfType, type MapSnapshot } from '@darkbeacon/shared';
 import { builtInThemes, SYSTEM_THEME_ID } from '@darkbeacon/theme-sdk';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { DiscordBotService } from '@darkbeacon/identity';
+import { SecretBox } from '../../adapters/identity/secret-box.js';
 import {
+  KyselyBundledPluginMarks,
   KyselyPluginRepository,
   KyselyThemeRepository,
 } from '../../adapters/plugins/kysely-plugin-repository.js';
@@ -53,9 +57,14 @@ const NotificationInput = z.object({
   url: z.url().optional(),
 });
 
+/** Catalogue folders installed and switched on by default (see `PluginAdmin.ensureBundled`). */
+export const BUNDLED_PLUGINS = ['discord-notify'];
+
 /** Starts plugins once every module is ready, wires their ports and accepts .tgz uploads. */
 @Injectable()
 export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, OnApplicationShutdown {
+  private readonly logger = new Logger('Plugins');
+
   constructor(
     @Inject(PluginHost) private readonly host: PluginHost,
     @Inject(PluginPortProviders) private readonly providers: PluginPortProviders,
@@ -69,6 +78,8 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
     @Inject(EventConsumers) private readonly consumers: EventConsumers,
     @Inject(ThemeAdmin) private readonly themes: ThemeAdmin,
     @Inject(SignInCookies) private readonly signInCookies: SignInCookies,
+    @Inject(DiscordBotService) private readonly bot: DiscordBotService,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   onModuleInit(): void {
@@ -109,9 +120,28 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
       getSystem: (id) => this.universe.getSystem(id),
       searchSystems: (query, limit = 20) => this.universe.searchSystems(query, limit),
     };
+    this.providers.discord = {
+      available: () => this.bot.configured(),
+      channelLabel: async (guildId, channelId) => {
+        const [guilds, channels] = await Promise.all([
+          this.bot.guilds().catch(() => []),
+          this.bot.channels(guildId).catch(() => []),
+        ]);
+        const channel = channels.find((c) => c.id === channelId);
+        const guild = guilds.find((g) => g.id === guildId);
+        return channel ? `#${channel.name}${guild ? ` on ${guild.name}` : ''}` : null;
+      },
+      send: (channelId, message) => this.bot.send(channelId, message),
+    };
   }
 
   async onApplicationBootstrap(): Promise<void> {
+    // Plugins shipped on by default; tests install what they need themselves.
+    if (this.config.env !== 'test') {
+      await this.admin
+        .ensureBundled(BUNDLED_PLUGINS, new KyselyBundledPluginMarks(this.database))
+        .catch((error: unknown) => this.logger.error(`bundled plugins: ${String(error)}`));
+    }
     await this.host.start();
   }
 
@@ -224,6 +254,8 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
         notifiers: NotifierRegistry,
         commands: PluginCommandRegistry,
         providers: PluginPortProviders,
+        consumers: EventConsumers,
+        config: AppConfig,
       ) =>
         new PluginHost({
           admin,
@@ -238,6 +270,9 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
           commands,
           providers,
           pluginDir: (id) => installer.pluginDir(id),
+          consumers,
+          publicUrl: config.publicUrl,
+          secrets: (id) => new SecretBox(config.secretKey, `plugin:${id}`),
         }),
       inject: [
         PluginAdmin,
@@ -252,6 +287,8 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
         NotifierRegistry,
         PluginCommandRegistry,
         PluginPortProviders,
+        EventConsumers,
+        APP_CONFIG,
       ],
     },
     PluginsLifecycle,

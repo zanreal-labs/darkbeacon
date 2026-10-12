@@ -50,6 +50,8 @@ const MAX_TRIES = 5;
 @Injectable()
 export class EventConsumers implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly consumers: EventConsumer[] = [];
+  /** Consumers whose cursor exists; only those are drained. */
+  private readonly ready = new Set<EventConsumer>();
   private readonly failures = new Map<string, number>();
   private readonly logger = new Logger('EventConsumers');
   private running: Promise<void> | null = null;
@@ -70,10 +72,30 @@ export class EventConsumers implements OnApplicationBootstrap, OnModuleDestroy {
       throw new Error(`event consumer ${consumer.name} is registered twice`);
     }
     this.consumers.push(consumer);
+    // Registered while running (a plugin loaded later): start it once its cursor exists.
+    if (!this.stopped) {
+      void this.init(consumer)
+        .then(() => {
+          this.ready.add(consumer);
+          return this.wake();
+        })
+        .catch((error: unknown) => this.logger.error(`${consumer.name}: ${message(error)}`));
+    }
+  }
+
+  /** Stops a consumer; its cursor is kept, so registering it again resumes where it stopped. */
+  unregister(name: string): void {
+    const index = this.consumers.findIndex((c) => c.name === name);
+    if (index === -1) return;
+    const [consumer] = this.consumers.splice(index, 1);
+    this.ready.delete(consumer!);
   }
 
   async onApplicationBootstrap(): Promise<void> {
-    for (const consumer of this.consumers) await this.init(consumer);
+    for (const consumer of this.consumers) {
+      await this.init(consumer);
+      this.ready.add(consumer);
+    }
     this.stopped = false;
     this.unsubscribe = this.bus.subscribe(() => void this.wake());
     this.timer = setInterval(() => void this.wake(), POLL_MS).unref();
@@ -97,8 +119,9 @@ export class EventConsumers implements OnApplicationBootstrap, OnModuleDestroy {
     this.running = (async () => {
       do {
         this.again = false;
-        for (const consumer of this.consumers) {
+        for (const consumer of [...this.consumers]) {
           if (this.stopped) return;
+          if (!this.ready.has(consumer)) continue;
           await this.drain(consumer).catch((error: unknown) =>
             this.logger.error(`${consumer.name}: ${message(error)}`),
           );

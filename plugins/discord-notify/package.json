@@ -1,11 +1,12 @@
 {
   "name": "@darkbeacon/plugin-discord-notify",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "Posts chosen map events to a Discord webhook",
+  "description": "Posts what matters on a map to a Discord channel",
   "type": "module",
   "files": [
-    "dist/server.js",
+    "dist/*.js",
+    "dist/migrations/*.js",
     "settings.schema.json",
     "darkbeacon-plugin.json"
   ],
@@ -13,6 +14,8 @@
     "build": "tsc -b"
   },
   "devDependencies": {
-    "@darkbeacon/plugin-sdk": "workspace:*"
+    "@darkbeacon/db": "workspace:*",
+    "@darkbeacon/plugin-sdk": "workspace:*",
+    "@darkbeacon/theme-sdk": "workspace:*"
   }
 }

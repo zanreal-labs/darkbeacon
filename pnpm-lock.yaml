@@ -315,9 +315,15 @@ importers:
 
   plugins/discord-notify:
     devDependencies:
+      '@darkbeacon/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@darkbeacon/plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
+      '@darkbeacon/theme-sdk':
+        specifier: workspace:*
+        version: link:../../packages/theme-sdk
 
   plugins/sample-widget:
     devDependencies:

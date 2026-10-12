@@ -52,6 +52,19 @@ export interface PluginMigration {
   up(db: Kysely<unknown>): Promise<void>;
 }
 
+/**
+ * The instance's Discord bot, when an admin connected one (Admin, Instance). Messages take
+ * Discord's Create Message shape (`content`, `embeds`, `allowed_mentions`).
+ */
+export interface DiscordBotPort {
+  /** True when a bot is connected. */
+  available(): Promise<boolean>;
+  /** "#alerts on Hard Knocks", or null when the bot cannot see that channel. */
+  channelLabel(guildId: string, channelId: string): Promise<string | null>;
+  /** Posts as the bot; rejects with Discord's reason. */
+  send(channelId: string, message: Record<string, unknown>): Promise<void>;
+}
+
 export interface PluginPorts {
   maps: MapReader;
   universe: UniverseReader;
@@ -59,6 +72,22 @@ export interface PluginPorts {
   notifier: Notifier;
   clock: Clock;
   db: PluginDatabase;
+  discord: DiscordBotPort;
+}
+
+/**
+ * A durable subscription: events are read from the event log with a cursor kept for the plugin,
+ * so nothing is missed across restarts or while the plugin reloads. `handle` runs inside the
+ * transaction that moves the cursor (writes through the `db` port commit with it); a handler
+ * that throws is retried, and after five failures the event is skipped. Events from while the
+ * plugin was switched off are delivered when it is switched on again: check `occurredAt`.
+ */
+export interface DurableConsumer {
+  /** Stable within the plugin; the cursor is stored under it. */
+  name: string;
+  /** Event types or `prefix.*`, covered by the manifest's `events`. Map events only. */
+  events: string[];
+  handle(event: DomainEvent): Promise<void>;
 }
 
 /** Ports a plugin can implement for the core. */
@@ -123,6 +152,15 @@ export interface PluginContext<P extends PluginPortName = PluginPortName> {
    * Returns an unsubscribe function.
    */
   on(eventType: string, handler: (event: DomainEvent) => void | Promise<void>): () => void;
+  /** Like `on`, but durable (see `DurableConsumer`). Returns a function that stops it. */
+  consume(consumer: DurableConsumer): () => void;
+  /** Facts about the instance the plugin runs on. */
+  readonly instance: { readonly publicUrl: string };
+  /**
+   * Encrypts secrets (webhook URLs, tokens) for the plugin's own tables, with a key derived from
+   * the instance's SECRET_KEY for this plugin alone. `open` answers null for text it cannot open.
+   */
+  readonly secrets: { seal(text: string): string; open(sealed: string): string | null };
   readonly commands: PluginCommands;
   readonly settings: PluginSettings;
   readonly logger: PluginLogger;

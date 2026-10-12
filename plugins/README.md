@@ -3,11 +3,11 @@
 First-party packages. They form the catalogue an admin installs from (`catalog:<folder>`), and
 each plugin is built against `@darkbeacon/plugin-sdk` only.
 
-| Folder           | What it shows                                                                        |
-| ---------------- | ------------------------------------------------------------------------------------ |
-| `discord-notify` | Event subscriptions, per-map settings (JSON Schema), providing a `Notifier`          |
-| `sample-widget`  | A web part in the `widget` slot, an HTTP route, an event subscriber with local state |
-| `theme-amarr`    | A theme package: a manifest and token overrides, no code                             |
+| Folder           | What it shows                                                                                                                         |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `discord-notify` | On by default: a durable consumer, own tables (`db`), the `discord` bot port, HTTP routes for the map Notifications tab, a `Notifier` |
+| `sample-widget`  | A web part in the `widget` slot, an HTTP route, an event subscriber with local state                                                  |
+| `theme-amarr`    | A theme package: a manifest and token overrides, no code                                                                              |
 
 ## Writing a plugin
 

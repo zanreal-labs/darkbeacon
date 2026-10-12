@@ -83,6 +83,8 @@ function check(file, source) {
       }
       return null;
     case 'plugins':
+      // Tests may run a plugin against a real database on both dialects; plugin code may not.
+      if (source === '@darkbeacon/db/testing' && /\.test\.tsx?$/.test(file)) return null;
       if (
         pkg.startsWith('@darkbeacon/') &&
         !['@darkbeacon/plugin-sdk', '@darkbeacon/theme-sdk'].includes(pkg)

@@ -18,6 +18,8 @@ import {
   MANIFEST_FILE,
   eventAllowed,
   parseManifest,
+  type DiscordBotPort,
+  type DurableConsumer,
   type MapReader,
   type Notification,
   type Notifier,
@@ -44,6 +46,7 @@ import {
 import type { MapSnapshot } from '@darkbeacon/shared';
 import { readJson } from './installer.js';
 import { manifestPath } from './manifest-file.js';
+import type { EventConsumer } from '../platform/event-consumers.js';
 import type { PluginCommandRegistry } from './plugin-commands.js';
 import { runPluginMigrations } from './plugin-migrations.js';
 
@@ -54,6 +57,14 @@ import { runPluginMigrations } from './plugin-migrations.js';
 export class PluginPortProviders {
   universe: UniverseReader | null = null;
   mapSnapshot: ((mapId: string) => Promise<MapSnapshot | null>) | null = null;
+  /** The instance's Discord bot (identity sets it). */
+  discord: DiscordBotPort | null = null;
+}
+
+/** What the host needs of the durable event consumers (`EventConsumers`). */
+export interface DurableConsumers {
+  register(consumer: EventConsumer): void;
+  unregister(name: string): void;
 }
 
 export interface PluginHostDeps {
@@ -70,6 +81,12 @@ export interface PluginHostDeps {
   commands: PluginCommandRegistry;
   providers: PluginPortProviders;
   pluginDir(id: string): string;
+  /** Durable consumers for `ctx.consume`; without them it throws (tests that do not need it). */
+  consumers?: DurableConsumers;
+  /** `ctx.instance.publicUrl`. */
+  publicUrl?: string;
+  /** `ctx.secrets`: a sealing box per plugin (keyed from SECRET_KEY). */
+  secrets?: (pluginId: string) => { seal(text: string): string; open(sealed: string): string | null };
   logger?: (pluginId: string) => PluginLogger;
   /** Failures in a row (handlers, routes, notifiers) after which a plugin is disabled. Default 5. */
   failureThreshold?: number;
@@ -292,6 +309,9 @@ export class PluginHost {
       ports,
       on: (type: string, handler: (event: DomainEvent) => void | Promise<void>) =>
         this.subscribe(loaded, type, handler),
+      consume: (consumer: DurableConsumer) => this.consume(loaded, consumer),
+      instance: Object.freeze({ publicUrl: this.deps.publicUrl ?? 'http://localhost:3000' }),
+      secrets: this.secretsFor(id),
       commands: { run: (name: string, input: unknown) => this.deps.commands.run(actor, name, input) },
       settings: {
         get: <T>() => this.settings(id, null) as Promise<T>,
@@ -328,7 +348,68 @@ export class PluginHost {
         db: () => database.db(),
         transaction: (work) => database.transaction(work),
       }),
+      discord: () => ({
+        available: async () => (await providers.discord?.available()) ?? false,
+        channelLabel: async (guildId, channelId) =>
+          (await providers.discord?.channelLabel(guildId, channelId)) ?? null,
+        send: (channelId, message) => {
+          if (!providers.discord) throw new Error('No Discord bot on this server');
+          return providers.discord.send(channelId, message);
+        },
+      }),
     };
+  }
+
+  private secretsFor(id: string): PluginContext['secrets'] {
+    const box = this.deps.secrets?.(id);
+    return Object.freeze({
+      seal: (text: string) => {
+        if (!box) throw new Error('Secrets are not available to plugins on this server');
+        return box.seal(text);
+      },
+      open: (sealed: string) => box?.open(sealed) ?? null,
+    });
+  }
+
+  /**
+   * A durable consumer for the plugin (`ctx.consume`): read from the event log with its own
+   * cursor (`plugin:<id>:<name>`), map events only, from maps the plugin is not switched off on.
+   * A failing handler counts as a plugin failure and the event is retried by the consumers.
+   */
+  private consume(loaded: LoadedPlugin, consumer: DurableConsumer): () => void {
+    const consumers = this.deps.consumers;
+    if (!consumers) throw new Error('Durable consumers are not available on this server');
+    for (const type of consumer.events) {
+      if (!eventAllowed(loaded.manifest.events, type)) {
+        throw new ForbiddenError(`"${type}" is not among the events in ${MANIFEST_FILE}`);
+      }
+    }
+    if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(consumer.name))
+      throw new Error(`invalid consumer name ${consumer.name}`);
+    const name = `plugin:${loaded.plugin.id}:${consumer.name}`;
+    consumers.register({
+      name,
+      streams: ['map'],
+      types: consumer.events,
+      handle: async (event) => {
+        if (loaded.stopped || !isActiveOn(loaded.plugin, mapIdOf(event))) return;
+        try {
+          await consumer.handle(event);
+          loaded.failures = 0;
+        } catch (error) {
+          this.fail(loaded, error, `consuming ${event.type}`);
+          throw error;
+        }
+      },
+    });
+    let stopped = false;
+    const stop = () => {
+      if (stopped) return;
+      stopped = true;
+      consumers.unregister(name);
+    };
+    loaded.cleanups.push(stop);
+    return stop;
   }
 
   private mapReader(loaded: LoadedPlugin): MapReader {

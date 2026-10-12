@@ -57,6 +57,38 @@ describe('PluginAdmin', () => {
     return uc.install(admin, { kind: 'catalog', name: 'pinger' });
   };
 
+  it('installs bundled plugins switched on, upgrades them, and never brings back an uninstalled one', async () => {
+    const seen = new Set<string>();
+    const marks = { seen: async (id: string) => seen.has(id), mark: async (id: string) => void seen.add(id) };
+    const ship = (version: string) => {
+      installer.entries = [
+        {
+          source: 'catalog:pinger',
+          kind: 'plugin',
+          id: 'pinger',
+          name: 'Pinger',
+          version,
+          description: null,
+        },
+      ];
+      installer.next = { kind: 'plugin', manifest: manifest(version), directory: `/staging/${version}` };
+    };
+    ship('1.0.0');
+    expect(await uc.ensureBundled(['pinger', 'missing'], marks)).toEqual(['pinger']);
+    expect(plugins.rows.get('pinger')).toMatchObject({ enabled: true });
+    // The same version again: nothing to do.
+    expect(await uc.ensureBundled(['pinger'], marks)).toEqual([]);
+    // A newer version shipped: upgraded, still on (an admin who switched it off keeps it off).
+    await uc.setEnabled(admin, 'pinger', false);
+    ship('1.1.0');
+    expect(await uc.ensureBundled(['pinger'], marks)).toEqual(['pinger']);
+    expect(plugins.rows.get('pinger')).toMatchObject({ enabled: false, manifest: { version: '1.1.0' } });
+    // Uninstalled by an admin: stays away.
+    await uc.uninstall(admin, 'pinger');
+    expect(await uc.ensureBundled(['pinger'], marks)).toEqual([]);
+    expect(plugins.rows.has('pinger')).toBe(false);
+  });
+
   it('installs disabled, commits the files and publishes plugin.updated', async () => {
     const dto = await install();
     expect(dto).toMatchObject({ id: 'pinger', enabled: false, ports: ['notifier'], hasSettings: true });
