@@ -51,6 +51,11 @@ const SIGNATURE_FIELDS = [
   'name',
   'description',
   'connectionId',
+  'tempName',
+  'destination',
+  'timeStatus',
+  'massStatus',
+  'bubbled',
 ] as const satisfies ReadonlyArray<keyof UpdateSignatureRequest>;
 
 const CHANGED_SINCE = 'It changed again since; revert the later change first';
@@ -198,6 +203,21 @@ export class MappingReverter implements ChangeReverter {
         const siblings = await this.ports.signatures.listForSystem(mapId, before.solarSystemId);
         if (siblings.some((s) => s.eveId === before.eveId))
           throw new ConflictError(`Signature ${before.eveId} is there again`);
+        // Back as it was: same id, fields, author and link (when the connection is still there).
+        if (before.id) {
+          // The audit snapshot leaves out bookkeeping (map, times, authors).
+          const snapshot = {
+            createdAt: event.occurredAt,
+            ...before,
+            // The connection it led through may have come back in the same undo, with a new id.
+            ...(before.connectionId ? { connectionId: connectionId(before.connectionId) } : {}),
+            mapId,
+            updatedAt: event.occurredAt,
+          } as SignatureDto;
+          const back = await this.uc.signatures.restore(actor, mapId, [snapshot]);
+          if (back.length === 0) throw new ConflictError('The signature cannot come back');
+          return;
+        }
         const added = await this.uc.signatures.add(actor, mapId, before.solarSystemId, {
           eveId: before.eveId,
           ...(before.group ? { group: before.group } : {}),

@@ -21,6 +21,8 @@ import { MapRoutingSettingsDto, WayHomeDto } from './dto/route-panel.js';
 import { McpMode } from './dto/publishing.js';
 import { MapShareDto, MapSourceDto } from './dto/sharing.js';
 import { CharacterPresenceDto } from './dto/tracking.js';
+import { CommentDto } from './dto/comments.js';
+import { StructureDto } from './dto/structures.js';
 import type { EventType } from './events.js';
 import { shareScope } from './share-scope.js';
 
@@ -100,6 +102,11 @@ export const EVENT_DATA_SCHEMAS: Record<EventType, z.ZodType> = {
   'character.unlinked': z.object({ characterId: EveId }),
   'plugin.updated': PluginDto,
   'plugin.removed': z.object({ id: z.string() }),
+  'comment.added': CommentDto,
+  'comment.removed': z.object({ id: Id, solarSystemId: EveId }),
+  'structure.added': StructureDto,
+  'structure.updated': StructureDto,
+  'structure.removed': z.object({ id: Id, solarSystemId: EveId }),
   'access.rule_changed': AccessRuleDto,
   'access.owner_changed': z.object({ mapId: Id, ownerAccountId: Id, previousOwnerAccountId: Id }),
   'map.trashed': z.object({ id: Id, deletedAt: Timestamp }),

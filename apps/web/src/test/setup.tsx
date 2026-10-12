@@ -54,6 +54,20 @@ export function installFlowMocks(size = { width: 160, height: 60 }) {
 export function setupMockServer(...handlers: Parameters<typeof setupServer>) {
   // ThemeProvider asks for installed themes; without them it keeps the built-in ones.
   const themes = http.get(routes.themes.list.path, () => new HttpResponse(null, { status: 404 }));
+  // Sidebar sections load their own lists; empty unless a test says otherwise.
+  const empty = [
+    routes.comments.list.path,
+    routes.structures.list.path,
+    routes.audit.systemHistory.path,
+    routes.connections.intel.path,
+  ].map((path) =>
+    http.get(path, () =>
+      HttpResponse.json(path === routes.audit.systemHistory.path ? { entries: [], nextCursor: null } : []),
+    ),
+  );
+  const wormholes = http.get(routes.universe.wormholes.path, () =>
+    HttpResponse.json({ types: [], hullClasses: [] }),
+  );
   // The routes section asks for the viewer's route options, hubs and routes; none by default.
   const routing = [
     http.get(routes.routing.preferences.path, () => HttpResponse.json(DEFAULT_ROUTE_PREFERENCES)),
@@ -67,7 +81,7 @@ export function setupMockServer(...handlers: Parameters<typeof setupServer>) {
       }),
     ),
   ];
-  const server = setupServer(...handlers, themes, ...routing);
+  const server = setupServer(...handlers, themes, ...empty, wormholes, ...routing);
   beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
   afterEach(() => server.resetHandlers());
   afterAll(() => server.close());

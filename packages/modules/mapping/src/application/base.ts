@@ -16,8 +16,10 @@ import {
 import type { EventPayloads, EventType } from '@darkbeacon/shared';
 import type { MapSystem } from '../domain/map.js';
 import type {
+  AuthorDirectory,
   ChainOverlay,
   ChangeStamps,
+  CommentRepository,
   ConnectionRepository,
   MapRepository,
   PassageRepository,
@@ -25,6 +27,7 @@ import type {
   PingAuthorDirectory,
   PingRepository,
   SignatureRepository,
+  StructureRepository,
   SystemRepository,
   UniverseCatalog,
   MapDirectory,
@@ -44,6 +47,11 @@ export interface MappingPorts {
   /** Merged chains of maps that merge others (sharing); absent: every map shows its own rows. */
   overlay?: ChainOverlay;
   universe: UniverseCatalog;
+  /** Names written on signatures, comments and structures; absent: nobody is named. */
+  authors?: AuthorDirectory;
+  /** Structures and comments, for map files and copies; absent: maps travel without them. */
+  structures?: StructureRepository;
+  comments?: CommentRepository;
   /** Accounts, the map creation policy and rule counts; absent: anyone creates, no inventory names. */
   directory?: MapDirectory;
   /** Rally pings; absent: no pings (and nothing is held on the map by one). */

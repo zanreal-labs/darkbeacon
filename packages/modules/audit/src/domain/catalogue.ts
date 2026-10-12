@@ -49,6 +49,13 @@ const signatureRefs = (d: Fields, b: Fields | null) => [
   ...ref('system', either(d, b, 'solarSystemId')),
   ...ref('connection', d.connectionId ?? b?.connectionId),
 ];
+/** Things that belong to one system (comments, structures): found in that system's history. */
+const inSystem = (kind: string) => (d: Fields, b: Fields | null) => [
+  ...ref(kind, either(d, b, 'id')),
+  ...ref('system', either(d, b, 'solarSystemId')),
+];
+/** Who wrote it is the event's actor already; not a change of its own. */
+const AUTHORED = [...STAMPS, 'createdBy', 'updatedBy'] as const;
 const byId =
   (kind: string, key = 'id') =>
   (d: Fields, b: Fields | null): AuditEntity => ({ kind, id: str(either(d, b, key)) });
@@ -134,9 +141,9 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
       ...ref('system', b?.to),
     ],
   },
-  'signature.added': { op: 'create', entity: byId('signature'), refs: signatureRefs, ignore: STAMPS },
-  'signature.updated': { op: 'update', entity: byId('signature'), refs: signatureRefs, ignore: STAMPS },
-  'signature.removed': { op: 'delete', entity: byId('signature'), refs: signatureRefs, ignore: STAMPS },
+  'signature.added': { op: 'create', entity: byId('signature'), refs: signatureRefs, ignore: AUTHORED },
+  'signature.updated': { op: 'update', entity: byId('signature'), refs: signatureRefs, ignore: AUTHORED },
+  'signature.removed': { op: 'delete', entity: byId('signature'), refs: signatureRefs, ignore: AUTHORED },
   'character.moved': {
     op: 'activity',
     entity: character,
@@ -420,6 +427,26 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
     activity: () => ({ downloaded: change(null, true) }),
   },
   'backup.settings_changed': { op: 'update', entity: () => ({ kind: 'settings', id: 'backups' }) },
+  'comment.added': { op: 'create', entity: byId('comment'), refs: inSystem('comment'), ignore: STAMPS },
+  'comment.removed': { op: 'delete', entity: byId('comment'), refs: inSystem('comment'), ignore: STAMPS },
+  'structure.added': {
+    op: 'create',
+    entity: byId('structure'),
+    refs: inSystem('structure'),
+    ignore: AUTHORED,
+  },
+  'structure.updated': {
+    op: 'update',
+    entity: byId('structure'),
+    refs: inSystem('structure'),
+    ignore: AUTHORED,
+  },
+  'structure.removed': {
+    op: 'delete',
+    entity: byId('structure'),
+    refs: inSystem('structure'),
+    ignore: AUTHORED,
+  },
   'api_key.created': {
     op: 'create',
     entity: byId('apiKey'),

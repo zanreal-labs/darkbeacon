@@ -6,6 +6,7 @@ import {
   WANDERER_EXPORT_CONTENT_TYPE,
   type AccessRuleDto,
   type AuditPageDto,
+  type CommentDto,
   type HubsDto,
   type ImportJobDto,
   type ImportPlanDto,
@@ -13,6 +14,7 @@ import {
   type MapSnapshot,
   type MeDto,
   type StreamSnapshotDto,
+  type StructureDto,
   type WandererTestResultDto,
   type WebhookDto,
 } from '@darkbeacon/shared';
@@ -152,8 +154,18 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
     expect(map.connections).toHaveLength(preview.counts.connections);
     const home = map.systems.find((s) => s.solarSystemId === 31002531)!;
     expect(home).toMatchObject({ customName: 'Home sweet home', status: 'home', locked: true });
-    expect(home.description).toContain('Structure: Fortizar “Home Fort”\nOwner: Wormhole Rescue Ltd [RESQ]');
-    expect(home.description).toContain('Neut Loki on d-scan');
+    // Structures and comments are Darkbeacon structures and comments, with their authors and times.
+    expect(home.description).not.toContain('Home Fort');
+    const structures = await owner.json<StructureDto[]>(`/api/maps/${mapId}/systems/31002531/structures`);
+    expect(structures.find((s) => s.name === 'Home Fort')).toMatchObject({
+      typeName: 'Fortizar',
+      owner: { name: 'Wormhole Rescue Ltd', ticker: 'RESQ' },
+      createdBy: { name: 'CCP Bartender' },
+    });
+    const comments = await owner.json<CommentDto[]>(`/api/maps/${mapId}/systems/31002531/comments`);
+    expect(comments.find((c) => c.text.startsWith('Neut Loki on d-scan'))?.author?.name).toBe('Scout Alt');
+    expect(job.outcome.structures!.created).toBe(preview.counts.structures);
+    expect(job.outcome.comments!.created).toBe(preview.counts.comments);
     // Changes carry Wanderer's times (the field times maps merging this one compare).
     const wandererHome = wanderer.map.systems.find((x) => x.solar_system_id === 31002531)!;
     expect(home.updatedAt).toBe(Date.parse(String(wandererHome.updated_at)));
@@ -265,7 +277,9 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
       `/api/maps/${mapId}/connections/${pairOf(wanderer.map.connections[0]!)!.id}/passages`,
     );
     expect(passages.map((p) => p.shipTypeId).sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([605, 22456]);
-    expect(home.description).toContain('Comment by Scout Alt');
+    // Who wrote a comment comes from the character name Wanderer resolves.
+    const thread = await owner.json<CommentDto[]>(`/api/maps/${mapId}/systems/31002531/comments`);
+    expect(thread.some((c) => c.author?.name === 'Scout Alt')).toBe(true);
     // Imported wormholes are numbered like any other ({n} of the bookmark labels).
     expect(map.connections.filter((c) => c.type === 'wormhole' && c.bookmarkNumber).length).toBeGreaterThan(
       10,
@@ -345,6 +359,9 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
     expect(merged.status).toBe('done');
     expect(merged.outcome.systems).toMatchObject({ created: 0, updated: 1, removed: 0 });
     expect(merged.outcome.access).toMatchObject({ created: 0, unchanged: 6 });
+    // Comments and structures are not doubled either.
+    expect(merged.outcome.comments).toMatchObject({ created: 0 });
+    expect(merged.outcome.structures).toMatchObject({ created: 0 });
     const after = await snapshot(owner, mapId);
     expect(after.systems).toHaveLength(before.systems.length);
     expect(after.signatures).toHaveLength(before.signatures.length);

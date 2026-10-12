@@ -14,7 +14,7 @@ import {
   type MapExportDocument,
   type MapSettingsExportDocument,
 } from '@darkbeacon/shared';
-import type { ChainMap, Connection, MapSystem, Signature } from '../domain/map.js';
+import type { ChainMap, Comment, Connection, MapSystem, Signature, Structure } from '../domain/map.js';
 import { MappingUseCases } from './base.js';
 import { MapUseCases } from './maps.js';
 
@@ -26,6 +26,8 @@ export interface ImportedMap {
   systems: number;
   connections: number;
   signatures: number;
+  structures: number;
+  comments: number;
   skippedSystems: number[];
 }
 
@@ -131,11 +133,39 @@ export class MapTransfer extends MappingUseCases {
         signatures++;
         if (system.visible) events.add('signature.added', signature);
       }
+
+      // Structures and comments keep their authors and dates: they are what was known then.
+      let structures = 0;
+      const structureRepository = this.ports.structures;
+      if (structureRepository) {
+        for (const s of document.structures ?? []) {
+          const system = placed.get(s.solarSystemId);
+          if (!system) continue;
+          const structure: Structure = { ...s, id: newId(), mapId: map.id };
+          await structureRepository.insert(structure);
+          structures++;
+          if (system.visible) events.add('structure.added', structure);
+        }
+      }
+      let comments = 0;
+      const commentRepository = this.ports.comments;
+      if (commentRepository) {
+        for (const c of document.comments ?? []) {
+          const system = placed.get(c.solarSystemId);
+          if (!system) continue;
+          const comment: Comment = { ...c, id: newId(), mapId: map.id };
+          await commentRepository.insert(comment);
+          comments++;
+          if (system.visible) events.add('comment.added', comment);
+        }
+      }
       return {
         map,
         systems: placed.size,
         connections: connectionIds.size,
         signatures,
+        structures,
+        comments,
         skippedSystems,
       };
     });
@@ -143,16 +173,20 @@ export class MapTransfer extends MappingUseCases {
 
   /**
    * A copy of the map as a new one owned by the caller: systems (hidden ones and their intel too),
-   * connections, settings and labels, and signatures unless left out (map admins). The rules
-   * are copied by the access module.
+   * connections, settings and labels, and signatures, structures and comments unless left out
+   * (map admins). The rules are copied by the access module.
    */
   async duplicate(actor: Actor | null, mapId: string, request: DuplicateMapRequest): Promise<ImportedMap> {
     await this.authorize(actor, mapId, 'admin');
     const document = await this.read(mapId, null);
-    return this.importMap(actor, request.signatures ? document : { ...document, signatures: [] }, {
-      name: request.name,
-      slug: request.slug,
-    });
+    return this.importMap(
+      actor,
+      request.signatures ? document : { ...document, signatures: [], structures: [], comments: [] },
+      {
+        name: request.name,
+        slug: request.slug,
+      },
+    );
   }
 
   /** The map's settings and labels as a file (managers and up). */
@@ -189,10 +223,12 @@ export class MapTransfer extends MappingUseCases {
 
   private async read(mapId: string, instance: string | null): Promise<MapContentExport> {
     const map = await this.load(mapId);
-    const [systems, connections, signatures] = await Promise.all([
+    const [systems, connections, signatures, structures, comments] = await Promise.all([
       this.ports.systems.list(mapId),
       this.ports.connections.list(mapId),
       this.ports.signatures.listForMap(mapId),
+      this.ports.structures?.listForMap(mapId) ?? ([] as Structure[]),
+      this.ports.comments?.listForMap(mapId) ?? ([] as Comment[]),
     ]);
     const strip = <T extends { mapId: string; provenance?: unknown }>({
       mapId: _m,
@@ -216,6 +252,8 @@ export class MapTransfer extends MappingUseCases {
       systems: systems.map(strip),
       connections: connections.map(strip),
       signatures: signatures.map(strip),
+      structures: structures.map(strip),
+      comments: comments.map(strip),
     };
   }
 

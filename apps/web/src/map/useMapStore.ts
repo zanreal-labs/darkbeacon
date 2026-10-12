@@ -376,13 +376,15 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto, options:
         });
       },
 
-      removeConnection(connectionId: string, gesture?: Gesture) {
+      /** `withSignatures`: the signatures leading through it go too. */
+      removeConnection(connectionId: string, options: { withSignatures?: boolean } = {}, gesture?: Gesture) {
+        const query = options.withSignatures ? '?withSignatures=true' : '';
         const known = latest.current.connections.get(connectionId);
         return run({
           apply: (s) => ({ ...s, connections: mapWithout(s.connections, (_, id) => id !== connectionId) }),
           confirmedBy: (e) => e.type === 'connection.removed' && e.data.id === connectionId,
           request: (headers) =>
-            api(buildPath(routes.connections.remove.path, { mapId, connectionId }), {
+            api(`${buildPath(routes.connections.remove.path, { mapId, connectionId })}${query}`, {
               method: 'DELETE',
               headers,
             }),

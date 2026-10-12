@@ -121,6 +121,11 @@ export function signatureFields(request: UpdateSignatureRequest): Record<string,
     notes: request.description,
     kind: request.kind,
     link,
+    tempName: request.tempName,
+    destination: request.destination,
+    bubbled: request.bubbled,
+    time: request.timeStatus,
+    mass: request.massStatus,
   });
 }
 

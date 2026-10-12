@@ -52,6 +52,8 @@ import { passageMenuItems } from './menus/passages';
 import { STATUS_LABEL } from './nodeFacts';
 import type { MapStore } from './useMapStore';
 import { lowerFirst } from './undo/undoStack';
+import { connectionSignatureItems, paneSignatureItems } from './menus/signatures';
+import { signaturePrefs } from './signatures/prefs';
 import { holderStandingMenu, type HolderStanding } from './menus/intel';
 import { linksMenu } from './menus/links';
 import { pingMenuItems, type PingMenuContext } from './menus/pings';
@@ -477,6 +479,7 @@ export function connectionMenu(ctx: ConnectionMenuContext): MenuItem[] {
       icon: locked ? <LockOpen /> : <Lock />,
       onSelect: () => update({ locked: !locked }),
     });
+  flags.push(...connectionSignatureItems(c, can));
   flags.push(...more(ctx.plugins, (close) => ({ mapId: ctx.mapId, connectionId: c.id, close })));
   const remove: MenuItem[] =
     can.edit && (!locked || can.manage)
@@ -486,7 +489,10 @@ export function connectionMenu(ctx: ConnectionMenuContext): MenuItem[] {
             label: 'Remove connection',
             icon: <Trash2 />,
             danger: true,
-            onSelect: () => void store.removeConnection(c.id),
+            onSelect: () =>
+              void store.removeConnection(c.id, {
+                withSignatures: signaturePrefs().deleteConnectionWithSigs,
+              }),
           },
         ]
       : [];
@@ -547,6 +553,7 @@ export function paneMenu(ctx: PaneMenuContext): MenuItem[] {
         onSelect: ctx.onCenterOnMe,
       },
     ],
+    paneSignatureItems(),
   );
 }
 

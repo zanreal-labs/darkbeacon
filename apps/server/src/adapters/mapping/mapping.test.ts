@@ -393,7 +393,13 @@ describeEachDialect('mapping use cases', (t) => {
       text: `${PASTE}\nDEF-456\tCosmic Signature\tGas Site\tBarren Perimeter Reservoir\t100.0%\t1 AU`,
       mode: 'replace',
     });
-    expect(replaced).toEqual({ added: 0, updated: 1, removed: 1, skipped: [] });
+    expect(replaced).toEqual({
+      added: 0,
+      updated: 1,
+      removed: 1,
+      skipped: [],
+      removedSignatures: [expect.objectContaining({ id: stale.id, eveId: 'OLD-000' })],
+    });
     const list = await signatures.list(bob, map.id, SYSTEMS.c2);
     expect(list.map((s) => [s.eveId, s.group, s.name, s.description])).toEqual([
       ['ABC-123', 'wormhole', null, ''],

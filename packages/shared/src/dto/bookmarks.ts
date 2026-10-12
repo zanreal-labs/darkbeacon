@@ -20,6 +20,10 @@ export const BOOKMARK_VARIABLES = {
   eol: 'EOL when the wormhole is at the end of its life',
   tempName: "This system's temporary name",
   labels: "This system's Labels and custom label (WH1 bait)",
+  letter: 'The number as a letter (A, B, C)',
+  destClassIndex: 'A letter when several wormholes out of the parent lead to the same class (a, b)',
+  direction: 'In for a K162 (the hole was opened from the other side), Out for one that starts here',
+  spawn: 'Static, Wandering or K162',
 } as const;
 
 export type BookmarkVariable = keyof typeof BOOKMARK_VARIABLES;
@@ -50,6 +54,13 @@ export const BOOKMARK_ORDERS: Record<BookmarkOrder, { label: string; description
 export const BookmarkNumbering = z.object({
   order: BookmarkOrder.default('found'),
   renumberOnClose: z.boolean().default(false),
+  /** `{n}` counts from 0 (the first wormhole is 0, `{letter}` still starts at A). */
+  startAtZero: z.boolean().optional(),
+  /**
+   * What a variable's value is written as, keyed `<variable>:<value>` (`destClass:HS` -> `H`,
+   * `size:L` -> ``, `spawn:Static` -> `S`): Wanderer's value mappings. An empty text drops it.
+   */
+  values: z.record(z.string().max(32), z.string().max(16)).optional(),
 });
 export type BookmarkNumbering = z.infer<typeof BookmarkNumbering>;
 
@@ -99,15 +110,34 @@ export const BOOKMARK_TEMPLATE_PRESETS: readonly string[] = [
   '{n} {sig3}',
 ];
 
+/** Text of a variable's value, after the map's value mappings (see `BookmarkNumbering.values`). */
+export type BookmarkValues = Readonly<Record<string, string>>;
+
 /** Fills a template; empty variables drop out and spaces collapse. */
-export function renderBookmarkTemplate(template: string, vars: BookmarkVars): string {
+export function renderBookmarkTemplate(
+  template: string,
+  vars: BookmarkVars,
+  values: BookmarkValues = {},
+): string {
   return template
-    .replace(VARIABLE, (whole, name: string) =>
-      name in BOOKMARK_VARIABLES ? vars[name as BookmarkVariable] : whole,
-    )
+    .replace(VARIABLE, (whole, name: string) => {
+      if (!(name in BOOKMARK_VARIABLES)) return whole;
+      const value = vars[name as BookmarkVariable];
+      return value ? (values[`${name}:${value}`] ?? value) : value;
+    })
     .replace(/\s+/g, ' ')
     .trim();
 }
+
+/** Values the mappings can rename, by variable, as the settings offer them. */
+export const BOOKMARK_MAPPABLE_VALUES: Readonly<Partial<Record<BookmarkVariable, readonly string[]>>> = {
+  destClass: ['HS', 'LS', 'NS', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'Thera', 'C13', 'Drifter', 'Pochven'],
+  size: ['F', 'M', 'L', 'XL', 'C'],
+  mass: ['reduced', 'crit'],
+  eol: ['EOL'],
+  direction: ['In', 'Out'],
+  spawn: ['Static', 'Wandering', 'K162'],
+};
 
 /** Class labels of a system as bookmark text, from the SDE wormhole class and security. */
 export function bookmarkClassLabel(info: { whClass: number | null; security: number } | undefined): string {
@@ -270,6 +300,10 @@ export interface BookmarkChainInput {
   order?: BookmarkOrder | undefined;
   /** The map's Labels, for `{labels}`; left out, `{labels}` has only the custom label. */
   systemLabels?: readonly SystemLabelDto[] | undefined;
+  /** `{n}` counts from 0 (see `BookmarkNumbering.startAtZero`). */
+  startAtZero?: boolean | undefined;
+  /** Static wormhole types of a system, for `{spawn}`; unknown: `{spawn}` says K162 only. */
+  staticsOf?: ((solarSystemId: number) => readonly string[] | undefined) | undefined;
 }
 
 /** `{labels}` of a system: its Labels in the map's order, then its custom label. */
@@ -283,9 +317,28 @@ export function systemLabelsText(
   return names.join(' ');
 }
 
-/** `{n}` text: `3`, and `{N}`: `03`. */
-function numberVars(n: number | undefined): Pick<BookmarkVars, 'n' | 'N'> {
-  return n === undefined ? { n: '', N: '' } : { n: String(n), N: String(n).padStart(2, '0') };
+/** `{n}` text: `3`, `{N}`: `03` and `{letter}`: `C` (counted from 0 when asked, the letter not). */
+function numberVars(n: number | undefined, startAtZero = false): Pick<BookmarkVars, 'n' | 'N' | 'letter'> {
+  if (n === undefined) return { n: '', N: '', letter: '' };
+  const shown = startAtZero ? n - 1 : n;
+  return { n: String(shown), N: String(shown).padStart(2, '0'), letter: siblingLetter(n - 1).toUpperCase() };
+}
+
+const WORMHOLE_TYPE = /^[A-Z]\d{3}$/;
+
+/** `{direction}`: In for a K162, Out for a known type that starts in the parent. */
+function directionOf(type: string | null | undefined): string {
+  const code = type?.trim().toUpperCase() ?? '';
+  if (code === 'K162') return 'In';
+  return WORMHOLE_TYPE.test(code) ? 'Out' : '';
+}
+
+/** `{spawn}`: K162, or Static / Wandering by the parent's statics. */
+function spawnOf(type: string | null | undefined, statics: readonly string[] | undefined): string {
+  const code = type?.trim().toUpperCase() ?? '';
+  if (code === 'K162') return 'K162';
+  if (!WORMHOLE_TYPE.test(code) || !statics) return '';
+  return statics.map((s) => s.toUpperCase()).includes(code) ? 'Static' : 'Wandering';
 }
 
 /**
@@ -347,7 +400,26 @@ export function bookmarkChain(input: BookmarkChainInput): Map<number, BookmarkVa
     eol: '',
     tempName: s.temporaryName ?? '',
     labels: systemLabelsText(s, input.systemLabels),
+    letter: '',
+    destClassIndex: '',
+    direction: '',
+    spawn: '',
   });
+  // `{destClassIndex}`: wormholes out of one parent into the same class, by signature A to Z.
+  const sameClass = new Map<string, ChainStep[]>();
+  for (const step of steps) {
+    if (!numbersBookmark(step.connection)) continue;
+    const key = `${step.parent}:${input.classOf(step.child)}`;
+    sameClass.set(key, [...(sameClass.get(key) ?? []), step]);
+  }
+  const classIndex = new Map<string, string>();
+  for (const group of sameClass.values()) {
+    if (group.length < 2) continue;
+    group
+      .map((step) => ({ step, sig: sigOf(step)?.eveId ?? '~' }))
+      .sort((a, b) => (a.sig < b.sig ? -1 : a.sig > b.sig ? 1 : 0))
+      .forEach(({ step }, i) => classIndex.set(step.connection.id, siblingLetter(i)));
+  }
   for (const root of roots) result.set(root, { ...base(byId.get(root)!), chainIndex: '0', root: true });
   const letters = new Map<number, number>();
   for (const step of steps) {
@@ -360,7 +432,10 @@ export function bookmarkChain(input: BookmarkChainInput): Map<number, BookmarkVa
       sig: sig?.eveId ?? '',
       sig3: sig?.eveId.slice(0, 3) ?? '',
       chainIndex: `${step.depth}${siblingLetter(sibling)}`,
-      ...numberVars(numberOf.get(c.id)),
+      ...numberVars(numberOf.get(c.id), input.startAtZero),
+      destClassIndex: classIndex.get(c.id) ?? '',
+      direction: directionOf(sig?.type),
+      spawn: spawnOf(sig?.type, input.staticsOf?.(step.parent)),
       type: sig?.type ?? '',
       size: SIZE_TEXT[c.shipSize],
       mass: c.massStatus === 'critical' ? 'crit' : c.massStatus === 'reduced' ? 'reduced' : '',
@@ -375,7 +450,11 @@ export function bookmarkChain(input: BookmarkChainInput): Map<number, BookmarkVa
  * The label shown above a system. A temporary name wins unless the template places it itself;
  * roots (home) show only a temporary name; nothing to show is null.
  */
-export function bookmarkLabel(template: string, vars: BookmarkVars & { root: boolean }): string | null {
+export function bookmarkLabel(
+  template: string,
+  vars: BookmarkVars & { root: boolean },
+  values: BookmarkValues = {},
+): string | null {
   const used = bookmarkTemplateVariables(template);
   if (vars.tempName && !used.includes('tempName')) return vars.tempName;
   if (vars.root) return vars.tempName || null;
@@ -383,9 +462,9 @@ export function bookmarkLabel(template: string, vars: BookmarkVars & { root: boo
   // (a stargate, or a wormhole the server has not numbered yet).
   const needsSig = used.includes('sig') || used.includes('sig3');
   if (needsSig && !vars.sig) return vars.tempName || null;
-  const needsNumber = used.includes('n') || used.includes('N');
+  const needsNumber = used.includes('n') || used.includes('N') || used.includes('letter');
   if (needsNumber && !vars.n) return vars.tempName || null;
-  const label = renderBookmarkTemplate(template, vars);
+  const label = renderBookmarkTemplate(template, vars, values);
   return label || null;
 }
 
@@ -403,6 +482,10 @@ export const BOOKMARK_PREVIEW_VARS: BookmarkVars & { root: boolean } = {
   eol: '',
   tempName: '',
   labels: 'WH1',
+  letter: 'A',
+  destClassIndex: '',
+  direction: 'Out',
+  spawn: 'Static',
   root: false,
 };
 

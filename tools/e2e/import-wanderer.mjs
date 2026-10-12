@@ -51,10 +51,11 @@ if ((await allow.getAttribute('aria-checked')) !== 'true') await allow.click();
 await page.getByRole('switch', { name: 'Allow imports from private networks', checked: true }).waitFor();
 await shot('01-admin-imports');
 
-step('All maps has "Import from Wanderer"');
+step('All maps imports from Wanderer (Import menu)');
 await page.goto(`${BASE}/maps`, { waitUntil: 'networkidle' });
 await shot('02-all-maps');
-await page.getByRole('link', { name: 'Import from Wanderer' }).first().click();
+await page.getByRole('button', { name: 'Import' }).first().click();
+await page.getByRole('menuitem', { name: 'From Wanderer…' }).click();
 await page.waitForURL(/\/import$/);
 await page.waitForLoadState('networkidle');
 

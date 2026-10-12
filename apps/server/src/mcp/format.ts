@@ -132,8 +132,12 @@ export function signatureLine(s: SignatureDto): string {
     s.custom ? 'custom' : null,
     s.group,
   ].filter((p): p is string => p !== null);
-  if (s.type) parts.push(s.type);
+  if (s.type) parts.push(s.destination ? `${s.type} to ${s.destination.replaceAll('_', '/')}` : s.type);
   if (s.name) parts.push(s.name);
+  if (s.tempName) parts.push(`temp name "${s.tempName}"`);
+  if (s.timeStatus === 'eol') parts.push('EOL');
+  if (s.massStatus && s.massStatus !== 'fresh') parts.push(`mass ${s.massStatus}`);
+  if (s.bubbled) parts.push('bubbled');
   if (s.connectionId) parts.push(`links ${short(s.connectionId)}`);
   if (s.description) parts.push(`"${oneLine(s.description, 80)}"`);
   parts.push(`id ${short(s.id)}`);

@@ -24,6 +24,7 @@ import {
   KeyRound,
   Network,
   Plus,
+  Radar,
   Route,
   Send,
   Settings2,
@@ -100,6 +101,7 @@ import {
   Tooltip,
   useToast,
 } from '../ui';
+import { SignatureRetention } from './SignatureRetention';
 import { MapImportSettings } from './MapImportSettings';
 import dialog from './MapSettings.module.css';
 import styles from './settings.module.css';
@@ -179,6 +181,16 @@ const SECTIONS: readonly Section[] = [
     render: (map, can) => (
       <Pane>
         <BookmarkLabelSettings key={map.id} map={map} canManage={can.manage} canEdit={can.edit} />
+      </Pane>
+    ),
+  },
+  {
+    id: 'signatures',
+    title: 'Signatures',
+    icon: <Radar />,
+    render: (map) => (
+      <Pane>
+        <SignatureRetention key={map.id} map={map} />
       </Pane>
     ),
   },

@@ -58,6 +58,11 @@ export function PluginsProvider({
   return <RegistryContext.Provider value={registry}>{children}</RegistryContext.Provider>;
 }
 
+/** The registry, for native parts of the app that draw into plugin slots (node badges). */
+export function usePluginRegistry(): PluginRegistry {
+  return useContext(RegistryContext);
+}
+
 /** Components registered for `slot`, without plugins switched off on `mapId`. */
 export function useSlot<S extends WebSlot>(slot: S, mapId?: string | null): readonly SlotEntry<S>[] {
   const registry = useContext(RegistryContext);

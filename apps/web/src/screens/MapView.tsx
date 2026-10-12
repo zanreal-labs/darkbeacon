@@ -39,12 +39,14 @@ import type { ConnectionTraffic } from '../map/ConnectionEdge';
 import { systemDisplayName } from '../map/SystemNode';
 import { useMapStore } from '../map/useMapStore';
 import { useUndoShortcut } from '../map/undo/useUndoShortcut';
+import { useSignatureUndoBridge } from '../map/undo/signatureBridge';
 import { useSystemsClipboard } from '../map/clipboard/useSystemsClipboard';
 import { useCanvasPrefs } from '../map/canvas/prefs';
 import { RallyCard } from '../map/pings/RallyCard';
 import { usePingCommands, usePings } from '../map/pings/api';
 import { isWormholeSpace } from '../map/sidebar/SystemDetails';
 import { SystemSidebar } from '../map/sidebar/SystemSidebar';
+import { SignatureLayer } from '../map/signatures/SignatureLayer';
 import { filterableSources, permissionsFor, withoutSources } from '../map/sharing/chain';
 import { ProvenanceLine, provenanceText } from '../map/sharing/ProvenanceLine';
 import { SourceFilter, useHiddenSources } from '../map/sharing/SourceFilter';
@@ -227,6 +229,8 @@ export function MapView({
     });
   }, [state.systems, universe, systemLabels, labels]);
   const undo = useUndoShortcut(store.undo, toast, can.edit);
+  // One stack for Ctrl+Z: removed signatures join it while they can be put back.
+  useSignatureUndoBridge(map.id, store, endName);
 
   const closeMenu = useCallback(() => setMenu(null), []);
   const covered = (system || connection) && panel ? cover : { right: 0, bottom: 0 };
@@ -330,7 +334,7 @@ export function MapView({
         // A merged map writes through to its sources one change at a time.
         void store.gesture(label, (g) =>
           Promise.all([
-            ...plan.connections.map((id) => store.removeConnection(id, g)),
+            ...plan.connections.map((id) => store.removeConnection(id, {}, g)),
             ...plan.systems.map((id) => store.removeSystem(id, g)),
           ]),
         );
@@ -705,6 +709,7 @@ export function MapView({
         />
       )}
 
+      <SignatureLayer mapId={map.id} state={state} universe={universe} store={store} canEdit={can.edit} />
       {connection && !system && (
         <ConnectionSidebar
           mapId={map.id}

@@ -132,6 +132,38 @@ describe('bookmarkChain', () => {
     expect(chain.get(4)).toMatchObject({ chainIndex: '2a', sig: 'XYZ-777', destClass: 'HS' });
   });
 
+  it('knows direction, spawn, letters, same-class indexes, counting from 0 and value mappings', () => {
+    const extra = bookmarkChain({
+      systems: [system(1, { status: 'home' }), system(2), system(3), system(5)],
+      connections: [
+        connection('a', 1, 2, { bookmarkNumber: 1, bookmarkParent: 1 }),
+        connection('b', 1, 3, { bookmarkNumber: 2, bookmarkParent: 1 }),
+        connection('d', 1, 5, { bookmarkNumber: 3, bookmarkParent: 1 }),
+      ],
+      signatures: [
+        signature(1, 'BBB-200', 'a', 'D845'),
+        signature(1, 'AAA-100', 'b', 'E004'),
+        signature(1, 'CCC-300', 'd', 'K162'),
+      ],
+      classOf: (id) => (id === 5 ? 'C2' : 'HS'),
+      staticsOf: () => ['D845', 'U210'],
+      startAtZero: true,
+    });
+    expect(extra.get(2)).toMatchObject({
+      direction: 'Out',
+      spawn: 'Static',
+      n: '0',
+      letter: 'A',
+      destClassIndex: 'b',
+    });
+    expect(extra.get(3)).toMatchObject({ spawn: 'Wandering', n: '1', letter: 'B', destClassIndex: 'a' });
+    expect(extra.get(5)).toMatchObject({ direction: 'In', spawn: 'K162', destClassIndex: '' });
+    const values = { 'destClass:HS': 'H', 'spawn:Static': 'S', 'direction:Out': ' ' };
+    expect(bookmarkLabel('{n}{destClass}{destClassIndex} {spawn} {direction}', extra.get(2)!, values)).toBe(
+      '0Hb S',
+    );
+  });
+
   it('labels: template, temporary name wins, nothing without a signature', () => {
     expect(bookmarkLabel('{sig}', chain.get(2)!)).toBe('ABC-123');
     expect(bookmarkLabel('{chainIndex} {destClass} {sig3}', chain.get(4)!)).toBe('2a HS XYZ');

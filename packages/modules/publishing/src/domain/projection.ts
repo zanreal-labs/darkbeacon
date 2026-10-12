@@ -66,7 +66,10 @@ export function projectConnection(connection: ConnectionDto, scopes: Scopes): Co
   };
 }
 
-/** Shared only with `signatures`, notes included. */
+/**
+ * Shared only with `signatures`, notes, temporary name, destination, bubble, lifetime and mass
+ * included (as in shares between maps). Who added or changed a signature is the map's own.
+ */
 export function projectSignature(signature: SignatureDto): SignatureDto {
   return {
     id: signature.id,
@@ -82,6 +85,11 @@ export function projectSignature(signature: SignatureDto): SignatureDto {
     ...(signature.custom ? { custom: signature.custom } : {}),
     createdAt: signature.createdAt,
     updatedAt: signature.updatedAt,
+    tempName: signature.tempName ?? null,
+    destination: signature.destination ?? null,
+    timeStatus: signature.timeStatus ?? null,
+    massStatus: signature.massStatus ?? null,
+    bubbled: signature.bubbled ?? false,
   };
 }
 
