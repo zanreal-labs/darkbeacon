@@ -2272,6 +2272,24 @@ export const routes = {
       response: dto.MapIntelDto,
     }),
   },
+  undo: {
+    /**
+     * Undoes one gesture of the caller on the map (every change made with its `x-darkbeacon-action`
+     * header), newest first, each through the history's revert. Changes that changed again since
+     * stay and are listed; 409 when none could be undone.
+     */
+    action: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/history/undo',
+      auth: 'account',
+      scope: { resource: 'audit', action: 'write' },
+      status: 200,
+      mapRole: 'member',
+      body: dto.UndoActionRequest,
+      response: dto.UndoResultDto,
+      summary: 'Undo one gesture of the caller (all changes made with one action id)',
+    }),
+  },
 } as const;
 
 type PathParams<P extends string> = P extends `${string}:${infer Name}/${infer Rest}`

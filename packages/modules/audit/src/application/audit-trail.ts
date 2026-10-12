@@ -1,6 +1,7 @@
 import {
   AUDIT_STREAM,
   ConflictError,
+  DomainError,
   INSTANCE_STREAM,
   isInstanceAdmin,
   mapStream,
@@ -19,9 +20,18 @@ import type {
   AuditQuery,
   AuditRevertDto,
   AuditVerifyDto,
+  UndoFailureDto,
+  UndoResultDto,
 } from '@darkbeacon/shared';
 import { decodeCursor, encodeCursor, toEntry, type StoredEvent } from '../domain/entries.js';
-import type { AuditFilter, AuditScopeFilter, AuditStore, ChangeReverter } from '../ports/index.js';
+import { undoPlan } from '../domain/undo.js';
+import type {
+  AuditFilter,
+  AuditScopeFilter,
+  AuditStore,
+  ChangeReverter,
+  RevertContext,
+} from '../ports/index.js';
 
 export interface AuditTrailDeps {
   store: AuditStore;
@@ -31,6 +41,8 @@ export interface AuditTrailDeps {
 }
 
 const PAGE = 50;
+/** One gesture never makes more changes than this (a paste of a big selection at most). */
+const ACTION_LIMIT = 2_000;
 /** Exports stop here; narrow the filters (time, person, type) for more. */
 export const EXPORT_LIMIT = 50_000;
 const EXPORT_PAGE = 500;
@@ -102,6 +114,53 @@ export class AuditTrail {
       entries: written.map((s) =>
         toEntry(s, { showOrigin, revertible: this.canRevert(s.event.type), revertedBy: null }),
       ),
+    };
+  }
+
+  /**
+   * Undoes one gesture of `actor` on the map: every change recorded with the action id that is
+   * still standing, in the order `undoPlan` gives, each reverted like `revert` does. A change that
+   * changed again since stays and is reported; nothing at all undone is a ConflictError.
+   */
+  async undo(actor: Actor | null, mapId: string, action: string): Promise<UndoResultDto> {
+    await requireMapRole(this.deps.access, actor, mapId, 'member');
+    const accountId = actor?.kind === 'account' ? actor.id : null;
+    const stream = mapStream(mapId);
+    const recorded = (await this.deps.store.byRef(stream, `action:${action}`, ACTION_LIMIT)).filter(
+      // Only the caller's own changes: an action id is theirs, but the check costs nothing.
+      (s) => s.audit && s.audit.actor.accountId === accountId && !s.audit.revertOf,
+    );
+    if (recorded.length === 0) throw new NotFoundError('Change');
+    const reverted = await this.deps.store.revertsOf(recorded.map((s) => s.event.id));
+    const standing = recorded.filter((s) => !reverted.has(s.event.id) && this.canRevert(s.event.type));
+    if (standing.length === 0) throw new ConflictError('This was already undone');
+
+    const context: RevertContext = { connectionIds: new Map() };
+    const done: string[] = [];
+    const failed: UndoFailureDto[] = [];
+    for (const stored of undoPlan(standing)) {
+      const reverter = this.reverters.get(stored.event.type)!;
+      try {
+        await this.deps.scope.run({ revertOf: stored.event.id, action: undefined }, () =>
+          reverter.revert(actor!, mapId, stored, context),
+        );
+        done.push(stored.event.id);
+      } catch (error) {
+        // Refused (changed since, gone, locked meanwhile): it stays, the rest is still undone.
+        if (!(error instanceof DomainError) || error.code === 'unauthenticated') throw error;
+        failed.push({ eventId: stored.event.id, type: stored.event.type, reason: error.message });
+      }
+    }
+    if (done.length === 0) throw new ConflictError(failed[0]?.reason ?? 'Nothing to undo', { failed });
+    const showOrigin = await this.mapView(actor, mapId);
+    const written = (await Promise.all(done.map((id) => this.deps.store.writtenBy(id)))).flat();
+    return {
+      action,
+      reverted: done,
+      entries: written.map((s) =>
+        toEntry(s, { showOrigin, revertible: this.canRevert(s.event.type), revertedBy: null }),
+      ),
+      failed,
     };
   }
 

@@ -1,4 +1,4 @@
-import { Controller, Get, HttpCode, Inject, Param, Post, Query, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Res } from '@nestjs/common';
 import { AuditTrail, toCsv } from '@darkbeacon/audit';
 import type { Actor } from '@darkbeacon/core';
 import {
@@ -6,6 +6,8 @@ import {
   AuditQuery,
   nestPath,
   routes,
+  UndoActionRequest,
+  type UndoResultDto,
   type AuditEntryDto,
   type AuditPageDto,
   type AuditRevertDto,
@@ -70,6 +72,16 @@ export class AuditController {
     @Param('eventId') eventId: string,
   ): Promise<AuditRevertDto> {
     return this.trail.revert(actor, mapId, eventId);
+  }
+
+  @Post(nestPath(routes.undo.action.path))
+  @HttpCode(200)
+  undo(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Body(new ZodPipe(UndoActionRequest)) body: UndoActionRequest,
+  ): Promise<UndoResultDto> {
+    return this.trail.undo(actor, mapId, body.action);
   }
 
   @Get(nestPath(r.instance.path))

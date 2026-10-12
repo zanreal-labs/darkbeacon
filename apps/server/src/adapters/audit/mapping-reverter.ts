@@ -1,4 +1,4 @@
-import { sameValue, type ChangeReverter, type StoredEvent } from '@darkbeacon/audit';
+import { sameValue, type ChangeReverter, type RevertContext, type StoredEvent } from '@darkbeacon/audit';
 import { ConflictError, type Actor } from '@darkbeacon/core';
 import type {
   BookmarkNumberUseCases,
@@ -90,8 +90,16 @@ export class MappingReverter implements ChangeReverter {
     private readonly uc: MappingUseCaseSet,
   ) {}
 
-  async revert(actor: Actor, mapId: string, { event, audit }: StoredEvent): Promise<void> {
+  async revert(
+    actor: Actor,
+    mapId: string,
+    { event, audit }: StoredEvent,
+    context?: RevertContext,
+  ): Promise<void> {
     const diff = audit?.diff ?? {};
+    // A connection put back earlier in the same undo has a new id.
+    const connectionId = (id: unknown) =>
+      typeof id === 'string' ? (context?.connectionIds.get(id) ?? id) : id;
     const removed = audit?.removed ?? null;
     switch (event.type) {
       case 'system.added': {
@@ -163,6 +171,8 @@ export class MappingReverter implements ChangeReverter {
         });
         const restore = connectionBackPatch(pick(before, CONNECTION_FIELDS));
         await this.uc.connections.update(actor, mapId, added.id, restore);
+        const { id } = event.data as { id: string };
+        context?.connectionIds.set(id, added.id);
         return;
       }
       case 'signature.added': {
@@ -176,7 +186,9 @@ export class MappingReverter implements ChangeReverter {
         const { id } = event.data as SignatureDto;
         const current = await this.ports.signatures.findById(mapId, id);
         if (!current) throw new ConflictError('The signature is gone');
-        await this.uc.signatures.update(actor, mapId, id, this.backPatch(diff, current, SIGNATURE_FIELDS));
+        const patch = this.backPatch(diff, current, SIGNATURE_FIELDS);
+        if (patch.connectionId) patch.connectionId = connectionId(patch.connectionId) as string;
+        await this.uc.signatures.update(actor, mapId, id, patch);
         return;
       }
       case 'signature.removed': {
@@ -193,8 +205,9 @@ export class MappingReverter implements ChangeReverter {
           name: before.name ?? null,
           description: before.description ?? '',
         });
-        if (before.connectionId && (await this.ports.connections.findById(mapId, before.connectionId)))
-          await this.uc.signatures.update(actor, mapId, added.id, { connectionId: before.connectionId });
+        const link = connectionId(before.connectionId) as string | null | undefined;
+        if (link && (await this.ports.connections.findById(mapId, link)))
+          await this.uc.signatures.update(actor, mapId, added.id, { connectionId: link });
         return;
       }
       case 'labels.changed': {

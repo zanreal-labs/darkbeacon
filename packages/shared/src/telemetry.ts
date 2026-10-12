@@ -141,7 +141,16 @@ export const ContextMenuAction = z.enum([
   // either: an item a plugin added
   'plugin',
 ]);
-export const KeyboardShortcut = z.enum(['fit_chain', 'center_on_me', 'legend']);
+export const KeyboardShortcut = z.enum([
+  'fit_chain',
+  'center_on_me',
+  'legend',
+  'undo',
+  'delete_selection',
+  'copy_selection',
+  'paste_systems',
+  'search',
+]);
 
 /**
  * Events the web app may report (through `POST /api/telemetry/e`, never straight to PostHog).

@@ -37,6 +37,7 @@ import {
   Trash2,
   TriangleAlert,
   Type,
+  Undo2,
   Weight,
 } from 'lucide-react';
 import type { MenuItem } from '../components/ContextMenu';
@@ -49,6 +50,7 @@ import { hubMenu, waypointMenu, type HubMenuContext } from './menus/routes';
 import { passageMenuItems } from './menus/passages';
 import { STATUS_LABEL } from './nodeFacts';
 import type { MapStore } from './useMapStore';
+import { lowerFirst } from './undo/undoStack';
 import { holderStandingMenu, type HolderStanding } from './menus/intel';
 
 /*
@@ -478,10 +480,26 @@ export interface PaneMenuContext {
   onAddSystem(): void;
   onFitChain(): void;
   onCenterOnMe(): void;
+  /** What Ctrl+Z would undo now; null or absent when nothing. */
+  undoLabel?: string | null;
+  onUndo?(): void;
 }
 
 export function paneMenu(ctx: PaneMenuContext): MenuItem[] {
+  const undo: MenuItem[] =
+    ctx.undoLabel && ctx.onUndo
+      ? [
+          {
+            kind: 'action',
+            label: `Undo ${lowerFirst(ctx.undoLabel)}`,
+            icon: <Undo2 />,
+            shortcut: 'Ctrl+Z',
+            onSelect: ctx.onUndo,
+          },
+        ]
+      : [];
   return groups(
+    undo,
     ctx.can.edit
       ? [{ kind: 'action', label: 'Add system here…', icon: <Plus />, onSelect: ctx.onAddSystem }]
       : [],

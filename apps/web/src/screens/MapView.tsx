@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import {
   SYSTEM_PLACEMENT,
@@ -33,6 +33,7 @@ import { RollingCalculator } from '../map/connection/RollingCalculator';
 import type { ConnectionTraffic } from '../map/ConnectionEdge';
 import { systemDisplayName } from '../map/SystemNode';
 import { useMapStore } from '../map/useMapStore';
+import { useUndoShortcut } from '../map/undo/useUndoShortcut';
 import { SystemSidebar } from '../map/sidebar/SystemSidebar';
 import { filterableSources, permissionsFor, withoutSources } from '../map/sharing/chain';
 import { ProvenanceLine, provenanceText } from '../map/sharing/ProvenanceLine';
@@ -109,7 +110,9 @@ export function MapView({
   role: MapSummaryDto['role'];
   snapshot?: StreamSnapshotDto;
 }) {
-  const store = useMapStore(map.id, snapshot);
+  // Undo labels name systems; the names arrive with the universe data, read when a label is made.
+  const nameRef = useRef<(id: number) => string>(String);
+  const store = useMapStore(map.id, snapshot, { nameOf: (id) => nameRef.current(id) });
   // On a map that merges others, a viewer may hide some of them (only in this browser).
   const sourceFilter = useHiddenSources(map.id);
   const state = useMemo(
@@ -174,6 +177,10 @@ export function MapView({
     const sys = state.systems.get(id);
     return sys ? systemDisplayName(sys, universe.get(id)) : (universe.get(id)?.name ?? 'Unknown system');
   };
+  useEffect(() => {
+    nameRef.current = endName;
+  });
+  const undo = useUndoShortcut(store.undo, toast, can.edit);
 
   const closeMenu = useCallback(() => setMenu(null), []);
   const covered = (system || connection) && panel ? cover : { right: 0, bottom: 0 };
@@ -276,6 +283,8 @@ export function MapView({
         },
         onFitChain: target.fitChain,
         onCenterOnMe: target.centerOnMe,
+        undoLabel: can.edit ? store.undoLabel : null,
+        onUndo: undo,
       }),
     };
   })();
