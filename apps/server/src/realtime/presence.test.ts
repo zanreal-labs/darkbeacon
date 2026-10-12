@@ -222,6 +222,22 @@ describe('PresenceRooms', () => {
     }
   });
 
+  it('forgets a map once everyone left, with or without a relay', () => {
+    const relay: PresenceRelay = { publish: () => {}, subscribe: () => () => {} };
+    for (const options of [{}, { relay }]) {
+      const local = new PresenceRooms(options);
+      const a = member('ka', 'alice');
+      local.update('map:m', a.m, { cursor: { x: 1, y: 1 } });
+      local.flush();
+      local.leave('map:m', 'ka');
+      local.flush();
+      local.flush();
+      expect((local as unknown as { rooms: Map<string, unknown> }).rooms.size).toBe(0);
+      local.close();
+    }
+    rooms = new PresenceRooms();
+  });
+
   it('tells listeners (plugins) about arrivals, departures and editing, not cursor moves', () => {
     rooms = new PresenceRooms();
     const heard: string[][] = [];

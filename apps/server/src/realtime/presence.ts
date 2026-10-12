@@ -98,6 +98,8 @@ interface Room {
   /** Peers whose state changed since the last flush. */
   dirty: Set<string>;
   left: Set<string>;
+  /** This process's peers that changed since the last broadcast. */
+  relayDirty: Set<string>;
   /** This process's peers that left since the last broadcast. */
   leftLocal: Set<string>;
   /** Membership or editing markers changed: plugins hear about it. */
@@ -176,6 +178,7 @@ export class PresenceRooms {
       room.peers.set(member.key, joined);
       room.left.delete(member.key);
       room.dirty.add(member.key);
+      if (this.relay) room.relayDirty.add(member.key);
       room.summaryChanged = true;
       this.sendFull(stream, room, joined);
     } else if (!this.patch(room, peer, patch)) return;
@@ -188,8 +191,9 @@ export class PresenceRooms {
     if (!room || !peer) return;
     room.peers.delete(key);
     room.dirty.delete(key);
+    room.relayDirty.delete(key);
     room.left.add(key);
-    if (peer.remoteSeenAt === null) room.leftLocal.add(key);
+    if (this.relay && peer.remoteSeenAt === null) room.leftLocal.add(key);
     room.summaryChanged = true;
     this.schedule();
   }
@@ -207,6 +211,7 @@ export class PresenceRooms {
         peer.member = { ...peer.member, settings };
         peer.whole = true;
         room.dirty.add(peer.member.key);
+        if (this.relay) room.relayDirty.add(peer.member.key);
         this.sendFull(stream, room, peer);
       }
     }
@@ -256,6 +261,9 @@ export class PresenceRooms {
     const now = this.now();
     this.refreshRelay(now);
     for (const [stream, room] of this.rooms) {
+      // Other replicas hear of changes at the full rate, whatever this map's own pace: their
+      // viewers then see a cursor as fresh as this replica's do.
+      this.relayChanges(stream, room);
       const due = force || now - room.lastFlushAt >= this.roomIntervalMs(room.peers.size) - 2;
       if (due && (room.dirty.size > 0 || room.left.size > 0 || room.leftLocal.size > 0)) {
         room.lastFlushAt = now;
@@ -290,6 +298,7 @@ export class PresenceRooms {
           peers: new Map(),
           dirty: new Set(),
           left: new Set(),
+          relayDirty: new Set(),
           leftLocal: new Set(),
           summaryChanged: false,
           lastFlushAt: 0,
@@ -310,7 +319,10 @@ export class PresenceRooms {
       if (field === 'editing') room.summaryChanged = true;
       changed = true;
     }
-    if (changed) room.dirty.add(peer.member.key);
+    if (changed) {
+      room.dirty.add(peer.member.key);
+      if (this.relay && peer.remoteSeenAt === null) room.relayDirty.add(peer.member.key);
+    }
     return changed;
   }
 
@@ -353,6 +365,14 @@ export class PresenceRooms {
     this.schedule();
   }
 
+  /** Broadcasts this process's peers that changed since the last broadcast. */
+  private relayChanges(stream: string, room: Room): void {
+    if (!this.relay || (room.relayDirty.size === 0 && room.leftLocal.size === 0)) return;
+    const changed = [...room.relayDirty].map((key) => room.peers.get(key)).filter((p): p is Peer => !!p);
+    room.relayDirty.clear();
+    this.broadcast(stream, room, changed);
+  }
+
   /** Tells the other replicas what changed about this process's peers on a map. */
   private broadcast(stream: string, room: Room, peers: Iterable<Peer>): void {
     if (!this.relay) return;
@@ -386,6 +406,7 @@ export class PresenceRooms {
         if (peer.remoteSeenAt !== null && now - peer.remoteSeenAt > 3 * RELAY_REFRESH_MS)
           this.leave(stream, peer.member.key);
       }
+      room.relayDirty.clear();
       this.broadcast(stream, room, room.peers.values());
     }
   }
@@ -395,7 +416,6 @@ export class PresenceRooms {
     const left = [...room.left];
     room.dirty.clear();
     room.left.clear();
-    this.broadcast(stream, room, changed);
     // Two renderings per changed peer, built and serialized once: for viewers who see motion
     // (cursors, drags) and for those who do not. Null: nothing to tell that kind of viewer.
     const parts = changed.map((peer) => {
