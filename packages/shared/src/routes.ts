@@ -1511,6 +1511,61 @@ export const routes = {
       body: dto.TransferMapOwnerRequest,
       response: dto.MapDto,
     }),
+    /** A new map from this one (systems, connections, settings, labels; signatures and rules on request). */
+    duplicate: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/duplicate',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'write', global: true },
+      mapRole: 'admin',
+      body: dto.DuplicateMapRequest,
+      response: dto.ImportMapResultDto,
+    }),
+  },
+
+  /**
+   * Darkbeacon's own map files (`darkbeacon.map` v1): everything on a map, to move it between
+   * instances or out of Darkbeacon; and the settings alone. Bodies over 1 MB are sent as
+   * `application/vnd.darkbeacon.map+json` (up to 32 MB).
+   */
+  mapFiles: {
+    export: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/export',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'write' },
+      mapRole: 'manager',
+      query: dto.MapExportQuery,
+      download: true,
+      response: dto.MapExportDocument,
+    }),
+    import: route({
+      method: 'POST',
+      path: '/api/maps/import',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'write', global: true },
+      body: dto.ImportMapRequest,
+      response: dto.ImportMapResultDto,
+    }),
+    exportSettings: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/settings/export',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'write' },
+      mapRole: 'manager',
+      download: true,
+      response: dto.MapSettingsExportDocument,
+    }),
+    importSettings: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/settings/import',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'manage' },
+      mapRole: 'admin',
+      status: 200,
+      body: dto.ImportMapSettingsRequest,
+      response: dto.MapDto,
+    }),
   },
 
   /**
