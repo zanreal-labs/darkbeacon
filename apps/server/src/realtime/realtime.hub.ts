@@ -78,7 +78,7 @@ class Connection {
 
   constructor(
     readonly resolveActor: () => Promise<Actor | null>,
-    readonly send: (message: ServerMessage) => void,
+    readonly send: Send,
     /** Closes the transport: the session behind the connection ended. */
     readonly end: () => void,
   ) {
@@ -87,6 +87,13 @@ class Connection {
     });
   }
 }
+
+/**
+ * Sends one message to a client. `text` is the message already serialized when the hub has it
+ * (one event or presence change going to many clients is serialized once); otherwise the
+ * transport serializes `message` itself.
+ */
+export type Send = (message: ServerMessage, text?: string) => void;
 
 /** What the transport (ws gateway) holds per socket. */
 export interface HubConnection {
@@ -121,17 +128,18 @@ export class RealtimeHub {
    * `resolveActor` is called on connect and again when access may have changed; `end` closes
    * the transport once a signed-in connection's session no longer resolves.
    */
-  connect(
-    resolveActor: () => Promise<Actor | null>,
-    send: (message: ServerMessage) => void,
-    end: () => void = () => {},
-  ): HubConnection {
+  connect(resolveActor: () => Promise<Actor | null>, send: Send, end: () => void = () => {}): HubConnection {
     const connection = new Connection(resolveActor, send, end);
     this.connections.add(connection);
     return {
       receive: (raw) => this.serialize(connection, () => this.receive(connection, raw)),
       close: () => this.disconnect(connection),
     };
+  }
+
+  /** How many subscriptions on this process follow `stream` (a map someone has open). */
+  followers(stream: string): number {
+    return this.byStream.get(stream)?.size ?? 0;
   }
 
   close(): void {
@@ -186,7 +194,12 @@ export class RealtimeHub {
     connection.present.add(stream);
     presence.rooms.update(
       stream,
-      { key: connection.presenceKey, identity, settings, send: (message) => connection.send(message) },
+      {
+        key: connection.presenceKey,
+        identity,
+        settings,
+        send: (message, text) => connection.send(message, text),
+      },
       state,
     );
   }
@@ -305,21 +318,24 @@ export class RealtimeHub {
           Object.assign(data, await provider(id, actor));
         return { seq, data };
       },
-      { isolation: 'repeatable read' },
+      { isolation: 'repeatable read', readOnly: true },
     );
   }
 
-  private deliver(sub: Subscription, event: DomainEvent): void {
+  private deliver(sub: Subscription, event: DomainEvent, frame?: () => string): void {
     if (!sub.active || event.seq <= sub.lastSeq) return;
     sub.lastSeq = event.seq;
-    sub.connection.send({ op: 'event', event });
+    sub.connection.send({ op: 'event', event }, frame?.());
   }
 
   private dispatch(event: DomainEvent): void {
+    // Serialized once for every client following the stream, and only if one does.
+    let text: string | undefined;
+    const frame = () => (text ??= JSON.stringify({ op: 'event', event }));
     for (const sub of this.byStream.get(event.stream) ?? []) {
       sub.enqueue(
         async () => {
-          if (event.seq === sub.lastSeq + 1) this.deliver(sub, event);
+          if (event.seq === sub.lastSeq + 1) this.deliver(sub, event, frame);
           else if (event.seq > sub.lastSeq) await this.replay(sub); // fill the gap from the log
         },
         (error) => this.fail(sub, error),

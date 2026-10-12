@@ -55,6 +55,13 @@ export const PresencePeerDto = PresenceState.extend({
 });
 export type PresencePeerDto = z.infer<typeof PresencePeerDto>;
 
+/**
+ * A change to someone already on the map: the key and only the fields that changed. A peer that
+ * just arrived (or changed its presence settings) comes in full, as a PresencePeerDto.
+ */
+export const PresencePeerPatch = PresencePeerDto.partial().required({ key: true });
+export type PresencePeerPatch = z.infer<typeof PresencePeerPatch>;
+
 /** Per-account presence choices, kept on the server so they follow the person. */
 export const PresenceSettingsDto = z.object({
   /** Others see my cursor and drag previews. */
@@ -70,3 +77,8 @@ export type UpdatePresenceSettingsRequest = z.infer<typeof UpdatePresenceSetting
 export const PRESENCE_COLORS = 8;
 /** Peak rate of presence messages per map, in both directions. */
 export const PRESENCE_HZ = 15;
+/**
+ * Peer updates one viewer receives per second at most: a map with more than about 40 people
+ * moving is flushed less often than PRESENCE_HZ (150 people: 4 times a second).
+ */
+export const PRESENCE_PEER_BUDGET = 600;

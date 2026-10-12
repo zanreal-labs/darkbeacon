@@ -67,7 +67,7 @@ import { SnapshotController } from './snapshot.controller.js';
     },
     RealtimeGateway,
   ],
-  exports: [RealtimeRegistry, PresenceRooms],
+  exports: [RealtimeRegistry, PresenceRooms, RealtimeHub],
 })
 export class RealtimeModule implements OnModuleDestroy {
   constructor(@Inject(PresenceRooms) private readonly rooms: PresenceRooms) {}

@@ -9,6 +9,7 @@ import {
   type PresenceDrag,
   type PresenceEditing,
   type PresencePeerDto,
+  type PresencePeerPatch,
   type PresenceSelection,
   type PresenceSettingsDto,
   type PresenceStatePatch,
@@ -102,10 +103,16 @@ export class PresenceStore {
 
   apply(message: PresenceMessage): void {
     if (message.full) {
-      this.replace(message.peers);
+      // A full list carries every peer whole.
+      this.replace(message.peers as PresencePeerDto[]);
       return;
     }
-    for (const peer of message.peers) this.peers.set(peer.key, peer);
+    // Changes are patches: the key and what changed; someone new arrives whole.
+    for (const patch of message.peers) {
+      const known = this.peers.get(patch.key);
+      if (known) this.peers.set(patch.key, { ...known, ...patch });
+      else if (isWhole(patch)) this.peers.set(patch.key, patch);
+    }
     for (const key of message.left) this.peers.delete(key);
     this.publish();
   }
@@ -129,6 +136,10 @@ export class PresenceStore {
     this.snapshot = [...this.peers.values()].sort((a, b) => a.since - b.since || a.key.localeCompare(b.key));
     for (const listener of this.listeners) listener();
   }
+}
+
+function isWhole(peer: PresencePeerPatch): peer is PresencePeerDto {
+  return peer.accountId !== undefined && peer.since !== undefined && peer.color !== undefined;
 }
 
 /** Peers grouped per person (several tabs of one account read as one person). */

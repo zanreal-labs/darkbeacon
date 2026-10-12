@@ -49,6 +49,8 @@ describeEachDialect('server', (t) => {
     const messages: ServerMessage[] = [];
     socket.on('message', (data) => messages.push(JSON.parse(String(data)) as ServerMessage));
     await new Promise((resolve, reject) => socket.once('open', resolve).once('error', reject));
+    // Big frames (snapshots) are compressed for clients that offer it, as browsers do.
+    expect(socket.extensions).toContain('permessage-deflate');
 
     socket.send(JSON.stringify({ op: 'subscribe', stream: 'instance', sinceSeq: 0 }));
     await vi.waitFor(() => expect(messages.some((m) => m.op === 'subscribed')).toBe(true));

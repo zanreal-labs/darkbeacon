@@ -14,7 +14,19 @@ export const MAX_FRAME_BYTES = 64 * 1024;
 const POLICY_VIOLATION = 1008;
 
 /** The `/ws` transport: one hub connection per socket, plus ping/pong liveness checks. */
-@WebSocketGateway({ path: '/ws', maxPayload: MAX_FRAME_BYTES })
+/**
+ * Big frames (snapshots, long replays: a 500-system chain is about 1 MB of JSON) are compressed
+ * when the browser offers permessage-deflate; small ones (events, presence) go as they are. A
+ * small window and memory level keep zlib at about 20 KB per socket instead of 300 KB.
+ */
+export const PER_MESSAGE_DEFLATE = {
+  threshold: 16 * 1024,
+  serverMaxWindowBits: 11,
+  zlibDeflateOptions: { level: 3, memLevel: 4 },
+  concurrencyLimit: 4,
+};
+
+@WebSocketGateway({ path: '/ws', maxPayload: MAX_FRAME_BYTES, perMessageDeflate: PER_MESSAGE_DEFLATE })
 export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy {
   private readonly sockets = new Map<WebSocket, { hub: HubConnection; alive: boolean }>();
   private readonly heartbeat = setInterval(() => this.checkLiveness(), HEARTBEAT_MS).unref();
@@ -37,8 +49,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     }
     const hub = this.hub.connect(
       () => this.actors.resolve({ headers: request.headers }),
-      (message) => {
-        if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(message));
+      (message, text) => {
+        if (socket.readyState === socket.OPEN) socket.send(text ?? JSON.stringify(message));
       },
       () => socket.close(POLICY_VIOLATION, 'Signed out'),
     );

@@ -94,6 +94,38 @@ describe('PresenceStore', () => {
     expect(store.getSnapshot()).toEqual([]);
   });
 
+  it('merges patches into the peers it knows and ignores patches of peers it never saw', () => {
+    const { client, socket } = connected();
+    const store = new PresenceStore(client, 'map:1');
+    store.start();
+    socket.push({
+      op: 'presence',
+      stream: 'map:1',
+      full: true,
+      peers: [peer('a', 'alice', { cursor: { x: 1, y: 1 }, editing: { kind: 'map', id: 'm' } })],
+      left: [],
+    });
+    // Only the cursor changed: the rest of Alice stays as it was.
+    socket.push({
+      op: 'presence',
+      stream: 'map:1',
+      full: false,
+      peers: [{ key: 'a', cursor: { x: 9, y: 8 } }],
+      left: [],
+    });
+    socket.push({
+      op: 'presence',
+      stream: 'map:1',
+      full: false,
+      peers: [{ key: 'zz', cursor: { x: 1, y: 1 } }],
+      left: [],
+    });
+    expect(store.getSnapshot()).toEqual([
+      { ...peer('a', 'alice'), cursor: { x: 9, y: 8 }, editing: { kind: 'map', id: 'm' } },
+    ]);
+    store.stop();
+  });
+
   it('sends at most 15 updates a second, the latest state winning', () => {
     vi.useFakeTimers();
     const { client, socket } = connected();

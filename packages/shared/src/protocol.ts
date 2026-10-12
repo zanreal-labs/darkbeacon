@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { DomainEventSchema } from './events.js';
 import type { CharacterPresenceDto } from './dto/tracking.js';
-import { PresencePeerDto, PresenceStatePatch } from './dto/presence.js';
+import { PresencePeerPatch, PresenceStatePatch } from './dto/presence.js';
 import type { ConnectionDto, MapDto, MapSystemDto, SignatureDto } from './dto/mapping.js';
 import type { MapExitDto } from './dto/routing.js';
 
@@ -18,7 +18,8 @@ import type { MapExitDto } from './dto/routing.js';
  * follows: the client sends {op:'presence', stream, state} (a patch; the first one joins) and
  * {op:'presence.leave', stream}; the server answers the joiner with the full list of the others
  * ({op:'presence', full: true}) and then sends changes, coalesced per map at most PRESENCE_HZ
- * times a second ({op:'presence', full: false, peers: changed, left: keys}). Unsubscribing,
+ * times a second, less on crowded maps (PRESENCE_PEER_BUDGET), as patches
+ * ({op:'presence', full: false, peers: [{key, ...changed fields}], left: keys}). Unsubscribing,
  * losing access or closing the socket leaves.
  */
 export const ClientMessage = z.discriminatedUnion('op', [
@@ -63,9 +64,12 @@ export const ServerMessage = z.discriminatedUnion('op', [
   z.object({
     op: z.literal('presence'),
     stream: z.string(),
-    /** True: `peers` is everyone else on the map (replace); false: only those who changed. */
+    /**
+     * True: `peers` is everyone else on the map, each in full (replace). False: only those who
+     * changed, each as a patch (key and changed fields; in full when it just arrived).
+     */
     full: z.boolean(),
-    peers: z.array(PresencePeerDto),
+    peers: z.array(PresencePeerPatch),
     /** Keys of peers who left. */
     left: z.array(z.string()),
   }),

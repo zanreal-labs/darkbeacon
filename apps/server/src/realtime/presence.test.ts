@@ -20,7 +20,9 @@ const member = (key: string, accountId: string, settings = DEFAULT_PRESENCE_SETT
     key,
     identity: { accountId, name: accountId, characterId: null, characterName: `${accountId} main` },
     settings,
-    send: (message) => inbox.push(message),
+    send: (message: PresenceMessage, _text: string) => {
+      inbox.push(message);
+    },
   };
   return { m, inbox };
 };
@@ -87,6 +89,75 @@ describe('PresenceRooms', () => {
     // Alice hides others: she still sees who is here, not where they point.
     rooms.applySettings('alice', { shareCursor: true, showOthers: false });
     expect(a.inbox.at(-1)).toMatchObject({ full: true, peers: [{ key: 'kb', cursor: null }] });
+  });
+
+  it('sends changes as patches, serialized once for every viewer', () => {
+    rooms = new PresenceRooms({ now: () => 1000 });
+    const texts: string[] = [];
+    const viewers = Array.from({ length: 3 }, (_, i) => {
+      const v = member(`k${i}`, `v${i}`);
+      const send = v.m.send;
+      v.m.send = (message, text) => {
+        texts.push(text);
+        send(message, text);
+      };
+      return v;
+    });
+    const mover = member('km', 'mover');
+    for (const v of viewers) rooms.update('map:m', v.m, {});
+    rooms.update('map:m', mover.m, { selection: { systems: [1], connections: [] } });
+    rooms.flush();
+    texts.length = 0;
+
+    rooms.update('map:m', mover.m, { cursor: { x: 3, y: 4 } });
+    rooms.flush();
+    // Only the key and the cursor: nothing about who it is, nor the unchanged selection.
+    for (const v of viewers)
+      expect(v.inbox.at(-1)).toEqual({
+        op: 'presence',
+        stream: 'map:m',
+        full: false,
+        peers: [{ key: 'km', cursor: { x: 3, y: 4 } }],
+        left: [],
+      });
+    expect(texts).toHaveLength(3);
+    for (const [i, text] of texts.entries()) expect(JSON.parse(text)).toEqual(viewers[i]!.inbox.at(-1));
+
+    // A viewer who hides others hears nothing about a cursor move.
+    rooms.applySettings('v0', { shareCursor: true, showOthers: false });
+    rooms.flush();
+    const before = viewers[0]!.inbox.length;
+    rooms.update('map:m', mover.m, { cursor: { x: 5, y: 6 } });
+    rooms.flush();
+    expect(viewers[0]!.inbox).toHaveLength(before);
+    expect(viewers[1]!.inbox.at(-1)).toMatchObject({ peers: [{ key: 'km', cursor: { x: 5, y: 6 } }] });
+  });
+
+  it('flushes crowded maps less often, so a viewer gets at most the peer budget', () => {
+    let now = 0;
+    rooms = new PresenceRooms({ now: () => now, hz: 15, peerBudget: 600 });
+    expect(rooms.roomIntervalMs(2)).toBe(67);
+    expect(rooms.roomIntervalMs(41)).toBe(67);
+    expect(rooms.roomIntervalMs(101)).toBe(167);
+    expect(rooms.roomIntervalMs(150)).toBe(248);
+    expect(rooms.roomIntervalMs(1000)).toBe(250);
+
+    const people = Array.from({ length: 150 }, (_, i) => member(`k${i}`, `a${i}`));
+    for (const p of people) rooms.update('map:m', p.m, {});
+    rooms.flush();
+    const received = () => people[0]!.inbox.length;
+    const start = received();
+    // One second of everyone moving, with the timer's ticks every 67 ms.
+    for (now = 1; now <= 1000; now += 67) {
+      for (const p of people) rooms.update('map:m', p.m, { cursor: { x: now, y: 1 } });
+      rooms.flush(false);
+    }
+    const flushes = received() - start;
+    expect(flushes).toBeLessThanOrEqual(5);
+    expect(flushes * 149).toBeLessThanOrEqual(600 + 149);
+    // The latest position always gets through.
+    rooms.flush();
+    expect(people[0]!.inbox.at(-1)!.peers.find((p) => p.key === 'k1')?.cursor?.x).toBe(now - 67);
   });
 
   it('tells listeners (plugins) about arrivals, departures and editing, not cursor moves', () => {

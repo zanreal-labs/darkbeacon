@@ -29,7 +29,8 @@ export async function createApp(
     { logger: options.logger ?? ['log', 'warn', 'error'] },
   );
   app.setGlobalPrefix('api');
-  app.useWebSocketAdapter(new WsAdapter(app));
+  // The gateway reads frames itself (RealtimeHub); Nest's own parse of every frame is skipped.
+  app.useWebSocketAdapter(new WsAdapter(app, { messageParser: () => undefined }));
   app.enableShutdownHooks();
   const logger = new Logger('Web');
   installWebProxy(app, web, (error) => logger.warn(`web server did not answer: ${error.message}`));
