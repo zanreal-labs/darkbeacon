@@ -94,4 +94,19 @@ describe('RealtimeClient', () => {
     ]);
     client.stop();
   });
+
+  it('resumes from the seq of a server-rendered snapshot instead of asking for a snapshot', () => {
+    FakeSocket.all = [];
+    const client = new RealtimeClient({ url: 'ws://x/ws', createSocket: () => new FakeSocket() });
+    const seen: StreamMessage[] = [];
+    client.subscribe('map:1', (m) => seen.push(m), 4);
+    client.start();
+    const socket = FakeSocket.all[0]!;
+    socket.open();
+    expect(socket.sent).toEqual([{ op: 'subscribe', stream: 'map:1', sinceSeq: 4 }]);
+    socket.push(event(4));
+    socket.push(event(5));
+    expect(seen.map((m) => (m.op === 'event' ? m.event.seq : m.op))).toEqual([5]);
+    client.stop();
+  });
 });

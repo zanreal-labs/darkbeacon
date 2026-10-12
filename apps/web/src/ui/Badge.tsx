@@ -1,3 +1,5 @@
+'use client';
+
 import type { CSSProperties, ReactNode } from 'react';
 import { cx } from './cx';
 import styles from './display.module.css';

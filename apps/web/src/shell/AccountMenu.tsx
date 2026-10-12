@@ -1,7 +1,9 @@
-import { useNavigate } from 'react-router';
+'use client';
+
+import { useRouter } from 'next/navigation';
 import { LogOut, Plus, Settings } from 'lucide-react';
 import { routes, type MeDto } from '@darkbeacon/shared';
-import { useLogout, useProviders } from '../lib/session';
+import { useLogout, useMe, useProviders } from '../lib/session';
 import {
   Avatar,
   Badge,
@@ -22,11 +24,12 @@ export function eveLinkHref(returnTo = '/account'): string {
   return `${routes.auth.eveLogin.path}?${new URLSearchParams({ returnTo })}`;
 }
 
-/** Avatar button with the account, its EVE characters and sign out. */
-export function AccountMenu({ me }: { me: MeDto }) {
-  const navigate = useNavigate();
+/** Avatar button with the account, its EVE characters and sign out. `me` is the server's copy. */
+export function AccountMenu({ me: rendered }: { me: MeDto }) {
+  const router = useRouter();
   const logout = useLogout();
   const providers = useProviders();
+  const me = useMe().data ?? rendered;
   const { account, characters } = me;
   const main = characters.find((c) => c.id === account.mainCharacterId);
   return (
@@ -52,7 +55,7 @@ export function AccountMenu({ me }: { me: MeDto }) {
             <MenuItem
               key={c.id}
               icon={<CharacterAvatar id={c.id} name={c.name} size={20} />}
-              onSelect={() => void navigate('/account')}
+              onSelect={() => router.push('/account')}
             >
               <span className={styles.menuCharacter}>
                 {c.name}
@@ -68,14 +71,12 @@ export function AccountMenu({ me }: { me: MeDto }) {
           )}
         </MenuGroup>
         <MenuSeparator />
-        <MenuItem icon={<Settings />} onSelect={() => void navigate('/account')}>
+        <MenuItem icon={<Settings />} onSelect={() => router.push('/account')}>
           Account settings
         </MenuItem>
         <MenuItem
           icon={<LogOut />}
-          onSelect={() =>
-            logout.mutate(undefined, { onSuccess: () => void navigate('/login', { replace: true }) })
-          }
+          onSelect={() => logout.mutate(undefined, { onSuccess: () => router.replace('/login') })}
         >
           Sign out
         </MenuItem>

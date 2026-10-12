@@ -1,5 +1,8 @@
+'use client';
+
 import { useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
-import { Link, Navigate, useNavigate, useParams } from 'react-router';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowUpRight,
@@ -76,14 +79,27 @@ import {
   Tooltip,
   useToast,
 } from '../ui';
+import { Redirect } from '../components/Redirect';
 import styles from './settings.module.css';
 
 const errorText = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback);
 
 type TabId = 'general' | 'labels' | 'access' | 'webhooks';
 
-export function MapSettingsPage() {
-  const { slug = '' } = useParams();
+/** Map settings while they load (also the server's Suspense fallback). */
+export function MapSettingsSkeleton() {
+  return (
+    <Page width={880} aria-busy="true">
+      <Skeleton width={220} height={24} />
+      <Skeleton width={320} height={14} style={{ marginTop: 10 }} />
+      <Skeleton width="100%" height={36} style={{ margin: '32px 0 24px' }} />
+      <Skeleton width="100%" height={220} radius={10} />
+    </Page>
+  );
+}
+
+/** Settings of the map at `/m/<slug>/settings`; the server renders it with the map already loaded. */
+export function MapSettingsPage({ slug }: { slug: string }) {
   const map = useQuery({
     queryKey: ['map', slug],
     queryFn: () => api<MapDto>(buildPath(routes.maps.bySlug.path, { slug })),
@@ -112,16 +128,7 @@ export function MapSettingsPage() {
     visible[0]?.id ?? 'labels',
   );
 
-  if (map.isPending || maps.isPending) {
-    return (
-      <Page width={880} aria-busy="true">
-        <Skeleton width={220} height={24} />
-        <Skeleton width={320} height={14} style={{ marginTop: 10 }} />
-        <Skeleton width="100%" height={36} style={{ margin: '32px 0 24px' }} />
-        <Skeleton width="100%" height={220} radius={10} />
-      </Page>
-    );
-  }
+  if (map.isPending || maps.isPending) return <MapSettingsSkeleton />;
   if (map.isError) {
     const missing = map.error instanceof ApiError && map.error.status === 404;
     return (
@@ -133,7 +140,7 @@ export function MapSettingsPage() {
             description={`There is no map “${slug}”, or you cannot see it.`}
             actions={
               <Button asChild>
-                <Link to="/">Back to maps</Link>
+                <Link href="/">Back to maps</Link>
               </Button>
             }
           />
@@ -147,7 +154,7 @@ export function MapSettingsPage() {
       </Page>
     );
   }
-  if (!can.manage) return <Navigate to={`/m/${slug}`} replace />;
+  if (!can.manage) return <Redirect to={`/m/${slug}`} />;
 
   return (
     <Page width={880}>
@@ -160,7 +167,7 @@ export function MapSettingsPage() {
         }
         actions={
           <Button asChild trailingIcon={<ArrowUpRight />}>
-            <Link to={`/m/${map.data.slug}`}>Open map</Link>
+            <Link href={`/m/${map.data.slug}`}>Open map</Link>
           </Button>
         }
       />
@@ -218,7 +225,7 @@ const SCOPES: Record<MapScope, { label: string; hint: string }> = {
 };
 
 function GeneralSettings({ map }: { map: MapDto }) {
-  const navigate = useNavigate();
+  const router = useRouter();
   const toast = useToast();
   const updated = useMapUpdated();
   const [name, setName] = useState(map.name);
@@ -235,7 +242,7 @@ function GeneralSettings({ map }: { map: MapDto }) {
     onSuccess: (next) => {
       updated(next);
       toast({ title: 'Map settings saved', tone: 'success' });
-      if (next.slug !== map.slug) void navigate(`/m/${next.slug}/settings`, { replace: true });
+      if (next.slug !== map.slug) router.replace(`/m/${next.slug}/settings`);
     },
   });
 
@@ -325,7 +332,7 @@ function GeneralSettings({ map }: { map: MapDto }) {
 }
 
 function DeleteMap({ map }: { map: MapDto }) {
-  const navigate = useNavigate();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState('');
@@ -333,7 +340,7 @@ function DeleteMap({ map }: { map: MapDto }) {
     mutationFn: () => api<void>(buildPath(routes.maps.remove.path, { mapId: map.id }), { method: 'DELETE' }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['maps'] });
-      void navigate('/', { replace: true });
+      router.replace('/');
     },
   });
   return (

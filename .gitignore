@@ -10,3 +10,5 @@ coverage/
 .turbo/
 *.tsbuildinfo
 .claude/
+.next/
+next-env.d.ts

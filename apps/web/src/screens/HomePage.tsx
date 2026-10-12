@@ -1,5 +1,8 @@
+'use client';
+
 import { useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, Map as MapIcon, Plus, Settings, Waypoints } from 'lucide-react';
 import { routes, type CreateMapRequest, type MapDto, type MapSummaryDto } from '@darkbeacon/shared';
@@ -46,6 +49,37 @@ export const ROLE_TONE = {
   viewer: 'neutral',
 } as const;
 
+const TITLE = 'Maps';
+const DESCRIPTION = 'Every chain you can see. Open one to map live with your group.';
+
+function MapListSkeleton() {
+  return (
+    <Card aria-busy="true" aria-label="Loading maps">
+      <ul className={styles.list}>
+        {[0, 1, 2].map((i) => (
+          <li key={i} className={styles.skeletonRow}>
+            <Skeleton width={36} height={36} radius={8} />
+            <span className={styles.skeletonText}>
+              <Skeleton width={`${40 - i * 8}%`} height={12} />
+              <Skeleton width={`${22 + i * 4}%`} height={10} />
+            </span>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+/** The maps page as it looks while the list streams in (part of the prerendered shell). */
+export function HomePageSkeleton() {
+  return (
+    <Page width={880}>
+      <PageHeader title={TITLE} description={DESCRIPTION} />
+      <MapListSkeleton />
+    </Page>
+  );
+}
+
 export function HomePage() {
   useBreadcrumbs([{ label: 'Maps' }]);
   const demo = useDemoMode();
@@ -64,8 +98,8 @@ export function HomePage() {
   return (
     <Page width={880}>
       <PageHeader
-        title="Maps"
-        description="Every chain you can see. Open one to map live with your group."
+        title={TITLE}
+        description={DESCRIPTION}
         actions={maps.data && maps.data.length > 0 ? newMap : undefined}
       />
       <Stack>
@@ -75,19 +109,7 @@ export function HomePage() {
           </Callout>
         )}
         {maps.isPending ? (
-          <Card aria-busy="true" aria-label="Loading maps">
-            <ul className={styles.list}>
-              {[0, 1, 2].map((i) => (
-                <li key={i} className={styles.skeletonRow}>
-                  <Skeleton width={36} height={36} radius={8} />
-                  <span className={styles.skeletonText}>
-                    <Skeleton width={`${40 - i * 8}%`} height={12} />
-                    <Skeleton width={`${22 + i * 4}%`} height={10} />
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </Card>
+          <MapListSkeleton />
         ) : maps.isError ? (
           <Card>
             <ErrorState
@@ -124,7 +146,7 @@ function MapRow({ map }: { map: MapSummaryDto }) {
   const can = mapPermissions(map.role);
   return (
     <li className={styles.item}>
-      <Link to={`/m/${map.slug}`} className={styles.link}>
+      <Link href={`/m/${map.slug}`} className={styles.link}>
         <span className={styles.icon} aria-hidden>
           <Waypoints />
         </span>
@@ -137,7 +159,7 @@ function MapRow({ map }: { map: MapSummaryDto }) {
       </Link>
       {can.manage && (
         <IconButton asChild className={styles.settings} label={`Settings of ${map.name}`} icon={<Settings />}>
-          <Link to={`/m/${map.slug}/settings`} />
+          <Link href={`/m/${map.slug}/settings`} />
         </IconButton>
       )}
     </li>
@@ -146,7 +168,7 @@ function MapRow({ map }: { map: MapSummaryDto }) {
 
 function CreateMapDialog({ open, onOpenChange }: { open: boolean; onOpenChange(open: boolean): void }) {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
+  const router = useRouter();
   const [name, setName] = useState('');
   const [slug, setSlug] = useState<string | null>(null);
   const shownSlug = slug ?? slugify(name);
@@ -156,7 +178,7 @@ function CreateMapDialog({ open, onOpenChange }: { open: boolean; onOpenChange(o
       api<MapDto>(routes.maps.create.path, { method: 'POST', json: body }),
     onSuccess: (map) => {
       void queryClient.invalidateQueries({ queryKey: ['maps'] });
-      void navigate(`/m/${map.slug}`);
+      router.push(`/m/${map.slug}`);
     },
   });
 

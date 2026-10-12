@@ -1,18 +1,12 @@
+'use client';
+
 import { useCallback, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router';
-import { useQuery } from '@tanstack/react-query';
-import { ReactFlowProvider, useReactFlow } from '@xyflow/react';
-import {
-  buildPath,
-  routes,
-  type MapDto,
-  type MapSummaryDto,
-  type UniverseSystemDto,
-} from '@darkbeacon/shared';
+import Link from 'next/link';
+import { useReactFlow } from '@xyflow/react';
+import type { MapDto, MapSummaryDto, StreamSnapshotDto, UniverseSystemDto } from '@darkbeacon/shared';
 import {
   AlertTriangle,
   Info,
-  Lock,
   MousePointerClick,
   Plus,
   Puzzle,
@@ -23,7 +17,6 @@ import {
   X,
 } from 'lucide-react';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
-import { api, ApiError } from '../lib/api';
 import { mapPermissions } from '../lib/roles';
 import { useMe } from '../lib/session';
 import { useUniverseSystems } from '../lib/universe';
@@ -38,68 +31,8 @@ import { SignaturesWidget } from '../map/widgets/SignaturesWidget';
 import { SystemInfoWidget } from '../map/widgets/SystemInfoWidget';
 import { WidgetDock, type DockTab } from '../map/widgets/WidgetDock';
 import { SlotItem, useSlot } from '../plugins/PluginSlot';
-import { useBreadcrumbs } from '../shell/breadcrumbs';
-import { Button, EmptyState, ErrorState, IconButton, Spinner } from '../ui';
+import { Button, EmptyState, IconButton, Spinner } from '../ui';
 import styles from './MapPage.module.css';
-
-export function MapPage() {
-  const { slug = '' } = useParams();
-  const map = useQuery({
-    queryKey: ['map', slug],
-    queryFn: () => api<MapDto>(buildPath(routes.maps.bySlug.path, { slug })),
-    retry: false,
-  });
-  const maps = useQuery({
-    queryKey: ['maps'],
-    queryFn: () => api<MapSummaryDto[]>(routes.maps.list.path),
-    retry: false,
-  });
-  useBreadcrumbs([{ label: 'Maps', to: '/' }, { label: map.data?.name ?? slug }]);
-
-  if (map.isPending) {
-    return (
-      <div className={styles.page}>
-        <div className={styles.center} role="status">
-          <Spinner label="Loading map" />
-          <span>Loading map…</span>
-        </div>
-      </div>
-    );
-  }
-  if (map.isError) {
-    const missing = map.error instanceof ApiError && map.error.status === 404;
-    return (
-      <div className={styles.page}>
-        <div className={styles.overlayCard}>
-          {missing ? (
-            <EmptyState
-              icon={<Lock />}
-              title="Map not found"
-              description={`There is no map “${slug}”, or you have no access to it. Ask its admin to add you.`}
-              actions={
-                <Button asChild variant="primary">
-                  <Link to="/">Back to maps</Link>
-                </Button>
-              }
-            />
-          ) : (
-            <ErrorState
-              title="The map could not be loaded"
-              error={map.error}
-              onRetry={() => void map.refetch()}
-            />
-          )}
-        </div>
-      </div>
-    );
-  }
-  const role = maps.data?.find((m) => m.id === map.data.id)?.role ?? 'viewer';
-  return (
-    <ReactFlowProvider>
-      <MapView key={map.data.id} map={map.data} role={role} />
-    </ReactFlowProvider>
-  );
-}
 
 interface OpenMenu {
   target: MenuTarget;
@@ -107,8 +40,17 @@ interface OpenMenu {
   y: number;
 }
 
-function MapView({ map, role }: { map: MapDto; role: MapSummaryDto['role'] }) {
-  const store = useMapStore(map.id);
+/** The live map: canvas, search, dock with widgets, context menus. Browser only (React Flow). */
+export function MapView({
+  map,
+  role,
+  snapshot,
+}: {
+  map: MapDto;
+  role: MapSummaryDto['role'];
+  snapshot?: StreamSnapshotDto;
+}) {
+  const store = useMapStore(map.id, snapshot);
   const { state } = store;
   const me = useMe();
   const rf = useReactFlow();
@@ -304,7 +246,7 @@ function MapView({ map, role }: { map: MapDto; role: MapSummaryDto['role'] }) {
   ];
 
   return (
-    <div className={styles.page}>
+    <div className={styles.page} data-immersive>
       <MapCanvas
         mapId={map.id}
         state={state}
@@ -343,7 +285,7 @@ function MapView({ map, role }: { map: MapDto; role: MapSummaryDto['role'] }) {
             label="Map settings"
             icon={<Settings />}
           >
-            <Link to={`/m/${map.slug}/settings`} />
+            <Link href={`/m/${map.slug}/settings`} />
           </IconButton>
         )}
       </div>

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { act, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw/http';
-import { buildPath, routes, type MapSystemDto } from '@darkbeacon/shared';
+import { buildPath, routes, type MapSystemDto, type StreamSnapshotDto } from '@darkbeacon/shared';
 import { connectionFixture, eventMessage, MAP_ID, systemFixture } from '../test/fixtures';
 import { FakeSocket, fakeRealtime, renderWithProviders, setupMockServer } from '../test/setup';
 import { useMapStore } from './useMapStore';
@@ -15,8 +15,8 @@ const updatePath = buildPath(routes.systems.update.path, { mapId: MAP_ID, solarS
 const removePath = buildPath(routes.systems.remove.path, { mapId: MAP_ID, solarSystemId: SYSTEM });
 const server = setupMockServer();
 
-function Probe() {
-  const store = useMapStore(MAP_ID);
+function Probe({ initial }: { initial?: StreamSnapshotDto }) {
+  const store = useMapStore(MAP_ID, initial);
   const system = store.state.systems.get(SYSTEM);
   return (
     <div>
@@ -133,5 +133,24 @@ describe('useMapStore optimistic updates', () => {
       ),
     );
     expect(text('status')).toBe('friendly');
+  });
+});
+
+describe('useMapStore with a server-rendered snapshot', () => {
+  it('shows the snapshot at once and only takes events after its seq', () => {
+    const initial: StreamSnapshotDto = {
+      stream: STREAM,
+      seq: 7,
+      data: { systems: [systemFixture(SYSTEM, { status: 'friendly' })], connections: [] },
+    };
+    renderWithProviders(<Probe initial={initial} />, { realtime: fakeRealtime() });
+    // Painted before any socket opened.
+    expect(text('status')).toBe('friendly');
+    const socket = FakeSocket.last!;
+    act(() => socket.open());
+    expect(socket.sent).toEqual([{ op: 'subscribe', stream: STREAM, sinceSeq: 7 }]);
+    const message = eventMessage(STREAM, 'system.updated', systemFixture(SYSTEM, { status: 'hostile' }));
+    act(() => socket.push({ ...message, event: { ...message.event, seq: 8 } }));
+    expect(text('status')).toBe('hostile');
   });
 });

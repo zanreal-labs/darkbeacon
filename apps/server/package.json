@@ -2,7 +2,7 @@
   "name": "@darkbeacon/server",
   "version": "0.1.0",
   "private": true,
-  "description": "NestJS composition root: REST under /api, WebSocket at /ws, the web app as static files",
+  "description": "NestJS composition root: REST under /api, WebSocket at /ws, and the front door of the web app",
   "type": "module",
   "main": "dist/main.js",
   "scripts": {
@@ -11,7 +11,6 @@
     "dev": "tsc -b && concurrently -k -n tsc,node \"tsc -b -w --preserveWatchOutput\" \"node --watch --enable-source-maps dist/main.js\""
   },
   "dependencies": {
-    "@fastify/static": "^10.1.6",
     "@nestjs/common": "^12.1.2",
     "@nestjs/core": "^12.1.2",
     "@nestjs/platform-fastify": "^12.1.2",

@@ -1,3 +1,5 @@
+'use client';
+
 import type { ReactElement, ReactNode } from 'react';
 import { Tooltip as T } from 'radix-ui';
 import styles from './overlay.module.css';

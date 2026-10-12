@@ -40,7 +40,10 @@ function Current() {
 }
 
 describe('ThemeProvider', () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => {
+    localStorage.clear();
+    document.cookie = 'dbk_theme=; Max-Age=0; Path=/';
+  });
   afterEach(() => delete document.documentElement.dataset.theme);
 
   it('follows the operating system by default, live', async () => {
@@ -77,6 +80,8 @@ describe('ThemeProvider', () => {
     system.set(true);
     expect(document.documentElement.dataset.theme).toBe('default');
     expect(localStorage.getItem('dbk-theme-preference')).toBe('default');
+    // The cookie is what the head script reads before the next first paint.
+    expect(document.cookie).toContain('dbk_theme=default');
 
     await userEvent.click(screen.getByRole('radio', { name: /System/ }));
     await waitFor(() => expect(document.documentElement.dataset.theme).toBe('dark'));

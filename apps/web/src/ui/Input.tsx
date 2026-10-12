@@ -1,3 +1,5 @@
+'use client';
+
 import { forwardRef, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from 'react';
 import { cx } from './cx';
 import { useFieldControl } from './Field';

@@ -1,177 +1,130 @@
-import { useEffect, useRef, type ReactNode } from 'react';
-import { Link, NavLink, useLocation } from 'react-router';
-import { ChevronLeft, ChevronRight, Map as MapIcon, Shield, UserRound } from 'lucide-react';
-import type { MeDto } from '@darkbeacon/shared';
-import { useConnectionStatus, useRealtime } from '../lib/RealtimeProvider';
-import { isInstanceAdmin, useDemoMode } from '../lib/session';
+import Link from 'next/link';
+import { Suspense, type ReactElement, type ReactNode } from 'react';
+import { Map as MapIcon, Shield, UserRound } from 'lucide-react';
 import { PluginsProvider } from '../plugins/PluginSlot';
-import { useTheme } from '../theme/ThemeProvider';
-import { Badge, StatusDot, Tooltip } from '../ui';
-import { AccountMenu } from './AccountMenu';
-import { BreadcrumbProvider, useBreadcrumbItems, type Crumb } from './breadcrumbs';
+import { Skeleton, Tooltip } from '../ui';
+import { Breadcrumbs } from './Trail';
+import { BreadcrumbProvider } from './breadcrumbs';
+import { ConnectionIndicator } from './ConnectionIndicator';
 import { LogoMark } from './Logo';
+import { NavLink } from './NavLink';
 import { ThemeMenu } from './ThemeMenu';
 import styles from './AppShell.module.css';
 
-const STATUS = {
-  open: { label: 'Live', color: 'var(--dbk-color-success)', hint: 'Changes from others appear instantly.' },
-  connecting: { label: 'Connecting', color: 'var(--dbk-color-warning)', hint: 'Reconnecting to the server…' },
-  closed: {
-    label: 'Offline',
-    color: 'var(--dbk-color-danger)',
-    hint: 'Not connected. Retrying in the background.',
-  },
-} as const;
-
-function ConnectionIndicator() {
-  const status = useConnectionStatus();
-  const s = STATUS[status];
-  return (
-    <Tooltip content={s.hint}>
-      <span className={styles.connection} role="status" aria-label={`Realtime: ${s.label}`} tabIndex={0}>
-        <StatusDot color={s.color} pulse={status === 'open'} />
-        <span className={styles.connectionLabel}>{s.label}</span>
-      </span>
-    </Tooltip>
-  );
-}
-
-/** Default trail from the route when a page sets none. */
-function routeCrumbs(pathname: string): Crumb[] {
-  if (pathname.startsWith('/account')) return [{ label: 'Account' }];
-  if (pathname.startsWith('/admin')) return [{ label: 'Admin' }];
-  const map = /^\/m\/([^/]+)(\/settings)?/.exec(pathname);
-  if (map) {
-    const crumbs: Crumb[] = [
-      { label: 'Maps', to: '/' },
-      { label: decodeURIComponent(map[1]!), to: `/m/${map[1]}` },
-    ];
-    if (map[2]) crumbs.push({ label: 'Settings' });
-    return crumbs;
-  }
-  return [{ label: 'Maps' }];
-}
-
-function Breadcrumbs() {
-  const { pathname } = useLocation();
-  const items = useBreadcrumbItems() ?? routeCrumbs(pathname);
-  // Phones show only the current page, with a back link to its parent.
-  const parent = items.length > 1 ? items[items.length - 2] : undefined;
-  return (
-    <nav aria-label="Breadcrumb" className={styles.breadcrumbs} data-nested={parent?.to ? '' : undefined}>
-      {parent?.to && (
-        <Link to={parent.to} className={styles.back} aria-label={`Back to ${parent.label}`}>
-          <ChevronLeft aria-hidden />
-        </Link>
-      )}
-      <ol>
-        {items.map((c, i) => {
-          const last = i === items.length - 1;
-          return (
-            <li key={`${i}-${c.label}`}>
-              {i > 0 && <ChevronRight className={styles.crumbSep} aria-hidden />}
-              {c.to && !last ? (
-                <Link to={c.to}>{c.label}</Link>
-              ) : (
-                <span aria-current={last ? 'page' : undefined}>{c.label}</span>
-              )}
-            </li>
-          );
-        })}
-      </ol>
-    </nav>
-  );
-}
-
-interface NavItem {
-  to: string;
+export interface NavItem {
+  href: string;
   label: string;
   icon: ReactNode;
   end?: boolean;
 }
 
+/** A rail icon link; static in the prerendered shell, marked current once the URL is known. */
+export function RailLink({ item }: { item: NavItem }) {
+  const link = (current: boolean) =>
+    current ? (
+      <NavLink href={item.href} end={item.end} className={styles.railLink} aria-label={item.label}>
+        {item.icon}
+      </NavLink>
+    ) : (
+      <Link href={item.href} className={styles.railLink} aria-label={item.label}>
+        {item.icon}
+      </Link>
+    );
+  const tip = (child: ReactElement) => (
+    <Tooltip content={item.label} side="right">
+      {child}
+    </Tooltip>
+  );
+  return <Suspense fallback={tip(link(false))}>{tip(link(true))}</Suspense>;
+}
+
+/** A tab of the phone tab bar, like `RailLink`. */
+export function TabLink({ item }: { item: NavItem }) {
+  const body = (
+    <>
+      {item.icon}
+      <span>{item.label}</span>
+    </>
+  );
+  return (
+    <Suspense
+      fallback={
+        <Link href={item.href} className={styles.tab}>
+          {body}
+        </Link>
+      }
+    >
+      <NavLink href={item.href} end={item.end} className={styles.tab}>
+        {body}
+      </NavLink>
+    </Suspense>
+  );
+}
+
+export const MAPS_NAV: NavItem = { href: '/', label: 'Maps', icon: <MapIcon />, end: true };
+export const ADMIN_NAV: NavItem = { href: '/admin', label: 'Admin', icon: <Shield /> };
+export const ACCOUNT_NAV: NavItem = { href: '/account', label: 'Account', icon: <UserRound /> };
+
 /**
  * The signed-in frame: a slim rail on the left (bottom tabs on phones) and a top bar with the
- * breadcrumb, live status, theme switch and account menu.
+ * breadcrumb, live status, theme switch and account menu. Everything here is static and part of
+ * the prerendered shell; the parts that need the account arrive through the slots, each behind
+ * its own Suspense boundary.
  */
-export function AppShell({ me, children }: { me: MeDto; children: ReactNode }) {
-  const realtime = useRealtime();
-  const { refresh: refreshTheme } = useTheme();
-  const demo = useDemoMode();
-  const admin = isInstanceAdmin(me);
-  const accountId = me.account.id;
-  const lastAccount = useRef<string | null>(null);
-  const { pathname } = useLocation();
-  // The map is a full-screen tool; on phones its own dock replaces the tab bar.
-  const immersive = /^\/m\/[^/]+\/?$/.test(pathname);
-
-  // The socket authenticates with the session cookie at connect time; reconnect when it changes.
-  // The account's own theme choice is read again at the same moment.
-  useEffect(() => {
-    if (lastAccount.current === accountId) return;
-    const wasKnown = lastAccount.current !== null;
-    lastAccount.current = accountId;
-    refreshTheme();
-    if (wasKnown) realtime.reconnect();
-  }, [accountId, realtime, refreshTheme]);
-
-  const nav: NavItem[] = [
-    { to: '/', label: 'Maps', icon: <MapIcon />, end: true },
-    ...(admin ? [{ to: '/admin', label: 'Admin', icon: <Shield /> }] : []),
-  ];
-  const mobileNav: NavItem[] = [...nav, { to: '/account', label: 'Account', icon: <UserRound /> }];
-
+export function AppShell({
+  account,
+  adminRail,
+  adminTab,
+  demoBadge,
+  children,
+}: {
+  account: ReactNode;
+  adminRail: ReactNode;
+  adminTab: ReactNode;
+  demoBadge: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <PluginsProvider enabled>
       <BreadcrumbProvider>
-        <div className={styles.shell} data-immersive={immersive || undefined}>
+        <div className={styles.shell}>
           <a href="#main" className={styles.skip}>
             Skip to content
           </a>
           <nav className={styles.rail} aria-label="Main">
-            <Link to="/" className={styles.logo} aria-label="Darkbeacon home">
+            <Link href="/" className={styles.logo} aria-label="Darkbeacon home">
               <LogoMark size={26} />
             </Link>
-            {nav.map((item) => (
-              <Tooltip key={item.to} content={item.label} side="right">
-                <NavLink to={item.to} end={item.end} className={styles.railLink} aria-label={item.label}>
-                  {item.icon}
-                </NavLink>
-              </Tooltip>
-            ))}
+            <RailLink item={MAPS_NAV} />
+            {adminRail}
           </nav>
           <header className={styles.topbar}>
-            <Link to="/" className={styles.mobileLogo} aria-label="Darkbeacon home">
+            <Link href="/" className={styles.mobileLogo} aria-label="Darkbeacon home">
               <LogoMark size={22} />
             </Link>
-            <Breadcrumbs />
+            <Suspense fallback={<Skeleton width={120} height={12} />}>
+              <Breadcrumbs />
+            </Suspense>
             <span className={styles.spacer} />
-            {demo && (
-              <Tooltip content="Demo mode: everyone who opens this instance shares one demo account.">
-                <span tabIndex={0} className={styles.demo}>
-                  <Badge tone="warning" dot>
-                    Demo<span className={styles.demoWord}> mode</span>
-                  </Badge>
-                </span>
-              </Tooltip>
-            )}
+            {demoBadge}
             <ConnectionIndicator />
             <ThemeMenu />
-            <AccountMenu me={me} />
+            {account}
           </header>
           <main id="main" className={styles.main} tabIndex={-1}>
             {children}
           </main>
           <nav className={styles.tabbar} aria-label="Main">
-            {mobileNav.map((item) => (
-              <NavLink key={item.to} to={item.to} end={item.end} className={styles.tab}>
-                {item.icon}
-                <span>{item.label}</span>
-              </NavLink>
-            ))}
+            <TabLink item={MAPS_NAV} />
+            {adminTab}
+            <TabLink item={ACCOUNT_NAV} />
           </nav>
         </div>
       </BreadcrumbProvider>
     </PluginsProvider>
   );
+}
+
+export function AccountPlaceholder() {
+  return <span className={styles.accountPlaceholder} aria-hidden />;
 }

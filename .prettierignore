@@ -4,3 +4,5 @@ coverage
 docs/SPEC.md
 packages/sde/data
 .claude
+.next
+next-env.d.ts

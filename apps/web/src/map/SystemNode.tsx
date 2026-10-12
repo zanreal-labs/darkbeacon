@@ -1,3 +1,5 @@
+'use client';
+
 import { memo, type CSSProperties } from 'react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import type { LabelDto, MapSystemDto, UniverseSystemDto } from '@darkbeacon/shared';

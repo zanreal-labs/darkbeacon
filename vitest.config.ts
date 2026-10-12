@@ -33,6 +33,8 @@ export default defineConfig({
   resolve: { alias: workspaceAliases() },
   test: {
     globalSetup: ['./tools/vitest/global-setup.ts'],
+    // Next.js navigation stand-ins for web component tests; a no-op for everything else.
+    setupFiles: ['./apps/web/src/test/next-mocks.tsx'],
     include: ['{apps,packages,plugins}/**/src/**/*.test.{ts,tsx}'],
     exclude: ['**/node_modules/**', '**/dist/**'],
     testTimeout: 15_000,

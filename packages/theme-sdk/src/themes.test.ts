@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { themeToCss, themesToCss } from './css.js';
+import { systemThemesCss, themeToCss, themesToCss } from './css.js';
 import { ThemeManifestSchema, isBuiltInTheme, parseThemeManifest, resolveTheme } from './manifest.js';
-import { builtInThemes, darkTheme, lightTheme, resolveThemePreference, SYSTEM_THEME_ID } from './themes.js';
+import {
+  builtInThemes,
+  contrastTheme,
+  darkTheme,
+  lightTheme,
+  resolveThemePreference,
+  SYSTEM_THEME_ID,
+} from './themes.js';
 import { TOKEN_NAMES } from './tokens.js';
 
 describe('themes', () => {
@@ -17,6 +24,22 @@ describe('themes', () => {
     expect(css).toContain('color-scheme: dark;');
     expect(css).toContain('--dbk-edge-time-eol: #cf7cf2;');
     expect(themesToCss(builtInThemes)).toContain('[data-theme="contrast"]');
+  });
+
+  it('follow the system in css alone when no theme is picked', () => {
+    const css = systemThemesCss(
+      { light: lightTheme, dark: darkTheme, contrast: contrastTheme },
+      builtInThemes,
+    );
+    const dark = css.indexOf('@media (prefers-color-scheme: dark)');
+    const contrast = css.indexOf('@media (prefers-contrast: more)');
+    // Light first, explicit themes next, then the media queries (contrast wins over dark, as in JS).
+    expect(css.startsWith(':root {')).toBe(true);
+    expect(css.indexOf('[data-theme="dark"]')).toBeLessThan(dark);
+    expect(dark).toBeLessThan(contrast);
+    expect(css.slice(dark, contrast)).toContain(':root:not([data-theme]) {');
+    expect(css.slice(dark, contrast)).toContain(`--dbk-color-bg: ${darkTheme.tokens['color-bg']};`);
+    expect(css.slice(contrast)).toContain('--dbk-color-bg: #000000;');
   });
 
   it('read light and dark from one palette', () => {

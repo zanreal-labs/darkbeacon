@@ -2,8 +2,9 @@ import { useQueries } from '@tanstack/react-query';
 import { buildPath, routes, type UniverseSystemDto } from '@darkbeacon/shared';
 import type { TokenName } from '@darkbeacon/theme-sdk';
 import { api } from './api';
+import { universeKey } from './universe-keys';
 
-export const universeKey = (id: number) => ['universe', id] as const;
+export { universeKey } from './universe-keys';
 
 /** Static data of the given systems, fetched once per system and kept for the session. */
 export function useUniverseSystems(ids: readonly number[]): Map<number, UniverseSystemDto> {

@@ -5,7 +5,7 @@ import tseslint from 'typescript-eslint';
 import darkbeacon from './tools/eslint/boundaries.js';
 
 export default tseslint.config(
-  { ignores: ['**/dist/**', '**/node_modules/**', 'coverage/**', '**/*.d.ts', '.claude/**'] },
+  { ignores: ['**/dist/**', '**/node_modules/**', '**/.next/**', 'coverage/**', '**/*.d.ts', '.claude/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

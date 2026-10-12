@@ -94,6 +94,14 @@
   outline: none;
 }
 
+/* `mono` fields (ids, slugs): the global helper must win over `font: inherit` above, whichever
+   stylesheet the browser gets first. */
+.bare:global(.mono) {
+  font-family: var(--dbk-font-family-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: normal;
+}
+
 .bare::placeholder {
   color: var(--dbk-color-text-subtle);
 }

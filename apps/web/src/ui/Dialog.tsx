@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { Dialog as D } from 'radix-ui';
 import { X } from 'lucide-react';

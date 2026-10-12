@@ -1,3 +1,5 @@
+'use client';
+
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import { Toast as T } from 'radix-ui';
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react';

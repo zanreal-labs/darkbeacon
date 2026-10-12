@@ -1,61 +1,26 @@
-import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { routes, type AuthProvidersDto, type MeDto } from '@darkbeacon/shared';
 import { api, ApiError } from './api';
 import { useOptionalRealtime } from './RealtimeProvider';
+import { meKey, providersKey } from './session-keys';
 
-export const meKey = ['me'] as const;
-export const providersKey = ['auth-providers'] as const;
-
-/** Set after an explicit sign-out in demo mode, so the next visit lands on the sign-in page. */
-const DEMO_OPT_OUT_KEY = 'dbk-demo-signed-out';
-
-function demoOptedOut(): boolean {
-  try {
-    return sessionStorage.getItem(DEMO_OPT_OUT_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function setDemoOptOut(value: boolean): void {
-  try {
-    if (value) sessionStorage.setItem(DEMO_OPT_OUT_KEY, '1');
-    else sessionStorage.removeItem(DEMO_OPT_OUT_KEY);
-  } catch {
-    // Without storage, sign-out in demo mode signs straight back in; acceptable for a preview.
-  }
-}
-
-function fetchProviders(client: QueryClient): Promise<AuthProvidersDto> {
-  return client.fetchQuery({
-    queryKey: providersKey,
-    queryFn: () => api<AuthProvidersDto>(routes.auth.providers.path),
-    staleTime: Infinity,
-  });
-}
+export { isInstanceAdmin, meKey, providersKey } from './session-keys';
 
 /**
- * The signed-in account, or null when signed out. Other errors stay errors. In demo mode an
- * unauthenticated visit is signed in as the demo account on the spot.
+ * The signed-in account, or null when signed out; other errors stay errors. Pages rendered on the
+ * server start with it filled in. In demo mode the server signs a visit in before the page renders
+ * (the web app's proxy), so there is nothing to do here.
  */
 export function useMe() {
-  const client = useQueryClient();
-  const realtime = useOptionalRealtime();
   return useQuery({
     queryKey: meKey,
     queryFn: async (): Promise<MeDto | null> => {
       try {
         return await api<MeDto>(routes.accounts.me.path);
       } catch (error) {
-        if (!(error instanceof ApiError) || error.code !== 'unauthenticated') throw error;
+        if (error instanceof ApiError && error.code === 'unauthenticated') return null;
+        throw error;
       }
-      if (demoOptedOut()) return null;
-      const providers = await fetchProviders(client);
-      if (!providers.demo) return null;
-      const me = await api<MeDto>(routes.auth.demo.path, { method: 'POST' });
-      // The socket opened before the session cookie existed; open it again as the demo account.
-      realtime?.reconnect();
-      return me;
     },
     retry: false,
     staleTime: 60_000,
@@ -81,10 +46,8 @@ export function useEnterDemo() {
   const queryClient = useQueryClient();
   const realtime = useOptionalRealtime();
   return useMutation({
-    mutationFn: () => {
-      setDemoOptOut(false);
-      return api<MeDto>(routes.auth.demo.path, { method: 'POST' });
-    },
+    // The server also forgets the sign-out it remembered (`dbk_demo_out`).
+    mutationFn: () => api<MeDto>(routes.auth.demo.path, { method: 'POST' }),
     onSuccess: (me) => {
       queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== providersKey[0] });
       queryClient.setQueryData(meKey, me);
@@ -101,16 +64,12 @@ export function useLogout(everywhere = false) {
       api<void>(everywhere ? routes.auth.logoutEverywhere.path : routes.auth.logout.path, {
         method: 'POST',
       }),
+    // In demo mode the server remembers the sign-out, so the next visit shows the sign-in page.
     onSuccess: () => {
-      setDemoOptOut(true);
       queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== providersKey[0] });
       queryClient.setQueryData(meKey, null);
       // The socket still carries the old session until it reconnects.
       realtime?.reconnect();
     },
   });
-}
-
-export function isInstanceAdmin(me: MeDto | null | undefined): boolean {
-  return me?.account.instanceRole === 'owner' || me?.account.instanceRole === 'admin';
 }

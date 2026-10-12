@@ -1,3 +1,5 @@
+'use client';
+
 import type { ComponentProps, ReactNode } from 'react';
 import { ContextMenu as C, DropdownMenu as D } from 'radix-ui';
 import { Check, ChevronRight } from 'lucide-react';

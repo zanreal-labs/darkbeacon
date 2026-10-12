@@ -1,3 +1,5 @@
+'use client';
+
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { Lock } from 'lucide-react';
 import type {

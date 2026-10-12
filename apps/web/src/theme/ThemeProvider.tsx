@@ -1,9 +1,13 @@
+'use client';
+
 import {
   createContext,
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
   type ReactNode,
@@ -14,14 +18,16 @@ import {
   resolveThemePreference,
   SYSTEM_THEME_ID,
   themeToCss,
-  themesToCss,
   type Theme,
   type TokenValues,
 } from '@darkbeacon/theme-sdk';
+import {
+  LEGACY_THEME_STORAGE_KEY as LEGACY_STORAGE_KEY,
+  PACKAGE_CSS_STORAGE_KEY,
+  THEME_COOKIE,
+  THEME_STORAGE_KEY as STORAGE_KEY,
+} from './head';
 
-const STORAGE_KEY = 'dbk-theme-preference';
-/** The key from before the rename to Darkbeacon; read once and moved, so nobody's choice is lost. */
-const LEGACY_STORAGE_KEY = 'ww-theme-preference';
 const DARK_QUERY = '(prefers-color-scheme: dark)';
 const CONTRAST_QUERY = '(prefers-contrast: more)';
 
@@ -52,7 +58,20 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
+function cookiePreference(): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = new RegExp(`(?:^|; )${THEME_COOKIE}=([^;]*)`).exec(document.cookie);
+  try {
+    return match ? decodeURIComponent(match[1]!) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The saved choice: the cookie the head script reads first, else the browser's copy. */
 function storedPreference(): string | null {
+  const cookie = cookiePreference();
+  if (cookie !== null) return cookie;
   try {
     const current = localStorage.getItem(STORAGE_KEY);
     if (current !== null) return current;
@@ -68,11 +87,34 @@ function storedPreference(): string | null {
   }
 }
 
+/** Saved as a cookie (read before the first paint) and mirrored to localStorage. */
 function storePreference(id: string): void {
+  if (typeof document !== 'undefined') {
+    const secure = location.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = `${THEME_COOKIE}=${encodeURIComponent(id)}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
+  }
   try {
     localStorage.setItem(STORAGE_KEY, id);
   } catch {
-    // Not kept locally; the server copy still applies when signed in.
+    // Not kept locally; the cookie and the server copy still apply.
+  }
+}
+
+/** Another tab saved a different choice. */
+function subscribeStorage(onChange: () => void): () => void {
+  window.addEventListener('storage', onChange);
+  return () => window.removeEventListener('storage', onChange);
+}
+
+const subscribeNothing = () => () => {};
+
+/** Keeps the CSS of a picked theme package for the head script of the next visit. */
+function storePackageCss(theme: Theme | undefined): void {
+  try {
+    if (theme) localStorage.setItem(PACKAGE_CSS_STORAGE_KEY, themeToCss(theme, `[data-theme="${theme.id}"]`));
+    else localStorage.removeItem(PACKAGE_CSS_STORAGE_KEY);
+  } catch {
+    // Without storage a theme package applies once the theme list loaded.
   }
 }
 
@@ -114,20 +156,6 @@ function apply(themeId: string, colorScheme: 'light' | 'dark'): void {
   root.style.colorScheme = colorScheme;
 }
 
-/** Writes every built-in theme's tokens as CSS variables. Call before the first render to avoid a flash. */
-export function installThemes(): void {
-  if (!document.getElementById('dbk-themes')) {
-    const style = document.createElement('style');
-    style.id = 'dbk-themes';
-    style.textContent = themesToCss(builtInThemes);
-    document.head.prepend(style);
-  }
-  const id = resolveThemePreference(storedPreference() ?? SYSTEM_THEME_ID, systemState());
-  const theme = builtInThemes.find((t) => t.id === id);
-  // A theme package is only known after /api/themes answers; until then its built-in base is close.
-  apply(theme?.id ?? (matches(DARK_QUERY) ? 'dark' : 'default'), theme?.colorScheme ?? 'light');
-}
-
 /** CSS for themes installed on the server (theme packages), next to the built-in ones. */
 function installPackageThemes(themes: readonly Theme[]): void {
   let style = document.getElementById('dbk-package-themes');
@@ -145,11 +173,25 @@ function installPackageThemes(themes: readonly Theme[]): void {
  * so the page does not flash before the server answers.
  */
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [preference, setPreferenceState] = useState(() => storedPreference() ?? SYSTEM_THEME_ID);
+  // The saved choice is read in the browser only; the server renders `system`. Nothing is
+  // applied until it is known (the head script already applied it), so there is no flash.
+  const stored = useSyncExternalStore(subscribeStorage, storedPreference, () => null);
+  const inBrowser = useSyncExternalStore(
+    subscribeNothing,
+    () => true,
+    () => false,
+  );
+  // A choice made here (or the account's, from the server) wins over the stored one.
+  const [chosen, setPreferenceState] = useState<string | null>(null);
+  const preference = chosen ?? stored ?? SYSTEM_THEME_ID;
   const [themes, setThemes] = useState<readonly Theme[]>(builtInThemes);
   const [defaultThemeId, setDefaultThemeId] = useState(SYSTEM_THEME_ID);
   const [version, setVersion] = useState(0);
   const system = useSystemColorScheme();
+  const themesRef = useRef(themes);
+  useEffect(() => {
+    themesRef.current = themes;
+  }, [themes]);
 
   useEffect(() => {
     let cancelled = false;
@@ -166,6 +208,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         const chosen = known(data.selectedThemeId) ?? known(storedPreference()) ?? data.defaultThemeId;
         setPreferenceState(chosen);
         storePreference(chosen);
+        storePackageCss(all.find((t) => t.id === chosen && !t.builtIn));
       })
       .catch(() => {
         // Offline or no server (tests, mock mode): the built-in themes still work.
@@ -178,13 +221,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const resolvedId = resolveThemePreference(preference, system);
   const theme = themes.find((t) => t.id === resolvedId) ?? builtInThemes[0]!;
 
-  useEffect(() => {
-    apply(theme.id, theme.colorScheme);
-  }, [theme]);
+  useLayoutEffect(() => {
+    if (inBrowser) apply(theme.id, theme.colorScheme);
+  }, [theme, inBrowser]);
 
   const setPreference = useCallback((id: string) => {
     setPreferenceState(id);
     storePreference(id);
+    storePackageCss(themesRef.current.find((t) => t.id === id && !builtInThemes.some((b) => b.id === t.id)));
     // Signed out this answers 401, and the browser copy is all there is.
     void fetch(routes.themes.select.path, {
       method: 'PUT',

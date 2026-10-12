@@ -1,3 +1,5 @@
+'use client';
+
 import type { ReactNode } from 'react';
 import { Select as S } from 'radix-ui';
 import { Check, ChevronDown } from 'lucide-react';

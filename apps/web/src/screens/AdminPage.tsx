@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Crown, MoreHorizontal, Package, Palette, Plus, Puzzle, Server, Trash2, Users } from 'lucide-react';
@@ -6,6 +8,7 @@ import {
   routes,
   type AdminAccountDto,
   type CatalogEntryDto,
+  type HealthDto,
   type InstanceSettingsDto,
   type PluginDto,
   type ThemeDto,
@@ -64,6 +67,23 @@ type TabId = (typeof TABS)[number]['id'];
 
 const errorText = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback);
 
+const TITLE = 'Admin';
+const DESCRIPTION = 'Settings for this instance, the people on it, plugins and themes.';
+
+/** Query keys of the data the server renders the first tab with. */
+export const adminKeys = { settings: ['admin-settings'], health: ['health'] } as const;
+
+/** The admin page as it looks while its data streams in. */
+export function AdminPageSkeleton() {
+  return (
+    <Page width={880} aria-busy="true">
+      <PageHeader title={TITLE} description={DESCRIPTION} />
+      <Skeleton width="100%" height={36} style={{ marginBottom: 24 }} />
+      <Skeleton width="100%" height={220} radius={10} />
+    </Page>
+  );
+}
+
 export function AdminPage() {
   useBreadcrumbs([{ label: 'Admin' }]);
   const [tab, setTab] = useTabParam<TabId>(
@@ -72,10 +92,7 @@ export function AdminPage() {
   );
   return (
     <Page width={880}>
-      <PageHeader
-        title="Admin"
-        description="Settings for this instance, the people on it, plugins and themes."
-      />
+      <PageHeader title={TITLE} description={DESCRIPTION} />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className={styles.tabs} aria-label="Admin sections">
           {TABS.map((t) => (
@@ -105,15 +122,15 @@ export function AdminPage() {
 
 function useInstanceSettings() {
   return useQuery({
-    queryKey: ['admin-settings'],
+    queryKey: adminKeys.settings,
     queryFn: () => api<InstanceSettingsDto>(routes.admin.settings.path),
   });
 }
 
 function InstanceTab() {
   const health = useQuery({
-    queryKey: ['health'],
-    queryFn: () => api<{ status: string; version: string; database: string }>(routes.health.path),
+    queryKey: adminKeys.health,
+    queryFn: () => api<HealthDto>(routes.health.path),
   });
   const fact = (label: string, value: ReactNode) => (
     <div className={styles.fact}>

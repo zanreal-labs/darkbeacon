@@ -1,3 +1,5 @@
+'use client';
+
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Search } from 'lucide-react';
 import { Spinner } from './Button';

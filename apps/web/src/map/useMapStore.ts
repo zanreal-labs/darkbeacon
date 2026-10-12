@@ -7,6 +7,7 @@ import {
   type PasteSignaturesRequest,
   type PasteSignaturesResult,
   type Position,
+  type StreamSnapshotDto,
   type TypedEvent,
   type UpdateConnectionRequest,
   type UpdateSignatureRequest,
@@ -45,12 +46,24 @@ function mapWithout<K, V>(map: Map<K, V>, keep: (v: V, k: K) => boolean): Map<K,
 /**
  * Live state of one map: the `map:<id>` stream plus optimistic local changes. Commands go
  * over REST; their results come back as events, which replace the optimistic overlay.
+ *
+ * `initial` is the snapshot the server rendered the page with: the map shows at once and the
+ * stream resumes after its seq, so nothing is loaded twice.
  */
-export function useMapStore(mapId: string) {
-  const [confirmed, setConfirmed] = useState(emptyMapState);
+export function useMapStore(mapId: string, initial?: StreamSnapshotDto) {
+  const [confirmed, setConfirmed] = useState(() =>
+    initial
+      ? applyMapMessage(emptyMapState(), {
+          op: 'snapshot',
+          stream: initial.stream,
+          seq: initial.seq,
+          data: initial.data,
+        })
+      : emptyMapState(),
+  );
   const [pending, setPending] = useState<PendingChange[]>([]);
   const [notices, setNotices] = useState<Notice[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const [loaded, setLoaded] = useState(initial !== undefined);
   const [streamError, setStreamError] = useState<string | null>(null);
   const nextId = useRef(0);
   const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
@@ -77,24 +90,28 @@ export function useMapStore(mapId: string) {
     [later],
   );
 
-  useStream(`map:${mapId}`, (message) => {
-    if (message.op === 'error') {
-      setStreamError(message.message);
-      return;
-    }
-    setStreamError(null);
-    setConfirmed((s) => applyMapMessage(s, message));
-    if (message.op === 'snapshot') {
-      setLoaded(true);
-      // The snapshot already contains everything that succeeded.
-      setPending((p) => p.filter((c) => !c.settled));
-    } else if (message.op === 'subscribed') {
-      setLoaded(true);
-    } else if (message.op === 'event') {
-      const event = message.event as TypedEvent;
-      setPending((p) => confirmPending(p, event));
-    }
-  });
+  useStream(
+    `map:${mapId}`,
+    (message) => {
+      if (message.op === 'error') {
+        setStreamError(message.message);
+        return;
+      }
+      setStreamError(null);
+      setConfirmed((s) => applyMapMessage(s, message));
+      if (message.op === 'snapshot') {
+        setLoaded(true);
+        // The snapshot already contains everything that succeeded.
+        setPending((p) => p.filter((c) => !c.settled));
+      } else if (message.op === 'subscribed') {
+        setLoaded(true);
+      } else if (message.op === 'event') {
+        const event = message.event as TypedEvent;
+        setPending((p) => confirmPending(p, event));
+      }
+    },
+    initial?.seq,
+  );
 
   const run = useCallback(
     async (spec: ChangeSpec): Promise<boolean> => {

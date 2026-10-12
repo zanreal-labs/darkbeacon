@@ -4,12 +4,17 @@
     "composite": false,
     "declaration": false,
     "declarationMap": false,
+    "sourceMap": false,
     "noEmit": true,
+    "allowJs": false,
+    "incremental": true,
     "lib": ["ES2024", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
-    "types": ["vite/client"]
+    "types": ["node"],
+    "plugins": [{ "name": "next" }]
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["next-env.d.ts", "next.config.ts", "src", ".next/types/**/*.ts", ".next/dev/types/**/*.ts"],
+  "exclude": ["node_modules"]
 }

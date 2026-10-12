@@ -1,3 +1,5 @@
+'use client';
+
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { routes, type UniverseSystemDto } from '@darkbeacon/shared';

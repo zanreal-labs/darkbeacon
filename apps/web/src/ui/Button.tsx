@@ -1,4 +1,6 @@
-import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
+'use client';
+
+import { cloneElement, forwardRef, isValidElement, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { Slot } from 'radix-ui';
 import { cx } from './cx';
 import { Tooltip } from './Tooltip';
@@ -100,19 +102,34 @@ export interface IconButtonProps extends Omit<ButtonProps, 'icon' | 'trailingIco
 
 /** A square button with only an icon; `label` is its accessible name and tooltip. */
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  { label, icon, tooltip = true, variant = 'ghost', className, ...rest },
+  { label, icon, tooltip = true, variant = 'ghost', size = 'md', className, asChild, children, ...rest },
   ref,
 ) {
-  const button = (
-    <Button
-      ref={ref}
-      variant={variant}
-      aria-label={label}
-      className={cx(styles.icon, className)}
-      icon={icon}
-      {...rest}
-    />
-  );
+  const classes = cx(styles.button, VARIANT[variant], SIZE[size], styles.icon, className);
+  // With `asChild` the child (a link) becomes the button itself: cloned once with the icon, so
+  // the tooltip trigger sits directly on it (a second Slot in between renders differently on the
+  // server than in the browser).
+  const button =
+    asChild && isValidElement<{ className?: string; children?: ReactNode }>(children) ? (
+      cloneElement(
+        children,
+        // The ref is only passed on to the element, never read here.
+        // eslint-disable-next-line react-hooks/refs
+        { ...rest, ref, 'aria-label': label, className: cx(classes, children.props.className) } as object,
+        icon,
+        children.props.children,
+      )
+    ) : (
+      <Button
+        ref={ref}
+        variant={variant}
+        size={size}
+        aria-label={label}
+        className={cx(styles.icon, className)}
+        icon={icon}
+        {...rest}
+      />
+    );
   return tooltip ? <Tooltip content={label}>{button}</Tooltip> : button;
 });
 

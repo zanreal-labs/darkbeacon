@@ -70,7 +70,7 @@
   color: var(--dbk-color-text);
 }
 
-.railLink:global(.active) {
+.railLink[aria-current='page'] {
   background: var(--dbk-color-accent-subtle);
   color: var(--dbk-color-accent-text);
 }
@@ -295,14 +295,14 @@
     display: none;
   }
 
-  .shell[data-immersive] {
+  .shell:has([data-immersive]) {
     grid-template-rows: var(--topbar-height) minmax(0, 1fr);
     grid-template-areas:
       'top'
       'main';
   }
 
-  .shell[data-immersive] .tabbar {
+  .shell:has([data-immersive]) .tabbar {
     display: none;
   }
 
@@ -332,7 +332,15 @@
     height: 20px;
   }
 
-  .tab:global(.active) {
+  .tab[aria-current='page'] {
     color: var(--dbk-color-accent-text);
   }
+}
+
+/* Stands in for the avatar while the account streams in. */
+.accountPlaceholder {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--dbk-color-surface-hover);
 }

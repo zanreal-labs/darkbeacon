@@ -1,3 +1,5 @@
+'use client';
+
 import type { ComponentProps, ReactNode } from 'react';
 import { Tabs as T, ToggleGroup } from 'radix-ui';
 import { cx } from './cx';

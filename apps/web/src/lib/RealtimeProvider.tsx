@@ -1,3 +1,5 @@
+'use client';
+
 import {
   createContext,
   useContext,
@@ -19,7 +21,14 @@ export function RealtimeProvider({
   children: ReactNode;
   client?: RealtimeClient;
 }) {
-  const [client] = useState(() => given ?? new RealtimeClient({ url: defaultRealtimeUrl(window.location) }));
+  // Rendered on the server too, where there is no socket to open; the client is only started in the browser.
+  const [client] = useState(
+    () =>
+      given ??
+      new RealtimeClient({
+        url: typeof window === 'undefined' ? 'ws://server/ws' : defaultRealtimeUrl(window.location),
+      }),
+  );
   useEffect(() => {
     client.start();
     return () => client.stop();
@@ -38,16 +47,20 @@ export function useRealtime(): RealtimeClient {
   return client;
 }
 
-/** Follows a stream while mounted. `stream` null = not yet known (e.g. map still loading). */
-export function useStream(stream: string | null, listener: StreamListener): void {
+/**
+ * Follows a stream while mounted. `stream` null = not yet known (e.g. map still loading).
+ * `sinceSeq`: the seq of a snapshot the page was rendered with; only later events are replayed.
+ */
+export function useStream(stream: string | null, listener: StreamListener, sinceSeq?: number): void {
   const client = useRealtime();
   const latest = useRef(listener);
+  const resumeFrom = useRef(sinceSeq);
   useEffect(() => {
     latest.current = listener;
   });
   useEffect(() => {
     if (!stream) return;
-    return client.subscribe(stream, (message) => latest.current(message));
+    return client.subscribe(stream, (message) => latest.current(message), resumeFrom.current);
   }, [client, stream]);
 }
 
@@ -56,5 +69,7 @@ export function useConnectionStatus(): ConnectionStatus {
   return useSyncExternalStore(
     (notify) => client.onStatus(notify),
     () => client.status,
+    // The prerendered shell shows the socket as about to connect.
+    () => 'connecting',
   );
 }

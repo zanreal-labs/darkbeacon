@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { freeSpot } from '../map/geometry';
-import { slugify } from '../pages/HomePage';
+import { slugify } from '../screens/HomePage';
 import { systemClass } from './universe';
 
 describe('systemClass', () => {

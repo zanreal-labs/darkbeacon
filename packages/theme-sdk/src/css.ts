@@ -13,3 +13,22 @@ export function themesToCss(themes: readonly Theme[]): string {
   const root = first ? themeToCss(first, ':root') : '';
   return root + themes.map((t) => themeToCss(t, `[data-theme="${t.id}"]`)).join('');
 }
+
+/**
+ * Stylesheet for a page that must be right on its first paint, before any script runs: light on
+ * `:root`, one block per theme under `[data-theme="<id>"]`, and for a page without `data-theme`
+ * (the `system` preference) the dark and high-contrast themes from `prefers-color-scheme` and
+ * `prefers-contrast` media queries, in the same order of precedence as `resolveThemePreference`.
+ */
+export function systemThemesCss(
+  system: { light: Theme; dark: Theme; contrast: Theme },
+  themes: readonly Theme[],
+): string {
+  const auto = ':root:not([data-theme])';
+  return (
+    themeToCss(system.light, ':root') +
+    themes.map((t) => themeToCss(t, `[data-theme="${t.id}"]`)).join('') +
+    `@media (prefers-color-scheme: dark) {\n${themeToCss(system.dark, auto)}}\n` +
+    `@media (prefers-contrast: more) {\n${themeToCss(system.contrast, auto)}}\n`
+  );
+}

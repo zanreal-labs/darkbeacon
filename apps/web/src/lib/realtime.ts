@@ -68,11 +68,15 @@ export class RealtimeClient {
     this.open();
   }
 
-  /** Listens to a stream; the first listener subscribes, the last one to leave unsubscribes. */
-  subscribe(stream: string, listener: StreamListener): () => void {
+  /**
+   * Listens to a stream; the first listener subscribes, the last one to leave unsubscribes.
+   * `sinceSeq` is the seq of state the caller already has (a server-rendered snapshot), so the
+   * server only replays what came after it instead of sending a snapshot.
+   */
+  subscribe(stream: string, listener: StreamListener, sinceSeq?: number): () => void {
     let state = this.streams.get(stream);
     if (!state) {
-      state = { lastSeq: undefined, listeners: new Set() };
+      state = { lastSeq: sinceSeq, listeners: new Set() };
       this.streams.set(stream, state);
       this.sendSubscribe(stream, state);
     }
@@ -159,6 +163,6 @@ function defaultBackoff(attempt: number): number {
   return Math.min(30_000, 500 * 2 ** (attempt - 1)) * (0.75 + Math.random() * 0.5);
 }
 
-export function defaultRealtimeUrl(location: Location): string {
+export function defaultRealtimeUrl(location: Pick<Location, 'protocol' | 'host'>): string {
   return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
 }

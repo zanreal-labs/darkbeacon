@@ -1,3 +1,5 @@
+'use client';
+
 import { useEffect, useState, type ClipboardEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2, ClipboardPaste, Radar, X } from 'lucide-react';

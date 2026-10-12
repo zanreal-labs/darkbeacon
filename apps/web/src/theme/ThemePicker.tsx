@@ -1,3 +1,5 @@
+'use client';
+
 import { RadioGroup } from 'radix-ui';
 import { Check } from 'lucide-react';
 import { builtInThemes, SYSTEM_THEME_ID, type Theme, type TokenName } from '@darkbeacon/theme-sdk';

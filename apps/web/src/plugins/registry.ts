@@ -76,7 +76,8 @@ const EMPTY: readonly SlotEntry[] = [];
 
 export type ModuleImporter = (url: string) => Promise<{ default?: WebPlugin }>;
 
-const nativeImport: ModuleImporter = (url) => import(/* @vite-ignore */ url);
+const nativeImport: ModuleImporter = (url) =>
+  import(/* webpackIgnore: true */ /* turbopackIgnore: true */ url);
 
 /** Loads each plugin's web module and lets it register; one broken plugin does not stop the rest. */
 export async function loadWebPlugins(

@@ -1,3 +1,5 @@
+'use client';
+
 import * as React from 'react';
 import {
   Component,
@@ -59,7 +61,11 @@ export function PluginsProvider({
 /** Components registered for `slot`, without plugins switched off on `mapId`. */
 export function useSlot<S extends WebSlot>(slot: S, mapId?: string | null): readonly SlotEntry<S>[] {
   const registry = useContext(RegistryContext);
-  const entries = useSyncExternalStore(registry.subscribe, () => registry.get(slot));
+  const entries = useSyncExternalStore(
+    registry.subscribe,
+    () => registry.get(slot),
+    () => registry.get(slot),
+  );
   return useMemo(
     () => entries.filter((e) => registry.enabledOn(e.pluginId, mapId)),
     [entries, registry, mapId],

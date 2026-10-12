@@ -1,3 +1,5 @@
+'use client';
+
 import type { ReactNode } from 'react';
 import { Checkbox as C, Switch as S } from 'radix-ui';
 import { Check, Minus } from 'lucide-react';

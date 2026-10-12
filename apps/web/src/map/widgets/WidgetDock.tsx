@@ -1,3 +1,5 @@
+'use client';
+
 import type { ReactNode } from 'react';
 import { PanelRightClose } from 'lucide-react';
 import { IconButton } from '../../ui';

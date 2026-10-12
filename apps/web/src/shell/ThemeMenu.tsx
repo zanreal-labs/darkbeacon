@@ -1,3 +1,5 @@
+'use client';
+
 import { Contrast, Monitor, Moon, Palette, Sun } from 'lucide-react';
 import { SYSTEM_THEME_ID } from '@darkbeacon/theme-sdk';
 import { useTheme } from '../theme/ThemeProvider';

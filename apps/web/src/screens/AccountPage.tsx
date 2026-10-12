@@ -1,6 +1,8 @@
+'use client';
+
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useRouter } from 'next/navigation';
 import { LogOut, MoreHorizontal, Plus, Star, Unlink, UserRound } from 'lucide-react';
 import { buildPath, routes, type CharacterDto, type MeDto } from '@darkbeacon/shared';
 import { api, ApiError } from '../lib/api';
@@ -28,6 +30,7 @@ import {
   PageHeader,
   Row,
   Rows,
+  Skeleton,
   Stack,
   Tooltip,
   useToast,
@@ -37,18 +40,34 @@ function errorText(error: unknown): string {
   return error instanceof ApiError ? error.message : 'Something went wrong. Try again.';
 }
 
-/** Discord identity, linked EVE characters (main character, link, unlink), theme and sessions. */
-export function AccountPage() {
+/**
+ * Discord identity, linked EVE characters (main character, link, unlink), theme and sessions.
+ * `authError`: an EVE SSO failure, which comes back as `?auth_error=<message>`.
+ */
+const TITLE = 'Account';
+const DESCRIPTION = 'Your sign-in, EVE characters and preferences.';
+
+/** The account page as it looks while the account streams in. */
+export function AccountPageSkeleton() {
+  return (
+    <Page width={760} aria-busy="true">
+      <PageHeader title={TITLE} description={DESCRIPTION} />
+      <Stack>
+        <Skeleton width="100%" height={88} radius={10} />
+        <Skeleton width="100%" height={180} radius={10} />
+      </Stack>
+    </Page>
+  );
+}
+
+export function AccountPage({ authError = null }: { authError?: string | null }) {
   const me = useMe();
-  // EVE SSO failures come back as ?auth_error=<message>.
-  const [params] = useSearchParams();
-  const authError = params.get('auth_error');
   if (!me.data) return null;
   const { account } = me.data;
 
   return (
     <Page width={760}>
-      <PageHeader title="Account" description="Your sign-in, EVE characters and preferences." />
+      <PageHeader title={TITLE} description={DESCRIPTION} />
       <Stack>
         {authError && (
           <Callout tone="danger" title="EVE sign-in didn't work">
@@ -222,11 +241,11 @@ function Characters({ me }: { me: MeDto }) {
 }
 
 function Sessions() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const logout = useLogout();
   const logoutEverywhere = useLogout(true);
   const [confirmAll, setConfirmAll] = useState(false);
-  const done = () => void navigate('/login', { replace: true });
+  const done = () => router.replace('/login');
   return (
     <Card>
       <CardHeader title="Sessions" description="Signing out everywhere ends your sessions on every device." />

@@ -1,3 +1,5 @@
+'use client';
+
 import { createContext, useContext, useId, type ReactNode } from 'react';
 import { cx } from './cx';
 import styles from './field.module.css';
