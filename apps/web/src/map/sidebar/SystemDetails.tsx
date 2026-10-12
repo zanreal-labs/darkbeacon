@@ -33,6 +33,7 @@ import {
 import { classPill, shownSecurity, STATUS_LABEL } from '../nodeFacts';
 import type { MapStore } from '../useMapStore';
 import { destinationToken } from '../WormholeFacts';
+import { EffectTable } from './EffectTable';
 import { InlineText } from './InlineText';
 import styles from './sidebar.module.css';
 
@@ -102,10 +103,10 @@ export function StaticsLine({ statics }: { statics: readonly string[] }) {
   );
 }
 
-function Effect({ effect }: { effect: WormholeEffect }) {
+function Effect({ effect, whClass }: { effect: WormholeEffect; whClass: number | null }) {
   const { name, summary } = WORMHOLE_EFFECTS[effect];
   return (
-    <Tooltip content={summary} side="bottom" align="start">
+    <Tooltip content={<EffectTable effect={effect} whClass={whClass} />} side="bottom" align="start">
       <span className={styles.effect} tabIndex={0} aria-label={`${name}: ${summary}`}>
         <Orbit aria-hidden />
         {name}
@@ -178,7 +179,7 @@ export function SystemIdentity({
       {holder}
       {info && (info.effect || info.statics.length > 0) && (
         <div className={styles.wormhole}>
-          {info.effect && <Effect effect={info.effect} />}
+          {info.effect && <Effect effect={info.effect} whClass={info.whClass} />}
           <StaticsLine statics={info.statics} />
         </div>
       )}

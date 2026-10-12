@@ -229,3 +229,38 @@
   font-size: var(--dbk-font-size-small);
   font-weight: 700;
 }
+
+/* ---- Effect table (the effect's tooltip in the header) ---- */
+
+.effectTable {
+  display: grid;
+  gap: 6px;
+  max-width: 280px;
+}
+
+.effectTable p {
+  margin: 0;
+}
+
+.effectTable table {
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.effectTable caption {
+  padding-bottom: 2px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.effectTable th {
+  padding: 1px 12px 1px 0;
+  font-weight: 400;
+  text-align: left;
+}
+
+.effectTable td {
+  font-family: var(--dbk-font-family-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}

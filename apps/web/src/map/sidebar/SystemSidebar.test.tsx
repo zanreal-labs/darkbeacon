@@ -293,13 +293,16 @@ function Sidebar({
 }
 
 describe('SystemSidebar', () => {
-  it('carries the system header: pill, place, class, effect, statics and links out', () => {
+  it('carries the system header: pill, place, class, effect, statics and links out', async () => {
     wrap(<Sidebar state={{}} />);
     const header = screen.getByRole('complementary', { name: 'System' });
     expect(header.textContent).toContain('C3');
     expect(header.textContent).toContain('A-R00001 › A-C00311');
     expect(header.textContent).toContain('Class 3 wormhole');
-    expect(screen.getByLabelText(/^Pulsar: /)).toBeTruthy();
+    const effect = screen.getByLabelText(/^Pulsar: /);
+    // Its tooltip lists what it changes in this class.
+    act(() => effect.focus());
+    expect((await screen.findAllByText('Shield capacity'))[0]!.nextElementSibling?.textContent).toBe('+58%');
     expect(
       within(screen.getByRole('list', { name: 'Statics' })).getByText('D845').nextSibling?.textContent,
     ).toBe('HS');
