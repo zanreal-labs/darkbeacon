@@ -2,6 +2,7 @@
 
 import { useId, type ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
+import { useSectionPlacement } from './layout';
 import styles from './sidebar.module.css';
 
 interface Props {
@@ -19,9 +20,13 @@ interface Props {
 /** One part of the system sidebar: a compact header that folds it, and its content. */
 export function SidebarSection({ id, title, count, action, collapsed, onToggle, children }: Props) {
   const bodyId = useId();
+  // My layout may hide the section or move it (see `layout.tsx`).
+  const placement = useSectionPlacement(id);
+  if (placement?.hidden) return null;
   return (
     <section
       className={styles.section}
+      style={placement ? { order: placement.order } : undefined}
       data-section={id}
       data-collapsed={collapsed || undefined}
       aria-label={title}

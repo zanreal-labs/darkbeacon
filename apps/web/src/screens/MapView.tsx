@@ -10,7 +10,7 @@ import {
   type StreamSnapshotDto,
   type UniverseSystemDto,
 } from '@darkbeacon/shared';
-import { AlertTriangle, PanelRight, Plus, Waypoints, X } from 'lucide-react';
+import { AlertTriangle, PanelRight, Plus, Radio, Waypoints, X } from 'lucide-react';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
 import { mapPermissions } from '../lib/roles';
 import { useMe } from '../lib/session';
@@ -22,6 +22,7 @@ import { AddSystemSearch } from '../map/AddSystemSearch';
 import { OnlyTrackedGate, untrackedOf } from '../map/OnlyTrackedGate';
 import { useMapIntel as useSystemIntel, useSetStanding, useStandingsQuery } from '../lib/intel';
 import { MapCanvas, type FocusRequest, type MenuTarget } from '../map/MapCanvas';
+import { useMapCharacters } from '../map/characters/useMapCharacters';
 import type { HolderStanding } from '../map/menus/intel';
 import { freeSpot } from '../map/geometry';
 import { connectionMenu, paneMenu, systemMenu } from '../map/menus';
@@ -161,6 +162,8 @@ export function MapView({
   const connectionPlugins = useSlot('connectionContextMenu', map.id);
   const widgetPlugins = useSlot('widget', map.id);
   const hubMenu = useHubMenu(map.id, can.edit, toast);
+  // My characters on this map: the top bar's strip, tracking, follow mode, On the map.
+  const characters = useMapCharacters({ map, can, state: store.state, select: (id) => select(id, true) });
 
   // Tags (`labels` in the data) and Labels (WH1...) of the map.
   const labels = (state.map ?? map).labels;
@@ -359,6 +362,7 @@ export function MapView({
           </span>
         )}
         <span className={styles.spacer} />
+        {characters.bar}
         <SourceFilter
           sources={filterableSources(store.state.sources)}
           hidden={sourceFilter.hidden}
@@ -405,13 +409,18 @@ export function MapView({
                     </Button>
                   )
                 : can.edit && (
-                    <Button
-                      variant="primary"
-                      icon={<Plus />}
-                      onClick={() => setFocus((f) => ({ ...f, search: f.search + 1 }))}
-                    >
-                      Add a system
-                    </Button>
+                    <>
+                      <Button
+                        variant="primary"
+                        icon={<Plus />}
+                        onClick={() => setFocus((f) => ({ ...f, search: f.search + 1 }))}
+                      >
+                        Add a system
+                      </Button>
+                      <Button icon={<Radio />} onClick={characters.openTracking}>
+                        Track a character
+                      </Button>
+                    </>
                   )
             }
           />
@@ -510,6 +519,8 @@ export function MapView({
           </li>
         ))}
       </ul>
+
+      {characters.dialog}
 
       {menu && menuContent && menuContent.items.length > 0 && (
         <ContextMenu x={menu.x} y={menu.y} {...menuContent} onClose={closeMenu} />

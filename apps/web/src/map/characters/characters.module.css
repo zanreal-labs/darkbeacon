@@ -1,0 +1,420 @@
+/* The map's character controls: the strip in the top bar, On the map, tracking and activity. */
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--dbk-space-2);
+  /* Keeps to the right of the top bar, next to the sidebar when it is open. */
+  margin-left: auto;
+}
+
+/* One pill like the other top-bar controls: portraits, then the tracking button. */
+.group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: var(--dbk-control-height);
+  padding: 0 3px;
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+  background: var(--dbk-color-surface);
+  box-shadow: var(--dbk-shadow-small);
+}
+
+.portrait {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+
+.portrait:disabled {
+  cursor: default;
+}
+
+/* Online: a ring in the success colour; offline: dimmed; expired: grey and struck. */
+.portrait > :first-child {
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px var(--dbk-color-surface),
+    0 0 0 3px var(--dbk-color-border-strong);
+  opacity: 0.55;
+}
+
+.portrait[data-online] > :first-child {
+  box-shadow:
+    0 0 0 2px var(--dbk-color-surface),
+    0 0 0 3px var(--dbk-color-success);
+  opacity: 1;
+}
+
+.portrait[data-expired] > :first-child {
+  box-shadow:
+    0 0 0 2px var(--dbk-color-surface),
+    0 0 0 3px var(--dbk-color-danger);
+  filter: grayscale(1);
+  opacity: 0.7;
+}
+
+.portrait:hover:not(:disabled) > :first-child,
+.portrait:focus-visible > :first-child {
+  opacity: 1;
+}
+
+.mark {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  padding: 1px;
+  border-radius: 50%;
+  background: var(--dbk-color-surface);
+}
+
+.mainMark {
+  top: -3px;
+  right: -3px;
+  color: var(--dbk-color-warning);
+  fill: currentColor;
+}
+
+.followMark {
+  bottom: -3px;
+  right: -3px;
+  color: var(--dbk-color-accent);
+}
+
+.more {
+  padding: 0 4px;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+}
+
+.trackButton,
+.onMapButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: calc(var(--dbk-radius) - 2px);
+  background: none;
+  color: var(--dbk-color-text-muted);
+  font: inherit;
+  font-size: var(--dbk-font-size-small);
+  cursor: pointer;
+}
+
+.trackButton svg,
+.onMapButton svg {
+  width: 16px;
+  height: 16px;
+}
+
+.trackButton:hover,
+.onMapButton:hover {
+  background: var(--dbk-color-surface-hover);
+  color: var(--dbk-color-text);
+}
+
+.trackButton[data-alone] {
+  color: var(--dbk-color-text);
+}
+
+.onMapButton {
+  height: var(--dbk-control-height);
+  padding: 0 var(--dbk-space-2);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+  background: var(--dbk-color-surface);
+  box-shadow: var(--dbk-shadow-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.onMapButton[data-state='open'] {
+  border-color: var(--dbk-color-border-strong);
+  color: var(--dbk-color-text);
+}
+
+/* ---- On the map ---- */
+.panel {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  max-height: inherit;
+}
+
+.panelFooter {
+  padding: var(--dbk-space-1);
+  border-top: 1px solid var(--dbk-color-border);
+}
+
+.panelFooter button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px var(--dbk-space-2);
+  border: 0;
+  border-radius: var(--dbk-radius);
+  background: none;
+  color: var(--dbk-color-text-muted);
+  font: inherit;
+  font-size: var(--dbk-font-size-small);
+  cursor: pointer;
+}
+
+.panelFooter button:hover {
+  background: var(--dbk-color-surface-hover);
+  color: var(--dbk-color-text);
+}
+
+.panelFooter svg {
+  width: 14px;
+  height: 14px;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--dbk-space-2);
+  padding: var(--dbk-space-3) var(--dbk-space-3) 0;
+  font-size: var(--dbk-font-size-small);
+}
+
+.panelHeader .muted,
+.panelHeader > span {
+  flex: 1;
+  color: var(--dbk-color-text-muted);
+}
+
+.panelTools {
+  display: grid;
+  gap: var(--dbk-space-2);
+  padding: var(--dbk-space-2) var(--dbk-space-3);
+  border-bottom: 1px solid var(--dbk-color-border);
+}
+
+.panelEmpty {
+  margin: 0;
+  padding: var(--dbk-space-4) var(--dbk-space-3);
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+  text-align: center;
+}
+
+.onMapList {
+  margin: 0;
+  padding: var(--dbk-space-1);
+  overflow-y: auto;
+  list-style: none;
+}
+
+.onMapRow {
+  display: flex;
+  align-items: center;
+  gap: var(--dbk-space-2);
+  width: 100%;
+  padding: 5px var(--dbk-space-2);
+  border: 0;
+  border-radius: var(--dbk-radius);
+  background: none;
+  color: var(--dbk-color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.onMapRow:not([data-online]) {
+  opacity: 0.6;
+}
+
+.onMapRow:hover:not(:disabled) {
+  background: var(--dbk-color-surface-hover);
+}
+
+.onMapRow:disabled {
+  cursor: default;
+}
+
+.onMapMain {
+  display: grid;
+  min-width: 0;
+}
+
+.onMapName {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ticker {
+  margin-left: 6px;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+  font-weight: 400;
+}
+
+.onMapWhere {
+  overflow: hidden;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Tracking dialog ---- */
+.dialogNote {
+  margin: 0 0 var(--dbk-space-3);
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+}
+
+.trackHead,
+.trackRow {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 40px 40px 52px;
+  gap: var(--dbk-space-2);
+  align-items: center;
+}
+
+.trackHead {
+  padding: 0 var(--dbk-space-2);
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-small);
+}
+
+.trackHead span {
+  text-align: center;
+}
+
+.trackHead span:first-child {
+  grid-column: 3;
+}
+
+.trackList {
+  display: grid;
+  margin: 0 calc(-1 * var(--dbk-space-2));
+  padding: 0;
+  list-style: none;
+}
+
+.trackRow {
+  padding: var(--dbk-space-2);
+  border-radius: var(--dbk-radius);
+}
+
+.trackRow > button {
+  justify-self: center;
+}
+
+.trackRow + .trackRow {
+  border-top: 1px solid var(--dbk-color-border);
+}
+
+.trackRow[data-expired] > :first-child {
+  filter: grayscale(1);
+  opacity: 0.7;
+}
+
+.trackMain {
+  display: grid;
+  min-width: 0;
+}
+
+.trackName {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trackWhere {
+  overflow: hidden;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inlineLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--dbk-color-accent-text);
+}
+
+.inlineLink svg {
+  width: 12px;
+  height: 12px;
+}
+
+.toggle {
+  color: var(--dbk-color-text-subtle);
+}
+
+.toggle[aria-pressed='true'] {
+  color: var(--dbk-color-accent-text);
+}
+
+.toggle[aria-pressed='true'] svg[class*='lucide-star'] {
+  color: var(--dbk-color-warning);
+  fill: currentColor;
+}
+
+.trackSwitch {
+  justify-self: center;
+}
+
+/* ---- Activity ---- */
+.activity {
+  width: 100%;
+  margin-top: var(--dbk-space-3);
+  border-collapse: collapse;
+  font-size: var(--dbk-font-size-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.activity th,
+.activity td {
+  padding: 6px var(--dbk-space-2);
+  border-bottom: 1px solid var(--dbk-color-border);
+  text-align: right;
+}
+
+.activity th:first-child {
+  text-align: left;
+}
+
+.activity thead th {
+  color: var(--dbk-color-text-muted);
+  font-weight: 500;
+}
+
+.activity tbody th {
+  font-weight: 500;
+}
+
+.activityName {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dbk-space-2);
+}
+
+@media (max-width: 760px) {
+  .more {
+    display: none;
+  }
+
+  /* Phones keep the first portrait (main or online) next to the tracking button. */
+  .group > .portrait ~ .portrait {
+    display: none;
+  }
+}

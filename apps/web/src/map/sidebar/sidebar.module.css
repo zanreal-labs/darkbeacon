@@ -207,10 +207,17 @@
 /* ---- Sections ---- */
 
 .scroll {
+  display: flex;
   flex: 1;
+  flex-direction: column;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+/* Sections keep their height; my layout orders them (`order`). */
+.scroll > * {
+  flex: none;
 }
 
 .section {
@@ -829,7 +836,7 @@
 
 .pilot {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto;
+  grid-template-columns: 24px minmax(0, 1fr) auto 24px;
   gap: 8px;
   align-items: center;
   min-height: 32px;
@@ -1044,4 +1051,111 @@
   width: 14px;
   height: 14px;
   color: var(--dbk-color-text-muted);
+}
+
+/* Local: name with corporation and alliance tickers, docked, links, compact rows. */
+.pilotText {
+  display: grid;
+  min-width: 0;
+}
+
+.pilotGroup {
+  overflow: hidden;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.docked {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  color: var(--dbk-color-text-subtle);
+}
+
+.pilotMore {
+  opacity: 0;
+}
+
+.pilot:hover .pilotMore,
+.pilotMore:focus-visible,
+.pilotMore[data-state='open'] {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .pilotMore {
+    opacity: 1;
+  }
+}
+
+.pilots[data-compact] .pilot {
+  grid-template-columns: 20px minmax(0, 1fr) auto 24px;
+  min-height: 26px;
+  padding-block: 1px;
+}
+
+.pilotsHidden {
+  margin: var(--dbk-space-1) 0 0;
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-small);
+}
+
+/* Sidebar sections dialog, and the quiet link to it under the last section. */
+.layoutList {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.layoutRow {
+  display: flex;
+  align-items: center;
+  gap: var(--dbk-space-1);
+  padding: 6px 0;
+}
+
+.layoutRow + .layoutRow {
+  border-top: 1px solid var(--dbk-color-border);
+}
+
+.layoutRow[data-hidden] {
+  color: var(--dbk-color-text-muted);
+}
+
+.layoutSwitch {
+  flex: 1;
+}
+
+.customize {
+  order: 1000;
+  display: flex;
+  justify-content: center;
+  padding: var(--dbk-space-3) 0 var(--dbk-space-4);
+}
+
+.customize button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--dbk-radius);
+  background: none;
+  color: var(--dbk-color-text-subtle);
+  font: inherit;
+  font-size: var(--dbk-font-size-small);
+  cursor: pointer;
+}
+
+.customize button:hover {
+  background: var(--dbk-color-surface-hover);
+  color: var(--dbk-color-text);
+}
+
+.customize svg {
+  width: 14px;
+  height: 14px;
 }

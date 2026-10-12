@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef, type ReactNode } from 'react';
-import { ClipboardPaste } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { ClipboardPaste, SlidersHorizontal } from 'lucide-react';
 import type {
   CharacterDto,
   LabelDto,
@@ -19,7 +19,9 @@ import { ActivitySection, SystemHolder } from './ActivitySection';
 import { RoutesSidebarSection } from '../routes/RoutesSection';
 import { ConnectionsSection } from './ConnectionsSection';
 import { KillsSection, KillsSettingsMenu, useKillsSettings } from './KillsSection';
-import { LocalSection, TrackMenu, usePresence } from './LocalSection';
+import { SidebarLayoutProvider } from './layout';
+import { LocalMenu, LocalSection, usePresence } from './LocalSection';
+import { SectionsDialog } from './SectionsDialog';
 import { SidebarSection } from './SidebarSection';
 import { SidebarShell } from './SidebarShell';
 import {
@@ -95,6 +97,7 @@ export function SystemSidebar({
   note,
 }: Props) {
   const { collapsed, toggle, expand } = useCollapsedSections();
+  const [customizing, setCustomizing] = useState(false);
   const id = system.solarSystemId;
 
   const paste = useSignaturePaste(id, store);
@@ -149,137 +152,153 @@ export function SystemSidebar({
         />
       )}
     >
-      <SidebarSection
-        id="system"
-        title="System"
-        collapsed={!!collapsed.system}
-        onToggle={toggle}
-        action={<SetDestination solarSystemId={id} name={name} />}
-      >
-        <SystemDetails
-          // A field being edited belongs to its system: another system starts clean.
-          key={id}
-          system={system}
-          info={info}
-          labels={labels}
-          systemLabels={systemLabels}
-          can={can}
-          store={store}
-          focusToken={focusToken}
-          focusedRef={focusedRef}
-        />
-      </SidebarSection>
-      <SidebarSection
-        id="signatures"
-        title="Signatures"
-        count={signatures.length}
-        collapsed={!!collapsed.signatures}
-        onToggle={toggle}
-        action={
-          can.edit &&
-          canReadClipboard() && (
-            <IconButton
-              size="sm"
-              label="Paste from clipboard"
-              tooltipSide="left"
-              icon={<ClipboardPaste />}
-              loading={paste.busy}
-              onClick={() => void pasteFromClipboard(paste)}
-            />
-          )
-        }
-      >
-        <SignaturesSection
-          key={id}
-          mapId={mapId}
-          solarSystemId={id}
-          signatures={signatures}
-          streamed={state.has.signatures}
-          connections={state.connections}
-          universe={universe}
-          can={can}
-          store={store}
-          paste={paste}
-          onSelectSystem={onSelectSystem}
-        />
-      </SidebarSection>
-      <SidebarSection
-        id="connections"
-        title="Connections"
-        count={connectionCount}
-        collapsed={!!collapsed.connections}
-        onToggle={toggle}
-      >
-        <ConnectionsSection
-          solarSystemId={id}
-          connections={state.connections}
-          universe={universe}
-          can={can}
-          store={store}
-          onSelectSystem={onSelectSystem}
-        />
-      </SidebarSection>
-      <SidebarSection id="activity" title="Activity" collapsed={!!collapsed.activity} onToggle={toggle}>
-        <ActivitySection key={id} mapId={mapId} solarSystemId={id} />
-      </SidebarSection>
-      <SidebarSection
-        id="kills"
-        title="Kills"
-        collapsed={!!collapsed.kills}
-        onToggle={toggle}
-        action={
-          <KillsSettingsMenu
-            settings={killSettings}
-            update={setKillSettings}
-            solarSystemId={id}
-            systemName={name}
+      <SidebarLayoutProvider extra={plugins.map((p) => p.key)}>
+        <SidebarSection
+          id="system"
+          title="System"
+          collapsed={!!collapsed.system}
+          onToggle={toggle}
+          action={<SetDestination solarSystemId={id} name={name} />}
+        >
+          <SystemDetails
+            // A field being edited belongs to its system: another system starts clean.
+            key={id}
+            system={system}
+            info={info}
+            labels={labels}
+            systemLabels={systemLabels}
+            can={can}
+            store={store}
+            focusToken={focusToken}
+            focusedRef={focusedRef}
           />
-        }
-      >
-        <KillsSection mapId={mapId} solarSystemId={id} settings={killSettings} universe={universe} />
-      </SidebarSection>
-      <SidebarSection
-        id="local"
-        title="Local"
-        count={here.length}
-        collapsed={!!collapsed.local}
-        onToggle={toggle}
-        action={
-          can.edit && (
-            <TrackMenu
+        </SidebarSection>
+        <SidebarSection
+          id="signatures"
+          title="Signatures"
+          count={signatures.length}
+          collapsed={!!collapsed.signatures}
+          onToggle={toggle}
+          action={
+            can.edit &&
+            canReadClipboard() && (
+              <IconButton
+                size="sm"
+                label="Paste from clipboard"
+                tooltipSide="left"
+                icon={<ClipboardPaste />}
+                loading={paste.busy}
+                onClick={() => void pasteFromClipboard(paste)}
+              />
+            )
+          }
+        >
+          <SignaturesSection
+            key={id}
+            mapId={mapId}
+            solarSystemId={id}
+            signatures={signatures}
+            streamed={state.has.signatures}
+            connections={state.connections}
+            universe={universe}
+            can={can}
+            store={store}
+            paste={paste}
+            onSelectSystem={onSelectSystem}
+          />
+        </SidebarSection>
+        <SidebarSection
+          id="connections"
+          title="Connections"
+          count={connectionCount}
+          collapsed={!!collapsed.connections}
+          onToggle={toggle}
+        >
+          <ConnectionsSection
+            solarSystemId={id}
+            connections={state.connections}
+            universe={universe}
+            can={can}
+            store={store}
+            onSelectSystem={onSelectSystem}
+          />
+        </SidebarSection>
+        <SidebarSection id="activity" title="Activity" collapsed={!!collapsed.activity} onToggle={toggle}>
+          <ActivitySection key={id} mapId={mapId} solarSystemId={id} />
+        </SidebarSection>
+        <SidebarSection
+          id="kills"
+          title="Kills"
+          collapsed={!!collapsed.kills}
+          onToggle={toggle}
+          action={
+            <KillsSettingsMenu
+              settings={killSettings}
+              update={setKillSettings}
+              solarSystemId={id}
+              systemName={name}
+            />
+          }
+        >
+          <KillsSection mapId={mapId} solarSystemId={id} settings={killSettings} universe={universe} />
+        </SidebarSection>
+        <SidebarSection
+          id="local"
+          title="Local"
+          count={here.length}
+          collapsed={!!collapsed.local}
+          onToggle={toggle}
+          action={
+            <LocalMenu
               mapId={mapId}
               myCharacters={myCharacters}
               tracked={tracked}
+              canTrack={can.edit}
               onChanged={() => presence.refetch()}
             />
-          )
-        }
-      >
-        <LocalSection here={here} mine={mine} />
-      </SidebarSection>
-      <RoutesSidebarSection
-        mapId={mapId}
-        solarSystemId={id}
-        can={can}
-        myCharacters={myCharacters}
-        onMap={new Set(universe.keys())}
-        onSelectSystem={onSelectSystem}
-        collapsed={!!collapsed.routes}
-        onToggle={toggle}
-      />
-      {plugins.map((entry) => (
-        <SidebarSection
-          key={entry.key}
-          id={entry.key}
-          title={entry.title}
-          collapsed={!!collapsed[entry.key]}
-          onToggle={toggle}
+          }
         >
-          <div className={styles.plugin}>
-            <SlotItem entry={entry} props={{ mapId }} />
-          </div>
+          <LocalSection
+            here={here}
+            mine={mine}
+            expired={new Set(myCharacters.filter((c) => !c.tokenValid).map((c) => c.id))}
+          />
         </SidebarSection>
-      ))}
+        <RoutesSidebarSection
+          mapId={mapId}
+          solarSystemId={id}
+          can={can}
+          myCharacters={myCharacters}
+          onMap={new Set(universe.keys())}
+          onSelectSystem={onSelectSystem}
+          collapsed={!!collapsed.routes}
+          onToggle={toggle}
+        />
+        {plugins.map((entry) => (
+          <SidebarSection
+            key={entry.key}
+            id={entry.key}
+            title={entry.title}
+            collapsed={!!collapsed[entry.key]}
+            onToggle={toggle}
+          >
+            <div className={styles.plugin}>
+              <SlotItem entry={entry} props={{ mapId }} />
+            </div>
+          </SidebarSection>
+        ))}
+      </SidebarLayoutProvider>
+      <div className={styles.customize}>
+        <button type="button" onClick={() => setCustomizing(true)}>
+          <SlidersHorizontal aria-hidden />
+          Sidebar sections
+        </button>
+      </div>
+      <SectionsDialog
+        open={customizing}
+        onOpenChange={setCustomizing}
+        extra={plugins.map((p) => ({ id: p.key, title: p.title }))}
+      />
     </SidebarShell>
   );
 }
