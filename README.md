@@ -26,7 +26,9 @@ docker run -p 3000:3000 -v dbk-data:/data --env-file .env darkbeacon
 
 Open `http://localhost:3000`. The first account to sign in becomes the instance owner. Data lives in the
 `/data` volume (SQLite by default; set `DATABASE_URL=postgres://...` to use Postgres). Without `SECRET_KEY`
-the server generates one and keeps it in `/data/secret.key`.
+the server generates one and keeps it in `/data/secret.key`. One container holds a whole alliance (thousands of
+accounts, 600 characters tracked online, 400 people connected); [`docs/scaling.md`](docs/scaling.md) has the
+measured envelope, when to switch to Postgres and how to run several replicas (`CLUSTER=postgres`).
 
 Only an EVE application (`EVE_CLIENT_ID`, `EVE_CLIENT_SECRET`, callback `<PUBLIC_URL>/api/auth/eve/callback`)
 is needed: people then sign in with any of their characters, and alts added while signed in join the same
