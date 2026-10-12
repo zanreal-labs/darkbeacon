@@ -79,6 +79,16 @@ Pages are served as a prerendered shell (the rail, the top bar, the page frame) 
 the parts that depend on who is looking (the account, the maps list, the map, settings) stream into it. The
 map opens on a snapshot read on the server and then stays live over the WebSocket.
 
+### Moving from Wanderer
+
+Groups on Wanderer bring their maps along, intel included: **All maps**, **Import from Wanderer**. Point it at
+wanderer.ltd or your own Wanderer with the map's API key (or upload the file Wanderer exports), check the
+preview (what comes over, what is approximated, what is left out, who gets access), and import into a new map
+or merge into one you already use. Systems, connections in every state, signatures, structures, comments and
+ACL members come over; the import runs on the server, is audited as "Imported from Wanderer", can run again
+without duplicates and can keep pulling from Wanderer every few minutes while everyone moves. Step by step,
+and what does not migrate: [docs/migrate-from-wanderer.md](docs/migrate-from-wanderer.md).
+
 ## Development
 
 Node tooling never runs on the host. Everything runs in the dev container defined by
@@ -119,8 +129,8 @@ apps/web               Next.js app (App Router, Cache Components, React Flow, Ta
 packages/core          ids, Result, Clock, DomainEvent envelope, authorization, errors, core ports
 packages/db            Kysely factory (SQLite/Postgres), Database = UnitOfWork, migrations/<module>/
 packages/shared        zod DTOs, REST routes (routes.ts), WebSocket protocol, event catalogue
-packages/modules/*     identity, access, mapping, tracking, notifications, plugins, routing
-                       (domain/application/ports)
+packages/modules/*     identity, access, mapping, tracking, notifications, plugins, routing, audit,
+                       importing (domain/application/ports)
 packages/plugin-sdk    plugin manifest, PluginContext, web slots
 packages/theme-sdk     theme tokens, built-in themes, CSS generator
 packages/sde           SDE builder and the committed datasets: universe (systems, regions, gates) and wormholes
