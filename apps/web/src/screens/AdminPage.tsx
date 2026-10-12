@@ -4,9 +4,11 @@ import { useState, type FormEvent, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowUpRight,
+  Ban,
   Crown,
   DatabaseBackup,
   KeyRound,
+  Map as MapIcon,
   MessageSquare,
   MoreHorizontal,
   Package,
@@ -16,6 +18,7 @@ import {
   ScrollText,
   Server,
   Trash2,
+  UserCheck,
   UserRound,
   Users,
   X,
@@ -30,6 +33,7 @@ import {
   type InstanceSettingsDto,
   type ObservabilityDto,
   type PluginDto,
+  type SetAccountDisabledRequest,
   type ThemeDto,
   type ThemesDto,
   type UpdateInstanceRoleRequest,
@@ -59,6 +63,9 @@ import {
   CardHeader,
   ChoiceGroup,
   ConfirmDialog,
+  Dialog,
+  DialogClose,
+  DialogContent,
   EmptyState,
   ErrorState,
   Field,
@@ -81,7 +88,10 @@ import {
   TabsTrigger,
   useToast,
 } from '../ui';
+import { ApiSwitchesCard, MapCreationCard, SignUpCard } from './AdminAccess';
 import { AdminApiAccess } from './AdminApiAccess';
+import { AdminCharactersCard } from './AdminCharacters';
+import { AdminMapsTab } from './AdminMaps';
 import { AuditTab } from './AuditTab';
 import { TelemetryCard } from './TelemetryCard';
 import { ChainCleanupCard } from './ChainCleanupCard';
@@ -91,6 +101,7 @@ import styles from './settings.module.css';
 const TABS = [
   { id: 'instance', title: 'Instance', icon: <Server /> },
   { id: 'people', title: 'People', icon: <Users /> },
+  { id: 'maps', title: 'Maps', icon: <MapIcon /> },
   { id: 'plugins', title: 'Plugins', icon: <Puzzle /> },
   { id: 'themes', title: 'Themes', icon: <Palette /> },
   { id: 'backups', title: 'Backups', icon: <DatabaseBackup /> },
@@ -103,7 +114,7 @@ const errorText = (e: unknown, fallback: string) => (e instanceof ApiError ? e.m
 
 const TITLE = 'Admin';
 const DESCRIPTION =
-  'Settings for this instance, the people on it, plugins, themes, backups, API access and what changed.';
+  'Settings for this instance, the people and maps on it, plugins, themes, backups, API access and what changed.';
 
 /** Query keys of the data the server renders the first tab with. */
 export const adminKeys = {
@@ -165,7 +176,13 @@ export function AdminPage() {
           <InstanceTab />
         </TabsContent>
         <TabsContent value="people">
-          <PeopleTab />
+          <Stack>
+            <PeopleTab />
+            <AdminCharactersCard />
+          </Stack>
+        </TabsContent>
+        <TabsContent value="maps">
+          <AdminMapsTab />
         </TabsContent>
         <TabsContent value="plugins">
           <PluginsTab />
@@ -189,14 +206,14 @@ export function AdminPage() {
 
 // ---- Instance ---------------------------------------------------------------------------------
 
-function useInstanceSettings() {
+export function useInstanceSettings() {
   return useQuery({
     queryKey: adminKeys.settings,
     queryFn: () => api<InstanceSettingsDto>(routes.admin.settings.path),
   });
 }
 
-function useSaveSettings(success?: string) {
+export function useSaveSettings(success?: string) {
   const queryClient = useQueryClient();
   const toast = useToast();
   return useMutation({
@@ -255,6 +272,9 @@ function InstanceTab() {
       </Card>
       <ObservabilityCard />
       <SignInSettings />
+      <SignUpCard />
+      <MapCreationCard />
+      <ApiSwitchesCard />
       <DefaultMapSettings />
       <DiscordBotSettings />
       {providers.data?.loginMethod === 'discord' && <DiscordAdminSettings />}
@@ -672,6 +692,7 @@ function PeopleTab() {
   const toast = useToast();
   const eveMode = useProviders().data?.loginMethod === 'eve';
   const [handover, setHandover] = useState<AdminAccountDto | null>(null);
+  const [disabling, setDisabling] = useState<AdminAccountDto | null>(null);
   const accounts = useQuery({
     queryKey: ['admin-accounts'],
     queryFn: () => api<AdminAccountDto[]>(routes.admin.accounts.path),
@@ -701,6 +722,19 @@ function PeopleTab() {
     onError: (error) =>
       toast({ title: 'Could not hand over', description: errorText(error, 'Try again.'), tone: 'danger' }),
   });
+  const setDisabled = useMutation({
+    mutationFn: ({ account, ...body }: SetAccountDisabledRequest & { account: AdminAccountDto }) =>
+      api<AdminAccountDto>(buildPath(routes.adminIdentity.setDisabled.path, { accountId: account.id }), {
+        method: 'PUT',
+        json: body,
+      }),
+    onSuccess: (_, { account, disabled }) => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-accounts'] });
+      toast({ title: `${account.name} ${disabled ? 'disabled' : 'enabled'}`, tone: 'success' });
+    },
+    onError: (error) =>
+      toast({ title: 'Could not save', description: errorText(error, 'Try again.'), tone: 'danger' }),
+  });
   const isOwner = me.data?.account.instanceRole === 'owner';
   const myId = me.data?.account.id;
 
@@ -708,7 +742,7 @@ function PeopleTab() {
     <Card>
       <CardHeader
         title="People"
-        description="Everyone who has signed in. Admins manage this panel and plugins; the owner role can only be handed over."
+        description="Everyone who has signed in. Admins manage this panel and plugins; the owner role can only be handed over. A disabled account cannot sign in or use its keys."
       />
       <CardBody flush>
         {accounts.isPending ? (
@@ -724,6 +758,15 @@ function PeopleTab() {
                   <div className={styles.rowTitle}>
                     {a.name}
                     {a.id === myId && <Badge variant="outline">You</Badge>}
+                    {a.disabledAt && (
+                      <Badge
+                        tone="danger"
+                        dot
+                        title={a.disabledReason || `Disabled ${relativeTime(a.disabledAt)}`}
+                      >
+                        Disabled
+                      </Badge>
+                    )}
                   </div>
                   <div className={styles.rowMeta}>
                     {a.discordId ? 'Discord' : eveMode ? 'EVE Online' : 'Local account'}
@@ -747,19 +790,33 @@ function PeopleTab() {
                       }
                     />
                   )}
-                  {isOwner && a.instanceRole !== 'owner' ? (
+                  {a.instanceRole !== 'owner' && a.id !== myId ? (
                     <Menu>
                       <MenuTrigger asChild>
                         <IconButton size="sm" label={`More for ${a.name}`} icon={<MoreHorizontal />} />
                       </MenuTrigger>
                       <MenuContent>
-                        <MenuItem icon={<Crown />} onSelect={() => setHandover(a)}>
-                          Make owner…
-                        </MenuItem>
+                        {a.disabledAt ? (
+                          <MenuItem
+                            icon={<UserCheck />}
+                            onSelect={() => setDisabled.mutate({ account: a, disabled: false })}
+                          >
+                            Enable
+                          </MenuItem>
+                        ) : (
+                          <MenuItem icon={<Ban />} tone="danger" onSelect={() => setDisabling(a)}>
+                            Disable…
+                          </MenuItem>
+                        )}
+                        {isOwner && (
+                          <MenuItem icon={<Crown />} onSelect={() => setHandover(a)}>
+                            Make owner…
+                          </MenuItem>
+                        )}
                       </MenuContent>
                     </Menu>
                   ) : (
-                    isOwner && <span style={{ width: 26 }} />
+                    <span style={{ width: 26 }} />
                   )}
                 </div>
               </li>
@@ -776,7 +833,69 @@ function PeopleTab() {
         tone="danger"
         onConfirm={() => handover && transfer.mutateAsync(handover.id)}
       />
+      <DisableDialog
+        account={disabling}
+        onClose={() => setDisabling(null)}
+        onConfirm={(reason) =>
+          disabling && setDisabled.mutateAsync({ account: disabling, disabled: true, reason })
+        }
+      />
     </Card>
+  );
+}
+
+/** Disabling an account, with an optional reason other admins see. */
+function DisableDialog({
+  account,
+  onClose,
+  onConfirm,
+}: {
+  account: AdminAccountDto | null;
+  onClose(): void;
+  onConfirm(reason: string | null): Promise<unknown> | null;
+}) {
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const close = () => {
+    setReason('');
+    onClose();
+  };
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await onConfirm(reason.trim() || null);
+      close();
+    } catch {
+      // The mutation shows the error.
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog open={account !== null} onOpenChange={(open) => !open && close()}>
+      <DialogContent
+        title={`Disable ${account?.name ?? ''}?`}
+        description="They are signed out everywhere, cannot sign in, and their API keys and map access stop working until you enable them again. Nothing of theirs is deleted."
+        width={440}
+        footer={
+          <>
+            <DialogClose asChild>
+              <Button variant="ghost">Cancel</Button>
+            </DialogClose>
+            <Button type="submit" form="disable-account" variant="danger" loading={busy}>
+              Disable account
+            </Button>
+          </>
+        }
+      >
+        <form id="disable-account" onSubmit={(e) => void submit(e)}>
+          <Field label="Reason" optional hint="Other admins see it next to the account.">
+            <Input maxLength={200} value={reason} onChange={(e) => setReason(e.target.value)} />
+          </Field>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
