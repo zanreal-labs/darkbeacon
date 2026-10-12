@@ -208,6 +208,12 @@ export function MapSharing({ map }: { map: MapDto }) {
                         {share.level === 'read-write' ? 'Read and write' : 'Read only'}
                       </Badge>
                       {share.status === 'offered' && <Badge tone="warning">Offered</Badge>}
+                      {share.status === 'active' && share.offeredLevel && (
+                        <Badge tone="warning">Offers read and write</Badge>
+                      )}
+                      {map.kind === 'composite' && share.defaultWrite && (
+                        <Badge tone="neutral">New systems go here</Badge>
+                      )}
                     </div>
                     <div className={styles.rowMeta}>Shares {scopeSummary(share.scopes)}</div>
                     {share.status === 'active' && (
@@ -240,6 +246,26 @@ export function MapSharing({ map }: { map: MapDto }) {
                       </>
                     ) : (
                       <>
+                        {share.offeredLevel && (
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            icon={<Check />}
+                            loading={accept.isPending && accept.variables?.id === share.id}
+                            onClick={() => accept.mutate(share)}
+                          >
+                            Allow writes
+                          </Button>
+                        )}
+                        {map.kind === 'composite' && share.level === 'read-write' && !share.defaultWrite && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => update.mutate({ id: share.id, body: { defaultWrite: true } })}
+                          >
+                            Send new systems here
+                          </Button>
+                        )}
                         <Switch
                           checked={!share.hidden}
                           label="Show"
@@ -283,6 +309,7 @@ export function MapSharing({ map }: { map: MapDto }) {
                         <div className={styles.rowTitle}>
                           {share.targetName}
                           {share.status === 'offered' && <Badge tone="warning">Waiting for its admin</Badge>}
+                          {share.offeredLevel && <Badge tone="warning">Writes wait for its admin</Badge>}
                         </div>
                         <div className={styles.rowMeta}>Receives {scopeSummary(share.scopes)}</div>
                         <details className={own.details}>
@@ -298,7 +325,7 @@ export function MapSharing({ map }: { map: MapDto }) {
                         <Select
                           size="sm"
                           aria-label={`Level for ${share.targetName}`}
-                          value={share.level}
+                          value={share.offeredLevel ?? share.level}
                           options={LEVELS}
                           onValueChange={(level) =>
                             update.mutate({ id: share.id, body: { level: level as ShareLevel } })

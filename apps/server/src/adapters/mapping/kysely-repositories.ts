@@ -62,6 +62,8 @@ export interface MappingTables {
     bubbled: string;
     eol_at: number | null;
     mass_status_at: number | null;
+    bookmark_number: number | null;
+    bookmark_parent: number | null;
     created_at: number;
     updated_at: number;
     /** min(source, target) and max(source, target): unique per map. */
@@ -293,6 +295,18 @@ export class KyselyConnectionRepository extends Repository implements Connection
   async delete(mapId: string, id: string): Promise<void> {
     await this.db.deleteFrom('map_connections').where('map_id', '=', mapId).where('id', '=', id).execute();
   }
+
+  async mapsWithUnnumberedWormholes(): Promise<string[]> {
+    const rows = await this.db
+      .selectFrom('map_connections')
+      .select('map_id')
+      .distinct()
+      .where('type', '=', 'wormhole')
+      .where('bookmark_number', 'is', null)
+      .orderBy('map_id')
+      .execute();
+    return rows.map((r) => r.map_id);
+  }
 }
 
 export class KyselySignatureRepository extends Repository implements SignatureRepository {
@@ -476,6 +490,14 @@ export class KyselyChangeStamps extends Repository implements ChangeStamps {
       .onConflict((oc) => oc.columns(['map_id', 'kind', 'key']).doUpdateSet({ deleted_at: at }))
       .execute();
   }
+
+  async pruneTombstones(before: number): Promise<number> {
+    const result = await this.db
+      .deleteFrom('map_tombstones')
+      .where('deleted_at', '<', before)
+      .executeTakeFirst();
+    return Number(result.numDeletedRows);
+  }
 }
 
 function passageFromRow(row: PassageRow): Passage {
@@ -578,6 +600,8 @@ function connectionToRow(c: Connection): Omit<ConnectionRow, 'field_times'> {
     bubbled: c.bubbled,
     eol_at: c.eolAt,
     mass_status_at: c.massStatusAt ?? null,
+    bookmark_number: c.bookmarkNumber ?? null,
+    bookmark_parent: c.bookmarkParent ?? null,
     created_at: c.createdAt,
     updated_at: c.updatedAt,
     pair_low: Math.min(c.source, c.target),
@@ -600,6 +624,8 @@ function connectionFromRow(row: ConnectionRow): Connection {
     bubbled: row.bubbled as Connection['bubbled'],
     eolAt: row.eol_at == null ? null : Number(row.eol_at),
     massStatusAt: row.mass_status_at == null ? null : Number(row.mass_status_at),
+    bookmarkNumber: row.bookmark_number == null ? null : Number(row.bookmark_number),
+    bookmarkParent: row.bookmark_parent == null ? null : Number(row.bookmark_parent),
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
   };

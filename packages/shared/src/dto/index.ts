@@ -15,3 +15,5 @@ export * from './wormholes.js';
 export * from './audit.js';
 export * from './presence.js';
 export * from './sharing.js';
+export * from './observability.js';
+export * from './backups.js';

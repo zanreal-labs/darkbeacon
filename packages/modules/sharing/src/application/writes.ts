@@ -76,11 +76,27 @@ export class ChainWrites {
     const { who, map } = await this.open(actor, mapId);
     const ref = refId('system', String(solarSystemId));
     if (map.merge.holders(ref).length === 0) throw new NotFoundError('System');
+    const composite = map.info.kind === 'composite';
+    const local = composite ? map.local.get(solarSystemId) : undefined;
+    const unlocking = request.locked === false;
+    if (local?.locked && !unlocking && (request.position || request.visible === false))
+      throw new ConflictError('The system is locked');
     if (request.visible === false) {
       await this.removeSystem(who, mapId, solarSystemId);
       return;
     }
     const fields = systemFields(request);
+    if (composite) {
+      // Notes, labels and locks of a composite are its own, kept over what its sources say.
+      const own: Partial<{ notes: string | null; labelIds: string[]; locked: boolean }> = {};
+      if ('notes' in fields) own.notes = (fields.notes as string) || null;
+      if ('labelIds' in fields) own.labelIds = fields.labelIds as string[];
+      if ('locked' in fields) own.locked = fields.locked as boolean;
+      delete fields.notes;
+      delete fields.labelIds;
+      delete fields.locked;
+      if (Object.keys(own).length > 0) await this.merger.setLocal(who, mapId, solarSystemId, own);
+    }
     if (Object.keys(fields).length > 0)
       await this.writeHolders(
         who,
@@ -97,9 +113,12 @@ export class ChainWrites {
     if (request.position) await this.merger.move(who, mapId, [{ solarSystemId, position: request.position }]);
   }
 
-  /** Positions are the merged map's own layout; sources keep theirs. */
+  /** Positions are the merged map's own layout; sources keep theirs. A composite's locks hold. */
   async moveSystems(actor: Actor | null, mapId: string, request: MoveSystemsRequest): Promise<void> {
-    const { who } = await this.open(actor, mapId);
+    const { who, map } = await this.open(actor, mapId);
+    const locked = request.positions.find((p) => map.local.get(p.solarSystemId)?.locked);
+    if (locked)
+      throw new ConflictError('A locked system cannot be moved', { solarSystemId: locked.solarSystemId });
     await this.merger.move(
       who,
       mapId,
@@ -110,6 +129,7 @@ export class ChainWrites {
   /** Hides the system on every writable source holding it; read-only sources keep showing it. */
   async removeSystem(actor: Actor | null, mapId: string, solarSystemId: number): Promise<void> {
     const { who, map } = await this.open(actor, mapId);
+    if (map.local.get(solarSystemId)?.locked) throw new ConflictError('The system is locked');
     const ref = refId('system', String(solarSystemId));
     await this.writeHolders(who, map, 'system', ref, () => ({
       op: 'system.remove',
@@ -296,11 +316,14 @@ export class ChainWrites {
     );
   }
 
-  /** Where new objects go: the map's own objects, except on a composite (it has none): its first read-write source. */
+  /**
+   * Where new objects go: the map's own objects, except on a composite (it has none): the source
+   * its admins picked, else its first read-write source.
+   */
   private newObjectTargets(map: MergedMapState, kind: ChainObjectKind): SourceInfo[] {
-    return this.writable(map, kind).filter((s) =>
-      map.info.kind === 'composite' ? s.id !== SELF : s.id === SELF,
-    );
+    if (map.info.kind !== 'composite') return this.writable(map, kind).filter((s) => s.id === SELF);
+    const shares = this.writable(map, kind).filter((s) => s.id !== SELF);
+    return [...shares.filter((s) => s.defaultWrite), ...shares.filter((s) => !s.defaultWrite)];
   }
 
   /** Writable sources holding the system that share signatures. */

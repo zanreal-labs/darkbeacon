@@ -43,6 +43,24 @@ every other request (pages, their assets, streamed HTML) through to it. If that 
 and `/api/health` answers 503 until it is back, so the container's health check covers both. Put any reverse
 proxy you like in front; it must not buffer responses, or pages lose their streaming.
 
+### Backups
+
+On SQLite (the default) Darkbeacon backs its database up by itself: daily by default, while it runs, into
+`/data/backups`, keeping the 14 newest automatic backups. Admin > Backups shows when the last one ran and
+the next one runs, makes one now, downloads, deletes and restores them (from the list or an uploaded file,
+after typing `RESTORE`), and sets the schedule, retention and an alert webhook for failures. Before an
+update migrates the database it is backed up too. Copy backups off the server now and then (download them,
+or `docker cp darkbeacon:/data/backups .`), and keep `/data/secret.key` with them: it is not in a backup.
+For when the web app is not an option there is a command line:
+
+```sh
+docker exec -it darkbeacon darkbeacon backup list      # also: create, verify <file>
+docker run --rm -it -v dbk-data:/data darkbeacon darkbeacon backup restore <file>   # server stopped
+```
+
+`BACKUP_SCHEDULE`, `BACKUP_RETENTION`, `BACKUP_DIR` and friends set the defaults. On PostgreSQL use
+`pg_dump`. Everything else, including how a restore works, is in [`docs/backups.md`](docs/backups.md).
+
 ### Demo mode: a preview without Discord or EVE
 
 ```sh
@@ -78,6 +96,37 @@ bundled, so nothing is loaded from a CDN.
 Pages are served as a prerendered shell (the rail, the top bar, the page frame) that appears at once, while
 the parts that depend on who is looking (the account, the maps list, the map, settings) stream into it. The
 map opens on a snapshot read on the server and then stays live over the WebSocket.
+
+### Telemetry
+
+Production builds send anonymous usage statistics to the Darkbeacon maintainers, so they know how many
+instances and players there are and which features are used: a daily heartbeat (version, database, which
+first-party plugins are on, counts of accounts, characters and maps, daily/weekly/monthly actives, sizes as
+buckets) and which features were used (a route computed in outlaw mode, a connection marked EOL, the
+signatures panel opened). Never names, ids, systems, maps, IPs or anything anyone types; an instance is a
+random id and an account an HMAC under a secret that never leaves your database. Browser events go through
+your server, which checks them against the allow-list; PostHog never runs in the browser.
+
+Turn it off with `TELEMETRY=off` or `DO_NOT_TRACK=1`, or with the switch in Admin > Instance, where you can
+also see every payload that was sent. Development and test servers never send. The exact field list, the
+reasoning and the PostHog setup are in [docs/telemetry.md](docs/telemetry.md).
+
+### Observability: Grafana, OpenTelemetry, Prometheus
+
+Traces, metrics and logs go out over OpenTelemetry as soon as an OTLP endpoint is set; nothing else to
+configure, and nothing is loaded while it is off:
+
+```sh
+docker run ... -e OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318 darkbeacon
+```
+
+A page view is one trace from the API server through the web app's server and back to the API, down to the
+SQL; log lines link to their traces; metrics cover events, the outbox backlog, webhook and Discord deliveries,
+ESI requests and limits, tracking polls, online characters, maps and WebSockets. For Prometheus, set
+`METRICS_PROMETHEUS=true` and `METRICS_TOKEN=...` and scrape `/metrics` with that bearer token.
+`docker compose -f docker-compose.observability.yml up -d --build` runs a demo instance next to Grafana's
+all-in-one `grafana/otel-lgtm` with a starter dashboard. Grafana Cloud, collectors, every variable and every
+metric: [docs/observability.md](docs/observability.md). Admin > Instance shows what is exported.
 
 ## Development
 
@@ -119,8 +168,10 @@ apps/web               Next.js app (App Router, Cache Components, React Flow, Ta
 packages/core          ids, Result, Clock, DomainEvent envelope, authorization, errors, core ports
 packages/db            Kysely factory (SQLite/Postgres), Database = UnitOfWork, migrations/<module>/
 packages/shared        zod DTOs, REST routes (routes.ts), WebSocket protocol, event catalogue
-packages/modules/*     identity, access, mapping, tracking, notifications, plugins, routing
-                       (domain/application/ports)
+packages/modules/*     identity, access, mapping, tracking, notifications, plugins, routing, audit,
+                       telemetry (domain/application/ports)
+                       observability (domain/application/ports)
+                       backups (domain/application/ports)
 packages/plugin-sdk    plugin manifest, PluginContext, web slots
 packages/theme-sdk     theme tokens, built-in themes, CSS generator
 packages/sde           SDE builder and the committed datasets: universe (systems, regions, gates) and wormholes
@@ -170,6 +221,16 @@ plugins/*              first-party plugins (plugin-sdk only)
    installed by identity through `ActorResolverRegistry.use(...)`.
 
 Imports across those lines are checked by `pnpm lint` (`tools/eslint/boundaries.js`).
+
+## Support the project
+
+Darkbeacon is built and maintained in my spare time, for free, for everyone who lives in wormhole space.
+If it saves your fleet a few jumps and you would like to say thanks, you can send ISK in game to
+**`Z4NR34L`**. Every donation, however small, goes into keeping the project alive and growing.
+
+Donations are entirely voluntary: they buy no features, no priority and no special access, and every
+instance works the same whether its users donate or not. Bug reports, ideas and pull requests help just as
+much.
 
 ## Credits
 

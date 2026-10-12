@@ -236,7 +236,7 @@ describeEachDialect('mapping use cases', (t) => {
       await systems.add(bob, map.id, { solarSystemId: id });
     }
     const gate = await connections.add(bob, map.id, { source: SYSTEMS.jita, target: SYSTEMS.perimeter });
-    expect(gate).toMatchObject({ type: 'gate', shipSize: 'xlarge' });
+    expect(gate).toMatchObject({ type: 'gate', shipSize: 'capital' });
     const hole = await connections.add(bob, map.id, { source: SYSTEMS.c2, target: SYSTEMS.c1 });
     expect(hole).toMatchObject({
       type: 'wormhole',

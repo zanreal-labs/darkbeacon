@@ -1,4 +1,4 @@
-import { ServerMessage, type PresenceStatePatch } from '@darkbeacon/shared';
+import { RESTORED_CLOSE_CODE, ServerMessage, type PresenceStatePatch } from '@darkbeacon/shared';
 
 export type StreamMessage = Extract<ServerMessage, { op: 'snapshot' | 'event' | 'subscribed' | 'error' }>;
 export type StreamListener = (message: StreamMessage) => void;
@@ -41,6 +41,7 @@ export class RealtimeClient {
   private readonly presence = new Map<string, PresenceStatePatch>();
   private readonly presenceListeners = new Map<string, Set<PresenceListener>>();
   private readonly statusListeners = new Set<(status: ConnectionStatus) => void>();
+  private readonly resetListeners = new Set<() => void>();
   private attempt = 0;
   private stopped = true;
   private timer: ReturnType<typeof setTimeout> | undefined;
@@ -124,6 +125,12 @@ export class RealtimeClient {
     };
   }
 
+  /** Called after the server's database was replaced (a restore): everything held is stale. */
+  onReset(listener: () => void): () => void {
+    this.resetListeners.add(listener);
+    return () => this.resetListeners.delete(listener);
+  }
+
   onStatus(listener: (status: ConnectionStatus) => void): () => void {
     this.statusListeners.add(listener);
     return () => this.statusListeners.delete(listener);
@@ -143,9 +150,14 @@ export class RealtimeClient {
       for (const [stream, state] of this.presence) this.send({ op: 'presence', stream, state });
     };
     socket.onmessage = (event) => this.receive(String(event.data));
-    socket.onclose = () => {
+    socket.onclose = (event) => {
       if (this.socket !== socket) return;
       this.socket = null;
+      if ((event as { code?: number } | undefined)?.code === RESTORED_CLOSE_CODE) {
+        // The seqs held belong to the old database: resubscribe from snapshots.
+        for (const state of this.streams.values()) state.lastSeq = undefined;
+        for (const listener of this.resetListeners) listener();
+      }
       this.setStatus('closed');
       if (this.stopped) return;
       const delay = (this.options.backoff ?? defaultBackoff)(++this.attempt);

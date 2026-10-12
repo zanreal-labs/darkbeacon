@@ -33,6 +33,8 @@ export interface SourceInfo {
   /** `all` for the map's own objects. */
   scopes: readonly ShareScope[] | 'all';
   hidden: boolean;
+  /** On a composite: where its new objects go. */
+  defaultWrite?: boolean;
 }
 
 export function sourceDto(source: SourceInfo): MapSourceDto {
@@ -74,6 +76,8 @@ export interface ViewContext {
   sources: ReadonlyMap<string, SourceInfo>;
   /** The map's own positions of systems. */
   layout: ReadonlyMap<number, Position>;
+  /** A composite's own notes, label assignments and locks, over the merged ones. */
+  local?: ReadonlyMap<number, { notes: string | null; labelIds: string[]; locked: boolean }>;
 }
 
 const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
@@ -104,6 +108,7 @@ export function positionHint(object: MergedObject): Position | null {
 export function systemDto(object: MergedObject, ctx: ViewContext): MapSystemDto {
   const solarSystemId = Number(object.key);
   const f = object.fields;
+  const local = ctx.local?.get(solarSystemId);
   return {
     mapId: ctx.mapId,
     solarSystemId,
@@ -112,9 +117,11 @@ export function systemDto(object: MergedObject, ctx: ViewContext): MapSystemDto 
     temporaryName: str(f.label),
     tag: str(f.tag),
     status: (str(f.status) as SystemStatus | null) ?? 'unknown',
-    description: str(f.notes) ?? '',
-    labelIds: Array.isArray(f.labelIds) ? f.labelIds.filter((x): x is string => typeof x === 'string') : [],
-    locked: f.locked === true,
+    description: local?.notes ?? str(f.notes) ?? '',
+    labelIds:
+      local?.labelIds ??
+      (Array.isArray(f.labelIds) ? f.labelIds.filter((x): x is string => typeof x === 'string') : []),
+    locked: local?.locked ?? f.locked === true,
     visible: true,
     createdAt: object.born,
     updatedAt: object.updatedAt,

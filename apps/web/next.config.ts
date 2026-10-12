@@ -22,6 +22,8 @@ const config: NextConfig = {
   outputFileTracingRoot: root,
   turbopack: { root },
   poweredByHeader: false,
+  // OpenTelemetry (src/instrumentation.node.ts) loads exporters at runtime; keep it out of the bundle.
+  serverExternalPackages: ['@opentelemetry/sdk-node', '@opentelemetry/instrumentation-undici'],
   env: { DBK_NODE_NAME_SIZERS: JSON.stringify(sizers) },
   // The API server streams this app's answers through; anything in front of it must not buffer.
   headers: async () => [{ source: '/:path*{/}?', headers: [{ key: 'X-Accel-Buffering', value: 'no' }] }],

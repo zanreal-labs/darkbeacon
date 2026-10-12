@@ -12,6 +12,9 @@ export const featureModules: Array<Type | DynamicModule> = [
   (await import('./notifications/notifications.module.js')).NotificationsModule,
   (await import('./plugins/plugins.module.js')).PluginsModule,
   (await import('./audit/audit.module.js')).AuditModule,
+  (await import('./backups/backups.module.js')).BackupsModule,
   (await import('./demo/demo.module.js')).DemoModule,
   (await import('./landing/landing.module.js')).LandingModule,
+  (await import('./telemetry/telemetry.module.js')).TelemetryModule,
+  (await import('./observability/observability.module.js')).ObservabilityModule,
 ];

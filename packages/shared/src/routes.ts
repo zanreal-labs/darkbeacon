@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import * as dto from './dto/index.js';
+import * as telemetry from './telemetry.js';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 /** Who may call: anyone, a signed-in account, or an instance admin. Map routes also check the map role. */
@@ -28,6 +29,8 @@ const route = <const R extends RouteDef>(r: R): R => r;
  */
 export const routes = {
   health: route({ method: 'GET', path: '/api/health', auth: 'public', response: dto.HealthDto }),
+  /** Readiness: the database answers and every migration is applied (503 otherwise). */
+  ready: route({ method: 'GET', path: '/api/ready', auth: 'public', response: dto.ReadyDto }),
 
   realtime: {
     /**
@@ -264,6 +267,54 @@ export const routes = {
       response: dto.DiscordBotDto,
     }),
     removeDiscordBot: route({ method: 'DELETE', path: '/api/admin/discord-bot', auth: 'admin' }),
+    /** What the instance exports for monitoring (OpenTelemetry); set through the environment only. */
+    observability: route({
+      method: 'GET',
+      path: '/api/admin/observability',
+      auth: 'admin',
+      response: dto.ObservabilityDto,
+    }),
+  },
+
+  /**
+   * SQLite backups (instance admins). On Postgres the status says `supported: false` and the
+   * other routes answer 409: back Postgres up with its own tooling.
+   */
+  backups: {
+    status: route({
+      method: 'GET',
+      path: '/api/admin/backups',
+      auth: 'admin',
+      response: dto.BackupStatusDto,
+    }),
+    create: route({ method: 'POST', path: '/api/admin/backups', auth: 'admin', response: dto.BackupDto }),
+    updateSettings: route({
+      method: 'PATCH',
+      path: '/api/admin/backups/settings',
+      auth: 'admin',
+      body: dto.UpdateBackupSettingsRequest,
+      response: dto.BackupSettingsDto,
+    }),
+    /** Streams the `.db.gz` file as an attachment. */
+    download: route({ method: 'GET', path: '/api/admin/backups/:name/download', auth: 'admin' }),
+    remove: route({ method: 'DELETE', path: '/api/admin/backups/:name', auth: 'admin' }),
+    restore: route({
+      method: 'POST',
+      path: '/api/admin/backups/:name/restore',
+      auth: 'admin',
+      body: dto.RestoreBackupRequest,
+      response: dto.RestoreResultDto,
+    }),
+    /**
+     * multipart/form-data: a `confirm` field (`RESTORE`) first, then one `file` (a `.db.gz`
+     * backup or a plain SQLite file), streamed to disk up to `maxUploadBytes`.
+     */
+    restoreUpload: route({
+      method: 'POST',
+      path: '/api/admin/backups/restore-upload',
+      auth: 'admin',
+      response: dto.RestoreResultDto,
+    }),
   },
 
   universe: {
@@ -346,6 +397,26 @@ export const routes = {
       body: dto.SetBookmarkTemplateRequest,
       response: dto.MapDto,
     }),
+    /**
+     * The map's `{n}` numbering: order and renumber on close (manager+); published as
+     * `map.settings_changed`. A new order numbers every system's wormholes again.
+     */
+    setBookmarkNumbering: route({
+      method: 'PUT',
+      path: '/api/maps/:mapId/bookmark-numbering',
+      auth: 'account',
+      mapRole: 'manager',
+      body: dto.SetBookmarkNumberingRequest,
+      response: dto.MapDto,
+    }),
+    /** Numbers wormholes 1, 2, 3 again in the map's order; changes arrive as `connection.updated`. */
+    renumberBookmarks: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/bookmark-numbers/renumber',
+      auth: 'account',
+      mapRole: 'member',
+      body: dto.RenumberBookmarksRequest,
+    }),
     /** The caller's own view of the map: last viewport and bookmark template override. */
     getPreferences: route({
       method: 'GET',
@@ -418,6 +489,15 @@ export const routes = {
       path: '/api/maps/:mapId/connections/:connectionId',
       auth: 'account',
       mapRole: 'member',
+    }),
+    /** A wormhole's `{n}` set by hand; the sibling that had the number swaps with it. */
+    setBookmarkNumber: route({
+      method: 'PUT',
+      path: '/api/maps/:mapId/connections/:connectionId/bookmark-number',
+      auth: 'account',
+      mapRole: 'member',
+      body: dto.SetBookmarkNumberRequest,
+      response: dto.ConnectionDto,
     }),
     /** The connections panel: every visible connection with type, mass and time estimates, most urgent first. */
     intel: route({
@@ -806,6 +886,45 @@ export const routes = {
       auth: 'admin',
       response: dto.AuditVerifyDto,
     }),
+  },
+
+  /** Anonymous product telemetry (see docs/telemetry.md). */
+  telemetry: {
+    /** Whether the web app reports usage, and whether to show the admin the notice about it. */
+    client: route({
+      method: 'GET',
+      path: '/api/telemetry',
+      auth: 'account',
+      response: telemetry.TelemetryClientDto,
+    }),
+    /**
+     * Usage events from the web app, checked against the allow-list and forwarded without the
+     * request's IP or anything else about the browser. 400 when any event is not on the list.
+     */
+    ingest: route({
+      method: 'POST',
+      path: '/api/telemetry/e',
+      auth: 'account',
+      body: telemetry.TelemetryIngestRequest,
+      response: telemetry.TelemetryIngestResultDto,
+    }),
+    /** Status, instance id, the last payloads sent and the heartbeat as it would be sent now. */
+    status: route({
+      method: 'GET',
+      path: '/api/admin/telemetry',
+      auth: 'admin',
+      response: telemetry.TelemetryStatusDto,
+    }),
+    /** The admin switch; recorded on the instance audit as `telemetry.changed`. */
+    setEnabled: route({
+      method: 'PUT',
+      path: '/api/admin/telemetry/enabled',
+      auth: 'admin',
+      body: telemetry.SetTelemetryEnabledRequest,
+      response: telemetry.TelemetryStatusDto,
+    }),
+    /** The admin has read the notice about telemetry; it is not shown to them again. */
+    dismissNotice: route({ method: 'POST', path: '/api/admin/telemetry/notice', auth: 'admin' }),
   },
 
   presence: {

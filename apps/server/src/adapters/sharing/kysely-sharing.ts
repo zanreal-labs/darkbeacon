@@ -4,6 +4,8 @@ import type {
   ChainLayoutRepository,
   ChainViewRepository,
   CompositeMaps,
+  LocalFields,
+  LocalFieldsRepository,
   Share,
   ShareRepository,
   StoredView,
@@ -22,7 +24,9 @@ export interface SharingTables {
     offered_scopes: string;
     target_scopes: string | null;
     status: string;
+    offered_level: string | null;
     hidden: number;
+    default_write: number;
     offered_by: string;
     accepted_by: string | null;
     offered_at: number;
@@ -31,6 +35,14 @@ export interface SharingTables {
   };
   chain_views: { map_id: string; sources: string; updated_at: number };
   chain_view_entities: { map_id: string; kind: string; id: string; data: string };
+  chain_local_fields: {
+    map_id: string;
+    solar_system_id: number;
+    notes: string | null;
+    label_ids: string;
+    locked: number;
+    updated_at: number;
+  };
   chain_layout: { map_id: string; solar_system_id: number; x: number; y: number; updated_at: number };
   /** Mapping's table, read for the map kind only. */
   maps: { id: string; kind: string };
@@ -55,7 +67,9 @@ function shareFromRow(row: ShareRow): Share {
     offeredScopes: json.decode<ShareScope[]>(row.offered_scopes) ?? ['topology'],
     targetScopes: json.decode<ShareScope[]>(row.target_scopes),
     status: row.status as Share['status'],
+    offeredLevel: (row.offered_level as Share['offeredLevel']) ?? null,
     hidden: bool.decode(row.hidden),
+    defaultWrite: bool.decode(row.default_write),
     offeredBy: row.offered_by,
     acceptedBy: row.accepted_by,
     offeredAt: Number(row.offered_at),
@@ -75,7 +89,9 @@ function shareToRow(share: Share): ShareRow {
     offered_scopes: json.encode(share.offeredScopes),
     target_scopes: share.targetScopes === null ? null : json.encode(share.targetScopes),
     status: share.status,
+    offered_level: share.offeredLevel,
     hidden: bool.encode(share.hidden),
+    default_write: bool.encode(share.defaultWrite),
     offered_by: share.offeredBy,
     accepted_by: share.acceptedBy,
     offered_at: share.offeredAt,
@@ -273,6 +289,54 @@ export class KyselyChainLayoutRepository extends Repository implements ChainLayo
 
   async clear(mapId: string): Promise<void> {
     await this.db.deleteFrom('chain_layout').where('map_id', '=', mapId).execute();
+  }
+}
+
+/** A composite's own notes, label assignments and locks of systems. */
+export class KyselyLocalFieldsRepository extends Repository implements LocalFieldsRepository {
+  async list(mapId: string): Promise<Map<number, LocalFields>> {
+    const rows = await this.db
+      .selectFrom('chain_local_fields')
+      .selectAll()
+      .where('map_id', '=', mapId)
+      .execute();
+    return new Map(
+      rows.map((r) => [
+        Number(r.solar_system_id),
+        {
+          notes: r.notes,
+          labelIds: json.decode<string[]>(r.label_ids) ?? [],
+          locked: bool.decode(r.locked),
+        },
+      ]),
+    );
+  }
+
+  async put(mapId: string, solarSystemId: number, fields: LocalFields, at: number): Promise<void> {
+    const row = {
+      map_id: mapId,
+      solar_system_id: solarSystemId,
+      notes: fields.notes,
+      label_ids: json.encode(fields.labelIds),
+      locked: bool.encode(fields.locked),
+      updated_at: at,
+    };
+    await this.db
+      .insertInto('chain_local_fields')
+      .values(row)
+      .onConflict((oc) =>
+        oc.columns(['map_id', 'solar_system_id']).doUpdateSet({
+          notes: row.notes,
+          label_ids: row.label_ids,
+          locked: row.locked,
+          updated_at: row.updated_at,
+        }),
+      )
+      .execute();
+  }
+
+  async clear(mapId: string): Promise<void> {
+    await this.db.deleteFrom('chain_local_fields').where('map_id', '=', mapId).execute();
   }
 }
 

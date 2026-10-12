@@ -24,6 +24,7 @@ import {
   KyselyChainLayoutRepository,
   KyselyChainViewRepository,
   KyselyCompositeMaps,
+  KyselyLocalFieldsRepository,
   KyselyShareRepository,
 } from './kysely-sharing.js';
 import { LocalChainSources } from './local-chain-source.js';
@@ -42,6 +43,7 @@ export function sharingTestEnv(database: Database) {
     sources: new LocalChainSources({ ports: env.ports, characters, audit }),
     views: new KyselyChainViewRepository(database),
     layout: new KyselyChainLayoutRepository(database),
+    local: new KyselyLocalFieldsRepository(database),
     composites: new KyselyCompositeMaps(database),
     access: env.access,
     events: env.ports.events,

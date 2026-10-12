@@ -48,6 +48,9 @@ packages/modules/plugins        plugin registry, manifest validation, enable/dis
 packages/modules/routing        routes over stargates and the chain, hubs, chain exits, in-game waypoints
 packages/modules/audit          audit records of events, histories, reverts, hash chain check
 packages/modules/sharing        shares between maps, composite maps, merging several maps' chains
+packages/modules/telemetry      anonymous product telemetry: allow-list, pseudonymous ids, opt-outs, heartbeat
+packages/modules/observability  telemetry settings, domain metrics, admin status (OpenTelemetry SDK in adapters)
+packages/modules/backups        SQLite backups: snapshots, schedule, retention, validation, restore
 packages/db            Kysely factory, dialect switch, migration runner; migrations in migrations/<module>/
 packages/shared        zod schemas, DTOs and the WebSocket protocol shared by server and web
 packages/plugin-sdk    public plugin contract: manifest type, PluginContext (exposed ports), web slots
@@ -149,6 +152,9 @@ interface DomainEvent<T = unknown> {
   shows in one line in the sidebar, never on the canvas.
 - Merged changes are published on the merged map's own stream with its own seq; edits on a merged
   map write through to read-write sources only, never past the share's scopes.
+  A composite keeps its own notes, labels and locks of systems; raising a share to read-write
+  needs the target's consent again; webhooks and plugins of a map with objects of its own skip
+  the merged copies.
 - Sources sit behind the `ChainSource` port in a wire-ready delta format (stable keys, stamped
   fields, tombstones, scopes cut at the source), so a map on another instance can be a source later.
 
@@ -179,7 +185,8 @@ interface DomainEvent<T = unknown> {
 Environment only for what must exist before the first login: `PUBLIC_URL`, `SECRET_KEY`,
 `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `EVE_CLIENT_ID`, `EVE_CLIENT_SECRET`, `DATABASE_URL` (optional),
 `PORT` (default 3000), `DATA_DIR` (default /data), `DEMO_MODE`. Everything else is stored in the database and
-edited in the admin tab.
+edited in the admin tab, except observability: the standard `OTEL_*` variables plus `METRICS_PROMETHEUS` and
+`METRICS_TOKEN` (docs/observability.md), shown read-only in the admin tab.
 
 ## Container
 

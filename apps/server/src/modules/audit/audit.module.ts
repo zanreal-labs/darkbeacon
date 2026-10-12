@@ -3,6 +3,7 @@ import { AuditTrail } from '@darkbeacon/audit';
 import { isInstanceAdmin, type Clock, type MapAccess } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
 import {
+  BookmarkNumberUseCases,
   ConnectionUseCases,
   MapUseCases,
   SignatureUseCases,
@@ -46,6 +47,7 @@ export class AuditModule implements OnModuleInit {
     @Inject(SystemUseCases) private readonly systems: SystemUseCases,
     @Inject(ConnectionUseCases) private readonly connections: ConnectionUseCases,
     @Inject(SignatureUseCases) private readonly signatures: SignatureUseCases,
+    @Inject(BookmarkNumberUseCases) private readonly numbers: BookmarkNumberUseCases,
   ) {}
 
   onModuleInit(): void {
@@ -55,6 +57,7 @@ export class AuditModule implements OnModuleInit {
         systems: this.systems,
         connections: this.connections,
         signatures: this.signatures,
+        numbers: this.numbers,
       }),
     );
     // The instance audit can be followed live by instance admins only.

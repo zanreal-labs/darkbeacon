@@ -450,6 +450,7 @@ export class DiscordNotify {
       mention ? config.settings.mention : null,
     );
     const ids = rows.map((r) => r.id);
+    this.ctx.metrics.delivery('discord', result.ok ? 'ok' : 'failed');
     if (result.ok) {
       await this.store.markSent(ids, config.mapId, this.now());
     } else if (result.retryAfterMs !== undefined) {

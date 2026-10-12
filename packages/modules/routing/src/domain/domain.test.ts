@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { findRoute, jumpsTo, RouteGraph, StargateGraph } from './graph.js';
 import { isLowSec, nearestStaging } from './hubs.js';
-import { isHighSecSpace, isWormholeSpace, policyFor, type RouteNode } from './modes.js';
+import { isHighSecSpace, isWormholeSpace, policyFor, routeSpace, type RouteNode } from './modes.js';
 import { closedLevels, displaySecurity, isHighSec, policeAttack } from './security.js';
 
 describe('security', () => {
@@ -134,5 +134,19 @@ describe('jump tables', () => {
   it('finds the nearest low-sec system next to a hub', () => {
     const staging = nearestStaging(stargates, 4, policyFor('outlaw'), isLowSec, String);
     expect(staging?.id).toBe(5); // 6 is null-sec; 5 (0.3) is two jumps away
+  });
+});
+
+describe('routeSpace', () => {
+  const at = (security: number, whClass: number | null = null) => ({ security, whClass });
+  it('names the one kind of space a route runs through, else mixed', () => {
+    expect(routeSpace([at(0.9459), at(0.5), at(0.45)])).toBe('high');
+    expect(routeSpace([at(0.4), at(0.01)])).toBe('low');
+    expect(routeSpace([at(0), at(-0.4), at(-1)])).toBe('null');
+    expect(routeSpace([at(0.5), at(0.4)])).toBe('mixed');
+    // Wormhole space and Pochven never make a route one kind.
+    expect(routeSpace([at(-1, 3), at(0.9)])).toBe('mixed');
+    expect(routeSpace([at(-1, 25)])).toBe('mixed');
+    expect(routeSpace([])).toBe('mixed');
   });
 });

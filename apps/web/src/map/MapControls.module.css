@@ -121,24 +121,26 @@
   transform: translate(-50%, -50%);
 }
 
-.sampleBadges {
-  display: inline-flex;
-  gap: 3px;
+.sampleSize {
+  position: absolute;
+  top: 50%;
+  left: 32px;
+  transform: translate(-50%, -50%);
 }
 
 .statusSample {
   display: block;
   width: 40px;
   height: 20px;
-  border: 1px solid var(--dbk-node-border);
+  border: 3px solid var(--status);
   border-radius: var(--dbk-radius-small);
-  background: var(--tint);
+  background: var(--dbk-node-bg);
 }
 
-/* Phones: pinch zooms, so only fit and the legend; above the dock's tab bar. */
+/* Phones: pinch zooms, so only fit and the legend; above the system sheet when it is open. */
 @media (max-width: 760px) {
   .panel.panel {
-    margin-bottom: calc(64px + env(safe-area-inset-bottom));
+    margin-bottom: calc(var(--covered-bottom, 0px) + var(--dbk-space-3) + env(safe-area-inset-bottom));
   }
 
   .zoom,

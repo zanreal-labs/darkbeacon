@@ -28,8 +28,8 @@ import {
   type ViewContext,
   type ViewEntity,
 } from '../domain/view.js';
-import type { ChainMapInfo, ChainSelector } from '../ports/index.js';
-import { SHARING_ACTOR, type SharingPorts } from './ports.js';
+import type { ChainMapInfo, ChainSelector, LocalFields } from '../ports/index.js';
+import { SHARING_ACTOR, SHARING_COPY_ACTOR, type SharingPorts } from './ports.js';
 
 /** A merged map in memory: its sources, their merge and what its viewers were given. */
 interface MergedMap {
@@ -40,6 +40,8 @@ interface MergedMap {
   merge: ChainMerge;
   view: ViewState;
   layout: Map<number, Position>;
+  /** A composite's own notes, labels and locks of systems. */
+  local: Map<number, LocalFields>;
 }
 
 /** The systems, connections and signatures a merged map shows (mapping's ChainOverlay). */
@@ -188,6 +190,43 @@ export class ChainMerger {
     });
   }
 
+  /**
+   * A composite's own notes, label assignments and lock of a system: kept on the composite, over
+   * what its sources say, and published like any change of the map.
+   */
+  async setLocal(
+    actor: Actor,
+    mapId: string,
+    solarSystemId: number,
+    patch: Partial<LocalFields>,
+  ): Promise<void> {
+    await this.serial(mapId, async () => {
+      const map = await this.ensure(mapId);
+      if (!map) return;
+      const current = map.local.get(solarSystemId) ?? { notes: null, labelIds: [], locked: false };
+      const next: LocalFields = { ...current, ...patch };
+      if (JSON.stringify(next) === JSON.stringify(current)) return;
+      const local = new Map(map.local).set(solarSystemId, next);
+      await this.publish(
+        map,
+        new Set([refId('system', String(solarSystemId))]),
+        actor,
+        {},
+        {
+          local,
+          localChanged: { solarSystemId, fields: next },
+        },
+      );
+    });
+  }
+
+  /** Forgets everything kept in memory (the database was replaced); the next use builds again. */
+  reset(): void {
+    this.maps.clear();
+    this.pending.clear();
+    this.shares = null;
+  }
+
   /** Resolves once nothing is queued for any merged map. */
   async idle(): Promise<void> {
     while (this.queues.size > 0) await Promise.all([...this.queues.values()]);
@@ -279,6 +318,7 @@ export class ChainMerger {
       await this.ports.uow.transaction(async () => {
         await views.clear(mapId);
         await layout.clear(mapId);
+        await this.ports.local.clear(mapId);
       });
       return;
     }
@@ -313,6 +353,7 @@ export class ChainMerger {
           level: share.level,
           scopes: shareScopes(share),
           hidden: share.hidden,
+          defaultWrite: share.defaultWrite,
         });
       }
     }
@@ -334,6 +375,7 @@ export class ChainMerger {
       merge,
       view: new ViewState(stored.entities),
       layout: await layout.list(mapId),
+      local: info.kind === 'composite' ? await this.ports.local.list(mapId) : new Map(),
     };
     const refs = new Set([...merge.refs(), ...map.view.refs()]);
     const nextSources = list.map(sourceDto);
@@ -373,8 +415,14 @@ export class ChainMerger {
       placed?: ReadonlyArray<{ solarSystemId: number; position: Position }>;
       sources?: MapSourceDto[];
       sourcesChanged?: boolean;
+      local?: Map<number, LocalFields>;
+      localChanged?: { solarSystemId: number; fields: LocalFields };
     } = {},
   ): Promise<void> {
+    // On a map with objects of its own, the merge's events are copies (webhooks and plugins skip them).
+    const merge = actor === SHARING_ACTOR;
+    if (merge && map.info.kind !== 'composite') actor = SHARING_COPY_ACTOR;
+    const local = extra.local ?? map.local;
     const layout = extra.layout ?? new Map(map.layout);
     const placed = [...(extra.placed ?? [])];
     this.place(map, refs, layout, placed);
@@ -382,11 +430,12 @@ export class ChainMerger {
       mapId: map.mapId,
       sources: new Map(map.sources.filter((s) => !s.hidden).map((s) => [s.id, s])),
       layout,
+      local,
     };
     const next: ViewEntity[] = [];
     for (const ref of refs) next.push(...entitiesOf(map.merge, ref, ctx));
     const changes = map.view.diff(refs, next);
-    if (changes.length === 0 && placed.length === 0 && !extra.sourcesChanged) {
+    if (changes.length === 0 && placed.length === 0 && !extra.sourcesChanged && !extra.localChanged) {
       map.layout = layout;
       return;
     }
@@ -397,7 +446,7 @@ export class ChainMerger {
         newEvent({
           stream: mapStream(map.mapId),
           type: 'map.sources_changed',
-          actor: actorRef(SHARING_ACTOR),
+          actor: actorRef(merge ? actor : SHARING_ACTOR),
           data: { sources: extra.sources ?? [] },
           occurredAt: this.ports.clock.now(),
         }),
@@ -405,16 +454,15 @@ export class ChainMerger {
     }
     const { views, uow, events: log, audit: scope } = this.ports;
     // Merged changes are the merge's own doing, whatever request happened to trigger them.
-    const context: AuditContext =
-      actor === SHARING_ACTOR
-        ? {
-            channel: { kind: 'system', id: 'sharing' },
-            origin: undefined,
-            characterId: undefined,
-            via: undefined,
-            ...audit,
-          }
-        : audit;
+    const context: AuditContext = merge
+      ? {
+          channel: { kind: 'system', id: 'sharing' },
+          origin: undefined,
+          characterId: undefined,
+          via: undefined,
+          ...audit,
+        }
+      : audit;
     await scope.run(context, () =>
       uow.transaction(async () => {
         const puts = changes.flatMap((c) => (c.after ? [c.after] : []));
@@ -423,11 +471,16 @@ export class ChainMerger {
         if (puts.length > 0) await views.put(map.mapId, puts);
         if (placed.length > 0) await this.ports.layout.put(map.mapId, placed, this.ports.clock.now());
         if (extra.sources) await views.saveSources(map.mapId, extra.sources);
+        if (extra.localChanged) {
+          const { solarSystemId, fields } = extra.localChanged;
+          await this.ports.local.put(map.mapId, solarSystemId, fields, this.ports.clock.now());
+        }
         if (events.length > 0) await log.append(events);
       }),
     );
     map.view.apply(changes);
     map.layout = layout;
+    map.local = local;
   }
 
   /**

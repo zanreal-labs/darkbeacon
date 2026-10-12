@@ -29,17 +29,24 @@ import {
   KyselyChainLayoutRepository,
   KyselyChainViewRepository,
   KyselyCompositeMaps,
+  KyselyLocalFieldsRepository,
   KyselyShareRepository,
 } from '../../adapters/sharing/kysely-sharing.js';
 import { LocalChainSources } from '../../adapters/sharing/local-chain-source.js';
 import { AUDIT_SCOPE, CLOCK, EVENT_BUS, EVENT_LOG, MAP_ACCESS, UNIT_OF_WORK } from '../../platform/tokens.js';
 import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
+import { MaintenanceMode } from '../../platform/maintenance.js';
 import { MappingModule } from '../mapping/mapping.module.js';
 import { CHAIN_OVERLAY, MAPPING_PORTS } from '../mapping/mapping.tokens.js';
 import { TrackingModule } from '../tracking/tracking.module.js';
 import { SharesController } from './sharing.controllers.js';
 
 export const SHARING_PORTS = 'SharingPorts';
+
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+/** How long deletions are remembered for merged maps. */
+export const TOMBSTONE_DAYS = 30;
 
 /**
  * Shares between maps and merged chains: maps of this instance are sources through
@@ -68,6 +75,7 @@ export const SHARING_PORTS = 'SharingPorts';
         sources: new LocalChainSources({ ports: mapping, characters, audit }),
         views: new KyselyChainViewRepository(database),
         layout: new KyselyChainLayoutRepository(database),
+        local: new KyselyLocalFieldsRepository(database),
         composites: new KyselyCompositeMaps(database),
         access,
         events,
@@ -114,20 +122,44 @@ export class SharingModule implements OnModuleInit, OnApplicationBootstrap, OnMo
     @Inject(CHAIN_OVERLAY) private readonly overlay: ChainOverlaySlot,
     @Inject(RealtimeRegistry) private readonly registry: RealtimeRegistry,
     @Inject(EVENT_BUS) private readonly bus: EventBus,
+    @Inject(MaintenanceMode) private readonly maintenance: MaintenanceMode,
+    @Inject(MAPPING_PORTS) private readonly mapping: MappingPorts,
   ) {
     this.feed = new SharingFeed(this.ports, this.merger);
   }
 
   private readonly feed: SharingFeed;
+  private paused = false;
+  private pruneTimer: NodeJS.Timeout | undefined;
 
   onModuleInit(): void {
     this.overlay.use({ view: (mapId) => this.merger.chain(mapId) });
     // After mapping's and tracking's parts, so merged characters replace the map's own list.
     this.registry.registerSnapshot('map', (mapId) => this.merger.snapshot(mapId));
     this.unsubscribe = this.bus.subscribe((event) => this.onEvent(event));
+    // A restore replaces the database: what is kept in memory goes, merged maps build again.
+    this.maintenance.register({
+      name: 'sharing',
+      pause: async () => {
+        this.paused = true;
+        await this.merger.idle();
+      },
+      resume: async (restored) => {
+        this.paused = false;
+        if (!restored) return;
+        this.merger.reset();
+        await this.merger
+          .rebuildAll()
+          .catch((error: unknown) => this.logger.error(`rebuilding merged maps: ${message(error)}`));
+      },
+    });
   }
 
   async onApplicationBootstrap(): Promise<void> {
+    this.pruneTimer = setInterval(
+      () => void this.pruneTombstones().catch((error: unknown) => this.logger.error(message(error))),
+      HOUR_MS,
+    ).unref();
     await this.merger
       .rebuildAll()
       .catch((error: unknown) => this.logger.error(`rebuilding merged maps: ${message(error)}`));
@@ -135,9 +167,20 @@ export class SharingModule implements OnModuleInit, OnApplicationBootstrap, OnMo
 
   onModuleDestroy(): void {
     this.unsubscribe?.();
+    clearInterval(this.pruneTimer);
+  }
+
+  /** Deletions older than 30 days are forgotten (a very old copy elsewhere may then show again). */
+  private async pruneTombstones(): Promise<void> {
+    if (this.paused) return;
+    const pruned = await this.mapping.stamps.pruneTombstones(
+      this.ports.clock.now() - TOMBSTONE_DAYS * DAY_MS,
+    );
+    if (pruned > 0) this.logger.log(`forgot ${pruned} deletion(s) older than ${TOMBSTONE_DAYS} days`);
   }
 
   private onEvent(event: DomainEvent): void {
+    if (this.paused) return;
     this.feed
       .handle(event)
       .catch((error: unknown) =>

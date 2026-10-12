@@ -3,18 +3,28 @@
 import { memo, type CSSProperties, type MouseEvent } from 'react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import {
+  WORMHOLE_DESTINATION_LABEL,
   WORMHOLE_EFFECTS,
+  wormholeDestination,
   type LabelDto,
   type MapSystemDto,
   type UniverseSystemDto,
 } from '@darkbeacon/shared';
 import { cssVar } from '@darkbeacon/theme-sdk';
-import { Bubbles, Users } from 'lucide-react';
+import { Lock, Users } from 'lucide-react';
 import { PluginSlot } from '../plugins/PluginSlot';
-import { characterPortraitUrl, useToast } from '../ui';
-import { classPill, PILL_LABELS, STATUS_LABEL, type NearestHub } from './nodeFacts';
+import { useToast } from '../ui';
+import {
+  classPill,
+  PILL_LABELS,
+  ROUTE_SPACE_TEXT,
+  ROUTE_SPACE_TOKEN,
+  STATUS_BORDER,
+  STATUS_LABEL,
+  type NearestHub,
+} from './nodeFacts';
 import { builtNodeNameSizers } from './node-sizers';
-import { StaticChips } from './WormholeFacts';
+import { destinationToken } from './WormholeFacts';
 import styles from './SystemNode.module.css';
 
 export interface SystemNodeData extends Record<string, unknown> {
@@ -22,26 +32,21 @@ export interface SystemNodeData extends Record<string, unknown> {
   system: MapSystemDto;
   /** Static data; undefined while loading. */
   info: UniverseSystemDto | undefined;
-  /** The system's labels, resolved from the map's label list. */
+  /** The system's labels, resolved from the map's label list (shown above the node). */
   labels: LabelDto[];
   /** Tracked characters currently in the system. */
   characters: number;
   /** Bookmark label above the system (see `bookmarkLabel` in shared); null for none. */
   bookmark?: string | null;
-  /** Known-space letters this system lets the chain out to ("H", "L", "N"); empty when none. */
-  exit?: readonly string[];
-  /** Nearest trade hub from an exit, from the routing API; shown under EXIT systems. */
+  /** For an exit to known space: the nearest hub, from the routing API (shown below the node). */
   hub?: NearestHub | null;
-  /** A connection is bubbled on this system's side. */
-  bubbled?: boolean;
-  /** The viewer's own character here (their main first), for the "You are here" marker. */
-  me?: { characterId: number; name: string } | null;
+  /** One of the viewer's own characters is here: the pilot count is in the accent colour. */
+  mine?: boolean;
 }
 
 export type SystemNodeType = Node<SystemNodeData, 'system'>;
 
 const SIDES = [Position.Top, Position.Right, Position.Bottom, Position.Left];
-const MAX_LABELS = 2;
 /** Computed at build time from the universe dataset; sizes every node the same. */
 const NAME_SIZERS = builtNodeNameSizers();
 
@@ -68,6 +73,7 @@ export function systemTooltip(system: MapSystemDto, info: UniverseSystemDto | un
   lines.push(`Status: ${STATUS_LABEL[system.status]}`);
   if (info?.effect)
     lines.push(`${WORMHOLE_EFFECTS[info.effect].name}: ${WORMHOLE_EFFECTS[info.effect].summary}`);
+  if (info?.statics.length) lines.push(`Statics: ${info.statics.join(', ')}`);
   if (system.tag) lines.push(`Tag: ${system.tag}`);
   if (system.locked) lines.push('Locked');
   if (!system.visible) lines.push('Hidden from the map');
@@ -79,9 +85,9 @@ function PillContent({ info }: { info: UniverseSystemDto | undefined }) {
   const pill = classPill(info);
   const style =
     pill.kind === 'security'
-      ? { background: pill.background, color: pill.color }
+      ? { background: pill.background }
       : pill.kind === 'class'
-        ? { background: cssVar(pill.token), color: cssVar('node-pill-text') }
+        ? { background: cssVar(pill.token) }
         : undefined;
   return (
     <span className={styles.pill} data-kind={pill.kind} style={style}>
@@ -90,21 +96,42 @@ function PillContent({ info }: { info: UniverseSystemDto | undefined }) {
   );
 }
 
+/** Statics as plain text: the hole type, then where it leads in that place's colour ("D845 HS"). */
+function StaticsText({ statics }: { statics: readonly string[] }) {
+  if (statics.length === 0) return null;
+  return (
+    <ul className={styles.statics} aria-label="Statics">
+      {statics.map((type) => {
+        const to = wormholeDestination(type);
+        const where = to ? WORMHOLE_DESTINATION_LABEL[to] : null;
+        return (
+          <li key={type} title={where ? `Static ${type} to ${where}` : `Static ${type}`}>
+            <span className={styles.code}>{type}</span>
+            {where && (
+              <span className={styles.to} style={{ color: cssVar(destinationToken(to)) }}>
+                {where}
+              </span>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 /**
- * The one system node: every node has the same size, so the chain lines up. The background says
- * the status and nothing else; colour elsewhere only where it means something (security, class,
- * static destinations, labels). Themes change its tokens, never its content.
+ * The one system node, built for a glance: a neutral box whose 3 px border carries the status;
+ * the designation pill and the name, the pilot count; the statics. The bookmark code and labels
+ * sit above it, the nearest hub of an exit below it. Everything else is in the tooltip.
  */
 export const SystemNode = memo(function SystemNode({
   data,
   selected,
   isConnectable,
 }: NodeProps<SystemNodeType>) {
-  const { system, info, labels, characters, mapId, bookmark, exit = [], hub, bubbled, me } = data;
+  const { system, info, labels, characters, mapId, bookmark, hub, mine } = data;
   const toast = useToast();
   const name = nodeName(system, info);
-  const shownLabels = labels.slice(0, MAX_LABELS);
-  const moreLabels = labels.length - shownLabels.length;
 
   const copyBookmark = (e: MouseEvent) => {
     e.stopPropagation();
@@ -114,6 +141,7 @@ export const SystemNode = memo(function SystemNode({
       () => toast({ title: 'Could not copy to the clipboard', tone: 'warning' }),
     );
   };
+  const square = hub?.space ? ROUTE_SPACE_TOKEN[hub.space] : undefined;
 
   return (
     <div
@@ -121,8 +149,7 @@ export const SystemNode = memo(function SystemNode({
       data-selected={selected || undefined}
       data-hidden={!system.visible || undefined}
       data-status={system.status}
-      data-exit={exit.length > 0 || undefined}
-      style={{ '--node-tint': cssVar(`node-status-${system.status}`) } as CSSProperties}
+      style={{ '--node-status': cssVar(STATUS_BORDER[system.status]) } as CSSProperties}
       title={systemTooltip(system, info)}
     >
       {SIDES.map((side) => (
@@ -136,43 +163,39 @@ export const SystemNode = memo(function SystemNode({
         />
       ))}
 
-      {(bookmark || me || characters > 0) && (
-        <div className={styles.above}>
-          {bookmark ? (
-            <button
-              type="button"
-              className={`${styles.bookmark} nodrag nopan`}
-              title={`Bookmark label ${bookmark}: click to copy`}
-              onClick={copyBookmark}
-            >
-              {bookmark}
-            </button>
-          ) : (
-            <span />
-          )}
-          {me ? (
-            <span className={styles.here} title={`You are here: ${me.name}`}>
-              <img src={characterPortraitUrl(me.characterId, 32)} alt="" width={18} height={18} />
-              You are here
-              {characters > 1 && <span className={styles.hereCount}>+{characters - 1}</span>}
-            </span>
-          ) : (
-            characters > 0 && (
-              <span
-                className={styles.pilots}
-                title={`${characters} tracked pilot${characters === 1 ? '' : 's'} here`}
+      <div className={styles.above}>
+        {bookmark && (
+          <button
+            type="button"
+            className={`${styles.bookmark} nodrag nopan`}
+            title={`Bookmark ${bookmark}: click to copy`}
+            onClick={copyBookmark}
+          >
+            {bookmark}
+          </button>
+        )}
+        {labels.length > 0 && (
+          <ul className={styles.labels} aria-label="Labels">
+            {labels.map((l) => (
+              <li
+                key={l.id}
+                className={styles.label}
+                style={{ '--label-color': l.color } as CSSProperties}
+                title={l.description ? `${l.name}: ${l.description}` : l.name}
               >
-                <Users aria-hidden />
-                {characters}
-              </span>
-            )
-          )}
-        </div>
-      )}
+                {l.name}
+              </li>
+            ))}
+          </ul>
+        )}
+        <span className={styles.badges}>
+          <PluginSlot slot="nodeBadge" props={{ mapId, solarSystemId: system.solarSystemId }} />
+        </span>
+      </div>
 
       <div className={styles.head}>
         <div className={styles.row} aria-hidden>
-          {/* Invisible sizers: the widest pill and the longest names set every node's width. */}
+          {/* Invisible sizers: the widest pill, the longest names and a pilot count set every node's width. */}
           <span className={styles.stack}>
             {PILL_LABELS.map((l) => (
               <span key={l} className={`${styles.pill} ${styles.sizer}`}>
@@ -187,69 +210,50 @@ export const SystemNode = memo(function SystemNode({
               </span>
             ))}
           </span>
+          <span className={`${styles.pilots} ${styles.sizer}`}>
+            <Users aria-hidden />
+            99
+          </span>
         </div>
         <div className={`${styles.row} ${styles.fill}`}>
           <PillContent info={info} />
           <span className={styles.name}>{name}</span>
+          {characters > 0 && (
+            <span
+              className={styles.pilots}
+              data-mine={mine || undefined}
+              title={`${characters} tracked pilot${characters === 1 ? '' : 's'} here${mine ? ', you among them' : ''}`}
+            >
+              <Users aria-hidden />
+              {characters}
+            </span>
+          )}
         </div>
       </div>
 
       <div className={`${styles.line} ${styles.fill}`}>
-        <StaticChips statics={info?.statics ?? []} className={styles.statics} />
-        {exit.length > 0 && (
-          <span
-            className={styles.exit}
-            title={`Exit to ${exit.map((l) => ({ H: 'high', L: 'low', N: 'null' })[l]).join(', ')}-sec`}
-          >
-            EXIT {exit.join('/')}
+        <StaticsText statics={info?.statics ?? []} />
+        {system.locked && (
+          <span className={styles.lock} title="Locked: cannot be moved or removed" data-locked>
+            <Lock aria-label="Locked" />
           </span>
         )}
       </div>
 
-      <div className={`${styles.line} ${styles.fill}`}>
-        {shownLabels.length > 0 && (
-          <ul className={styles.labels} aria-label="Labels">
-            {shownLabels.map((l) => (
-              <li
-                key={l.id}
-                className={styles.label}
-                style={{ '--label-color': l.color } as CSSProperties}
-                title={l.description ? `${l.name}: ${l.description}` : l.name}
-              >
-                <span className={styles.labelName}>{l.name}</span>
-              </li>
-            ))}
-            {moreLabels > 0 && (
-              <li
-                className={styles.more}
-                title={labels
-                  .slice(MAX_LABELS)
-                  .map((l) => l.name)
-                  .join(', ')}
-              >
-                +{moreLabels}
-              </li>
-            )}
-          </ul>
-        )}
-        <span className={styles.badges}>
-          <PluginSlot slot="nodeBadge" props={{ mapId, solarSystemId: system.solarSystemId }} />
-        </span>
-      </div>
-
-      {bubbled && (
+      {hub && (
         <span
-          className={styles.bubble}
-          role="img"
-          aria-label="Bubbled"
-          title="A connection is bubbled on this side"
+          className={styles.hub}
+          title={`Nearest hub: ${hub.name}, ${hub.jumps} jump${hub.jumps === 1 ? '' : 's'}${hub.space ? `, ${ROUTE_SPACE_TEXT[hub.space]}` : ''}`}
         >
-          <Bubbles aria-hidden />
-        </span>
-      )}
-      {exit.length > 0 && hub && (
-        <span className={styles.hub} title={`Nearest trade hub: ${hub.name}, ${hub.jumps} jumps`}>
           {hub.name} {hub.jumps}j
+          {square && (
+            <span
+              className={styles.square}
+              data-space={hub.space}
+              style={{ background: cssVar(square) }}
+              aria-hidden
+            />
+          )}
         </span>
       )}
     </div>

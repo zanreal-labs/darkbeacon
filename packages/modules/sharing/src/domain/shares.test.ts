@@ -63,9 +63,21 @@ describe('share consent', () => {
     const target = { sourceAdmin: false, targetAdmin: true };
     expect(() => updateShare(share, { level: 'read-write' }, target, 20)).toThrow(/shared map/);
     expect(() => updateShare(share, { hidden: true }, source, 20)).toThrow(/receiving map/);
-    expect(updateShare(share, { level: 'read-write' }, source, 20)).toMatchObject({
+    // Raising an accepted share to read-write waits for the target's consent ...
+    const raised = updateShare(share, { level: 'read-write' }, source, 20)!;
+    expect(raised).toMatchObject({ level: 'read', offeredLevel: 'read-write', updatedAt: 20 });
+    expect(acceptShare(raised, { by: 'carol', sides: target, now: 21 })).toMatchObject({
       level: 'read-write',
-      updatedAt: 20,
+      offeredLevel: null,
+    });
+    // ... unless the same person administers both; lowering it never does.
+    const both = { sourceAdmin: true, targetAdmin: true };
+    const rw = updateShare(share, { level: 'read-write' }, both, 20)!;
+    expect(rw).toMatchObject({ level: 'read-write', offeredLevel: null });
+    expect(updateShare(rw, { level: 'read' }, source, 22)).toMatchObject({ level: 'read' });
+    expect(updateShare(raised, { level: 'read' }, source, 22)).toMatchObject({
+      level: 'read',
+      offeredLevel: null,
     });
     expect(updateShare(share, { hidden: true }, target, 20)).toMatchObject({ hidden: true });
     expect(updateShare(share, { level: 'read' }, source, 20)).toBeNull();
@@ -83,6 +95,24 @@ describe('share consent', () => {
     expect(() => checkOffer({ ...ALLIANCE, kind: 'composite' }, A, [])).toThrow(/composite/);
     expect(() => checkOffer({ ...A, kind: 'standard' }, ALLIANCE, [offer(false)])).toThrow(/already/);
     expect(() => checkOffer({ ...A, kind: 'standard' }, ALLIANCE, [])).not.toThrow();
+  });
+
+  it('lets the target pick a read-write share for a composite’s new objects', () => {
+    const target = { sourceAdmin: false, targetAdmin: true };
+    const read = offer(true);
+    expect(() => updateShare(read, { defaultWrite: true }, target, 30)).toThrow(/read-write/);
+    const rw = { ...read, level: 'read-write' as const };
+    expect(() =>
+      updateShare(rw, { defaultWrite: true }, { sourceAdmin: true, targetAdmin: false }, 30),
+    ).toThrow(/receiving map/);
+    const chosen = updateShare(rw, { defaultWrite: true }, target, 30)!;
+    expect(chosen.defaultWrite).toBe(true);
+    // Read-only again: no longer anyone's default.
+    expect(
+      updateShare(chosen, { level: 'read' }, { sourceAdmin: true, targetAdmin: true }, 31),
+    ).toMatchObject({
+      defaultWrite: false,
+    });
   });
 
   it('can be revoked by either side', () => {

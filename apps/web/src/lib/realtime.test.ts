@@ -42,6 +42,33 @@ const event = (seq: number) => ({
 });
 
 describe('RealtimeClient', () => {
+  it('starts over from snapshots after the server restored its database', () => {
+    vi.useFakeTimers();
+    FakeSocket.all = [];
+    const client = new RealtimeClient({
+      url: 'ws://x/ws',
+      createSocket: () => new FakeSocket(),
+      backoff: () => 100,
+    });
+    const resets = vi.fn();
+    client.onReset(resets);
+    client.subscribe('map:1', () => undefined);
+    client.start();
+    const first = FakeSocket.all[0]!;
+    first.open();
+    first.push({ op: 'snapshot', stream: 'map:1', seq: 40, data: {} });
+    first.readyState = 3;
+    first.onclose?.({ code: 4100 });
+    expect(resets).toHaveBeenCalledOnce();
+    vi.advanceTimersByTime(100);
+    const second = FakeSocket.all[1]!;
+    second.open();
+    // No sinceSeq: seq 40 belonged to the database that was replaced.
+    expect(second.sent).toEqual([{ op: 'subscribe', stream: 'map:1' }]);
+    client.stop();
+    vi.useRealTimers();
+  });
+
   it('resumes with sinceSeq after a reconnect and drops duplicates', () => {
     vi.useFakeTimers();
     FakeSocket.all = [];

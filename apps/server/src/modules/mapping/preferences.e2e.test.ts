@@ -48,6 +48,7 @@ describeEachDialect('map preferences and bookmark templates over HTTP', (t) => {
     expect((await call('GET', path, 'alice')).body).toEqual({
       viewport: null,
       bookmarkTemplate: null,
+      bookmarkOrder: null,
       updatedAt: 0,
     });
     const saved = await call('PATCH', path, 'alice', { viewport: { x: -120.5, y: 40, zoom: 0.9 } });

@@ -16,6 +16,9 @@
     { "path": "packages/modules/routing" },
     { "path": "packages/modules/audit" },
     { "path": "packages/modules/sharing" },
+    { "path": "packages/modules/telemetry" },
+    { "path": "packages/modules/observability" },
+    { "path": "packages/modules/backups" },
     { "path": "apps/server" },
     { "path": "plugins/discord-notify" },
     { "path": "plugins/sample-widget" }

@@ -137,6 +137,23 @@ export class SharingUseCases {
     if (!next) return this.toDto(current);
     const dto = await this.toDto(next);
     await this.ports.uow.transaction(async () => {
+      // One default for new objects per composite: the others give it up.
+      if (next.defaultWrite && !current.defaultWrite) {
+        for (const other of await this.ports.shares.listActiveForTarget(next.target)) {
+          if (other.id === next.id || !other.defaultWrite) continue;
+          const plain = { ...other, defaultWrite: false, updatedAt: next.updatedAt };
+          await this.ports.shares.update(plain);
+          await this.ports.events.append(
+            this.events(
+              account,
+              'map.share.changed',
+              plain,
+              await this.toDto(plain),
+              await this.toDto(other),
+            ),
+          );
+        }
+      }
       await this.ports.shares.update(next);
       await this.ports.events.append(
         this.events(account, 'map.share.changed', next, dto, await this.toDto(current)),

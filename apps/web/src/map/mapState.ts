@@ -2,6 +2,7 @@ import type {
   CharacterPresenceDto,
   ConnectionDto,
   MapDto,
+  MapExitDto,
   MapSnapshot,
   MapSourceDto,
   MapSystemDto,
@@ -22,6 +23,8 @@ export interface MapState {
    * While set, its systems, connections and signatures are the merged ones.
    */
   sources: MapSourceDto[] | null;
+  /** The chain's exits as the routing API computed them; null until the server sent them. */
+  exits: MapExitDto[] | null;
   /** Snapshot parts the server sent; a missing part is loaded over REST instead. */
   has: { signatures: boolean; characters: boolean };
 }
@@ -33,6 +36,7 @@ export const emptyMapState = (): MapState => ({
   signatures: new Map(),
   characters: new Map(),
   sources: null,
+  exits: null,
   has: { signatures: false, characters: false },
 });
 
@@ -76,6 +80,7 @@ export function applyMapMessage(state: MapState, message: StreamMessage): MapSta
       signatures: data.signatures ? byKey(data.signatures, (s) => s.id) : state.signatures,
       characters: data.characters ? byKey(data.characters, (c) => c.characterId) : state.characters,
       sources: data.sources ?? null,
+      exits: data.exits ?? state.exits,
       has: {
         signatures: state.has.signatures || data.signatures !== undefined,
         characters: state.has.characters || data.characters !== undefined,
@@ -132,6 +137,8 @@ export function applyMapEvent(state: MapState, event: TypedEvent): MapState {
     case 'map.created':
     case 'map.settings_changed':
       return { ...state, map: event.data };
+    case 'routes.exits_changed':
+      return { ...state, exits: event.data.exits };
     case 'labels.changed':
       return state.map ? { ...state, map: { ...state.map, labels: event.data.labels } } : state;
     default:

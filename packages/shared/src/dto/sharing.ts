@@ -39,8 +39,15 @@ export const MapShareDto = z.object({
   /** What the target receives: the offer, narrowed by the target's admins. */
   scopes: z.array(shareScope),
   status: ShareStatus,
+  /**
+   * A higher level the source's admins offer on an active share (read -> read-write); it applies
+   * once the target's admins accept it, until then `level` stays. Null when nothing is pending.
+   */
+  offeredLevel: ShareLevel.nullable(),
   /** Hidden by the target's admins for now: nothing of it is shown, the share stays. */
   hidden: z.boolean(),
+  /** On a composite: new systems and connections made on it go to this source (read-write only). */
+  defaultWrite: z.boolean(),
   offeredAt: Timestamp,
   acceptedAt: Timestamp.nullable(),
   updatedAt: Timestamp,
@@ -78,6 +85,8 @@ export const UpdateShareRequest = z.object({
   level: ShareLevel.optional(),
   scopes: z.array(shareScope).max(16).optional(),
   hidden: z.boolean().optional(),
+  /** Target admins of a composite: make this source where new objects go. */
+  defaultWrite: z.literal(true).optional(),
 });
 export type UpdateShareRequest = z.infer<typeof UpdateShareRequest>;
 
@@ -144,3 +153,24 @@ export const ChainDelta = z.object({
   at: Timestamp,
 });
 export type ChainDelta = z.infer<typeof ChainDelta>;
+
+/**
+ * Actor ids of the events a merged map writes from its sources. On a composite they are the map's
+ * own news (`sharing`); on a map with objects of its own they repeat what its sources said
+ * (`sharing-copy`), so webhooks and plugins there see only the map's own events.
+ */
+export const MERGE_ACTOR_ID = 'sharing';
+export const MERGE_COPY_ACTOR_ID = 'sharing-copy';
+
+/** Written by the merge of a map (either kind). */
+export function isMergeEvent(event: { actor: { kind: string; id: string } }): boolean {
+  return (
+    event.actor.kind === 'system' &&
+    (event.actor.id === MERGE_ACTOR_ID || event.actor.id === MERGE_COPY_ACTOR_ID)
+  );
+}
+
+/** A merged copy on a map with objects of its own: not for webhooks and plugins. */
+export function isMergedCopy(event: { actor: { kind: string; id: string } }): boolean {
+  return event.actor.kind === 'system' && event.actor.id === MERGE_COPY_ACTOR_ID;
+}

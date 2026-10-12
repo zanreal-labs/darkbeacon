@@ -7,6 +7,7 @@ export interface MapPreferenceTables {
     account_id: string;
     viewport: string | null;
     bookmark_template: string | null;
+    bookmark_order: string | null;
     updated_at: number;
   };
 }
@@ -32,6 +33,7 @@ export class KyselyMapPreferenceRepository implements MapPreferenceRepository {
       accountId: row.account_id,
       viewport: json.decode<MapPreferences['viewport']>(row.viewport),
       bookmarkTemplate: row.bookmark_template,
+      bookmarkOrder: (row.bookmark_order as MapPreferences['bookmarkOrder']) ?? null,
       updatedAt: Number(row.updated_at),
     };
   }
@@ -40,6 +42,7 @@ export class KyselyMapPreferenceRepository implements MapPreferenceRepository {
     const values = {
       viewport: p.viewport ? json.encode(p.viewport) : null,
       bookmark_template: p.bookmarkTemplate,
+      bookmark_order: p.bookmarkOrder ?? null,
       updated_at: p.updatedAt,
     };
     await this.db

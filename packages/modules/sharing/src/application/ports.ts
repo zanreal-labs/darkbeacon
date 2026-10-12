@@ -1,3 +1,4 @@
+import { MERGE_ACTOR_ID, MERGE_COPY_ACTOR_ID } from '@darkbeacon/shared';
 import type { Actor } from '@darkbeacon/core';
 import type {
   AuditScope,
@@ -7,6 +8,7 @@ import type {
   Clock,
   CompositeMaps,
   EventLog,
+  LocalFieldsRepository,
   MapAccess,
   ShareRepository,
   UnitOfWork,
@@ -18,6 +20,8 @@ export interface SharingPorts {
   sources: ChainSources;
   views: ChainViewRepository;
   layout: ChainLayoutRepository;
+  /** A composite's own notes, labels and locks of systems. */
+  local: LocalFieldsRepository;
   composites: CompositeMaps;
   access: MapAccess;
   events: EventLog;
@@ -27,4 +31,7 @@ export interface SharingPorts {
 }
 
 /** Who writes the merged maps' own events (derived from their sources). */
-export const SHARING_ACTOR: Actor = { kind: 'system', id: 'sharing' };
+export const SHARING_ACTOR: Actor = { kind: 'system', id: MERGE_ACTOR_ID };
+
+/** Who writes them on a map with objects of its own (copies webhooks and plugins skip). */
+export const SHARING_COPY_ACTOR: Actor = { kind: 'system', id: MERGE_COPY_ACTOR_ID };

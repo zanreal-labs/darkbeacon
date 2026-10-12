@@ -21,6 +21,8 @@ export interface ChangeStamps {
   ): Promise<Map<string, number>>;
   /** Records (or moves forward) the deletion of `key` at `at`. */
   putTombstone(mapId: string, kind: 'connection' | 'signature', key: string, at: number): Promise<void>;
+  /** Forgets deletions older than `before`; returns how many. */
+  pruneTombstones(before: number): Promise<number>;
 }
 
 /**

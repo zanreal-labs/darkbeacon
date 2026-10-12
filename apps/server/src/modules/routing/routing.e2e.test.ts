@@ -132,6 +132,8 @@ describeEachDialect('routing and connections over HTTP', (t) => {
       ['static', 'J014348'],
     ]);
     expect(exits.body.exits[0]?.nearest?.name).toBe('Jita');
+    // Tama is low-sec and Jita high-sec: no single kind of space, so no colour under the exit.
+    expect(exits.body.exits[0]?.nearest?.space).toBe('mixed');
 
     // The runtime recomputes exits after chain changes and publishes them.
     await vi.waitFor(async () => expect((await events('routes.exits_changed')).length).toBeGreaterThan(0));

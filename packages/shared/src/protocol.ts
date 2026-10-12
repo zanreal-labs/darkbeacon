@@ -35,6 +35,12 @@ export const ClientMessage = z.discriminatedUnion('op', [
 ]);
 export type ClientMessage = z.infer<typeof ClientMessage>;
 
+/**
+ * Close code the server sends after the database was restored from a backup: seqs the client
+ * holds belong to the old database, so it must resubscribe without `sinceSeq` (snapshots).
+ */
+export const RESTORED_CLOSE_CODE = 4100;
+
 export const WsErrorCode = z.enum([
   'bad_request',
   'unauthenticated',

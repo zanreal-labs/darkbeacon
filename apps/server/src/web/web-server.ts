@@ -128,6 +128,8 @@ export async function resolveWebServer(
   env: NodeJS.ProcessEnv,
   apiOrigin: string,
   logger: WebServerLogger,
+  /** Extra environment for the web server (its telemetry settings). */
+  webEnv: NodeJS.ProcessEnv = {},
 ): Promise<WebServer | null> {
   if (env.WEB_UPSTREAM) return { origin: env.WEB_UPSTREAM.replace(/\/+$/, ''), stop: async () => {} };
   const entry = env.WEB_SERVER_ENTRY ?? WEB_SERVER_ENTRY;
@@ -135,7 +137,7 @@ export async function resolveWebServer(
     logger.warn(`no web app build at ${entry}; serving the API only`);
     return null;
   }
-  return startWebServer({ entry, apiOrigin, logger });
+  return startWebServer({ entry, apiOrigin, logger, env: webEnv });
 }
 
 /** Asks the web server's own health route; false when it does not answer within `timeoutMs`. */

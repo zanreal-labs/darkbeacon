@@ -114,6 +114,20 @@ export interface ChainLayoutRepository {
   clear(mapId: string): Promise<void>;
 }
 
+/** What a composite keeps of a system itself, over what its sources say. */
+export interface LocalFields {
+  /** Null: the merged notes show. */
+  notes: string | null;
+  labelIds: string[];
+  locked: boolean;
+}
+
+export interface LocalFieldsRepository {
+  list(mapId: string): Promise<Map<number, LocalFields>>;
+  put(mapId: string, solarSystemId: number, fields: LocalFields, at: number): Promise<void>;
+  clear(mapId: string): Promise<void>;
+}
+
 /** Local maps that are composites (merged by kind, with or without shares). */
 export interface CompositeMaps {
   listComposites(): Promise<string[]>;

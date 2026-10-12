@@ -1,7 +1,7 @@
-import { beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it } from 'vitest';
 import { mapStream, type DomainEvent } from '@darkbeacon/core';
 import { describeEachDialect } from '@darkbeacon/db/testing';
-import type { ChainMap } from '@darkbeacon/mapping';
+import { BookmarkNumberUseCases, type ChainMap } from '@darkbeacon/mapping';
 import type {
   ConnectionDto,
   MapShareDto,
@@ -52,6 +52,9 @@ describeEachDialect('sharing and merged chains', (t) => {
     await env.settle();
     return accepted;
   }
+
+  // Merges still running when a test ends would outlive its database.
+  afterEach(() => env.settle());
 
   beforeEach(async () => {
     env = sharingTestEnv(t.db);
@@ -385,7 +388,11 @@ describeEachDialect('sharing and merged chains', (t) => {
     await env.settle();
     const since = await env.events(corpA.id, head);
     expect(types(since)).toEqual(['system.updated', 'system.updated']);
-    expect(since[1]).toMatchObject({ actor: { kind: 'system', id: 'sharing' }, data: { status: 'home' } });
+    // A copy: the map's webhooks and plugins already heard the change from its own event.
+    expect(since[1]).toMatchObject({
+      actor: { kind: 'system', id: 'sharing-copy' },
+      data: { status: 'home' },
+    });
 
     await env.sharing.revoke(alice, corpA.id, offered.id);
     expect(await env.merger.isMerged(corpA.id)).toBe(false);
@@ -415,6 +422,75 @@ describeEachDialect('sharing and merged chains', (t) => {
     await env.settle();
     expect((await view(alliance.id)).systems).toEqual([]);
     expect((await env.sharing.list(carol, alliance.id)).incoming).toEqual([]);
+  });
+
+  it('keeps a composite’s own notes, labels and locks over what its sources say', async () => {
+    await env.systems.update(alice, corpA.id, c5, { description: 'Corp A notes' });
+    await share(corpA, alice, 'read', ['topology', 'intel']);
+    const before = (await view(alliance.id)).systems.find((s) => s.solarSystemId === c5)!;
+    expect(before.description).toBe('Corp A notes');
+    // Even on a read-only source's system: these live on the composite.
+    await env.writes.updateSystem(dave, alliance.id, c5, { description: 'Alliance notes', locked: true });
+    const after = (await view(alliance.id)).systems.find((s) => s.solarSystemId === c5)!;
+    expect(after).toMatchObject({ description: 'Alliance notes', locked: true });
+    expect((await env.ports.systems.find(corpA.id, c5))!.description).toBe('Corp A notes');
+    await expect(
+      env.writes.moveSystems(dave, alliance.id, { positions: [{ solarSystemId: c5, x: 1, y: 1 }] }),
+    ).rejects.toMatchObject({ code: 'conflict' });
+    await expect(env.writes.removeSystem(dave, alliance.id, c5)).rejects.toMatchObject({ code: 'conflict' });
+    // A source changing its notes no longer shows over the composite's.
+    env.clock.advance(1_000);
+    await env.systems.update(alice, corpA.id, c5, { description: 'Corp A again' });
+    await env.settle();
+    expect((await view(alliance.id)).systems.find((s) => s.solarSystemId === c5)!.description).toBe(
+      'Alliance notes',
+    );
+    // Survives a rebuild from scratch.
+    await sharingTestEnv(t.db).merger.rebuildAll();
+    expect((await view(alliance.id)).systems.find((s) => s.solarSystemId === c5)!.locked).toBe(true);
+  });
+
+  it('sends a composite’s new systems to the source its admins picked', async () => {
+    env.access.grant('bob', alliance.id, 'admin');
+    await share(corpA, alice, 'read-write');
+    const b = await env.sharing.offer(bob, corpB.id, { targetMapId: alliance.id, level: 'read-write' });
+    await env.settle();
+    await env.writes.addSystem(dave, alliance.id, { solarSystemId: SYSTEMS.jita });
+    await env.settle();
+    expect(await env.ports.systems.find(corpA.id, SYSTEMS.jita)).not.toBeNull();
+    await env.sharing.update(carol, alliance.id, b.id, { defaultWrite: true });
+    await env.writes.addSystem(dave, alliance.id, { solarSystemId: SYSTEMS.perimeter });
+    await env.settle();
+    expect(await env.ports.systems.find(corpB.id, SYSTEMS.perimeter)).not.toBeNull();
+    expect(await env.ports.systems.find(corpA.id, SYSTEMS.perimeter)).toBeNull();
+    const incoming = (await env.sharing.list(carol, alliance.id)).incoming;
+    expect(incoming.filter((s) => s.defaultWrite).map((s) => s.sourceName)).toEqual(['Corp B']);
+  });
+
+  it('asks the target again before a read share takes writes', async () => {
+    const a = await share(corpA, alice, 'read');
+    const raised = await env.sharing.update(alice, corpA.id, a.id, { level: 'read-write' });
+    expect(raised).toMatchObject({ level: 'read', offeredLevel: 'read-write' });
+    const overlap = edge((await view(alliance.id)).connections, c5, c1)!;
+    await expect(
+      env.writes.updateConnection(dave, alliance.id, overlap.id, { dangerous: true }),
+    ).rejects.toMatchObject({ code: 'forbidden' });
+    await env.sharing.accept(carol, alliance.id, a.id, {});
+    await env.writes.updateConnection(dave, alliance.id, overlap.id, { dangerous: true });
+    expect((await env.ports.connections.findBetween(corpA.id, c5, c1))!.dangerous).toBe(true);
+  });
+
+  it('forgets old deletions', async () => {
+    await env.ports.stamps.putTombstone(corpA.id, 'signature', `${c5}:ABC-123`, 1_000);
+    await env.ports.stamps.putTombstone(corpA.id, 'signature', `${c5}:ABC-124`, 50_000);
+    expect(await env.ports.stamps.pruneTombstones(10_000)).toBe(1);
+    expect([...(await env.ports.stamps.tombstones(corpA.id, 'signature')).keys()]).toEqual([`${c5}:ABC-124`]);
+  });
+
+  it('numbers a merged map’s wormholes in its order as shown, not by hand', async () => {
+    await share(corpA, alice, 'read');
+    const numbers = new BookmarkNumberUseCases(env.ports);
+    await expect(numbers.renumber(carol, alliance.id)).rejects.toMatchObject({ code: 'conflict' });
   });
 
   it('refuses edits of the composite’s own rows through the plain map routes', async () => {

@@ -1,4 +1,4 @@
-import type { MapSourceDto, ProvenanceDto, TypedEvent } from '@darkbeacon/shared';
+import { isMergeEvent, type MapSourceDto, type ProvenanceDto, type TypedEvent } from '@darkbeacon/shared';
 import type { MapPermissions } from '../../lib/roles';
 import type { MapState } from '../mapState';
 
@@ -12,7 +12,7 @@ const OBJECT_EVENTS = /^(system|connection|signature|character)\./;
  */
 export function fromMergedView(event: TypedEvent): boolean {
   if (!OBJECT_EVENTS.test(event.type)) return true;
-  if (event.actor.kind === 'system' && event.actor.id === 'sharing') return true;
+  if (isMergeEvent(event)) return true;
   const data = event.data as { provenance?: unknown };
   return typeof data === 'object' && data !== null && data.provenance !== undefined;
 }
@@ -28,12 +28,17 @@ export function enteringMerged(state: MapState): MapState {
 
 /**
  * What the viewer may do with one object of a merged map: edit it when some map that takes
- * writes holds it (its own objects, read-write shares); lock and label only the map's own.
- * Plain maps keep the role's permissions.
+ * writes holds it (its own objects, read-write shares); lock and label the map's own objects,
+ * and on a composite every system (it keeps its labels and locks itself). Plain maps keep the
+ * role's permissions.
  */
-export function permissionsFor(can: MapPermissions, provenance: ProvenanceDto | undefined): MapPermissions {
+export function permissionsFor(
+  can: MapPermissions,
+  provenance: ProvenanceDto | undefined,
+  composite = false,
+): MapPermissions {
   if (!provenance) return can;
-  const own = provenance.sources.includes('self');
+  const own = composite || provenance.sources.includes('self');
   return { ...can, edit: can.edit && provenance.writable, manage: can.manage && own };
 }
 

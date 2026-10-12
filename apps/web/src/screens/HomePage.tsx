@@ -7,6 +7,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, Map as MapIcon, Plus, Settings, Star, Waypoints } from 'lucide-react';
 import { routes, type CreateMapRequest, type MapDto, type MapSummaryDto } from '@darkbeacon/shared';
 import { api, ApiError } from '../lib/api';
+import { mapSettingsHref } from '../lib/map-settings';
 import { useInstance, useMaps, useSetDefaultMap } from '../lib/maps';
 import { mapsKey } from '../lib/session-keys';
 import { mapPermissions } from '../lib/roles';
@@ -32,6 +33,7 @@ import {
   Stack,
   useToast,
 } from '../ui';
+import { usePageView } from '../lib/useTelemetry';
 import styles from './HomePage.module.css';
 
 /** `My Chain 2` -> `my-chain-2`; the server validates again. */
@@ -97,6 +99,7 @@ export function LandingSkeleton() {
 /** `/maps`: every map the account can see, with a star for the one `/` opens. */
 export function MapsPage() {
   useBreadcrumbs([{ label: TITLE }]);
+  usePageView('maps');
   const demo = useDemoMode();
   const maps = useMaps();
   const [creating, setCreating] = useState(false);
@@ -224,7 +227,7 @@ function MapRow({
         />
         {can.manage && (
           <IconButton asChild size="sm" label={`Settings of ${map.name}`} icon={<Settings />}>
-            <Link href={`/m/${map.slug}/settings`} />
+            <Link href={mapSettingsHref(map.slug)} />
           </IconButton>
         )}
       </span>

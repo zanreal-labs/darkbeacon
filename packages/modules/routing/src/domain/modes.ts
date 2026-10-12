@@ -70,3 +70,21 @@ export function policyFor(mode: RouteMode, closed = 0): RoutePolicy {
     }
   }
 }
+
+/**
+ * The one kind of space every system of a route is in, or `mixed`: high-sec (true security of
+ * 0.45 and up), low-sec (above 0.0) or null-sec (0.0 and below) known space. Wormhole space and
+ * Pochven make any route `mixed`.
+ */
+export function routeSpace(nodes: readonly Pick<RouteNode, 'security' | 'whClass'>[]): RouteSpaceKind {
+  let kind: RouteSpaceKind | null = null;
+  for (const node of nodes) {
+    if (isWormholeSpace(node) || node.whClass === 25) return 'mixed';
+    const here: RouteSpaceKind = isHighSec(node.security) ? 'high' : node.security > 0 ? 'low' : 'null';
+    if (kind !== null && kind !== here) return 'mixed';
+    kind = here;
+  }
+  return kind ?? 'mixed';
+}
+
+export type RouteSpaceKind = 'high' | 'low' | 'null' | 'mixed';

@@ -70,9 +70,19 @@
   color: var(--dbk-color-text);
 }
 
-.railLink[aria-current='page'] {
+.railLink[aria-current='page'],
+.railLink[aria-expanded='true'] {
   background: var(--dbk-color-accent-subtle);
   color: var(--dbk-color-accent-text);
+}
+
+/* The settings button opens a dialog instead of going somewhere. */
+button.railLink {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
 }
 
 /* ---- Top bar ---- */
@@ -218,10 +228,6 @@
 .menuIconSpace {
   flex: none;
   width: 16px;
-}
-
-.crumbParent {
-  min-width: 0;
 }
 
 .demo {

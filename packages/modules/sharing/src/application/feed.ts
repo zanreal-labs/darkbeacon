@@ -1,8 +1,8 @@
 import { parseStream, type DomainEvent } from '@darkbeacon/core';
-import { isEventOfType, LOCAL_INSTANCE } from '@darkbeacon/shared';
+import { isEventOfType, isMergeEvent, LOCAL_INSTANCE } from '@darkbeacon/shared';
 import { feedSignal } from '../domain/feed.js';
 import type { ChainMerger } from './merger.js';
-import { SHARING_ACTOR, type SharingPorts } from './ports.js';
+import type { SharingPorts } from './ports.js';
 
 /**
  * Follows the events of local maps for the maps that merge them: objects that changed are read
@@ -18,7 +18,7 @@ export class SharingFeed {
   async handle(event: DomainEvent): Promise<void> {
     const stream = parseStream(event.stream);
     if (stream?.kind !== 'map') return;
-    if (event.actor.kind === SHARING_ACTOR.kind && event.actor.id === SHARING_ACTOR.id) return;
+    if (isMergeEvent(event)) return;
     const mapId = stream.id;
     const origin = { instance: LOCAL_INSTANCE, mapId };
     if (isEventOfType(event, 'map.created')) {
