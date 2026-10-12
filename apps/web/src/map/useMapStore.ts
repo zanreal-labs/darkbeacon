@@ -313,12 +313,16 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto) {
         });
       },
 
-      removeConnection(connectionId: string) {
+      /** `withSignatures`: the signatures leading through it go too. */
+      removeConnection(connectionId: string, options: { withSignatures?: boolean } = {}) {
+        const query = options.withSignatures ? '?withSignatures=true' : '';
         return run({
           apply: (s) => ({ ...s, connections: mapWithout(s.connections, (_, id) => id !== connectionId) }),
           confirmedBy: (e) => e.type === 'connection.removed' && e.data.id === connectionId,
           request: () =>
-            api(buildPath(routes.connections.remove.path, { mapId, connectionId }), { method: 'DELETE' }),
+            api(`${buildPath(routes.connections.remove.path, { mapId, connectionId })}${query}`, {
+              method: 'DELETE',
+            }),
           failure: 'Could not remove the connection',
         });
       },

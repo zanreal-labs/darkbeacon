@@ -18,6 +18,8 @@ import type { BridgeDto } from './dto/bridges.js';
 import type { MapRoutingSettingsDto, WayHomeDto } from './dto/route-panel.js';
 import type { CharacterPresenceDto } from './dto/tracking.js';
 import type { MapShareDto, MapSourceDto } from './dto/sharing.js';
+import type { CommentDto } from './dto/comments.js';
+import type { StructureDto } from './dto/structures.js';
 import type { KillmailDto } from './dto/intel.js';
 import type { McpMode } from './dto/publishing.js';
 import type { ShareScope } from './share-scope.js';
@@ -153,6 +155,12 @@ export interface EventPayloads {
   /** Instance stream: a plugin was installed, upgraded, enabled, disabled or failed. */
   'plugin.updated': PluginDto;
   'plugin.removed': { id: string };
+  /** A comment was added to a system of the map. */
+  'comment.added': CommentDto;
+  'comment.removed': { id: string; solarSystemId: number };
+  'structure.added': StructureDto;
+  'structure.updated': StructureDto;
+  'structure.removed': { id: string; solarSystemId: number };
   /** A rule's role changed in place (the audit record holds the role before). */
   'access.rule_changed': AccessRuleDto;
   /** The map was handed to another account (the new owner is admin, the old one keeps only rules). */
@@ -238,6 +246,11 @@ export const EVENT_TYPES = [
   'character.unlinked',
   'plugin.updated',
   'plugin.removed',
+  'comment.added',
+  'comment.removed',
+  'structure.added',
+  'structure.updated',
+  'structure.removed',
   'access.rule_changed',
   'access.owner_changed',
   'map.trashed',

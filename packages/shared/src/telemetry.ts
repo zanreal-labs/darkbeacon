@@ -104,6 +104,7 @@ export const TelemetrySection = z.enum([
   'webhooks',
   'danger',
   'backups',
+  'signatures',
   'routes',
   'bridges',
   'import',

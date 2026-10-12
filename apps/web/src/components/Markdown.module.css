@@ -1,0 +1,62 @@
+/* Rendered notes and comments: compact, inherits the surrounding text size. */
+
+.markdown {
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
+.markdown > * {
+  margin: 0;
+}
+
+.markdown > * + * {
+  margin-top: 6px;
+}
+
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  font-size: inherit;
+  font-weight: 600;
+}
+
+.markdown h4 {
+  font-size: var(--dbk-font-size-large);
+}
+
+.markdown ul,
+.markdown ol {
+  padding-left: 18px;
+}
+
+.markdown blockquote {
+  padding-left: 8px;
+  border-left: 2px solid var(--dbk-color-border-strong);
+  color: var(--dbk-color-text-muted);
+}
+
+.markdown code {
+  padding: 0 3px;
+  border-radius: var(--dbk-radius-small);
+  background: var(--dbk-color-surface-hover);
+  font-family: var(--dbk-font-family-mono);
+  font-size: 0.92em;
+}
+
+.markdown pre {
+  overflow-x: auto;
+  padding: 6px 8px;
+  border-radius: var(--dbk-radius-small);
+  background: var(--dbk-color-surface-hover);
+}
+
+.markdown pre code {
+  padding: 0;
+  background: none;
+}
+
+.markdown a {
+  color: var(--dbk-color-accent-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

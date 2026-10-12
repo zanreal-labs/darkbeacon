@@ -106,6 +106,8 @@ export interface WandererSignature {
 }
 
 export interface WandererStructure {
+  /** Wanderer's id of the structure; null in files that have none. */
+  id: string | null;
   systemUuid: string | null;
   solarSystemId: number | null;
   name: string | null;
@@ -113,6 +115,8 @@ export interface WandererStructure {
   typeId: string | null;
   ownerName: string | null;
   ownerTicker: string | null;
+  /** The owning corporation, when Wanderer knew its id. */
+  ownerId: number | null;
   status: string | null;
   endTime: number | null;
   notes: string | null;
@@ -123,6 +127,8 @@ export interface WandererStructure {
 }
 
 export interface WandererComment {
+  /** Wanderer's id of the comment; null in files that have none. */
+  id: string | null;
   systemUuid: string | null;
   solarSystemId: number | null;
   text: string;
@@ -342,6 +348,7 @@ export function readSignature(row: unknown): WandererSignature | null {
 export function readStructure(row: unknown): WandererStructure | null {
   if (!isRow(row)) return null;
   const structure: WandererStructure = {
+    id: text(row.id),
     systemUuid: text(row.system_id),
     solarSystemId: eveIdNumber(row.solar_system_id),
     name: text(row.name),
@@ -349,6 +356,7 @@ export function readStructure(row: unknown): WandererStructure | null {
     typeId: text(row.structure_type_id),
     ownerName: text(row.owner_name),
     ownerTicker: text(row.owner_ticker),
+    ownerId: eveIdNumber(row.owner_id),
     status: text(row.status),
     endTime: time(row.end_time),
     notes: text(row.notes),
@@ -373,6 +381,7 @@ export function readComment(row: unknown): WandererComment | null {
   const systemData = system && isRow(system.data) ? system.data : null;
   const character = isRow(attributes.character) ? attributes.character : null;
   return {
+    id: text(row.id) ?? text(attributes.id),
     systemUuid: text(attributes.system_id) ?? (systemData ? text(systemData.id) : null),
     solarSystemId: eveIdNumber(attributes.solar_system_id),
     text: commentText,

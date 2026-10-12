@@ -326,6 +326,7 @@ export class LocalChainSource implements ChainSource {
           ...(f.type !== undefined ? { type: f.type as string | null } : {}),
           ...(f.name !== undefined ? { name: f.name as string | null } : {}),
           ...(typeof f.notes === 'string' ? { description: f.notes } : {}),
+          ...signatureExtras(f),
         });
         if (typeof f.link === 'string') {
           const linked = await this.connectionOrNull(f.link);
@@ -410,6 +411,7 @@ export class LocalChainSource implements ChainSource {
     if (fields.type !== undefined) request.type = fields.type as string | null;
     if (fields.name !== undefined) request.name = fields.name as string | null;
     if (typeof fields.notes === 'string') request.description = fields.notes;
+    Object.assign(request, signatureExtras(fields));
     if (fields.kind === 'signature' || fields.kind === 'anomaly' || fields.kind === 'other')
       request.kind = fields.kind;
     if (fields.link === null) request.connectionId = null;
@@ -574,6 +576,11 @@ function signatureEntry(s: Signature, times: FieldTimes, pairs: ReadonlyMap<stri
         s.connectionId ? (pairs.get(s.connectionId) ?? null) : null,
         at(times, 'connectionId', born),
       ),
+      tempName: stamp(s.tempName ?? null, at(times, 'tempName', born)),
+      destination: stamp(s.destination ?? null, at(times, 'destination', born)),
+      bubbled: stamp(s.bubbled ?? false, at(times, 'bubbled', born)),
+      time: stamp(s.timeStatus ?? null, at(times, 'timeStatus', born)),
+      mass: stamp(s.massStatus ?? null, at(times, 'massStatus', born)),
       kind: stamp(s.kind ?? 'signature', at(times, 'kind', born)),
       custom: stamp(s.custom ?? false, at(times, 'custom', born)),
     },
@@ -598,6 +605,17 @@ function characterEntry(c: CharacterPresenceDto): ChainEntry {
 }
 
 // --- writing helpers ----------------------------------------------------------------------------
+
+/** Temporary name, destination, bubble, lifetime and mass of a signature, from wire fields. */
+function signatureExtras(f: Record<string, unknown>): UpdateSignatureRequest {
+  const r: UpdateSignatureRequest = {};
+  if (f.tempName !== undefined) r.tempName = f.tempName as string | null;
+  if (f.destination !== undefined) r.destination = f.destination as Signature['destination'];
+  if (typeof f.bubbled === 'boolean') r.bubbled = f.bubbled;
+  if (f.time !== undefined) r.timeStatus = f.time as Signature['timeStatus'];
+  if (f.mass !== undefined) r.massStatus = f.mass as Signature['massStatus'];
+  return r;
+}
 
 function systemRequest(f: Record<string, unknown>, systemLabels: LabelList): UpdateSystemRequest {
   const r: UpdateSystemRequest = {};

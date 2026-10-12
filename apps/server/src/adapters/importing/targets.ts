@@ -12,6 +12,8 @@ import type {
 } from '@darkbeacon/importing';
 import type {
   ChainImportUseCases,
+  CommentUseCases,
+  StructureUseCases,
   ConnectionUseCases,
   MapUseCases,
   SignatureUseCases,
@@ -28,6 +30,8 @@ export interface MappingUseCaseSet {
   connections: ConnectionUseCases;
   signatures: SignatureUseCases;
   imports: ChainImportUseCases;
+  comments: CommentUseCases;
+  structures: StructureUseCases;
 }
 
 const target = (map: MapDto): TargetMap => ({
@@ -91,6 +95,26 @@ export class MappingChainTarget implements ChainTarget {
 
   putPassage(...args: Parameters<ChainTarget['putPassage']>) {
     return this.mapping.imports.putPassage(...args);
+  }
+
+  async putComment(...[actor, mapId, comment, existingId]: Parameters<ChainTarget['putComment']>) {
+    const { comment: written, outcome } = await this.mapping.comments.importComment(
+      actor,
+      mapId,
+      { ...comment, author: comment.author ? { accountId: null, ...comment.author } : null },
+      existingId,
+    );
+    return { id: written.id, outcome };
+  }
+
+  async putStructure(...[actor, mapId, structure, existingId]: Parameters<ChainTarget['putStructure']>) {
+    const { structure: written, outcome } = await this.mapping.structures.importStructure(
+      actor,
+      mapId,
+      { ...structure, author: structure.author ? { accountId: null, ...structure.author } : null },
+      existingId,
+    );
+    return { id: written.id, outcome };
   }
 
   ensureLabels(...args: Parameters<ChainTarget['ensureLabels']>) {

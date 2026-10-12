@@ -14,6 +14,7 @@ export const MAP_SETTINGS_SECTIONS = [
   'labels',
   'tags',
   'bookmarks',
+  'signatures',
   'routes',
   'bridges',
   'discord',

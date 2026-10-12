@@ -246,3 +246,50 @@
   display: flex;
   gap: 2px;
 }
+
+/* ---- Value mappings ---- */
+
+.mappings > summary {
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+  cursor: pointer;
+}
+
+.mappingGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.mappingGroup {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.mappingGroup > legend {
+  margin-bottom: 4px;
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-small);
+}
+
+.mappingRow {
+  display: grid;
+  grid-template-columns: 7ch minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--dbk-font-size-small);
+}
+
+.mappingClear {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dbk-color-accent-text);
+  font: inherit;
+  font-size: var(--dbk-font-size-xs);
+  cursor: pointer;
+}

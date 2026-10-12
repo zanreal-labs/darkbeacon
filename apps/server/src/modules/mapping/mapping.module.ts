@@ -16,6 +16,7 @@ import { InstanceMapDirectory } from '../../adapters/mapping/map-directory.js';
 import {
   ChainOverlaySlot,
   BookmarkNumberUseCases,
+  CommentUseCases,
   ConnectionIntelQuery,
   ConnectionUseCases,
   MapPreferenceUseCases,
@@ -26,6 +27,7 @@ import {
   PassageUseCases,
   MapUseCases,
   SignatureUseCases,
+  StructureUseCases,
   SystemUseCases,
   type MapRepository,
   type MappingPorts,
@@ -40,6 +42,9 @@ import {
   KyselySystemRepository,
 } from '../../adapters/mapping/kysely-repositories.js';
 import { KyselyMapPreferenceRepository } from '../../adapters/mapping/kysely-preferences.js';
+import { DirectoryAuthors } from '../../adapters/mapping/author-directory.js';
+import { KyselyCommentRepository, KyselyStructureRepository } from '../../adapters/mapping/kysely-intel.js';
+import { AuditDirectoryRegistry } from '../../platform/audit.js';
 import { KyselyPilotDirectory } from '../../adapters/mapping/pilot-directory.js';
 import { MappingMapOwnership } from '../../adapters/mapping/map-ownership.js';
 import { isEventOfType } from '@darkbeacon/shared';
@@ -56,6 +61,8 @@ import {
   SignaturesController,
   SystemsController,
 } from './mapping.controllers.js';
+import { CommentsController, StructuresController } from './intel.controllers.js';
+import { SignatureSweep } from './signature-sweep.js';
 import { MergedWriteRouter } from './merged-writes.js';
 import { AdminMapsController, MapLifecycleController } from './lifecycle.controllers.js';
 import { MAP_FILE_LIMIT, MAP_FILE_TYPE, MapFilesController } from './transfer.controller.js';
@@ -85,6 +92,8 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
     ConnectionsController,
     BookmarkNumbersController,
     SignaturesController,
+    CommentsController,
+    StructuresController,
   ],
   providers: [
     {
@@ -109,6 +118,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
         clock: Clock,
         access: MapAccess,
         overlay: ChainOverlaySlot,
+        directory: AuditDirectoryRegistry,
         accounts: AccountService,
         settings: InstanceSettingsService,
         rules: AccessRules,
@@ -122,6 +132,9 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
         stamps: new KyselyChangeStamps(database),
         overlay,
         universe,
+        authors: new DirectoryAuthors(directory),
+        structures: new KyselyStructureRepository(database),
+        comments: new KyselyCommentRepository(database),
         access,
         events,
         uow,
@@ -137,6 +150,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
         CLOCK,
         MAP_ACCESS,
         CHAIN_OVERLAY,
+        AuditDirectoryRegistry,
         AccountService,
         InstanceSettingsService,
         AccessRules,
@@ -155,6 +169,19 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
     useCase(ConnectionIntelQuery),
     useCase(PassageRecorder),
     useCase(PassageUseCases),
+    {
+      provide: CommentUseCases,
+      useFactory: (ports: MappingPorts, database: Database) =>
+        new CommentUseCases({ ...ports, comments: new KyselyCommentRepository(database) }),
+      inject: [MAPPING_PORTS, Database],
+    },
+    {
+      provide: StructureUseCases,
+      useFactory: (ports: MappingPorts, database: Database) =>
+        new StructureUseCases({ ...ports, structures: new KyselyStructureRepository(database) }),
+      inject: [MAPPING_PORTS, Database],
+    },
+    SignatureSweep,
     {
       provide: MapPreferenceUseCases,
       useFactory: (database: Database, access: MapAccess, clock: Clock) =>
@@ -176,6 +203,8 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
     ConnectionUseCases,
     SignatureUseCases,
     BookmarkNumberUseCases,
+    CommentUseCases,
+    StructureUseCases,
     PassageUseCases,
     SweeperRuntime,
     ConnectionIntelQuery,

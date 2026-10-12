@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { AccessSubjectKind, MapRole } from './access.js';
+import { CommentDto } from './comments.js';
 import { EveId, Id, Timestamp } from './common.js';
 import {
   ConnectionDto,
@@ -11,10 +12,11 @@ import {
   Slug,
   SystemLabelDto,
 } from './mapping.js';
+import { StructureDto } from './structures.js';
 
 /**
  * Darkbeacon's own map file: everything on a map (hidden systems with the intel they keep, every
- * connection, every signature), its settings and labels, and on request its access rules. It is
+ * connection, signature, structure and comment), its settings and labels, and on request its access rules. It is
  * the way back out of Darkbeacon and the way between instances. Versioned: readers refuse a
  * format or version they do not know; a new version adds a reader, old files keep working.
  */
@@ -30,6 +32,13 @@ export type ExportedConnection = z.infer<typeof ExportedConnection>;
 
 export const ExportedSignature = SignatureDto.omit({ mapId: true, provenance: true });
 export type ExportedSignature = z.infer<typeof ExportedSignature>;
+
+/** Authors and dates stay as they were written; a new map gets new ids. */
+export const ExportedStructure = StructureDto.omit({ mapId: true });
+export type ExportedStructure = z.infer<typeof ExportedStructure>;
+
+export const ExportedComment = CommentDto.omit({ mapId: true });
+export type ExportedComment = z.infer<typeof ExportedComment>;
 
 export const ExportedAccessRule = z.object({
   subjectKind: AccessSubjectKind,
@@ -58,6 +67,9 @@ export const MapExportDocument = z.object({
   systems: z.array(ExportedSystem).max(10_000),
   connections: z.array(ExportedConnection).max(20_000),
   signatures: z.array(ExportedSignature).max(100_000),
+  /** Absent in files written before maps carried structures and comments. */
+  structures: z.array(ExportedStructure).max(20_000).optional(),
+  comments: z.array(ExportedComment).max(100_000).optional(),
   /** Only when the exporting person administers the map and asked for them. */
   accessRules: z.array(ExportedAccessRule).max(5_000).optional(),
 });

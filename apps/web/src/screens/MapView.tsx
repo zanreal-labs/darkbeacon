@@ -35,6 +35,7 @@ import type { ConnectionTraffic } from '../map/ConnectionEdge';
 import { systemDisplayName } from '../map/SystemNode';
 import { useMapStore } from '../map/useMapStore';
 import { SystemSidebar } from '../map/sidebar/SystemSidebar';
+import { SignatureLayer } from '../map/signatures/SignatureLayer';
 import { filterableSources, permissionsFor, withoutSources } from '../map/sharing/chain';
 import { ProvenanceLine, provenanceText } from '../map/sharing/ProvenanceLine';
 import { SourceFilter, useHiddenSources } from '../map/sharing/SourceFilter';
@@ -464,6 +465,7 @@ export function MapView({
         />
       )}
 
+      <SignatureLayer mapId={map.id} state={state} universe={universe} store={store} canEdit={can.edit} />
       {connection && !system && (
         <ConnectionSidebar
           mapId={map.id}

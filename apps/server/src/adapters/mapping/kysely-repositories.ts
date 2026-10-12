@@ -1,5 +1,6 @@
 import { ConflictError } from '@darkbeacon/core';
 import { bool, isUniqueViolation, json, type Database } from '@darkbeacon/db';
+import type { AuthorDto } from '@darkbeacon/shared';
 import {
   stampChanges,
   type ChainMap,
@@ -101,6 +102,14 @@ export interface MappingTables {
     updated_at: number;
     /** JSON field -> when it last changed; see `ChangeStamps`. */
     field_times: string;
+    temp_name: string | null;
+    destination: string | null;
+    time_status: string | null;
+    mass_status: string | null;
+    bubbled: number;
+    /** JSON `AuthorDto`. */
+    created_by: string | null;
+    updated_by: string | null;
   };
   map_tombstones: { map_id: string; kind: string; key: string; deleted_at: number };
   map_connection_passages: {
@@ -390,12 +399,43 @@ export class KyselySignatureRepository extends Repository implements SignatureRe
     return row ? signatureFromRow(row) : null;
   }
 
-  async insert(signature: Signature): Promise<void> {
+  async insert(signature: Signature, options: { restoredAt?: number } = {}): Promise<void> {
+    const row = signatureToRow(signature);
+    // A restored signature counts as written when it came back (see `ChangeStamps`).
+    const times =
+      options.restoredAt === undefined
+        ? {}
+        : Object.fromEntries(
+            Object.keys(signature)
+              .filter((k) => !['mapId', 'createdAt', 'updatedAt', 'provenance'].includes(k))
+              .map((k) => [k, options.restoredAt]),
+          );
     await this.db
       .insertInto('map_signatures')
-      .values({ ...signatureToRow(signature), field_times: '{}' })
+      .values({ ...row, field_times: json.encode(times) })
       .execute()
       .catch(signatureConflict(signature.eveId));
+  }
+
+  async touch(mapId: string, ids: readonly string[], at: number): Promise<void> {
+    if (ids.length === 0) return;
+    await this.db
+      .updateTable('map_signatures')
+      .set({ updated_at: at })
+      .where('map_id', '=', mapId)
+      .where('id', 'in', ids)
+      .where('updated_at', '<', at)
+      .execute();
+  }
+
+  async listUpdatedBefore(before: number): Promise<Signature[]> {
+    const rows = await this.db
+      .selectFrom('map_signatures')
+      .selectAll()
+      .where('updated_at', '<', before)
+      .orderBy('map_id')
+      .execute();
+    return rows.map(signatureFromRow);
   }
 
   async update(signature: Signature): Promise<void> {
@@ -764,6 +804,13 @@ function signatureToRow(s: Signature): Omit<SignatureRow, 'field_times'> {
     custom: bool.encode(s.custom ?? false),
     created_at: s.createdAt,
     updated_at: s.updatedAt,
+    temp_name: s.tempName ?? null,
+    destination: s.destination ?? null,
+    time_status: s.timeStatus ?? null,
+    mass_status: s.massStatus ?? null,
+    bubbled: bool.encode(s.bubbled ?? false),
+    created_by: s.createdBy ? json.encode(s.createdBy) : null,
+    updated_by: s.updatedBy ? json.encode(s.updatedBy) : null,
   };
 }
 
@@ -782,5 +829,12 @@ function signatureFromRow(row: SignatureRow): Signature {
     ...(bool.decode(row.custom) ? { custom: true } : {}),
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
+    tempName: row.temp_name,
+    destination: row.destination as Signature['destination'],
+    timeStatus: row.time_status as Signature['timeStatus'],
+    massStatus: row.mass_status as Signature['massStatus'],
+    bubbled: bool.decode(row.bubbled),
+    createdBy: json.decode<AuthorDto>(row.created_by),
+    updatedBy: json.decode<AuthorDto>(row.updated_by),
   };
 }

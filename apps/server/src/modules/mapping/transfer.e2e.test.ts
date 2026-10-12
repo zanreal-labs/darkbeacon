@@ -29,6 +29,8 @@ function normalized(doc: MapExportDocument) {
         connection: connectionId ? connectionKey.get(connectionId) : null,
       }))
       .sort((a, b) => a.eveId.localeCompare(b.eveId)),
+    structures: (doc.structures ?? []).map(({ id: _i, ...x }) => x),
+    comments: (doc.comments ?? []).map(({ id: _i, ...x }) => x),
     accessRules: doc.accessRules,
   };
 }
@@ -76,6 +78,15 @@ describeEachDialect('map files over HTTP', (t) => {
     ).body as SignatureDto;
     await s.call('PATCH', `${base}/signatures/${sig.id}`, 'alice', { connectionId: hole.id });
     await s.call('POST', `${base}/systems/${SYSTEMS.c1}/signatures`, 'alice', { eveId: 'XYZ-999' });
+    await s.call('POST', `${base}/systems/${SYSTEMS.c2}/structures`, 'alice', {
+      typeName: 'Astrahus',
+      name: 'Home Fort',
+      status: 'reinforced',
+      endsAt: 1_900_000_000_000,
+    });
+    await s.call('POST', `${base}/systems/${SYSTEMS.c2}/comments`, 'alice', {
+      text: 'Rolled the **static**',
+    });
     // A hidden system keeps its notes and signatures; the file keeps them too.
     await s.call('PATCH', `${base}/systems/${SYSTEMS.c1}`, 'alice', { description: 'was here' });
     await s.call('DELETE', `${base}/systems/${SYSTEMS.c1}`, 'alice');
@@ -108,6 +119,12 @@ describeEachDialect('map files over HTTP', (t) => {
       description: 'was here',
     });
     expect(doc.accessRules).toHaveLength(2);
+    // Structures and comments travel with their authors and dates.
+    expect(doc.structures).toMatchObject([
+      { solarSystemId: SYSTEMS.c2, name: 'Home Fort', status: 'reinforced', endsAt: 1_900_000_000_000 },
+    ]);
+    expect(doc.comments).toMatchObject([{ solarSystemId: SYSTEMS.c2, text: 'Rolled the **static**' }]);
+    expect(doc.comments![0]!.author).not.toBeNull();
 
     // Import on another account: a new map, new ids, the same chain.
     const imported = await s.call(
@@ -157,6 +174,7 @@ describeEachDialect('map files over HTTP', (t) => {
     const base = `/api/maps/${map.id}`;
     await s.call('POST', `${base}/systems`, 'alice', { solarSystemId: SYSTEMS.c2 });
     await s.call('POST', `${base}/systems/${SYSTEMS.c2}/signatures`, 'alice', { eveId: 'ABC-123' });
+    await s.call('POST', `${base}/systems/${SYSTEMS.c2}/comments`, 'alice', { text: 'Scouted' });
     await s.call('POST', `${base}/access-rules`, 'alice', {
       subjectKind: 'account',
       subjectId: 'bob',
@@ -173,6 +191,10 @@ describeEachDialect('map files over HTTP', (t) => {
     const dup = await s.call('POST', `${base}/duplicate`, 'alice', { name: 'Copy', signatures: false });
     expect(dup).toMatchObject({ status: 201, body: { systems: 1, signatures: 0, accessRules: 1 } });
     const copyId = (dup.body as ImportMapResultDto).map.id;
+    // Without signatures, the intel stays behind too.
+    expect((await s.call('GET', `/api/maps/${copyId}/systems/${SYSTEMS.c2}/comments`, 'alice')).body).toEqual(
+      [],
+    );
     const rules = (await s.call('GET', `/api/maps/${copyId}/access-rules`, 'alice')).body as AccessRuleDto[];
     expect(rules.map((r) => [r.subjectId, r.role])).toEqual([['bob', 'member']]);
 

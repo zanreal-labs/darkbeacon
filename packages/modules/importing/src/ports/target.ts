@@ -8,11 +8,38 @@ import type {
   MapSettings,
   MapSystemDto,
   SignatureDto,
+  StructureStatus,
   SystemLabelDto,
 } from '@darkbeacon/shared';
 import type { ConnectionWrite, SignatureWrite, SystemWrite } from '../domain/decide.js';
 
 export type WriteOutcome = 'created' | 'updated' | 'unchanged';
+
+export interface ImportedAuthor {
+  characterId: number | null;
+  name: string;
+}
+
+export interface ImportedComment {
+  solarSystemId: number;
+  text: string;
+  author: ImportedAuthor | null;
+  createdAt: number | null;
+}
+
+export interface ImportedStructure {
+  solarSystemId: number;
+  typeId: number | null;
+  typeName: string;
+  name: string;
+  owner: { id: number | null; name: string; ticker: string | null } | null;
+  status: StructureStatus;
+  endsAt: number | null;
+  notes: string;
+  author: ImportedAuthor | null;
+  createdAt: number | null;
+  changedAt: number | null;
+}
 
 export interface TargetMap {
   id: string;
@@ -79,6 +106,23 @@ export interface ChainTarget {
     },
     externalId: string,
   ): Promise<'created' | 'unchanged' | 'skipped'>;
+  /**
+   * A comment as Wanderer kept it (author and time). `existingId`: the comment an earlier import
+   * wrote; when it is still there nothing changes (comments are not edited).
+   */
+  putComment(
+    actor: Actor,
+    mapId: string,
+    comment: ImportedComment,
+    existingId: string | null,
+  ): Promise<{ id: string; outcome: WriteOutcome }>;
+  /** A structure: added, or the one an earlier import wrote (`existingId`) changed to these fields. */
+  putStructure(
+    actor: Actor,
+    mapId: string,
+    structure: ImportedStructure,
+    existingId: string | null,
+  ): Promise<{ id: string; outcome: WriteOutcome }>;
   /** Adds the Tags the map lacks by name. */
   ensureLabels(actor: Actor, mapId: string, labels: ReadonlyArray<Omit<LabelDto, 'id'>>): Promise<LabelDto[]>;
   /** The map's Labels: `replace` makes the list exactly `labels`, else missing names are added. */

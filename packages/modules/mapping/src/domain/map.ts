@@ -1,4 +1,5 @@
 import type {
+  CommentDto,
   ConnectionDto,
   MapDto,
   MapPreferencesDto,
@@ -6,6 +7,7 @@ import type {
   MassMode,
   PassageSource,
   SignatureDto,
+  StructureDto,
 } from '@darkbeacon/shared';
 
 // For the MVP the entities have the same shape as their DTOs; split them when they diverge.
@@ -34,6 +36,8 @@ export interface Passage {
   /** The account that logged it by hand; null for tracked jumps. */
   createdBy: string | null;
 }
+export type Comment = CommentDto;
+export type Structure = StructureDto;
 
 /** One account's own view of a map; not an event, nobody else sees it. */
 export interface MapPreferences extends MapPreferencesDto {

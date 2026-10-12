@@ -31,6 +31,8 @@ const PHASES = [
   'connections',
   'signatures',
   'passages',
+  'structures',
+  'comments',
   'access',
   'settings',
   'removals',
@@ -190,6 +192,8 @@ export class ImportRunner {
       plan.connections.length +
       plan.signatures.length +
       plan.passages.length +
+      plan.structures.length +
+      plan.comments.length +
       (accessWanted ? plan.access.length : 0) +
       1;
     const out = r.outcome;
@@ -397,6 +401,63 @@ export class ImportRunner {
             'passages',
             outcome === 'created' ? 'created' : outcome === 'unchanged' ? 'unchanged' : 'skipped',
           );
+        });
+      }
+    }
+
+    // Structures and comments: real objects with their authors, owners and timers ----------------
+    if (reached('structures')) {
+      await job.phase('structures');
+      for (const planned of plan.structures) {
+        this.check(r.id);
+        const link = links.get('structure', planned.key);
+        await this.item(job, 'structures', `A structure in ${planned.name}`, async () => {
+          await deps.uow.transaction(async () => {
+            // Unchanged in Wanderer since the last import: leave what people changed here alone.
+            if (link && JSON.stringify(link.written) === JSON.stringify(planned.fields)) {
+              step('structures', 'unchanged');
+              return;
+            }
+            const { id, outcome } = await deps.target.putStructure(
+              actor,
+              mapId,
+              {
+                solarSystemId: planned.solarSystemId,
+                ...planned.fields,
+                author: planned.author,
+                createdAt: planned.createdAt,
+                changedAt: planned.remoteUpdatedAt,
+              },
+              link?.localId ?? null,
+            );
+            step('structures', outcome);
+            await this.link(mapId, key, 'structure', planned.key, id, planned.fields, null);
+          });
+        });
+      }
+    }
+    if (reached('comments')) {
+      await job.phase('comments');
+      for (const planned of plan.comments) {
+        this.check(r.id);
+        const link = links.get('comment', planned.key);
+        await this.item(job, 'comments', `A comment in ${planned.name}`, async () => {
+          await deps.uow.transaction(async () => {
+            const { id, outcome } = await deps.target.putComment(
+              actor,
+              mapId,
+              {
+                solarSystemId: planned.solarSystemId,
+                text: planned.text,
+                author: planned.author,
+                createdAt: planned.createdAt,
+              },
+              link?.localId ?? null,
+            );
+            step('comments', outcome);
+            if (outcome !== 'unchanged' || !link)
+              await this.link(mapId, key, 'comment', planned.key, id, { text: planned.text }, null);
+          });
         });
       }
     }

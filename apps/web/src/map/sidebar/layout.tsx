@@ -7,11 +7,14 @@ import { usePreference } from '../../lib/preferences';
 export const SIDEBAR_SECTIONS = [
   { id: 'system', title: 'System' },
   { id: 'signatures', title: 'Signatures' },
+  { id: 'structures', title: 'Structures' },
+  { id: 'comments', title: 'Comments' },
   { id: 'connections', title: 'Connections' },
   { id: 'activity', title: 'Activity' },
   { id: 'kills', title: 'Kills' },
   { id: 'local', title: 'Local' },
   { id: 'routes', title: 'Routes' },
+  { id: 'history', title: 'History' },
 ] as const;
 
 /** Sections hidden and the order chosen (ids; absent ones keep their default place after them). */

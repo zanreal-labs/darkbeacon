@@ -107,6 +107,9 @@ export class MapUseCases extends MappingUseCases {
           ...(request.settings?.bookmarkNumbering
             ? { bookmarkNumbering: request.settings.bookmarkNumbering }
             : {}),
+          ...(request.settings?.signatureRetentionDays !== undefined
+            ? { signatureRetentionDays: request.settings.signatureRetentionDays }
+            : {}),
           ...(request.settings?.onlyTrackedCharacters !== undefined
             ? { onlyTrackedCharacters: request.settings.onlyTrackedCharacters }
             : {}),

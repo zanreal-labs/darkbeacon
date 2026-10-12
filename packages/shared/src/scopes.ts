@@ -65,7 +65,8 @@ export const SCOPE_MAP_ROLE: Record<MapScopeResource, Record<ScopeAction, MapRol
 /** Human descriptions for the key pickers and the docs. */
 export const SCOPE_RESOURCE_LABELS: Record<ScopeResource | 'admin', string> = {
   maps: 'Maps (read: list and open; write: labels, bookmark labels; manage: settings, sharing, delete)',
-  systems: 'Systems on the map (write: add, move, edit, notes; manage: lock)',
+  systems:
+    'Systems on the map, with their comments and structures (write: add, move, edit, notes; manage: lock)',
   connections: 'Connections with mass and time status',
   signatures: 'Signatures (write: add, paste, edit, remove)',
   routes:
