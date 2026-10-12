@@ -39,4 +39,6 @@ VOLUME /data
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
   CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/api/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
-CMD ["node", "--enable-source-maps", "apps/server/dist/main.js"]
+# The preload starts OpenTelemetry before the app when OTEL_* asks for it (docs/observability.md);
+# it loads nothing else while telemetry is off.
+CMD ["node", "--enable-source-maps", "--import", "./apps/server/dist/adapters/observability/preload.js", "apps/server/dist/main.js"]

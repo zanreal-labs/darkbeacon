@@ -100,6 +100,8 @@ export interface PluginHostDeps {
   /** `ctx.secrets`: a sealing box per plugin (keyed from SECRET_KEY). */
   secrets?: (pluginId: string) => { seal(text: string): string; open(sealed: string): string | null };
   logger?: (pluginId: string) => PluginLogger;
+  /** `ctx.metrics.delivery`: records a plugin's notification deliveries (telemetry). */
+  delivered?: (channel: string, ok: boolean) => void;
   /** Failures in a row (handlers, routes, notifiers) after which a plugin is disabled. Default 5. */
   failureThreshold?: number;
   /** How long `register()` may take. Default 30 s. */
@@ -361,6 +363,10 @@ export class PluginHost {
         forMap: <T>(mapId: string) => this.settings(id, mapId) as Promise<T>,
       },
       logger: loaded.logger,
+      metrics: Object.freeze({
+        delivery: (channel: string, outcome: 'ok' | 'failed') =>
+          this.deps.delivered?.(channel, outcome === 'ok'),
+      }),
       http: { route: (route: PluginRoute) => this.addRoute(loaded, route) },
       audit: Object.freeze({
         configChanged: (request: PluginHttpRequest, change: PluginConfigChange) =>

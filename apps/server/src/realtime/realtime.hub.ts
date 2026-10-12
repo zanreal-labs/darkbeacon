@@ -43,6 +43,8 @@ export interface HubOptions {
    */
   recheckMs?: number;
   onError?: (error: unknown) => void;
+  /** Runs work in a trace span (telemetry); subscriptions and catch-ups are traced with it. */
+  trace?: <T>(name: string, attributes: Record<string, string>, work: () => Promise<T>) => Promise<T>;
 }
 
 const REPLAY_PAGE = 500;
@@ -134,6 +136,11 @@ export class RealtimeHub {
     };
   }
 
+  /** Open connections (sockets). */
+  get connectionCount(): number {
+    return this.connections.size;
+  }
+
   close(): void {
     clearInterval(this.recheckTimer);
     this.unsubscribeBus();
@@ -161,7 +168,17 @@ export class RealtimeHub {
       connection.send({ op: 'unsubscribed', stream: message.stream });
     } else if (message.op === 'presence') await this.presence(connection, message.stream, message.state);
     else if (message.op === 'presence.leave') this.leavePresence(connection, message.stream);
-    else await this.subscribe(connection, message.stream, message.sinceSeq);
+    else {
+      const { stream, sinceSeq } = message;
+      await this.traced('ws subscribe', stream, () => this.subscribe(connection, stream, sinceSeq));
+    }
+  }
+
+  private traced<T>(name: string, stream: string, work: () => Promise<T>): Promise<T> {
+    const trace = this.options.trace;
+    return trace
+      ? trace(name, { 'darkbeacon.stream.kind': parseStream(stream)?.kind ?? 'unknown' }, work)
+      : work();
   }
 
   /**
@@ -227,7 +244,7 @@ export class RealtimeHub {
     set.add(sub);
     // Registered before catching up, so live events queue behind the catch-up and are de-duplicated by seq.
     sub.enqueue(
-      () => this.catchUp(sub, sinceSeq),
+      () => this.traced('ws catch-up', stream, () => this.catchUp(sub, sinceSeq)),
       (error) => this.fail(sub, error),
     );
   }

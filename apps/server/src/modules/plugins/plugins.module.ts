@@ -14,6 +14,7 @@ import { ValidationError, type Clock, type EventBus, type EventLog, type MapAcce
 import { Database } from '@darkbeacon/db';
 import { NotifierRegistry } from '@darkbeacon/notifications';
 import type { UniverseCatalog } from '@darkbeacon/mapping';
+import type { DomainTelemetry } from '@darkbeacon/observability';
 import { PluginAdmin, ThemeAdmin } from '@darkbeacon/plugins';
 import { isEventOfType, type MapSnapshot } from '@darkbeacon/shared';
 import { builtInThemes, SYSTEM_THEME_ID } from '@darkbeacon/theme-sdk';
@@ -40,6 +41,7 @@ import {
   EVENT_BUS,
   EVENT_LOG,
   MAP_ACCESS,
+  OBSERVABILITY,
   UNIT_OF_WORK,
   UNIVERSE_CATALOG,
 } from '../../platform/tokens.js';
@@ -261,6 +263,7 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
         providers: PluginPortProviders,
         consumers: EventConsumers,
         config: AppConfig,
+        telemetry?: DomainTelemetry | null,
       ) =>
         new PluginHost({
           admin,
@@ -278,6 +281,7 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
           consumers,
           publicUrl: config.publicUrl,
           secrets: (id) => new SecretBox(config.secretKey, `plugin:${id}`),
+          delivered: telemetry ? (channel, ok) => telemetry.notificationDelivered(channel, ok) : undefined,
         }),
       inject: [
         PluginAdmin,
@@ -294,6 +298,7 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
         PluginPortProviders,
         EventConsumers,
         APP_CONFIG,
+        { token: OBSERVABILITY, optional: true },
       ],
     },
     PluginsLifecycle,

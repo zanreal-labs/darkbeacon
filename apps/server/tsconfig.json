@@ -22,6 +22,7 @@
     { "path": "../../packages/modules/notifications" },
     { "path": "../../packages/modules/plugins" },
     { "path": "../../packages/modules/routing" },
-    { "path": "../../packages/modules/audit" }
+    { "path": "../../packages/modules/audit" },
+    { "path": "../../packages/modules/observability" }
   ]
 }

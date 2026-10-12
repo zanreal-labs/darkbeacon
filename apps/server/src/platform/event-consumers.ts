@@ -131,6 +131,26 @@ export class EventConsumers implements OnApplicationBootstrap, OnModuleDestroy {
     return this.running;
   }
 
+  /** Events each running consumer has not got past yet, over the streams it reads (the backlog). */
+  async lag(): Promise<Array<{ consumer: string; behind: number }>> {
+    const lags: Array<{ consumer: string; behind: number }> = [];
+    for (const consumer of this.consumers) {
+      if (!this.ready.has(consumer)) continue;
+      const row = await this.streamsOf(consumer)
+        .leftJoin('event_consumer_offset as o', (join) =>
+          join.onRef('o.stream', '=', 'event_stream.stream').on('o.consumer', '=', consumer.name),
+        )
+        .select((eb) =>
+          eb.fn
+            .sum<number | string | null>(eb('event_stream.head_seq', '-', eb.fn.coalesce('o.seq', eb.lit(0))))
+            .as('behind'),
+        )
+        .executeTakeFirst();
+      lags.push({ consumer: consumer.name, behind: Number(row?.behind ?? 0) });
+    }
+    return lags;
+  }
+
   private get db() {
     return this.database.db<ConsumerTables>();
   }
