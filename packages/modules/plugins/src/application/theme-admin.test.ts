@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ManualClock, type Actor } from '@darkbeacon/core';
 import { ThemeAdmin } from './theme-admin.js';
-import { FakeInstaller, MemoryThemes, directUow } from './fakes.test-support.js';
+import { FakeInstaller, MemoryLog, MemoryThemes, directUow } from './fakes.test-support.js';
 
 const admin: Actor = { kind: 'account', id: 'boss', instanceRole: 'owner' };
 const alice: Actor = { kind: 'account', id: 'alice', instanceRole: 'user' };
@@ -28,6 +28,7 @@ describe('ThemeAdmin', () => {
       installer,
       uow: directUow,
       clock: new ManualClock(),
+      log: new MemoryLog(),
       builtInIds: ['system', 'default', 'dark', 'contrast'],
     });
   });

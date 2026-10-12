@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { newEvent, type DomainEvent } from '@darkbeacon/core';
 import { describeEachDialect } from '@darkbeacon/db/testing';
+import { AuditStamper } from '@darkbeacon/audit';
+import { AsyncAuditScope } from '../../platform/audit.js';
 import { InProcessEventBus } from './in-process-event-bus.js';
-import { KyselyEventLog } from './kysely-event-log.js';
+import { eventHash, KyselyEventLog, type EventTables } from './kysely-event-log.js';
 
 const actor = { kind: 'system', id: 'test' } as const;
 const ev = (stream: string, type = 'system.added', occurredAt = 1000) =>
@@ -78,6 +80,92 @@ describeEachDialect('KyselyEventLog', (t) => {
     expect(await log.oldestSeq('map:d')).toBe(3);
     expect(await log.headSeq('map:d')).toBe(3);
     expect((await log.append([ev('map:d')]))[0]?.seq).toBe(4);
+  });
+
+  it('stores an audit record, refs and a hash chain with each event, never publishing `before`', async () => {
+    const bus = new InProcessEventBus();
+    const published: DomainEvent[] = [];
+    bus.subscribe((e) => void published.push(e));
+    const scope = new AsyncAuditScope();
+    const log = new KyselyEventLog(t.db, bus, {
+      scope,
+      stamper: new AuditStamper({
+        account: async () => ({ name: 'Alice', mainCharacterId: 7, mainCharacterName: 'Alice Main' }),
+        character: async () => null,
+      }),
+    });
+    const before = { id: 'c1', source: 1, target: 2, massStatus: 'fresh', updatedAt: 1 };
+    const stored = await scope.run(
+      { channel: { kind: 'web' }, origin: { country: 'DE', userAgent: 'ua' } },
+      () =>
+        log.append([
+          newEvent({
+            stream: 'map:h',
+            type: 'connection.updated',
+            actor: { kind: 'account', id: 'a' },
+            data: { ...before, massStatus: 'critical', updatedAt: 2 },
+            before,
+            occurredAt: 10,
+          }),
+          ev('map:h', 'system.added', 11),
+        ]),
+    );
+    expect(stored[0]).not.toHaveProperty('before');
+    await flush();
+    expect(published).toHaveLength(2);
+    expect(published.every((e) => !('before' in e))).toBe(true);
+
+    const rows = await t.db
+      .db<EventTables>()
+      .selectFrom('event_log')
+      .selectAll()
+      .where('stream', '=', 'map:h')
+      .orderBy('seq')
+      .execute();
+    const audit = JSON.parse(rows[0]!.audit!) as Record<string, unknown>;
+    expect(audit).toMatchObject({
+      actor: { kind: 'account', id: 'a', accountName: 'Alice', characterId: 7, characterName: 'Alice Main' },
+      channel: { kind: 'web', id: null },
+      origin: { country: 'DE', userAgent: 'ua' },
+      op: 'update',
+      entity: { kind: 'connection', id: 'c1' },
+      diff: { massStatus: { before: 'fresh', after: 'critical' } },
+    });
+    // Chained: the first row starts the stream, every hash covers its row and the one before.
+    expect(rows[0]!.prev_hash).toBeNull();
+    expect(rows[1]!.prev_hash).toBe(rows[0]!.hash);
+    for (const row of rows) expect(eventHash({ ...row, seq: Number(row.seq) })).toBe(row.hash);
+    const head = await t.db
+      .db<EventTables>()
+      .selectFrom('event_stream')
+      .select('head_hash')
+      .where('stream', '=', 'map:h')
+      .executeTakeFirstOrThrow();
+    expect(head.head_hash).toBe(rows[1]!.hash);
+    const refs = await t.db
+      .db<EventTables>()
+      .selectFrom('event_ref')
+      .select('ref')
+      .where('seq', '=', 1)
+      .where('stream', '=', 'map:h')
+      .execute();
+    expect(refs.map((r) => r.ref).sort()).toEqual([
+      'account:a',
+      'character:7',
+      'connection:c1',
+      'system:1',
+      'system:2',
+    ]);
+
+    // Pruning removes the refs with their events.
+    expect(await log.prune(11)).toBe(1);
+    const left = await t.db
+      .db<EventTables>()
+      .selectFrom('event_ref')
+      .select('seq')
+      .where('stream', '=', 'map:h')
+      .execute();
+    expect(left.every((r) => Number(r.seq) === 2)).toBe(true);
   });
 });
 

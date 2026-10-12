@@ -41,6 +41,11 @@ export const InstanceSettingsDto = z.object({
   adminRoleIds: z.array(z.string()),
   /** Whether webhooks may target loopback, private and link-local addresses (off by default). */
   webhooksToPrivateNetworks: z.boolean(),
+  /**
+   * Days the event log (which is also the audit trail) is kept; null keeps everything (default).
+   * Replay and webhook delivery are unaffected: they read only recent events.
+   */
+  eventRetentionDays: z.number().int().positive().nullable(),
 });
 export type InstanceSettingsDto = z.infer<typeof InstanceSettingsDto>;
 
@@ -50,5 +55,6 @@ export const UpdateInstanceSettingsRequest = z.object({
   adminGuildId: Snowflake.nullable().optional(),
   adminRoleIds: z.array(Snowflake).max(50).optional(),
   webhooksToPrivateNetworks: z.boolean().optional(),
+  eventRetentionDays: z.number().int().min(1).max(36_500).nullable().optional(),
 });
 export type UpdateInstanceSettingsRequest = z.infer<typeof UpdateInstanceSettingsRequest>;

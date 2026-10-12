@@ -36,6 +36,7 @@ export class HubAdmin {
     await requireMapRole(this.deps.access, actor, mapId, 'manager');
     const ids = this.validate(solarSystemIds);
     return this.deps.uow.transaction(async () => {
+      const before = await this.deps.queries.mapHubs(mapId);
       await this.deps.hubs.setMapHubs(mapId, ids);
       const hubs = await this.deps.queries.mapHubs(mapId);
       await this.deps.events.append([
@@ -44,6 +45,7 @@ export class HubAdmin {
           type: 'routes.hubs_changed',
           actor: actorRef(actor!),
           data: { hubs },
+          before: { hubs: before },
           occurredAt: this.deps.clock.now(),
         }),
       ]);
@@ -100,13 +102,15 @@ export class ExitsPublisher {
       throw error;
     }
     const json = JSON.stringify(exits);
-    if (this.published.get(mapId) === json) return null;
+    const previous = this.published.get(mapId);
+    if (previous === json) return null;
     await this.deps.events.append([
       newEvent({
         stream: mapStream(mapId),
         type: 'routes.exits_changed',
         actor: actorRef(ROUTING),
         data: { exits },
+        ...(previous === undefined ? {} : { before: { exits: JSON.parse(previous) as MapExitDto[] } }),
         occurredAt: this.deps.clock.now(),
       }),
     ]);

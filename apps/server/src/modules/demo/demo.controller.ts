@@ -6,6 +6,7 @@ import type { AppConfig } from '../../config/config.js';
 import { SignInCookies } from '../../platform/sign-in-cookies.js';
 import { APP_CONFIG } from '../../platform/tokens.js';
 import { clearCookie, DEMO_OPT_OUT_COOKIE, serializeCookie, SESSION_COOKIE } from '../identity/cookies.js';
+import { SignInAudit } from '../identity/sign-in-audit.js';
 import { DemoService } from './demo.service.js';
 
 @Controller()
@@ -15,6 +16,7 @@ export class DemoController {
     @Inject(DemoService) private readonly demo: DemoService,
     @Inject(AccountService) private readonly accounts: AccountService,
     @Inject(SignInCookies) private readonly signInCookies: SignInCookies,
+    @Inject(SignInAudit) private readonly audit: SignInAudit,
   ) {}
 
   /**
@@ -34,6 +36,7 @@ export class DemoController {
       clearCookie(DEMO_OPT_OUT_COOKIE, { secure }),
       ...(await this.signInCookies.for(signedIn.account.id, request, secure)),
     ]);
+    await this.audit.signedIn(signedIn.account.id, 'demo');
     return this.accounts.me(await this.accounts.actorFor(signedIn.account));
   }
 }

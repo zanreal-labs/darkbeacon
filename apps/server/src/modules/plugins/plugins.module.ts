@@ -26,6 +26,7 @@ import type { AppConfig } from '../../config/config.js';
 import { FilePluginInstaller } from '../../plugins/installer.js';
 import { PluginCommandRegistry } from '../../plugins/plugin-commands.js';
 import { PluginHost, PluginPortProviders } from '../../plugins/plugin-host.js';
+import { PresenceRooms } from '../../realtime/presence.js';
 import { EventConsumers } from '../../platform/event-consumers.js';
 import { SignInCookies } from '../../platform/sign-in-cookies.js';
 import { FilePluginSettingsSchemas } from '../../plugins/settings-schemas.js';
@@ -69,6 +70,7 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
     @Inject(EventConsumers) private readonly consumers: EventConsumers,
     @Inject(ThemeAdmin) private readonly themes: ThemeAdmin,
     @Inject(SignInCookies) private readonly signInCookies: SignInCookies,
+    @Inject(PresenceRooms) private readonly presence: PresenceRooms,
   ) {}
 
   onModuleInit(): void {
@@ -109,6 +111,7 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
       getSystem: (id) => this.universe.getSystem(id),
       searchSystems: (query, limit = 20) => this.universe.searchSystems(query, limit),
     };
+    this.providers.presence = this.presence;
   }
 
   async onApplicationBootstrap(): Promise<void> {
@@ -196,16 +199,18 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
         installer: FilePluginInstaller,
         uow: Database,
         clock: Clock,
+        log: EventLog,
       ) =>
         new ThemeAdmin({
           themes,
           installer,
           uow,
           clock,
+          log,
           // `system` is a preference (light or dark by the OS), valid wherever a theme id is.
           builtInIds: [SYSTEM_THEME_ID, ...builtInThemes.map((t) => t.id)],
         }),
-      inject: [KyselyThemeRepository, FilePluginInstaller, UNIT_OF_WORK, CLOCK],
+      inject: [KyselyThemeRepository, FilePluginInstaller, UNIT_OF_WORK, CLOCK, EVENT_LOG],
     },
     { provide: PluginPortProviders, useValue: new PluginPortProviders() },
     { provide: PluginCommandRegistry, useValue: new PluginCommandRegistry() },

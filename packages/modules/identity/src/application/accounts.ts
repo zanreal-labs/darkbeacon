@@ -135,7 +135,7 @@ export class AccountService {
       if (target.instanceRole !== role) {
         const updated = { ...target, instanceRole: role, updatedAt: this.deps.clock.now() };
         await this.deps.accounts.update(updated);
-        await this.roleChanged(admin, updated);
+        await this.roleChanged(admin, updated, target);
         return this.adminDto(updated);
       }
       return this.adminDto(target);
@@ -157,8 +157,8 @@ export class AccountService {
       const next = { ...target, instanceRole: 'owner' as const, updatedAt: now };
       await this.deps.accounts.update(former);
       await this.deps.accounts.update(next);
-      await this.roleChanged(caller, former);
-      await this.roleChanged(caller, next);
+      await this.roleChanged(caller, former, owner);
+      await this.roleChanged(caller, next, target);
     });
   }
 
@@ -229,7 +229,7 @@ export class AccountService {
     return { ...toAccountDto(account, await this.effectiveRole(account)), lastSeenAt: account.lastSeenAt };
   }
 
-  private async roleChanged(actor: Actor, account: Account): Promise<void> {
+  private async roleChanged(actor: Actor, account: Account, before: Account): Promise<void> {
     const data: EventPayloads['access.role_changed'] = {
       accountId: account.id,
       role: await this.effectiveRole(account),
@@ -241,6 +241,7 @@ export class AccountService {
         actor: actorRef(actor),
         data,
         occurredAt: this.deps.clock.now(),
+        before: { accountId: before.id, role: await this.effectiveRole(before) },
       }),
     ]);
   }

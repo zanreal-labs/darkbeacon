@@ -28,9 +28,21 @@ export interface NewEvent<T = unknown> {
   occurredAt: number;
   actor: ActorRef;
   data: T;
+  /**
+   * The changed entity as it was before (updates) or the entity that is gone (removals). Only
+   * the audit trail reads it, for the field-level diff and the removed snapshot; it is never
+   * part of the published envelope.
+   */
+  before?: unknown;
 }
 
 export const INSTANCE_STREAM = 'instance';
+
+/**
+ * Audit records of instance changes that are not map state and must not reach every signed-in
+ * account (sign-ins, settings, themes, webhooks, plugin settings). Instance admins only.
+ */
+export const AUDIT_STREAM = 'audit:instance';
 
 export function mapStream(mapId: string): string {
   return `map:${mapId}`;
@@ -51,6 +63,7 @@ export function newEvent<T>(input: {
   actor: ActorRef;
   data: T;
   occurredAt: number;
+  before?: unknown;
 }): NewEvent<T> {
   return { id: newId(), ...input };
 }

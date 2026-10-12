@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { LogOut, MoreHorizontal, Plus, Star, Unlink, UserRound } from 'lucide-react';
 import { buildPath, routes, type CharacterDto, type MeDto } from '@darkbeacon/shared';
 import { api, ApiError } from '../lib/api';
+import { usePresenceSettings } from '../lib/presence';
 import { meKey, useLogout, useMe, useProviders } from '../lib/session';
 import { eveLinkHref, ROLE_LABEL } from '../shell/AccountMenu';
 import { ThemePicker } from '../theme/ThemePicker';
@@ -32,6 +33,7 @@ import {
   Rows,
   Skeleton,
   Stack,
+  Switch,
   Tooltip,
   useToast,
 } from '../ui';
@@ -103,6 +105,8 @@ export function AccountPage({ authError = null }: { authError?: string | null })
             <ThemePicker />
           </CardBody>
         </Card>
+
+        <Collaboration />
 
         <Sessions />
       </Stack>
@@ -236,6 +240,42 @@ function Characters({ me }: { me: MeDto }) {
         tone="danger"
         onConfirm={() => (unlinking ? unlink.mutateAsync(unlinking.id) : undefined)}
       />
+    </Card>
+  );
+}
+
+/** Live cursors on maps: whether others see mine, whether I see theirs. Kept on the server. */
+function Collaboration() {
+  const { settings, update } = usePresenceSettings();
+  const toast = useToast();
+  const change = (patch: { shareCursor?: boolean; showOthers?: boolean }) =>
+    update.mutate(patch, {
+      onError: (error) => toast({ title: 'Could not save', description: errorText(error), tone: 'danger' }),
+    });
+  return (
+    <Card>
+      <CardHeader
+        title="Live cursors"
+        description="On a map, everyone sees who else is there and what they are editing. Cursors and drags are up to you."
+      />
+      <CardBody>
+        <div style={{ display: 'grid', gap: 'var(--dbk-space-4)' }}>
+          <Switch
+            checked={settings.data?.shareCursor ?? true}
+            disabled={!settings.data}
+            onCheckedChange={(shareCursor) => change({ shareCursor })}
+            label="Share my cursor"
+            description="Others on the map see where you point and where you drag systems."
+          />
+          <Switch
+            checked={settings.data?.showOthers ?? true}
+            disabled={!settings.data}
+            onCheckedChange={(showOthers) => change({ showOthers })}
+            label="Show other people's cursors"
+            description="Turn off for a calmer map; you still see who is there."
+          />
+        </div>
+      </CardBody>
     </Card>
   );
 }

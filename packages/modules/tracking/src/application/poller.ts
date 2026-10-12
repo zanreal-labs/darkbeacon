@@ -211,6 +211,9 @@ export class TrackingPoller {
               actor: this.actor,
               data: change.data,
               occurredAt: now,
+              ...(change.type === 'character.ship_changed'
+                ? { before: { shipTypeId: presence.shipTypeId, shipName: presence.shipName } }
+                : {}),
             }),
           ),
         ),

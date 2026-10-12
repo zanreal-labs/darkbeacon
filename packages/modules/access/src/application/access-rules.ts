@@ -70,7 +70,7 @@ export class AccessRules {
       const rule = await this.deps.rules.findById(ruleId);
       if (rule?.mapId !== mapId) throw new NotFoundError('Access rule');
       await this.deps.rules.delete(ruleId);
-      await this.append(actor!, mapId, 'access.rule_removed', { id: ruleId });
+      await this.append(actor!, mapId, 'access.rule_removed', { id: ruleId }, toAccessRuleDto(rule));
     });
   }
 
@@ -86,6 +86,7 @@ export class AccessRules {
     mapId: string,
     type: K,
     data: EventPayloads[K],
+    before?: AccessRuleDto,
   ): Promise<void> {
     await this.deps.events.append([
       newEvent({
@@ -94,6 +95,7 @@ export class AccessRules {
         actor: actorRef(actor),
         data,
         occurredAt: this.deps.clock.now(),
+        ...(before ? { before } : {}),
       }),
     ]);
   }

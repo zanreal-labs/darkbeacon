@@ -1,5 +1,6 @@
 import {
   INSTANCE_STREAM,
+  newId,
   parseStream,
   type Actor,
   type DomainEvent,
@@ -7,14 +8,31 @@ import {
   type EventLog,
 } from '@darkbeacon/core';
 import type { Database } from '@darkbeacon/db';
-import { ClientMessage, isEventOfType, type ServerMessage, type WsErrorCode } from '@darkbeacon/shared';
+import {
+  ClientMessage,
+  isEventOfType,
+  type PresenceSettingsDto,
+  type PresenceStatePatch,
+  type ServerMessage,
+  type WsErrorCode,
+} from '@darkbeacon/shared';
+import type { PresenceIdentity, PresenceRooms } from './presence.js';
 import type { RealtimeRegistry } from './realtime.registry.js';
+
+/** Presence over the socket: the rooms, and how a signed-in account is shown and what it chose. */
+export interface HubPresence {
+  rooms: PresenceRooms;
+  identify(accountId: string): Promise<PresenceIdentity>;
+  settings(accountId: string): Promise<PresenceSettingsDto>;
+}
 
 export interface HubOptions {
   log: EventLog;
   bus: EventBus;
   registry: RealtimeRegistry;
   database: Database;
+  /** Presence on map streams; without it presence messages are ignored. */
+  presence?: HubPresence;
   /** Larger gaps are answered with a snapshot instead of a replay. */
   maxReplay?: number;
   /** Streams one connection may follow at once. */
@@ -48,6 +66,13 @@ class Subscription {
 class Connection {
   actor: Actor | null = null;
   readonly subscriptions = new Map<string, Subscription>();
+  /** This socket's key in presence rooms. */
+  readonly presenceKey = newId();
+  /** Maps this socket is present on. */
+  readonly present = new Set<string>();
+  /** Looked up on the first presence message (per account; reset when the account changes). */
+  presenceProfile: { accountId: string; identity: PresenceIdentity; settings: PresenceSettingsDto } | null =
+    null;
   /** Serializes message handling and re-authorization. */
   queue: Promise<void>;
 
@@ -134,7 +159,50 @@ export class RealtimeHub {
     else if (message.op === 'unsubscribe') {
       this.drop(connection, message.stream);
       connection.send({ op: 'unsubscribed', stream: message.stream });
-    } else await this.subscribe(connection, message.stream, message.sinceSeq);
+    } else if (message.op === 'presence') await this.presence(connection, message.stream, message.state);
+    else if (message.op === 'presence.leave') this.leavePresence(connection, message.stream);
+    else await this.subscribe(connection, message.stream, message.sinceSeq);
+  }
+
+  /**
+   * Presence on a map: only signed-in accounts, only on a map stream this socket follows (so the
+   * same authorization as the map itself, re-checked with it). Anything else is ignored.
+   */
+  private async presence(connection: Connection, stream: string, state: PresenceStatePatch): Promise<void> {
+    const presence = this.options.presence;
+    const actor = connection.actor;
+    if (!presence || actor?.kind !== 'account') return;
+    if (parseStream(stream)?.kind !== 'map' || !connection.subscriptions.get(stream)?.active) return;
+    if (connection.presenceProfile?.accountId !== actor.id) {
+      const [identity, settings] = await Promise.all([
+        presence.identify(actor.id),
+        presence.settings(actor.id),
+      ]);
+      connection.presenceProfile = { accountId: actor.id, identity, settings };
+    }
+    // The subscription may have been dropped while the account was looked up.
+    if (!connection.subscriptions.get(stream)?.active || !this.connections.has(connection)) return;
+    const { identity, settings } = connection.presenceProfile;
+    connection.present.add(stream);
+    presence.rooms.update(
+      stream,
+      { key: connection.presenceKey, identity, settings, send: (message) => connection.send(message) },
+      state,
+    );
+  }
+
+  /** An account changed its presence choices: its sockets and the rooms follow at once. */
+  presenceSettingsChanged(accountId: string, settings: PresenceSettingsDto): void {
+    for (const connection of this.connections) {
+      if (connection.presenceProfile?.accountId === accountId)
+        connection.presenceProfile = { ...connection.presenceProfile, settings };
+    }
+    this.options.presence?.rooms.applySettings(accountId, settings);
+  }
+
+  private leavePresence(connection: Connection, stream: string): void {
+    if (!connection.present.delete(stream)) return;
+    this.options.presence?.rooms.leave(stream, connection.presenceKey);
   }
 
   private async subscribe(
@@ -319,6 +387,7 @@ export class RealtimeHub {
   }
 
   private drop(connection: Connection, stream: string): void {
+    this.leavePresence(connection, stream);
     const sub = connection.subscriptions.get(stream);
     if (!sub) return;
     sub.active = false;

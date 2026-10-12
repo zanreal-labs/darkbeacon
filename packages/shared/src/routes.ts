@@ -524,6 +524,97 @@ export const routes = {
     asset: route({ method: 'GET', path: '/api/plugins/:pluginId/assets/:file', auth: 'account' }),
   },
 
+  /**
+   * History of changes (the event log with its audit records). Map histories are open to map
+   * viewers; the request origin is shown to map admins only. Newest first, paged with `before`.
+   */
+  audit: {
+    mapHistory: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/history',
+      auth: 'account',
+      mapRole: 'viewer',
+      query: dto.AuditQuery,
+      response: dto.AuditPageDto,
+    }),
+    /** The system, its signatures and the connections touching it. */
+    systemHistory: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/systems/:solarSystemId/history',
+      auth: 'account',
+      mapRole: 'viewer',
+      query: dto.AuditQuery,
+      response: dto.AuditPageDto,
+    }),
+    connectionHistory: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/connections/:connectionId/history',
+      auth: 'account',
+      mapRole: 'viewer',
+      query: dto.AuditQuery,
+      response: dto.AuditPageDto,
+    }),
+    /** `format=csv|json`; a file download (`content-disposition: attachment`). */
+    mapExport: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/history/export',
+      auth: 'account',
+      mapRole: 'viewer',
+      query: dto.AuditExportQuery,
+    }),
+    /**
+     * Undoes one change when that is safe (the thing still looks as the change left it); the
+     * revert is recorded like any change, with `revertOf`. 409 when it changed since.
+     */
+    revert: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/history/:eventId/revert',
+      auth: 'account',
+      mapRole: 'member',
+      response: dto.AuditRevertDto,
+    }),
+    /**
+     * Instance audit: sign-ins, roles and ownership, access rules, plugins and their settings,
+     * themes, instance settings and webhooks.
+     */
+    instance: route({
+      method: 'GET',
+      path: '/api/admin/audit',
+      auth: 'admin',
+      query: dto.AuditQuery,
+      response: dto.AuditPageDto,
+    }),
+    instanceExport: route({
+      method: 'GET',
+      path: '/api/admin/audit/export',
+      auth: 'admin',
+      query: dto.AuditExportQuery,
+    }),
+    /** Checks the hash chain of every stream (or `?stream=`). */
+    verify: route({
+      method: 'POST',
+      path: '/api/admin/audit/verify',
+      auth: 'admin',
+      response: dto.AuditVerifyDto,
+    }),
+  },
+
+  presence: {
+    settings: route({
+      method: 'GET',
+      path: '/api/accounts/me/presence',
+      auth: 'account',
+      response: dto.PresenceSettingsDto,
+    }),
+    updateSettings: route({
+      method: 'PUT',
+      path: '/api/accounts/me/presence',
+      auth: 'account',
+      body: dto.UpdatePresenceSettingsRequest,
+      response: dto.PresenceSettingsDto,
+    }),
+  },
+
   themes: {
     list: route({ method: 'GET', path: '/api/themes', auth: 'public', response: dto.ThemesDto }),
     select: route({

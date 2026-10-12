@@ -44,6 +44,9 @@ importers:
       '@darkbeacon/access':
         specifier: workspace:*
         version: link:../../packages/modules/access
+      '@darkbeacon/audit':
+        specifier: workspace:*
+        version: link:../../packages/modules/audit
       '@darkbeacon/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -223,6 +226,15 @@ importers:
       zod:
         specifier: ^4.6.5
         version: 4.6.5
+
+  packages/modules/audit:
+    dependencies:
+      '@darkbeacon/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@darkbeacon/shared':
+        specifier: workspace:*
+        version: link:../../shared
 
   packages/modules/identity:
     dependencies:

@@ -46,6 +46,7 @@ packages/modules/tracking       ESI polling -> character events, auto-mapping su
 packages/modules/notifications  notifier port + webhook delivery
 packages/modules/plugins        plugin registry, manifest validation, enable/disable state
 packages/modules/routing        routes over stargates and the chain, hubs, chain exits, in-game waypoints
+packages/modules/audit          audit records of events, histories, reverts, hash chain check
 packages/db            Kysely factory, dialect switch, migration runner; migrations in migrations/<module>/
 packages/shared        zod schemas, DTOs and the WebSocket protocol shared by server and web
 packages/plugin-sdk    public plugin contract: manifest type, PluginContext (exposed ports), web slots
@@ -93,7 +94,13 @@ interface DomainEvent<T = unknown> {
   `signature.added|updated|removed`, `character.moved|jumped|ship_changed|online_changed`,
   `map.settings_changed`, `labels.changed`, `ping.created|removed`, `access.rule_added|rule_removed|role_changed`.
 - Webhooks: per map, chosen event types, HMAC-SHA256 signature header, retries with backoff, delivery log.
-- Retention of `event_log` configurable (default 30 days).
+- Retention of `event_log` configurable (default: keep everything; the log is the audit trail).
+- Audit trail: every event is stored with who (account, character in use, names), how (web, API token,
+  plugin, system process), from where (country, user agent) and what changed (field-level diff, or the
+  removed snapshot); histories per map, system, connection and person, an instance audit, CSV/JSON
+  export, reverting a single change, a hash chain per stream. See `docs/decisions.md`.
+- Presence over `/ws` (cursors, drag previews, editing markers, selections, who is here): ephemeral,
+  never stored, coalesced per map, authorized like the map stream.
 
 ## Identity and access
 

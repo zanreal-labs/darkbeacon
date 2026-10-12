@@ -11,6 +11,8 @@ import {
   WebhookDispatcher,
   type WebhookSender,
 } from '@darkbeacon/notifications';
+import { InProcessEventBus } from '../events/in-process-event-bus.js';
+import { KyselyEventLog } from '../events/kysely-event-log.js';
 import { HttpWebhookSender, isPublicAddress } from './http-webhook-sender.js';
 import { KyselyWebhookRepository, type WebhookTables } from './kysely-webhook-repository.js';
 import { SecretBox } from './secret-box.js';
@@ -59,7 +61,14 @@ describeEachDialect('webhooks', (t) => {
     clock = new ManualClock();
     repo = new KyselyWebhookRepository(t.db, new SecretBox('k'.repeat(32), 'webhook-secret'));
     dispatcher = new WebhookDispatcher({ webhooks: repo, sender, clock });
-    admin = new WebhookAdmin({ webhooks: repo, access, dispatcher, clock });
+    admin = new WebhookAdmin({
+      webhooks: repo,
+      access,
+      dispatcher,
+      clock,
+      events: new KyselyEventLog(t.db, new InProcessEventBus()),
+      uow: t.db,
+    });
   });
 
   it('are managed by map admins only, with the secret shown once and stored sealed', async () => {

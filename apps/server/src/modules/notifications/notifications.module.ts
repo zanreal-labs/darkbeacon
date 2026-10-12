@@ -8,7 +8,7 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import { InstanceSettingsService } from '@darkbeacon/access';
-import type { Clock, MapAccess } from '@darkbeacon/core';
+import type { Clock, EventLog, MapAccess, UnitOfWork } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
 import { NotifierRegistry, WebhookAdmin, WebhookDispatcher } from '@darkbeacon/notifications';
 import { isEventOfType } from '@darkbeacon/shared';
@@ -17,7 +17,7 @@ import { KyselyWebhookRepository } from '../../adapters/notifications/kysely-web
 import { SecretBox } from '../../adapters/notifications/secret-box.js';
 import type { AppConfig } from '../../config/config.js';
 import { EventConsumers } from '../../platform/event-consumers.js';
-import { APP_CONFIG, CLOCK, MAP_ACCESS } from '../../platform/tokens.js';
+import { APP_CONFIG, CLOCK, EVENT_LOG, MAP_ACCESS, UNIT_OF_WORK } from '../../platform/tokens.js';
 import { WebhooksController } from './webhooks.controller.js';
 
 const RETRY_EVERY_MS = 5_000;
@@ -120,8 +120,10 @@ function every(ms: number, work: () => Promise<unknown>, logger: Logger): () => 
         dispatcher: WebhookDispatcher,
         clock: Clock,
         access: MapAccess,
-      ) => new WebhookAdmin({ webhooks, dispatcher, clock, access }),
-      inject: [KyselyWebhookRepository, WebhookDispatcher, CLOCK, MAP_ACCESS],
+        events: EventLog,
+        uow: UnitOfWork,
+      ) => new WebhookAdmin({ webhooks, dispatcher, clock, access, events, uow }),
+      inject: [KyselyWebhookRepository, WebhookDispatcher, CLOCK, MAP_ACCESS, EVENT_LOG, UNIT_OF_WORK],
     },
     WebhookWorker,
   ],

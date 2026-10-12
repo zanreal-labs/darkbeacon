@@ -75,7 +75,7 @@ export class ConnectionUseCases extends MappingUseCases {
       if (patch.timeStatus) next.eolAt = patch.timeStatus === 'eol' ? (current.eolAt ?? now) : null;
       if (patch.massStatus && patch.massStatus !== current.massStatus) next.massStatusAt = now;
       await this.ports.connections.update(next);
-      events.add('connection.updated', next);
+      events.add('connection.updated', next, current);
       return next;
     });
   }

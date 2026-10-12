@@ -9,3 +9,5 @@ export * from './themes.js';
 export * from './tracking.js';
 export * from './universe.js';
 export * from './wormholes.js';
+export * from './audit.js';
+export * from './presence.js';

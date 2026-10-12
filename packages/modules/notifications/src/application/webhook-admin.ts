@@ -1,13 +1,19 @@
 import {
+  AUDIT_STREAM,
   NotFoundError,
   ValidationError,
   actorRef,
+  newEvent,
   newId,
   requireMapRole,
   type Actor,
+  type EventLog,
+  type UnitOfWork,
 } from '@darkbeacon/core';
 import {
   EVENT_TYPES,
+  redactUrl,
+  type AuditEventPayloads,
   type CreateWebhookRequest,
   type CreatedWebhookDto,
   type UpdateWebhookRequest,
@@ -29,6 +35,9 @@ export interface WebhookAdminDeps {
   access: MapAccess;
   dispatcher: WebhookDispatcher;
   clock: Clock;
+  /** Config changes are recorded on the audit stream (never the map stream: secrets). */
+  events: EventLog;
+  uow: UnitOfWork;
 }
 
 const DELIVERY_LOG_LIMIT = 100;
@@ -45,6 +54,7 @@ export class WebhookAdmin {
   /** The secret is returned only here; afterwards it is only used to sign. */
   async create(actor: Actor | null, mapId: string, input: CreateWebhookRequest): Promise<CreatedWebhookDto> {
     await requireMapRole(this.deps.access, actor, mapId, 'admin');
+    const author = actor!;
     checkUrl(input.url);
     checkEventTypes(input.events);
     const webhook: Webhook = {
@@ -56,7 +66,10 @@ export class WebhookAdmin {
       enabled: true,
       createdAt: this.deps.clock.now(),
     };
-    await this.deps.webhooks.insert(webhook);
+    await this.deps.uow.transaction(async () => {
+      await this.deps.webhooks.insert(webhook);
+      await this.record(author, 'webhook.created', auditDto(webhook));
+    });
     return { ...toWebhookDto(webhook), secret: webhook.secret };
   }
 
@@ -75,13 +88,37 @@ export class WebhookAdmin {
       ...(input.events !== undefined ? { events: [...new Set(input.events)] } : {}),
       ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
     };
-    await this.deps.webhooks.update(updated);
+    await this.deps.uow.transaction(async () => {
+      await this.deps.webhooks.update(updated);
+      await this.record(actor!, 'webhook.updated', auditDto(updated), auditDto(webhook));
+    });
     return toWebhookDto(updated);
   }
 
   async remove(actor: Actor | null, mapId: string, webhookId: string): Promise<void> {
-    await this.require(actor, mapId, webhookId);
-    await this.deps.webhooks.delete(webhookId);
+    const webhook = await this.require(actor, mapId, webhookId);
+    await this.deps.uow.transaction(async () => {
+      await this.deps.webhooks.delete(webhookId);
+      await this.record(actor!, 'webhook.removed', { id: webhookId, mapId }, auditDto(webhook));
+    });
+  }
+
+  private async record<K extends 'webhook.created' | 'webhook.updated' | 'webhook.removed'>(
+    actor: Actor,
+    type: K,
+    data: AuditEventPayloads[K],
+    before?: unknown,
+  ): Promise<void> {
+    await this.deps.events.append([
+      newEvent({
+        stream: AUDIT_STREAM,
+        type,
+        actor: actorRef(actor),
+        data,
+        occurredAt: this.deps.clock.now(),
+        ...(before === undefined ? {} : { before }),
+      }),
+    ]);
   }
 
   /** Drops the webhooks (and delivery logs) of a deleted map; a reaction to `map.removed`. */
@@ -124,6 +161,11 @@ function checkEventTypes(events: readonly string[]): void {
       !(e.endsWith('.*') && known.some((k) => k.startsWith(e.slice(0, -1)))),
   );
   if (unknown.length > 0) throw new ValidationError(`Unknown event types: ${unknown.join(', ')}`);
+}
+
+/** The webhook as the audit trail keeps it: the URL without its path (it may hold a token). */
+function auditDto(webhook: Webhook): WebhookDto {
+  return { ...toWebhookDto(webhook), url: redactUrl(webhook.url) };
 }
 
 export function toWebhookDto(webhook: Webhook): WebhookDto {

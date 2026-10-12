@@ -1,4 +1,4 @@
-import type { Actor } from '@darkbeacon/core';
+import { noAuditScope, type Actor, type AuditScope } from '@darkbeacon/core';
 import type { ConnectionUseCases, MappingPorts, SystemUseCases } from '@darkbeacon/mapping';
 import type { Position } from '@darkbeacon/shared';
 import type { AutoMapTarget, RecordedJump } from '@darkbeacon/tracking';
@@ -19,6 +19,7 @@ export class MappingAutoMapTarget implements AutoMapTarget {
     private readonly ports: Pick<MappingPorts, 'maps' | 'systems'>,
     private readonly systems: SystemUseCases,
     private readonly connections: ConnectionUseCases,
+    private readonly audit: AuditScope = noAuditScope,
   ) {}
 
   async scopes(mapId: string) {
@@ -27,10 +28,20 @@ export class MappingAutoMapTarget implements AutoMapTarget {
 
   async recordJump(jump: RecordedJump): Promise<void> {
     const actor: Actor = { kind: 'account', id: jump.accountId, instanceRole: 'user' };
-    await this.place(actor, jump.mapId, jump.from, jump.to);
-    await this.place(actor, jump.mapId, jump.to, jump.from);
-    // Idempotent: an existing connection comes back unchanged.
-    await this.connections.add(actor, jump.mapId, { source: jump.from, target: jump.to, type: jump.type });
+    // Recorded as the owner, made by auto-mapping with the character that jumped.
+    await this.audit.run(
+      { channel: { kind: 'system', id: 'auto-mapping' }, characterId: jump.characterId },
+      async () => {
+        await this.place(actor, jump.mapId, jump.from, jump.to);
+        await this.place(actor, jump.mapId, jump.to, jump.from);
+        // Idempotent: an existing connection comes back unchanged.
+        await this.connections.add(actor, jump.mapId, {
+          source: jump.from,
+          target: jump.to,
+          type: jump.type,
+        });
+      },
+    );
   }
 
   /** Adds (or restores) `solarSystemId` next to `near` unless it is already on the map. */

@@ -6,17 +6,19 @@ import {
   type DynamicModule,
   type OnApplicationShutdown,
 } from '@nestjs/common';
-import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { AuditStamper } from '@darkbeacon/audit';
 import { systemClock, type EventBus } from '@darkbeacon/core';
 import { createDatabase, Database } from '@darkbeacon/db';
 import { InProcessEventBus } from '../adapters/events/in-process-event-bus.js';
 import { KyselyEventLog } from '../adapters/events/kysely-event-log.js';
 import type { AppConfig } from '../config/config.js';
 import { ActorGuard, ActorResolverRegistry } from './actor.js';
+import { AsyncAuditScope, AuditContextInterceptor, AuditDirectoryRegistry } from './audit.js';
 import { EventConsumers } from './event-consumers.js';
 import { SignInCookies } from './sign-in-cookies.js';
 import { ApiExceptionFilter } from './http.js';
-import { APP_CONFIG, CLOCK, EVENT_BUS, EVENT_LOG, HTTP_FETCH, UNIT_OF_WORK } from './tokens.js';
+import { APP_CONFIG, AUDIT_SCOPE, CLOCK, EVENT_BUS, EVENT_LOG, HTTP_FETCH, UNIT_OF_WORK } from './tokens.js';
 
 export interface PlatformOptions {
   /** Use this database instead of opening one from the config (tests). It is not closed on shutdown. */
@@ -38,7 +40,8 @@ class DatabaseLifecycle implements OnApplicationShutdown {
 
 /**
  * Global infrastructure every feature module can inject: config, Database (= UnitOfWork),
- * Clock, EventLog, EventBus, durable event consumers and the actor resolver registry.
+ * Clock, EventLog, EventBus, durable event consumers, the actor resolver registry and the audit
+ * scope and directory the event log records actors with.
  */
 @Global()
 @Module({})
@@ -70,20 +73,32 @@ export class PlatformModule {
         { provide: HTTP_FETCH, useValue: options.fetch ?? globalThis.fetch.bind(globalThis) },
         {
           provide: EVENT_BUS,
-          useFactory: () =>
-            new InProcessEventBus((error, event) =>
-              logger.error(`handler failed for ${event.type} ${event.id}: ${String(error)}`),
+          useFactory: (scope: AsyncAuditScope) =>
+            new InProcessEventBus(
+              (error, event) =>
+                logger.error(`handler failed for ${event.type} ${event.id}: ${String(error)}`),
+              (dispatch) => scope.detached(dispatch),
             ),
+          inject: [AsyncAuditScope],
         },
+        AsyncAuditScope,
+        { provide: AUDIT_SCOPE, useExisting: AsyncAuditScope },
+        AuditDirectoryRegistry,
         {
           provide: EVENT_LOG,
-          useFactory: (database: Database, bus: EventBus) => new KyselyEventLog(database, bus),
-          inject: [Database, EVENT_BUS],
+          useFactory: (
+            database: Database,
+            bus: EventBus,
+            scope: AsyncAuditScope,
+            directory: AuditDirectoryRegistry,
+          ) => new KyselyEventLog(database, bus, { scope, stamper: new AuditStamper(directory) }),
+          inject: [Database, EVENT_BUS, AsyncAuditScope, AuditDirectoryRegistry],
         },
         ActorResolverRegistry,
         EventConsumers,
         SignInCookies,
         { provide: APP_GUARD, useClass: ActorGuard },
+        { provide: APP_INTERCEPTOR, useClass: AuditContextInterceptor },
         { provide: APP_FILTER, useClass: ApiExceptionFilter },
       ],
       exports: [
@@ -97,6 +112,9 @@ export class PlatformModule {
         ActorResolverRegistry,
         EventConsumers,
         SignInCookies,
+        AsyncAuditScope,
+        AUDIT_SCOPE,
+        AuditDirectoryRegistry,
       ],
     };
   }

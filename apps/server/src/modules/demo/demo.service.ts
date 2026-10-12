@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { AccountService, DemoLogin, type SignedIn } from '@darkbeacon/identity';
 import { ConnectionUseCases, MapUseCases, SignatureUseCases, SystemUseCases } from '@darkbeacon/mapping';
+import { AsyncAuditScope } from '../../platform/audit.js';
 import { seedDemoChain } from './demo-chain.js';
 
 /**
@@ -20,6 +21,7 @@ export class DemoService {
     @Inject(SystemUseCases) private readonly systems: SystemUseCases,
     @Inject(ConnectionUseCases) private readonly connections: ConnectionUseCases,
     @Inject(SignatureUseCases) private readonly signatures: SignatureUseCases,
+    @Inject(AsyncAuditScope) private readonly audit: AsyncAuditScope,
   ) {}
 
   get enabled(): boolean {
@@ -31,12 +33,15 @@ export class DemoService {
     const actor = await this.accounts.actorFor(signedIn.account);
     const run = this.seeding.then(async () => {
       if ((await this.maps.list(actor)).length > 0) return;
-      await seedDemoChain(actor, {
-        maps: this.maps,
-        systems: this.systems,
-        connections: this.connections,
-        signatures: this.signatures,
-      });
+      // The demo map is made by the server, not by whoever happened to visit first.
+      await this.audit.run({ channel: { kind: 'system', id: 'demo' }, origin: undefined }, () =>
+        seedDemoChain(actor, {
+          maps: this.maps,
+          systems: this.systems,
+          connections: this.connections,
+          signatures: this.signatures,
+        }),
+      );
       this.logger.log('seeded the demo map');
     });
     // A failed seed must not block the next visit from trying again.

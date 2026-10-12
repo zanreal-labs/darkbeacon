@@ -19,6 +19,31 @@ export interface EventReader {
   readSince(stream: string, sinceSeq: number, limit?: number): Promise<DomainEvent[]>;
 }
 
+/** Someone on a map, as plugins see them: no cursors, selections or drags. */
+export interface PresenceSummary {
+  accountId: string;
+  name: string;
+  characterId: number | null;
+  characterName: string | null;
+  /** What they have open for editing, if anything. */
+  editing: { kind: 'system' | 'connection' | 'signature' | 'map'; id: string; field?: string } | null;
+  /** When they arrived on the map (epoch ms). */
+  since: number;
+}
+
+/**
+ * Who is on the maps the plugin is enabled on (one entry per open tab). Presence is never
+ * stored, so this is only ever the current moment.
+ */
+export interface PresenceReader {
+  here(mapId: string): Promise<PresenceSummary[]>;
+  /**
+   * Called when someone arrives, leaves or opens something for editing on a map (at most a few
+   * times a second per map). Returns an unsubscribe function; unloading the plugin unsubscribes.
+   */
+  onChange(handler: (mapId: string, here: PresenceSummary[]) => void): () => void;
+}
+
 export interface Notification {
   mapId: string | null;
   title: string;
@@ -59,6 +84,7 @@ export interface PluginPorts {
   notifier: Notifier;
   clock: Clock;
   db: PluginDatabase;
+  presence: PresenceReader;
 }
 
 /** Ports a plugin can implement for the core. */

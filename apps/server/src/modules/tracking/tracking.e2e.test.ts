@@ -183,6 +183,28 @@ describeEachDialect('tracking and universe over HTTP', (t) => {
       expect(connections).toEqual([expect.objectContaining({ type: 'wormhole' }) as ConnectionDto]);
     });
 
+    // The audit trail says the jump was mapped by auto-mapping with the character that jumped,
+    // and the moves came from ESI tracking, both on behalf of the character's owner.
+    const audits = await t.db
+      .db<{ event_log: { stream: string; type: string; audit: string | null } }>()
+      .selectFrom('event_log')
+      .select(['type', 'audit'])
+      .where('stream', '=', `map:${mapId}`)
+      .execute();
+    const auditOf = (type: string) =>
+      JSON.parse(audits.find((r) => r.type === type)!.audit!) as {
+        channel: unknown;
+        actor: { characterId: number; characterName: string; accountName: string };
+      };
+    expect(auditOf('connection.added')).toMatchObject({
+      channel: { kind: 'system', id: 'auto-mapping' },
+      actor: { characterId: PILOT, characterName: 'Pilot', accountName: 'alice' },
+    });
+    expect(auditOf('character.jumped')).toMatchObject({
+      channel: { kind: 'system', id: 'tracking' },
+      actor: { characterId: PILOT, accountName: 'alice' },
+    });
+
     // With high-sec in scope a gate jump is mapped as a gate.
     await request('PATCH', `/api/maps/${mapId}`, 'alice', { settings: { scopes: ['wormhole', 'high'] } });
     esi.set(PILOT, { location: PERIMETER });

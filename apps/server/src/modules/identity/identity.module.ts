@@ -33,11 +33,13 @@ import type { FetchLike } from '../../adapters/identity/oauth-http.js';
 import { SecretBox } from '../../adapters/identity/secret-box.js';
 import type { AppConfig } from '../../config/config.js';
 import { ActorResolverRegistry } from '../../platform/actor.js';
+import { AuditDirectoryRegistry } from '../../platform/audit.js';
 import { APP_CONFIG, CLOCK, EVENT_LOG, HTTP_FETCH, UNIT_OF_WORK } from '../../platform/tokens.js';
 import { AccountsController, AdminAccountsController } from './accounts.controller.js';
 import { AuthController, oauthCallbackUrl } from './auth.controller.js';
 import { readSessionCookie } from './cookies.js';
 import { PENDING_BOX } from './identity.tokens.js';
+import { SignInAudit } from './sign-in-audit.js';
 
 const DISCORD = 'identity.Discord';
 const ACCOUNTS = 'identity.AccountRepository';
@@ -54,6 +56,7 @@ const DISCORD_LINKS = 'identity.DiscordLinkRepository';
 @Module({
   controllers: [AuthController, AccountsController, AdminAccountsController],
   providers: [
+    SignInAudit,
     {
       provide: PENDING_BOX,
       useFactory: (config: AppConfig) => new SecretBox(config.secretKey, 'oauth-state'),
@@ -166,7 +169,7 @@ const DISCORD_LINKS = 'identity.DiscordLinkRepository';
       inject: [APP_CONFIG, CHARACTERS, UNIT_OF_WORK, EVENT_LOG, CLOCK, HTTP_FETCH],
     },
   ],
-  exports: [AccountService, CharacterService, SessionService, DemoLogin],
+  exports: [AccountService, CharacterService, SessionService, DemoLogin, SignInAudit],
 })
 export class IdentityModule implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger('Identity');
@@ -178,9 +181,34 @@ export class IdentityModule implements OnModuleInit, OnApplicationBootstrap, OnM
     @Inject(AccountService) private readonly accounts: AccountService,
     @Inject(GuildRoleSync) private readonly guildRoles: GuildRoleSync,
     @Inject(DiscordLogin) private readonly discordLogin: DiscordLogin,
+    @Inject(AuditDirectoryRegistry) private readonly directory: AuditDirectoryRegistry,
+    @Inject(ACCOUNTS) private readonly accountRepository: KyselyAccountRepository,
+    @Inject(CHARACTERS) private readonly characterRepository: CharacterRepository,
   ) {}
 
   onModuleInit(): void {
+    // Names and main characters for the audit trail, read when an event is written.
+    this.directory.use({
+      account: async (accountId) => {
+        const account = await this.accountRepository.findById(accountId);
+        if (!account) return null;
+        const main = account.mainCharacterId
+          ? await this.characterRepository.findById(account.mainCharacterId)
+          : null;
+        const ownMain = main?.accountId === account.id ? main : null;
+        return {
+          name: account.name,
+          mainCharacterId: ownMain?.id ?? null,
+          mainCharacterName: ownMain?.name ?? null,
+        };
+      },
+      character: async (characterId) => {
+        const character = await this.characterRepository.findById(characterId);
+        if (!character) return null;
+        const account = await this.accountRepository.findById(character.accountId);
+        return { name: character.name, accountId: character.accountId, accountName: account?.name ?? null };
+      },
+    });
     this.actors.use(async (request) => {
       const resolved = await this.sessions.resolve(readSessionCookie(request));
       if (!resolved) return null;

@@ -142,6 +142,15 @@ const paired: Record<PairedToken, readonly [light: string, dark: string]> = {
   'edge-dangerous': ['rgba(209, 47, 47, 0.28)', 'rgba(240, 82, 82, 0.32)'],
   'edge-bubble': ['#d12f2f', '#f05252'],
   'edge-selected': ['#0b7f91', '#5dd3e0'],
+  // People on the map: eight hues that stay apart from each other and readable on the canvas.
+  'presence-0': ['#2563eb', '#60a5fa'],
+  'presence-1': ['#c026d3', '#e879f9'],
+  'presence-2': ['#c2410c', '#fb923c'],
+  'presence-3': ['#0f766e', '#2dd4bf'],
+  'presence-4': ['#6d28d9', '#a78bfa'],
+  'presence-5': ['#be123c', '#fb7185'],
+  'presence-6': ['#4d7c0f', '#a3e635'],
+  'presence-7': ['#a16207', '#facc15'],
   'shadow-small': ['0 1px 2px rgba(16, 24, 40, 0.06)', '0 1px 2px rgba(0, 0, 0, 0.4)'],
   'shadow-medium': [
     '0 4px 12px rgba(16, 24, 40, 0.08), 0 1px 3px rgba(16, 24, 40, 0.06)',
