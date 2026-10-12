@@ -45,7 +45,7 @@ export function CanvasSettings() {
         <CardBody>
           <div className={styles.formStack}>
             <div className={styles.grid}>
-              <Field label="Minimap">
+              <Field label="Minimap" hint="Phones have no room for it.">
                 <Select
                   value={prefs.minimap}
                   onValueChange={(v) => setCanvasPrefs({ minimap: v as Corner | 'off' })}

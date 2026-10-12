@@ -506,11 +506,27 @@ export function MapCanvas({
     if (!readOnly || opened.current || !loaded || nodes.length === 0) return;
     if (!nodes.every((n) => n.measured?.width)) return;
     opened.current = true;
-    // A preview opens on the system it is about, at the readable zoom.
+    // A preview opens on what it is about: the marked way, else its system, at a readable zoom.
+    const marked =
+      highlight && highlight.systems.size > 1
+        ? boundsOf(rectsOf(new Set([...highlight.systems].map(String))))
+        : null;
+    const box = canvasRef.current?.getBoundingClientRect();
+    if (marked && box) {
+      void rf.setViewport(
+        fitViewport(
+          marked,
+          box,
+          { top: 48, right: 48, bottom: 48, left: 72 },
+          { minZoom: FIT_MIN_ZOOM, maxZoom: DEFAULT_ZOOM },
+        ),
+      );
+      return;
+    }
     const at = openOn !== undefined ? centerOfSystem(openOn) : null;
     if (at) centerOn(at, DEFAULT_ZOOM, false);
     else fitChain();
-  }, [readOnly, loaded, nodes, fitChain, openOn, centerOfSystem, centerOn]);
+  }, [readOnly, loaded, nodes, fitChain, openOn, centerOfSystem, centerOn, highlight, rectsOf, rf]);
 
   const centerOnMe = useCallback(() => {
     const at = myLocation ? centerOfSystem(myLocation.solarSystemId) : null;

@@ -10,9 +10,7 @@
     "font-size": "15px",
     "font-size-large": "17px",
     "font-size-title": "23px",
-    "map-text-scale": "1.2",
-    "node-min-width": "200px",
-    "node-padding": "10px 12px",
+    "map-text-scale": "1.15",
     "control-height-small": "30px",
     "control-height": "36px"
   }
