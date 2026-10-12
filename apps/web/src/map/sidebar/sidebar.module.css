@@ -298,6 +298,12 @@
   align-items: center;
 }
 
+.sectionActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .sectionBody {
   padding: 0 16px 12px;
 }
@@ -522,7 +528,25 @@
 
 .notesText {
   margin: 0;
-  white-space: pre-wrap;
+}
+
+/* Rendered notes an editor can click into. */
+.notesView {
+  min-height: 28px;
+  margin: 0 -8px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--dbk-radius);
+  cursor: text;
+}
+
+.notesView:hover {
+  border-color: var(--dbk-color-border);
+}
+
+.notesView:focus-visible {
+  border-color: var(--dbk-color-focus);
+  outline: none;
 }
 
 .detailsFooter {
@@ -655,22 +679,6 @@
 .table th:last-child,
 .table td:last-child {
   padding-right: 10px;
-}
-
-.table th:nth-child(1) {
-  width: 80px;
-}
-
-.table th:nth-child(2) {
-  width: 90px;
-}
-
-.table th:nth-child(4) {
-  width: 40px;
-}
-
-.table th:nth-child(5) {
-  width: 32px;
 }
 
 .table td {
@@ -930,4 +938,118 @@
 
 .sidebar[data-phone] .table th {
   top: 34px;
+}
+
+/* Anomalies and other scanner results: a fold under the signatures, collapsed by default. */
+.others {
+  border-top: 1px solid var(--dbk-color-border);
+}
+
+.othersToggle {
+  display: flex;
+  align-items: center;
+  gap: var(--dbk-space-2);
+  width: 100%;
+  padding: var(--dbk-space-2) var(--dbk-space-3);
+  border: 0;
+  background: none;
+  color: var(--dbk-color-text-muted);
+  font: inherit;
+  font-size: var(--dbk-font-size-small);
+  cursor: pointer;
+}
+
+.othersToggle:hover {
+  color: var(--dbk-color-text);
+}
+
+.othersToggle[aria-expanded='true'] .chevron {
+  transform: rotate(90deg);
+}
+
+.othersFilter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dbk-space-1);
+  padding: 0 var(--dbk-space-3) var(--dbk-space-2);
+}
+
+.filterChip {
+  padding: 1px var(--dbk-space-2);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: 999px;
+  background: none;
+  color: var(--dbk-color-text-muted);
+  font: inherit;
+  font-size: var(--dbk-font-size-xs);
+  cursor: pointer;
+}
+
+.filterChip[aria-pressed='true'] {
+  border-color: var(--dbk-color-accent);
+  background: var(--dbk-color-accent-subtle);
+  color: var(--dbk-color-text);
+}
+
+/* "custom" after the id of an entry someone wrote. */
+.customMark {
+  margin-left: var(--dbk-space-1);
+  color: var(--dbk-color-text-subtle);
+  font-family: inherit;
+  font-size: var(--dbk-font-size-xs);
+}
+
+/* Connections of the selected system. */
+.connections {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.connectionRow {
+  display: grid;
+  gap: var(--dbk-space-1);
+  padding: var(--dbk-space-2) var(--dbk-space-3);
+  border-top: 1px solid var(--dbk-color-border);
+}
+
+.connectionRow:first-child {
+  border-top: 0;
+}
+
+.connectionHead {
+  display: flex;
+  align-items: center;
+  gap: var(--dbk-space-2);
+  min-width: 0;
+}
+
+.connectionName {
+  flex: 1;
+  overflow: hidden;
+  border: 0;
+  background: none;
+  color: var(--dbk-color-text);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.connectionFacts {
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-xs);
+}
+
+.lockButton[aria-pressed='true'] {
+  color: var(--dbk-color-text);
+}
+
+.lockIcon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--dbk-color-text-muted);
 }

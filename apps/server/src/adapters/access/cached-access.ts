@@ -88,8 +88,14 @@ export class AccessCache {
         if (rule) this.rules.delete(rule.mapId);
         await inner.delete(ruleId);
       },
+      updateRole: async (ruleId, role) => {
+        const rule = await inner.findById(ruleId);
+        if (rule) this.rules.delete(rule.mapId);
+        await inner.updateRole(ruleId, role);
+      },
       listMatching: (subjects) => inner.listMatching(subjects),
       discordGuildIds: () => inner.discordGuildIds(),
+      countByMap: () => inner.countByMap(),
     };
   }
 
@@ -119,13 +125,21 @@ export class AccessCache {
     }
     const stream = parseStream(event.stream);
     if (event.type.startsWith('access.')) {
-      // A rule on a map, or something instance-wide (roles): drop the map, or everything.
-      if (stream?.kind === 'map') this.rules.delete(stream.id);
-      else {
+      // A rule or the owner of a map, or something instance-wide (roles): drop the map, or everything.
+      if (stream?.kind === 'map') {
+        this.rules.delete(stream.id);
+        this.owners.delete(stream.id);
+      } else {
         this.rules.clear();
         this.subjects.clear();
+        this.owners.clear();
       }
-    } else if (event.type === 'map.created' || event.type === 'map.removed') {
+    } else if (
+      event.type === 'map.created' ||
+      event.type === 'map.removed' ||
+      event.type === 'map.trashed' ||
+      event.type === 'map.restored'
+    ) {
       if (stream?.kind === 'map') {
         this.owners.delete(stream.id);
         this.rules.delete(stream.id);

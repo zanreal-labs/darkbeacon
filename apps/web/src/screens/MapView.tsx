@@ -19,9 +19,13 @@ import { useUniverseSystems } from '../lib/universe';
 import { useMapSettings } from '../lib/useMapSettings';
 import { usePageView } from '../lib/useTelemetry';
 import { AddSystemSearch } from '../map/AddSystemSearch';
+import { OnlyTrackedGate, untrackedOf } from '../map/OnlyTrackedGate';
+import { useMapIntel as useSystemIntel, useSetStanding, useStandingsQuery } from '../lib/intel';
 import { MapCanvas, type FocusRequest, type MenuTarget } from '../map/MapCanvas';
+import type { HolderStanding } from '../map/menus/intel';
 import { freeSpot } from '../map/geometry';
 import { connectionMenu, paneMenu, systemMenu } from '../map/menus';
+import { useHubMenu } from '../map/routes/api';
 import { ConnectionSidebar } from '../map/connection/ConnectionSidebar';
 import { useConnectionIntel, useLivePassages, useMapIntel } from '../map/connection/data';
 import { LogJumpDialog } from '../map/connection/LogJumpDialog';
@@ -30,6 +34,7 @@ import type { ConnectionTraffic } from '../map/ConnectionEdge';
 import { systemDisplayName } from '../map/SystemNode';
 import { useMapStore } from '../map/useMapStore';
 import { SystemSidebar } from '../map/sidebar/SystemSidebar';
+import { SignatureLayer } from '../map/signatures/SignatureLayer';
 import { filterableSources, permissionsFor, withoutSources } from '../map/sharing/chain';
 import { ProvenanceLine, provenanceText } from '../map/sharing/ProvenanceLine';
 import { SourceFilter, useHiddenSources } from '../map/sharing/SourceFilter';
@@ -117,6 +122,8 @@ export function MapView({
   const settings = useMapSettings();
   const toast = useToast();
   const can = mapPermissions(role);
+  // The map's "only tracked characters" option: it opens once all of mine are tracked here.
+  const untracked = untrackedOf(map, can, me.data?.characters ?? [], new Set(store.state.characters.keys()));
   const [selected, setSelected] = useState<number | null>(null);
   // A clicked connection takes the sidebar instead of a system.
   const [selectedConnection, setSelectedConnection] = useState<string | null>(null);
@@ -154,6 +161,7 @@ export function MapView({
   const systemPlugins = useSlot('systemContextMenu', map.id);
   const connectionPlugins = useSlot('connectionContextMenu', map.id);
   const widgetPlugins = useSlot('widget', map.id);
+  const hubMenu = useHubMenu(map.id, can.edit, toast);
 
   // Tags (`labels` in the data) and Labels (WH1...) of the map.
   const labels = (state.map ?? map).labels;
@@ -176,6 +184,27 @@ export function MapView({
     setSelected(solarSystemId);
     setPanel(true);
     setFocusNode((f) => ({ id: solarSystemId, center, n: (f?.n ?? 0) + 1 }));
+  };
+
+  // System intel for the system menu: who holds a system and how the viewer stands towards it.
+  const systemIntel = useSystemIntel(map.id);
+  const standings = useStandingsQuery();
+  const setStanding = useSetStanding();
+  const holderOf = (solarSystemId: number): { holder?: HolderStanding } => {
+    const sov = systemIntel.systems.get(solarSystemId)?.sovereignty;
+    if (sov?.kind !== 'alliance' || !standings.data) return {};
+    const id = sov.holder.id;
+    return {
+      holder: {
+        holder: sov.holder,
+        standing: standings.data.standings.find((s) => s.id === id)?.standing ?? null,
+        overridden: standings.data.overrides.includes(id),
+        set: (standing) =>
+          void setStanding(id, standing).catch(() =>
+            toast({ title: 'Standing did not change', tone: 'danger' }),
+          ),
+      },
+    };
   };
 
   const deselect = () => {
@@ -208,7 +237,9 @@ export function MapView({
           characters: me.data?.characters,
           notify: toast,
           onManageLabels: () => settings.show('labels'),
+          routes: hubMenu,
           onManageTags: () => settings.show('tags'),
+          ...holderOf(sys.solarSystemId),
         }),
       };
     }
@@ -393,6 +424,9 @@ export function MapView({
           <span>Loading systems…</span>
         </div>
       )}
+      {store.loaded && store.state.has.characters && untracked.length > 0 && (
+        <OnlyTrackedGate map={map} can={can} untracked={untracked} />
+      )}
       {store.streamError && (
         <div className={styles.streamError} role="alert">
           <AlertTriangle aria-hidden />
@@ -422,6 +456,7 @@ export function MapView({
         />
       )}
 
+      <SignatureLayer mapId={map.id} state={state} universe={universe} store={store} canEdit={can.edit} />
       {connection && !system && (
         <ConnectionSidebar
           mapId={map.id}

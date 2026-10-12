@@ -17,6 +17,7 @@ import type {
   SystemStatus,
   TimeStatus,
 } from '@darkbeacon/shared';
+import { LifetimeMark } from '@darkbeacon/shared';
 import { labelIdsByName } from './commands.js';
 import { mergedId, parsePair, parseRefId, parseSignatureKey, refId } from './keys.js';
 import type { ChainMerge, MergedObject } from './merge.js';
@@ -136,6 +137,16 @@ export function systemDto(object: MergedObject, ctx: ViewContext): MapSystemDto 
   };
 }
 
+/** A wire lifetime mark (`{ mark, at }`) as the DTO field, or nothing. */
+function lifetimeOf(value: unknown): { lifetime?: ConnectionDto['lifetime'] } {
+  const v = obj(value);
+  const mark = str(v?.mark);
+  const at = num(v?.at);
+  return mark && at !== null && (LifetimeMark.options as readonly string[]).includes(mark)
+    ? { lifetime: { mark: mark as LifetimeMark, at } }
+    : {};
+}
+
 /** Wire `low|high` bubbles to a connection drawn from `source` (the lower id) to `target`. */
 function bubbledOf(value: unknown): Bubbled {
   if (value === 'low') return 'source';
@@ -163,6 +174,9 @@ export function connectionDto(object: MergedObject, ctx: ViewContext): Connectio
     bubbled: bubbledOf(f.bubbled),
     eolAt: num(time?.eolAt),
     massStatusAt: num(mass?.at),
+    ...(f.locked === true ? { locked: true } : {}),
+    ...(str(f.note) ? { note: str(f.note)! } : {}),
+    ...lifetimeOf(f.lifetime),
     createdAt: object.born,
     updatedAt: object.updatedAt,
     provenance: provenance(object, ctx),
@@ -186,6 +200,13 @@ export function signatureDto(
     name: str(f.name),
     description: str(f.notes) ?? '',
     connectionId,
+    tempName: str(f.tempName),
+    destination: str(f.destination) as SignatureDto['destination'],
+    timeStatus: str(f.time) as SignatureDto['timeStatus'],
+    massStatus: str(f.mass) as SignatureDto['massStatus'],
+    bubbled: f.bubbled === true,
+    ...(f.kind === 'anomaly' || f.kind === 'other' ? { kind: f.kind } : {}),
+    ...(f.custom === true ? { custom: true } : {}),
     createdAt: object.born,
     updatedAt: object.updatedAt,
     provenance: provenance(object, ctx),

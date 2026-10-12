@@ -115,6 +115,9 @@ export class MemoryCharacters implements CharacterRepository {
   listForAccount(accountId: string) {
     return Promise.resolve([...this.rows.values()].filter((c) => c.accountId === accountId));
   }
+  listAll() {
+    return Promise.resolve([...this.rows.values()].sort((a, b) => a.name.localeCompare(b.name)));
+  }
   upsert(character: LinkedCharacter) {
     this.rows.set(character.id, character);
     return Promise.resolve();

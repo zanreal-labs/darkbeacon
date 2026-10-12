@@ -9,7 +9,9 @@ import {
   buildPath,
   routes,
   type CharacterPresenceDto,
+  type KillmailDto,
   type MapDto,
+  type SystemActivityDto,
   type StreamSnapshotDto,
   type UniverseSystemDto,
 } from '@darkbeacon/shared';
@@ -76,7 +78,95 @@ const server = setupMockServer(
   ),
   http.get(routes.tracking.characters.path, () => HttpResponse.json(pilots)),
   http.get(routes.maps.get.path, () => HttpResponse.json(mapDto)),
+  http.get(routes.intel.map.path, () => HttpResponse.json({ systems: [], live: true })),
+  http.get(routes.intel.standings.path, () =>
+    HttpResponse.json({ standings: [], missingScopes: false, overrides: [] }),
+  ),
+  http.get(routes.routing.hubs.path, () => HttpResponse.json({ trade: [], map: [], personal: [] })),
+  http.get(routes.intel.system.path, () => HttpResponse.json(activityFixture())),
+  http.get(routes.intel.kills.path, ({ request }) => {
+    const all = !new URL(request.url).searchParams.has('systems');
+    return HttpResponse.json({
+      kills: all ? [killFixture(1, WH), killFixture(2, JITA)] : [killFixture(1, WH)],
+    });
+  }),
 );
+
+function killFixture(id: number, solarSystemId: number): KillmailDto {
+  return {
+    id,
+    solarSystemId,
+    time: Date.now() - 12 * 60_000,
+    value: 1_250_000_000,
+    npc: false,
+    solo: false,
+    victim: {
+      character: { id: 90000001, name: 'Unlucky Pilot', ticker: null },
+      corporation: { id: 98000001, name: 'Victim Corp', ticker: 'VIC' },
+      alliance: null,
+      ship: { id: 11987, name: 'Guardian', ticker: null },
+    },
+    finalBlow: null,
+    attackerCount: 4,
+    attackers: [
+      {
+        corporation: { id: 98000002, name: 'Hunters', ticker: 'HUNT' },
+        alliance: { id: 99000002, name: 'Hunting Party', ticker: 'HPTY' },
+        pilots: 3,
+      },
+    ],
+  };
+}
+
+function activityFixture(): SystemActivityDto {
+  const hour = Date.UTC(2026, 9, 12, 13);
+  return {
+    intel: {
+      solarSystemId: WH,
+      sovereignty: null,
+      regionHolder: null,
+      kills1h: 6,
+      npcKills1h: null,
+      jumps1h: null,
+      lastKillAt: Date.now(),
+    },
+    hours: Array.from({ length: 24 }, (_, i) => ({
+      hour: hour - (23 - i) * 3_600_000,
+      shipKills: null,
+      podKills: null,
+      npcKills: null,
+      jumps: null,
+      killmails: i === 23 ? 6 : 0,
+    })),
+    kills: [killFixture(1, WH)],
+    groups: {
+      '1h': [
+        {
+          kind: 'alliance',
+          entity: { id: 99000002, name: 'Hunting Party', ticker: 'HPTY' },
+          kills: 1,
+          losses: 0,
+        },
+      ],
+      '24h': [
+        {
+          kind: 'alliance',
+          entity: { id: 99000002, name: 'Hunting Party', ticker: 'HPTY' },
+          kills: 4,
+          losses: 1,
+        },
+        {
+          kind: 'corporation',
+          entity: { id: 98000001, name: 'Victim Corp', ticker: 'VIC' },
+          kills: 0,
+          losses: 3,
+        },
+      ],
+      '7d': [],
+    },
+    coveredSince: 0,
+  };
+}
 
 const mapDto: MapDto = {
   id: MAP_ID,
@@ -213,13 +303,16 @@ function Sidebar({
 }
 
 describe('SystemSidebar', () => {
-  it('carries the system header: pill, place, class, effect, statics and links out', () => {
+  it('carries the system header: pill, place, class, effect, statics and links out', async () => {
     wrap(<Sidebar state={{}} />);
     const header = screen.getByRole('complementary', { name: 'System' });
     expect(header.textContent).toContain('C3');
     expect(header.textContent).toContain('A-R00001 › A-C00311');
     expect(header.textContent).toContain('Class 3 wormhole');
-    expect(screen.getByLabelText(/^Pulsar: /)).toBeTruthy();
+    const effect = screen.getByLabelText(/^Pulsar: /);
+    // Its tooltip lists what it changes in this class.
+    act(() => effect.focus());
+    expect((await screen.findAllByText('Shield capacity'))[0]!.nextElementSibling?.textContent).toBe('+58%');
     expect(
       within(screen.getByRole('list', { name: 'Statics' })).getByText('D845').nextSibling?.textContent,
     ).toBe('HS');
@@ -280,7 +373,9 @@ describe('SystemSidebar', () => {
 
     paste(document.body, 'ABC-123\tCosmic Signature\tWormhole\t\t0.0%\t2.1 AU');
     expect(await screen.findByText('3 new / 1 updated')).toBeTruthy();
-    expect(bodies).toEqual([{ text: 'ABC-123\tCosmic Signature\tWormhole\t\t0.0%\t2.1 AU', mode: 'merge' }]);
+    expect(bodies).toEqual([
+      { text: 'ABC-123\tCosmic Signature\tWormhole\t\t0.0%\t2.1 AU', mode: 'replace' },
+    ]);
   });
 
   it('lists who is in the system, mine first and highlighted, with their ships', () => {
@@ -364,5 +459,65 @@ describe('SystemSidebar', () => {
     expect(sheet.dataset.stop).toBe('full');
     await user.click(screen.getByRole('button', { name: 'Collapse the panel' }));
     expect(sheet.dataset.stop).toBe('peek');
+  });
+
+  it('shows activity, who flies here and the kills, with choices for the list', async () => {
+    const user = userEvent.setup();
+    wrap(<Sidebar state={{}} />);
+    const activity = screen.getByRole('region', { name: 'Activity' });
+    // Kills of the last hour, busy from five on.
+    const kills = await within(activity).findByText('Kills');
+    expect(kills.parentElement!.dataset.tone).toBe('hot');
+    expect(within(activity).getByRole('img', { name: 'Kills per hour, last 24 hours' })).toBeTruthy();
+    // Who flies here: the last day by default, with links out.
+    expect(within(activity).getByText('Hunting Party')).toBeTruthy();
+    expect(within(activity).getByText('4 kills · 1 loss')).toBeTruthy();
+    expect(
+      within(activity).getByRole('link', { name: 'Hunting Party on zKillboard' }).getAttribute('href'),
+    ).toBe('https://zkillboard.com/alliance/99000002/');
+    expect(within(activity).getByRole('link', { name: 'Victim Corp on EVE Who' }).getAttribute('href')).toBe(
+      'https://evewho.com/corporation/98000001',
+    );
+    await user.click(within(activity).getByRole('radio', { name: '7d' }));
+    expect(within(activity).getByText('No killmails here in the last week.')).toBeTruthy();
+
+    const list = screen.getByRole('region', { name: 'Kills' });
+    expect(await within(list).findByText('Guardian')).toBeTruthy();
+    expect(within(list).getByText('1.3b')).toBeTruthy();
+    expect(within(list).getByText('by [HPTY] +3')).toBeTruthy();
+    expect(
+      within(list)
+        .getByRole('link', { name: /Killmail Guardian on zKillboard/ })
+        .getAttribute('href'),
+    ).toBe('https://zkillboard.com/kill/1/');
+    // Every system on the map: the system's name leads each row.
+    await user.click(within(list).getByRole('button', { name: 'Kill list settings' }));
+    await user.click(await screen.findByRole('menuitemradio', { name: 'Every system on the map' }));
+    await user.keyboard('{Escape}');
+    expect(await within(list).findByText(/Jita/)).toBeTruthy();
+    expect(JSON.parse(window.localStorage.getItem(`dbk-kills-settings:${MAP_ID}`)!)).toMatchObject({
+      scope: 'all',
+    });
+  });
+
+  it('names the holder and the claiming corporation, and asks to link again for standings', async () => {
+    const held = activityFixture();
+    held.intel.sovereignty = {
+      kind: 'alliance',
+      holder: { id: 1354830081, name: 'Goonswarm Federation', ticker: 'CONDI' },
+      corporation: { id: 98000001, name: 'KarmaFleet', ticker: 'KARMA' },
+    };
+    server.use(
+      http.get(routes.intel.system.path, () => HttpResponse.json(held)),
+      http.get(routes.intel.standings.path, () =>
+        HttpResponse.json({ standings: [], missingScopes: true, overrides: [] }),
+      ),
+    );
+    wrap(<Sidebar state={{}} />);
+    const header = screen.getByRole('complementary', { name: 'System' });
+    expect(await within(header).findByText('Goonswarm Federation')).toBeTruthy();
+    expect(header.textContent).toContain('claimed by KarmaFleet [KARMA]');
+    const relink = await within(header).findByRole('link', { name: 'Link your characters again' });
+    expect(relink.getAttribute('href')).toContain('/api/auth/eve/login');
   });
 });

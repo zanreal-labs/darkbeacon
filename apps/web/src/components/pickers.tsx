@@ -66,7 +66,7 @@ export function EvePicker({
       onChange={onChange}
       cacheKey={['eve', category]}
       disabled={disabled}
-      placeholder={`Search a ${NOUN[category]} by name`}
+      placeholder={`Search ${/^[aeiou]/.test(NOUN[category]) ? 'an' : 'a'} ${NOUN[category]} by name`}
       search={async (q) => {
         const found = await api<EveSearchResultDto>(
           `${routes.eve.search.path}?${new URLSearchParams({ category, q })}`,

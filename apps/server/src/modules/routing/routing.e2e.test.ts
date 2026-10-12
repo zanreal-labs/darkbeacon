@@ -7,12 +7,19 @@ import type {
   ConnectionIntelDto,
   HubDistanceDto,
   HubDto,
+  HubRoutesDto,
+  ImportBridgesResultDto,
   MapDto,
   MapExitsDto,
   MapSnapshot,
   MeDto,
   RouteDto,
+  RoutePreferencesDto,
+  RoutesByDto,
+  StationDto,
   StreamSnapshotDto,
+  UniverseSystemDto,
+  WayHomeDto,
   WormholeCatalogDto,
 } from '@darkbeacon/shared';
 import { TrackingPoller, type TrackingRepository } from '@darkbeacon/tracking';
@@ -151,7 +158,7 @@ describeEachDialect('routing and connections over HTTP', (t) => {
     });
   });
 
-  it('keeps map hubs for managers and personal hubs for everyone', async () => {
+  it('keeps map hubs for members and personal hubs for everyone', async () => {
     const put = await request<HubDto[]>('PUT', `/api/maps/${mapId}/hubs`, 'alice', {
       solarSystemIds: [AMAMAKE],
     });
@@ -187,6 +194,135 @@ describeEachDialect('routing and connections over HTTP', (t) => {
       expect.any(Number),
     );
     expect(distances.body.find((d) => d.name === 'Tama')?.jumps).toEqual(expect.any(Number));
+  });
+
+  it('routes over pasted jump bridges, to every hub at once, by kind and home', async () => {
+    const idOf = async (name: string) =>
+      (await request<UniverseSystemDto[]>('GET', `/api/universe/systems?q=${name}&limit=1`, 'alice')).body[0]!
+        .id;
+    const dq = await idOf('1DQ1-A');
+    const t5 = await idOf('4O-239');
+
+    const paste = await request<ImportBridgesResultDto>('POST', `/api/maps/${mapId}/bridges/paste`, 'alice', {
+      text: '4O-239 » 1DQ1-A - Home Bridge\nJita » Perimeter\nNowhere » 1DQ1-A\n1DQ1-A -> 4O-239\nPR-8CA » 1DQ1-A',
+    });
+    expect(paste.status).toBe(200);
+    expect(paste.body).toMatchObject({ added: 1, known: 0, unknownSystems: ['Nowhere'] });
+    // Jita is high-sec; PR-8CA is 5.6 ly from 1DQ1-A, past an Ansiblex's 5 ly.
+    expect(paste.body.unreadable).toMatchObject([
+      { line: 2, reason: expect.stringContaining('null-sec') },
+      { line: 5, reason: '5.6 ly apart; an Ansiblex reaches 5 ly' },
+    ]);
+    expect(paste.body.bridges).toMatchObject([
+      { a: { name: '4O-239' }, b: { name: '1DQ1-A' }, source: 'paste' },
+    ]);
+    expect(await events('routes.bridges_changed')).toHaveLength(1);
+
+    const route = (query: string) =>
+      request<RouteDto>('GET', `/api/maps/${mapId}/route?from=${dq}&to=${t5}${query}`, 'alice');
+    expect((await route('')).body).toMatchObject({
+      jumps: 1,
+      steps: [{}, { via: 'bridge', edge: 'ansiblex' }],
+    });
+    expect((await route('&bridges=false')).body.jumps).toBeGreaterThan(1);
+    expect((await route('&capital=true')).body.jumps).toBeGreaterThan(1);
+    expect((await route('&skip=dangerous')).body.jumps).toBe(1);
+
+    const bridge = paste.body.bridges[0]!;
+    expect(
+      (await request('PATCH', `/api/maps/${mapId}/bridges/${bridge.id}`, 'alice', { dangerous: true }))
+        .status,
+    ).toBe(200);
+    expect((await route('&skip=dangerous')).body.jumps).toBeGreaterThan(1);
+    expect((await request('GET', `/api/maps/${mapId}/bridges`, 'bob')).status).toBe(404);
+
+    // Hubs: members keep the map's, everyone their own; one request routes to all of them.
+    expect(
+      (await request('PUT', `/api/maps/${mapId}/hubs`, 'alice', { solarSystemIds: [JITA, AMAMAKE, dq] }))
+        .status,
+    ).toBe(200);
+    const all = await request<HubRoutesDto>('GET', `/api/maps/${mapId}/routes/hubs?from=${TAMA}`, 'alice');
+    expect(all.status).toBe(200);
+    expect(all.body.limit).toBe(20);
+    expect(all.body.routes.map((r) => r.name).sort()).toEqual(['1DQ1-A', 'Amamake', 'Jita']);
+    const hubJumps = all.body.routes.map((r) => r.jumps!);
+    expect(hubJumps).toEqual([...hubJumps].sort((a, b) => a - b));
+    const jita = all.body.routes.find((r) => r.name === 'Jita')!;
+    expect(jita.steps[0]).toMatchObject({ solarSystemId: TAMA, via: 'start', regionName: 'The Citadel' });
+    expect(jita.steps).toHaveLength(jita.jumps! + 1);
+    const safer = await request<HubRoutesDto>(
+      'GET',
+      `/api/maps/${mapId}/routes/hubs?from=${TAMA}&mode=safer&avoidSpace=pochven,edencom`,
+      'alice',
+    );
+    expect(safer.body.mode).toBe('safer');
+    expect(
+      (await request('PUT', '/api/accounts/me/hubs', 'alice', { solarSystemIds: [AMAMAKE] })).status,
+    ).toBe(200);
+    const mine = await request<HubRoutesDto>(
+      'GET',
+      `/api/maps/${mapId}/routes/hubs?from=${TAMA}&hubs=personal`,
+      'alice',
+    );
+    expect(mine.body.routes.map((r) => [r.name, r.kind])).toEqual([['Amamake', 'personal']]);
+
+    // Route options follow the viewer; the Thera toggle belongs to the map.
+    const prefs = await request<RoutePreferencesDto>('PUT', '/api/accounts/me/route-preferences', 'alice', {
+      mode: 'safer',
+      skip: ['eol', 'eol'],
+    });
+    expect(prefs.body).toMatchObject({ mode: 'safer', skip: ['eol'], thera: true, capital: false });
+    expect(
+      (await request<RoutePreferencesDto>('GET', '/api/accounts/me/route-preferences', 'alice')).body.mode,
+    ).toBe('safer');
+    expect((await request('GET', `/api/maps/${mapId}/routing-settings`, 'alice')).body).toEqual({
+      thera: true,
+    });
+    expect(
+      (await request('PATCH', `/api/maps/${mapId}/routing-settings`, 'alice', { thera: false })).body,
+    ).toEqual({ thera: false });
+    expect((await events('routes.settings_changed')).map((e) => e.data)).toEqual([{ thera: false }]);
+
+    // Routes By: the nearest security offices with their stations.
+    const offices = await request<RoutesByDto>(
+      'GET',
+      `/api/maps/${mapId}/routes/by?from=${TAMA}&kind=securityOffice&limit=3`,
+      'alice',
+    );
+    expect(offices.body.entries).toHaveLength(3);
+    expect(offices.body.entries[0]!.stations[0]!.name).toMatch(/CONCORD|DED/);
+    const jumps = offices.body.entries.map((e) => e.jumps);
+    expect(jumps).toEqual([...jumps].sort((a, b) => a - b));
+    const trade = await request<RoutesByDto>(
+      'GET',
+      `/api/maps/${mapId}/routes/by?from=${TAMA}&kind=tradeHubs&highsec=true`,
+      'alice',
+    );
+    expect(trade.body.entries).toHaveLength(5);
+    expect(trade.body.entries.find((e) => e.name === 'Jita')!.stations[0]).toMatchObject({
+      id: 60003760,
+      main: true,
+    });
+    const stations = await request<StationDto[]>('GET', `/api/universe/systems/${JITA}/stations`, 'alice');
+    expect(stations.body.length).toBeGreaterThan(5);
+
+    // Way home: from each map hub back into the chain, through its mouth.
+    for (const id of [HOME, TAMA]) {
+      await request('POST', `/api/maps/${mapId}/systems`, 'alice', { solarSystemId: id });
+    }
+    await request('POST', `/api/maps/${mapId}/connections`, 'alice', { source: HOME, target: TAMA });
+    await request('PATCH', `/api/maps/${mapId}/systems/${HOME}`, 'alice', { status: 'home' });
+    await vi.waitFor(async () => {
+      const last = (await events('routes.way_home_changed')).at(-1)?.data as WayHomeDto | undefined;
+      expect(last?.home?.name).toBe('J014348');
+      expect(last?.routes.find((r) => r.hub.name === 'Jita')).toMatchObject({ mouth: { name: 'Tama' } });
+    });
+    const home = await request<WayHomeDto>('GET', `/api/maps/${mapId}/way-home`, 'alice');
+    expect(home.body.routes[0]!.mouth.name).toBe('Tama');
+    expect(home.body.routes.every((r) => !r.viaEveScout)).toBe(true);
+
+    expect((await request('DELETE', `/api/maps/${mapId}/bridges`, 'alice')).status).toBe(204);
+    expect((await request<unknown[]>('GET', `/api/maps/${mapId}/bridges`, 'alice')).body).toEqual([]);
   });
 
   it('sets waypoints only for own characters whose grant allows it', async () => {

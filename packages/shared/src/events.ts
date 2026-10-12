@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { DomainEvent } from '@darkbeacon/core';
 import type { AccessRuleDto } from './dto/access.js';
+import type { ImportJobDto, ImportSourceDto, ImportOutcomeDto } from './dto/importing.js';
 import type { InstanceRole } from './dto/identity.js';
 import type { PluginDto } from './dto/plugins.js';
 import type {
@@ -13,8 +14,13 @@ import type {
 } from './dto/mapping.js';
 import type { MassMode, PassageSource } from './dto/passages.js';
 import type { HubDto, MapExitDto } from './dto/routing.js';
+import type { BridgeDto } from './dto/bridges.js';
+import type { MapRoutingSettingsDto, WayHomeDto } from './dto/route-panel.js';
 import type { CharacterPresenceDto } from './dto/tracking.js';
 import type { MapShareDto, MapSourceDto } from './dto/sharing.js';
+import type { CommentDto } from './dto/comments.js';
+import type { StructureDto } from './dto/structures.js';
+import type { KillmailDto } from './dto/intel.js';
 import type { McpMode } from './dto/publishing.js';
 import type { ShareScope } from './share-scope.js';
 
@@ -116,6 +122,11 @@ export interface EventPayloads {
   'routes.hubs_changed': { hubs: HubDto[] };
   'ping.created': PingDto;
   'ping.removed': { id: string };
+  /**
+   * A ship or pod was destroyed in a system the map shows (zKillboard's live feed, fresh kills
+   * only); on every map showing it, from the system actor `intel`.
+   */
+  'kill.reported': KillmailDto;
   'access.rule_added': AccessRuleDto;
   'access.rule_removed': { id: string };
   /**
@@ -144,6 +155,49 @@ export interface EventPayloads {
   /** Instance stream: a plugin was installed, upgraded, enabled, disabled or failed. */
   'plugin.updated': PluginDto;
   'plugin.removed': { id: string };
+  /** A comment was added to a system of the map. */
+  'comment.added': CommentDto;
+  'comment.removed': { id: string; solarSystemId: number };
+  'structure.added': StructureDto;
+  'structure.updated': StructureDto;
+  'structure.removed': { id: string; solarSystemId: number };
+  /** A rule's role changed in place (the audit record holds the role before). */
+  'access.rule_changed': AccessRuleDto;
+  /** The map was handed to another account (the new owner is admin, the old one keeps only rules). */
+  'access.owner_changed': { mapId: string; ownerAccountId: string; previousOwnerAccountId: string };
+  /**
+   * The map was deleted, but can still be restored by an instance admin: nobody can open it until
+   * then. Rules, shares and webhooks stay with it (`map.removed` follows once it is purged).
+   */
+  'map.trashed': { id: string; deletedAt: number };
+  /** An instance admin brought a deleted map back as it was. */
+  'map.restored': MapDto;
+  /** The map's Ansiblex jump bridges changed: added (`added`), flagged or removed (by id). */
+  'routes.bridges_changed': { added: BridgeDto[]; updated: BridgeDto[]; removed: string[] };
+  /** The map's own routing settings changed (manager+). */
+  'routes.settings_changed': MapRoutingSettingsDto;
+  /** The way home from each hub to the map's home system changed. */
+  'routes.way_home_changed': WayHomeDto;
+  /** Map stream: an import from Wanderer started writing into this map. */
+  'import.started': { jobId: string; source: ImportSourceDto; mode: 'new' | 'merge' };
+  /** Map stream: an import finished (`done`), failed or was cancelled, with what it did per kind. */
+  'import.finished': {
+    jobId: string;
+    source: ImportSourceDto;
+    status: 'done' | 'failed' | 'cancelled';
+    outcome: Record<string, ImportOutcomeDto>;
+    error: string | null;
+  };
+  /** Map stream: pulling from Wanderer every few minutes was switched on (`enabled`) or off. */
+  'import.sync_changed': {
+    syncId: string;
+    source: ImportSourceDto;
+    enabled: boolean;
+    intervalMinutes: number;
+    reason: string | null;
+  };
+  /** `import:<jobId>` stream: the job as it is now (progress, report). */
+  'import.progress': ImportJobDto;
 }
 
 export type EventType = keyof EventPayloads;
@@ -181,6 +235,7 @@ export const EVENT_TYPES = [
   'routes.hubs_changed',
   'ping.created',
   'ping.removed',
+  'kill.reported',
   'access.rule_added',
   'access.rule_removed',
   'access.public_link_changed',
@@ -189,6 +244,22 @@ export const EVENT_TYPES = [
   'character.unlinked',
   'plugin.updated',
   'plugin.removed',
+  'comment.added',
+  'comment.removed',
+  'structure.added',
+  'structure.updated',
+  'structure.removed',
+  'access.rule_changed',
+  'access.owner_changed',
+  'map.trashed',
+  'map.restored',
+  'routes.bridges_changed',
+  'routes.settings_changed',
+  'routes.way_home_changed',
+  'import.started',
+  'import.finished',
+  'import.sync_changed',
+  'import.progress',
 ] as const satisfies readonly EventType[];
 
 export type TypedEvent<K extends EventType = EventType> = {

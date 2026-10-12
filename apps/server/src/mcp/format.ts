@@ -65,16 +65,24 @@ export function systemLine(catalog: UniverseCatalog, system: MapSystemDto, extra
 
 export function connectionLine(catalog: UniverseCatalog, c: ConnectionDto, withStatus: boolean): string {
   const ends = `${systemName(catalog, c.source)} <-> ${systemName(catalog, c.target)}`;
-  if (c.type !== 'wormhole') return `${ends} | ${c.type} | id ${short(c.id)}`;
+  if (c.type !== 'wormhole') return [ends, c.type, ...connectionTail(c)].join(' | ');
   const parts = [ends, 'wh'];
   if (withStatus) {
     parts.push(`mass ${c.massStatus}`, c.timeStatus === 'eol' ? 'EOL' : 'time ok', `size ${c.shipSize}`);
     if (c.massSaved) parts.push('mass saved');
+    if (c.lifetime) parts.push(`marked <${c.lifetime.mark} left at ${new Date(c.lifetime.at).toISOString()}`);
   }
   if (c.dangerous) parts.push('DANGER');
   if (c.bubbled !== 'none') parts.push(`bubbled ${c.bubbled}`);
+  return [...parts, ...connectionTail(c)].join(' | ');
+}
+
+function connectionTail(c: ConnectionDto): string[] {
+  const parts: string[] = [];
+  if (c.locked) parts.push('locked');
+  if (c.note) parts.push(`note "${oneLine(c.note, 120)}"`);
   parts.push(`id ${short(c.id)}`);
-  return parts.join(' | ');
+  return parts;
 }
 
 export function intelLine(c: ConnectionIntelDto): string {
@@ -118,9 +126,18 @@ export function routeText(route: RouteDto): string {
 }
 
 export function signatureLine(s: SignatureDto): string {
-  const parts = [s.eveId, s.group];
-  if (s.type) parts.push(s.type);
+  const parts = [
+    s.eveId,
+    s.kind && s.kind !== 'signature' ? s.kind : null,
+    s.custom ? 'custom' : null,
+    s.group,
+  ].filter((p): p is string => p !== null);
+  if (s.type) parts.push(s.destination ? `${s.type} to ${s.destination.replaceAll('_', '/')}` : s.type);
   if (s.name) parts.push(s.name);
+  if (s.tempName) parts.push(`temp name "${s.tempName}"`);
+  if (s.timeStatus === 'eol') parts.push('EOL');
+  if (s.massStatus && s.massStatus !== 'fresh') parts.push(`mass ${s.massStatus}`);
+  if (s.bubbled) parts.push('bubbled');
   if (s.connectionId) parts.push(`links ${short(s.connectionId)}`);
   if (s.description) parts.push(`"${oneLine(s.description, 80)}"`);
   parts.push(`id ${short(s.id)}`);

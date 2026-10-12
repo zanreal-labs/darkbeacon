@@ -1,5 +1,6 @@
 import { ConflictError } from '@darkbeacon/core';
 import { bool, isUniqueViolation, json, type Database } from '@darkbeacon/db';
+import type { AuthorDto } from '@darkbeacon/shared';
 import {
   stampChanges,
   type ChainMap,
@@ -16,12 +17,14 @@ import {
   type SignatureRepository,
   type SystemRepository,
 } from '@darkbeacon/mapping';
+import type { LifetimeMark, SignatureKind } from '@darkbeacon/shared';
 
 export interface MappingTables {
   maps: {
     id: string;
     slug: string;
     name: string;
+    description: string;
     owner_account_id: string;
     /** `standard` or `composite`. */
     kind: string;
@@ -32,6 +35,8 @@ export interface MappingTables {
     system_labels: string;
     created_at: number;
     updated_at: number;
+    /** Set while the map is deleted but restorable. */
+    deleted_at: number | null;
   };
   map_systems: {
     map_id: string;
@@ -69,6 +74,10 @@ export interface MappingTables {
     mass_status_at: number | null;
     bookmark_number: number | null;
     bookmark_parent: number | null;
+    note: string;
+    locked: number;
+    lifetime_mark: string | null;
+    lifetime_at: number | null;
     created_at: number;
     updated_at: number;
     /** min(source, target) and max(source, target): unique per map. */
@@ -87,10 +96,20 @@ export interface MappingTables {
     name: string | null;
     description: string;
     connection_id: string | null;
+    kind: string;
+    custom: number;
     created_at: number;
     updated_at: number;
     /** JSON field -> when it last changed; see `ChangeStamps`. */
     field_times: string;
+    temp_name: string | null;
+    destination: string | null;
+    time_status: string | null;
+    mass_status: string | null;
+    bubbled: number;
+    /** JSON `AuthorDto`. */
+    created_by: string | null;
+    updated_by: string | null;
   };
   map_tombstones: { map_id: string; kind: string; key: string; deleted_at: number };
   map_connection_passages: {
@@ -149,14 +168,26 @@ export class KyselyMapRepository extends Repository implements MapRepository {
       .selectFrom('maps')
       .selectAll()
       .where('owner_account_id', '=', accountId)
+      .where('deleted_at', 'is', null)
       .orderBy('name')
       .execute();
     return rows.map(mapFromRow);
   }
 
   async allIds(): Promise<string[]> {
-    const rows = await this.db.selectFrom('maps').select('id').orderBy('created_at').orderBy('id').execute();
+    const rows = await this.db
+      .selectFrom('maps')
+      .select('id')
+      .where('deleted_at', 'is', null)
+      .orderBy('created_at')
+      .orderBy('id')
+      .execute();
     return rows.map((r) => r.id);
+  }
+
+  async listAll(): Promise<ChainMap[]> {
+    const rows = await this.db.selectFrom('maps').selectAll().orderBy('created_at').orderBy('id').execute();
+    return rows.map(mapFromRow);
   }
 
   async insert(map: ChainMap): Promise<void> {
@@ -182,6 +213,16 @@ function slugConflict(slug: string) {
 }
 
 export class KyselySystemRepository extends Repository implements SystemRepository {
+  async countVisibleByMap(): Promise<Map<string, number>> {
+    const rows = await this.db
+      .selectFrom('map_systems')
+      .select(['map_id', (eb) => eb.fn.countAll<number | string>().as('n')])
+      .where('visible', '=', bool.encode(true))
+      .groupBy('map_id')
+      .execute();
+    return new Map(rows.map((r) => [r.map_id, Number(r.n)]));
+  }
+
   async list(mapId: string): Promise<MapSystem[]> {
     const rows = await this.db
       .selectFrom('map_systems')
@@ -355,10 +396,20 @@ export class KyselySignatureRepository extends Repository implements SignatureRe
     return row ? signatureFromRow(row) : null;
   }
 
-  async insert(signature: Signature): Promise<void> {
+  async insert(signature: Signature, options: { restoredAt?: number } = {}): Promise<void> {
+    const row = signatureToRow(signature);
+    // A restored signature counts as written when it came back (see `ChangeStamps`).
+    const times =
+      options.restoredAt === undefined
+        ? {}
+        : Object.fromEntries(
+            Object.keys(signature)
+              .filter((k) => !['mapId', 'createdAt', 'updatedAt', 'provenance'].includes(k))
+              .map((k) => [k, options.restoredAt]),
+          );
     await this.db
       .insertInto('map_signatures')
-      .values({ ...signatureToRow(signature), field_times: '{}' })
+      .values({ ...row, field_times: json.encode(times) })
       .execute()
       .catch(signatureConflict(signature.eveId));
   }
@@ -372,6 +423,27 @@ export class KyselySignatureRepository extends Repository implements SignatureRe
         .execute()
         .catch(signatureConflict(chunk.map((s) => s.eveId).join(', ')));
     }
+  }
+
+  async touch(mapId: string, ids: readonly string[], at: number): Promise<void> {
+    if (ids.length === 0) return;
+    await this.db
+      .updateTable('map_signatures')
+      .set({ updated_at: at })
+      .where('map_id', '=', mapId)
+      .where('id', 'in', ids)
+      .where('updated_at', '<', at)
+      .execute();
+  }
+
+  async listUpdatedBefore(before: number): Promise<Signature[]> {
+    const rows = await this.db
+      .selectFrom('map_signatures')
+      .selectAll()
+      .where('updated_at', '<', before)
+      .orderBy('map_id')
+      .execute();
+    return rows.map(signatureFromRow);
   }
 
   async update(signature: Signature): Promise<void> {
@@ -598,6 +670,7 @@ function mapToRow(map: ChainMap): MapRow {
     id: map.id,
     slug: map.slug,
     name: map.name,
+    description: map.description ?? '',
     kind: map.kind ?? 'standard',
     owner_account_id: map.ownerAccountId,
     settings: json.encode(map.settings),
@@ -605,6 +678,7 @@ function mapToRow(map: ChainMap): MapRow {
     system_labels: json.encode(map.systemLabels),
     created_at: map.createdAt,
     updated_at: map.updatedAt,
+    deleted_at: map.deletedAt ?? null,
   };
 }
 
@@ -613,6 +687,7 @@ function mapFromRow(row: MapRow): ChainMap {
     id: row.id,
     slug: row.slug,
     name: row.name,
+    ...(row.description ? { description: row.description } : {}),
     ...(row.kind === 'composite' ? { kind: 'composite' as const } : {}),
     ownerAccountId: row.owner_account_id,
     settings: json.decode<ChainMap['settings']>(row.settings)!,
@@ -620,6 +695,8 @@ function mapFromRow(row: MapRow): ChainMap {
     systemLabels: json.decode<ChainMap['systemLabels']>(row.system_labels) ?? [],
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
+    // Left out while not deleted, so maps read the same as before it existed.
+    ...(row.deleted_at === null || row.deleted_at === undefined ? {} : { deletedAt: Number(row.deleted_at) }),
   };
 }
 
@@ -681,6 +758,10 @@ function connectionToRow(c: Connection): Omit<ConnectionRow, 'field_times'> {
     mass_status_at: c.massStatusAt ?? null,
     bookmark_number: c.bookmarkNumber ?? null,
     bookmark_parent: c.bookmarkParent ?? null,
+    note: c.note ?? '',
+    locked: bool.encode(c.locked ?? false),
+    lifetime_mark: c.lifetime?.mark ?? null,
+    lifetime_at: c.lifetime?.at ?? null,
     created_at: c.createdAt,
     updated_at: c.updatedAt,
     pair_low: Math.min(c.source, c.target),
@@ -705,6 +786,12 @@ function connectionFromRow(row: ConnectionRow): Connection {
     massStatusAt: row.mass_status_at == null ? null : Number(row.mass_status_at),
     bookmarkNumber: row.bookmark_number == null ? null : Number(row.bookmark_number),
     bookmarkParent: row.bookmark_parent == null ? null : Number(row.bookmark_parent),
+    // Defaults stay absent, so a connection reads the same as before these fields existed.
+    ...(bool.decode(row.locked) ? { locked: true } : {}),
+    ...(row.note ? { note: row.note } : {}),
+    ...(row.lifetime_mark && row.lifetime_at != null
+      ? { lifetime: { mark: row.lifetime_mark as LifetimeMark, at: Number(row.lifetime_at) } }
+      : {}),
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
   };
@@ -721,8 +808,17 @@ function signatureToRow(s: Signature): Omit<SignatureRow, 'field_times'> {
     name: s.name,
     description: s.description,
     connection_id: s.connectionId,
+    kind: s.kind ?? 'signature',
+    custom: bool.encode(s.custom ?? false),
     created_at: s.createdAt,
     updated_at: s.updatedAt,
+    temp_name: s.tempName ?? null,
+    destination: s.destination ?? null,
+    time_status: s.timeStatus ?? null,
+    mass_status: s.massStatus ?? null,
+    bubbled: bool.encode(s.bubbled ?? false),
+    created_by: s.createdBy ? json.encode(s.createdBy) : null,
+    updated_by: s.updatedBy ? json.encode(s.updatedBy) : null,
   };
 }
 
@@ -737,7 +833,16 @@ function signatureFromRow(row: SignatureRow): Signature {
     name: row.name,
     description: row.description,
     connectionId: row.connection_id,
+    ...(row.kind && row.kind !== 'signature' ? { kind: row.kind as SignatureKind } : {}),
+    ...(bool.decode(row.custom) ? { custom: true } : {}),
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
+    tempName: row.temp_name,
+    destination: row.destination as Signature['destination'],
+    timeStatus: row.time_status as Signature['timeStatus'],
+    massStatus: row.mass_status as Signature['massStatus'],
+    bubbled: bool.decode(row.bubbled),
+    createdBy: json.decode<AuthorDto>(row.created_by),
+    updatedBy: json.decode<AuthorDto>(row.updated_by),
   };
 }

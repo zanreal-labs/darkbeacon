@@ -15,6 +15,7 @@ import { EventConsumers } from '../../platform/event-consumers.js';
 import { MaintenanceMode } from '../../platform/maintenance.js';
 import { APP_CONFIG, EVENT_BUS, LEADERSHIP, OBSERVABILITY } from '../../platform/tokens.js';
 import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
+import { OfflineVisibility } from './offline-visibility.js';
 
 /** How often the poller looks for characters that are due (a tick only reads memory). */
 const TICK_MS = 250;
@@ -40,13 +41,18 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
     @Inject(EVENT_BUS) private readonly bus: EventBus,
     @Inject(LEADERSHIP) private readonly leadership: Leadership,
     @Inject(MaintenanceMode) private readonly maintenance: MaintenanceMode,
+    @Inject(OfflineVisibility) private readonly offline: OfflineVisibility,
     @Optional() @Inject(OBSERVABILITY) private readonly telemetry?: DomainTelemetry | null,
   ) {}
 
   onModuleInit(): void {
-    this.registry.registerSnapshot('map', async (mapId) => ({
-      characters: await this.listCharacters.forMap(mapId),
+    this.registry.registerSnapshot('map', async (mapId, actor) => ({
+      characters: await this.offline.filterList(actor, mapId, await this.listCharacters.forMap(mapId)),
     }));
+    // Offline characters for managers only, on maps that ask for it.
+    this.registry.registerEventFilter('map', (actor, mapId, event) =>
+      this.offline.filterEvent(actor, mapId, event),
+    );
     this.consumers.register({
       name: 'auto-mapping',
       streams: ['map'],
@@ -75,9 +81,15 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
     const unsubscribeTracking = this.bus.subscribe(() => this.poller.trackingChanged(), {
       types: ['character.tracked', 'character.untracked', 'map.removed', 'character.unlinked'],
     });
+    // The offline option and roles are cached briefly; changes read them again at once.
+    const unsubscribeSettings = this.bus.subscribe(
+      (event) => this.offline.forget(event.stream.slice('map:'.length)),
+      { types: ['map.settings_changed', 'access.*'] },
+    );
     this.unsubscribe = () => {
       unsubscribeAccess();
       unsubscribeTracking();
+      unsubscribeSettings();
     };
     this.maintenance.register({
       name: 'tracking',

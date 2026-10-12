@@ -12,6 +12,9 @@ export function routeCrumbs(pathname: string): Crumb[] {
   if (pathname.startsWith('/account')) return [{ label: 'Account' }];
   if (pathname.startsWith('/admin')) return [{ label: 'Admin' }];
   if (pathname.startsWith('/maps')) return [{ label: 'All maps' }];
+  // The same trail the page sets, so the server's first HTML already matches it.
+  if (pathname.startsWith('/import'))
+    return [{ label: 'All maps', to: '/maps' }, { label: 'Import from Wanderer' }];
   if (pathname.startsWith('/dev')) return [{ label: 'Components' }];
   if (pathname.startsWith('/jump')) return [{ label: 'Jump planner' }];
   const map = /^\/m\/([^/]+)/.exec(pathname);

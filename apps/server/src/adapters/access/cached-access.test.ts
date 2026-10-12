@@ -31,8 +31,16 @@ function setup() {
           rules.filter((r) => r.id !== id),
         );
     },
+    updateRole: async (id, role) => {
+      for (const [mapId, rules] of stored)
+        stored.set(
+          mapId,
+          rules.map((r) => (r.id === id ? { ...r, role } : r)),
+        );
+    },
     listMatching: async () => [],
     discordGuildIds: async () => [],
+    countByMap: async () => new Map([...stored].map(([mapId, rules]) => [mapId, rules.length])),
   };
   const subjects: AccessSubjects = {
     accountId: 'a1',
@@ -93,6 +101,12 @@ describe('AccessCache', () => {
     t.cache.onEvent(event('map:m1', 'map.removed', { id: 'm1' }));
     await t.owners.ownerOf('m1');
     expect(t.reads.owners).toBe(2);
+    // A handover, and a map put in the trash or taken out of it.
+    for (const type of ['access.owner_changed', 'map.trashed', 'map.restored']) {
+      t.cache.onEvent(event('map:m1', type, {}));
+      await t.owners.ownerOf('m1');
+    }
+    expect(t.reads.owners).toBe(5);
   });
 
   it('drops a map on its own rule writes and reads fresh inside transactions', async () => {
@@ -102,6 +116,8 @@ describe('AccessCache', () => {
     expect(await t.rules.listForMap('m1')).toHaveLength(2);
     await t.rules.delete('r1');
     expect(await t.rules.listForMap('m1')).toHaveLength(1);
+    await t.rules.updateRole('r2', 'admin');
+    expect((await t.rules.listForMap('m1'))[0]?.role).toBe('admin');
 
     t.inTransaction(true);
     const before = t.reads.rules;

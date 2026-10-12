@@ -10,6 +10,7 @@ import { connectionFixture, MAP_ID, signatureFixture } from '../../test/fixtures
 import { renderWithProviders, setupMockServer } from '../../test/setup';
 import { ToastProvider, TooltipProvider } from '../../ui';
 import { useMapStore } from '../useMapStore';
+import { DEFAULT_SIGNATURE_PREFS, setSignaturePrefs } from '../signatures/prefs';
 import { pasteSummary, SignaturesSection, useSignaturePaste } from './SignaturesSection';
 
 const SYSTEM = 31000001;
@@ -34,7 +35,7 @@ function Section({
   onSelectSystem?: (id: number) => void;
 }) {
   const store = useMapStore(MAP_ID);
-  const paste = useSignaturePaste(SYSTEM, store);
+  const paste = useSignaturePaste(MAP_ID, SYSTEM, store);
   return (
     <>
       <SignaturesSection
@@ -75,13 +76,16 @@ describe('SignaturesSection', () => {
     const user = userEvent.setup();
     render(<Section signatures={[signatureFixture('s1', SYSTEM, 'XYZ-999')]} />);
 
-    await user.click(screen.getByRole('checkbox', { name: 'Remove missing' }));
+    // "Remove missing" starts on and turns itself off after a paste (Wanderer's lazy delete).
+    const lazy = screen.getByRole('checkbox', { name: 'Remove missing' });
+    expect(lazy.getAttribute('aria-checked')).toBe('true');
     await user.click(screen.getByRole('textbox', { name: 'Paste probe scanner results' }));
     await user.paste(SCANNER);
 
     expect(await screen.findByText('2 new / 0 updated / 1 removed')).toBeTruthy();
-    expect(screen.getByText('1 line not understood')).toBeTruthy();
+    expect(screen.getByText(/1 line not understood/)).toBeTruthy();
     expect(bodies).toEqual([{ text: SCANNER, mode: 'replace' }]);
+    await waitFor(() => expect(lazy.getAttribute('aria-checked')).toBe('false'));
   });
 
   it('shows the server error and keeps the list', async () => {
@@ -98,24 +102,31 @@ describe('SignaturesSection', () => {
     expect(screen.getByText('XYZ-999')).toBeTruthy();
   });
 
-  it('lists signatures sorted by id, read-only for viewers', async () => {
+  it('lists signatures newest first, sorts by a column, read-only for viewers', async () => {
+    const user = userEvent.setup();
     render(
       <Section
         role="viewer"
         signatures={[
-          signatureFixture('s2', SYSTEM, 'QQQ-200', { group: 'relic', name: 'Forgotten Site' }),
-          signatureFixture('s1', SYSTEM, 'AAA-100', { group: 'wormhole', type: 'B274' }),
+          signatureFixture('s2', SYSTEM, 'QQQ-200', { group: 'relic', name: 'Forgotten Site', createdAt: 2 }),
+          signatureFixture('s1', SYSTEM, 'AAA-100', { group: 'wormhole', type: 'B274', createdAt: 1 }),
         ]}
       />,
     );
-    const rows = screen.getAllByRole<HTMLTableRowElement>('row').slice(1);
-    expect(rows.map((r) => r.cells[0]?.textContent)).toEqual(['AAA-100', 'QQQ-200']);
+    const ids = () =>
+      screen
+        .getAllByRole<HTMLTableRowElement>('row')
+        .slice(1)
+        .map((r) => r.cells[0]?.textContent);
+    expect(ids()).toEqual(['QQQ-200', 'AAA-100']);
+    await user.click(screen.getByRole('button', { name: 'ID' }));
+    expect(ids()).toEqual(['AAA-100', 'QQQ-200']);
     expect(screen.queryByRole('textbox', { name: 'Paste probe scanner results' })).toBeNull();
     expect(screen.queryByRole('button', { name: /Remove/ })).toBeNull();
     await waitFor(() => expect(screen.getByText('Forgotten Site')).toBeTruthy());
   });
 
-  it('edits the type of a wormhole in place and links to where it leads', async () => {
+  it('links a wormhole to where it leads and selects that system', async () => {
     const patches: unknown[] = [];
     server.use(
       http.patch(
@@ -123,7 +134,11 @@ describe('SignaturesSection', () => {
         async ({ request }) => {
           patches.push(await request.json());
           return HttpResponse.json(
-            signatureFixture('s1', SYSTEM, 'AAA-100', { group: 'wormhole', type: 'H296' }),
+            signatureFixture('s1', SYSTEM, 'AAA-100', {
+              group: 'wormhole',
+              type: 'H296',
+              connectionId: 'c1',
+            }),
           );
         },
       ),
@@ -135,16 +150,27 @@ describe('SignaturesSection', () => {
       <Section
         onSelectSystem={onSelectSystem}
         connections={new Map([[connection.id, connection]])}
+        signatures={[signatureFixture('s1', SYSTEM, 'AAA-100', { group: 'wormhole', type: 'H296' })]}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Link AAA-100 to a connection' }));
+    await user.click(await screen.findByRole('menuitem', { name: /J100002/ }));
+    await waitFor(() => expect(patches).toEqual([{ connectionId: 'c1' }]));
+  });
+
+  it('shows where a linked wormhole leads and selects it', async () => {
+    const onSelectSystem = vi.fn();
+    const user = userEvent.setup();
+    const connection = connectionFixture('c1', SYSTEM, OTHER);
+    render(
+      <Section
+        onSelectSystem={onSelectSystem}
+        connections={new Map([[connection.id, connection]])}
         signatures={[
-          signatureFixture('s1', SYSTEM, 'AAA-100', { group: 'wormhole', type: 'B274', connectionId: 'c1' }),
+          signatureFixture('s1', SYSTEM, 'AAA-100', { group: 'wormhole', type: 'H296', connectionId: 'c1' }),
         ]}
       />,
     );
-    const type = screen.getByRole('textbox', { name: 'Wormhole type of AAA-100' });
-    await user.clear(type);
-    await user.type(type, 'H296{Enter}');
-    await waitFor(() => expect(patches).toEqual([{ type: 'H296' }]));
-
     await user.click(screen.getByRole('button', { name: 'J100002' }));
     expect(onSelectSystem).toHaveBeenCalledWith(OTHER);
   });
@@ -154,5 +180,44 @@ describe('SignaturesSection', () => {
       title: '3 new / 1 updated',
       description: undefined,
     });
+  });
+
+  it('folds anomalies and other scanner results away, filterable, and marks custom entries', async () => {
+    render(
+      <Section
+        signatures={[
+          signatureFixture('s1', SYSTEM, 'ABC-123', { group: 'wormhole' }),
+          signatureFixture('s2', SYSTEM, 'Tower 3', { custom: true, name: 'Our Raitaru' }),
+          signatureFixture('s3', SYSTEM, 'JKL-012', { kind: 'anomaly', group: 'combat', name: 'Sansha Hub' }),
+          signatureFixture('s4', SYSTEM, 'MNO-345', {
+            kind: 'anomaly',
+            group: 'ore',
+            name: 'Ordinary Deposit',
+          }),
+          signatureFixture('s5', SYSTEM, 'PQR-678', { kind: 'other', type: 'Ship · Frigate', name: 'Heron' }),
+        ]}
+      />,
+    );
+    const signatures = screen.getByRole('table', { name: 'Signatures' });
+    expect(signatures.textContent).toContain('ABC-123');
+    expect(signatures.textContent).toContain('Tower 3custom');
+    expect(signatures.textContent).not.toContain('JKL-012');
+    // Collapsed by default.
+    const fold = screen.getByRole('button', { name: /Anomalies and other results/ });
+    expect(fold.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('table', { name: 'Anomalies and other results' })).toBeNull();
+    await userEvent.click(fold);
+    const others = () => screen.getByRole('table', { name: 'Anomalies and other results' }).textContent;
+    expect(others()).toContain('JKL-012');
+    expect(others()).toContain('PQR-678');
+    // The chips show or hide a group (the same filters as the signature settings).
+    await userEvent.click(screen.getByRole('button', { name: 'Combat' }));
+    expect(screen.getByRole('button', { name: 'Combat' }).getAttribute('aria-pressed')).toBe('false');
+    expect(others()).toContain('MNO-345');
+    expect(others()).not.toContain('JKL-012');
+    await userEvent.click(screen.getByRole('button', { name: 'Other' }));
+    expect(others()).not.toContain('PQR-678');
+    expect(others()).toContain('MNO-345');
+    setSignaturePrefs(DEFAULT_SIGNATURE_PREFS);
   });
 });

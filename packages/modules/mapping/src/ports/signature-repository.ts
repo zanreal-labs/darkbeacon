@@ -4,9 +4,17 @@ export interface SignatureRepository {
   listForMap(mapId: string): Promise<Signature[]>;
   listForSystem(mapId: string, solarSystemId: number): Promise<Signature[]>;
   findById(mapId: string, id: string): Promise<Signature | null>;
-  insert(signature: Signature): Promise<void>;
-  /** Several at once (a probe scanner paste): one statement instead of one per signature. */
+  /**
+   * `restoredAt`: the signature is put back after a removal (an undo); its fields count as written
+   * then, so maps merging this one take it over their tombstone.
+   */
+  insert(signature: Signature, options?: { restoredAt?: number }): Promise<void>;
+  /** Several new ones at once (a probe scanner paste): one statement instead of one per signature. */
   insertMany(signatures: readonly Signature[]): Promise<void>;
   update(signature: Signature): Promise<void>;
+  /** Moves `updatedAt` forward without changing anything else (seen again in a scan). */
+  touch(mapId: string, ids: readonly string[], at: number): Promise<void>;
   delete(mapId: string, id: string): Promise<void>;
+  /** Signatures not changed since before `before` (epoch ms), of every map. */
+  listUpdatedBefore(before: number): Promise<Signature[]>;
 }

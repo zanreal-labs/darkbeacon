@@ -6,8 +6,8 @@ import {
   COLORS,
   connectionAdded,
   connectionChanged,
-  exitsFrom,
   systemLabel,
+  wayHomeNote,
   type MapView,
 } from './describe.js';
 import { inQuietHours, parseUpdate } from './settings.js';
@@ -101,22 +101,37 @@ describe('what notifications say', () => {
     expect(systemLabel(view([]), 1)).toBe('System 1');
   });
 
-  it('finds the way home: the nearest exits through visible systems', () => {
-    const exits = exitsFrom(
-      31000001,
-      [
-        connection('a', 31000001, 31000002),
-        connection('b', 31000002, 30002537),
-        connection('c', 31000001, 30000142),
-        connection('d', 30000142, 30002537),
-      ],
-      new Set([31000001, 31000002, 30002537, 30000142]),
-      (id) => universe(id)?.whClass,
-    );
-    expect(exits).toEqual([
-      { systemId: 30000142, jumps: 1 },
-      { systemId: 30002537, jumps: 2 },
-    ]);
+  it('names each hub of the way home with its jumps and mouth', () => {
+    const v = view([system(31000001)]);
+    const route = (name: string, jumps: number, space: 'high' | 'low' | 'mixed', viaEveScout = false) => ({
+      hub: { solarSystemId: 1, name, security: 0.9, kind: 'map' as const, near: null },
+      jumps,
+      mouth: { solarSystemId: 30002537, name: 'Amamake', security: 0.4 },
+      space,
+      viaEveScout,
+    });
+    const note = wayHomeNote(
+      v,
+      {
+        home: { solarSystemId: 31000001, name: 'J100001' },
+        routes: [
+          route('Jita', 7, 'high'),
+          route('Amarr', 9, 'mixed', true),
+          ...Array(6).fill(route('Hek', 12, 'low')),
+        ],
+      },
+      0,
+    )!;
+    const lines = note.embed.description!.split('\n');
+    expect(note.embed.title).toBe('Way home to J100001 (C3)');
+    expect(lines).toHaveLength(5);
+    expect(lines[0]).toMatch(/^\*\*Jita\*\*: 7J via \[Amamake\]\(.+\) \(high-sec only\)$/);
+    expect(lines[1]).toMatch(/9J via \[Amamake\]\(.+\) · through Thera\/Turnur$/);
+    expect(wayHomeNote(v, { home: null, routes: [] }, 0)).toBeNull();
+    expect(
+      wayHomeNote(v, { home: { solarSystemId: 31000001, name: 'J100001' }, routes: [] }, 0)!.embed
+        .description,
+    ).toBe('No hub of the map has a way into the chain right now.');
   });
 
   it('uses the map state colours of the built-in dark theme', () => {

@@ -1,5 +1,5 @@
 import type { ActorRef, AuditContext } from '@darkbeacon/core';
-import type { ConnectionDto } from '@darkbeacon/shared';
+import { countBucket, type ConnectionDto } from '@darkbeacon/shared';
 import {
   pluginRef,
   type ChangeSource,
@@ -39,6 +39,9 @@ const CONNECTION_FIELDS: ReadonlyArray<[keyof ConnectionDto, (after: ConnectionD
   ['bubbled', () => 'bubble'],
   ['dangerous', () => 'dangerous'],
   ['massSaved', () => 'mass_saved'],
+  ['locked', () => 'lock'],
+  ['note', () => 'note'],
+  ['lifetime', () => 'lifetime'],
 ];
 
 const record = (value: unknown): Record<string, unknown> | null =>
@@ -71,6 +74,24 @@ export function featureEvents(event: ObservedEvent, context: AuditContext): Feat
     }
     case 'webhook.created':
       return accountId ? one('webhook_created') : [];
+    case 'import.finished': {
+      // The source by kind only: hosts and slugs say whose map it was.
+      const source = record(data?.source);
+      const outcome = record(data?.outcome) ?? {};
+      const written = (kind: string) => {
+        const o = record(outcome[kind]);
+        return countBucket(Number(o?.created ?? 0) + Number(o?.updated ?? 0));
+      };
+      if (!accountId || typeof data?.status !== 'string') return [];
+      return one('import_completed', {
+        source: source?.kind === 'wanderer-file' ? 'file' : 'api',
+        status: data.status,
+        systems: written('systems'),
+        connections: written('connections'),
+        signatures: written('signatures'),
+        access_rules: written('access'),
+      });
+    }
   }
 
   const source = changeSource(context);
@@ -86,7 +107,9 @@ export function featureEvents(event: ObservedEvent, context: AuditContext): Feat
       const after = data as ConnectionDto | null;
       const before = record(event.before) as ConnectionDto | null;
       if (!after || !before) return [];
-      return CONNECTION_FIELDS.filter(([key]) => before[key] !== after[key]).map(([, field]) => ({
+      return CONNECTION_FIELDS.filter(
+        ([key]) => JSON.stringify(before[key] ?? null) !== JSON.stringify(after[key] ?? null),
+      ).map(([, field]) => ({
         event: 'connection_updated',
         props: { field: field(after), source },
         accountId,

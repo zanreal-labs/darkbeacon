@@ -47,6 +47,7 @@ const SYSTEM_PROCESSES: Record<string, string> = {
   'bookmark-numbers': 'Bookmark numbering',
   mapping: 'Mapping',
   passages: 'Passage log',
+  'signature-sweep': 'Old signature sweep',
   sweeper: 'Connection cleanup',
 };
 
@@ -61,6 +62,9 @@ export function channelLabel(channel: AuditChannelDto): string {
     case 'plugin':
       return channel.id ? `Plugin ${channel.id}` : 'Plugin';
     default:
+      // Imports name their source: `wanderer:<host>/<slug>`.
+      if (channel.id?.startsWith('wanderer:'))
+        return `Imported from Wanderer ${channel.id.slice('wanderer:'.length)}`;
       return (channel.id && SYSTEM_PROCESSES[channel.id]) ?? 'Server';
   }
 }
@@ -87,12 +91,29 @@ const FIELD_LABELS: Record<string, string> = {
   mass: 'Ship mass',
   exits: 'Exits',
   hubs: 'Hubs',
+  wayHome: 'Way home',
+  thera: 'Thera and Turnur in routes',
+  added: 'Added',
+  updated: 'Changed',
+  removed: 'Removed',
   dangerous: 'Dangerous',
+  note: 'Note',
+  lifetime: 'Lifetime left',
+  kind: 'Kind',
+  custom: 'Custom entry',
   bubbled: 'Bubbled',
   eveId: 'Signature',
   group: 'Group',
   name: 'Name',
   connectionId: 'Linked connection',
+  tempName: 'Temporary name',
+  destination: 'Leads to class',
+  text: 'Comment',
+  typeName: 'Structure type',
+  owner: 'Owner',
+  endsAt: 'Timer',
+  notes: 'Notes',
+  signatureRetentionDays: 'Signatures kept',
   bookmarkNumber: 'Bookmark number',
   bookmarkParent: 'Numbered from',
   role: 'Role',
@@ -112,7 +133,6 @@ const FIELD_LABELS: Record<string, string> = {
   massMode: 'Mass counted',
   higgs: 'Higgs Anchor',
   entangler: 'Mass entangler',
-  note: 'Note',
   configured: 'Connected',
   discord: 'Discord',
   channel: 'Channel',
@@ -168,6 +188,9 @@ const HIDDEN = new Set([
   'source',
   'target',
   'createdBy',
+  'updatedBy',
+  'author',
+  'typeId',
   'passageId',
   'kind',
   'regenerated',
@@ -222,6 +245,12 @@ function labelNames(ids: unknown, mapId: string | null, names: AuditNames): stri
 
 function value(field: string, v: unknown, names: AuditNames, mapId: string | null = null): string {
   if (field === 'eventRetentionDays') return typeof v === 'number' ? `${v} days` : 'Forever';
+  if (field === 'endsAt' && typeof v === 'number')
+    return `${new Date(v).toISOString().slice(0, 16).replace('T', ' ')} EVE`;
+  if (field === 'owner' && typeof v === 'object' && v !== null) {
+    const o = v as { name?: string; ticker?: string | null };
+    return o.ticker ? `[${o.ticker}] ${o.name ?? ''}`.trim() : (o.name ?? 'set');
+  }
   if (field === 'expiredConnectionMinutes')
     return typeof v === 'number' ? (v === 0 ? 'At once' : `${v} min later`) : 'Never';
   if (field === 'staleSystemMinutes') return typeof v === 'number' ? `${v} min` : 'Never';
@@ -239,6 +268,7 @@ function value(field: string, v: unknown, names: AuditNames, mapId: string | nul
     const p = v as { x: number; y: number };
     return `${Math.round(p.x)}, ${Math.round(p.y)}`;
   }
+  if (field === 'lifetime' && typeof v === 'object') return `under ${(v as { mark?: string }).mark ?? '?'}`;
   if (field === 'settings' && typeof v === 'object') {
     const scopes = (v as { scopes?: string[] }).scopes;
     return scopes?.length ? scopes.map(titleCase).join(', ') : '—';
@@ -336,7 +366,12 @@ const PROVIDERS: Record<string, string> = {
 export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditReading {
   const d = (entry.op === 'delete' ? (entry.removed ?? {}) : {}) as Record<string, unknown>;
   const data = { ...d, ...Object.fromEntries(Object.entries(entry.diff).map(([k, c]) => [k, c.after])) };
-  const systemId = entry.entity?.kind === 'system' ? Number(entry.entity.id) : undefined;
+  const systemId =
+    entry.entity?.kind === 'system'
+      ? Number(entry.entity.id)
+      : typeof data.solarSystemId === 'number'
+        ? data.solarSystemId
+        : undefined;
   const system = systemId ? (names.system?.(systemId) ?? 'a system') : 'a system';
   const via = channelLabel(entry.channel);
   const who =
@@ -396,6 +431,29 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
         changes: [],
       };
     }
+    case 'access.rule_changed': {
+      const target = ruleSubject(data as Record<string, unknown>, names);
+      const role = String(data.role ?? '');
+      return { ...read(`made ${target} ${ROLE_WORDS[role] ?? role} of ${mapName}`, 'access'), changes: [] };
+    }
+    case 'access.owner_changed':
+      return read(`handed ${mapName} to a new owner`, 'access');
+    case 'map.trashed':
+      return read(`deleted ${mapName} (an instance admin can restore it)`, 'map');
+    case 'map.restored':
+      return read(`restored ${mapName}`, 'map');
+    case 'account.disabled_changed':
+      return read(data.disabled ? `disabled ${subject}` : `enabled ${subject} again`, 'access');
+    case 'webhook.secret_rotated':
+      return read(`gave a webhook of ${mapName} a new secret`, 'instance');
+    case 'webhook.auto_disabled':
+      return read(`turned off a failing webhook of ${mapName}`, 'instance');
+    case 'invite.created':
+      return read('made an invite link', 'access');
+    case 'invite.revoked':
+      return read('revoked an invite link', 'access');
+    case 'invite.used':
+      return read('signed up with an invite link', 'access');
     case 'account.discord_changed':
       return read(entry.diff.discord?.after ? 'connected Discord' : 'disconnected Discord', 'access');
     case 'discord_bot.changed':
@@ -491,6 +549,12 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
       return read("updated the chain's exits", 'map');
     case 'routes.hubs_changed':
       return read(`changed the hubs of ${mapName}`, 'map');
+    case 'routes.bridges_changed':
+      return read(`changed the jump bridges of ${mapName}`, 'map');
+    case 'routes.settings_changed':
+      return read(`changed the route settings of ${mapName}`, 'map');
+    case 'routes.way_home_changed':
+      return read('updated the way home', 'map');
     case 'system.added':
       return read(entry.diff.visible ? `put ${system} back on the map` : `added ${system}`, 'map');
     case 'system.updated':
@@ -523,6 +587,16 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
       return read('changed a signature', 'intel');
     case 'signature.removed':
       return read(`removed signature ${String(data.eveId ?? '')}`.trim(), 'intel');
+    case 'comment.added':
+      return read(`commented on ${system}`, 'intel');
+    case 'comment.removed':
+      return read(`removed a comment on ${system}`, 'intel');
+    case 'structure.added':
+      return read(`noted the structure ${String(data.name ?? '')}`.trim(), 'intel');
+    case 'structure.updated':
+      return read(`changed the structure ${String(data.name ?? '')}`.trim(), 'intel');
+    case 'structure.removed':
+      return read(`removed the structure ${String(data.name ?? '')}`.trim(), 'intel');
     case 'character.moved':
     case 'character.jumped':
       return read(`moved to ${value('location', entry.diff.location?.after, names)}`, 'tracking');
@@ -534,6 +608,27 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
       return read('started tracking a character', 'tracking');
     case 'character.untracked':
       return read('stopped tracking a character', 'tracking');
+    case 'import.started':
+      return read(`started importing from ${String(entry.diff.imported?.after ?? 'Wanderer')}`, 'map');
+    case 'import.finished': {
+      const status = entry.diff.status?.after;
+      const source = String(entry.diff.imported?.after ?? 'Wanderer');
+      return read(
+        status === 'done'
+          ? `imported from ${source}`
+          : status === 'cancelled'
+            ? `stopped importing from ${source}`
+            : `could not import from ${source}`,
+        'map',
+      );
+    }
+    case 'import.sync_changed':
+      return read(
+        entry.diff.syncing?.after
+          ? `started syncing from ${String(entry.diff.source?.after ?? 'Wanderer')}`
+          : `stopped syncing from ${String(entry.diff.source?.after ?? 'Wanderer')}`,
+        'map',
+      );
     default:
       return read(`made a change (${entry.type})`, 'map');
   }

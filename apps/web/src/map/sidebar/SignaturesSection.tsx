@@ -1,35 +1,62 @@
 'use client';
 
-import { useCallback, useEffect, useState, type ClipboardEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+} from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ClipboardPaste, Radar, X } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronRight,
+  CircleDot,
+  ClipboardPaste,
+  Clock,
+  MessageSquareText,
+  Pencil,
+  Radar,
+  TriangleAlert,
+  Undo2,
+  X,
+} from 'lucide-react';
 import {
   buildPath,
   routes,
-  SignatureGroup,
   type ConnectionDto,
+  type ConnectionIntelDto,
   type PasteSignaturesResult,
   type SignatureDto,
   type UniverseSystemDto,
+  type UpdateSignatureRequest,
 } from '@darkbeacon/shared';
 import { api } from '../../lib/api';
 import type { MapPermissions } from '../../lib/roles';
-import { shortAge } from '../../lib/time';
-import { Checkbox, IconButton, Kbd, Skeleton, useToast } from '../../ui';
+import { Button, Checkbox, CharacterAvatar, IconButton, Kbd, Skeleton, useToast } from '../../ui';
 import { seedSignatures } from '../mapState';
+import { TypeLabel } from '../signatures/catalog';
+import { ageLabel, freshness, GROUP_LABEL, targetOf, visibleSignatures } from '../signatures/facts';
+import { OtherFilters } from '../signatures/FilterChips';
+import { LeadsToMenu } from '../signatures/LeadsToMenu';
+import { announceLink } from '../signatures/onLink';
+import {
+  setSignaturePrefs,
+  signaturePrefs,
+  useSignaturePrefs,
+  type SignatureSortField,
+} from '../signatures/prefs';
+import { SignatureEditor } from '../signatures/SignatureEditor';
+import { rememberRemoved, useSignatureRemoval, useUndo } from '../signatures/undo';
 import type { MapStore } from '../useMapStore';
-import { InlineText } from './InlineText';
 import styles from './sidebar.module.css';
+import sig from '../signatures/signatures.module.css';
 
-export const GROUP_LABEL: Record<SignatureGroup, string> = {
-  unknown: 'Unknown',
-  wormhole: 'Wormhole',
-  combat: 'Combat',
-  relic: 'Relic',
-  data: 'Data',
-  gas: 'Gas',
-  ore: 'Ore',
-};
+export { GROUP_LABEL };
 
 /** "3 new / 1 updated", and what else the paste did. */
 export function pasteSummary(r: PasteSignaturesResult): { title: string; description?: string } {
@@ -38,7 +65,9 @@ export function pasteSummary(r: PasteSignaturesResult): { title: string; descrip
   const skipped = r.skipped.length;
   return {
     title: parts.join(' / '),
-    description: skipped ? `${skipped} ${skipped === 1 ? 'line' : 'lines'} not understood` : undefined,
+    description: skipped
+      ? `${skipped} ${skipped === 1 ? 'line' : 'lines'} not understood (scanner columns or client language)`
+      : undefined,
   };
 }
 
@@ -52,14 +81,19 @@ export interface SignaturePaste {
   submit(text: string): Promise<void>;
 }
 
-/** Sends probe scanner text for the selected system and reports what changed in a toast. */
+/**
+ * Sends probe scanner text for the selected system and reports what changed in a toast. "Remove
+ * missing" (lazy delete) starts as the preferences say and turns itself off after a paste unless
+ * they say to keep it; what it removed can be put back for the undo window.
+ */
 export function useSignaturePaste(
+  mapId: string,
   solarSystemId: number | null,
   store: Pick<MapStore, 'pasteSignatures'>,
 ): SignaturePaste {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
-  const [replace, setReplace] = useState(false);
+  const [replace, setReplace] = useState(() => signaturePrefs().lazyDelete);
   const { pasteSignatures } = store;
   const submit = useCallback(
     async (text: string) => {
@@ -67,14 +101,18 @@ export function useSignaturePaste(
       setBusy(true);
       const result = await pasteSignatures(solarSystemId, { text, mode: replace ? 'replace' : 'merge' });
       setBusy(false);
-      if (result) toast({ ...pasteSummary(result), tone: 'success' });
+      if (!result) return;
+      toast({ ...pasteSummary(result), tone: 'success' });
+      if (result.removedSignatures?.length) rememberRemoved(mapId, solarSystemId, result.removedSignatures);
+      if (replace && !signaturePrefs().keepLazyDelete) setReplace(false);
     },
-    [solarSystemId, busy, pasteSignatures, replace, toast],
+    [mapId, solarSystemId, busy, pasteSignatures, replace, toast],
   );
   return { busy, replace, setReplace, submit };
 }
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+const MOD = isMac ? '⌘' : 'Ctrl';
 
 export const canReadClipboard = () =>
   typeof navigator !== 'undefined' && 'clipboard' in navigator && 'readText' in navigator.clipboard;
@@ -86,6 +124,50 @@ export async function pasteFromClipboard(paste: SignaturePaste) {
   } catch {
     // Permission refused: Ctrl+V still works.
   }
+}
+
+/** The current time, every second while something on screen counts. */
+function useNow(ms = 1000) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), ms);
+    return () => clearInterval(timer);
+  }, [ms]);
+  return now;
+}
+
+const URGENCY_TEXT = { critical: 'Critical', warning: 'Soon', ok: '' } as const;
+
+/** Resolved types and urgency of the map's connections, refreshed when they change. */
+function useConnectionIntel(
+  mapId: string,
+  connections: Map<string, ConnectionDto>,
+  signatures: SignatureDto[],
+) {
+  const stamp = useMemo(
+    () =>
+      [...connections.values()].reduce((max, c) => Math.max(max, c.updatedAt), 0) +
+      signatures.reduce((max, s) => Math.max(max, s.updatedAt), 0),
+    [connections, signatures],
+  );
+  const query = useQuery({
+    queryKey: ['connection-intel', mapId, stamp],
+    queryFn: () => api<ConnectionIntelDto[]>(buildPath(routes.connections.intel.path, { mapId })),
+    staleTime: 60_000,
+    placeholderData: (previous) => previous,
+  });
+  return useMemo(() => new Map((query.data ?? []).map((i) => [i.connectionId, i])), [query.data]);
+}
+
+/** Time left in a hole, compact (`4h`, `35m`) or in words. */
+function timeLeft(ms: number | null, words = false): string | null {
+  if (ms === null) return null;
+  const h = ms / 3_600_000;
+  if (h < 1) {
+    const m = Math.max(1, Math.round(h * 60));
+    return words ? `${m} min left` : `${m}m`;
+  }
+  return words ? `about ${Math.round(h)} h left` : `${Math.round(h)}h`;
 }
 
 interface Props {
@@ -101,15 +183,16 @@ interface Props {
   paste: SignaturePaste;
   /** Selects the system a wormhole signature leads to. */
   onSelectSystem(solarSystemId: number): void;
+  /** Name of a system on the map (custom name or real name). */
+  systemName?(solarSystemId: number): string;
 }
 
-/** Where a wormhole signature leads: the other end of its connection. */
-function targetOf(sig: SignatureDto, connections: Map<string, ConnectionDto>): number | null {
-  const c = sig.connectionId ? connections.get(sig.connectionId) : undefined;
-  if (!c) return null;
-  return c.source === sig.solarSystemId ? c.target : c.source;
-}
-
+/**
+ * The signatures of the selected system, as in Wanderer's widget: columns and groups to taste,
+ * any column sortable, new rows highlighted, ages ticking. Click selects (Ctrl/⌘ adds, Shift
+ * takes a range), Ctrl/⌘+A selects all, Delete removes, Ctrl/⌘+Z puts removals back, a double
+ * click (or the pencil) opens the editor, the link button says where a wormhole leads.
+ */
 export function SignaturesSection({
   mapId,
   solarSystemId,
@@ -121,6 +204,7 @@ export function SignaturesSection({
   store,
   paste,
   onSelectSystem,
+  systemName = (id) => universe.get(id)?.name ?? String(id),
 }: Props) {
   const listed = useQuery({
     queryKey: ['signatures', mapId, solarSystemId],
@@ -132,21 +216,344 @@ export function SignaturesSection({
     if (listed.data) seed((s) => seedSignatures(s, listed.data));
   }, [listed.data, seed]);
 
+  const prefs = useSignaturePrefs();
+  const now = useNow();
+  const intel = useConnectionIntel(mapId, connections, signatures);
+  const removal = useSignatureRemoval(mapId);
+  const undo = useUndo(solarSystemId);
+  const [picked, setSelected] = useState<Set<string>>(new Set());
+  // Signatures that went away are no longer selected.
+  const selected = useMemo(() => {
+    const ids = new Set(signatures.map((s) => s.id));
+    return new Set([...picked].filter((id) => ids.has(id)));
+  }, [picked, signatures]);
+  const [anchor, setAnchor] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const focusTable = useCallback(() => rootRef.current?.focus({ preventScroll: true }), []);
+
+  // Probed signatures in the table; anomalies and other scanner rows fold away below it.
+  const rows = useMemo(() => visibleSignatures(signatures, prefs), [signatures, prefs]);
+  const probed = rows.filter((x) => (x.kind ?? 'signature') === 'signature');
+  const others = rows.filter((x) => (x.kind ?? 'signature') !== 'signature');
+  const hiddenOthers = signatures.filter(
+    (x) => (x.kind ?? 'signature') !== 'signature' && !rows.includes(x),
+  ).length;
+  const hidden = signatures.filter((x) => (x.kind ?? 'signature') === 'signature').length - probed.length;
+  const [showOthers, setShowOthers] = useState(false);
+  const live = new Set(signatures.map((s) => s.eveId));
+  const ghosts = undo.batches
+    .flatMap((b) => b.signatures)
+    .filter((s) => s.solarSystemId === solarSystemId && !live.has(s.eveId));
+  const editingSig = editing ? signatures.find((s) => s.id === editing) : undefined;
+
   const onPaste = (e: ClipboardEvent) => {
     e.preventDefault();
     void paste.submit(e.clipboardData.getData('text/plain'));
   };
 
-  const sorted = [...signatures].sort((a, b) => a.eveId.localeCompare(b.eveId));
+  const removeSelected = (ids: string[]) => {
+    if (!can.edit || ids.length === 0) return;
+    setSelected(new Set());
+    void removal.remove(solarSystemId, ids);
+  };
+
+  const select = (e: MouseEvent, id: string) => {
+    if (e.shiftKey && anchor) {
+      const order = rows.map((r) => r.id);
+      const [a = -1, b = -1] = [order.indexOf(anchor), order.indexOf(id)].sort((x, y) => x - y);
+      if (a >= 0 && b >= 0) {
+        setSelected(new Set(order.slice(a, b + 1)));
+        return;
+      }
+    }
+    setAnchor(id);
+    if (e.metaKey || e.ctrlKey) {
+      setSelected((current) => {
+        const next = new Set(current);
+        if (!next.delete(id)) next.add(id);
+        return next;
+      });
+    } else setSelected((current) => (current.size === 1 && current.has(id) ? new Set() : new Set([id])));
+  };
+
+  const onKeyDown = (e: KeyboardEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('input, textarea, select, [contenteditable="true"]')) return;
+    const mod = e.metaKey || e.ctrlKey;
+    // Ctrl/⌘+A as in Wanderer, or just A while the table has the focus.
+    if (e.key.toLowerCase() === 'a' && !e.altKey && !e.shiftKey) {
+      e.preventDefault();
+      setSelected(new Set(rows.map((r) => r.id)));
+    } else if (mod && e.key.toLowerCase() === 'z' && undo.batches.length > 0) {
+      e.preventDefault();
+      void removal.restore(undo.batches);
+    } else if ((e.key === 'Delete' || e.key === 'Backspace') && selected.size > 0 && can.edit) {
+      e.preventDefault();
+      removeSelected([...selected]);
+    } else if (e.key === 'Enter' && selected.size === 1 && can.edit) {
+      e.preventDefault();
+      setEditing([...selected][0]!);
+    } else if (e.key === 'Escape' && selected.size > 0) {
+      setSelected(new Set());
+    }
+  };
+
+  const sortBy = (field: SignatureSortField) => {
+    const { sort } = signaturePrefs();
+    setSignaturePrefs({
+      sort: {
+        field,
+        dir:
+          sort.field === field
+            ? sort.dir === 'asc'
+              ? 'desc'
+              : 'asc'
+            : field === 'added' || field === 'updated'
+              ? 'desc'
+              : 'asc',
+      },
+    });
+  };
+  const header = (field: SignatureSortField, label: string, className?: string) => {
+    const active = prefs.sort.field === field;
+    return (
+      <th
+        scope="col"
+        className={className}
+        aria-sort={active ? (prefs.sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
+      >
+        <button type="button" className={sig.sortButton} onClick={() => sortBy(field)}>
+          {label}
+          {active && (prefs.sort.dir === 'asc' ? <ArrowUp aria-hidden /> : <ArrowDown aria-hidden />)}
+        </button>
+      </th>
+    );
+  };
+
+  const { columns } = prefs;
+  const columnCount = 2 + Object.values(columns).filter(Boolean).length + (can.edit ? 1 : 0);
+  // A link saved here also does what the preferences ask on link (see `useOnLink`).
+  const update = async (id: string, patch: UpdateSignatureRequest) => {
+    const ok = await store.updateSignature(id, patch);
+    if (ok && patch.connectionId) announceLink(id, patch.connectionId);
+    return ok;
+  };
+
+  /** One table of scan results; selection, editing and the undo rows are shared. */
+  const renderTable = (list: SignatureDto[], label: string, withGhosts: boolean) => (
+    <table
+      className={`${styles.table} ${sig.table}`}
+      data-edit={can.edit || undefined}
+      aria-multiselectable={can.edit || undefined}
+      aria-label={label}
+    >
+      <thead>
+        <tr>
+          {header('eveId', 'ID', sig.colId)}
+          {columns.group && header('group', 'Group', sig.colGroup)}
+          {header('info', 'Info')}
+          {columns.description && header('description', 'Notes')}
+          {columns.added && header('added', 'Added', `${styles.num} ${sig.colAge}`)}
+          {columns.updated && header('updated', 'Upd.', `${styles.num} ${sig.colAge}`)}
+          {columns.author && header('author', 'By', sig.colAuthor)}
+          {can.edit && <th aria-label="Actions" className={sig.colActions} />}
+        </tr>
+      </thead>
+      <tbody>
+        {list.map((s) => {
+          const target = targetOf(s, connections);
+          const connection = s.connectionId ? connections.get(s.connectionId) : undefined;
+          const info = s.connectionId ? intel.get(s.connectionId) : undefined;
+          const wormhole = s.group === 'wormhole';
+          const time = connection?.timeStatus ?? s.timeStatus;
+          const mass = connection?.massStatus ?? s.massStatus;
+          const code = s.type?.toUpperCase();
+          const resolved =
+            info?.wormholeType && (!code || code === 'K162') && info.wormholeType !== code
+              ? info.wormholeType
+              : null;
+          const isSelected = selected.has(s.id);
+          return (
+            <tr
+              key={s.id}
+              data-group={s.group}
+              data-selected={isSelected || undefined}
+              data-bubbled={s.bubbled || undefined}
+              aria-selected={can.edit ? isSelected : undefined}
+              onClick={(e) => {
+                if ((e.target as HTMLElement).closest('button, a, input')) return;
+                select(e, s.id);
+                (e.currentTarget.closest('[data-signatures]') as HTMLElement | null)?.focus({
+                  preventScroll: true,
+                });
+              }}
+              onDoubleClick={(e) => {
+                if (!can.edit || (e.target as HTMLElement).closest('button, a')) return;
+                setEditing(s.id);
+              }}
+            >
+              <td className={`${styles.sigId} ${sig.id}`} title={s.eveId}>
+                {s.eveId}
+              </td>
+              {columns.group && <td className={sig.group}>{GROUP_LABEL[s.group]}</td>}
+              <td>
+                <span className={sig.info}>
+                  {/* A custom entry: its id is free text someone wrote, not the scanner's. */}
+                  {s.custom && (
+                    <span className={styles.customMark} title="Written by someone, not from the scanner">
+                      custom
+                    </span>
+                  )}
+                  {/* Once linked, the temporary name is on the system it leads to. */}
+                  {s.tempName && target === null && <strong className={sig.tempName}>{s.tempName}</strong>}
+                  {wormhole && time === 'eol' && <Clock className={sig.iconEol} aria-label="End of life" />}
+                  {wormhole && mass && mass !== 'fresh' && (
+                    <TriangleAlert
+                      className={mass === 'critical' ? sig.iconCritical : sig.iconReduced}
+                      aria-label={mass === 'critical' ? 'Mass critical' : 'Mass reduced'}
+                    />
+                  )}
+                  {s.bubbled && <CircleDot className={sig.iconBubble} aria-label="Hole is inside a bubble" />}
+                  {wormhole ? (
+                    code ? (
+                      <TypeLabel code={code} destination={target === null ? s.destination : null} />
+                    ) : (
+                      !resolved && <span className="subtle">?</span>
+                    )
+                  ) : (
+                    <span className={`${styles.ellipsis} ${sig.grow}`}>
+                      {s.name ?? <span className="subtle">—</span>}
+                    </span>
+                  )}
+                  {resolved && (
+                    <span className={sig.resolved} title="Type from the other side of the hole">
+                      ({resolved})
+                    </span>
+                  )}
+                  {info && info.urgency !== 'ok' && (
+                    <span
+                      className={sig.urgency}
+                      data-urgency={info.urgency}
+                      title={[URGENCY_TEXT[info.urgency], timeLeft(info.time.remainingMs, true)]
+                        .filter(Boolean)
+                        .join(': ')}
+                    >
+                      {timeLeft(info.time.remainingMs) ?? URGENCY_TEXT[info.urgency]}
+                    </span>
+                  )}
+                  {target !== null && (
+                    <button
+                      type="button"
+                      className={`${styles.target} ${sig.grow}`}
+                      title={`Leads to ${systemName(target)}: select it`}
+                      onClick={() => onSelectSystem(target)}
+                    >
+                      <span aria-hidden>→ </span>
+                      {systemName(target)}
+                    </button>
+                  )}
+                  {s.description && !columns.description && (
+                    <span className={sig.iconNote} role="img" aria-label="Has notes" title={s.description}>
+                      <MessageSquareText aria-hidden />
+                    </span>
+                  )}
+                </span>
+              </td>
+              {columns.description && (
+                <td className={`${styles.ellipsis} ${sig.description}`} title={s.description || undefined}>
+                  {s.description}
+                </td>
+              )}
+              {columns.added && (
+                <td
+                  className={`${styles.num} ${styles.age}`}
+                  data-fresh={freshness(s.createdAt, now)}
+                  title={new Date(s.createdAt).toLocaleString()}
+                >
+                  {ageLabel(s.createdAt, now)}
+                </td>
+              )}
+              {columns.updated && (
+                <td className={`${styles.num} ${styles.age}`} title={new Date(s.updatedAt).toLocaleString()}>
+                  {ageLabel(s.updatedAt, now)}
+                </td>
+              )}
+              {columns.author && (
+                <td className={sig.author} title={s.createdBy?.name}>
+                  {s.createdBy?.characterId ? (
+                    <CharacterAvatar
+                      id={s.createdBy.characterId}
+                      name={s.createdBy.name}
+                      size={16}
+                      decorative
+                    />
+                  ) : null}
+                  <span className={styles.ellipsis}>{s.createdBy?.name ?? '—'}</span>
+                </td>
+              )}
+              {can.edit && (
+                <td className={styles.actionCell}>
+                  <span className={sig.actions}>
+                    {wormhole && target === null && (
+                      <LeadsToMenu
+                        signature={s}
+                        connections={connections}
+                        universe={universe}
+                        systemName={systemName}
+                        linkedTo={target}
+                        onLink={(connectionId) => void update(s.id, { connectionId })}
+                      />
+                    )}
+                    <IconButton
+                      size="sm"
+                      tooltip={false}
+                      className={styles.rowRemove}
+                      label={`Edit ${s.eveId}`}
+                      icon={<Pencil />}
+                      onClick={() => setEditing(s.id)}
+                    />
+                    <IconButton
+                      size="sm"
+                      tooltip={false}
+                      className={styles.rowRemove}
+                      label={`Remove ${s.eveId}`}
+                      icon={<X />}
+                      onClick={() => removeSelected(selected.has(s.id) ? [...selected] : [s.id])}
+                    />
+                  </span>
+                </td>
+              )}
+            </tr>
+          );
+        })}
+        {(withGhosts ? ghosts : []).map((s) => (
+          <tr key={`ghost:${s.id}`} data-removed>
+            <td className={styles.sigId}>{s.eveId}</td>
+            <td colSpan={columnCount - 1} className={sig.ghost}>
+              removed{s.type ? ` · ${s.type}` : s.name ? ` · ${s.name}` : ''}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
 
   return (
-    <div className={styles.signatures}>
+    <div
+      ref={rootRef}
+      data-signatures
+      className={styles.signatures}
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
+      data-color={prefs.colorByGroup || undefined}
+    >
       {can.edit && (
         <div className={styles.pasteRow}>
           <label className={styles.pasteZone} data-busy={paste.busy || undefined}>
             <ClipboardPaste aria-hidden />
             <span>
-              <Kbd>{isMac ? '⌘' : 'Ctrl'}</Kbd> <Kbd>V</Kbd> pastes the scan
+              <Kbd>{MOD}</Kbd> <Kbd>V</Kbd> pastes the scan
             </span>
             <textarea
               className={styles.pasteArea}
@@ -167,7 +574,33 @@ export function SignaturesSection({
         </div>
       )}
 
-      {sorted.length === 0 ? (
+      {undo.batches.length > 0 && (
+        <div className={sig.undoBar} role="status">
+          <span>
+            {ghosts.length} removed · {undo.secondsLeft}s to undo
+          </span>
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={<Undo2 />}
+            onClick={() => void removal.restore(undo.batches)}
+          >
+            Undo <Kbd>{MOD}</Kbd>
+            <Kbd>Z</Kbd>
+          </Button>
+        </div>
+      )}
+
+      {selected.size > 1 && can.edit && (
+        <div className={sig.selectionBar}>
+          <span>{selected.size} selected</span>
+          <Button size="sm" variant="danger-ghost" icon={<X />} onClick={() => removeSelected([...selected])}>
+            Remove
+          </Button>
+        </div>
+      )}
+
+      {probed.length === 0 && ghosts.length === 0 ? (
         listed.isLoading ? (
           <div className={styles.padded} aria-busy="true">
             {[0, 1, 2].map((i) => (
@@ -177,102 +610,55 @@ export function SignaturesSection({
         ) : (
           <p className={styles.empty}>
             <Radar aria-hidden />
-            {can.edit
-              ? 'No signatures yet. Copy the probe scanner and paste.'
-              : 'Nobody has scanned here yet.'}
+            {hidden > 0
+              ? `${hidden} hidden by the filters.`
+              : others.length + hiddenOthers > 0
+                ? 'No probed signatures yet.'
+                : can.edit
+                  ? 'No signatures yet. Copy the probe scanner and paste.'
+                  : 'Nobody has scanned here yet.'}
           </p>
         )
       ) : (
-        <table className={styles.table} data-edit={can.edit || undefined}>
-          <thead>
-            <tr>
-              <th scope="col">ID</th>
-              <th scope="col">Group</th>
-              <th scope="col">Type / name</th>
-              <th scope="col" className={styles.num}>
-                Age
-              </th>
-              {can.edit && <th aria-label="Actions" />}
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((s) => {
-              const target = targetOf(s, connections);
-              const targetName = target !== null ? (universe.get(target)?.name ?? '…') : null;
-              const wormhole = s.group === 'wormhole';
-              const text = [s.type, s.name].filter(Boolean).join(' · ');
-              return (
-                <tr key={s.id} data-group={s.group}>
-                  <td className={styles.sigId}>{s.eveId}</td>
-                  <td>
-                    {can.edit ? (
-                      <span className={styles.groupSelect}>
-                        <select
-                          className={styles.inlineSelect}
-                          aria-label={`Group of ${s.eveId}`}
-                          value={s.group}
-                          onChange={(e) =>
-                            void store.updateSignature(s.id, { group: e.target.value as SignatureGroup })
-                          }
-                        >
-                          {SignatureGroup.options.map((g) => (
-                            <option key={g} value={g}>
-                              {GROUP_LABEL[g]}
-                            </option>
-                          ))}
-                        </select>
-                      </span>
-                    ) : (
-                      GROUP_LABEL[s.group]
-                    )}
-                  </td>
-                  <td title={[text, s.description].filter(Boolean).join(' · ') || undefined}>
-                    <span className={styles.typeCell} data-wormhole={wormhole || undefined}>
-                      {can.edit ? (
-                        <InlineText
-                          label={wormhole ? `Wormhole type of ${s.eveId}` : `Name of ${s.eveId}`}
-                          mono={wormhole}
-                          value={(wormhole ? s.type : s.name) ?? ''}
-                          placeholder={wormhole ? 'Type' : '—'}
-                          maxLength={wormhole ? 64 : 128}
-                          onCommit={(v) =>
-                            void store.updateSignature(s.id, wormhole ? { type: v } : { name: v })
-                          }
-                        />
-                      ) : (
-                        <span className={styles.ellipsis}>{text || <span className="subtle">—</span>}</span>
-                      )}
-                      {target !== null && (
-                        <button
-                          type="button"
-                          className={styles.target}
-                          title={`Leads to ${targetName}: select it`}
-                          onClick={() => onSelectSystem(target)}
-                        >
-                          <span aria-hidden>→ </span>
-                          {targetName}
-                        </button>
-                      )}
-                    </span>
-                  </td>
-                  <td className={`${styles.num} ${styles.age}`}>{shortAge(s.createdAt)}</td>
-                  {can.edit && (
-                    <td className={styles.actionCell}>
-                      <IconButton
-                        size="sm"
-                        tooltip={false}
-                        className={styles.rowRemove}
-                        label={`Remove ${s.eveId}`}
-                        icon={<X />}
-                        onClick={() => void store.removeSignature(s.id)}
-                      />
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        renderTable(probed, 'Signatures', true)
+      )}
+      {others.length + hiddenOthers > 0 && (
+        <div className={styles.others}>
+          <button
+            type="button"
+            className={styles.othersToggle}
+            aria-expanded={showOthers}
+            onClick={() => setShowOthers((v) => !v)}
+          >
+            <ChevronRight className={styles.chevron} aria-hidden />
+            Anomalies and other results
+            <span className={styles.sectionCount}>{others.length}</span>
+          </button>
+          {showOthers && (
+            <>
+              <OtherFilters />
+              {others.length > 0 && renderTable(others, 'Anomalies and other results', false)}
+            </>
+          )}
+        </div>
+      )}
+      {hidden > 0 && probed.length > 0 && (
+        <p className={sig.hiddenNote}>{hidden} hidden by the filters (signature settings)</p>
+      )}
+
+      {editingSig && (
+        <SignatureEditor
+          signature={editingSig}
+          system={universe.get(solarSystemId)}
+          connections={connections}
+          universe={universe}
+          systemName={systemName}
+          onSave={(patch) => update(editingSig.id, patch)}
+          onClose={() => {
+            setEditing(null);
+            focusTable();
+          }}
+        />
       )}
     </div>
   );

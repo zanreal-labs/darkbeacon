@@ -118,6 +118,7 @@ describeEachDialect('accounts, EVE sign-in, pickers and the landing map', (t) =>
       discordBot: false,
       publicMaps: true,
       mcpMode: 'off',
+      mapCreation: 'everyone',
     });
   });
 

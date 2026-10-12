@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Lock, LockOpen, Map as MapIcon, Navigation, Orbit, Skull, Telescope, X } from 'lucide-react';
 import {
   buildPath,
@@ -35,7 +35,9 @@ import {
 import { classPill, shownSecurity, STATUS_LABEL } from '../nodeFacts';
 import type { MapStore } from '../useMapStore';
 import { destinationToken } from '../WormholeFacts';
+import { EffectTable } from './EffectTable';
 import { InlineText } from './InlineText';
+import { NotesField } from './NotesField';
 import styles from './sidebar.module.css';
 
 /**
@@ -104,10 +106,10 @@ export function StaticsLine({ statics }: { statics: readonly string[] }) {
   );
 }
 
-function Effect({ effect }: { effect: WormholeEffect }) {
+function Effect({ effect, whClass }: { effect: WormholeEffect; whClass: number | null }) {
   const { name, summary } = WORMHOLE_EFFECTS[effect];
   return (
-    <Tooltip content={summary} side="bottom" align="start">
+    <Tooltip content={<EffectTable effect={effect} whClass={whClass} />} side="bottom" align="start">
       <span className={styles.effect} tabIndex={0} aria-label={`${name}: ${summary}`}>
         <Orbit aria-hidden />
         {name}
@@ -127,6 +129,7 @@ export function SystemIdentity({
   store,
   onClose,
   dragHandle,
+  holder,
 }: {
   system: MapSystemDto;
   info: UniverseSystemDto | undefined;
@@ -135,6 +138,8 @@ export function SystemIdentity({
   onClose(): void;
   /** The phone sheet's handle, above the name. */
   dragHandle?: ReactNode;
+  /** Who holds the system (intel), under where it is. */
+  holder?: ReactNode;
 }) {
   const realName = info?.name ?? 'Unknown system';
   const custom = system.customName || system.temporaryName;
@@ -173,53 +178,14 @@ export function SystemIdentity({
           <span className={styles.space}>{spaceText(info)}</span>
         </p>
       )}
+      {holder}
       {info && (info.effect || info.statics.length > 0) && (
         <div className={styles.wormhole}>
-          {info.effect && <Effect effect={info.effect} />}
+          {info.effect && <Effect effect={info.effect} whClass={info.whClass} />}
           <StaticsLine statics={info.statics} />
         </div>
       )}
     </header>
-  );
-}
-
-/** Notes that grow with their text; saved when the field is left (or Ctrl+Enter). */
-function InlineNotes({ value, onCommit }: { value: string; onCommit(value: string): void }) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-  const [draft, setDraft] = useState<string | null>(null);
-  const shown = draft ?? value;
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight + 2, 320)}px`;
-  }, [shown]);
-  const commit = () => {
-    if (draft === null) return;
-    setDraft(null);
-    if (draft !== value) onCommit(draft);
-  };
-  return (
-    <textarea
-      ref={ref}
-      className={styles.notes}
-      aria-label="Notes"
-      rows={2}
-      maxLength={10_000}
-      placeholder="Structures, who lives here, what to watch for…"
-      value={shown}
-      onFocus={() => setDraft(value)}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) e.currentTarget.blur();
-        else if (e.key === 'Escape') {
-          setDraft(null);
-          const el = e.currentTarget;
-          requestAnimationFrame(() => el.blur());
-        }
-      }}
-    />
   );
 }
 
@@ -498,14 +464,11 @@ export function SystemDetails({
         )}
       </dl>
 
-      {can.edit ? (
-        <InlineNotes
-          value={system.description}
-          onCommit={(description) => void update(id, { description })}
-        />
-      ) : (
-        system.description && <p className={styles.notesText}>{system.description}</p>
-      )}
+      <NotesField
+        editable={can.edit}
+        value={system.description}
+        onCommit={(description) => void update(id, { description })}
+      />
 
       {info && (
         <div className={styles.detailsFooter}>

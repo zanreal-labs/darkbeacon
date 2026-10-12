@@ -49,6 +49,13 @@ const signatureRefs = (d: Fields, b: Fields | null) => [
   ...ref('system', either(d, b, 'solarSystemId')),
   ...ref('connection', d.connectionId ?? b?.connectionId),
 ];
+/** Things that belong to one system (comments, structures): found in that system's history. */
+const inSystem = (kind: string) => (d: Fields, b: Fields | null) => [
+  ...ref(kind, either(d, b, 'id')),
+  ...ref('system', either(d, b, 'solarSystemId')),
+];
+/** Who wrote it is the event's actor already; not a change of its own. */
+const AUTHORED = [...STAMPS, 'createdBy', 'updatedBy'] as const;
 const byId =
   (kind: string, key = 'id') =>
   (d: Fields, b: Fields | null): AuditEntity => ({ kind, id: str(either(d, b, key)) });
@@ -56,6 +63,12 @@ const character = byId('character', 'characterId');
 const characterRefs = (d: Fields) => [...ref('character', d.characterId)];
 const subject = (d: Fields) => num(d.characterId);
 const change = (before: unknown, after: unknown) => ({ before, after });
+
+/** `Wanderer wanderer.ltd/home-chain`, as the audit trail names where an import came from. */
+const importSource = (source: unknown): string => {
+  const s = asFields(source);
+  return s ? `Wanderer ${str(s.host)}/${str(s.slug)}` : 'Wanderer';
+};
 
 const MAP_ENTITY: Partial<AuditDescriptor> = { ignore: ['createdAt', 'updatedAt'] };
 
@@ -128,9 +141,9 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
       ...ref('system', b?.to),
     ],
   },
-  'signature.added': { op: 'create', entity: byId('signature'), refs: signatureRefs, ignore: STAMPS },
-  'signature.updated': { op: 'update', entity: byId('signature'), refs: signatureRefs, ignore: STAMPS },
-  'signature.removed': { op: 'delete', entity: byId('signature'), refs: signatureRefs, ignore: STAMPS },
+  'signature.added': { op: 'create', entity: byId('signature'), refs: signatureRefs, ignore: AUTHORED },
+  'signature.updated': { op: 'update', entity: byId('signature'), refs: signatureRefs, ignore: AUTHORED },
+  'signature.removed': { op: 'delete', entity: byId('signature'), refs: signatureRefs, ignore: AUTHORED },
   'character.moved': {
     op: 'activity',
     entity: character,
@@ -233,6 +246,17 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
     state: (d) => ({ hubs: Array.isArray(d.hubs) ? d.hubs.map((hub: Fields) => str(hub.name)) : [] }),
   },
   'ping.created': { op: 'create', entity: byId('ping'), refs: (d) => ref('system', d.solarSystemId) },
+  // Kills in the chain come from zKillboard, not from anyone on the map: activity in the system's history.
+  'kill.reported': {
+    op: 'activity',
+    entity: byId('kill'),
+    refs: (d) => ref('system', d.solarSystemId),
+    activity: (d) => {
+      const victim = asFields(d.victim);
+      const ship = asFields(victim?.ship);
+      return { kill: change(null, ship?.name ?? 'ship') };
+    },
+  },
   'ping.removed': { op: 'delete', entity: byId('ping'), refs: (d, b) => ref('system', b?.solarSystemId) },
   'access.rule_added': { op: 'create', entity: byId('accessRule'), ignore: ['createdAt', 'mapId'] },
   'access.rule_removed': { op: 'delete', entity: byId('accessRule'), ignore: ['createdAt', 'mapId'] },
@@ -256,6 +280,61 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
   },
   'plugin.updated': { op: 'update', entity: byId('plugin'), ignore: ['installedAt'] },
   'plugin.removed': { op: 'delete', entity: byId('plugin'), ignore: ['installedAt'] },
+  'routes.bridges_changed': {
+    op: 'activity',
+    entity: () => ({ kind: 'bridges', id: 'map' }),
+    activity: (d) => {
+      const pair = (b: Fields) => `${str(asFields(b.a)?.name)} » ${str(asFields(b.b)?.name)}`;
+      const list = (key: string) => (Array.isArray(d[key]) ? (d[key] as Fields[]) : []);
+      const diff: FieldDiff = {};
+      if (list('added').length > 0) diff.added = change(null, list('added').map(pair));
+      if (list('updated').length > 0) diff.updated = change(null, list('updated').map(pair));
+      if (list('removed').length > 0) diff.removed = change(null, list('removed').length);
+      return diff;
+    },
+  },
+  'routes.settings_changed': { op: 'update', entity: () => ({ kind: 'routingSettings', id: 'map' }) },
+  'routes.way_home_changed': {
+    op: 'update',
+    entity: () => ({ kind: 'wayHome', id: 'map' }),
+    state: (d) => ({
+      wayHome: Array.isArray(d.routes)
+        ? d.routes.map(
+            (r: Fields) =>
+              `${str(asFields(r.hub)?.name)} ${str(r.jumps)}j via ${str(asFields(r.mouth)?.name)}`,
+          )
+        : [],
+    }),
+  },
+  'import.started': {
+    op: 'activity',
+    entity: byId('import', 'jobId'),
+    activity: (d) => ({ imported: change(null, importSource(d.source)), mode: change(null, d.mode) }),
+  },
+  'import.finished': {
+    op: 'activity',
+    entity: byId('import', 'jobId'),
+    activity: (d) => ({
+      imported: change(null, importSource(d.source)),
+      status: change(null, d.status),
+      ...(d.error ? { error: change(null, d.error) } : {}),
+    }),
+  },
+  'import.sync_changed': {
+    op: 'activity',
+    entity: byId('importSync', 'syncId'),
+    activity: (d) => ({
+      syncing: change(!d.enabled, d.enabled),
+      source: change(null, importSource(d.source)),
+      intervalMinutes: change(null, d.intervalMinutes),
+      ...(d.reason ? { reason: change(null, d.reason) } : {}),
+    }),
+  },
+  'import.progress': {
+    op: 'update',
+    entity: byId('import'),
+    state: (d) => ({ status: d.status, phase: d.phase }),
+  },
 
   // Instance audit (the `audit:instance` stream).
   'auth.signed_in': {
@@ -348,6 +427,26 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
     activity: () => ({ downloaded: change(null, true) }),
   },
   'backup.settings_changed': { op: 'update', entity: () => ({ kind: 'settings', id: 'backups' }) },
+  'comment.added': { op: 'create', entity: byId('comment'), refs: inSystem('comment'), ignore: STAMPS },
+  'comment.removed': { op: 'delete', entity: byId('comment'), refs: inSystem('comment'), ignore: STAMPS },
+  'structure.added': {
+    op: 'create',
+    entity: byId('structure'),
+    refs: inSystem('structure'),
+    ignore: AUTHORED,
+  },
+  'structure.updated': {
+    op: 'update',
+    entity: byId('structure'),
+    refs: inSystem('structure'),
+    ignore: AUTHORED,
+  },
+  'structure.removed': {
+    op: 'delete',
+    entity: byId('structure'),
+    refs: inSystem('structure'),
+    ignore: AUTHORED,
+  },
   'api_key.created': {
     op: 'create',
     entity: byId('apiKey'),
@@ -378,6 +477,60 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
     op: 'delete',
     entity: byId('oauthGrant'),
     refs: (d) => ref('account', d.accountId),
+  },
+  'access.rule_changed': {
+    op: 'update',
+    entity: byId('accessRule'),
+    ignore: ['createdAt', 'mapId', 'subject'],
+  },
+  'access.owner_changed': {
+    op: 'activity',
+    entity: byId('map', 'mapId'),
+    refs: (d) => [
+      ...ref('map', d.mapId),
+      ...ref('account', d.ownerAccountId),
+      ...ref('account', d.previousOwnerAccountId),
+    ],
+    activity: (d) => ({ ownerAccountId: change(d.previousOwnerAccountId, d.ownerAccountId) }),
+  },
+  'map.trashed': {
+    op: 'activity',
+    entity: byId('map'),
+    refs: (d) => ref('map', d.id),
+    activity: () => ({ deleted: change(false, true) }),
+  },
+  'map.restored': {
+    ...MAP_ENTITY,
+    op: 'activity',
+    entity: byId('map'),
+    refs: (d) => ref('map', d.id),
+    activity: () => ({ deleted: change(true, false) }),
+  },
+  'account.disabled_changed': {
+    op: 'activity',
+    entity: byId('account', 'accountId'),
+    refs: (d) => ref('account', d.accountId),
+    activity: (d) => ({ disabled: change(!d.disabled, d.disabled), reason: change(null, d.reason) }),
+  },
+  'webhook.secret_rotated': {
+    op: 'activity',
+    entity: byId('webhook'),
+    refs: (d) => ref('map', d.mapId),
+    activity: () => ({ secret: change('old', 'new') }),
+  },
+  'webhook.auto_disabled': {
+    op: 'activity',
+    entity: byId('webhook'),
+    refs: (d) => ref('map', d.mapId),
+    activity: (d) => ({ enabled: change(true, false), failures: change(null, d.failures) }),
+  },
+  'invite.created': { op: 'create', entity: byId('invite') },
+  'invite.revoked': { op: 'delete', entity: byId('invite') },
+  'invite.used': {
+    op: 'activity',
+    entity: byId('invite'),
+    refs: (d) => ref('account', d.accountId),
+    activity: (d) => ({ accountId: change(null, d.accountId) }),
   },
 };
 

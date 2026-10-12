@@ -5,6 +5,7 @@ import { PresencePeerPatch, PresenceStatePatch } from './dto/presence.js';
 import type { ConnectionDto, MapDto, MapSystemDto, SignatureDto } from './dto/mapping.js';
 import type { MapExitDto } from './dto/routing.js';
 import type { MapSourceDto } from './dto/sharing.js';
+import { SystemIntelDto } from './dto/intel.js';
 
 /**
  * WebSocket protocol at /ws. Commands go over REST; their results arrive here as events.
@@ -22,6 +23,11 @@ import type { MapSourceDto } from './dto/sharing.js';
  * times a second, less on crowded maps (PRESENCE_PEER_BUDGET), as patches
  * ({op:'presence', full: false, peers: [{key, ...changed fields}], left: keys}). Unsubscribing,
  * losing access or closing the socket leaves.
+ *
+ * Intel (ephemeral, not events): {op:'intel', stream, systems} on a `map:<id>` stream the socket
+ * follows, when sovereignty, hourly activity or kill counts of the map's systems changed. Clients
+ * load the full picture over REST (`routes.intel`) and patch it with these; a new killmail itself
+ * is an event (`kill.reported`).
  */
 export const ClientMessage = z.discriminatedUnion('op', [
   z.object({
@@ -79,6 +85,12 @@ export const ServerMessage = z.discriminatedUnion('op', [
     peers: z.array(PresencePeerPatch),
     /** Keys of peers who left. */
     left: z.array(z.string()),
+  }),
+  z.object({
+    op: z.literal('intel'),
+    stream: z.string(),
+    /** Systems of the map whose sovereignty or activity changed (replace what is held). */
+    systems: z.array(SystemIntelDto),
   }),
 ]);
 export type ServerMessage = z.infer<typeof ServerMessage>;

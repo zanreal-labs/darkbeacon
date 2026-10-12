@@ -1,0 +1,15 @@
+/* Covers the map until the person tracks every character (the option of the map). */
+.gate {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: var(--dbk-space-4);
+  background: color-mix(in srgb, var(--dbk-color-bg) 82%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+.card {
+  width: min(480px, 100%);
+}

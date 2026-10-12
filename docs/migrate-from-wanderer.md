@@ -1,0 +1,231 @@
+# Moving from Wanderer
+
+Darkbeacon imports whole Wanderer maps: systems with their notes, tags, labels and positions, connections in
+every state, signatures, structures, system comments and the map's access lists. It reads the public
+instance (wanderer.ltd) and any self-hosted Wanderer, over Wanderer's API with a map API key or from the file
+Wanderer exports. The import runs on the server, can be merged into a map you already use, and can keep
+pulling from Wanderer while your group moves over.
+
+Darkbeacon is written from scratch; it only speaks Wanderer's published API and file format (see
+[Sources](#sources)).
+
+## Step by step
+
+1. **Get the map API key in Wanderer.** Open the map, then its settings, and find the **Public API** section
+   (Wanderer calls it the map API key). Generate one if the map has none and copy it. On a self-hosted
+   Wanderer (Community Edition) the public API must be switched on: `WANDERER_PUBLIC_API_DISABLED=false`.
+   Access lists whose members the map key cannot read need their own **ACL API key** (from the ACL's edit
+   screen in Wanderer); the preview tells you which ones.
+2. **Open the import in Darkbeacon.** Go to **All maps** and press **Import from Wanderer**, or, to merge into
+   a map you have already, open that map's settings, **Import**, **Import into this map** (map managers).
+3. **Choose the source.**
+   - **Wanderer's API**: the address of the instance (`https://wanderer.ltd` or your own), the map (its slug,
+     or paste the map's address) and the map API key. **Test connection** checks the address and the key
+     without reading anything else.
+   - **Export file**: the `.json` file Wanderer exported (up to 25 MB). A file is read once; it cannot keep
+     syncing, and it has no access lists.
+4. **Read the map.** Darkbeacon reads the whole map and shows a preview: how many systems (shown and hidden),
+   connections, signatures, structures, comments, labels, access rules and hubs it found, and the mapping
+   report: what comes over as it is, what comes over close to it, and what is left out and why. Nothing is
+   written yet. The access list shows every ACL member with the role it will get here and the name ESI gives
+   it today (or the name Wanderer had, when ESI does not know it).
+5. **Choose where it goes.**
+   - **A new map**: you name it and become its owner; everything is created as Wanderer has it.
+   - **A map I manage** (not a map that merges other maps): merged field by field (see [Merging](#merging)). The preview shows what would be
+     new, updated, unchanged or skipped, and every field the two sides disagree on with the side that is kept.
+   - Options: **Import access rules** (map admins), **Remove what Wanderer no longer has** (merges only) and
+     **Keep syncing from Wanderer** (API only, every 5 to 60 minutes).
+6. **Import.** The import runs as a job on the server; the page follows it live (progress per phase). A job
+   interrupted by a restart picks up where it was. When it is done, **Open map** and **Download report** (the
+   job, the mapping report, what happened per kind, and the Wanderer fields Darkbeacon has no place for).
+7. **While you move over**, a map that keeps syncing pulls Wanderer again every N minutes and merges what
+   changed. Stop it in the map's settings, **Import**, **Stop syncing**. It also stops by itself when Wanderer
+   refuses the key, after five failed pulls in a row, or when the person who set it up is no longer a manager
+   of the map.
+
+## Public and self-hosted Wanderer
+
+- **wanderer.ltd** and other public instances are read over `https://` only.
+- A **self-hosted Wanderer on your own network** (a private or local address, or plain `http://`) is refused
+  until an instance admin allows it: **Admin**, **Instance**, **Imports**, **Allow imports from private
+  networks**. The check runs when the connection is made, so a name that resolves to a private address is
+  refused too.
+- A self-hosted Wanderer with a **self-signed certificate**: an instance admin can tick **Accept a
+  self-signed certificate** on the import page.
+- Darkbeacon never follows redirects with the key (it tells you the address to use instead), waits out
+  `429` answers (`Retry-After`), retries `5xx` answers and network errors twice, and spaces its requests to
+  one instance. Every person can read at most twelve Wanderer maps in ten minutes, one at a time.
+
+## What migrates
+
+Everything a Wanderer map holds comes over 1:1. Where Darkbeacon had no place for something, it has one now
+(connection notes, locks and lifetime marks; anomalies and other scanner results; custom entries).
+
+| Wanderer                                                                         | Darkbeacon                                                                                                                                                                                                                                                                    |
+| -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Systems: position, custom name, temporary name, notes, locked, shown or hidden   | The same fields. Hidden systems come over hidden, with their notes and signatures. Positions are spread to fit Darkbeacon's larger systems (once; later pulls keep the same scale).                                                                                           |
+| The map's labels (its own list, or Wanderer's defaults A, B, C, 1, 2, 3)         | The map's **Labels**, in the same order with the same ids and descriptions (names up to 8 characters; colours dropped, Labels are plain text; two with one name become one). A new map takes Wanderer's list instead of WH1-WH3; a merge adds the ones the map lacks by name. |
+| A system's labels and its custom label                                           | The system's Labels and its custom label (up to 16 characters).                                                                                                                                                                                                               |
+| A system's tag                                                                   | A **Tag** of that name on the system (created in the map's Tags, grey, when missing).                                                                                                                                                                                         |
+| Status: unknown, friendly, warning, home, target, dangerous                      | Unknown, friendly, warning, home, target, hostile.                                                                                                                                                                                                                            |
+| Status: target (secondary), dangerous (secondary)                                | Target or hostile, with a "Secondary" Tag.                                                                                                                                                                                                                                    |
+| Status: looking for                                                              | Unknown, with a "Looking for" Tag.                                                                                                                                                                                                                                            |
+| Connections: wormhole, gate, bridge                                              | Wormhole, gate, bridge.                                                                                                                                                                                                                                                       |
+| Mass: more than half, less than half, critical                                   | Fresh, reduced, critical; the time it was set counts for mass estimates.                                                                                                                                                                                                      |
+| Time marks: less than 1 h, 4 h, 4.5 h, 16 h, 24 h, 48 h left                     | The connection's lifetime mark with the time it was set (the time left and the hover card count from it); 1 h and 4 h are also end of life.                                                                                                                                   |
+| Ship size: frigate, medium, large, freight, capital                              | Frigate, medium, large, freighter (XL), capital.                                                                                                                                                                                                                              |
+| Dangerous, bubbled (source, target, both)                                        | The same.                                                                                                                                                                                                                                                                     |
+| Locked connections                                                               | Locked connections: only map managers change or remove them, auto-mapping never does.                                                                                                                                                                                         |
+| Connection custom info                                                           | The connection's note. A wormhole type that no signature carries is added to it ("Wormhole type: U210").                                                                                                                                                                      |
+| When a connection was found, when anything last changed                          | Kept: lifetimes count from Wanderer's first sighting, and shared chains weigh changes by Wanderer's own times.                                                                                                                                                                |
+| Cosmic signatures (every group), names, notes, wormhole types, linked systems    | Signatures; one that leads to a system the map connects is linked to that connection. A connection's wormhole type goes to its signature.                                                                                                                                     |
+| Cosmic anomalies and other scanner rows (ships, structures, deployables, drones) | Scan results of kind anomaly or other, in the signatures section under "Anomalies and other results".                                                                                                                                                                         |
+| Custom signatures (ids that are not `ABC-123`, entries someone wrote)            | Custom entries with their own id.                                                                                                                                                                                                                                             |
+| Marks on an unlinked signature (time, mass, where it leads)                      | Written in its description ("Wanderer marks: less than 16h left, leads to C5").                                                                                                                                                                                               |
+| The bookmark name of a signature                                                 | Written in its description ("Bookmark: 1a"); Darkbeacon names bookmarks from the map's template.                                                                                                                                                                              |
+| Passages one by one (pilot, ship, time), where the source lists them             | Passages of the connection, with the ship's hull mass from the SDE; recorded once however often you import.                                                                                                                                                                   |
+| Structures (type, name, owner, status, timer, notes, who added it)               | Structures of the system (Structures section): type, name, owner corporation and ticker, status, timer, notes, who added it and when. Statuses Darkbeacon has no value for become Powered (reported).                                                                         |
+| System comments                                                                  | Comments of the system (Comments section), with who wrote them and when; cut to 500 characters (reported).                                                                                                                                                                    |
+| ACL members: characters, corporations, alliances                                 | Access rules on the map by EVE id (see [Access](#access)).                                                                                                                                                                                                                    |
+| Map scope (wormholes, stargates, all, none)                                      | Auto-mapping scopes.                                                                                                                                                                                                                                                          |
+| Map hubs (settings export), the hubs the map's users set for their routes        | Map hubs (up to 20, most used first); routes in the sidebar measure from them.                                                                                                                                                                                                |
+| The map's description                                                            | The map's description (Map settings, General), shown in the list of maps.                                                                                                                                                                                                     |
+| Webhook subscriptions (address and events)                                       | Webhooks of the map, **added switched off** with the Darkbeacon events that tell the same thing (see [Webhooks](#webhooks)).                                                                                                                                                  |
+
+## What does not migrate, and why
+
+- **Tracked characters and user settings.** Each pilot signs in with EVE and links their characters here;
+  tracking starts again live.
+- **Passage counts without details.** Wanderer's documented API says how many ships went through a
+  connection, not who, in what or when. A bare count cannot feed mass estimates (they need the hull), so it
+  is kept in the import record and the downloadable report (`importedExtra`). Where an instance or an export
+  file lists passages one by one, they come over as passages.
+- **Connections to hidden systems** and a second connection between the same two systems: a hidden system
+  has no connections in either mapper, and a pair of systems has one connection.
+- **Kills.** They are zKillboard data that Darkbeacon reads live for the systems on the map.
+- **Webhook events Darkbeacon does not send**: `map_kill` (kills are read live from zKillboard) and any event
+  Wanderer adds later; the report names them. Wanderer's webhook secrets are never read.
+- **Map subscriptions and licences.** They are the Wanderer service's billing, not part of the chain.
+- **ACLs whose members the map key cannot read**, unless you give their ACL API keys.
+
+The mapping report of every import lists exactly what came over, what was approximated and what was left out,
+with examples.
+
+## Merging
+
+A merge never deletes anything unless you ask for it, and it is idempotent: running the same import again
+changes nothing, because every imported object keeps a stable id from Wanderer (solar system id, the pair of
+systems of a connection, system and signature id, the subject of an access rule).
+
+- **First import into an existing map**: blanks here are filled from Wanderer, blanks in Wanderer change
+  nothing, and where both have a different value the newer side wins (Wanderer's `updated_at` against the
+  time the object last changed here). Notes, Labels and Tags are never lost: different notes are joined, Labels and Tags
+  are united.
+- **Later imports and syncs from the same source** are three-way merges against what the last import wrote:
+  a field only Wanderer changed is taken, a field only changed here is kept, a field both changed goes to the
+  newer side.
+- Imported changes carry Wanderer's own change times, so maps that merge this one (shared chains) weigh
+  them by when they happened in Wanderer, and imported wormholes are numbered like any other.
+- A system **locked** here keeps its position. A system Wanderer took off its map is hidden here only when
+  **Remove what Wanderer no longer has** is on.
+- **Removals** (asked for) remove only what an earlier import brought and nobody changed here since.
+- **Access rules**: a subject without a rule gets one; a rule an earlier import added and nobody changed
+  follows Wanderer's role; any other rule here is kept as it is.
+
+## Webhooks
+
+A Wanderer webhook comes over as a webhook of the map with the same address, switched off: Darkbeacon signs
+every delivery with its own secret (header `x-darkbeacon-signature`) and sends its own event shapes, so the
+receiver has to be set up for them first. In **Map settings, Webhooks** a map admin takes a **New signing
+secret** (shown once), sets the receiver up with it, checks it with **Test** and switches the webhook on.
+Events map like this:
+
+| Wanderer                                                       | Darkbeacon                                                     |
+| -------------------------------------------------------------- | -------------------------------------------------------------- |
+| `add_system`, `deleted_system`, `system_metadata_changed`      | `system.added`, `system.removed`, `system.updated`             |
+| `connection_added`, `connection_removed`, `connection_updated` | `connection.added`, `connection.removed`, `connection.updated` |
+| `signature_added`, `signature_removed`                         | `signature.added`, `signature.removed`                         |
+| `signatures_updated`                                           | `signature.added`, `signature.updated`, `signature.removed`    |
+| `acl_member_added`, `acl_member_removed`, `acl_member_updated` | `access.rule_added`, `access.rule_removed` (both for updated)  |
+| `*` (or no events)                                             | `system.*`, `connection.*`, `signature.*`, access rule events  |
+| `map_kill`                                                     | none (left out, see above)                                     |
+
+Each Wanderer webhook is added once: a later import or sync does not add it again, even when it was deleted
+here. Webhooks need a map admin.
+
+## Access
+
+| Wanderer ACL role | Map role here                         |
+| ----------------- | ------------------------------------- |
+| admin             | admin (map settings and access rules) |
+| manager           | manager                               |
+| member            | member (edits the chain)              |
+| viewer            | viewer                                |
+| blocked           | blocked                               |
+
+A subject in several ACLs gets its strongest role, and one blocked in any ACL stays blocked. Blocks work as
+in Wanderer: a block on a character beats every grant, a block on a corporation or alliance beats every
+corporation and alliance grant, and only a rule on a character gets past it. Access rules only grant map roles: an import never makes anyone an instance admin. Importing access
+rules needs a map admin; the person who imports into a new map is its owner. Wanderer's map owner is not
+carried over.
+
+## While a backup is restored
+
+Imports and syncs pause while an admin restores a backup and carry on where they were afterwards.
+
+## Audit
+
+Every change an import makes is an ordinary event on the map (clients, webhooks and plugins see it like any
+edit) and goes into the audit trail as the person who ran the import, through the channel
+**"Imported from Wanderer `<host>/<slug>`"**. The map's history shows when an import started and finished
+(`import.started`, `import.finished`) and when syncing was switched on or off (`import.sync_changed`). The
+API key is stored encrypted (AES-256-GCM) and never shown or recorded again.
+
+## API
+
+The import screen uses these routes (signed-in accounts):
+
+- `POST /api/imports/wanderer/test`, `POST /api/imports/wanderer` (API source),
+  `POST /api/imports/wanderer/file` (the export file as the body, content type
+  `application/vnd.darkbeacon.wanderer-export+json`)
+- `GET /api/imports/:jobId`, `POST /api/imports/:jobId/plan`, `POST /api/imports/:jobId/start`,
+  `POST /api/imports/:jobId/cancel`, `GET /api/imports/:jobId/report`
+- `GET` and `DELETE /api/maps/:mapId/import-sync`
+- Progress over the WebSocket: subscribe to `import:<jobId>` (`import.progress` events with the whole job).
+
+## Sources
+
+Wanderer's API and formats as documented by the Wanderer team, read for interoperability only:
+
+- [Comprehensive Guide: Wanderer API Documentation](https://wanderer.ltd/news/api): map API key and ACL API
+  key (Bearer), `GET /api/map/systems?slug=&all=true`, `/api/map/connections`, `/api/map/acls`,
+  `/api/acls/:id` (members with `eve_character_id`, `eve_corporation_id` or `eve_alliance_id`),
+  `/api/map/characters`.
+- [API Guide: Systems and Connections API](https://wanderer.ltd/news/systems-connections-api):
+  `/api/maps/:map/systems`, `/connections`, `/signatures`, `/structures` and their fields.
+- [API Modernization: JSON:API v1](https://wanderer.ltd/news/api-modernization): `/api/v1/*` resources,
+  offset pagination (`page[limit]`, `page[offset]`), `map_system_comments` and `map_system_signatures`.
+- [User Guide: Public API Endpoints for Map Data](https://wanderer.ltd/news/map-public-api): where the map
+  API key is generated (map settings).
+- [Real-Time Events API: Server-Sent Events and Webhooks](https://wanderer.ltd/news/webhooks): `GET
+/api/maps/:map/webhooks` (`url`, `events`, `active`) and the event names; self-hosted instances need
+  `WANDERER_WEBHOOKS_ENABLED`, without it there are no webhooks to read. The JSON:API `map_user_settings`
+  resource (API modernization guide) carries each user's `hubs`.
+- [User Guide: Characters & ACL API Endpoints](https://wanderer.ltd/news/acl-api) and the access lists guide
+  ([GitHub](https://github.com/wanderer-industries/wanderer/blob/main/priv/posts/2024/08-04-access-lists-guide.md)):
+  ACL roles admin, manager, member, viewer, blocked.
+- Connection time marks: Wanderer's lifetime selector
+  ([`WdLifetimeSelector.tsx`](https://github.com/wanderer-industries/wanderer/blob/main/assets/js/hooks/Mapper/components/ui-kit/WdLifetimeSelector.tsx))
+  describes each code as "less than N hours remaining" (1, 4, 4.5, 16, 24, 48 h; 4.5 h the life of small
+  holes, 48 h only a few C6 statics), set on the connection's `time_status`; the time it was set is the
+  connection's `updated_at`. Scanner kinds and groups as its signature types name them (`Cosmic Signature`,
+  `Cosmic Anomaly`, `Structure`, `Ship`...). Passages one by one are not part of Wanderer's documented API;
+  instances or files that list them are read in the shape of its `map_chain_passages` resource.
+- Value codes (system status 0-8, connection type, mass, time and ship size codes, labels as JSON with
+  `customLabel` and `labels`) as Wanderer's API schemas describe them
+  ([swagger at `/swaggerui`](https://wanderer.ltd/swaggerui), resources in
+  [wanderer-industries/wanderer](https://github.com/wanderer-industries/wanderer)), and the export
+  files the Wanderer UI writes (the map settings export and the map contents export, versions 1 and 2).
+
+The fake Wanderer used by the tests and the demo (`tools/fake-wanderer`) serves made-up data in these
+shapes; nothing is ever sent to wanderer.ltd by the tests.

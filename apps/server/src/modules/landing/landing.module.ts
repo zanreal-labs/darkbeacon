@@ -53,6 +53,7 @@ export class LandingController {
       discordBot,
       publicMaps: settings.publicMaps ?? true,
       mcpMode: settings.mcpMode ?? 'off',
+      mapCreation: settings.mapCreation ?? 'everyone',
     };
   }
 }

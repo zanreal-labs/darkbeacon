@@ -22,8 +22,9 @@ export interface AccessServiceDeps {
  * The authorization service every module uses for maps (the core `MapAccess` port).
  *
  * - The map owner is always admin.
- * - Otherwise access rules decide: a block on one of the account's characters or on the account
- *   wins, then the highest granted role, then `blocked` if only blocks matched.
+ * - Otherwise access rules decide, as in Wanderer: a block on one of the account's characters or
+ *   on the account wins; a block on a corporation, alliance or Discord role beats every group
+ *   grant, so only character and account grants get past it; else the highest granted role.
  * - Service keys hold the roles an instance admin gave them; a public visitor is a viewer of
  *   the one map whose link it came through; system and plugin actors act as admin.
  * - Instance owners and admins get no implicit map access.
@@ -49,11 +50,12 @@ export class AccessService implements MapAccess {
       case 'public':
         return actor.mapId === mapId ? 'viewer' : null;
       case 'account': {
-        if (owner === actor.id) return 'admin';
         const [rules, subjects] = await Promise.all([
           this.deps.rules.listForMap(mapId),
           this.deps.subjects.subjectsOf(actor.id),
         ]);
+        if (subjects.disabled) return null;
+        if (owner === actor.id) return 'admin';
         return resolveMapRole(grantsFor(rules, subjects));
       }
     }
@@ -91,6 +93,7 @@ export class AccessService implements MapAccess {
       this.deps.ownership.mapsOwnedBy(accountId),
       this.deps.subjects.subjectsOf(accountId),
     ]);
+    if (subjects.disabled) return [];
     const result = owned.map((mapId) => ({ mapId, role: 'admin' as GrantingMapRole }));
     const byMap = new Map<string, AccessRule[]>();
     for (const rule of await this.deps.rules.listMatching(subjectKeys(subjects))) {

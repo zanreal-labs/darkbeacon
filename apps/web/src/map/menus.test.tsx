@@ -71,7 +71,55 @@ describe('system menu', () => {
     expect(rows(system('viewer').items)).toEqual(['Copy name']);
     const withPilot = system('viewer', {}, { characters: [pilot(1, 'Ayla Vex')] }).items;
     expect(rows(withPilot)).toEqual(['Set destination', 'Copy name']);
-    expect(rows(sub(withPilot, 'Set destination'))).toEqual(['Set destination', 'Add waypoint']);
+    expect(rows(sub(withPilot, 'Set destination'))).toEqual([
+      'Set destination',
+      'Add waypoint',
+      'Add waypoint first',
+    ]);
+  });
+
+  it('toggles map hubs for members and own hubs for everyone', () => {
+    const toggle = vi.fn();
+    const hubs = {
+      trade: [],
+      map: [{ solarSystemId: 31000005, name: 'J123456', security: -1, kind: 'map' as const, near: null }],
+      personal: [],
+    };
+    const viewer = system('viewer', {}, { routes: { hubs, canEdit: false, toggle } }).items;
+    expect(rows(viewer)).toEqual(['My hub', 'Copy name']);
+    const member = system('member', {}, { routes: { hubs, canEdit: true, toggle } }).items;
+    const mapHub = member.find((i) => i.kind === 'check' && i.label === 'Map hub');
+    if (mapHub?.kind !== 'check') throw new Error('Map hub');
+    expect(mapHub.checked).toBe(true);
+    mapHub.onSelect();
+    expect(toggle).toHaveBeenCalledWith('map', { solarSystemId: 31000005, name: 'J123456' }, false);
+  });
+
+  it('lets anyone set their own standing towards the holder, and go back to their contacts', () => {
+    const set: Array<number | null> = [];
+    const holder = (standing: number | null, overridden: boolean) => ({
+      holder: { id: 1354830081, name: 'Goonswarm Federation', ticker: 'CONDI' },
+      standing,
+      overridden,
+      set: (v: number | null) => void set.push(v),
+    });
+    const items = system('viewer', {}, { holder: holder(5, false) }).items;
+    expect(rows(items)).toEqual(['Standing towards [CONDI]', 'Copy name']);
+    const choices = sub(items, 'Standing towards [CONDI]');
+    expect(rows(choices)).toEqual([
+      'Excellent (+10)',
+      'Good (+5)',
+      'Neutral (0)',
+      'Bad (-5)',
+      'Terrible (-10)',
+    ]);
+    pick(choices, 'Terrible (-10)');
+    const overridden = sub(
+      system('viewer', {}, { holder: holder(-10, true) }).items,
+      'Standing towards [CONDI]',
+    );
+    pick(overridden, 'Use my contacts again');
+    expect(set).toEqual([-10, null]);
   });
 
   it('keeps the member top level short: details in submenus, remove last', () => {
@@ -188,13 +236,11 @@ describe('system menu', () => {
         characters: [pilot(1, 'Ayla Vex'), pilot(2, 'Bren Tal'), pilot(3, 'No Scope', false)],
       },
     );
-    expect(rows(sub(items, 'Set destination'))).toEqual([
-      'Ayla Vex',
+    expect(rows(sub(items, 'Set destination'))).toEqual(['All characters', '—', 'Ayla Vex', 'Bren Tal']);
+    expect(rows(sub(sub(items, 'Set destination'), 'Bren Tal'))).toEqual([
       'Set destination',
       'Add waypoint',
-      'Bren Tal',
-      'Set destination',
-      'Add waypoint',
+      'Add waypoint first',
     ]);
   });
 
@@ -225,16 +271,39 @@ describe('connection menu', () => {
     expect(rows(items)).toEqual([
       'Mass',
       'Time',
+      'Lifetime left',
       'Size',
       'Bubbled',
       'Type',
       '—',
       'Dangerous',
       'Mass saved',
+      'Link signatures…',
       '—',
       'Remove connection',
     ]);
     expect(rows(sub(items, 'Mass'))).toEqual(['Fresh', 'Reduced', 'Critical']);
+    expect(rows(sub(items, 'Lifetime left'))).toEqual([
+      'Not marked',
+      'Less than 1h',
+      'Less than 4h',
+      'Less than 4.5h',
+      'Less than 16h',
+      'Less than 24h',
+      'Less than 48h',
+    ]);
+  });
+
+  it('locks and unlocks for managers; a locked connection is read-only for members', () => {
+    const { items } = menu('member');
+    expect(rows(items)).not.toContain('Lock');
+    const managed = menu('manager');
+    expect(rows(managed.items)).toContain('Lock');
+    pick(managed.items, 'Lock');
+    expect(managed.commands.updateConnection.mock.calls).toEqual([['c1', { locked: true }]]);
+    const locked = { locked: true };
+    expect(rows(menu('member', locked).items)).not.toContain('Remove connection');
+    expect(rows(menu('manager', locked).items)).toContain('Unlock');
     expect(rows(sub(items, 'Size'))).toEqual(['Frigate', 'Medium', 'Large', 'Freighter', 'Capital']);
     expect(rows(sub(items, 'Bubbled'))).toEqual(['None', 'Near J123456', 'Near Jita', 'Both ends']);
   });
@@ -261,7 +330,7 @@ describe('connection menu', () => {
       ['c1', { bubbled: 'target' }],
       ['c1', { dangerous: true }],
     ]);
-    expect(commands.removeConnection).toHaveBeenCalledWith('c1');
+    expect(commands.removeConnection).toHaveBeenCalledWith('c1', { withSignatures: false });
   });
 
   it('leaves out wormhole states on a gate, and everything for a viewer', () => {
@@ -280,9 +349,21 @@ describe('connection menu', () => {
 describe('pane menu', () => {
   it('adds a system for members; everyone can fit the chain and center on themselves', () => {
     const ctx = { onAddSystem: vi.fn(), onFitChain: vi.fn(), onCenterOnMe: vi.fn() };
-    expect(rows(paneMenu({ ...ctx, can: mapPermissions('viewer') }))).toEqual(['Fit chain', 'Center on me']);
+    expect(rows(paneMenu({ ...ctx, can: mapPermissions('viewer') }))).toEqual([
+      'Fit chain',
+      'Center on me',
+      '—',
+      'Wormhole types…',
+    ]);
     const member = paneMenu({ ...ctx, can: mapPermissions('member') });
-    expect(rows(member)).toEqual(['Add system here…', '—', 'Fit chain', 'Center on me']);
+    expect(rows(member)).toEqual([
+      'Add system here…',
+      '—',
+      'Fit chain',
+      'Center on me',
+      '—',
+      'Wormhole types…',
+    ]);
     pick(member, 'Fit chain');
     expect(ctx.onFitChain).toHaveBeenCalledOnce();
   });

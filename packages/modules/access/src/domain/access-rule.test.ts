@@ -50,9 +50,36 @@ describe('access rules', () => {
     expect(roleFor(rule('corporation', '10', 'admin'), rule('account', 'acc', 'blocked'))).toBe('blocked');
   });
 
-  it('treats a block on a group as losing against any grant', () => {
-    expect(roleFor(rule('alliance', '100', 'blocked'), rule('character', '1', 'viewer'))).toBe('viewer');
+  it('lets a block on a group beat every group grant, as Wanderer does', () => {
+    // The alliance is a member, a spy corporation inside it is blocked: the spy stays out.
+    expect(roleFor(rule('alliance', '100', 'member'), rule('corporation', '10', 'blocked'))).toBe('blocked');
+    expect(roleFor(rule('corporation', '10', 'admin'), rule('alliance', '100', 'blocked'))).toBe('blocked');
+    expect(roleFor(rule('alliance', '100', 'admin'), rule('discordRole', 'r1', 'blocked', 'g1'))).toBe(
+      'blocked',
+    );
+    expect(roleFor(rule('discordRole', 'r1', 'admin', 'g1'), rule('corporation', '10', 'blocked'))).toBe(
+      'blocked',
+    );
     expect(roleFor(rule('corporation', '10', 'blocked'))).toBe('blocked');
+  });
+
+  it('lets only a character or account grant past a group block', () => {
+    expect(roleFor(rule('alliance', '100', 'blocked'), rule('character', '1', 'viewer'))).toBe('viewer');
+    expect(
+      roleFor(
+        rule('corporation', '10', 'blocked'),
+        rule('alliance', '100', 'admin'),
+        rule('account', 'acc', 'member'),
+      ),
+    ).toBe('member');
+  });
+
+  it('blocks the whole person when any of their characters sits in a blocked group', () => {
+    // A second character in the spy corporation blocks the person, like Wanderer's
+    // check over all of a user's characters.
+    const twoChars: AccessSubjects = { ...subjects, characterIds: [1, 2], corporationIds: [10, 20] };
+    const rules = [rule('alliance', '100', 'member'), rule('corporation', '20', 'blocked')];
+    expect(resolveMapRole(grantsFor(rules, twoChars))).toBe('blocked');
   });
 
   it('lists the subject keys of an account', () => {

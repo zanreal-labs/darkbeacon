@@ -26,6 +26,7 @@ import {
 import { RouteQueries } from '@darkbeacon/routing';
 import { OAuthServer } from '@darkbeacon/oauth';
 import { MapPublishing } from '@darkbeacon/publishing';
+import { IntelQueries } from '@darkbeacon/intel';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { AppConfig } from '../config/config.js';
 import { LIMITS, RateLimiter } from '../platform/rate-limiter.js';
@@ -69,6 +70,7 @@ export class McpController implements OnModuleDestroy {
     @Inject(UNIVERSE_CATALOG) universe: UniverseCatalog,
     @Optional() @Inject(MapPublishing) publishing: MapPublishing | null,
     @Optional() @Inject(OAuthServer) private readonly oauth: OAuthServer | null,
+    @Optional() @Inject(IntelQueries) systemIntel: IntelQueries | null,
   ) {
     this.publicOrigin = new URL(config.publicUrl).origin;
     const deps: McpDeps = {
@@ -83,6 +85,7 @@ export class McpController implements OnModuleDestroy {
       hub,
       universe,
       publishing: publishing ?? null,
+      systemIntel: systemIntel ?? null,
     };
     this.handler = createMcpHandler(
       (ctx) =>

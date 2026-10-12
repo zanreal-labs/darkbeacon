@@ -42,6 +42,12 @@ export const FIELD_SCOPES: Record<ChainObjectKind, Record<string, FieldScope>> =
     dangerous: 'connectionStatus',
     /** `none`, `low`, `high` or `both`: the bubbled end by system id, not by direction. */
     bubbled: 'connectionStatus',
+    /** `{ mark, at }`: "less than N hours left" and when it was set, or null. */
+    lifetime: 'connectionStatus',
+    /** Free text about the hole. */
+    note: 'intel',
+    /** Who may change it is the map's own business, like a system's lock. */
+    locked: 'local',
   },
   signature: {
     group: 'signatures',
@@ -50,6 +56,17 @@ export const FIELD_SCOPES: Record<ChainObjectKind, Record<string, FieldScope>> =
     notes: 'signatures',
     /** The pair key of the connection it leads through, or null. */
     link: 'signatures',
+    /** A wormhole's temporary name, where a K162 leads, whether it is bubbled. */
+    tempName: 'signatures',
+    destination: 'signatures',
+    bubbled: 'signatures',
+    /** Lifetime and mass the scanning pilot saw on the hole. */
+    time: 'signatures',
+    mass: 'signatures',
+    /** `signature`, `anomaly` or `other`. */
+    kind: 'signatures',
+    /** Someone wrote it rather than the scanner. */
+    custom: 'signatures',
   },
   character: {
     name: 'characters',

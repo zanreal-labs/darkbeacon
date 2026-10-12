@@ -186,6 +186,68 @@ describeEachDialect('webhooks', (t) => {
     ]);
     expect(await repo.pruneDeliveries(clock.now() + 1)).toBe(1);
   });
+
+  it('turns a webhook off after ten deliveries failed in a row, and rotates its secret', async () => {
+    const log = new KyselyEventLog(t.db, new InProcessEventBus());
+    dispatcher = new WebhookDispatcher({ webhooks: repo, sender, clock, events: log });
+    admin = new WebhookAdmin({ webhooks: repo, access, dispatcher, clock, events: log, uow: t.db });
+    const { id, secret } = await admin.create(alice, 'm1', { url: 'https://example.com/h', events: ['*'] });
+    sender.responses = Array.from({ length: 1000 }, () => 500);
+
+    /** One event whose every attempt fails. */
+    const failOne = async () => {
+      await dispatcher.handle(mapEvent('system.added'));
+      for (let i = 0; i < WEBHOOK_MAX_ATTEMPTS; i++) {
+        clock.advance(3 * 60 * 60_000);
+        await dispatcher.retryDue();
+      }
+    };
+    for (let i = 0; i < 9; i++) await failOne();
+    expect((await admin.list(alice, 'm1'))[0]).toMatchObject({ enabled: true, consecutiveFailures: 9 });
+    await failOne();
+    const off = (await admin.list(alice, 'm1'))[0]!;
+    expect(off).toMatchObject({ enabled: false, consecutiveFailures: 10 });
+    expect(off.disabledReason).toMatch(/10 deliveries failed in a row \(last: HTTP 500\)/);
+    expect((await log.readSince('audit:instance', 0)).map((e) => e.type)).toContain('webhook.auto_disabled');
+
+    // Turned on by a person: a clean slate; a success resets the count too.
+    expect(await admin.update(alice, 'm1', id, { enabled: true })).toMatchObject({
+      enabled: true,
+      consecutiveFailures: 0,
+      disabledReason: null,
+    });
+    sender.responses = [];
+
+    const rotated = await admin.rotateSecret(alice, 'm1', id);
+    expect(rotated.secret).toMatch(/^whsec_/);
+    expect(rotated.secret).not.toBe(secret);
+    await expect(admin.rotateSecret(bob, 'm1', id)).rejects.toMatchObject({ code: 'forbidden' });
+    await dispatcher.handle(mapEvent('system.updated'));
+    const last = sender.calls.at(-1)!;
+    const expected = createHmac('sha256', rotated.secret)
+      .update(`${last.headers[WEBHOOK_HEADERS.timestamp]}.${last.body}`)
+      .digest('hex');
+    expect(last.headers[WEBHOOK_HEADERS.signature]).toBe(`sha256=${expected}`);
+  });
+
+  it('delivers nothing while webhooks are turned off on the instance', async () => {
+    let on = false;
+    dispatcher = new WebhookDispatcher({ webhooks: repo, sender, clock, enabled: async () => on });
+    admin = new WebhookAdmin({
+      webhooks: repo,
+      access,
+      dispatcher,
+      clock,
+      events: new KyselyEventLog(t.db, new InProcessEventBus()),
+      uow: t.db,
+    });
+    await admin.create(alice, 'm1', { url: 'https://example.com/h', events: ['*'] });
+    await dispatcher.handle(mapEvent('system.added'));
+    expect(sender.calls).toEqual([]);
+    on = true;
+    await dispatcher.handle(mapEvent('system.added'));
+    expect(sender.calls).toHaveLength(1);
+  });
 });
 
 describe('HttpWebhookSender', () => {

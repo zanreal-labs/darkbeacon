@@ -101,11 +101,18 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto) {
     [later],
   );
 
+  const trashed = useRef(false);
   useStream(
     `map:${mapId}`,
     (message) => {
       if (message.op === 'error') {
-        setStreamError(message.message);
+        // After a deletion the server drops the stream; the deletion says it better.
+        if (!trashed.current) setStreamError(message.message);
+        return;
+      }
+      if (message.op === 'event' && message.event.type === 'map.trashed') {
+        trashed.current = true;
+        setStreamError('This map was deleted. An instance admin can restore it.');
         return;
       }
       setStreamError(null);
@@ -287,7 +294,14 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto) {
         return run({
           apply: (s) => ({
             ...s,
-            connections: mapWith(s.connections, connectionId, (c) => ({ ...c, ...patch })),
+            connections: mapWith(s.connections, connectionId, (c) => {
+              // A lifetime mark is sent by name; the connection holds it with the time it was set.
+              const { lifetime, ...rest } = patch;
+              const next: ConnectionDto = { ...c, ...rest };
+              if (lifetime !== undefined)
+                next.lifetime = lifetime === null ? null : { mark: lifetime, at: Date.now() };
+              return next;
+            }),
           }),
           confirmedBy: (e) => e.type === 'connection.updated' && e.data.id === connectionId,
           request: () =>
@@ -299,12 +313,16 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto) {
         });
       },
 
-      removeConnection(connectionId: string) {
+      /** `withSignatures`: the signatures leading through it go too. */
+      removeConnection(connectionId: string, options: { withSignatures?: boolean } = {}) {
+        const query = options.withSignatures ? '?withSignatures=true' : '';
         return run({
           apply: (s) => ({ ...s, connections: mapWithout(s.connections, (_, id) => id !== connectionId) }),
           confirmedBy: (e) => e.type === 'connection.removed' && e.data.id === connectionId,
           request: () =>
-            api(buildPath(routes.connections.remove.path, { mapId, connectionId }), { method: 'DELETE' }),
+            api(`${buildPath(routes.connections.remove.path, { mapId, connectionId })}${query}`, {
+              method: 'DELETE',
+            }),
           failure: 'Could not remove the connection',
         });
       },

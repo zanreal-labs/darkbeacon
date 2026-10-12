@@ -8,3 +8,4 @@ export type * from './eve-sso.js';
 export type * from './identity-provider.js';
 export type * from './login-policy.js';
 export type * from './session-repository.js';
+export type * from './invite-repository.js';

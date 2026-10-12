@@ -21,8 +21,10 @@ export function PublicMapCanvas({
   labels,
   systemLabels = [],
   universe,
+  token,
 }: {
   mapId: string;
+  token: string;
   state: MapState;
   labels: LabelDto[];
   systemLabels?: SystemLabelDto[];
@@ -43,6 +45,7 @@ export function PublicMapCanvas({
         focus={null}
         onMenu={nothing}
         readOnly
+        publicToken={token}
       />
     </ReactFlowProvider>
   );

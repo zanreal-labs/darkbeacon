@@ -161,6 +161,26 @@ export class RealtimeHub {
     return this.connections.size;
   }
 
+  /** Ids of the streams of a kind (`map`) someone follows right now. */
+  followed(kind: string): string[] {
+    return [...this.byStream.keys()].flatMap((stream) => {
+      const parsed = parseStream(stream);
+      return parsed?.kind === kind ? [parsed.id] : [];
+    });
+  }
+
+  /**
+   * Sends an ephemeral message (not an event: no seq, never stored or replayed) to everyone who
+   * follows the stream, so it reaches exactly those the stream's authorization lets in, views of
+   * it included (public links), each under the name of the stream it follows. Only public data
+   * travels this way (system intel), so views need no projection.
+   */
+  broadcast(stream: string, message: Extract<ServerMessage, { op: 'intel' }>): void {
+    for (const sub of this.byStream.get(stream) ?? []) {
+      if (sub.active) sub.connection.send({ ...message, stream: sub.stream });
+    }
+  }
+
   close(): void {
     clearInterval(this.recheckTimer);
     this.unsubscribeBus();
@@ -283,6 +303,19 @@ export class RealtimeHub {
       }
       source = resolved;
       project = (event) => view.project(parsed.id, event, stream);
+    } else if (parsed) {
+      // Per-follower filters (offline characters for managers only...), with the actor as it is
+      // now: re-checks update `connection.actor`.
+      const filters = this.options.registry.eventFilters(parsed.kind);
+      if (filters.length > 0)
+        project = async (event) => {
+          let shown: DomainEvent | null = event;
+          for (const filter of filters) {
+            if (!shown) break;
+            shown = await filter(connection.actor, parsed.id, shown);
+          }
+          return shown;
+        };
     }
     this.drop(connection, stream);
     const sub = new Subscription(stream, connection, sinceSeq ?? 0, source, project);
@@ -421,7 +454,8 @@ export class RealtimeHub {
         if (connection.actor?.kind === 'account' && connection.actor.id === accountId)
           this.reauthorize(connection);
       }
-    } else if (event.type.startsWith('access.')) {
+    } else if (event.type.startsWith('access.') || event.type === 'map.trashed') {
+      // A deleted map has nobody on it any more: its followers are checked like after a rule change.
       for (const connection of this.connections) {
         if (
           [...connection.subscriptions.values()].some(

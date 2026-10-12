@@ -33,6 +33,7 @@ import {
   type UpdateSignatureRequest,
   type UpdateSystemRequest,
 } from '@darkbeacon/shared';
+import { LifetimeMark } from '@darkbeacon/shared';
 import {
   labelIdsByName,
   labelNamesById,
@@ -125,7 +126,9 @@ export class LocalChainSource implements ChainSource {
     const want = plan(selectors);
     const entries: ChainEntry[] = [];
 
-    const systems = await ports.systems.list(mapId);
+    // A deleted map (restorable) shows nothing to the maps that merge it until it is back.
+    const trashed = !!(await ports.maps.findById(mapId))?.deletedAt;
+    const systems = trashed ? [] : await ports.systems.list(mapId);
     const visible = new Map(systems.filter((s) => s.visible).map((s) => [s.solarSystemId, s]));
 
     if (want.system) {
@@ -142,9 +145,9 @@ export class LocalChainSource implements ChainSource {
       }
     }
 
-    const needConnections = want.connection || want.signature;
+    const needConnections = (want.connection || want.signature) && !trashed;
     const connections = needConnections ? await ports.connections.list(mapId) : [];
-    const signatures = want.connection || want.signature ? await ports.signatures.listForMap(mapId) : [];
+    const signatures = needConnections ? await ports.signatures.listForMap(mapId) : [];
     if (want.connection) {
       const times = await ports.stamps.fieldTimes(mapId, 'connection');
       const tombstones = await ports.stamps.tombstones(mapId, 'connection');
@@ -179,7 +182,7 @@ export class LocalChainSource implements ChainSource {
           entries.push({ kind: 'signature', key, state: 'deleted', at });
       }
     }
-    if (want.character) {
+    if (want.character && !trashed) {
       for (const character of await this.deps.characters.forMap(mapId)) {
         const key = String(character.characterId);
         if (!want.character.all && !want.character.has(key)) continue;
@@ -323,6 +326,7 @@ export class LocalChainSource implements ChainSource {
           ...(f.type !== undefined ? { type: f.type as string | null } : {}),
           ...(f.name !== undefined ? { name: f.name as string | null } : {}),
           ...(typeof f.notes === 'string' ? { description: f.notes } : {}),
+          ...signatureExtras(f),
         });
         if (typeof f.link === 'string') {
           const linked = await this.connectionOrNull(f.link);
@@ -407,6 +411,9 @@ export class LocalChainSource implements ChainSource {
     if (fields.type !== undefined) request.type = fields.type as string | null;
     if (fields.name !== undefined) request.name = fields.name as string | null;
     if (typeof fields.notes === 'string') request.description = fields.notes;
+    Object.assign(request, signatureExtras(fields));
+    if (fields.kind === 'signature' || fields.kind === 'anomaly' || fields.kind === 'other')
+      request.kind = fields.kind;
     if (fields.link === null) request.connectionId = null;
     else if (typeof fields.link === 'string') {
       // This map may not have that connection; then the link stays as it is here.
@@ -542,6 +549,9 @@ function connectionEntry(c: Connection, times: FieldTimes, linked: readonly Sign
     massSaved: stamp(c.massSaved, at(times, 'massSaved', born)),
     dangerous: stamp(c.dangerous, at(times, 'dangerous', born)),
     bubbled: stamp(bubbledByEnd(c), at(times, 'bubbled', born)),
+    lifetime: stamp(c.lifetime ?? null, at(times, 'lifetime', born)),
+    note: stamp(c.note ?? '', at(times, 'note', born)),
+    locked: stamp(c.locked ?? false, at(times, 'locked', born)),
   };
   if (typed.length > 0) {
     const first = typed.sort((a, b) => a.at - b.at)[0]!;
@@ -566,6 +576,13 @@ function signatureEntry(s: Signature, times: FieldTimes, pairs: ReadonlyMap<stri
         s.connectionId ? (pairs.get(s.connectionId) ?? null) : null,
         at(times, 'connectionId', born),
       ),
+      tempName: stamp(s.tempName ?? null, at(times, 'tempName', born)),
+      destination: stamp(s.destination ?? null, at(times, 'destination', born)),
+      bubbled: stamp(s.bubbled ?? false, at(times, 'bubbled', born)),
+      time: stamp(s.timeStatus ?? null, at(times, 'timeStatus', born)),
+      mass: stamp(s.massStatus ?? null, at(times, 'massStatus', born)),
+      kind: stamp(s.kind ?? 'signature', at(times, 'kind', born)),
+      custom: stamp(s.custom ?? false, at(times, 'custom', born)),
     },
   };
 }
@@ -588,6 +605,17 @@ function characterEntry(c: CharacterPresenceDto): ChainEntry {
 }
 
 // --- writing helpers ----------------------------------------------------------------------------
+
+/** Temporary name, destination, bubble, lifetime and mass of a signature, from wire fields. */
+function signatureExtras(f: Record<string, unknown>): UpdateSignatureRequest {
+  const r: UpdateSignatureRequest = {};
+  if (f.tempName !== undefined) r.tempName = f.tempName as string | null;
+  if (f.destination !== undefined) r.destination = f.destination as Signature['destination'];
+  if (typeof f.bubbled === 'boolean') r.bubbled = f.bubbled;
+  if (f.time !== undefined) r.timeStatus = f.time as Signature['timeStatus'];
+  if (f.mass !== undefined) r.massStatus = f.mass as Signature['massStatus'];
+  return r;
+}
 
 function systemRequest(f: Record<string, unknown>, systemLabels: LabelList): UpdateSystemRequest {
   const r: UpdateSystemRequest = {};
@@ -615,6 +643,14 @@ function connectionRequest(f: Record<string, unknown>, current: Connection): Upd
   if (typeof f.massSaved === 'boolean') r.massSaved = f.massSaved;
   if (typeof f.dangerous === 'boolean') r.dangerous = f.dangerous;
   if (typeof f.bubbled === 'string') r.bubbled = bubbledToDirection(f.bubbled, current);
+  if (typeof f.note === 'string') r.note = f.note;
+  if (typeof f.locked === 'boolean') r.locked = f.locked;
+  if (f.lifetime === null) r.lifetime = null;
+  else if (f.lifetime && typeof f.lifetime === 'object') {
+    const mark = (f.lifetime as { mark?: unknown }).mark;
+    if (typeof mark === 'string' && (LifetimeMark.options as readonly string[]).includes(mark))
+      r.lifetime = mark as LifetimeMark;
+  }
   return r;
 }
 

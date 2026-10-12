@@ -14,19 +14,39 @@ import {
   type HubDistanceDto,
   type HubDistancesQuery,
   type HubDto,
+  type HubRouteDto,
+  type HubRoutesDto,
+  type HubRoutesQuery,
   type HubsDto,
   type MapExitDto,
   type MapExitsDto,
   type RouteDto,
   type RouteMode,
   type RouteQuery,
+  type RoutesByDto,
+  type RoutesByEntryDto,
+  type RoutesByQuery,
+  type RouteStepDto,
+  type StationDto,
+  type WayHomeDto,
+  type WayHomeRouteDto,
   type WormholeDestination,
 } from '@darkbeacon/shared';
-import { findRoute } from '../domain/graph.js';
-import { isLowSec, TRADE_HUBS } from '../domain/hubs.js';
+import { findRoute, routesFrom, type RouteStep } from '../domain/graph.js';
+import { isLowSec, MAX_HUBS, TRADE_HUBS } from '../domain/hubs.js';
 import { isWormholeSpace, policyFor, routeSpace, type RouteNode, type RoutePolicy } from '../domain/modes.js';
-import { closedLevels } from '../domain/security.js';
-import type { HubRepository, PilotDirectory, RoutingUniverse } from '../ports/index.js';
+import { DEFAULT_ROUTE_OPTIONS, routeOptions, withAvoidance, type RouteOptions } from '../domain/options.js';
+import { closedLevels, HIGH_SEC_MIN } from '../domain/security.js';
+import type {
+  AllianceDirectory,
+  HubRepository,
+  PilotDirectory,
+  PingTargets,
+  RoutingSettingsRepository,
+  RoutingUniverse,
+  StationCatalog,
+} from '../ports/index.js';
+import type { TheraFeed } from './eve-scout.js';
 import { yieldTurn, type Router } from './router.js';
 
 export interface RouteQueryDeps {
@@ -35,7 +55,30 @@ export interface RouteQueryDeps {
   hubs: HubRepository;
   pilots: PilotDirectory;
   access: MapAccess;
+  /** Map routing settings (the Thera toggle); without it Thera is allowed everywhere. */
+  settings?: RoutingSettingsRepository;
+  /** The viewer's alliance, for the jump bridges they may use. */
+  alliances?: AllianceDirectory;
+  stations?: StationCatalog;
+  pings?: PingTargets;
+  thera?: TheraFeed;
 }
+
+type OptionQuery = Parameters<typeof routeOptions>[0] & {
+  mode: RouteMode;
+  characterId?: number | undefined;
+  securityStatus?: number | undefined;
+};
+
+/** Thera and Turnur, the hubs of EVE-Scout's lists. */
+const THERA = 31000005;
+const TURNUR = 30002086;
+
+/**
+ * Options of the exits every viewer sees (`routes.exits_changed`, node badges): the chain, the
+ * map's bridges and the stargates. EVE-Scout's holes come and go by the minute, so they stay out.
+ */
+const SHARED_OPTIONS: RouteOptions = { ...DEFAULT_ROUTE_OPTIONS, thera: false };
 
 /** Static types that lead to known space count as exits. */
 const KNOWN_SPACE: ReadonlySet<WormholeDestination> = new Set(['hs', 'ls', 'ns']);
@@ -48,29 +91,122 @@ export class RouteQueries {
     await requireMapRole(this.deps.access, actor, mapId, 'viewer');
     this.system(query.from);
     this.system(query.to);
-    const { policy, securityStatus } = await this.policy(actor, query);
-    const graph = await this.deps.router.graphWith(mapId, query.skip ?? []);
+    const { policy, securityStatus, options, alliance } = await this.request(actor, mapId, query);
+    const graph = await this.deps.router.graphFor(mapId, options, alliance);
     if (!graph) throw new NotFoundError('Map');
-    const steps = findRoute(graph, query.from, query.to, policy, new Set(query.avoid ?? []));
+    const steps = findRoute(graph, query.from, query.to, policy);
     return {
       from: query.from,
       to: query.to,
       mode: query.mode,
       jumps: steps ? steps.length - 1 : null,
-      steps: (steps ?? []).map((step) => {
-        const system = this.deps.universe.getSystem(step.id);
-        return {
-          solarSystemId: step.id,
-          name: system?.name ?? String(step.id),
-          security: system?.security ?? 0,
-          whClass: system?.whClass ?? null,
-          classLabel: classLabel(system?.whClass),
-          via: step.via,
-          connectionId: step.connectionId,
-        };
-      }),
+      steps: (steps ?? []).map((step) => this.step(step)),
       securityStatus,
     };
+  }
+
+  /**
+   * Routes from one system to every hub of a list in one go: the map's hubs (pinged systems
+   * first) or the viewer's own, nearest first, with the systems on the way.
+   */
+  async hubRoutes(actor: Actor | null, mapId: string, query: HubRoutesQuery): Promise<HubRoutesDto> {
+    await requireMapRole(this.deps.access, actor, mapId, 'viewer');
+    this.system(query.from);
+    const hubs =
+      query.hubs === 'personal'
+        ? actor?.kind === 'account'
+          ? await this.personalHubs(actor.id)
+          : []
+        : await this.mapAndPingHubs(mapId);
+    const { policy, options, alliance } = await this.request(actor, mapId, query);
+    const graph = await this.deps.router.graphFor(mapId, options, alliance);
+    if (!graph) throw new NotFoundError('Map');
+    const tree = routesFrom(graph, query.from, policy);
+    const routes: HubRouteDto[] = hubs.map((hub) => {
+      const steps = tree.to(hub.solarSystemId);
+      return {
+        ...hub,
+        jumps: steps ? steps.length - 1 : null,
+        steps: (steps ?? []).map((s) => this.step(s)),
+      };
+    });
+    routes.sort((a, b) => (a.jumps ?? Infinity) - (b.jumps ?? Infinity) || a.name.localeCompare(b.name));
+    return { from: query.from, mode: query.mode, routes, limit: MAX_HUBS };
+  }
+
+  /** The nearest places of a kind from one system, with their stations and the way there. */
+  async routesBy(actor: Actor | null, mapId: string, query: RoutesByQuery): Promise<RoutesByDto> {
+    await requireMapRole(this.deps.access, actor, mapId, 'viewer');
+    this.system(query.from);
+    const { policy, options, alliance } = await this.request(actor, mapId, query);
+    const graph = await this.deps.router.graphFor(mapId, options, alliance);
+    if (!graph) throw new NotFoundError('Map');
+    const tree = routesFrom(graph, query.from, policy);
+    const entries: RoutesByEntryDto[] = [];
+    for (const [solarSystemId, stations] of this.placesOf(query.kind)) {
+      const system = this.deps.universe.getSystem(solarSystemId);
+      if (!system || (query.highsec && system.security < HIGH_SEC_MIN)) continue;
+      const steps = tree.to(solarSystemId);
+      if (!steps) continue;
+      entries.push({
+        solarSystemId,
+        name: system.name,
+        security: system.security,
+        jumps: steps.length - 1,
+        steps: steps.map((s) => this.step(s)),
+        stations,
+      });
+    }
+    entries.sort((a, b) => a.jumps - b.jumps || a.name.localeCompare(b.name));
+    return { from: query.from, kind: query.kind, entries: entries.slice(0, query.limit) };
+  }
+
+  /** The map's way home, for anyone who may view the map. */
+  async viewWayHome(actor: Actor | null, mapId: string): Promise<WayHomeDto> {
+    await requireMapRole(this.deps.access, actor, mapId, 'viewer');
+    return this.wayHome(mapId);
+  }
+
+  /**
+   * The way home from each of the map's hubs (the trade hubs when it has none) to its home
+   * system: the shortest way without end-of-life holes, through EVE-Scout's Thera and Turnur
+   * holes when the map allows them, naming the mouth where the trip leaves known space.
+   */
+  async wayHome(mapId: string): Promise<WayHomeDto> {
+    const chain = await this.deps.router.chain(mapId);
+    if (!chain) throw new NotFoundError('Map');
+    const home = chain.systems.find((s) => s.status === 'home');
+    const homeSystem = home && this.deps.universe.getSystem(home.solarSystemId);
+    if (!home || !homeSystem) return { home: null, routes: [] };
+    const thera = (await this.deps.settings?.mapSettings(mapId))?.thera ?? true;
+    const options: RouteOptions = { ...DEFAULT_ROUTE_OPTIONS, skip: ['eol'], thera };
+    const graph = await this.deps.router.graphFor(mapId, options, null);
+    if (!graph) throw new NotFoundError('Map');
+    const mapHubs = await this.mapHubs(mapId);
+    const hubs = (
+      mapHubs.length > 0 ? mapHubs : TRADE_HUBS.flatMap((h) => this.hub(h.solarSystemId, 'trade') ?? [])
+    ).filter((h) => h.solarSystemId !== home.solarSystemId);
+    const tree = routesFrom(graph, home.solarSystemId, policyFor('shortest'));
+    const routes: WayHomeRouteDto[] = [];
+    for (const hub of hubs) {
+      const steps = tree.to(hub.solarSystemId);
+      if (!steps) continue;
+      const nodes = steps.flatMap((s) => graph.node(s.id) ?? []);
+      const at = nodes.findIndex((n) => !isWormholeSpace(n) && n.whClass !== 25);
+      const mouth = at >= 0 ? this.deps.universe.getSystem(nodes[at]!.id) : null;
+      if (!mouth) continue;
+      const known = nodes.slice(at).filter((n) => !isWormholeSpace(n));
+      const high = known.filter((n) => n.security >= HIGH_SEC_MIN).length;
+      routes.push({
+        hub,
+        jumps: steps.length - 1,
+        mouth: { solarSystemId: mouth.id, name: mouth.name, security: mouth.security },
+        space: high === known.length ? 'high' : high === 0 ? 'low' : 'mixed',
+        viaEveScout: steps.some((s) => s.origin === 'eve-scout'),
+      });
+    }
+    routes.sort((a, b) => a.jumps - b.jumps || a.hub.name.localeCompare(b.hub.name));
+    return { home: { solarSystemId: homeSystem.id, name: homeSystem.name }, routes };
   }
 
   /** The hubs the actor gets distances to on this map (without a mode's staging systems). */
@@ -90,17 +226,17 @@ export class RouteQueries {
   ): Promise<HubDistanceDto[]> {
     await requireMapRole(this.deps.access, actor, mapId, 'viewer');
     this.system(query.from);
-    const { policy } = await this.policy(actor, query);
+    const { policy, options, alliance } = await this.request(actor, mapId, query);
     const hubs = await this.hubsFor(mapId, policy, actor);
-    return this.distances(mapId, query.from, hubs, policy);
+    return this.distances(mapId, query.from, hubs, policy, options, alliance);
   }
 
   async exits(actor: Actor | null, mapId: string, query: ExitsQuery): Promise<MapExitsDto> {
     await requireMapRole(this.deps.access, actor, mapId, 'viewer');
-    const { policy } = await this.policy(actor, query);
+    const { policy, options, alliance } = await this.request(actor, mapId, query);
     return {
       mode: query.mode,
-      exits: await this.exitsOf(mapId, policy, await this.hubsFor(mapId, policy, actor)),
+      exits: await this.exitsOf(mapId, policy, await this.hubsFor(mapId, policy, actor), options, alliance),
     };
   }
 
@@ -113,7 +249,7 @@ export class RouteQueries {
     // computed once per state of the chain and its hubs, not once per snapshot.
     return this.deps.router.derived(mapId, 'sharedExits', async () => {
       const policy = policyFor('shortest');
-      return this.exitsOf(mapId, policy, await this.hubsFor(mapId, policy, null));
+      return this.exitsOf(mapId, policy, await this.hubsFor(mapId, policy, null), SHARED_OPTIONS, null);
     });
   }
 
@@ -148,10 +284,20 @@ export class RouteQueries {
     return result.filter((hub) => !seen.has(hub.solarSystemId) && seen.add(hub.solarSystemId));
   }
 
-  private async distances(mapId: string, fromId: number, hubs: HubDto[], policy: RoutePolicy) {
+  private async distances(
+    mapId: string,
+    fromId: number,
+    hubs: HubDto[],
+    policy: RoutePolicy,
+    options: RouteOptions,
+    alliance: number | null,
+  ) {
     const result: HubDistanceDto[] = [];
     for (const hub of hubs) {
-      result.push({ ...hub, jumps: await this.deps.router.jumps(mapId, fromId, hub.solarSystemId, policy) });
+      result.push({
+        ...hub,
+        jumps: await this.deps.router.jumps(mapId, fromId, hub.solarSystemId, policy, options, alliance),
+      });
     }
     return result.sort(
       (a, b) => (a.jumps ?? Infinity) - (b.jumps ?? Infinity) || a.name.localeCompare(b.name),
@@ -159,8 +305,15 @@ export class RouteQueries {
   }
 
   /** The kind of space the route from an exit to its nearest hub runs through. */
-  private async spaceOf(mapId: string, fromId: number, hubId: number, policy: RoutePolicy) {
-    const graph = await this.deps.router.graph(mapId);
+  private async spaceOf(
+    mapId: string,
+    fromId: number,
+    hubId: number,
+    policy: RoutePolicy,
+    options: RouteOptions,
+    alliance: number | null,
+  ) {
+    const graph = await this.deps.router.graphFor(mapId, options, alliance);
     // A search over the whole universe: one exit at a time, letting requests through between.
     await yieldTurn();
     const steps = graph && findRoute(graph, fromId, hubId, policy);
@@ -168,7 +321,13 @@ export class RouteQueries {
     return routeSpace(steps.flatMap((step) => graph.node(step.id) ?? []));
   }
 
-  private async exitsOf(mapId: string, policy: RoutePolicy, hubs: HubDto[]): Promise<MapExitDto[]> {
+  private async exitsOf(
+    mapId: string,
+    policy: RoutePolicy,
+    hubs: HubDto[],
+    options: RouteOptions,
+    alliance: number | null,
+  ): Promise<MapExitDto[]> {
     const chain = await this.deps.router.chain(mapId);
     if (!chain) throw new NotFoundError('Map');
     const { universe } = this.deps;
@@ -191,7 +350,7 @@ export class RouteQueries {
         const destination = classDestination(system.whClass);
         if (destination) reached.set(from, [...(reached.get(from) ?? []), destination]);
       }
-      const distances = await this.distances(mapId, id, hubs, policy);
+      const distances = await this.distances(mapId, id, hubs, policy, options, alliance);
       const nearest = distances.find((d) => d.jumps !== null) ?? null;
       connected.push({
         kind: 'connected',
@@ -205,7 +364,7 @@ export class RouteQueries {
         statics: [],
         nearest: nearest && {
           ...nearest,
-          space: await this.spaceOf(mapId, id, nearest.solarSystemId, policy),
+          space: await this.spaceOf(mapId, id, nearest.solarSystemId, policy, options, alliance),
         },
         hubs: distances,
       });
@@ -247,6 +406,24 @@ export class RouteQueries {
     return [...connected, ...statics];
   }
 
+  /**
+   * Everything a routing request needs: its policy (keeping out of the avoided systems and
+   * space), its options (Thera only where the map allows it) and the viewer's alliance, which
+   * decides the jump bridges they may use.
+   */
+  private async request(actor: Actor | null, mapId: string, query: OptionQuery) {
+    const { policy, securityStatus } = await this.policy(actor, query);
+    const options = routeOptions(query);
+    if (options.thera && (await this.deps.settings?.mapSettings(mapId))?.thera === false) {
+      options.thera = false;
+    }
+    const alliance =
+      options.bridges && !options.capital && actor?.kind === 'account' && this.deps.alliances
+        ? await this.deps.alliances.allianceOf(actor.id)
+        : null;
+    return { policy: withAvoidance(policy, options), securityStatus, options, alliance };
+  }
+
   /** The policy of a request; `pilot` needs a security status, given or read for an own character. */
   private async policy(
     actor: Actor | null,
@@ -264,6 +441,59 @@ export class RouteQueries {
     if (status === null)
       throw new ValidationError('Pick a character or give a security status for this route');
     return { policy: policyFor('pilot', closedLevels(status)), securityStatus: status };
+  }
+
+  /** Pinged systems first (temporary targets), then the map's own hubs. */
+  private async mapAndPingHubs(mapId: string): Promise<HubDto[]> {
+    const pinged = (await this.deps.pings?.pinged(mapId)) ?? [];
+    const result = [...pinged.flatMap((id) => this.hub(id, 'ping') ?? []), ...(await this.mapHubs(mapId))];
+    const seen = new Set<number>();
+    return result.filter((hub) => !seen.has(hub.solarSystemId) && seen.add(hub.solarSystemId));
+  }
+
+  /** Systems of a Routes By kind, with the stations there that count. */
+  private placesOf(kind: RoutesByQuery['kind']): Map<number, StationDto[]> {
+    const places = new Map<number, StationDto[]>();
+    if (kind === 'thera' || kind === 'turnur') {
+      const hubId = kind === 'thera' ? THERA : TURNUR;
+      for (const c of this.deps.thera?.connections() ?? []) {
+        if (c.hubSystemId === hubId) places.set(c.solarSystemId, []);
+      }
+      return places;
+    }
+    if (kind === 'tradeHubs') {
+      for (const hub of TRADE_HUBS) {
+        const stations = this.deps.stations?.stationsIn(hub.solarSystemId) ?? [];
+        places.set(
+          hub.solarSystemId,
+          [...stations].sort((a, b) => Number(b.main) - Number(a.main) || a.name.localeCompare(b.name)),
+        );
+      }
+      return places;
+    }
+    for (const station of this.deps.stations?.places(kind) ?? []) {
+      places.set(station.solarSystemId, [...(places.get(station.solarSystemId) ?? []), station]);
+    }
+    return places;
+  }
+
+  /** One system of a route as the API shows it. */
+  private step(step: RouteStep): RouteStepDto {
+    const system = this.deps.universe.getSystem(step.id);
+    const { base } = this.deps.router;
+    const node = base.nodes[base.index.get(step.id) ?? -1];
+    return {
+      solarSystemId: step.id,
+      name: system?.name ?? String(step.id),
+      security: system?.security ?? 0,
+      whClass: system?.whClass ?? null,
+      classLabel: classLabel(system?.whClass),
+      via: step.via,
+      connectionId: step.connectionId,
+      ...(step.origin ? { edge: step.origin } : {}),
+      ...(system ? { regionName: system.regionName } : {}),
+      ...(node?.invasion ? { invasion: node.invasion } : {}),
+    };
   }
 
   private hub(solarSystemId: number, kind: HubDto['kind']): HubDto | null {

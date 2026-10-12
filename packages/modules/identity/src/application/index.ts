@@ -8,3 +8,4 @@ export * from './discord-bot.js';
 export * from './guild-roles.js';
 export * from './login.js';
 export * from './sessions.js';
+export * from './sign-up.js';

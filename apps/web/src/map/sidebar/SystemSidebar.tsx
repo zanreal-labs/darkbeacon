@@ -15,6 +15,10 @@ import type { SlotEntry } from '../../plugins/registry';
 import { IconButton } from '../../ui';
 import type { MapState } from '../mapState';
 import type { MapStore } from '../useMapStore';
+import { ActivitySection, SystemHolder } from './ActivitySection';
+import { RoutesSidebarSection } from '../routes/RoutesSection';
+import { ConnectionsSection } from './ConnectionsSection';
+import { KillsSection, KillsSettingsMenu, useKillsSettings } from './KillsSection';
 import { LocalSection, TrackMenu, usePresence } from './LocalSection';
 import { SidebarSection } from './SidebarSection';
 import { SidebarShell } from './SidebarShell';
@@ -26,6 +30,11 @@ import {
   useSignaturePaste,
 } from './SignaturesSection';
 import { useCollapsedSections } from './storage';
+import { CommentsSection } from './CommentsSection';
+import { HistorySection } from './HistorySection';
+import { StructuresSection } from './StructuresSection';
+import { SignatureSettingsMenu } from '../signatures/SignatureSettingsMenu';
+import { systemDisplayName } from '../SystemNode';
 import { SetDestination, SystemDetails, SystemIdentity } from './SystemDetails';
 import styles from './sidebar.module.css';
 
@@ -44,9 +53,13 @@ interface Props {
   labels: LabelDto[];
   /** The map's Labels (WH1...). */
   systemLabels?: readonly SystemLabelDto[];
-  state: Pick<MapState, 'signatures' | 'connections' | 'characters' | 'has'>;
+  state: Pick<MapState, 'signatures' | 'connections' | 'characters' | 'has'> &
+    Partial<Pick<MapState, 'systems'>>;
   can: MapPermissions;
-  store: Pick<MapStore, 'updateSystem' | 'pasteSignatures' | 'updateSignature' | 'removeSignature' | 'seed'>;
+  store: Pick<
+    MapStore,
+    'updateSystem' | 'pasteSignatures' | 'updateSignature' | 'removeSignature' | 'seed' | 'updateConnection'
+  >;
   myCharacters: CharacterDto[];
   plugins: readonly SlotEntry<'widget'>[];
   /** Shown, or hidden with the top bar's toggle while the system stays selected. */
@@ -90,7 +103,8 @@ export function SystemSidebar({
   const { collapsed, toggle, expand } = useCollapsedSections();
   const id = system.solarSystemId;
 
-  const paste = useSignaturePaste(id, store);
+  const paste = useSignaturePaste(mapId, id, store);
+  const [killSettings, setKillSettings] = useKillsSettings(mapId);
   const presence = usePresence(mapId, store);
 
   // Ctrl+V on the map or in the sidebar, but never into a field someone is typing in.
@@ -115,9 +129,16 @@ export function SystemSidebar({
 
   const signatures = [...state.signatures.values()].filter((s) => s.solarSystemId === id);
   const here = [...state.characters.values()].filter((c) => c.solarSystemId === id);
+  const connectionCount = [...state.connections.values()].filter(
+    (c) => c.source === id || c.target === id,
+  ).length;
   const mine = new Set(myCharacters.map((c) => c.id));
   const tracked = new Set([...state.characters.values()].map((c) => c.characterId));
   const name = info?.name ?? 'this system';
+  const systemName = (sid: number) => {
+    const onMap = state.systems?.get(sid);
+    return onMap ? systemDisplayName(onMap, universe.get(sid)) : (universe.get(sid)?.name ?? String(sid));
+  };
 
   return (
     <SidebarShell
@@ -134,6 +155,7 @@ export function SystemSidebar({
           store={store}
           onClose={onClose}
           dragHandle={handle}
+          holder={<SystemHolder mapId={mapId} solarSystemId={id} />}
         />
       )}
     >
@@ -164,17 +186,19 @@ export function SystemSidebar({
         collapsed={!!collapsed.signatures}
         onToggle={toggle}
         action={
-          can.edit &&
-          canReadClipboard() && (
-            <IconButton
-              size="sm"
-              label="Paste from clipboard"
-              tooltipSide="left"
-              icon={<ClipboardPaste />}
-              loading={paste.busy}
-              onClick={() => void pasteFromClipboard(paste)}
-            />
-          )
+          <span className={styles.sectionActions}>
+            {can.edit && canReadClipboard() && (
+              <IconButton
+                size="sm"
+                label="Paste from clipboard"
+                tooltipSide="left"
+                icon={<ClipboardPaste />}
+                loading={paste.busy}
+                onClick={() => void pasteFromClipboard(paste)}
+              />
+            )}
+            <SignatureSettingsMenu can={can} />
+          </span>
         }
       >
         <SignaturesSection
@@ -189,7 +213,59 @@ export function SystemSidebar({
           store={store}
           paste={paste}
           onSelectSystem={onSelectSystem}
+          systemName={systemName}
         />
+      </SidebarSection>
+      <StructuresSection
+        key={`structures:${id}`}
+        mapId={mapId}
+        solarSystemId={id}
+        can={can}
+        collapsed={!!collapsed.structures}
+        onToggle={toggle}
+      />
+      <CommentsSection
+        key={`comments:${id}`}
+        mapId={mapId}
+        solarSystemId={id}
+        can={can}
+        collapsed={!!collapsed.comments}
+        onToggle={toggle}
+      />
+      <SidebarSection
+        id="connections"
+        title="Connections"
+        count={connectionCount}
+        collapsed={!!collapsed.connections}
+        onToggle={toggle}
+      >
+        <ConnectionsSection
+          solarSystemId={id}
+          connections={state.connections}
+          universe={universe}
+          can={can}
+          store={store}
+          onSelectSystem={onSelectSystem}
+        />
+      </SidebarSection>
+      <SidebarSection id="activity" title="Activity" collapsed={!!collapsed.activity} onToggle={toggle}>
+        <ActivitySection key={id} mapId={mapId} solarSystemId={id} />
+      </SidebarSection>
+      <SidebarSection
+        id="kills"
+        title="Kills"
+        collapsed={!!collapsed.kills}
+        onToggle={toggle}
+        action={
+          <KillsSettingsMenu
+            settings={killSettings}
+            update={setKillSettings}
+            solarSystemId={id}
+            systemName={name}
+          />
+        }
+      >
+        <KillsSection mapId={mapId} solarSystemId={id} settings={killSettings} universe={universe} />
       </SidebarSection>
       <SidebarSection
         id="local"
@@ -210,6 +286,25 @@ export function SystemSidebar({
       >
         <LocalSection here={here} mine={mine} />
       </SidebarSection>
+      <RoutesSidebarSection
+        mapId={mapId}
+        solarSystemId={id}
+        can={can}
+        myCharacters={myCharacters}
+        onMap={new Set(universe.keys())}
+        onSelectSystem={onSelectSystem}
+        collapsed={!!collapsed.routes}
+        onToggle={toggle}
+      />
+      <HistorySection
+        key={`history:${id}`}
+        mapId={mapId}
+        solarSystemId={id}
+        universe={universe}
+        can={can}
+        collapsed={!!collapsed.history}
+        onToggle={toggle}
+      />
       {plugins.map((entry) => (
         <SidebarSection
           key={entry.key}

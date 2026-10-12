@@ -29,9 +29,18 @@ class MemoryRules implements AccessRuleRepository {
     this.rows.push(rule);
     return Promise.resolve();
   }
+  updateRole(id: string, role: AccessRule['role']) {
+    this.rows = this.rows.map((r) => (r.id === id ? { ...r, role } : r));
+    return Promise.resolve();
+  }
   delete(id: string) {
     this.rows = this.rows.filter((r) => r.id !== id);
     return Promise.resolve();
+  }
+  countByMap() {
+    const counts = new Map<string, number>();
+    for (const r of this.rows) counts.set(r.mapId, (counts.get(r.mapId) ?? 0) + 1);
+    return Promise.resolve(counts);
   }
   listMatching(subjects: { kind: AccessRule['subjectKind']; id: string }[]) {
     return Promise.resolve(
@@ -249,17 +258,116 @@ describe('access', () => {
       ]);
     });
 
-    it('refuses non-admins', async () => {
-      await accessRules.add(account('owner'), 'm1', {
-        subjectKind: 'character',
-        subjectId: '1',
-        role: 'manager',
+    it('lets managers handle viewers, members and blocks only, as in Wanderer', async () => {
+      const owner = account('owner');
+      const pilot = account('pilot');
+      await accessRules.add(owner, 'm1', { subjectKind: 'character', subjectId: '1', role: 'manager' });
+      const boss = await accessRules.add(owner, 'm1', {
+        subjectKind: 'corporation',
+        subjectId: '50',
+        role: 'admin',
       });
-      await expect(accessRules.list(account('pilot'), 'm1')).rejects.toMatchObject({ code: 'forbidden' });
+      expect(await accessRules.list(pilot, 'm1')).toHaveLength(2);
+
+      // Members, viewers and blocks: add, change between them, remove.
+      const spy = await accessRules.add(pilot, 'm1', {
+        subjectKind: 'corporation',
+        subjectId: '666',
+        role: 'viewer',
+      });
+      expect(await accessRules.update(pilot, 'm1', spy.id, 'blocked')).toMatchObject({ role: 'blocked' });
+      // Never managers or admins, and never a rule that is one.
+      await expect(accessRules.update(pilot, 'm1', spy.id, 'manager')).rejects.toMatchObject({
+        code: 'forbidden',
+      });
       await expect(
-        accessRules.add(account('pilot'), 'm1', { subjectKind: 'character', subjectId: '2', role: 'admin' }),
+        accessRules.add(pilot, 'm1', { subjectKind: 'character', subjectId: '2', role: 'admin' }),
       ).rejects.toMatchObject({ code: 'forbidden' });
+      await expect(accessRules.update(pilot, 'm1', boss.id, 'viewer')).rejects.toMatchObject({
+        code: 'forbidden',
+      });
+      await expect(accessRules.remove(pilot, 'm1', boss.id)).rejects.toMatchObject({ code: 'forbidden' });
+      await accessRules.remove(pilot, 'm1', spy.id);
+
+      // Members and strangers manage nothing.
+      subjects.byAccount.set('grunt', {
+        characterIds: [7],
+        corporationIds: [],
+        allianceIds: [],
+        discordRoles: [],
+      });
+      await accessRules.add(owner, 'm1', { subjectKind: 'character', subjectId: '7', role: 'member' });
+      await expect(accessRules.list(account('grunt'), 'm1')).rejects.toMatchObject({ code: 'forbidden' });
       await expect(accessRules.list(account('stranger'), 'm1')).rejects.toMatchObject({ code: 'not_found' });
+    });
+
+    it('changes a role in place and records the role before', async () => {
+      const owner = account('owner');
+      const rule = await accessRules.add(owner, 'm1', {
+        subjectKind: 'alliance',
+        subjectId: '100',
+        role: 'viewer',
+      });
+      const changed = await accessRules.update(owner, 'm1', rule.id, 'member');
+      expect(changed).toMatchObject({ id: rule.id, subjectId: '100', role: 'member' });
+      expect(await service.roleOf(account('pilot'), 'm1')).toBe('member');
+      // The same role again changes nothing and records nothing.
+      await accessRules.update(owner, 'm1', rule.id, 'member');
+      const last = events.events.at(-1)!;
+      expect(last).toMatchObject({ type: 'access.rule_changed', data: changed, before: rule });
+      expect(events.events.filter((e) => e.type === 'access.rule_changed')).toHaveLength(1);
+      await expect(accessRules.update(owner, 'm2', rule.id, 'admin')).rejects.toMatchObject({
+        code: 'not_found',
+      });
+    });
+
+    it('copies rules from another map the caller manages', async () => {
+      const owner = account('owner');
+      owners.owners.set('m3', 'owner');
+      await accessRules.add(owner, 'm3', { subjectKind: 'alliance', subjectId: '100', role: 'member' });
+      await accessRules.add(owner, 'm3', { subjectKind: 'corporation', subjectId: '666', role: 'blocked' });
+      await accessRules.add(owner, 'm1', { subjectKind: 'alliance', subjectId: '100', role: 'viewer' });
+
+      expect(await accessRules.copyFrom(owner, 'm1', 'm3')).toEqual({ added: 1, updated: 0, skipped: 1 });
+      expect(await accessRules.copyFrom(owner, 'm1', 'm3', true)).toEqual({
+        added: 0,
+        updated: 1,
+        skipped: 1,
+      });
+      const roles = (await accessRules.list(owner, 'm1')).map((r) => [r.subjectId, r.role]);
+      expect(roles).toEqual([
+        ['100', 'member'],
+        ['666', 'blocked'],
+      ]);
+      // A map the caller cannot read the rules of is not a source.
+      await expect(accessRules.copyFrom(owner, 'm1', 'm2')).rejects.toMatchObject({ code: 'not_found' });
+      await expect(accessRules.copyFrom(owner, 'm1', 'm1')).rejects.toMatchObject({ code: 'validation' });
+    });
+
+    it('makes a starter rule only for the creator’s own corporation or alliance', async () => {
+      const rulesWithSubjects = new AccessRules({
+        rules,
+        access: service,
+        uow,
+        events,
+        clock: new ManualClock(),
+        subjects,
+      });
+      owners.owners.set('m4', 'pilot');
+      await expect(
+        rulesWithSubjects.addStarter(account('pilot'), 'm4', {
+          subjectKind: 'corporation',
+          subjectId: '999',
+          role: 'member',
+        }),
+      ).rejects.toMatchObject({ code: 'validation' });
+      expect(
+        await rulesWithSubjects.addStarter(account('pilot'), 'm4', {
+          subjectKind: 'alliance',
+          subjectId: '100',
+          role: 'member',
+        }),
+      ).toMatchObject({ subjectKind: 'alliance', subjectId: '100', role: 'member' });
     });
   });
 });
@@ -302,6 +410,10 @@ describe('InstanceSettingsService', () => {
       mcpMode: 'off',
       apiCorsOrigins: [],
       publicMaps: true,
+      mapCreation: 'everyone',
+      apiAccess: true,
+      webhooksEnabled: true,
+      signIn: { mode: 'open', corporationIds: [], allianceIds: [], guildIds: [] },
     });
     expect(await service.update(admin, { adminGuildId: 'g1', adminRoleIds: ['r1', 'r1'] })).toEqual({
       adminGuildId: 'g1',
@@ -316,6 +428,10 @@ describe('InstanceSettingsService', () => {
       mcpMode: 'off',
       apiCorsOrigins: [],
       publicMaps: true,
+      mapCreation: 'everyone',
+      apiAccess: true,
+      webhooksEnabled: true,
+      signIn: { mode: 'open', corporationIds: [], allianceIds: [], guildIds: [] },
     });
     expect((await service.update(admin, {})).adminGuildId).toBe('g1');
     // A change is recorded on the audit stream with what it was before; no change, no record.

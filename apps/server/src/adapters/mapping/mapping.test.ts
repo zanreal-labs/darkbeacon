@@ -182,6 +182,11 @@ describeEachDialect('mapping use cases', (t) => {
       ['system.added', b],
     ]);
 
+    // Locking is for managers (Wanderer's `lock_system`).
+    await expect(systems.update(bob, map.id, SYSTEMS.c2, { locked: true })).rejects.toMatchObject({
+      code: 'forbidden',
+    });
+    env.access.grant('bob', map.id, 'manager');
     const named = await systems.update(bob, map.id, SYSTEMS.c2, {
       customName: 'Home',
       status: 'home',
@@ -388,7 +393,13 @@ describeEachDialect('mapping use cases', (t) => {
       text: `${PASTE}\nDEF-456\tCosmic Signature\tGas Site\tBarren Perimeter Reservoir\t100.0%\t1 AU`,
       mode: 'replace',
     });
-    expect(replaced).toEqual({ added: 0, updated: 1, removed: 1, skipped: [] });
+    expect(replaced).toEqual({
+      added: 0,
+      updated: 1,
+      removed: 1,
+      skipped: [],
+      removedSignatures: [expect.objectContaining({ id: stale.id, eveId: 'OLD-000' })],
+    });
     const list = await signatures.list(bob, map.id, SYSTEMS.c2);
     expect(list.map((s) => [s.eveId, s.group, s.name, s.description])).toEqual([
       ['ABC-123', 'wormhole', null, ''],
@@ -439,7 +450,7 @@ describeEachDialect('mapping use cases', (t) => {
     expect(events.every(([type]) => type === 'signature.added')).toBe(true);
   });
 
-  it('deletes a map with everything on it', async () => {
+  it('deletes a map softly, then for good with everything on it', async () => {
     await systems.add(bob, map.id, { solarSystemId: SYSTEMS.c2 });
     await systems.add(bob, map.id, { solarSystemId: SYSTEMS.c5 });
     await connections.add(bob, map.id, { source: SYSTEMS.c2, target: SYSTEMS.c5 });
@@ -448,7 +459,17 @@ describeEachDialect('mapping use cases', (t) => {
 
     const seq = await head();
     await maps.remove(alice, map.id);
-    expect(await eventsSince(seq)).toEqual([['map.removed', { id: map.id }]]);
+    const trashed = await eventsSince(seq);
+    expect(trashed).toEqual([['map.trashed', { id: map.id, deletedAt: expect.any(Number) }]]);
+    // Nobody holds a role on a deleted map; everything is kept for a restore.
+    await expect(maps.get(alice, map.id)).rejects.toMatchObject({ code: 'not_found' });
+    expect(await env.ports.systems.list(map.id)).toHaveLength(2);
+
+    const admin = { kind: 'account' as const, id: 'root', instanceRole: 'admin' as const };
+    await expect(maps.purge(alice, map.id)).rejects.toMatchObject({ code: 'forbidden' });
+    const purged = await head();
+    await maps.purge(admin, map.id);
+    expect(await eventsSince(purged)).toEqual([['map.removed', { id: map.id }]]);
     expect(await env.ports.maps.findById(map.id)).toBeNull();
     expect(await env.ports.systems.list(map.id)).toEqual([]);
     expect(await env.ports.connections.list(map.id)).toEqual([]);

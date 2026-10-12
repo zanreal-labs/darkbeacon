@@ -1,4 +1,17 @@
-import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post, Put } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
+import { AccessRules } from '@darkbeacon/access';
 import type { Actor } from '@darkbeacon/core';
 import {
   BookmarkNumberUseCases,
@@ -20,7 +33,9 @@ import {
   MoveSystemsRequest,
   nestPath,
   PasteSignaturesRequest,
+  RemoveSignaturesRequest,
   RenumberBookmarksRequest,
+  RestoreSignaturesRequest,
   RollPlanRequest,
   routes,
   SetBookmarkNumberingRequest,
@@ -45,7 +60,10 @@ const systemId = new ZodPipe(z.coerce.number().pipe(EveId));
 
 @Controller()
 export class MapsController {
-  constructor(@Inject(MapUseCases) private readonly maps: MapUseCases) {}
+  constructor(
+    @Inject(MapUseCases) private readonly maps: MapUseCases,
+    @Inject(AccessRules) private readonly rules: AccessRules,
+  ) {}
 
   @Get(nestPath(routes.maps.list.path))
   list(@CurrentActor() actor: Actor | null) {
@@ -53,8 +71,17 @@ export class MapsController {
   }
 
   @Post(nestPath(routes.maps.create.path))
-  create(@CurrentActor() actor: Actor | null, @Body(new ZodPipe(CreateMapRequest)) body: CreateMapRequest) {
-    return this.maps.create(actor, body);
+  async create(
+    @CurrentActor() actor: Actor | null,
+    @Body(new ZodPipe(CreateMapRequest)) body: CreateMapRequest,
+  ) {
+    const { starterRule, ...request } = body;
+    // Checked first, so a refused rule creates no map.
+    if (starterRule) await this.rules.checkStarter(actor, starterRule);
+    const map = await this.maps.create(actor, request);
+    // The first rule, for the creator's own corporation or alliance (checked by access).
+    if (starterRule) await this.rules.addStarter(actor, map.id, starterRule);
+    return map;
   }
 
   @Get(nestPath(routes.maps.bySlug.path))
@@ -358,11 +385,14 @@ export class ConnectionsController {
     @CurrentActor() actor: Actor | null,
     @Param('mapId') mapId: string,
     @Param('connectionId') connectionId: string,
+    // `?withSignatures=true`: the signatures leading through it go too.
+    @Query('withSignatures') withSignatures?: string,
   ): Promise<void> {
     await this.merged.route(
       mapId,
       (w) => w.removeConnection(actor, mapId, connectionId),
-      () => this.connections.remove(actor, mapId, connectionId),
+      () =>
+        this.connections.remove(actor, mapId, connectionId, { withSignatures: withSignatures === 'true' }),
     );
   }
 }
@@ -438,5 +468,37 @@ export class SignaturesController {
       (w) => w.removeSignature(actor, mapId, signatureId),
       () => this.signatures.remove(actor, mapId, signatureId),
     );
+  }
+
+  /** On a merged map each one is removed through its sources, without cascades or an undo. */
+  @Post(nestPath(routes.signatures.removeMany.path))
+  @HttpCode(200)
+  async removeMany(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Param('solarSystemId', systemId) solarSystemId: number,
+    @Body(new ZodPipe(RemoveSignaturesRequest)) body: RemoveSignaturesRequest,
+  ) {
+    const empty = { signatures: [], connectionIds: [] };
+    return (
+      (await this.merged.route(
+        mapId,
+        async (w) => {
+          for (const id of body.ids) await w.removeSignature(actor, mapId, id);
+        },
+        () => this.signatures.removeMany(actor, mapId, solarSystemId, body),
+      )) ?? empty
+    );
+  }
+
+  /** Not on merged maps: they hand out no undo. */
+  @Post(nestPath(routes.signatures.restore.path))
+  @HttpCode(200)
+  restore(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Body(new ZodPipe(RestoreSignaturesRequest)) body: RestoreSignaturesRequest,
+  ) {
+    return this.signatures.restore(actor, mapId, body.signatures);
   }
 }

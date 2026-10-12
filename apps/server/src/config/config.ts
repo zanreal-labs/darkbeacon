@@ -28,6 +28,8 @@ const EnvSchema = z
     ESI_BASE_URL: z.url().default('https://esi.evetech.net'),
     /** `postgres`: several replicas share one Postgres (event bus and leader election through it). */
     CLUSTER: z.enum(['none', 'postgres']).default('none'),
+    /** Requests a minute from one client address (0: no limit); 600 by default. */
+    RATE_LIMIT_PER_ADDRESS: z.coerce.number().int().min(0).max(1_000_000).optional(),
     DEMO_MODE: flag,
     ALLOW_DEMO_MODE: flag,
     /** Deprecated aliases of DEMO_MODE and ALLOW_DEMO_MODE. */
@@ -94,6 +96,8 @@ export interface AppConfig {
   demoMode: boolean;
   /** Deprecated environment variables that were used (to warn about at startup). */
   deprecated: string[];
+  /** Requests a minute from one client address; 0 turns the limit off; absent: the default. */
+  rateLimitPerAddress?: number;
 }
 
 export class ConfigError extends Error {
@@ -130,6 +134,7 @@ export function parseEnv(
     esiBaseUrl: e.ESI_BASE_URL.replace(/\/+$/, ''),
     cluster: e.CLUSTER,
     demoMode: e.DEMO_MODE || e.DEV_LOGIN,
+    ...(e.RATE_LIMIT_PER_ADDRESS !== undefined ? { rateLimitPerAddress: e.RATE_LIMIT_PER_ADDRESS } : {}),
     deprecated: [
       ...(cleaned.DEV_LOGIN !== undefined ? ['DEV_LOGIN (use DEMO_MODE)'] : []),
       ...(cleaned.ALLOW_DEV_LOGIN !== undefined ? ['ALLOW_DEV_LOGIN (use ALLOW_DEMO_MODE)'] : []),

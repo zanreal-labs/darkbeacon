@@ -17,6 +17,7 @@ import {
 import { AccessCache } from '../../adapters/access/cached-access.js';
 import { IdentitySubjectDirectory } from '../../adapters/access/subject-directory.js';
 import type { AppConfig } from '../../config/config.js';
+import { ActorResolverRegistry } from '../../platform/actor.js';
 import { EventConsumers } from '../../platform/event-consumers.js';
 import { APP_CONFIG, CLOCK, EVENT_BUS, EVENT_LOG, MAP_ACCESS, UNIT_OF_WORK } from '../../platform/tokens.js';
 import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
@@ -88,6 +89,7 @@ const RULES = 'access.AccessRuleRepository';
           events,
           clock,
           directory: new IdentitySubjectDirectory(eve, accounts, bot),
+          subjects: accounts,
         }),
       inject: [
         RULES,
@@ -121,7 +123,7 @@ const RULES = 'access.AccessRuleRepository';
       inject: [Database, RULES, UNIT_OF_WORK, EVENT_LOG, CLOCK, APP_CONFIG],
     },
   ],
-  exports: [MAP_ACCESS, AccessService, MapOwnershipRegistry, InstanceSettingsService],
+  exports: [MAP_ACCESS, AccessService, AccessRules, MapOwnershipRegistry, InstanceSettingsService],
 })
 export class AccessModule implements OnModuleInit {
   constructor(
@@ -129,9 +131,13 @@ export class AccessModule implements OnModuleInit {
     @Inject(AccessService) private readonly access: AccessService,
     @Inject(AccessRules) private readonly rules: AccessRules,
     @Inject(EventConsumers) private readonly consumers: EventConsumers,
+    @Inject(ActorResolverRegistry) private readonly actors: ActorResolverRegistry,
+    @Inject(InstanceSettingsService) private readonly settings: InstanceSettingsService,
   ) {}
 
   onModuleInit(): void {
+    // The instance API switch: keys and OAuth tokens work while `apiAccess` is on (the default).
+    this.actors.useApiSwitch(async () => (await this.settings.current()).apiAccess ?? true);
     this.realtime.registerStream('map', {
       authorize: async (actor, mapId) =>
         actor !== null && hasMapRole(await this.access.roleOf(actor, mapId), 'viewer'),

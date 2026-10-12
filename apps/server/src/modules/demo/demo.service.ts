@@ -1,10 +1,12 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { AccountService, DemoLogin, type SignedIn } from '@darkbeacon/identity';
 import {
+  CommentUseCases,
   ConnectionUseCases,
   MapUseCases,
   PassageUseCases,
   SignatureUseCases,
+  StructureUseCases,
   SystemUseCases,
 } from '@darkbeacon/mapping';
 import { AsyncAuditScope } from '../../platform/audit.js';
@@ -32,6 +34,8 @@ export class DemoService {
     @Inject(PassageUseCases) private readonly passages: PassageUseCases,
     @Inject(AsyncAuditScope) private readonly audit: AsyncAuditScope,
     @Inject(SharingUseCases) private readonly sharing: SharingUseCases,
+    @Inject(CommentUseCases) private readonly comments: CommentUseCases,
+    @Inject(StructureUseCases) private readonly structures: StructureUseCases,
   ) {}
 
   get enabled(): boolean {
@@ -49,6 +53,8 @@ export class DemoService {
         systems: this.systems,
         connections: this.connections,
         signatures: this.signatures,
+        comments: this.comments,
+        structures: this.structures,
       };
       const demoMapId = await this.audit.run(
         { channel: { kind: 'system', id: 'demo' }, origin: undefined },

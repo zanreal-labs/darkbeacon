@@ -136,6 +136,31 @@ const webhook = {
  * updates and removals, what it passes as `before`. A new event type does not compile until it
  * has a sample here, and the test below fails unless its audit record is complete.
  */
+const author = { accountId: 'a', characterId: 9, name: 'Alice Main' };
+const comment = {
+  id: 'cm1',
+  mapId: 'm',
+  solarSystemId: 31000005,
+  text: 'Keepstar here',
+  author,
+  createdAt: 1,
+};
+const structure = {
+  id: 'st1',
+  mapId: 'm',
+  solarSystemId: 31000005,
+  typeId: 35832,
+  typeName: 'Astrahus',
+  name: 'Home',
+  owner: { id: 98000001, name: 'Some Corp', ticker: 'SOME' },
+  status: 'powered',
+  endsAt: null,
+  notes: '',
+  createdBy: author,
+  updatedBy: author,
+  createdAt: 1,
+  updatedAt: 1,
+};
 const apiKey = {
   id: 'k1',
   kind: 'pat',
@@ -160,6 +185,39 @@ const sharing = {
   regenerated: false,
 };
 const BACKUP = 'darkbeacon-20261012T101500Z-v0.1.0-s20.db.gz';
+const importSource = { kind: 'wanderer-api' as const, host: 'wanderer.ltd', slug: 'home', name: 'Home' };
+const importJob = {
+  id: 'j',
+  status: 'running' as const,
+  source: importSource,
+  mode: 'new' as const,
+  mapId: 'm',
+  mapSlug: 'home',
+  mapName: 'Home',
+  phase: 'systems',
+  done: 0,
+  total: 1,
+  counts: {
+    systems: 1,
+    hiddenSystems: 0,
+    connections: 0,
+    signatures: 0,
+    structures: 0,
+    comments: 0,
+    labels: 0,
+    accessRules: 0,
+    hubs: 0,
+  },
+  report: [],
+  access: [],
+  outcome: {},
+  warnings: [],
+  error: null,
+  createdAt: 1,
+  updatedAt: 1,
+  finishedAt: null,
+  syncId: null,
+};
 
 const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
   'system.added': { data: system },
@@ -251,6 +309,25 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
     data: { id: 'p1', solarSystemId: 31000005, message: 'Help', createdBy: 'a', createdAt: 1 },
   },
   'ping.removed': { data: { id: 'p1' }, before: { id: 'p1', solarSystemId: 31000005, message: 'Help' } },
+  'kill.reported': {
+    data: {
+      id: 123,
+      solarSystemId: 31000005,
+      time: 1,
+      value: 1_000_000,
+      npc: false,
+      solo: false,
+      victim: {
+        character: null,
+        corporation: null,
+        alliance: null,
+        ship: { id: 670, name: 'Capsule', ticker: null },
+      },
+      finalBlow: null,
+      attackerCount: 2,
+      attackers: [],
+    },
+  },
   'access.rule_added': { data: rule },
   'access.rule_removed': { data: { id: 'r1' }, before: rule },
   'access.public_link_changed': { data: { ...sharing, enabled: true }, before: sharing },
@@ -259,9 +336,35 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
     before: { accountId: 'b', role: 'user' },
   },
   'access.account_changed': { data: { accountId: 'b' } },
+  'routes.bridges_changed': {
+    data: {
+      added: [{ id: 'b1', a: { name: '1DQ1-A' }, b: { name: 'UALX-3' } }],
+      updated: [],
+      removed: ['b0'],
+    },
+  },
+  'routes.settings_changed': { data: { thera: false }, before: { thera: true } },
+  'routes.way_home_changed': {
+    data: {
+      home: { solarSystemId: 31002531, name: 'J014348' },
+      routes: [{ hub: { name: 'Jita' }, jumps: 7, mouth: { name: 'Tama' } }],
+    },
+    before: { home: null, routes: [] },
+  },
   'character.unlinked': { data: { characterId: 9 } },
   'plugin.updated': { data: { ...plugin, enabled: true }, before: plugin },
   'plugin.removed': { data: { id: 'p' }, before: plugin },
+  'import.started': { data: { jobId: 'j', source: importSource, mode: 'new' } },
+  'import.finished': {
+    data: { jobId: 'j', source: importSource, status: 'done', outcome: {}, error: null },
+  },
+  'import.sync_changed': {
+    data: { syncId: 's', source: importSource, enabled: true, intervalMinutes: 15, reason: null },
+  },
+  'import.progress': {
+    data: { ...importJob, status: 'done', phase: 'done' },
+    before: { ...importJob, status: 'running', phase: 'systems' },
+  },
   'auth.signed_in': { data: { accountId: 'a', provider: 'discord' } },
   'auth.sign_in_failed': { data: { provider: 'discord', reason: 'cancelled', accountId: null } },
   'auth.signed_out': { data: { accountId: 'a', everywhere: false, device: 'Firefox on Windows' } },
@@ -293,6 +396,11 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
     data: { intervalMinutes: 360, keep: 14, maxAgeDays: null, notifyHost: null, notifySuccess: false },
     before: { intervalMinutes: 1440, keep: 14, maxAgeDays: null, notifyHost: null, notifySuccess: false },
   },
+  'comment.added': { data: comment },
+  'comment.removed': { data: { id: 'cm1', solarSystemId: comment.solarSystemId }, before: comment },
+  'structure.added': { data: structure },
+  'structure.updated': { data: { ...structure, status: 'reinforced', endsAt: 5_000 }, before: structure },
+  'structure.removed': { data: { id: 'st1', solarSystemId: structure.solarSystemId }, before: structure },
   'api_key.created': { data: apiKey },
   'api_key.updated': { data: { ...apiKey, name: 'Bot 2' }, before: apiKey },
   'api_key.rotated': { data: { id: 'k1', name: 'Bot', kind: 'pat', ownerAccountId: 'a' } },
@@ -325,6 +433,16 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
       readOnly: true,
     },
   },
+  'access.rule_changed': { data: { ...rule, role: 'manager' }, before: rule },
+  'access.owner_changed': { data: { mapId: 'm', ownerAccountId: 'b', previousOwnerAccountId: 'a' } },
+  'map.trashed': { data: { id: 'm', deletedAt: 5 } },
+  'map.restored': { data: map },
+  'account.disabled_changed': { data: { accountId: 'b', disabled: true, reason: 'spy' } },
+  'webhook.secret_rotated': { data: { id: 'w1', mapId: 'm' } },
+  'webhook.auto_disabled': { data: { id: 'w1', mapId: 'm', failures: 10, lastError: 'HTTP 500' } },
+  'invite.created': { data: { id: 'i1', note: 'new corp', expiresAt: null, maxUses: 5 } },
+  'invite.revoked': { data: { id: 'i1' }, before: { id: 'i1', note: null, expiresAt: null, maxUses: 5 } },
+  'invite.used': { data: { id: 'i1', accountId: 'b' } },
 };
 
 const facts = { accountId: 'a', accountName: 'Alice', characterId: 9, characterName: 'Alice Main' };

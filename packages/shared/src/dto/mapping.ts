@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { MapRole } from './access.js';
+import { AuthorDto } from './authors.js';
+import { StarterAccessRule } from './access-rules.js';
 import { BookmarkNumbering, BookmarkTemplate } from './bookmarks.js';
 import { EveId, Id, Timestamp } from './common.js';
 
@@ -13,8 +15,22 @@ export const MapSettings = z.object({
   bookmarkTemplate: BookmarkTemplate.optional(),
   /** How `{n}` numbers wormholes (see `bookmarks.ts`); absent means found order, gaps kept. */
   bookmarkNumbering: BookmarkNumbering.optional(),
+  /**
+   * Signatures nobody changed for this many days are removed (as in Wanderer); 0 keeps them.
+   * Absent means `DEFAULT_SIGNATURE_RETENTION_DAYS`.
+   */
+  signatureRetentionDays: z.number().int().min(0).max(365).optional(),
+  /**
+   * Wanderer's "only tracked characters": nobody opens the map until every character of theirs
+   * that may be tracked here is tracked. Absent: off.
+   */
+  onlyTrackedCharacters: z.boolean().optional(),
+  /** Wanderer's `restrict_offline_showing`: offline characters are shown to managers and up only. */
+  offlineForManagersOnly: z.boolean().optional(),
 });
 export type MapSettings = z.infer<typeof MapSettings>;
+
+export const DEFAULT_SIGNATURE_RETENTION_DAYS = 14;
 
 export const Color = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'expected #rrggbb');
 
@@ -66,10 +82,16 @@ export const Slug = z
 export const MapKind = z.enum(['standard', 'composite']);
 export type MapKind = z.infer<typeof MapKind>;
 
+/** Longest map description. */
+export const MAP_DESCRIPTION_MAX = 1000;
+const MapDescription = z.string().trim().max(MAP_DESCRIPTION_MAX);
+
 export const MapDto = z.object({
   id: Id,
   slug: Slug,
   name: z.string(),
+  /** What the map is for, shown in the list of maps; absent when empty. */
+  description: z.string().optional(),
   kind: MapKind.optional(),
   ownerAccountId: Id,
   settings: MapSettings,
@@ -79,11 +101,19 @@ export const MapDto = z.object({
   systemLabels: z.array(SystemLabelDto),
   createdAt: Timestamp,
   updatedAt: Timestamp,
+  /** Set while the map is deleted but can still be restored (instance admins only see it then). */
+  deletedAt: Timestamp.nullable().optional(),
 });
 export type MapDto = z.infer<typeof MapDto>;
 
 /** GET /api/maps item: a map plus the caller's effective role. */
-export const MapSummaryDto = MapDto.pick({ id: true, slug: true, name: true, kind: true }).extend({
+export const MapSummaryDto = MapDto.pick({
+  id: true,
+  slug: true,
+  name: true,
+  description: true,
+  kind: true,
+}).extend({
   role: MapRole.exclude(['blocked']),
 });
 export type MapSummaryDto = z.infer<typeof MapSummaryDto>;
@@ -92,12 +122,17 @@ export const CreateMapRequest = z.object({
   name: z.string().trim().min(1).max(64),
   slug: Slug.optional(),
   kind: MapKind.optional(),
+  description: MapDescription.optional(),
+  /** A first access rule for the creator's own corporation or alliance. */
+  starterRule: StarterAccessRule.optional(),
 });
 export type CreateMapRequest = z.infer<typeof CreateMapRequest>;
 
 export const UpdateMapRequest = z.object({
   name: z.string().trim().min(1).max(64).optional(),
   slug: Slug.optional(),
+  /** An empty string clears it. */
+  description: MapDescription.optional(),
   settings: MapSettings.partial().optional(),
 });
 export type UpdateMapRequest = z.infer<typeof UpdateMapRequest>;
@@ -214,6 +249,29 @@ export type ShipSize = z.infer<typeof ShipSize>;
 export const Bubbled = z.enum(['none', 'source', 'target', 'both']);
 export type Bubbled = z.infer<typeof Bubbled>;
 
+/**
+ * How much life a hole had left when someone looked: "less than N hours". `1h` and `4h` are end of
+ * life; `4.5h` is the whole life of small holes; `16h`, `24h` and `48h` are the lifetimes of the
+ * longer-lived holes (48 h only for a few C6 statics). The same marks Wanderer offers.
+ */
+export const LifetimeMark = z.enum(['1h', '4h', '4.5h', '16h', '24h', '48h']);
+export type LifetimeMark = z.infer<typeof LifetimeMark>;
+export const LIFETIME_MARK_HOURS: Record<LifetimeMark, number> = {
+  '1h': 1,
+  '4h': 4,
+  '4.5h': 4.5,
+  '16h': 16,
+  '24h': 24,
+  '48h': 48,
+};
+
+/** When a connection's lifetime was marked and with what: it expires before `at` + the mark's hours. */
+export const ConnectionLifetimeDto = z.object({ mark: LifetimeMark, at: Timestamp });
+export type ConnectionLifetimeDto = z.infer<typeof ConnectionLifetimeDto>;
+
+/** Longest connection note. */
+export const CONNECTION_NOTE_MAX = 2000;
+
 export const ConnectionDto = z.object({
   id: Id,
   mapId: Id,
@@ -240,6 +298,15 @@ export const ConnectionDto = z.object({
    */
   bookmarkNumber: z.number().int().positive().nullable().optional(),
   bookmarkParent: EveId.nullable().optional(),
+  /**
+   * Locked connections are changed and removed by managers only, never by auto-mapping. Absent
+   * means unlocked.
+   */
+  locked: z.boolean().optional(),
+  /** Free text about the hole (who rolled it, what is behind it). Absent means none. */
+  note: z.string().max(CONNECTION_NOTE_MAX).optional(),
+  /** The last lifetime mark ("less than 16 h left") and when it was set; absent or null: none. */
+  lifetime: ConnectionLifetimeDto.nullable().optional(),
   createdAt: Timestamp,
   updatedAt: Timestamp,
   /** On maps that merge other maps only. */
@@ -262,7 +329,15 @@ export const UpdateConnectionRequest = ConnectionDto.pick({
   massSaved: true,
   dangerous: true,
   bubbled: true,
-}).partial();
+})
+  .extend({
+    /** Managers only. */
+    locked: z.boolean(),
+    note: z.string().max(CONNECTION_NOTE_MAX),
+    /** A new mark is stamped with the time it was set; null clears it. */
+    lifetime: LifetimeMark.nullable(),
+  })
+  .partial();
 export type UpdateConnectionRequest = z.infer<typeof UpdateConnectionRequest>;
 
 export const SignatureGroup = z.enum(['unknown', 'wormhole', 'combat', 'relic', 'data', 'gas', 'ore']);
@@ -271,44 +346,152 @@ export type SignatureGroup = z.infer<typeof SignatureGroup>;
 /** In-game signature id such as `ABC-123`. */
 export const SignatureEveId = z.string().regex(/^[A-Z]{3}-\d{3}$/, 'expected ABC-123');
 
+/**
+ * Where a K162 or another type with several destinations (C729) leads, as the scanning pilot set
+ * it: one class, or a group when only the hole's size tells (`c1_c2_c3`: small, `c4_c5`: medium).
+ */
+export const SignatureDestination = z.enum([
+  'hs',
+  'ls',
+  'ns',
+  'c1',
+  'c2',
+  'c3',
+  'c4',
+  'c5',
+  'c6',
+  'c13',
+  'thera',
+  'pochven',
+  'c1_c2_c3',
+  'c4_c5',
+]);
+export type SignatureDestination = z.infer<typeof SignatureDestination>;
+
+/** The id of a custom entry (one someone wrote, not the scanner's): any short text. */
+export const CustomSignatureId = z.string().trim().min(1).max(32);
+
+/** True when `id` is a scanner id (`ABC-123`). */
+export function isScannerSignatureId(id: string): boolean {
+  return /^[A-Z]{3}-\d{3}$/.test(id);
+}
+
+/**
+ * What a scan result is: a cosmic signature (probed down), a cosmic anomaly (on the scanner at
+ * once) or anything else the scanner lists (ships, structures, deployables, drones).
+ */
+export const SignatureKind = z.enum(['signature', 'anomaly', 'other']);
+export type SignatureKind = z.infer<typeof SignatureKind>;
+
 export const SignatureDto = z.object({
   id: Id,
   mapId: Id,
   solarSystemId: EveId,
-  eveId: SignatureEveId,
+  /** `ABC-123`, or any short text for a custom entry. */
+  eveId: z.string().min(1).max(32),
   group: SignatureGroup,
   /** Wormhole type code (e.g. `B274`) or site type. */
   type: z.string().nullable(),
   name: z.string().nullable(),
+  /** Markdown. */
   description: z.string(),
   connectionId: Id.nullable(),
+  /** Absent means a cosmic signature. */
+  kind: SignatureKind.optional(),
+  /** Someone wrote it (its id need not be the scanner's). Absent means false. */
+  custom: z.boolean().optional(),
   createdAt: Timestamp,
   updatedAt: Timestamp,
   /** On maps that merge other maps only. */
   provenance: ProvenanceDto.optional(),
+  // Optional below: signatures (and events) from before these fields existed lack them.
+  /** A wormhole's temporary name; given to the system it leads to when it is linked. */
+  tempName: z.string().nullable().optional(),
+  /** Where a K162 or C729 leads (see SignatureDestination). */
+  destination: SignatureDestination.nullable().optional(),
+  /**
+   * Lifetime and mass the pilot saw on the hole. Given to the connection when the signature is
+   * linked (and whenever they change while it is); null when nobody said.
+   */
+  timeStatus: TimeStatus.nullable().optional(),
+  massStatus: MassStatus.nullable().optional(),
+  /** The hole is inside a warp disruption bubble. */
+  bubbled: z.boolean().optional(),
+  /** Who added it, and who changed it last. */
+  createdBy: AuthorDto.nullable().optional(),
+  updatedBy: AuthorDto.nullable().optional(),
 });
 export type SignatureDto = z.infer<typeof SignatureDto>;
 
-export const AddSignatureRequest = z.object({
-  eveId: SignatureEveId,
-  group: SignatureGroup.optional(),
-  type: z.string().trim().max(64).nullable().optional(),
-  name: z.string().trim().max(128).nullable().optional(),
-  description: z.string().max(2000).optional(),
-});
+const SignatureFields = {
+  tempName: z.string().trim().max(64).nullable(),
+  destination: SignatureDestination.nullable(),
+  timeStatus: TimeStatus.nullable(),
+  massStatus: MassStatus.nullable(),
+  bubbled: z.boolean(),
+};
+
+export const AddSignatureRequest = z
+  .object({
+    eveId: CustomSignatureId,
+    group: SignatureGroup.optional(),
+    type: z.string().trim().max(64).nullable().optional(),
+    name: z.string().trim().max(128).nullable().optional(),
+    description: z.string().max(2000).optional(),
+    kind: SignatureKind.optional(),
+    /** A custom entry: its id may be any short text. */
+    custom: z.boolean().optional(),
+    ...z.object(SignatureFields).partial().shape,
+  })
+  .refine((r) => r.custom === true || isScannerSignatureId(r.eveId), {
+    message: 'expected ABC-123 (or mark the entry as custom)',
+    path: ['eveId'],
+  });
 export type AddSignatureRequest = z.infer<typeof AddSignatureRequest>;
 
 export const UpdateSignatureRequest = z
   .object({
-    eveId: SignatureEveId,
+    /** Checked against the entry: scanner entries keep `ABC-123` ids. */
+    eveId: CustomSignatureId,
     group: SignatureGroup,
+    kind: SignatureKind,
     type: z.string().trim().max(64).nullable(),
     name: z.string().trim().max(128).nullable(),
     description: z.string().max(2000),
     connectionId: Id.nullable(),
+    ...SignatureFields,
   })
   .partial();
 export type UpdateSignatureRequest = z.infer<typeof UpdateSignatureRequest>;
+
+/**
+ * POST /api/maps/:mapId/systems/:solarSystemId/signatures/remove (member+): removes several
+ * signatures at once and returns them as they were, so they can be put back (`restore`).
+ * `withConnections` also removes the connections they lead through; `backLinks` also removes the
+ * signature on the far side that leads back, when it is the only one.
+ */
+export const RemoveSignaturesRequest = z.object({
+  ids: z.array(Id).min(1).max(500),
+  withConnections: z.boolean().optional(),
+  backLinks: z.boolean().optional(),
+});
+export type RemoveSignaturesRequest = z.infer<typeof RemoveSignaturesRequest>;
+
+export const RemovedSignaturesDto = z.object({
+  /** Every signature removed, the far-side ones included. */
+  signatures: z.array(SignatureDto),
+  /** Connections removed with them. */
+  connectionIds: z.array(Id),
+});
+export type RemovedSignaturesDto = z.infer<typeof RemovedSignaturesDto>;
+
+/**
+ * POST /api/maps/:mapId/signatures/restore (member+): puts removed signatures back as they were
+ * (an undo). Signatures whose code is in use again in their system are skipped; links to
+ * connections that are gone are dropped.
+ */
+export const RestoreSignaturesRequest = z.object({ signatures: z.array(SignatureDto).min(1).max(500) });
+export type RestoreSignaturesRequest = z.infer<typeof RestoreSignaturesRequest>;
 
 /** Paste from the in-game probe scanner. `replace` also removes signatures missing from the paste. */
 export const PasteSignaturesRequest = z.object({
@@ -323,5 +506,7 @@ export const PasteSignaturesResult = z.object({
   removed: z.number().int(),
   /** Lines the parser did not understand. */
   skipped: z.array(z.string()),
+  /** The signatures `replace` removed, as they were (for an undo). */
+  removedSignatures: z.array(SignatureDto).optional(),
 });
 export type PasteSignaturesResult = z.infer<typeof PasteSignaturesResult>;
