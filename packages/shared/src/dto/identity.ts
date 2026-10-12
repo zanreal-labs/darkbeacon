@@ -32,6 +32,13 @@ export const CharacterDto = z.object({
   linkedAt: Timestamp,
   /** The character's EVE grant allows setting the in-game destination (`esi-ui.write_waypoint.v1`). */
   canSetWaypoints: z.boolean().optional(),
+  /**
+   * Required ESI scopes the character's grant lacks (linked before Darkbeacon asked for them):
+   * linking it again adds them. Absent when unknown (characters without an EVE grant).
+   */
+  missingScopes: z.array(z.string()).optional(),
+  /** Opt-in scopes the grant holds (`assets`, `wallet`). */
+  extras: z.array(z.enum(['assets', 'wallet'])).optional(),
 });
 export type CharacterDto = z.infer<typeof CharacterDto>;
 
