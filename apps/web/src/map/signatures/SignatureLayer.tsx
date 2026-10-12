@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   destinationOfClass,
   type ConnectionDto,
+  type MapDto,
   type MapSystemDto,
   type SignatureDto,
   type TypedEvent,
@@ -17,6 +18,7 @@ import { systemClass } from '../../lib/universe';
 import { systemDisplayName } from '../SystemNode';
 import type { MapStore } from '../useMapStore';
 import { useBubbledBadges } from './BubbledBadge';
+import { linkSignature, useOnLink } from './onLink';
 import { TypeLabel } from './catalog';
 import { GROUP_LABEL, signatureLeadsTo } from './facts';
 import { signaturePrefs } from './prefs';
@@ -75,15 +77,17 @@ export function SignatureLayer({
 }: {
   mapId: string;
   state: {
+    map: MapDto | null;
     systems: Map<number, MapSystemDto>;
     connections: Map<string, ConnectionDto>;
     signatures: Map<string, SignatureDto>;
   };
   universe: Map<number, UniverseSystemDto>;
-  store: Pick<MapStore, 'updateSignature'>;
+  store: Pick<MapStore, 'updateSignature' | 'updateSystem'>;
   canEdit: boolean;
 }) {
   useBubbledBadges(mapId, state.signatures);
+  useOnLink(mapId, state, universe, store, canEdit);
   const me = useMe();
   const [reference, setReference] = useState(false);
   const [prompt, setPrompt] = useState<LinkPrompt | null>(null);
@@ -166,7 +170,7 @@ export function SignatureLayer({
           universe={universe}
           name={name}
           splash={!!prompt.from}
-          onLink={(signatureId) => void store.updateSignature(signatureId, { connectionId: connection.id })}
+          onLink={(signatureId) => void linkSignature(store, signatureId, connection.id)}
           onClose={() => setPrompt(null)}
         />
       )}

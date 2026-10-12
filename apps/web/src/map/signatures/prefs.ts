@@ -33,6 +33,12 @@ export interface SignaturePrefs {
   backLinks: boolean;
   /** After a jump of yours makes a new connection, offer to link one of the signatures. */
   linkOnSplash: boolean;
+  /**
+   * When you link a signature, for the system it leads to (bookmark templates, empty: off; as
+   * Wanderer's auto temp name, custom label and tag on link, with Labels for tags): copy its
+   * bookmark label, give it a temporary name, a custom label, and the Label the template names.
+   */
+  onLink: { copyLabel: boolean; tempName: string; customLabel: string; label: string };
 }
 
 export const DEFAULT_SIGNATURE_PREFS: SignaturePrefs = {
@@ -47,6 +53,7 @@ export const DEFAULT_SIGNATURE_PREFS: SignaturePrefs = {
   deleteConnectionWithSigs: false,
   backLinks: true,
   linkOnSplash: false,
+  onLink: { copyLabel: true, tempName: '', customLabel: '', label: '' },
 };
 
 let cache: SignaturePrefs | null = null;
@@ -62,6 +69,7 @@ function read(): SignaturePrefs {
       columns: { ...DEFAULT_SIGNATURE_PREFS.columns, ...stored.columns },
       groups: { ...stored.groups },
       sort: { ...DEFAULT_SIGNATURE_PREFS.sort, ...stored.sort },
+      onLink: { ...DEFAULT_SIGNATURE_PREFS.onLink, ...stored.onLink },
     };
   } catch {
     return DEFAULT_SIGNATURE_PREFS;

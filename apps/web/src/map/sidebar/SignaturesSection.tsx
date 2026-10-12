@@ -41,6 +41,7 @@ import { seedSignatures } from '../mapState';
 import { TypeLabel } from '../signatures/catalog';
 import { ageLabel, freshness, GROUP_LABEL, targetOf, visibleSignatures } from '../signatures/facts';
 import { LeadsToMenu } from '../signatures/LeadsToMenu';
+import { announceLink } from '../signatures/onLink';
 import {
   setSignaturePrefs,
   signaturePrefs,
@@ -321,7 +322,12 @@ export function SignaturesSection({
 
   const { columns } = prefs;
   const columnCount = 2 + Object.values(columns).filter(Boolean).length + (can.edit ? 1 : 0);
-  const update = (id: string, patch: UpdateSignatureRequest) => store.updateSignature(id, patch);
+  // A link saved here also does what the preferences ask on link (see `useOnLink`).
+  const update = async (id: string, patch: UpdateSignatureRequest) => {
+    const ok = await store.updateSignature(id, patch);
+    if (ok && patch.connectionId) announceLink(id, patch.connectionId);
+    return ok;
+  };
 
   return (
     <div

@@ -8,6 +8,7 @@ import {
   buildPath,
   routes,
   type ConnectionDto,
+  type MapDto,
   type SignatureDto,
   type UniverseSystemDto,
 } from '@darkbeacon/shared';
@@ -34,6 +35,7 @@ import { countdown } from '../sidebar/StructuresSection';
 import { useMapStore } from '../useMapStore';
 import { ageLabel, destinationChoices, freshness, leadsToChoices, signatureLeadsTo } from './facts';
 import { DEFAULT_SIGNATURE_PREFS, setSignaturePrefs, SIGNATURE_PREFS_KEY } from './prefs';
+import { onLinkChanges } from './onLink';
 import { linkCandidates, SignatureLayer } from './SignatureLayer';
 import { SignatureEditor } from './SignatureEditor';
 
@@ -228,7 +230,12 @@ describe('CommentsSection', () => {
 describe('link signature after a jump', () => {
   it('offers the unlinked wormholes of the system you came from when your jump made a connection', async () => {
     setSignaturePrefs({ linkOnSplash: true });
-    server.use(http.get(routes.accounts.me.path, () => HttpResponse.json(meFixture())));
+    server.use(
+      http.get(routes.accounts.me.path, () => HttpResponse.json(meFixture())),
+      http.get(buildPath(routes.maps.getPreferences.path, { mapId: MAP_ID }), () =>
+        HttpResponse.json({ viewport: null, bookmarkTemplate: null, bookmarkOrder: null, updatedAt: 0 }),
+      ),
+    );
     const me = meFixture().characters[0]!.id;
     const fresh = connectionFixture('c9', SYSTEM, HS);
     const sig = signatureFixture('s1', SYSTEM, 'ABC-123', { group: 'wormhole', type: 'D845' });
@@ -240,6 +247,7 @@ describe('link signature after a jump', () => {
           <SignatureLayer
             mapId={MAP_ID}
             state={{
+              map: null,
               systems: new Map([
                 [SYSTEM, systemFixture(SYSTEM)],
                 [HS, systemFixture(HS)],
@@ -248,7 +256,7 @@ describe('link signature after a jump', () => {
               signatures: new Map([[sig.id, sig]]),
             }}
             universe={universe}
-            store={{ updateSignature }}
+            store={{ updateSignature, updateSystem: vi.fn(async () => true) }}
             canEdit
           />
         </ToastProvider>
@@ -268,5 +276,45 @@ describe('link signature after a jump', () => {
     expect(await screen.findByText('Which signature did you jump through?')).toBeTruthy();
     await user.click(screen.getByRole('button', { name: /ABC-123/ }));
     expect(updateSignature).toHaveBeenCalledWith('s1', { connectionId: 'c9' });
+  });
+});
+
+describe('what linking does for the system it leads to', () => {
+  it('copies its bookmark label and fills temporary name, custom label and Label from templates', () => {
+    const hole = connectionFixture('c1', SYSTEM, HS, { bookmarkNumber: 2, bookmarkParent: SYSTEM });
+    const sig = signatureFixture('s1', SYSTEM, 'ABC-123', {
+      group: 'wormhole',
+      type: 'D845',
+      connectionId: 'c1',
+    });
+    const map = {
+      settings: { scopes: ['wormhole'], bookmarkNumbering: { order: 'found', renumberOnClose: false } },
+      systemLabels: [
+        { id: 'l1', name: 'WH1', description: '' },
+        { id: 'l2', name: 'WH2', description: '' },
+      ],
+    } as unknown as MapDto;
+    const changes = onLinkChanges(
+      sig,
+      {
+        map,
+        systems: new Map([
+          [SYSTEM, systemFixture(SYSTEM, { status: 'home' })],
+          [HS, systemFixture(HS)],
+        ]),
+        connections: new Map([[hole.id, hole]]),
+        signatures: new Map([[sig.id, sig]]),
+      },
+      universe,
+      {
+        template: '{sig3} {destClass}',
+        prefs: { copyLabel: true, tempName: '{sig3} out', customLabel: '{spawn}', label: 'WH{n}' },
+      },
+    );
+    expect(changes).toEqual({
+      target: HS,
+      label: 'ABC out',
+      patch: { temporaryName: 'ABC out', customLabel: 'Static', systemLabelIds: ['l2'] },
+    });
   });
 });
