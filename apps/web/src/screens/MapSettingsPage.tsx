@@ -14,6 +14,7 @@ import {
   Hash,
   KeyRound,
   Lock,
+  Network,
   Plus,
   Send,
   Settings2,
@@ -36,6 +37,7 @@ import {
 import { useInstance } from '../lib/maps';
 import { useMe } from '../lib/session';
 import { DiscordNotifications } from './MapNotifications';
+import { MapSharing } from './MapSharing';
 import {
   AccessSubjectKind,
   buildPath,
@@ -96,7 +98,7 @@ import styles from './settings.module.css';
 
 const errorText = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback);
 
-type TabId = 'general' | 'labels' | 'bookmarks' | 'access' | 'notifications';
+type TabId = 'general' | 'labels' | 'bookmarks' | 'access' | 'sharing' | 'notifications';
 
 /** Map settings while they load (also the server's Suspense fallback). */
 export function MapSettingsSkeleton() {
@@ -128,6 +130,7 @@ export function MapSettingsPage({ slug }: { slug: string }) {
     { id: 'labels', title: 'Labels', icon: <Tags />, show: can.manage },
     { id: 'bookmarks', title: 'Bookmark labels', icon: <Bookmark />, show: can.manage },
     { id: 'access', title: 'Access', icon: <ShieldCheck />, show: can.admin },
+    { id: 'sharing', title: 'Sharing', icon: <Network />, show: can.admin },
     { id: 'notifications', title: 'Notifications', icon: <Bell />, show: can.admin },
   ];
   const visible = tabs.filter((t) => t.show);
@@ -201,6 +204,11 @@ export function MapSettingsPage({ slug }: { slug: string }) {
         {can.admin && (
           <TabsContent value="access">
             <AccessRules map={map.data} />
+          </TabsContent>
+        )}
+        {can.admin && (
+          <TabsContent value="sharing">
+            <MapSharing map={map.data} />
           </TabsContent>
         )}
         {can.admin && (

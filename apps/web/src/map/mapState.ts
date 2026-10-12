@@ -3,11 +3,13 @@ import type {
   ConnectionDto,
   MapDto,
   MapSnapshot,
+  MapSourceDto,
   MapSystemDto,
   SignatureDto,
   TypedEvent,
 } from '@darkbeacon/shared';
 import type { StreamMessage } from '../lib/realtime';
+import { enteringMerged, fromMergedView } from './sharing/chain';
 
 export interface MapState {
   map: MapDto | null;
@@ -15,6 +17,11 @@ export interface MapState {
   connections: Map<string, ConnectionDto>;
   signatures: Map<string, SignatureDto>;
   characters: Map<number, CharacterPresenceDto>;
+  /**
+   * The maps merged into this one (sharing), or null for a map that shows only its own objects.
+   * While set, its systems, connections and signatures are the merged ones.
+   */
+  sources: MapSourceDto[] | null;
   /** Snapshot parts the server sent; a missing part is loaded over REST instead. */
   has: { signatures: boolean; characters: boolean };
 }
@@ -25,6 +32,7 @@ export const emptyMapState = (): MapState => ({
   connections: new Map(),
   signatures: new Map(),
   characters: new Map(),
+  sources: null,
   has: { signatures: false, characters: false },
 });
 
@@ -67,6 +75,7 @@ export function applyMapMessage(state: MapState, message: StreamMessage): MapSta
       connections: byKey(data.connections, (c) => c.id),
       signatures: data.signatures ? byKey(data.signatures, (s) => s.id) : state.signatures,
       characters: data.characters ? byKey(data.characters, (c) => c.characterId) : state.characters,
+      sources: data.sources ?? null,
       has: {
         signatures: state.has.signatures || data.signatures !== undefined,
         characters: state.has.characters || data.characters !== undefined,
@@ -78,7 +87,13 @@ export function applyMapMessage(state: MapState, message: StreamMessage): MapSta
 }
 
 export function applyMapEvent(state: MapState, event: TypedEvent): MapState {
+  // A merged map shows the merged objects; the map's own events about its rows are not them.
+  if (state.sources && !fromMergedView(event)) return state;
   switch (event.type) {
+    case 'map.sources_changed':
+      return event.data.sources.length > 0
+        ? { ...(state.sources ? state : enteringMerged(state)), sources: event.data.sources }
+        : { ...state, sources: null };
     case 'system.added':
     case 'system.updated':
       return { ...state, systems: upsert(state.systems, event.data.solarSystemId, event.data) };

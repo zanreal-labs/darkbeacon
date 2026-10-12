@@ -17,6 +17,7 @@ import {
   Button,
   Callout,
   Card,
+  Checkbox,
   Dialog,
   DialogContent,
   EmptyState,
@@ -278,10 +279,15 @@ function CreateMapForm({ autoFocus, onCancel }: { autoFocus?: boolean; onCancel?
   const create = useCreateMap();
   const [name, setName] = useState('');
   const [slug, setSlug] = useState<string | null>(null);
+  const [composite, setComposite] = useState(false);
   const shownSlug = slug ?? slugify(name);
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    create.mutate({ name: name.trim(), ...(shownSlug.length >= 2 ? { slug: shownSlug } : {}) });
+    create.mutate({
+      name: name.trim(),
+      ...(shownSlug.length >= 2 ? { slug: shownSlug } : {}),
+      ...(composite ? { kind: 'composite' as const } : {}),
+    });
   };
   return (
     <form className={styles.form} onSubmit={submit} aria-label="New map">
@@ -316,6 +322,12 @@ function CreateMapForm({ autoFocus, onCancel }: { autoFocus?: boolean; onCancel?
           onChange={(e) => setSlug(e.target.value)}
         />
       </Field>
+      <Checkbox
+        checked={composite}
+        onCheckedChange={setComposite}
+        label="Composite (merge other maps)"
+        description="No systems of its own: it shows the maps shared with it as one chain, e.g. an alliance chain."
+      />
       <div className={styles.formActions}>
         {onCancel && (
           <Button variant="ghost" onClick={onCancel}>

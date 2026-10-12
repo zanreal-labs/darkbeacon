@@ -32,6 +32,10 @@ import { freeSpot } from '../map/geometry';
 import { connectionMenu, systemMenu } from '../map/menus';
 import { systemDisplayName } from '../map/SystemNode';
 import { useMapStore } from '../map/useMapStore';
+import { filterableSources, permissionsFor, withoutSources } from '../map/sharing/chain';
+import { ProvenanceLine, provenanceText } from '../map/sharing/ProvenanceLine';
+import { SourceFilter, useHiddenSources } from '../map/sharing/SourceFilter';
+import sharingStyles from '../map/sharing/sharing.module.css';
 import { LocalWidget } from '../map/widgets/LocalWidget';
 import { SignaturesWidget } from '../map/widgets/SignaturesWidget';
 import { SystemInfoWidget } from '../map/widgets/SystemInfoWidget';
@@ -60,7 +64,12 @@ export function MapView({
   snapshot?: StreamSnapshotDto;
 }) {
   const store = useMapStore(map.id, snapshot);
-  const { state } = store;
+  // On a map that merges others, a viewer may hide some of them (only in this browser).
+  const sourceFilter = useHiddenSources(map.id);
+  const state = useMemo(
+    () => withoutSources(store.state, sourceFilter.hidden),
+    [store.state, sourceFilter.hidden],
+  );
   const me = useMe();
   const rf = useReactFlow();
   const can = mapPermissions(role);
@@ -112,7 +121,7 @@ export function MapView({
           system: sys,
           name,
           labels,
-          can,
+          can: permissionsFor(can, sys.provenance),
           store,
           plugins: systemPlugins,
           onEdit: () => {
@@ -129,10 +138,23 @@ export function MapView({
         const sys = state.systems.get(id);
         return sys ? systemDisplayName(sys, universe.get(id)) : String(id);
       };
-      return {
-        title: `${end(connection.source)} ↔ ${end(connection.target)}`,
-        items: connectionMenu({ mapId: map.id, connection, can, store, plugins: connectionPlugins }),
-      };
+      const items = connectionMenu({
+        mapId: map.id,
+        connection,
+        can: permissionsFor(can, connection.provenance),
+        store,
+        plugins: connectionPlugins,
+      });
+      const provenance = connection.provenance;
+      if (provenance && state.sources)
+        items.unshift({
+          kind: 'custom',
+          key: 'provenance',
+          render: () => (
+            <p className={sharingStyles.menuProvenance}>{provenanceText(provenance, state.sources ?? [])}</p>
+          ),
+        });
+      return { title: `${end(connection.source)} ↔ ${end(connection.target)}`, items };
     }
     if (!can.edit) return null;
     return {
@@ -195,14 +217,17 @@ export function MapView({
       icon: <Info />,
       render: () =>
         system ? (
-          <SystemInfoWidget
-            system={system}
-            info={universe.get(system.solarSystemId)}
-            labels={labels}
-            can={can}
-            store={store}
-            focusToken={focus.name}
-          />
+          <>
+            <ProvenanceLine provenance={system.provenance} sources={state.sources} />
+            <SystemInfoWidget
+              system={system}
+              info={universe.get(system.solarSystemId)}
+              labels={labels}
+              can={permissionsFor(can, system.provenance)}
+              store={store}
+              focusToken={focus.name}
+            />
+          </>
         ) : (
           nothingSelected
         ),
@@ -222,7 +247,7 @@ export function MapView({
               (s) => s.solarSystemId === system.solarSystemId,
             )}
             streamed={state.has.signatures}
-            can={can}
+            can={permissionsFor(can, system.provenance)}
             store={store}
           />
         ) : (
@@ -291,6 +316,12 @@ export function MapView({
           </span>
         )}
         <span className={styles.spacer} />
+        <SourceFilter
+          sources={filterableSources(store.state.sources)}
+          hidden={sourceFilter.hidden}
+          onToggle={sourceFilter.toggle}
+          className={styles.toolButton}
+        />
         {can.manage && (
           <IconButton
             asChild
@@ -310,12 +341,15 @@ export function MapView({
             icon={<Waypoints />}
             title="This map is empty"
             description={
-              can.edit
-                ? 'Search for a system to start the chain, or track a character and the map follows as you jump.'
-                : 'Nobody has mapped anything here yet.'
+              map.kind === 'composite'
+                ? 'It shows the maps shared with it. Offer a map to it from that map’s settings, then accept it here under Sharing.'
+                : can.edit
+                  ? 'Search for a system to start the chain, or track a character and the map follows as you jump.'
+                  : 'Nobody has mapped anything here yet.'
             }
             actions={
-              can.edit && (
+              can.edit &&
+              map.kind !== 'composite' && (
                 <Button
                   variant="primary"
                   icon={<Plus />}
