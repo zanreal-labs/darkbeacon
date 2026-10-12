@@ -168,13 +168,16 @@ function openSqlite(filename: string, options: { readonly?: boolean } = {}): SQL
 
 /**
  * Kysely prepares every query again; preparing costs about as much as running a small query.
- * Statements are kept per SQL text (the most recently used `max`) and reused. A statement still
- * iterating a streamed query is busy, and gets a fresh one instead.
+ * Statements are kept per SQL text (the most recently used `max`) and reused. Long SQL (batch
+ * inserts of many rows, one text per row count) is prepared each time: such statements are big,
+ * rare per request, and would fill the cache with variants. A statement still iterating a
+ * streamed query is busy, and gets a fresh one instead.
  */
-export function cachePreparedStatements(sqlite: SQLite.Database, max = 1000): void {
+export function cachePreparedStatements(sqlite: SQLite.Database, max = 500, maxLength = 2_000): void {
   const cache = new Map<string, SQLite.Statement>();
   const prepare = sqlite.prepare.bind(sqlite);
   sqlite.prepare = ((source: string) => {
+    if (source.length > maxLength) return prepare(source);
     const cached = cache.get(source);
     if (cached && !cached.busy) {
       // Most recently used last, so the oldest goes first.

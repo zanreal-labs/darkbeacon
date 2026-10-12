@@ -167,6 +167,10 @@ describe('portable helpers', () => {
     sqlite.prepare('select 1').get();
     sqlite.prepare('select 2').get();
     expect(sqlite.prepare('insert into t values (?)')).not.toBe(insert);
+
+    // Long SQL (a batch insert) is prepared each time, never kept.
+    const batch = `insert into t values ${Array.from({ length: 600 }, () => '(?)').join(', ')}`;
+    expect(sqlite.prepare(batch)).not.toBe(sqlite.prepare(batch));
     sqlite.close();
   });
 });
