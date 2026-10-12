@@ -18,6 +18,7 @@ import { AsyncAuditScope, AuditContextInterceptor, AuditDirectoryRegistry } from
 import { EventConsumers } from './event-consumers.js';
 import { SignInCookies } from './sign-in-cookies.js';
 import { ApiExceptionFilter } from './http.js';
+import { RateLimiter } from './rate-limiter.js';
 import { APP_CONFIG, AUDIT_SCOPE, CLOCK, EVENT_BUS, EVENT_LOG, HTTP_FETCH, UNIT_OF_WORK } from './tokens.js';
 
 export interface PlatformOptions {
@@ -95,6 +96,7 @@ export class PlatformModule {
           inject: [Database, EVENT_BUS, AsyncAuditScope, AuditDirectoryRegistry],
         },
         ActorResolverRegistry,
+        { provide: RateLimiter, useFactory: () => new RateLimiter() },
         EventConsumers,
         SignInCookies,
         { provide: APP_GUARD, useClass: ActorGuard },
@@ -110,6 +112,7 @@ export class PlatformModule {
         EVENT_LOG,
         HTTP_FETCH,
         ActorResolverRegistry,
+        RateLimiter,
         EventConsumers,
         SignInCookies,
         AsyncAuditScope,
