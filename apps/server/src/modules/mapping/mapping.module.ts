@@ -81,7 +81,15 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
     useCase(SignatureUseCases),
     useCase(MapSnapshotQuery),
   ],
-  exports: [MAP_REPOSITORY, MAP_OWNERSHIP, MAPPING_PORTS, SystemUseCases, ConnectionUseCases],
+  exports: [
+    MAP_REPOSITORY,
+    MAP_OWNERSHIP,
+    MAPPING_PORTS,
+    MapUseCases,
+    SystemUseCases,
+    ConnectionUseCases,
+    SignatureUseCases,
+  ],
 })
 export class MappingModule implements OnModuleInit {
   constructor(

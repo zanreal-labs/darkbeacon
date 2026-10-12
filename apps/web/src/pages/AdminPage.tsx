@@ -457,6 +457,7 @@ function ThemesTab() {
             disabled={setDefault.isPending}
             onChange={(e) => setDefault.mutate(e.target.value)}
           >
+            <option value="system">System (follows each computer)</option>
             {themes.data.themes.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}

@@ -57,7 +57,7 @@ describeEachDialect('tracking and universe over HTTP', (t) => {
 
   beforeEach(async () => {
     const config = {
-      ...parseEnv({ NODE_ENV: 'test', DEV_LOGIN: 'true' }),
+      ...parseEnv({ NODE_ENV: 'test', DEMO_MODE: 'true' }),
       secretKey: 'x'.repeat(32),
       dataDir: '/nonexistent',
     };

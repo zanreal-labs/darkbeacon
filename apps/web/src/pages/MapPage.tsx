@@ -27,6 +27,7 @@ import { SignaturesWidget } from '../map/widgets/SignaturesWidget';
 import { SystemInfoWidget } from '../map/widgets/SystemInfoWidget';
 import { WidgetDock, type DockTab } from '../map/widgets/WidgetDock';
 import { SlotItem, useSlot } from '../plugins/PluginSlot';
+import { useBreadcrumbs } from '../shell/breadcrumbs';
 import styles from './MapPage.module.css';
 
 export function MapPage() {
@@ -41,6 +42,7 @@ export function MapPage() {
     queryFn: () => api<MapSummaryDto[]>(routes.maps.list.path),
     retry: false,
   });
+  useBreadcrumbs([{ label: 'Maps', to: '/' }, { label: map.data?.name ?? slug }]);
 
   if (map.isPending) return <p className={styles.notice}>Loading map…</p>;
   if (map.isError) {

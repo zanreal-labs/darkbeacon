@@ -10,7 +10,8 @@ export interface InstalledTheme {
   installedAt: number;
 }
 
-export const DEFAULT_THEME_ID = 'default';
+/** New instances follow the operating system's light or dark mode (`system` in theme-sdk). */
+export const DEFAULT_THEME_ID = 'system';
 
 /** Theme choices are stored per scope: the instance default and one per account. */
 export const INSTANCE_THEME_SCOPE = 'instance';

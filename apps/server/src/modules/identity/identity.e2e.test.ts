@@ -94,7 +94,7 @@ describeEachDialect('identity and access over HTTP', (t) => {
         DISCORD_CLIENT_SECRET: DISCORD_CLIENT.clientSecret,
         EVE_CLIENT_ID: EVE_CLIENT.clientId,
         EVE_CLIENT_SECRET: EVE_CLIENT.clientSecret,
-        DEV_LOGIN: 'true',
+        DEMO_MODE: 'true',
       }),
       secretKey: 's'.repeat(32),
     };
@@ -113,7 +113,7 @@ describeEachDialect('identity and access over HTTP', (t) => {
   });
 
   it('lists the configured sign-in providers', async () => {
-    expect(await browser().json('/api/auth/providers')).toEqual({ discord: true, eve: true, dev: true });
+    expect(await browser().json('/api/auth/providers')).toEqual({ discord: true, eve: true, demo: true });
   });
 
   it('signs in with Discord, links an EVE character and logs out', async () => {

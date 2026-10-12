@@ -17,6 +17,7 @@ import {
 import { Icon } from '../components/Icon';
 import { api, ApiError } from '../lib/api';
 import { mapPermissions } from '../lib/roles';
+import { useBreadcrumbs } from '../shell/breadcrumbs';
 import styles from './pages.module.css';
 
 const errorText = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback);
@@ -33,6 +34,11 @@ export function MapSettingsPage() {
     queryFn: () => api<MapSummaryDto[]>(routes.maps.list.path),
     retry: false,
   });
+  useBreadcrumbs([
+    { label: 'Maps', to: '/' },
+    { label: map.data?.name ?? slug, to: `/m/${slug}` },
+    { label: 'Settings' },
+  ]);
   if (map.isPending || maps.isPending) return <p className={`${styles.page} muted`}>Loading…</p>;
   if (!map.data) return <p className={`${styles.page} error`}>This map is not available.</p>;
   const can = mapPermissions(maps.data?.find((m) => m.id === map.data.id)?.role);

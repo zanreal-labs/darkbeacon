@@ -15,7 +15,7 @@ import { NotifierRegistry } from '@wormwright/notifications';
 import type { UniverseCatalog } from '@wormwright/mapping';
 import { PluginAdmin, ThemeAdmin } from '@wormwright/plugins';
 import { isEventOfType, type MapSnapshot } from '@wormwright/shared';
-import { builtInThemes } from '@wormwright/theme-sdk';
+import { builtInThemes, SYSTEM_THEME_ID } from '@wormwright/theme-sdk';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
@@ -187,7 +187,15 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
         installer: FilePluginInstaller,
         uow: Database,
         clock: Clock,
-      ) => new ThemeAdmin({ themes, installer, uow, clock, builtInIds: builtInThemes.map((t) => t.id) }),
+      ) =>
+        new ThemeAdmin({
+          themes,
+          installer,
+          uow,
+          clock,
+          // `system` is a preference (light or dark by the OS), valid wherever a theme id is.
+          builtInIds: [SYSTEM_THEME_ID, ...builtInThemes.map((t) => t.id)],
+        }),
       inject: [KyselyThemeRepository, FilePluginInstaller, UNIT_OF_WORK, CLOCK],
     },
     { provide: PluginPortProviders, useValue: new PluginPortProviders() },

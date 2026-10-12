@@ -9,4 +9,5 @@ export const featureModules: Array<Type | DynamicModule> = [
   (await import('./tracking/tracking.module.js')).TrackingModule,
   (await import('./notifications/notifications.module.js')).NotificationsModule,
   (await import('./plugins/plugins.module.js')).PluginsModule,
+  (await import('./demo/demo.module.js')).DemoModule,
 ];

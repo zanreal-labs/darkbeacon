@@ -1,32 +1,18 @@
 import { createBrowserRouter, RouterProvider } from 'react-router';
-import { Layout } from './components/Layout';
 import { RequireAuth } from './components/RequireAuth';
 import { AccountPage } from './pages/AccountPage';
 import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
+import { AuthGate } from './shell/AuthGate';
 
 // The map canvas (React Flow) and the rarely used pages load on demand.
 const router = createBrowserRouter([
+  { path: 'login', element: <LoginPage /> },
   {
-    element: <Layout />,
+    element: <AuthGate />,
     children: [
-      { path: 'login', element: <LoginPage /> },
-      {
-        index: true,
-        element: (
-          <RequireAuth>
-            <HomePage />
-          </RequireAuth>
-        ),
-      },
-      {
-        path: 'account',
-        element: (
-          <RequireAuth>
-            <AccountPage />
-          </RequireAuth>
-        ),
-      },
+      { index: true, element: <HomePage /> },
+      { path: 'account', element: <AccountPage /> },
       {
         path: 'admin',
         lazy: () =>
@@ -40,25 +26,12 @@ const router = createBrowserRouter([
       },
       {
         path: 'm/:slug',
-        lazy: () =>
-          import('./pages/MapPage').then(({ MapPage }) => ({
-            element: (
-              <RequireAuth>
-                <MapPage />
-              </RequireAuth>
-            ),
-          })),
+        lazy: () => import('./pages/MapPage').then(({ MapPage }) => ({ element: <MapPage /> })),
       },
       {
         path: 'm/:slug/settings',
         lazy: () =>
-          import('./pages/MapSettingsPage').then(({ MapSettingsPage }) => ({
-            element: (
-              <RequireAuth>
-                <MapSettingsPage />
-              </RequireAuth>
-            ),
-          })),
+          import('./pages/MapSettingsPage').then(({ MapSettingsPage }) => ({ element: <MapSettingsPage /> })),
       },
     ],
   },

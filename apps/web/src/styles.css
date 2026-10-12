@@ -1,3 +1,8 @@
+/*
+ * Global base. Every colour, size and duration comes from theme tokens (`--ww-*`, see theme-sdk).
+ * Components live in `src/ui` with CSS modules; the few global classes below are shared helpers.
+ */
+
 *,
 *::before,
 *::after {
@@ -11,13 +16,25 @@ body,
   margin: 0;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   background: var(--ww-color-bg);
   color: var(--ww-color-text);
   font-family: var(--ww-font-family);
   font-size: var(--ww-font-size);
   line-height: var(--ww-line-height);
+  font-feature-settings: 'cv11', 'ss01';
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--ww-color-accent-subtle);
 }
 
 :focus-visible {
@@ -26,17 +43,112 @@ body {
 }
 
 a {
-  color: var(--ww-color-accent);
+  color: var(--ww-color-accent-text);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
 }
 
 h1,
 h2,
-h3 {
-  line-height: 1.2;
+h3,
+h4 {
+  margin: 0;
+  line-height: 1.25;
   font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
-/* Shared primitives. Components use CSS modules; these few classes keep controls consistent. */
+h1 {
+  font-size: var(--ww-font-size-title);
+}
+
+h2 {
+  font-size: var(--ww-font-size-large);
+}
+
+h3 {
+  font-size: var(--ww-font-size);
+}
+
+p {
+  margin: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--ww-font-family-mono);
+  font-size: 0.92em;
+}
+
+img {
+  max-width: 100%;
+}
+
+/* Scrollbars that blend into both modes. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ww-color-border-strong) transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---- Helpers ------------------------------------------------------------------------------- */
+
+/** Ids, numbers, system names: monospace with tabular figures. */
+.mono {
+  font-family: var(--ww-font-family-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: normal;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.muted {
+  color: var(--ww-color-text-muted);
+}
+
+.subtle {
+  color: var(--ww-color-text-subtle);
+}
+
+.error {
+  color: var(--ww-color-danger);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/*
+ * Legacy control classes, kept so screens not yet moved to `src/ui` match the design.
+ * New code uses <Button>, <Input>, <Field> from `src/ui` instead.
+ */
 
 .btn {
   display: inline-flex;
@@ -47,45 +159,56 @@ h3 {
   padding: 0 var(--ww-space-3);
   border: 1px solid var(--ww-color-border);
   border-radius: var(--ww-radius);
-  background: var(--ww-color-surface-raised);
+  background: var(--ww-color-surface);
+  box-shadow: var(--ww-shadow-small);
   color: var(--ww-color-text);
   font: inherit;
+  font-weight: 500;
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
+  transition:
+    background var(--ww-motion-fast) var(--ww-motion-easing),
+    border-color var(--ww-motion-fast) var(--ww-motion-easing);
 }
 
 .btn:hover:not(:disabled) {
-  border-color: var(--ww-color-text-muted);
+  background: var(--ww-color-surface-hover);
+  border-color: var(--ww-color-border-strong);
 }
 
 .btn:disabled {
-  opacity: 0.55;
-  cursor: default;
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .btn-primary {
   background: var(--ww-color-accent);
-  border-color: var(--ww-color-accent);
+  border-color: transparent;
   color: var(--ww-color-accent-contrast);
 }
 
 .btn-primary:hover:not(:disabled) {
-  border-color: var(--ww-color-accent);
-  filter: brightness(1.08);
+  background: var(--ww-color-accent-hover);
+  border-color: transparent;
 }
 
 .btn-danger {
   color: var(--ww-color-danger);
 }
 
+.btn-danger:hover:not(:disabled) {
+  background: var(--ww-color-danger-subtle);
+}
+
 .btn-ghost {
   background: transparent;
   border-color: transparent;
+  box-shadow: none;
 }
 
 .btn-small {
-  height: calc(var(--ww-control-height) - 8px);
+  height: var(--ww-control-height-small);
   padding: 0 var(--ww-space-2);
   font-size: var(--ww-font-size-small);
 }
@@ -97,8 +220,24 @@ h3 {
   border: 1px solid var(--ww-color-border);
   border-radius: var(--ww-radius);
   background: var(--ww-color-surface);
+  box-shadow: var(--ww-shadow-small);
   color: var(--ww-color-text);
   font: inherit;
+  transition: border-color var(--ww-motion-fast) var(--ww-motion-easing);
+}
+
+.input:hover:not(:disabled) {
+  border-color: var(--ww-color-border-strong);
+}
+
+.input:focus-visible {
+  outline: none;
+  border-color: var(--ww-color-focus);
+  box-shadow: 0 0 0 3px var(--ww-color-accent-subtle);
+}
+
+.input::placeholder {
+  color: var(--ww-color-text-subtle);
 }
 
 textarea.input {
@@ -114,22 +253,6 @@ textarea.input {
 
 .field > span {
   font-size: var(--ww-font-size-small);
+  font-weight: 500;
   color: var(--ww-color-text-muted);
-}
-
-.muted {
-  color: var(--ww-color-text-muted);
-}
-
-.error {
-  color: var(--ww-color-danger);
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
 }

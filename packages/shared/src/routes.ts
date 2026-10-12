@@ -46,6 +46,9 @@ export const routes = {
     /** Links an EVE character to the signed-in account (EVE SSO v2, PKCE). */
     eveLogin: route({ method: 'GET', path: '/api/auth/eve/login', auth: 'account', redirect: true }),
     eveCallback: route({ method: 'GET', path: '/api/auth/eve/callback', auth: 'account', redirect: true }),
+    /** Demo mode: signs in as the demo account (seeding the demo map once). */
+    demo: route({ method: 'POST', path: '/api/auth/demo', auth: 'public', response: dto.MeDto }),
+    /** Demo mode: signs in a named local account (scripts and tests). */
     dev: route({
       method: 'POST',
       path: '/api/auth/dev',

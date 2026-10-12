@@ -76,7 +76,7 @@ export class DiscordLogin {
   }
 }
 
-export interface DevLoginDeps {
+export interface DemoLoginDeps {
   enabled: boolean;
   accounts: AccountService;
   characters: CharacterRepository;
@@ -85,43 +85,69 @@ export interface DevLoginDeps {
   clock: Clock;
 }
 
-/** Placeholder corporation of dev-login characters (an NPC school corporation). */
-const DEV_CORPORATION_ID = 1000169;
+/** Placeholder corporation of demo characters (an NPC school corporation). */
+const DEMO_CORPORATION_ID = 1000169;
 
-/** `DEV_LOGIN=true`: signs in a named local account, optionally with a fake character. */
-export class DevLogin {
-  constructor(private readonly deps: DevLoginDeps) {}
+/** Name of the account a demo visit is signed in as. */
+export const DEMO_ACCOUNT_NAME = 'Demo pilot';
+/** Fake characters of the demo account; the first one is its main. */
+export const DEMO_CHARACTERS: readonly string[] = ['Ayla Vex', 'Torren Kade'];
+
+type FakeCharacter = NonNullable<DevLoginRequest['character']>;
+
+/**
+ * `DEMO_MODE=true` (formerly `DEV_LOGIN`): local previews without Discord or EVE.
+ * `signInDemo` is what the web app calls for an unauthenticated visit; `signIn` signs in any named
+ * local account (scripts and tests that need several people).
+ */
+export class DemoLogin {
+  constructor(private readonly deps: DemoLoginDeps) {}
 
   get enabled(): boolean {
     return this.deps.enabled;
   }
 
-  async signIn(request: DevLoginRequest, userAgent: string | null): Promise<SignedIn> {
-    if (!this.deps.enabled) throw new NotFoundError('Dev sign-in');
-    const account = await this.deps.accounts.devAccount(request.name);
-    const fake = request.character;
-    if (fake) {
-      await this.deps.uow.transaction(async () => {
-        const id = fake.id ?? devCharacterId(fake.name);
-        const existing = await this.deps.characters.findById(id);
-        if (existing && existing.accountId !== account.id) {
-          throw new ConflictError(`${existing.name} is already linked to another account`);
-        }
-        const now = this.deps.clock.now();
-        await this.deps.characters.upsert({
-          id,
-          accountId: account.id,
-          name: fake.name,
-          corporationId: fake.corporationId ?? existing?.corporationId ?? DEV_CORPORATION_ID,
-          allianceId: fake.allianceId !== undefined ? fake.allianceId : (existing?.allianceId ?? null),
-          ownerHash: 'dev',
-          tokenValid: true,
-          linkedAt: existing?.linkedAt ?? now,
-          updatedAt: now,
-        });
-      });
+  /** The demo account (owner on a fresh instance) with two fake characters, the first one as main. */
+  async signInDemo(userAgent: string | null): Promise<SignedIn> {
+    if (!this.deps.enabled) throw new NotFoundError('Demo access');
+    let account = await this.deps.accounts.devAccount(DEMO_ACCOUNT_NAME);
+    for (const name of DEMO_CHARACTERS) await this.attach(account, { name });
+    if (account.mainCharacterId == null) {
+      const actor = await this.deps.accounts.actorFor(account);
+      await this.deps.accounts.setMainCharacter(actor, devCharacterId(DEMO_CHARACTERS[0]!));
+      account = { ...account, mainCharacterId: devCharacterId(DEMO_CHARACTERS[0]!) };
     }
     const { token } = await this.deps.sessions.create(account.id, userAgent);
     return { token, account, returnTo: '/' };
+  }
+
+  async signIn(request: DevLoginRequest, userAgent: string | null): Promise<SignedIn> {
+    if (!this.deps.enabled) throw new NotFoundError('Demo access');
+    const account = await this.deps.accounts.devAccount(request.name);
+    if (request.character) await this.attach(account, request.character);
+    const { token } = await this.deps.sessions.create(account.id, userAgent);
+    return { token, account, returnTo: '/' };
+  }
+
+  private async attach(account: Account, fake: FakeCharacter): Promise<void> {
+    await this.deps.uow.transaction(async () => {
+      const id = fake.id ?? devCharacterId(fake.name);
+      const existing = await this.deps.characters.findById(id);
+      if (existing && existing.accountId !== account.id) {
+        throw new ConflictError(`${existing.name} is already linked to another account`);
+      }
+      const now = this.deps.clock.now();
+      await this.deps.characters.upsert({
+        id,
+        accountId: account.id,
+        name: fake.name,
+        corporationId: fake.corporationId ?? existing?.corporationId ?? DEMO_CORPORATION_ID,
+        allianceId: fake.allianceId !== undefined ? fake.allianceId : (existing?.allianceId ?? null),
+        ownerHash: 'dev',
+        tokenValid: true,
+        linkedAt: existing?.linkedAt ?? now,
+        updatedAt: now,
+      });
+    });
   }
 }

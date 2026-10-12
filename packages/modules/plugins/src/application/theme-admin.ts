@@ -21,7 +21,7 @@ export interface ThemeAdminDeps {
   installer: PluginInstaller;
   uow: UnitOfWork;
   clock: Clock;
-  /** Ids of the themes built into theme-sdk; they cannot be installed over or removed. */
+  /** Ids of the built-in themes (and the `system` preference): valid choices that packages cannot reuse. */
   builtInIds: readonly string[];
 }
 

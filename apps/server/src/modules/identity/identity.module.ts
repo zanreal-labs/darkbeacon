@@ -13,7 +13,7 @@ import { Database } from '@wormwright/db';
 import {
   AccountService,
   CharacterService,
-  DevLogin,
+  DemoLogin,
   DiscordLogin,
   GuildRoleSync,
   SessionService,
@@ -137,7 +137,7 @@ const callback = (config: AppConfig, provider: 'discord' | 'eve') =>
       inject: [DISCORD, AccountService, GuildRoleSync, SessionService, CLOCK, APP_CONFIG],
     },
     {
-      provide: DevLogin,
+      provide: DemoLogin,
       useFactory: (
         config: AppConfig,
         accounts: AccountService,
@@ -145,7 +145,7 @@ const callback = (config: AppConfig, provider: 'discord' | 'eve') =>
         sessions: SessionService,
         uow: UnitOfWork,
         clock: Clock,
-      ) => new DevLogin({ enabled: config.devLogin, accounts, characters, sessions, uow, clock }),
+      ) => new DemoLogin({ enabled: config.demoMode, accounts, characters, sessions, uow, clock }),
       inject: [APP_CONFIG, AccountService, CHARACTERS, SessionService, UNIT_OF_WORK, CLOCK],
     },
     {
@@ -169,7 +169,7 @@ const callback = (config: AppConfig, provider: 'discord' | 'eve') =>
       inject: [APP_CONFIG, CHARACTERS, UNIT_OF_WORK, EVENT_LOG, CLOCK, HTTP_FETCH],
     },
   ],
-  exports: [AccountService, CharacterService, SessionService],
+  exports: [AccountService, CharacterService, SessionService, DemoLogin],
 })
 export class IdentityModule implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger('Identity');

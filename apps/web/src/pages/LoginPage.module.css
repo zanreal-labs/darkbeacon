@@ -1,0 +1,162 @@
+.screen {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100dvh;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--ww-color-bg);
+}
+
+/* ---- Sky: CSS-only stars and a soft nebula, coloured from tokens so both modes work ---- */
+.sky {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.stars,
+.starsFar {
+  position: absolute;
+  inset: -50%;
+  --star: color-mix(in oklab, var(--ww-color-text) 55%, transparent);
+  background-image:
+    radial-gradient(1px 1px at 20px 30px, var(--star), transparent 60%),
+    radial-gradient(1px 1px at 120px 80px, var(--star), transparent 60%),
+    radial-gradient(1.5px 1.5px at 210px 150px, var(--star), transparent 60%),
+    radial-gradient(1px 1px at 60px 190px, var(--star), transparent 60%),
+    radial-gradient(1px 1px at 260px 40px, var(--star), transparent 60%),
+    radial-gradient(1.5px 1.5px at 170px 230px, var(--star), transparent 60%);
+  background-size: 300px 260px;
+  opacity: 0.55;
+  animation: drift 240s linear infinite;
+}
+
+.starsFar {
+  --star: color-mix(in oklab, var(--ww-color-text) 35%, transparent);
+  background-size: 180px 170px;
+  opacity: 0.4;
+  animation-duration: 400s;
+}
+
+:global([data-theme='default']) .stars,
+:global([data-theme='default']) .starsFar {
+  opacity: 0.18;
+}
+
+.nebula {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      60% 45% at 50% 42%,
+      color-mix(in oklab, var(--ww-color-accent) 22%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      40% 35% at 30% 65%,
+      color-mix(in oklab, var(--ww-security-wormhole) 16%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      35% 30% at 72% 30%,
+      color-mix(in oklab, var(--ww-security-special) 12%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(120% 90% at 50% 120%, var(--ww-color-bg) 40%, transparent);
+  filter: blur(8px);
+}
+
+@keyframes drift {
+  to {
+    transform: translate3d(-120px, -60px, 0);
+  }
+}
+
+/* ---- Layout ---- */
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--ww-space-3) var(--ww-space-4);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ww-space-2);
+  font-weight: 600;
+}
+
+.main {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: var(--ww-space-6);
+  padding: var(--ww-space-5) var(--ww-space-4) 10vh;
+}
+
+.hero {
+  display: grid;
+  justify-items: center;
+  gap: var(--ww-space-2);
+  text-align: center;
+}
+
+.mark {
+  display: grid;
+  place-items: center;
+  width: 80px;
+  height: 80px;
+  margin-bottom: var(--ww-space-3);
+  border: 1px solid color-mix(in oklab, var(--ww-color-accent) 30%, var(--ww-color-border));
+  border-radius: 22px;
+  background: color-mix(in oklab, var(--ww-color-surface) 70%, transparent);
+  box-shadow:
+    0 0 0 6px color-mix(in oklab, var(--ww-color-accent) 6%, transparent),
+    0 18px 50px color-mix(in oklab, var(--ww-color-accent) 22%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.title {
+  font-size: 32px;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+}
+
+.pitch {
+  color: var(--ww-color-text-muted);
+  font-size: var(--ww-font-size-large);
+}
+
+.actions {
+  display: grid;
+  gap: var(--ww-space-3);
+  width: min(100%, 360px);
+}
+
+.note {
+  color: var(--ww-color-text-muted);
+  font-size: var(--ww-font-size-small);
+  text-align: center;
+}
+
+.setup code {
+  padding: 1px 4px;
+  border-radius: var(--ww-radius-small);
+  background: var(--ww-color-surface-hover);
+  color: var(--ww-color-text);
+  font-size: var(--ww-font-size-small);
+}
+
+.url {
+  word-break: break-all;
+}
+
+.footer {
+  padding: var(--ww-space-4);
+  color: var(--ww-color-text-subtle);
+  font-size: var(--ww-font-size-xs);
+  text-align: center;
+}

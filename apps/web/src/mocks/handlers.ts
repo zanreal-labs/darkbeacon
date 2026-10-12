@@ -68,15 +68,19 @@ export function createMockApi(db: MockDb = createMockDb()) {
     http.get(routes.health.path, () =>
       HttpResponse.json({ status: 'ok', version: 'mock', database: 'sqlite' }),
     ),
-    http.get(routes.auth.providers.path, () => HttpResponse.json({ discord: true, eve: true, dev: true })),
+    http.get(routes.auth.providers.path, () => HttpResponse.json({ discord: true, eve: true, demo: true })),
     http.get(routes.themes.list.path, () =>
       HttpResponse.json({
         themes: builtInThemes.map((t) => ({ ...t, version: null, builtIn: true })),
-        defaultThemeId: 'default',
+        defaultThemeId: 'system',
         selectedThemeId: null,
       }),
     ),
     http.put(routes.themes.select.path, () => new HttpResponse(null, { status: 204 })),
+    http.post(routes.auth.demo.path, () => {
+      db.me = createMockDb().me;
+      return HttpResponse.json(db.me);
+    }),
     http.post(routes.auth.dev.path, async ({ request }) => {
       const body = (await request.json()) as { name: string; character?: { name: string } };
       const base = createMockDb().me!;

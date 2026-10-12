@@ -38,7 +38,10 @@ export type MeDto = z.infer<typeof MeDto>;
 export const SetMainCharacterRequest = z.object({ characterId: EveId });
 export type SetMainCharacterRequest = z.infer<typeof SetMainCharacterRequest>;
 
-/** POST /api/auth/dev (only with DEV_LOGIN=true). */
+/**
+ * POST /api/auth/dev (demo mode only): signs in a named local account, for scripts and tests that
+ * need several people. The web app uses POST /api/auth/demo instead.
+ */
 export const DevLoginRequest = z.object({
   name: z.string().trim().min(1).max(64),
   character: z
@@ -56,7 +59,8 @@ export type DevLoginRequest = z.infer<typeof DevLoginRequest>;
 export const AuthProvidersDto = z.object({
   discord: z.boolean(),
   eve: z.boolean(),
-  dev: z.boolean(),
+  /** Demo mode: unauthenticated visits are signed in as the demo account (POST /api/auth/demo). */
+  demo: z.boolean(),
 });
 export type AuthProvidersDto = z.infer<typeof AuthProvidersDto>;
 

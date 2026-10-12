@@ -1,4 +1,4 @@
-import type { ConnectionDto, MapSystemDto, SignatureDto } from '@wormwright/shared';
+import type { MeDto, ConnectionDto, MapSystemDto, SignatureDto } from '@wormwright/shared';
 
 export const MAP_ID = 'map-1';
 
@@ -84,5 +84,29 @@ export function eventMessage(stream: string, type: string, data: unknown, at = D
       data,
       v: 1,
     },
+  };
+}
+
+export function meFixture(): MeDto {
+  return {
+    account: {
+      id: 'acc-demo',
+      discordId: null,
+      name: 'Demo pilot',
+      avatarUrl: null,
+      instanceRole: 'owner',
+      mainCharacterId: 3_900_000_001,
+      createdAt: 0,
+    },
+    characters: [
+      {
+        id: 3_900_000_001,
+        name: 'Ayla Vex',
+        corporationId: 1000169,
+        allianceId: null,
+        tokenValid: true,
+        linkedAt: 0,
+      },
+    ],
   };
 }

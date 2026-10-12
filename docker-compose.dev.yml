@@ -17,7 +17,7 @@ x-node: &node
     npm_config_store_dir: /pnpm-store
     DATA_DIR: /data
     TEST_DATABASE_URL: postgres://wormwright:wormwright@postgres:5432/wormwright
-    DEV_LOGIN: 'true'
+    DEMO_MODE: 'true'
   entrypoint: ['sh', '-c', 'corepack enable pnpm >/dev/null 2>&1; exec "$$@"', '--']
   depends_on:
     postgres:

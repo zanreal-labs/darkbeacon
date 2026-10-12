@@ -129,7 +129,7 @@ describeEachDialect('plugins and themes over HTTP', (t) => {
   it('installs themes and keeps the default and each account’s choice', async () => {
     const initial = (await call('GET', '/api/themes')).body as ThemesDto;
     expect(initial.themes.map((th) => th.id)).toEqual(['default', 'dark', 'contrast']);
-    expect(initial).toMatchObject({ defaultThemeId: 'default', selectedThemeId: null });
+    expect(initial).toMatchObject({ defaultThemeId: 'system', selectedThemeId: null });
 
     const amarr = await call('POST', '/api/admin/themes', 'admin', { source: 'catalog:theme-amarr' });
     expect(amarr.status).toBe(201);
@@ -169,7 +169,7 @@ describeEachDialect('plugins and themes over HTTP', (t) => {
     expect(uploaded.body).toMatchObject({ id: 'sunset', builtIn: false });
 
     expect((await call('DELETE', '/api/admin/themes/amarr', 'admin')).status).toBe(204);
-    expect((await call('GET', '/api/themes', 'alice')).body).toMatchObject({ defaultThemeId: 'default' });
+    expect((await call('GET', '/api/themes', 'alice')).body).toMatchObject({ defaultThemeId: 'system' });
   });
 
   it('hides webhooks of maps nobody can see', async () => {

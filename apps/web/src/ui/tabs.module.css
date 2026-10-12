@@ -1,0 +1,108 @@
+.list {
+  display: flex;
+  gap: var(--ww-space-1);
+  border-bottom: 1px solid var(--ww-color-border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 var(--ww-space-2);
+  border: 0;
+  background: none;
+  color: var(--ww-color-text-muted);
+  font: inherit;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--ww-motion-fast) var(--ww-motion-easing);
+}
+
+.trigger svg {
+  width: 15px;
+  height: 15px;
+}
+
+.trigger:hover {
+  color: var(--ww-color-text);
+}
+
+.trigger::after {
+  content: '';
+  position: absolute;
+  left: var(--ww-space-2);
+  right: var(--ww-space-2);
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: transparent;
+  transition: background var(--ww-motion-fast) var(--ww-motion-easing);
+}
+
+.trigger[data-state='active'] {
+  color: var(--ww-color-text);
+}
+
+.trigger[data-state='active']::after {
+  background: var(--ww-color-accent);
+}
+
+.trigger:focus-visible {
+  outline-offset: -2px;
+  border-radius: var(--ww-radius);
+}
+
+.content {
+  padding-top: var(--ww-space-4);
+}
+
+.content:focus-visible {
+  outline: none;
+}
+
+/* Segmented control variant (small option sets such as the theme picker). */
+.segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--ww-color-border);
+  border-radius: var(--ww-radius);
+  background: var(--ww-color-bg-subtle);
+}
+
+.segment {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: calc(var(--ww-control-height-small) - 2px);
+  padding: 0 var(--ww-space-2);
+  border: 0;
+  border-radius: calc(var(--ww-radius) - 2px);
+  background: transparent;
+  color: var(--ww-color-text-muted);
+  font: inherit;
+  font-size: var(--ww-font-size-small);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.segment svg {
+  width: 14px;
+  height: 14px;
+}
+
+.segment:hover {
+  color: var(--ww-color-text);
+}
+
+.segment[data-state='on'] {
+  background: var(--ww-color-surface);
+  box-shadow: var(--ww-shadow-small);
+  color: var(--ww-color-text);
+}

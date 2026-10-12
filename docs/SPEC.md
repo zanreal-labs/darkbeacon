@@ -104,8 +104,9 @@ interface DomainEvent<T = unknown> {
   guild role, EVE character, corporation or alliance. Highest matching role wins; `blocked` on character or
   account beats everything. Map owner = an account (not a character).
 - Every use case checks authorization on the server; the UI hides what the user cannot do.
-- `DEV_LOGIN=true` (refused when `NODE_ENV=production` unless `ALLOW_DEV_LOGIN=true`) adds `/api/auth/dev`
-  that signs in a named local account and can attach a fake character — for local previews without Discord/EVE.
+- `DEMO_MODE=true` (refused when `NODE_ENV=production` unless `ALLOW_DEMO_MODE=true`; `DEV_LOGIN` is a
+  deprecated alias) signs every unauthenticated visit in as a shared demo account with fake characters and
+  seeds a demo map, for local previews without Discord/EVE. There is no sign-in form.
 
 ## Mapping (MVP slice)
 
@@ -147,7 +148,7 @@ interface DomainEvent<T = unknown> {
 
 Environment only for what must exist before the first login: `PUBLIC_URL`, `SECRET_KEY`,
 `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `EVE_CLIENT_ID`, `EVE_CLIENT_SECRET`, `DATABASE_URL` (optional),
-`PORT` (default 3000), `DATA_DIR` (default /data), `DEV_LOGIN`. Everything else is stored in the database and
+`PORT` (default 3000), `DATA_DIR` (default /data), `DEMO_MODE`. Everything else is stored in the database and
 edited in the admin tab.
 
 ## Container

@@ -17,7 +17,7 @@ import { AccountService } from './accounts.js';
 import { CharacterService } from './characters.js';
 import { pkceChallenge } from './crypto.js';
 import { GuildRoleSync } from './guild-roles.js';
-import { DevLogin, DiscordLogin } from './login.js';
+import { DEMO_ACCOUNT_NAME, DEMO_CHARACTERS, DemoLogin, DiscordLogin } from './login.js';
 import { SessionService } from './sessions.js';
 
 class FakeDiscord implements IdentityProvider {
@@ -91,7 +91,7 @@ function setup() {
     clock,
     redirectUri: 'https://ww.test/api/auth/discord/callback',
   });
-  const devLogin = new DevLogin({
+  const demoLogin = new DemoLogin({
     enabled: true,
     accounts: accountService,
     characters,
@@ -112,7 +112,7 @@ function setup() {
     sessions,
     guildRoles,
     discordLogin,
-    devLogin,
+    demoLogin,
   };
 }
 
@@ -364,18 +364,34 @@ describe('GuildRoleSync', () => {
   });
 });
 
-describe('DevLogin', () => {
+describe('DemoLogin', () => {
+  it('signs in the demo account with two characters, the first as main', async () => {
+    const t = setup();
+    const first = await t.demoLogin.signInDemo(null);
+    expect(first.account).toMatchObject({ name: DEMO_ACCOUNT_NAME, instanceRole: 'owner' });
+    const characters = await t.characters.listForAccount(first.account.id);
+    expect(characters.map((c) => c.name).sort()).toEqual([...DEMO_CHARACTERS].sort());
+    const me = await t.accountService.me(await t.accountService.actorFor(first.account));
+    expect(me.characters.find((c) => c.id === me.account.mainCharacterId)?.name).toBe(DEMO_CHARACTERS[0]);
+
+    // Every later visit lands on the same account and characters.
+    const again = await t.demoLogin.signInDemo(null);
+    expect(again.account.id).toBe(first.account.id);
+    expect(again.token).not.toBe(first.token);
+    expect(await t.characters.listForAccount(first.account.id)).toHaveLength(2);
+  });
+
   it('signs in a named account with a fake character and refuses stealing one', async () => {
     const t = setup();
-    const alice = await t.devLogin.signIn({ name: 'alice', character: { name: 'Alice Pilot' } }, null);
+    const alice = await t.demoLogin.signIn({ name: 'alice', character: { name: 'Alice Pilot' } }, null);
     const [character] = await t.characters.listForAccount(alice.account.id);
     expect(character).toMatchObject({ name: 'Alice Pilot', tokenValid: true, allianceId: null });
 
     await expect(
-      t.devLogin.signIn({ name: 'bob', character: { name: 'Thief', id: character!.id } }, null),
+      t.demoLogin.signIn({ name: 'bob', character: { name: 'Thief', id: character!.id } }, null),
     ).rejects.toMatchObject({ code: 'conflict' });
 
-    const disabled = new DevLogin({
+    const disabled = new DemoLogin({
       enabled: false,
       accounts: t.accountService,
       characters: t.characters,
@@ -384,6 +400,7 @@ describe('DevLogin', () => {
       clock: t.clock,
     });
     await expect(disabled.signIn({ name: 'x' }, null)).rejects.toMatchObject({ code: 'not_found' });
+    await expect(disabled.signInDemo(null)).rejects.toMatchObject({ code: 'not_found' });
   });
 });
 

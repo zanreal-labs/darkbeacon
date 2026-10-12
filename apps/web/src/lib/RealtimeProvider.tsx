@@ -27,6 +27,11 @@ export function RealtimeProvider({
   return <RealtimeContext.Provider value={client}>{children}</RealtimeContext.Provider>;
 }
 
+/** The client, or null outside a RealtimeProvider (session hooks use it to re-authenticate). */
+export function useOptionalRealtime(): RealtimeClient | null {
+  return useContext(RealtimeContext);
+}
+
 export function useRealtime(): RealtimeClient {
   const client = useContext(RealtimeContext);
   if (!client) throw new Error('useRealtime outside RealtimeProvider');

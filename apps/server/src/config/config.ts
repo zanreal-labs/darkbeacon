@@ -23,6 +23,9 @@ const EnvSchema = z
       .optional(),
     PORT: z.coerce.number().int().min(1).max(65535).default(3000),
     DATA_DIR: z.string().min(1).default('/data'),
+    DEMO_MODE: flag,
+    ALLOW_DEMO_MODE: flag,
+    /** Deprecated aliases of DEMO_MODE and ALLOW_DEMO_MODE. */
     DEV_LOGIN: flag,
     ALLOW_DEV_LOGIN: flag,
   })
@@ -39,11 +42,12 @@ const EnvSchema = z
         });
       }
     }
-    if (env.DEV_LOGIN && env.NODE_ENV === 'production' && !env.ALLOW_DEV_LOGIN) {
+    const demo = env.DEMO_MODE || env.DEV_LOGIN;
+    if (demo && env.NODE_ENV === 'production' && !(env.ALLOW_DEMO_MODE || env.ALLOW_DEV_LOGIN)) {
       ctx.addIssue({
         code: 'custom',
-        path: ['DEV_LOGIN'],
-        message: 'refused in production; set ALLOW_DEV_LOGIN=true if you really mean it',
+        path: [env.DEMO_MODE ? 'DEMO_MODE' : 'DEV_LOGIN'],
+        message: 'refused in production; set ALLOW_DEMO_MODE=true if you really mean it',
       });
     }
   });
@@ -67,7 +71,13 @@ export interface AppConfig {
   databaseUrl: string | undefined;
   port: number;
   dataDir: string;
-  devLogin: boolean;
+  /**
+   * Demo mode: unauthenticated visits are signed in as a demo account and a demo map is seeded.
+   * Anyone who can reach the instance gets in, so it is refused in production unless allowed.
+   */
+  demoMode: boolean;
+  /** Deprecated environment variables that were used (to warn about at startup). */
+  deprecated: string[];
 }
 
 export class ConfigError extends Error {
@@ -97,7 +107,11 @@ export function parseEnv(
     databaseUrl: e.DATABASE_URL,
     port: e.PORT,
     dataDir: e.DATA_DIR,
-    devLogin: e.DEV_LOGIN,
+    demoMode: e.DEMO_MODE || e.DEV_LOGIN,
+    deprecated: [
+      ...(cleaned.DEV_LOGIN !== undefined ? ['DEV_LOGIN (use DEMO_MODE)'] : []),
+      ...(cleaned.ALLOW_DEV_LOGIN !== undefined ? ['ALLOW_DEV_LOGIN (use ALLOW_DEMO_MODE)'] : []),
+    ],
   };
 }
 

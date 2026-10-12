@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { themeToCss, themesToCss } from './css.js';
 import { ThemeManifestSchema, isBuiltInTheme, parseThemeManifest, resolveTheme } from './manifest.js';
-import { builtInThemes, darkTheme } from './themes.js';
+import { builtInThemes, darkTheme, lightTheme, resolveThemePreference, SYSTEM_THEME_ID } from './themes.js';
 import { TOKEN_NAMES } from './tokens.js';
 
 describe('themes', () => {
@@ -15,8 +15,24 @@ describe('themes', () => {
     const css = themeToCss(darkTheme);
     expect(css).toContain(':root {');
     expect(css).toContain('color-scheme: dark;');
-    expect(css).toContain('--ww-edge-time-eol: #c77dea;');
+    expect(css).toContain('--ww-edge-time-eol: #cf7cf2;');
     expect(themesToCss(builtInThemes)).toContain('[data-theme="contrast"]');
+  });
+
+  it('read light and dark from one palette', () => {
+    expect(lightTheme.id).toBe('default');
+    expect(lightTheme.colorScheme).toBe('light');
+    expect(lightTheme.tokens['font-family']).toBe(darkTheme.tokens['font-family']);
+    expect(lightTheme.tokens['color-bg']).not.toBe(darkTheme.tokens['color-bg']);
+    // Derived colours follow whatever accent a theme sets.
+    expect(darkTheme.tokens['color-accent-subtle']).toContain('var(--ww-color-accent)');
+  });
+
+  it('resolve the system preference from the operating system', () => {
+    expect(resolveThemePreference(SYSTEM_THEME_ID, { dark: false })).toBe('default');
+    expect(resolveThemePreference(SYSTEM_THEME_ID, { dark: true })).toBe('dark');
+    expect(resolveThemePreference(SYSTEM_THEME_ID, { dark: true, moreContrast: true })).toBe('contrast');
+    expect(resolveThemePreference('amarr', { dark: false })).toBe('amarr');
   });
 
   it('resolves a theme manifest over its base', () => {

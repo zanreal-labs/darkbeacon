@@ -11,7 +11,8 @@ describe('config', () => {
       publicUrl: 'http://localhost:3000',
       port: 3000,
       dataDir: '/data',
-      devLogin: false,
+      demoMode: false,
+      deprecated: [],
       discord: null,
       eve: null,
       databaseUrl: undefined,
@@ -24,13 +25,21 @@ describe('config', () => {
     expect(config.eve).toBeNull();
   });
 
-  it('rejects half-configured clients, bad urls and dev login in production', () => {
+  it('rejects half-configured clients, bad urls and demo mode in production', () => {
     expect(() => parseEnv({ DISCORD_CLIENT_ID: 'a' })).toThrow(/DISCORD_CLIENT_SECRET/);
     expect(() => parseEnv({ DATABASE_URL: 'mysql://x' })).toThrow(/postgres/);
-    expect(() => parseEnv({ NODE_ENV: 'production', DEV_LOGIN: 'true' })).toThrow(/ALLOW_DEV_LOGIN/);
-    expect(parseEnv({ NODE_ENV: 'production', DEV_LOGIN: 'true', ALLOW_DEV_LOGIN: 'true' }).devLogin).toBe(
+    expect(() => parseEnv({ NODE_ENV: 'production', DEMO_MODE: 'true' })).toThrow(/ALLOW_DEMO_MODE/);
+    expect(() => parseEnv({ NODE_ENV: 'production', DEV_LOGIN: 'true' })).toThrow(/ALLOW_DEMO_MODE/);
+    expect(parseEnv({ NODE_ENV: 'production', DEMO_MODE: 'true', ALLOW_DEMO_MODE: 'true' }).demoMode).toBe(
       true,
     );
+  });
+
+  it('keeps DEV_LOGIN and ALLOW_DEV_LOGIN as deprecated aliases', () => {
+    const config = parseEnv({ NODE_ENV: 'production', DEV_LOGIN: 'true', ALLOW_DEV_LOGIN: 'true' });
+    expect(config.demoMode).toBe(true);
+    expect(config.deprecated).toEqual(['DEV_LOGIN (use DEMO_MODE)', 'ALLOW_DEV_LOGIN (use ALLOW_DEMO_MODE)']);
+    expect(parseEnv({ DEMO_MODE: 'true' })).toMatchObject({ demoMode: true, deprecated: [] });
   });
 
   it('generates and keeps a secret key in DATA_DIR', async () => {

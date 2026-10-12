@@ -28,7 +28,7 @@ describe('ThemeAdmin', () => {
       installer,
       uow: directUow,
       clock: new ManualClock(),
-      builtInIds: ['default', 'dark', 'contrast'],
+      builtInIds: ['system', 'default', 'dark', 'contrast'],
     });
   });
 
@@ -71,7 +71,7 @@ describe('ThemeAdmin', () => {
 
   it('keeps an instance default and a choice per account', async () => {
     await installAmarr();
-    expect(await uc.overview(null)).toMatchObject({ defaultThemeId: 'default', selectedThemeId: null });
+    expect(await uc.overview(null)).toMatchObject({ defaultThemeId: 'system', selectedThemeId: null });
 
     await uc.setDefault(admin, 'amarr');
     expect(await uc.select(alice, 'contrast')).toMatchObject({
@@ -79,6 +79,7 @@ describe('ThemeAdmin', () => {
       selectedThemeId: 'contrast',
     });
     expect(await uc.overview(admin)).toMatchObject({ selectedThemeId: null });
+    expect(await uc.select(alice, 'system')).toMatchObject({ selectedThemeId: 'system' });
     expect(await uc.select(alice, null)).toMatchObject({ selectedThemeId: null });
 
     await expect(uc.select(alice, 'neon')).rejects.toMatchObject({ code: 'not_found' });
@@ -93,7 +94,7 @@ describe('ThemeAdmin', () => {
     await uc.uninstall(admin, 'amarr');
     expect(await uc.overview(alice)).toMatchObject({
       installed: [],
-      defaultThemeId: 'default',
+      defaultThemeId: 'system',
       selectedThemeId: null,
     });
     await expect(uc.uninstall(admin, 'amarr')).rejects.toMatchObject({ code: 'not_found' });

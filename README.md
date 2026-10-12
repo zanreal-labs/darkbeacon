@@ -18,19 +18,35 @@ Open `http://localhost:3000`. The first account to sign in becomes the instance 
 `/data` volume (SQLite by default; set `DATABASE_URL=postgres://...` to use Postgres). Without `SECRET_KEY`
 the server generates one and keeps it in `/data/secret.key`.
 
-### Local preview without Discord or EVE
+### Demo mode: a preview without Discord or EVE
 
 ```sh
 docker build -t wormwright:dev .
 docker run -d --name wormwright-preview -p 127.0.0.1::3000 -v wormwright-preview:/data \
-  -e DEV_LOGIN=true -e ALLOW_DEV_LOGIN=true -e PUBLIC_URL=http://localhost wormwright:dev
+  -e DEMO_MODE=true -e ALLOW_DEMO_MODE=true -e PUBLIC_URL=http://localhost wormwright:dev
 docker port wormwright-preview 3000      # the random loopback port it landed on
 ```
 
-Open that address and use the development login form: any account name signs in (the first one becomes the
-owner), optionally with a fake EVE character. Fake characters have no ESI token, so they can be tracked on a
-map but never move. Plugins and themes shipped with the server are installed from Admin > Plugins and
-Admin > Themes. `docker rm -f wormwright-preview` stops it; the `wormwright-preview` volume keeps the data.
+Open that address and you are in: there is no sign-in form. With `DEMO_MODE=true` every visit without a
+session is signed in as one shared **Demo pilot** account (the owner on a fresh instance) with two fake EVE
+characters, and the first visit seeds a **Demo chain** map: a home C3 with both statics open, wormhole and
+known-space neighbours, and connections that are end of life, reduced or critical, frigate-only, dangerous,
+bubbled and a stargate, with labels and signatures. The map is seeded again only if the demo account has no
+map left. Signing out shows the normal sign-in page with an "Explore the demo" button.
+
+Anyone who can reach the instance gets in, so the server refuses `DEMO_MODE` with `NODE_ENV=production`
+(the image's default) unless `ALLOW_DEMO_MODE=true` is set too. `DEV_LOGIN` and `ALLOW_DEV_LOGIN` still work as
+deprecated aliases. Fake characters have no ESI token, so they can be tracked on a map but never move.
+Scripts that need several people can sign in named local accounts with
+`POST /api/auth/dev {"name": "...", "character": {"name": "..."}}` (demo mode only). Plugins and themes shipped
+with the server are installed from Admin > Plugins and Admin > Themes. `docker rm -f wormwright-preview` stops
+it; the `wormwright-preview` volume keeps the data.
+
+### Appearance
+
+The web app follows the computer's light or dark mode by default (and switches live when it changes); people
+can pick System, Light, Dark, High contrast or an installed theme from the top bar, and the choice is kept on
+their account. Fonts (Inter, JetBrains Mono) are bundled, so nothing is loaded from a CDN.
 
 ## Development
 
@@ -50,7 +66,7 @@ dc run --rm dev pnpm build         # server/packages to dist, web app to apps/we
 dc run --rm dev pnpm format        # prettier --write
 dc run --rm dev pnpm --filter @wormwright/sde universe   # rebuild universe.json from CCP's SDE (~100 MB download)
 
-dc up app                          # API (watch mode) + Vite, DEV_LOGIN=true
+dc up app                          # API (watch mode) + Vite, DEMO_MODE=true
 dc port app 5173                   # the random loopback port of the web app
 
 # The web app alone, against an in-browser mock of the API and WebSocket:
@@ -63,7 +79,7 @@ No fixed host ports are published; `dc port` prints where the app landed.
 
 ```
 apps/server            NestJS composition root: Nest modules, controllers, ws gateway, adapters
-apps/web               React SPA (Vite, React Flow, TanStack Query)
+apps/web               React SPA (Vite, React Flow, TanStack Query); design system in src/ui, shell in src/shell
 packages/core          ids, Result, Clock, DomainEvent envelope, authorization, errors, core ports
 packages/db            Kysely factory (SQLite/Postgres), Database = UnitOfWork, migrations/<module>/
 packages/shared        zod DTOs, REST routes (routes.ts), WebSocket protocol, event catalogue

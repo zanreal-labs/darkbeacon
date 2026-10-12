@@ -3,7 +3,7 @@ import { isDomainError, requireAccount, type Actor } from '@wormwright/core';
 import {
   AccountService,
   CharacterService,
-  DevLogin,
+  DemoLogin,
   DiscordLogin,
   safeReturnTo,
   SESSION_TTL_MS,
@@ -41,7 +41,7 @@ export class AuthController {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(PENDING_BOX) private readonly box: SecretBox,
     @Inject(DiscordLogin) private readonly discord: DiscordLogin,
-    @Inject(DevLogin) private readonly dev: DevLogin,
+    @Inject(DemoLogin) private readonly demo: DemoLogin,
     @Inject(CharacterService) private readonly characters: CharacterService,
     @Inject(SessionService) private readonly sessions: SessionService,
     @Inject(AccountService) private readonly accounts: AccountService,
@@ -51,7 +51,7 @@ export class AuthController {
 
   @Get(nestPath(routes.auth.providers.path))
   providers(): AuthProvidersDto {
-    return { discord: this.discord.enabled, eve: this.characters.enabled, dev: this.dev.enabled };
+    return { discord: this.discord.enabled, eve: this.characters.enabled, demo: this.demo.enabled };
   }
 
   @Get(nestPath(routes.auth.discordLogin.path))
@@ -109,14 +109,15 @@ export class AuthController {
     });
   }
 
+  /** Demo mode: a named local account, for scripts and tests (the web app uses /api/auth/demo). */
   @Post(nestPath(routes.auth.dev.path))
   @HttpCode(200)
-  async devLogin(
+  async namedLogin(
     @Body(new ZodPipe(DevLoginRequest)) body: DevLoginRequest,
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<MeDto> {
-    const signedIn = await this.dev.signIn(body, userAgent(request));
+    const signedIn = await this.demo.signIn(body, userAgent(request));
     this.setSession(reply, signedIn.token);
     return this.accounts.me(await this.accounts.actorFor(signedIn.account));
   }
