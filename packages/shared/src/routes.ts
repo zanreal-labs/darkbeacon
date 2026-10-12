@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import * as dto from './dto/index.js';
+import * as telemetry from './telemetry.js';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 /** Who may call: anyone, a signed-in account, or an instance admin. Map routes also check the map role. */
@@ -764,6 +765,45 @@ export const routes = {
       auth: 'admin',
       response: dto.AuditVerifyDto,
     }),
+  },
+
+  /** Anonymous product telemetry (see docs/telemetry.md). */
+  telemetry: {
+    /** Whether the web app reports usage, and whether to show the admin the notice about it. */
+    client: route({
+      method: 'GET',
+      path: '/api/telemetry',
+      auth: 'account',
+      response: telemetry.TelemetryClientDto,
+    }),
+    /**
+     * Usage events from the web app, checked against the allow-list and forwarded without the
+     * request's IP or anything else about the browser. 400 when any event is not on the list.
+     */
+    ingest: route({
+      method: 'POST',
+      path: '/api/telemetry/e',
+      auth: 'account',
+      body: telemetry.TelemetryIngestRequest,
+      response: telemetry.TelemetryIngestResultDto,
+    }),
+    /** Status, instance id, the last payloads sent and the heartbeat as it would be sent now. */
+    status: route({
+      method: 'GET',
+      path: '/api/admin/telemetry',
+      auth: 'admin',
+      response: telemetry.TelemetryStatusDto,
+    }),
+    /** The admin switch; recorded on the instance audit as `telemetry.changed`. */
+    setEnabled: route({
+      method: 'PUT',
+      path: '/api/admin/telemetry/enabled',
+      auth: 'admin',
+      body: telemetry.SetTelemetryEnabledRequest,
+      response: telemetry.TelemetryStatusDto,
+    }),
+    /** The admin has read the notice about telemetry; it is not shown to them again. */
+    dismissNotice: route({ method: 'POST', path: '/api/admin/telemetry/notice', auth: 'admin' }),
   },
 
   presence: {

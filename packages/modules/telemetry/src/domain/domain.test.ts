@@ -1,0 +1,202 @@
+import { describe, expect, it } from 'vitest';
+import { countBucket, TELEMETRY_WEB_EVENT_NAMES } from '@darkbeacon/shared';
+import { HeartbeatProps, pluginRef, TELEMETRY_CATALOGUE, validateTelemetryEvent } from './catalogue.js';
+import { changeSource, featureEvents } from './features.js';
+import { piiProblem } from './pii.js';
+import { telemetryOffReason, telemetryOptOut } from './policy.js';
+import { OBSERVED_ROUTES, requestFeature } from './requests.js';
+
+describe('the allow-list', () => {
+  it('accepts a catalogued event with its exact properties', () => {
+    expect(validateTelemetryEvent('panel_opened', { panel: 'signatures' })).toEqual({
+      ok: true,
+      props: { panel: 'signatures' },
+    });
+    expect(validateTelemetryEvent('map_created', {})).toMatchObject({ ok: true });
+  });
+
+  it('rejects unknown events', () => {
+    expect(validateTelemetryEvent('character_seen', {})).toMatchObject({ ok: false });
+    expect(validateTelemetryEvent('__proto__', {})).toMatchObject({ ok: false });
+    expect(validateTelemetryEvent('toString', {})).toMatchObject({ ok: false });
+  });
+
+  it('rejects unknown properties and values outside the enums', () => {
+    expect(validateTelemetryEvent('panel_opened', { panel: 'signatures', system: 'J123456' })).toMatchObject({
+      ok: false,
+    });
+    expect(validateTelemetryEvent('panel_opened', { panel: 'Jita' })).toMatchObject({ ok: false });
+    expect(
+      validateTelemetryEvent('route_computed', { mode: 'shortest', skips: 'yes', avoids: false }),
+    ).toMatchObject({ ok: false });
+    expect(validateTelemetryEvent('system_added', {})).toMatchObject({ ok: false });
+  });
+
+  it('rejects values shaped like personal data even where a schema would allow strings', () => {
+    const loose = { loose: HeartbeatProps.pick({ db: true }).extend({}).loose() };
+    for (const value of [
+      'pilot@example.com',
+      '192.168.1.20',
+      '2001:db8::1',
+      '30000142',
+      '123456789012345678',
+      '0190a6f2-7f6e-7c2a-9a51-5d6a0b9e1c11',
+      'Hello there',
+      'Jita IV - Moon 4',
+    ]) {
+      expect(piiProblem(value), value).not.toBeNull();
+      expect(validateTelemetryEvent('loose', { db: 'sqlite', extra: value }, loose), value).toMatchObject({
+        ok: false,
+      });
+    }
+    expect(piiProblem(2_112_000_000)).not.toBeNull();
+    expect(piiProblem(1.5)).not.toBeNull();
+    expect(piiProblem({ nested: 'x' })).not.toBeNull();
+    for (const fine of ['sqlite', '1001+', '<1s', '0.1.0', 12, true, null])
+      expect(piiProblem(fine)).toBeNull();
+  });
+
+  it('lists every web event of the shared catalogue', () => {
+    for (const name of TELEMETRY_WEB_EVENT_NAMES) expect(TELEMETRY_CATALOGUE).toHaveProperty(name);
+  });
+
+  it('names only first-party plugins', () => {
+    expect(pluginRef('discord-notify')).toBe('discord-notify');
+    expect(pluginRef('my-corp-intel-bot')).toBe('third_party');
+  });
+});
+
+describe('buckets', () => {
+  it('buckets counts', () => {
+    expect([0, 1, 3, 10, 11, 60, 999, 5000].map(countBucket)).toEqual([
+      '0',
+      '1',
+      '2-5',
+      '6-10',
+      '11-25',
+      '51-100',
+      '251-1000',
+      '1001+',
+    ]);
+  });
+});
+
+describe('opting out', () => {
+  const on = { key: 'phc_x', env: 'production' as const, optOut: null };
+
+  it('is on only in production with a key and every switch on', () => {
+    expect(telemetryOffReason(on, true)).toBeNull();
+    expect(telemetryOffReason({ ...on, key: '' }, true)).toBe('no_key');
+    expect(telemetryOffReason({ ...on, env: 'development' }, true)).toBe('not_production');
+    expect(telemetryOffReason({ ...on, env: 'test' }, true)).toBe('not_production');
+    expect(telemetryOffReason({ ...on, optOut: 'env' }, true)).toBe('env_opt_out');
+    expect(telemetryOffReason({ ...on, optOut: 'dnt' }, true)).toBe('do_not_track');
+    expect(telemetryOffReason(on, false)).toBe('admin_disabled');
+  });
+
+  it('reads TELEMETRY and DO_NOT_TRACK', () => {
+    expect(telemetryOptOut({})).toBeNull();
+    expect(telemetryOptOut({ TELEMETRY: 'off' })).toBe('env');
+    expect(telemetryOptOut({ TELEMETRY: 'FALSE' })).toBe('env');
+    expect(telemetryOptOut({ TELEMETRY: 'on' })).toBeNull();
+    expect(telemetryOptOut({ DO_NOT_TRACK: '1' })).toBe('dnt');
+    expect(telemetryOptOut({ DO_NOT_TRACK: 'true' })).toBe('dnt');
+    expect(telemetryOptOut({ DO_NOT_TRACK: '0' })).toBeNull();
+  });
+});
+
+describe('feature events', () => {
+  const by = { kind: 'account' as const, id: 'acc-1' };
+  const connection = {
+    id: 'c1',
+    mapId: 'm1',
+    source: 31000001,
+    target: 31000002,
+    type: 'wormhole',
+    timeStatus: 'normal',
+    massStatus: 'fresh',
+    shipSize: 'large',
+    massSaved: false,
+    dangerous: false,
+    bubbled: 'none',
+    eolAt: null,
+    createdAt: 1,
+    updatedAt: 1,
+  };
+
+  it('say which feature was used, never on what', () => {
+    const added = featureEvents({ type: 'system.added', actor: by, data: { solarSystemId: 31000001 } }, {});
+    expect(added).toEqual([{ event: 'system_added', props: { source: 'manual' }, accountId: 'acc-1' }]);
+    expect(JSON.stringify(added)).not.toContain('31000001');
+  });
+
+  it('tell auto-mapping from people', () => {
+    expect(changeSource({ channel: { kind: 'system', id: 'auto-mapping' } })).toBe('auto');
+    expect(changeSource({ channel: { kind: 'web' } })).toBe('manual');
+    expect(changeSource({ channel: { kind: 'system', id: 'demo' } })).toBeNull();
+    expect(
+      featureEvents(
+        { type: 'system.added', actor: by, data: {} },
+        { channel: { kind: 'system', id: 'demo' } },
+      ),
+    ).toEqual([]);
+  });
+
+  it('name the connection fields that changed', () => {
+    const after = { ...connection, timeStatus: 'eol', massStatus: 'critical' };
+    expect(
+      featureEvents({ type: 'connection.updated', actor: by, data: after, before: connection }, {}).map(
+        (e) => e.props.field,
+      ),
+    ).toEqual(['eol', 'mass']);
+  });
+
+  it('count a revert as one history revert', () => {
+    expect(featureEvents({ type: 'system.added', actor: by, data: {} }, { revertOf: 'e1' })).toEqual([
+      { event: 'history_reverted', props: {}, accountId: 'acc-1' },
+    ]);
+  });
+
+  it('count plugins an admin enabled, by first-party id only', () => {
+    const plugin = (id: string, enabled: boolean) => ({ id, enabled, name: 'Secret plugin' });
+    expect(
+      featureEvents(
+        { type: 'plugin.updated', actor: by, data: plugin('x', true), before: plugin('x', false) },
+        {},
+      ),
+    ).toEqual([{ event: 'plugin_enabled', props: { plugin: 'third_party' }, accountId: 'acc-1' }]);
+    expect(
+      featureEvents(
+        { type: 'plugin.updated', actor: { kind: 'system', id: 'bundled-plugins' }, data: plugin('x', true) },
+        {},
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe('request features', () => {
+  it('read routes by their pattern and enum inputs', () => {
+    expect(OBSERVED_ROUTES.has('GET /api/maps/:mapId/route')).toBe(true);
+    expect(
+      requestFeature({
+        method: 'GET',
+        path: '/api/maps/:mapId/route',
+        query: { from: '30000142', to: '31000005', mode: 'outlaw', skip: 'eol' },
+        body: undefined,
+        response: {},
+      }),
+    ).toEqual({ event: 'route_computed', props: { mode: 'outlaw', skips: true, avoids: false } });
+    expect(
+      requestFeature({
+        method: 'POST',
+        path: '/api/maps/:mapId/systems/:solarSystemId/signatures/paste',
+        query: {},
+        body: { text: 'ABC-123 Cosmic Signature' },
+        response: { added: 7, updated: 0, removed: 1, skipped: ['x'] },
+      }),
+    ).toEqual({ event: 'signatures_pasted', props: { added: '6-10', updated: '0', removed: '1' } });
+    expect(
+      requestFeature({ method: 'GET', path: '/api/maps', query: {}, body: undefined, response: [] }),
+    ).toBeNull();
+  });
+});

@@ -184,6 +184,7 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
     before: { configured: false, name: null },
   },
   'settings.changed': { data: { ...settings, eventRetentionDays: 90 }, before: settings },
+  'telemetry.changed': { data: { enabled: false }, before: { enabled: true } },
   'theme.installed': { data: { id: 't', name: 'T', version: '1.0.0' } },
   'theme.removed': { data: { id: 't' }, before: { id: 't', name: 'T', version: '1.0.0' } },
   'theme.default_changed': { data: { themeId: 'dark' }, before: { themeId: 'system' } },

@@ -33,6 +33,8 @@ export interface AuditEventPayloads {
    * keys (tokens, webhook URLs, passwords) are replaced by a short fingerprint.
    */
   'plugin.settings_changed': { pluginId: string; mapId: string | null; values: Record<string, unknown> };
+  /** An admin turned anonymous telemetry on or off (see docs/telemetry.md). */
+  'telemetry.changed': { enabled: boolean };
 }
 
 export type AuditEventType = keyof AuditEventPayloads;
@@ -51,4 +53,5 @@ export const AUDIT_EVENT_TYPES = [
   'webhook.updated',
   'webhook.removed',
   'plugin.settings_changed',
+  'telemetry.changed',
 ] as const satisfies readonly AuditEventType[];

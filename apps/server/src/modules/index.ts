@@ -13,4 +13,5 @@ export const featureModules: Array<Type | DynamicModule> = [
   (await import('./audit/audit.module.js')).AuditModule,
   (await import('./demo/demo.module.js')).DemoModule,
   (await import('./landing/landing.module.js')).LandingModule,
+  (await import('./telemetry/telemetry.module.js')).TelemetryModule,
 ];
