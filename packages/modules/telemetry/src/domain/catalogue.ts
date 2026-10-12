@@ -6,6 +6,7 @@ import {
   EveEntityCategory,
   FIRST_PARTY_PLUGIN_IDS,
   FirstPartyPluginId,
+  JumpHull,
   RouteMode,
   TELEMETRY_WEB_EVENTS,
   TelemetryThemeId,
@@ -97,6 +98,8 @@ export const TELEMETRY_SERVER_EVENTS = {
   bookmark_template_changed: z.strictObject({ scope: z.enum(['map', 'personal']) }),
   esi_picker_used: z.strictObject({ category: EveEntityCategory, mode: z.enum(['search', 'exact']) }),
   waypoint_set: z.strictObject({ mode: z.enum(['destination', 'waypoint']) }),
+  /** A jump route was planned: the hull class and how many legs it has (a bucket; 0 = no route). */
+  jump_planned: z.strictObject({ hull: JumpHull, legs: CountBucket }),
 } as const;
 
 export type TelemetryServerEventName = keyof typeof TELEMETRY_SERVER_EVENTS;

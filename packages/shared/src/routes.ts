@@ -582,6 +582,27 @@ export const routes = {
     }),
   },
 
+  jumps: {
+    /** Ships with a jump drive and the version of the k-space dataset. */
+    meta: route({ method: 'GET', path: '/api/jumps', auth: 'account', response: dto.JumpMetaDto }),
+    /** Known space for the planner's map; `?v=<version>` answers are cached for good. */
+    universe: route({
+      method: 'GET',
+      path: '/api/jumps/universe',
+      auth: 'account',
+      query: dto.JumpUniverseQuery,
+      response: dto.JumpUniverseDto,
+    }),
+    /** A capital jump route between two known-space systems. */
+    plan: route({
+      method: 'POST',
+      path: '/api/jumps/plan',
+      auth: 'account',
+      body: dto.JumpPlanRequest,
+      response: dto.JumpPlanDto,
+    }),
+  },
+
   signatures: {
     list: route({
       method: 'GET',
