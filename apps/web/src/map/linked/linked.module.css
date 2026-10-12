@@ -1,0 +1,27 @@
+/* The other map, read only, in the dialog: a canvas of its own. */
+.frame {
+  position: relative;
+  height: min(62vh, 560px);
+  overflow: hidden;
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius-large);
+  background: var(--dbk-color-canvas);
+}
+
+.loading {
+  display: grid;
+  height: 100%;
+  place-items: center;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--dbk-space-3);
+}
+
+@media (max-width: 760px) {
+  .frame {
+    height: 60dvh;
+  }
+}

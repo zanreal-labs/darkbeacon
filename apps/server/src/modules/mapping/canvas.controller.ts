@@ -1,12 +1,14 @@
 import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Post, Put } from '@nestjs/common';
 import type { Actor } from '@darkbeacon/core';
-import { ClipboardUseCases, PingUseCases } from '@darkbeacon/mapping';
+import { z } from 'zod';
+import { ClipboardUseCases, LinkedMapQueries, PingUseCases } from '@darkbeacon/mapping';
 import {
   ClipboardRolesRequest,
   CreatePingRequest,
   nestPath,
   PasteSystemsRequest,
   routes,
+  type LinkedMapDto,
   type MapDto,
   type MapPingDto,
   type PasteSystemsResultDto,
@@ -14,13 +16,25 @@ import {
 import { CurrentActor } from '../../platform/actor.js';
 import { ZodPipe } from '../../platform/http.js';
 
+const SolarSystemId = z.coerce.number().int().positive();
+
 /** What the canvas does beyond single changes: rally pings, and pasting copied systems. */
 @Controller()
 export class CanvasController {
   constructor(
     @Inject(PingUseCases) private readonly pings: PingUseCases,
     @Inject(ClipboardUseCases) private readonly clipboard: ClipboardUseCases,
+    @Inject(LinkedMapQueries) private readonly linked: LinkedMapQueries,
   ) {}
+
+  @Get(nestPath(routes.linkedMaps.elsewhere.path))
+  elsewhere(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Param('solarSystemId', new ZodPipe(SolarSystemId)) solarSystemId: number,
+  ): Promise<LinkedMapDto[]> {
+    return this.linked.elsewhere(actor, mapId, solarSystemId);
+  }
 
   @Get(nestPath(routes.pings.list.path))
   listPings(@CurrentActor() actor: Actor | null, @Param('mapId') mapId: string): Promise<MapPingDto[]> {

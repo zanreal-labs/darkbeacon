@@ -13,6 +13,7 @@ import {
   type ConnectionDto,
   type LabelDto,
   type MapSystemDto,
+  type LinkedMapDto,
   type SystemLabelDto,
   type UniverseSystemDto,
 } from '@darkbeacon/shared';
@@ -56,6 +57,7 @@ import { connectionSignatureItems, paneSignatureItems } from './menus/signatures
 import { signaturePrefs } from './signatures/prefs';
 import { holderStandingMenu, type HolderStanding } from './menus/intel';
 import { linksMenu } from './menus/links';
+import { linkedMapItems } from './menus/linked';
 import { pingMenuItems, type PingMenuContext } from './menus/pings';
 import type { DotlanTarget } from './canvas/prefs';
 import { isWormholeSpace } from './sidebar/SystemDetails';
@@ -124,6 +126,8 @@ export interface SystemMenuContext {
   dotlan?: DotlanTarget;
   /** The map's rally: call one here, move it here, or cancel it here. */
   rally?: Omit<PingMenuContext, 'solarSystemId' | 'canEdit'>;
+  /** Other maps the system is on, each opened read only. */
+  linked?: { maps: readonly LinkedMapDto[] | undefined; open(map: LinkedMapDto): void };
 }
 
 /** "WH1" or "WH1 — Static to high-sec": the name alone is often a letter or two. */
@@ -299,6 +303,7 @@ export function systemMenu(ctx: SystemMenuContext): MenuItem[] {
           .then(() => ctx.notify?.({ title: `Copied ${ctx.name}`, tone: 'success', duration: 2000 }))
           .catch(() => {}),
     }),
+    ...(ctx.linked ? linkedMapItems(ctx.linked.maps, ctx.linked.open) : []),
   ];
   go.push(...more(ctx.plugins, (close) => ({ mapId: ctx.mapId, solarSystemId: id, close })));
 

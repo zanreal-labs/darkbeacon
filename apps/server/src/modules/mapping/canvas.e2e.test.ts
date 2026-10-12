@@ -230,4 +230,22 @@ describeEachDialect('the canvas: pings and pasting systems', (t) => {
     const settings = await alice.json<MapDto>(`${m}`);
     expect(settings.settings.clipboard).toEqual({ copy: 'member', paste: 'manager' });
   });
+
+  it('names the other maps a system is on, with their homes, among those the viewer may open', async () => {
+    const { browser: alice } = await signIn('alice');
+    const { browser: bob } = await signIn('bob');
+    const own = await alice.json<MapDto>('/api/maps', { method: 'POST', json: { name: 'Own' } });
+    const other = await alice.json<MapDto>('/api/maps', { method: 'POST', json: { name: 'Other' } });
+    const hidden = await bob.json<MapDto>('/api/maps', { method: 'POST', json: { name: 'Bob only' } });
+    for (const map of [own, other, hidden])
+      await (map === hidden ? bob : alice).json(`/api/maps/${map.id}/systems`, {
+        method: 'POST',
+        json: { solarSystemId: JITA },
+      });
+    await alice.json(`/api/maps/${other.id}/systems`, { method: 'POST', json: { solarSystemId: AMARR } });
+    await alice.json(`/api/maps/${other.id}/systems/${AMARR}`, { method: 'PATCH', json: { status: 'home' } });
+    const linked = await alice.json<unknown[]>(`/api/maps/${own.id}/systems/${JITA}/elsewhere`);
+    expect(linked).toEqual([{ mapId: other.id, slug: other.slug, name: 'Other', home: AMARR }]);
+    expect(await alice.json(`/api/maps/${own.id}/systems/${PERIMETER}/elsewhere`)).toEqual([]);
+  });
 });

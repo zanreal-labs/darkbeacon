@@ -42,3 +42,4 @@ export * from './effect-modifiers.js';
 export * from './undo.js';
 export * from './clipboard.js';
 export * from './pings.js';
+export * from './linked-maps.js';

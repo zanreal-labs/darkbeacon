@@ -2461,6 +2461,18 @@ export const routes = {
       response: dto.MapDto,
     }),
   },
+
+  /** The other maps a system is on (Wanderer's "Also on <map>"), for a read-only preview. */
+  linkedMaps: {
+    elsewhere: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/systems/:solarSystemId/elsewhere',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'read' },
+      mapRole: 'viewer',
+      response: z.array(dto.LinkedMapDto),
+    }),
+  },
 } as const;
 
 type PathParams<P extends string> = P extends `${string}:${infer Name}/${infer Rest}`

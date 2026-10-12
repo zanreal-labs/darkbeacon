@@ -5,6 +5,7 @@ import { useReactFlow } from '@xyflow/react';
 import {
   SYSTEM_PLACEMENT,
   type ConnectionDto,
+  type LinkedMapDto,
   type MapDto,
   type MapSummaryDto,
   type StreamSnapshotDto,
@@ -43,6 +44,8 @@ import { useSignatureUndoBridge } from '../map/undo/signatureBridge';
 import { useSystemsClipboard } from '../map/clipboard/useSystemsClipboard';
 import { useCanvasPrefs } from '../map/canvas/prefs';
 import { RallyCard } from '../map/pings/RallyCard';
+import { useLinkedMaps } from '../map/linked/api';
+import { LinkedMapPreview } from '../map/linked/LinkedMapPreview';
 import { usePingCommands, usePings } from '../map/pings/api';
 import { isWormholeSpace } from '../map/sidebar/SystemDetails';
 import { SystemSidebar } from '../map/sidebar/SystemSidebar';
@@ -271,6 +274,13 @@ export function MapView({
   // A right click only opens the menu: it does not select the system or open the panel.
   const openMenu = (target: MenuTarget, x: number, y: number) => setMenu({ target, x, y });
 
+  // "Also on <map>": the other maps the system is on, asked when its menu opens.
+  const linked = useLinkedMaps(
+    map.id,
+    menu?.target.kind === 'system' && map.kind !== 'composite' ? menu.target.solarSystemId : null,
+  );
+  const [preview, setPreview] = useState<{ linked: LinkedMapDto; solarSystemId: number } | null>(null);
+
   // The map's rally ping: a card in a corner, the system drawn as a rally, a route there.
   const prefs = useCanvasPrefs();
   const myAccount = me.data?.account.id;
@@ -416,6 +426,10 @@ export function MapView({
           ...holderOf(sys.solarSystemId),
           info: universe.get(sys.solarSystemId),
           dotlan: prefs.dotlan,
+          linked: {
+            maps: linked.data,
+            open: (other) => setPreview({ linked: other, solarSystemId: sys.solarSystemId }),
+          },
           ...(map.kind === 'composite'
             ? {}
             : {
@@ -770,6 +784,14 @@ export function MapView({
           onShow={() => select(rally.solarSystemId, true)}
           onSelectStep={(id) => (state.systems.has(id) ? select(id, true) : undefined)}
           onCancel={() => pingCommands.cancel(rally.id)}
+        />
+      )}
+
+      {preview && (
+        <LinkedMapPreview
+          linked={preview.linked}
+          solarSystemId={preview.solarSystemId}
+          onClose={() => setPreview(null)}
         />
       )}
 

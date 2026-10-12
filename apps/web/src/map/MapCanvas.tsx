@@ -154,6 +154,10 @@ interface Props {
   rallies?: ReadonlySet<number>;
   /** Others on the map (their cursors are drawn) and where this tab shares its own. */
   presence?: { peers: readonly PresencePeerDto[]; publish: PresencePublisher };
+  /** Read-only previews: systems and connections drawn as selected (the way in). */
+  highlight?: { systems: ReadonlySet<number>; connections: ReadonlySet<string> };
+  /** Read-only previews: the system the view opens on, instead of the whole chain. */
+  openOn?: number;
 }
 
 /**
@@ -195,6 +199,8 @@ export function MapCanvas({
   onPointerAt,
   rallies,
   presence,
+  highlight,
+  openOn,
 }: Props) {
   const { theme } = useTheme();
   const demo = useProviders({ enabled: !readOnly }).data?.demo ?? false;
@@ -313,6 +319,7 @@ export function MapCanvas({
           position: old?.dragging ? old.position : system.position,
           draggable: editable && !system.locked,
           className: rallies?.has(system.solarSystemId) ? styles.rally : undefined,
+          ...(highlight ? { selected: highlight.systems.has(system.solarSystemId) } : {}),
           data: {
             mapId,
             system,
@@ -356,6 +363,7 @@ export function MapCanvas({
     bookmarks,
     myLocation,
     rallies,
+    highlight,
   ]);
 
   useEffect(() => {
@@ -372,7 +380,7 @@ export function MapCanvas({
           type: 'connection',
           source: String(c.source),
           target: String(c.target),
-          selected: selected.has(c.id),
+          selected: highlight ? highlight.connections.has(c.id) : selected.has(c.id),
           data: {
             mapId,
             connection: c,
@@ -382,7 +390,7 @@ export function MapCanvas({
           },
         }));
     });
-  }, [state.connections, state.systems, universe, mapId, setEdges, traffic]);
+  }, [state.connections, state.systems, universe, mapId, setEdges, traffic, highlight]);
 
   /** Rectangles of the given nodes (all when omitted), as React Flow measured them. */
   const rectsOf = useCallback(
@@ -498,8 +506,11 @@ export function MapCanvas({
     if (!readOnly || opened.current || !loaded || nodes.length === 0) return;
     if (!nodes.every((n) => n.measured?.width)) return;
     opened.current = true;
-    fitChain();
-  }, [readOnly, loaded, nodes, fitChain]);
+    // A preview opens on the system it is about, at the readable zoom.
+    const at = openOn !== undefined ? centerOfSystem(openOn) : null;
+    if (at) centerOn(at, DEFAULT_ZOOM, false);
+    else fitChain();
+  }, [readOnly, loaded, nodes, fitChain, openOn, centerOfSystem, centerOn]);
 
   const centerOnMe = useCallback(() => {
     const at = myLocation ? centerOfSystem(myLocation.solarSystemId) : null;
