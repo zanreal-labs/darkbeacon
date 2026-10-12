@@ -20,15 +20,24 @@ One container, 2 vCPU and 2 GB of memory, on SQLite or Postgres 17, holds a whol
 | Signature paste                  | 200 lines                                      | one every 2 s                                         |
 
 Targets and results with that load running at once, on the code of this branch merged with `main` at
-`a12a927` (p95 unless noted):
+`f846cf9` (intel, Wanderer import, routes and bridges, access and admin; p95 unless noted):
 
-| Target                                      | Goal     | SQLite                         | Postgres       |
-| ------------------------------------------- | -------- | ------------------------------ | -------------- |
-| REST API                                    | < 150 ms | 30 ms (p99 84)                 | 19 ms (p99 44) |
-| Map snapshot, 500 systems (under load)      | < 300 ms | 295 ms (p50 11)                | 83 ms          |
-| Realtime fan-out (edit to every client)     | < 250 ms | 41 ms                          | 29 ms          |
-| Presence fan-out (cursor to every peer)     | < 250 ms | 85 ms                          | 71 ms          |
-| Server memory (API and web server together) | < 1 GB   | 939 MB peak; 1.06 GB at 30 min | 888 MB peak    |
+| Target                                      | Goal     | SQLite                          | Postgres       |
+| ------------------------------------------- | -------- | ------------------------------- | -------------- |
+| REST API                                    | < 150 ms | 43 ms (p99 122)                 | 30 ms (p99 72) |
+| Map snapshot, 500 systems (under load)      | < 300 ms | 297 ms                          | 78 ms          |
+| Realtime fan-out (edit to every client)     | < 250 ms | 44 ms                           | 56 ms          |
+| Presence fan-out (cursor to every peer)     | < 250 ms | 88 ms                           | 73 ms          |
+| Server memory (API and web server together) | < 1 GB   | 997 MB peak; 1.06 GB at 30 min¹ | 922 MB peak    |
+
+The same check on the code merged with `a12a927` (the before-and-after table below) gave REST 30 ms and
+19 ms, snapshots 295 ms and 83 ms, edit fan-out 41 ms and 29 ms, presence 85 ms and 71 ms, peak RSS 939 and
+888 MB: what `main` added since (bookmark numbers and the way home among the snapshot's and the router's
+work, offline characters filtered per viewer) costs a little CPU (SQLite p50 43 to 51 % of two cores)
+and leaves every target where it was. Intel's outside sources are off in load runs (they would read
+zKillboard and EVE's ESI); serving intel to viewers is not part of the load.
+
+¹ The 30-minute soak ran on the code merged with `a12a927`.
 
 Memory is at the limit rather than under it: the API process levels off at about 650 MB and the Next.js
 server at about 400 MB (see [Memory over time](#memory-over-time)). Give the container 1.5 GB.
@@ -199,6 +208,11 @@ latencies than Postgres for reads (no network hop) and nothing to operate. Postg
   small fraction of the time; sustained thousands of writes a second (much bigger alliances, many
   plugins consuming every event) are Postgres territory.
 
+The built-in backup of SQLite holds every connection while it copies the file. Under the measured load
+it took 4 s (one each day by default); on a machine whose CPUs were busy with other work it took 97 s,
+and every request waited that long. Scheduled backups run one interval after the last one, so a manual
+backup at a quiet hour moves the daily one there ([`backups.md`](backups.md)); or use Postgres and its tooling.
+
 Switching later is a data migration (export and import); the schema and code are the same.
 
 ## More than one process
@@ -206,25 +220,44 @@ Switching later is a data migration (export and import); the schema and code are
 Status: implemented behind `CLUSTER=postgres`, tested with two replicas behind a round-robin proxy
 (`SCENARIO=cluster`), not the default. Everything that assumed a single process now goes through a port:
 
-| Assumption                    | Port (core or edge) | Single process    | `CLUSTER=postgres`                                          |
-| ----------------------------- | ------------------- | ----------------- | ----------------------------------------------------------- |
-| Events reach every subscriber | `EventBus`          | in process        | local dispatch + NOTIFY of stream ranges, read from the log |
-| Once-per-instance work        | `Leadership`        | always the leader | session advisory lock, another replica takes over in ≤ 2 s  |
-| Who is on a map, cursors      | `PresenceRelay`     | none              | NOTIFY of each replica's own peers, repeated every 5 s      |
-| ESI budget                    | `RateLimiter`       | token bucket      | token bucket on the leader (the only one polling)           |
+| Assumption                     | Port (core or edge) | Single process    | `CLUSTER=postgres`                                          |
+| ------------------------------ | ------------------- | ----------------- | ----------------------------------------------------------- |
+| Events reach every subscriber  | `EventBus`          | in process        | local dispatch + NOTIFY of stream ranges, read from the log |
+| Once-per-instance work         | `Leadership`        | always the leader | session advisory lock, another replica takes over in ≤ 2 s  |
+| Who is on a map, cursors       | `PresenceRelay`     | none              | NOTIFY of each replica's own peers, repeated every 5 s      |
+| Small news for every replica   | `Signals`           | in process        | NOTIFY, delivered at once to the sender                     |
+| Rate limits (ESI budget, edge) | `RateLimiter`       | token buckets     | token buckets per replica (see below)                       |
 
-On the leader only: the ESI poller, durable event consumers (auto-mapping, passages, webhooks, plugins'
-consumers, clean-ups), event retention, webhook retries, the chain sweeper, routing exits, installing bundled plugins and
-plugins' background work (`ctx.every`). Everywhere: HTTP, WebSockets and their fan-out, access caches (kept
-current by the bus), merged shared maps (each replica builds its own), and the idempotent prunes (sessions,
-OAuth grants, sharing tombstones). Built-in backups are SQLite's; a cluster runs on Postgres and is backed up
-with its tooling.
+On the leader only:
+
+- the ESI poller and durable event consumers (auto-mapping, passages, webhooks with their retries and
+  turning failing ones off, plugins' consumers, clean-ups);
+- intel's jobs: ESI sovereignty and hourly figures, zKillboard history and the R2Z2 feed, pruning. Every
+  replica pushes what they changed to its own viewers (`intel.changed` signals) and reads whether the
+  feed is live from what the leader writes;
+- merging shared maps: the leader merges each change once; the others forget what they kept of a map when
+  its stream moves and build it again from what is stored when a request needs it. A replica that starts
+  leading merges every shared map again;
+- Wanderer imports and syncs: a job queued on another replica is signalled to the leader, and a new leader
+  resumes jobs the old one left running;
+- schedules: event retention, the chain sweeper, the signature sweep, routing exits and the way home
+  (computed and published), session, OAuth, delivery and tombstone prunes, the telemetry heartbeat,
+  installing bundled plugins and plugins' background work (`ctx.every`).
+
+Everywhere: HTTP, WebSockets and SSE with their fan-out, access caches (kept current by the bus), the
+router's tables, and two small public caches every replica's routes read from memory: EVE-Scout's Thera
+and Turnur holes (one request every 5 minutes) and ESI's sovereignty holders for bridges (one an hour).
+Committed events are counted for OpenTelemetry by the replica that committed them. Built-in backups are
+SQLite's; a cluster runs on Postgres and is backed up with its tooling.
 
 Requirements and limits:
 
 - Replicas share `DATABASE_URL` and `DATA_DIR` (plugin packages and `secret.key` live there) and the same
   `SECRET_KEY`. Plugin installs and switches made on one replica reach the others through `plugin.*` events.
 - The load balancer needs no stickiness; WebSockets resume from their seq on any replica.
+- Rate limits are counted per replica: one client spread over N replicas by the load balancer gets N
+  times `RATE_LIMIT_PER_ADDRESS` (and its API keys' limits). Sticky sessions by client address keep it
+  exact. The ESI budget is the leader's, the only one polling.
 - Per-process state that stays per process: ESI name-lookup caches and their error-limit reading
   (`EsiDirectoryHttp`, each replica has its own IP anyway), the Discord bot's short caches, the plugin
   failure counters.
@@ -232,9 +265,12 @@ Requirements and limits:
   the leader only; a plugin with side effects (posting somewhere) belongs in `consume`, or checks
   `ctx.isLeader()`.
 - The poller's "maps someone has open first" counts the leader's sockets only.
-- NOTIFY payloads are limited to 8 kB, so the bus sends stream ranges, not events, and presence is split
-  by peers; a lost notification costs a gap the hub fills from the log (events) or a cursor that is late
-  until the next change (presence).
+- A drag or a note on a shared map handled by a follower merges from what is stored; if the leader is
+  merging the same map at that moment, the later write wins, as with any two edits.
+- NOTIFY payloads are limited to 8 kB, so the bus sends stream ranges, not events, presence is split by
+  peers and intel changes by systems; a lost notification costs a gap the hub fills from the log (events),
+  a cursor that is late until the next change (presence) or intel figures that are late until the next
+  change (signals).
 
 Measured with two replicas (`SCENARIO=cluster`, merged code: Postgres, the same load through a round-robin
 proxy, each WebSocket on whichever replica it reached, 2 CPUs per replica, one Postgres with 2 CPUs):
