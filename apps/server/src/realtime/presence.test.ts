@@ -8,8 +8,11 @@ import {
   DEFAULT_PRESENCE_SETTINGS,
   PresenceRooms,
   presenceColor,
+  RELAY_REFRESH_MS,
+  type PresenceBroadcast,
   type PresenceMember,
   type PresenceMessage,
+  type PresenceRelay,
 } from './presence.js';
 import { RealtimeHub } from './realtime.hub.js';
 import { RealtimeRegistry } from './realtime.registry.js';
@@ -158,6 +161,65 @@ describe('PresenceRooms', () => {
     // The latest position always gets through.
     rooms.flush();
     expect(people[0]!.inbox.at(-1)!.peers.find((p) => p.key === 'k1')?.cursor?.x).toBe(now - 67);
+  });
+
+  it('shares presence between replicas through the relay, and forgets a replica that went away', () => {
+    let now = 1000;
+    const handlers = new Set<(b: PresenceBroadcast) => void>();
+    const relay: PresenceRelay = {
+      publish: (broadcast) => {
+        for (const handler of handlers) handler(JSON.parse(JSON.stringify(broadcast)) as PresenceBroadcast);
+      },
+      subscribe: (handler) => (handlers.add(handler), () => handlers.delete(handler)),
+    };
+    const one = new PresenceRooms({ now: () => now, relay, processId: 'one' });
+    const two = new PresenceRooms({ now: () => now, relay, processId: 'two' });
+    rooms = one;
+    try {
+      const a = member('ka', 'alice');
+      const b = member('kb', 'bob');
+      one.update('map:m', a.m, {});
+      one.flush();
+      two.update('map:m', b.m, {});
+      // Bob (on two) is told about Alice (on one) in his first full list.
+      expect(b.inbox[0]).toMatchObject({ full: true, peers: [{ key: 'ka', accountId: 'alice' }] });
+      two.flush();
+      one.flush();
+      expect(a.inbox.at(-1)).toMatchObject({ full: false, peers: [{ key: 'kb', accountId: 'bob' }] });
+
+      // Cursors cross replicas as patches.
+      two.update('map:m', b.m, { cursor: { x: 7, y: 8 } });
+      two.flush();
+      one.flush();
+      expect(a.inbox.at(-1)).toEqual({
+        op: 'presence',
+        stream: 'map:m',
+        full: false,
+        peers: [{ key: 'kb', cursor: { x: 7, y: 8 } }],
+        left: [],
+      });
+      expect(one.here('map:m').map((p) => p.name)).toEqual(['alice', 'bob']);
+
+      // Leaving on one replica is seen on the other.
+      two.leave('map:m', 'kb');
+      two.flush();
+      one.flush();
+      expect(a.inbox.at(-1)).toMatchObject({ left: ['kb'] });
+
+      // A replica that stops repeating its peers (it crashed) loses them after three refreshes.
+      two.update('map:m', member('kc', 'carol').m, {});
+      two.flush();
+      one.flush();
+      two.close();
+      now += 3 * RELAY_REFRESH_MS + 1;
+      one.flush();
+      now += RELAY_REFRESH_MS + 1;
+      one.flush();
+      one.flush();
+      expect(one.here('map:m').map((p) => p.name)).toEqual(['alice']);
+    } finally {
+      two.close();
+    }
   });
 
   it('tells listeners (plugins) about arrivals, departures and editing, not cursor moves', () => {

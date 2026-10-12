@@ -12,6 +12,7 @@ describe('config', () => {
       port: 3000,
       dataDir: '/data',
       esiBaseUrl: 'https://esi.evetech.net',
+      cluster: 'none',
       demoMode: false,
       deprecated: [],
       discord: null,
@@ -23,6 +24,12 @@ describe('config', () => {
   it('points ESI elsewhere only when asked (load tests)', () => {
     expect(parseEnv({ ESI_BASE_URL: 'http://fake-esi:8080/' }).esiBaseUrl).toBe('http://fake-esi:8080');
     expect(() => parseEnv({ ESI_BASE_URL: 'not a url' })).toThrow(/ESI_BASE_URL/);
+  });
+
+  it('clusters only on Postgres', () => {
+    expect(parseEnv({ CLUSTER: 'postgres', DATABASE_URL: 'postgres://x/y' }).cluster).toBe('postgres');
+    expect(() => parseEnv({ CLUSTER: 'postgres' })).toThrow(/DATABASE_URL/);
+    expect(() => parseEnv({ CLUSTER: 'redis' })).toThrow(/CLUSTER/);
   });
 
   it('reads oauth clients and treats empty values as unset', () => {

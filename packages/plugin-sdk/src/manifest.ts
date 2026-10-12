@@ -13,7 +13,7 @@ export const PLUGIN_PORTS = [
 ] as const;
 export type PluginPortName = (typeof PLUGIN_PORTS)[number];
 
-export const SDK_VERSION = '1.0.0';
+export const SDK_VERSION = '1.1.0';
 export const MANIFEST_FILE = 'darkbeacon-plugin.json';
 /** The manifest name from before the rename to Darkbeacon; still read, with a deprecation warning. */
 export const LEGACY_MANIFEST_FILE = 'wormwright-plugin.json';

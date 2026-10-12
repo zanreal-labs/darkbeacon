@@ -211,6 +211,14 @@ export interface PluginContext<P extends PluginPortName = PluginPortName> {
   readonly audit: { configChanged(request: PluginHttpRequest, change: PluginConfigChange): Promise<void> };
   /** Offers an adapter to the core, e.g. a Notifier that every `notifier.send` reaches. */
   provide<K extends keyof ProvidablePorts>(port: K, adapter: ProvidablePorts[K]): void;
+  /**
+   * Background work (outbox delivery, digests, polling a feed): runs `work` every `ms` on one
+   * process of the instance (the leader, when the server runs as several replicas), skipping a
+   * run while the previous one is busy. Errors are logged. Stops with the plugin.
+   */
+  every(ms: number, work: () => Promise<unknown>): void;
+  /** Whether this process runs the instance's background work (always, without replicas). */
+  isLeader(): boolean;
 }
 
 export interface ServerPlugin<P extends PluginPortName = PluginPortName> {

@@ -25,6 +25,8 @@ const EnvSchema = z
     DATA_DIR: z.string().min(1).default('/data'),
     /** Where ESI is reached; only load tests and ESI proxies change it. */
     ESI_BASE_URL: z.url().default('https://esi.evetech.net'),
+    /** `postgres`: several replicas share one Postgres (event bus and leader election through it). */
+    CLUSTER: z.enum(['none', 'postgres']).default('none'),
     DEMO_MODE: flag,
     ALLOW_DEMO_MODE: flag,
     /** Deprecated aliases of DEMO_MODE and ALLOW_DEMO_MODE. */
@@ -43,6 +45,9 @@ const EnvSchema = z
           message: `set both ${id} and ${secret}`,
         });
       }
+    }
+    if (env.CLUSTER === 'postgres' && !env.DATABASE_URL) {
+      ctx.addIssue({ code: 'custom', path: ['CLUSTER'], message: 'CLUSTER=postgres needs DATABASE_URL' });
     }
     const demo = env.DEMO_MODE || env.DEV_LOGIN;
     if (demo && env.NODE_ENV === 'production' && !(env.ALLOW_DEMO_MODE || env.ALLOW_DEV_LOGIN)) {
@@ -75,6 +80,12 @@ export interface AppConfig {
   dataDir: string;
   /** ESI origin for tracking and waypoints (default https://esi.evetech.net); a fake one in load tests. */
   esiBaseUrl: string;
+  /**
+   * `none`: one process. `postgres`: replicas behind a load balancer share the database; events
+   * reach every replica through LISTEN/NOTIFY and one replica (an advisory lock) runs the
+   * once-per-instance work. See docs/scaling.md.
+   */
+  cluster: 'none' | 'postgres';
   /**
    * Demo mode: unauthenticated visits are signed in as a demo account and a demo map is seeded.
    * Anyone who can reach the instance gets in, so it is refused in production unless allowed.
@@ -112,6 +123,7 @@ export function parseEnv(
     port: e.PORT,
     dataDir: e.DATA_DIR,
     esiBaseUrl: e.ESI_BASE_URL.replace(/\/+$/, ''),
+    cluster: e.CLUSTER,
     demoMode: e.DEMO_MODE || e.DEV_LOGIN,
     deprecated: [
       ...(cleaned.DEV_LOGIN !== undefined ? ['DEV_LOGIN (use DEMO_MODE)'] : []),

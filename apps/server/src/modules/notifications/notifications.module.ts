@@ -8,7 +8,7 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import { InstanceSettingsService } from '@darkbeacon/access';
-import type { Clock, EventLog, MapAccess, UnitOfWork } from '@darkbeacon/core';
+import type { Clock, EventLog, Leadership, MapAccess, UnitOfWork } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
 import { NotifierRegistry, WebhookAdmin, WebhookDispatcher } from '@darkbeacon/notifications';
 import { isEventOfType } from '@darkbeacon/shared';
@@ -17,7 +17,7 @@ import { KyselyWebhookRepository } from '../../adapters/notifications/kysely-web
 import { SecretBox } from '../../adapters/notifications/secret-box.js';
 import type { AppConfig } from '../../config/config.js';
 import { EventConsumers } from '../../platform/event-consumers.js';
-import { APP_CONFIG, CLOCK, EVENT_LOG, MAP_ACCESS, UNIT_OF_WORK } from '../../platform/tokens.js';
+import { APP_CONFIG, CLOCK, EVENT_LOG, LEADERSHIP, MAP_ACCESS, UNIT_OF_WORK } from '../../platform/tokens.js';
 import { WebhooksController } from './webhooks.controller.js';
 
 const RETRY_EVERY_MS = 5_000;
@@ -39,6 +39,7 @@ export class WebhookWorker implements OnModuleInit, OnApplicationShutdown {
     @Inject(KyselyWebhookRepository) private readonly webhooks: KyselyWebhookRepository,
     @Inject(EventConsumers) private readonly consumers: EventConsumers,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(LEADERSHIP) private readonly leadership: Leadership,
   ) {}
 
   onModuleInit(): void {
@@ -53,7 +54,12 @@ export class WebhookWorker implements OnModuleInit, OnApplicationShutdown {
       },
     });
     this.cleanups.push(
-      every(RETRY_EVERY_MS, () => this.dispatcher.retryDue(), this.logger),
+      // Retries go out from one replica only (the leader), never twice.
+      every(
+        RETRY_EVERY_MS,
+        async () => (this.leadership.isLeader() ? this.dispatcher.retryDue() : undefined),
+        this.logger,
+      ),
       every(
         PRUNE_EVERY_MS,
         () => this.webhooks.pruneDeliveries(this.clock.now() - KEEP_DELIVERIES_MS),

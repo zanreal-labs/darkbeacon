@@ -6,6 +6,8 @@ export const APP_CONFIG = 'AppConfig';
 export const CLOCK = 'Clock';
 export const EVENT_LOG = 'EventLog';
 export const EVENT_BUS = 'EventBus';
+/** Leadership: whether this process runs the once-per-instance work (see platform/cluster.ts). */
+export const LEADERSHIP = 'Leadership';
 export const UNIT_OF_WORK = 'UnitOfWork';
 /** MapAccess port, provided by the access module. */
 export const MAP_ACCESS = 'MapAccess';

@@ -14,6 +14,7 @@ import {
   type DomainEvent,
   type EventBus,
   type EventLog,
+  type Leadership,
   type MapAccess,
 } from '@darkbeacon/core';
 import type { Database } from '@darkbeacon/db';
@@ -104,6 +105,8 @@ export interface PluginHostDeps {
   failureThreshold?: number;
   /** How long `register()` may take. Default 30 s. */
   registerTimeoutMs?: number;
+  /** `ctx.every` runs only where this says so (the leader of replicas); always without it. */
+  leadership?: Leadership;
 }
 
 interface CompiledRoute {
@@ -367,7 +370,22 @@ export class PluginHost {
           this.configChanged(loaded, request, change),
       }),
       provide: (port: string, adapter: Notifier) => this.provide(loaded, port, adapter),
+      every: (ms: number, work: () => Promise<unknown>) => this.every(loaded, ms, work),
+      isLeader: () => this.deps.leadership?.isLeader() ?? true,
     });
+  }
+
+  private every(loaded: LoadedPlugin, ms: number, work: () => Promise<unknown>): void {
+    let busy = false;
+    const timer = setInterval(() => {
+      if (busy || loaded.stopped || !(this.deps.leadership?.isLeader() ?? true)) return;
+      busy = true;
+      work()
+        .catch((error: unknown) => loaded.logger.error(message(error)))
+        .finally(() => (busy = false));
+    }, ms);
+    timer.unref();
+    loaded.cleanups.push(() => clearInterval(timer));
   }
 
   private portFactories(loaded: LoadedPlugin): { [K in keyof PluginPorts]: () => PluginPorts[K] } {

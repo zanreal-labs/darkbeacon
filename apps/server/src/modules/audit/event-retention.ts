@@ -6,8 +6,8 @@ import {
   type OnModuleDestroy,
 } from '@nestjs/common';
 import { InstanceSettingsService } from '@darkbeacon/access';
-import type { Clock, EventLog } from '@darkbeacon/core';
-import { CLOCK, EVENT_LOG } from '../../platform/tokens.js';
+import type { Clock, EventLog, Leadership } from '@darkbeacon/core';
+import { CLOCK, EVENT_LOG, LEADERSHIP } from '../../platform/tokens.js';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -25,10 +25,16 @@ export class EventRetention implements OnApplicationBootstrap, OnModuleDestroy {
     @Inject(EVENT_LOG) private readonly log: EventLog,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(InstanceSettingsService) private readonly settings: InstanceSettingsService,
+    @Inject(LEADERSHIP) private readonly leadership: Leadership,
   ) {}
 
   onApplicationBootstrap(): void {
-    this.timer = setInterval(() => void this.prune(), 60 * 60 * 1000).unref();
+    this.timer = setInterval(
+      () => {
+        if (this.leadership.isLeader()) void this.prune();
+      },
+      60 * 60 * 1000,
+    ).unref();
   }
 
   onModuleDestroy(): void {

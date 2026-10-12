@@ -2,6 +2,7 @@ import { Global, Inject, Logger, Module, type OnModuleDestroy } from '@nestjs/co
 import type { EventBus, EventLog } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
 import { AuditDirectoryRegistry } from '../platform/audit.js';
+import { Cluster } from '../platform/cluster.js';
 import { EVENT_BUS, EVENT_LOG } from '../platform/tokens.js';
 import { PresenceRooms } from './presence.js';
 import { PresenceSettingsController, PresenceSettingsStore } from './presence-settings.js';
@@ -19,7 +20,12 @@ import { SnapshotController } from './snapshot.controller.js';
   controllers: [SnapshotController, PresenceSettingsController],
   providers: [
     RealtimeRegistry,
-    { provide: PresenceRooms, useFactory: () => new PresenceRooms() },
+    {
+      provide: PresenceRooms,
+      // Replicas share presence through the cluster's relay; a single process needs none.
+      useFactory: (cluster: Cluster) => new PresenceRooms({ relay: cluster.presence }),
+      inject: [Cluster],
+    },
     PresenceSettingsStore,
     {
       provide: RealtimeHub,

@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { ManualClock, newEvent, type DomainEvent } from '@darkbeacon/core';
+import { ManualClock, newEvent, singleProcess, type DomainEvent, type Leadership } from '@darkbeacon/core';
 import type { Database } from '@darkbeacon/db';
 import { describeEachDialect } from '@darkbeacon/db/testing';
 import { InProcessEventBus } from '../adapters/events/in-process-event-bus.js';
@@ -18,14 +18,15 @@ describeEachDialect('EventConsumers', (t) => {
     const log = new KyselyEventLog(database, bus);
     const append = (stream: string, type = 'system.added') =>
       log.append([newEvent({ stream, type, actor: { kind: 'system', id: 't' }, data: {}, occurredAt: 1 })]);
-    const start = async (...consumers: EventConsumer[]) => {
-      const runner = new EventConsumers(database, log, bus, new ManualClock());
+    const start = async (...consumers: EventConsumer[]) => startLed(singleProcess, ...consumers);
+    const startLed = async (leadership: Leadership, ...consumers: EventConsumer[]) => {
+      const runner = new EventConsumers(database, log, bus, new ManualClock(), leadership);
       for (const consumer of consumers) runner.register(consumer);
       await runner.onApplicationBootstrap();
       running.push(runner);
       return runner;
     };
-    return { log, append, start };
+    return { log, append, start, startLed };
   };
 
   const recorder = (name: string, extra: Partial<EventConsumer> = {}) => {
@@ -128,5 +129,33 @@ describeEachDialect('EventConsumers', (t) => {
       expect(instance.seen).toEqual(['instance#1']);
       expect(connections.seen).toEqual(['map:a#1']);
     });
+  });
+
+  it('runs only while this process leads, resuming from the shared cursors', async () => {
+    const { append, startLed } = setup(t.db);
+    let leader = true;
+    const listeners = new Set<(leader: boolean) => void>();
+    const leadership: Leadership = {
+      isLeader: () => leader,
+      onChange: (listener) => (listeners.add(listener), () => listeners.delete(listener)),
+    };
+    const set = (value: boolean) => {
+      leader = value;
+      for (const listener of listeners) listener(value);
+    };
+    const led = recorder('led');
+    const runner = await startLed(leadership, led.consumer);
+    await append('map:a');
+    await vi.waitFor(() => expect(led.seen).toEqual(['map:a#1']));
+
+    // Another replica leads now: nothing is handled here.
+    set(false);
+    await append('map:a');
+    await runner.wake();
+    expect(led.seen).toEqual(['map:a#1']);
+
+    // Leading again: it picks up where the cursor stands.
+    set(true);
+    await vi.waitFor(() => expect(led.seen).toEqual(['map:a#1', 'map:a#2']));
   });
 });

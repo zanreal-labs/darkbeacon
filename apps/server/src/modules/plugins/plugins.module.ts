@@ -10,7 +10,14 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
-import { ValidationError, type Clock, type EventBus, type EventLog, type MapAccess } from '@darkbeacon/core';
+import {
+  ValidationError,
+  type Clock,
+  type EventBus,
+  type EventLog,
+  type Leadership,
+  type MapAccess,
+} from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
 import { NotifierRegistry } from '@darkbeacon/notifications';
 import type { UniverseCatalog } from '@darkbeacon/mapping';
@@ -39,6 +46,7 @@ import {
   CLOCK,
   EVENT_BUS,
   EVENT_LOG,
+  LEADERSHIP,
   MAP_ACCESS,
   UNIT_OF_WORK,
   UNIVERSE_CATALOG,
@@ -65,6 +73,7 @@ export const BUNDLED_PLUGINS = ['discord-notify'];
 @Injectable()
 export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, OnApplicationShutdown {
   private readonly logger = new Logger('Plugins');
+  private unsubscribe: (() => void) | undefined;
 
   constructor(
     @Inject(PluginHost) private readonly host: PluginHost,
@@ -82,6 +91,8 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
     @Inject(PresenceRooms) private readonly presence: PresenceRooms,
     @Inject(DiscordBotService) private readonly bot: DiscordBotService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    @Inject(LEADERSHIP) private readonly leadership: Leadership,
+    @Inject(EVENT_BUS) private readonly bus: EventBus,
   ) {}
 
   onModuleInit(): void {
@@ -139,16 +150,30 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
   }
 
   async onApplicationBootstrap(): Promise<void> {
-    // Plugins shipped on by default; tests install what they need themselves.
-    if (this.config.env !== 'test') {
+    // Plugins shipped on by default; tests install what they need themselves. With replicas the
+    // leader installs them (they share DATA_DIR) and the others load them on the event.
+    if (this.config.env !== 'test' && this.leadership.isLeader()) {
       await this.admin
         .ensureBundled(BUNDLED_PLUGINS, new KyselyBundledPluginMarks(this.database))
         .catch((error: unknown) => this.logger.error(`bundled plugins: ${String(error)}`));
     }
     await this.host.start();
+    // Another replica installed, switched or removed a plugin: this one follows (once its own
+    // plugins are loaded). On the replica that made the change the plugin is already in line,
+    // and syncing it again does nothing.
+    this.unsubscribe = this.bus.subscribe(
+      (event) => {
+        const id = isEventOfType(event, 'plugin.removed')
+          ? event.data.id
+          : (event.data as { id?: string }).id;
+        if (id) void this.host.sync(id).catch((error: unknown) => this.logger.error(String(error)));
+      },
+      { types: ['plugin.updated', 'plugin.removed'] },
+    );
   }
 
   async onApplicationShutdown(): Promise<void> {
+    this.unsubscribe?.();
     await this.host.stop();
   }
 
@@ -261,6 +286,7 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
         providers: PluginPortProviders,
         consumers: EventConsumers,
         config: AppConfig,
+        leadership: Leadership,
       ) =>
         new PluginHost({
           admin,
@@ -278,6 +304,7 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
           consumers,
           publicUrl: config.publicUrl,
           secrets: (id) => new SecretBox(config.secretKey, `plugin:${id}`),
+          leadership,
         }),
       inject: [
         PluginAdmin,
@@ -294,6 +321,7 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
         PluginPortProviders,
         EventConsumers,
         APP_CONFIG,
+        LEADERSHIP,
       ],
     },
     PluginsLifecycle,

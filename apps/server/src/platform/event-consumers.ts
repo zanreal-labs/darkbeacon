@@ -2,20 +2,23 @@ import {
   Inject,
   Injectable,
   Logger,
+  Optional,
   type OnApplicationBootstrap,
   type OnModuleDestroy,
 } from '@nestjs/common';
 import {
   INSTANCE_STREAM,
   matchesFilter,
+  singleProcess,
   type Clock,
   type DomainEvent,
   type EventBus,
   type EventLog,
+  type Leadership,
 } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
 import type { EventTables } from '../adapters/events/kysely-event-log.js';
-import { CLOCK, EVENT_BUS, EVENT_LOG } from './tokens.js';
+import { CLOCK, EVENT_BUS, EVENT_LOG, LEADERSHIP } from './tokens.js';
 
 /** A reader of the event log that resumes where it stopped, also after a crash or restart. */
 export interface EventConsumer {
@@ -73,6 +76,8 @@ export class EventConsumers implements OnApplicationBootstrap, OnModuleDestroy {
     @Inject(EVENT_LOG) private readonly log: EventLog,
     @Inject(EVENT_BUS) private readonly bus: EventBus,
     @Inject(CLOCK) private readonly clock: Clock,
+    /** Only the leader runs consumers (cursors are shared by all replicas). */
+    @Optional() @Inject(LEADERSHIP) private readonly leadership: Leadership = singleProcess,
   ) {}
 
   register(consumer: EventConsumer): void {
@@ -81,7 +86,7 @@ export class EventConsumers implements OnApplicationBootstrap, OnModuleDestroy {
     }
     this.consumers.push(consumer);
     // Registered while running (a plugin loaded later): start it once its cursor exists.
-    if (!this.stopped) {
+    if (!this.stopped && this.leadership.isLeader()) {
       void this.init(consumer)
         .then(() => {
           this.ready.add(consumer);
@@ -100,13 +105,28 @@ export class EventConsumers implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   async onApplicationBootstrap(): Promise<void> {
-    for (const consumer of this.consumers) {
+    this.stopped = false;
+    const unsubscribeBus = this.bus.subscribe((event) => void this.notify(event));
+    const unsubscribeLeadership = this.leadership.onChange((leader) => {
+      if (leader) void this.lead().catch((error: unknown) => this.logger.error(message(error)));
+      // Following: nothing is drained any more; the leader resumes from the shared cursors.
+      else this.ready.clear();
+    });
+    this.unsubscribe = () => {
+      unsubscribeBus();
+      unsubscribeLeadership();
+    };
+    this.timer = setInterval(() => void this.wake(), POLL_MS).unref();
+    if (this.leadership.isLeader()) await this.lead();
+  }
+
+  /** This process leads: every consumer gets its cursor and catches up. */
+  private async lead(): Promise<void> {
+    for (const consumer of [...this.consumers]) {
+      if (this.ready.has(consumer)) continue;
       await this.init(consumer);
       this.ready.add(consumer);
     }
-    this.stopped = false;
-    this.unsubscribe = this.bus.subscribe((event) => void this.notify(event));
-    this.timer = setInterval(() => void this.wake(), POLL_MS).unref();
     await this.wake();
   }
 
@@ -139,7 +159,7 @@ export class EventConsumers implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   private run(): Promise<void> {
-    if (this.stopped) return Promise.resolve();
+    if (this.stopped || !this.leadership.isLeader()) return Promise.resolve();
     if (this.running) return this.running;
     this.running = (async () => {
       while (!this.stopped && (this.again || this.pending.size > 0)) {
@@ -244,7 +264,7 @@ export class EventConsumers implements OnApplicationBootstrap, OnModuleDestroy {
     head: number,
   ): Promise<void> {
     let offset = from;
-    while (offset < head && !this.stopped) {
+    while (offset < head && !this.stopped && this.leadership.isLeader()) {
       const events = await this.log.readSince(stream, offset, PAGE);
       if (events.length === 0) {
         // Pruned before this consumer got to it.

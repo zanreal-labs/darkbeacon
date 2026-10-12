@@ -5,6 +5,7 @@ import {
   type Clock,
   type EventBus,
   type EventLog,
+  type Leadership,
   type MapAccess,
   type UnitOfWork,
 } from '@darkbeacon/core';
@@ -38,6 +39,7 @@ import {
   EVENT_BUS,
   EVENT_LOG,
   HTTP_FETCH,
+  LEADERSHIP,
   MAP_ACCESS,
   UNIT_OF_WORK,
   UNIVERSE_CATALOG,
@@ -79,6 +81,7 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
     @Inject(RealtimeRegistry) private readonly registry: RealtimeRegistry,
     @Inject(EventConsumers) private readonly consumers: EventConsumers,
     @Inject(EVENT_BUS) private readonly bus: EventBus,
+    @Inject(LEADERSHIP) private readonly leadership: Leadership,
   ) {}
 
   onModuleInit(): void {
@@ -128,7 +131,9 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
     this.timers.clear();
   }
 
+  /** Exits are published by one replica (the leader); every replica drops its routing state. */
   private schedule(mapId: string): void {
+    if (!this.leadership.isLeader()) return;
     clearTimeout(this.timers.get(mapId));
     this.timers.set(
       mapId,

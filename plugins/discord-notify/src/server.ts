@@ -171,10 +171,12 @@ export class DiscordNotify {
         ]);
       },
     });
+    // Background work runs on one replica only (the leader); hosts before SDK 1.1 have one process.
+    const leader = () => ctx.isLeader?.() ?? true;
     const every = (ms: number, work: () => Promise<unknown>) => {
       let busy = false;
       const timer = setInterval(() => {
-        if (busy) return;
+        if (busy || !leader()) return;
         busy = true;
         work()
           .catch((error: unknown) => ctx.logger.error(message(error)))
@@ -195,6 +197,7 @@ export class DiscordNotify {
         save: (position) => this.store.memorize(INSTANCE, 'r2z2', position),
         // Asked before every request; the answer is good for half a minute.
         wanted: async () => {
+          if (!leader()) return false;
           if (this.now() - wanted.at > 30_000) {
             const value = (await this.store.activeConfigs()).some((c) => c.settings.kinds.kills);
             wanted = { value, at: this.now() };
