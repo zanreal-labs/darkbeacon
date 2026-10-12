@@ -22,6 +22,7 @@ import {
   MapSnapshotQuery,
   PassageRecorder,
   MapTransfer,
+  MapBatchUseCases,
   MapUseCases,
   SignatureUseCases,
   SystemUseCases,
@@ -56,6 +57,7 @@ import {
 import { MergedWriteRouter } from './merged-writes.js';
 import { AdminMapsController, MapLifecycleController } from './lifecycle.controllers.js';
 import { MAP_FILE_LIMIT, MAP_FILE_TYPE, MapFilesController } from './transfer.controller.js';
+import { MapApiController } from './map-api.controller.js';
 import { CHAIN_OVERLAY, MAP_OWNERSHIP, MAP_REPOSITORY, MAPPING_PORTS } from './mapping.tokens.js';
 
 const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
@@ -74,6 +76,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
     MapLifecycleController,
     AdminMapsController,
     MapFilesController,
+    MapApiController,
     MapPreferencesController,
     SystemsController,
     ConnectionsController,
@@ -138,6 +141,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
     MergedWriteRouter,
     useCase(MapUseCases),
     useCase(MapTransfer),
+    useCase(MapBatchUseCases),
     useCase(SystemUseCases),
     useCase(ConnectionUseCases),
     useCase(SignatureUseCases),

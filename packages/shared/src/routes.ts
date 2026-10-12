@@ -1568,6 +1568,79 @@ export const routes = {
     }),
   },
 
+  /** Integration helpers: batches, connections by their systems, events since a seq, SSE. */
+  mapApi: {
+    /** Systems and connections added or changed in one transaction (all or nothing). */
+    batchUpsert: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/batch',
+      auth: 'account',
+      scope: { resource: 'systems', action: 'write' },
+      mapRole: 'member',
+      status: 200,
+      body: dto.BatchUpsertRequest,
+      response: dto.BatchUpsertResultDto,
+    }),
+    /** Connections removed and systems taken off in one transaction. */
+    batchDelete: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/batch/delete',
+      auth: 'account',
+      scope: { resource: 'systems', action: 'write' },
+      mapRole: 'member',
+      status: 200,
+      body: dto.BatchDeleteRequest,
+      response: dto.BatchDeleteResultDto,
+    }),
+    /** The connection between two systems (either direction). */
+    connectionByPair: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/connections/between/:source/:target',
+      auth: 'account',
+      scope: { resource: 'connections', action: 'read' },
+      mapRole: 'viewer',
+      response: dto.ConnectionDto,
+    }),
+    updateConnectionByPair: route({
+      method: 'PATCH',
+      path: '/api/maps/:mapId/connections/between/:source/:target',
+      auth: 'account',
+      scope: { resource: 'connections', action: 'write' },
+      mapRole: 'member',
+      body: dto.UpdateConnectionRequest,
+      response: dto.ConnectionDto,
+    }),
+    removeConnectionByPair: route({
+      method: 'DELETE',
+      path: '/api/maps/:mapId/connections/between/:source/:target',
+      auth: 'account',
+      scope: { resource: 'connections', action: 'write' },
+      mapRole: 'member',
+    }),
+    /** The map's events after a seq, from the durable log (what the WebSocket and webhooks carry). */
+    events: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/events',
+      auth: 'account',
+      scope: { resource: '*', action: 'read' },
+      mapRole: 'viewer',
+      query: dto.EventsQuery,
+      response: dto.EventsPageDto,
+    }),
+    /**
+     * Server-Sent Events of a stream (`map:<id>`): `event: <type>`, `id: <seq>`, `data: <event>`;
+     * `snapshot`, `subscribed` and `error` frames as on the WebSocket; a comment every 25 s.
+     */
+    sse: route({
+      method: 'GET',
+      path: '/api/streams/:stream/sse',
+      auth: 'public',
+      scope: { resource: '*', action: 'read' },
+      query: dto.SseQuery,
+      contentType: 'text/event-stream',
+    }),
+  },
+
   /**
    * Every map of the instance, for instance admins: who owns it, how big it is, deleted maps to
    * restore or purge. Never what is on a map: being instance admin grants no map role.
