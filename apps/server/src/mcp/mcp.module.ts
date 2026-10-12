@@ -85,7 +85,6 @@ export class McpController implements OnModuleDestroy {
         buildMcpServer(deps, (ctx.authInfo?.extra?.caller as McpCaller | undefined) ?? { kind: 'anonymous' }),
       {
         onerror: (error) => this.logger.error(error.stack ?? error.message),
-        responseMode: 'json',
         maxRequestBodySize: 256 * 1024,
       },
     );

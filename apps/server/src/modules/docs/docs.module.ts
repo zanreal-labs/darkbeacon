@@ -47,7 +47,7 @@ const PAGE = `<!doctype html>
     <meta name="color-scheme" content="light dark" />
     <meta name="robots" content="noindex" />
     <title>Darkbeacon API</title>
-    <link rel="icon" href="/icon.svg" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   </head>
   <body>
     <div id="app"></div>

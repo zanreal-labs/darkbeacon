@@ -79,6 +79,22 @@ Pages are served as a prerendered shell (the rail, the top bar, the page frame) 
 the parts that depend on who is looking (the account, the maps list, the map, settings) stream into it. The
 map opens on a snapshot read on the server and then stays live over the WebSocket.
 
+### API, public maps and AI agents
+
+- **REST API** under `/api/v1` (the versioned alias of `/api`), described as OpenAPI 3.1 at
+  `/api/openapi.json` and browsable at `/api/docs` on the instance (served by it, no CDN). Integrations
+  authenticate with API keys: personal access tokens (Account, API keys) act as their owner and can only
+  narrow what the owner may do; service keys (Admin, API access) get explicit roles. Keys have scopes per
+  resource and action, on all maps or one, an optional expiry, IP allow-list, rate limit and read-only
+  switch. See [`docs/api.md`](docs/api.md).
+- **Public maps**: a map admin can share a read-only, live view at `/p/<token>` and choose what it shows
+  (the chain and its connection status by default; signatures, notes, labels and pilots only when chosen).
+  See [`docs/public-maps.md`](docs/public-maps.md).
+- **AI agents**: an MCP endpoint at `/mcp` (Model Context Protocol 2026-07-28) lets Claude and other
+  assistants read the chain, find routes and the way out, and, with a key that allows it, record
+  signatures and connection status. Off until an admin switches it on. See [`docs/mcp.md`](docs/mcp.md).
+- Threat model and mitigations: [`docs/security.md`](docs/security.md).
+
 ## Development
 
 Node tooling never runs on the host. Everything runs in the dev container defined by
@@ -113,14 +129,15 @@ prerendered shell, demo sign-in, map, a live event) and `tools/screenshots/` (ev
 ## Layout
 
 ```
-apps/server            NestJS composition root: Nest modules, controllers, ws gateway, adapters, front door
+apps/server            NestJS composition root: Nest modules, controllers, ws gateway, adapters, front door,
+                       the MCP endpoint (src/mcp) and the API reference (modules/docs)
 apps/web               Next.js app (App Router, Cache Components, React Flow, TanStack Query): routes in
                        src/app, screens in src/screens, design system in src/ui, shell in src/shell
 packages/core          ids, Result, Clock, DomainEvent envelope, authorization, errors, core ports
 packages/db            Kysely factory (SQLite/Postgres), Database = UnitOfWork, migrations/<module>/
 packages/shared        zod DTOs, REST routes (routes.ts), WebSocket protocol, event catalogue
-packages/modules/*     identity, access, mapping, tracking, notifications, plugins, routing
-                       (domain/application/ports)
+packages/modules/*     identity, access, mapping, tracking, notifications, plugins, routing, audit,
+                       api-keys, sharing (domain/application/ports)
 packages/plugin-sdk    plugin manifest, PluginContext, web slots
 packages/theme-sdk     theme tokens, built-in themes, CSS generator
 packages/sde           SDE builder and the committed datasets: universe (systems, regions, gates) and wormholes
