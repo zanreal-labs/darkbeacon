@@ -23,3 +23,5 @@ export * from './observability.js';
 export * from './backups.js';
 export * from './importing.js';
 export * from './jumps.js';
+export * from './intel.js';
+export * from './effect-modifiers.js';

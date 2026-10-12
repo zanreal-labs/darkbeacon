@@ -18,6 +18,7 @@ export type {
   UpdateDiscordNotifyRequest,
   EventPayloads,
   EventType,
+  KillmailDto,
   MapDto,
   MapSystemDto,
   SignatureDto,

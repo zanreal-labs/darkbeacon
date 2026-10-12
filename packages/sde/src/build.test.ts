@@ -1,5 +1,6 @@
 import { deflateRawSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
+import { buildSystemFlags } from './flags.js';
 import { buildUniverse, classFromSecurity, formatUniverse, parseJsonl, type SdeInput } from './build.js';
 import { loadUniverseData } from './index.js';
 import { readZipEntries } from './zip.js';
@@ -181,3 +182,16 @@ function makeZip(files: { name: string; data: Buffer; deflate: boolean }[]): Buf
   end.writeUInt32LE(offset, 16);
   return Buffer.concat([...locals, directory, end]);
 }
+
+describe('system flags', () => {
+  it('keeps the systems the SDE draws with the shattered overlay', () => {
+    expect(
+      buildSystemFlags('SDE build 1', [
+        { _key: 31002531, visualEffect: 'SHATTEREDWORMHOLE_OVERLAY' },
+        { _key: 31000005, visualEffect: 'THERA' },
+        { _key: 30002086, visualEffect: 'SHATTEREDWORMHOLE_OVERLAY' },
+        { _key: 30000142 },
+      ]),
+    ).toEqual({ source: 'SDE build 1', shattered: [30002086, 31002531] });
+  });
+});

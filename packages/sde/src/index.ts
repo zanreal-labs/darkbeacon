@@ -205,3 +205,5 @@ export function loadKspaceData(file = KSPACE_DATA_FILE): KspaceData {
 }
 
 export { KSPACE_FLAGS, METERS_PER_LY, ZARZAKH_ID } from './kspace.js';
+
+export * from './flags.js';

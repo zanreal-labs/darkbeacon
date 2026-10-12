@@ -131,7 +131,7 @@ describeEachDialect('discord-notify plugin', (t) => {
       metrics: { delivery: (channel: string, outcome: string) => deliveries.push(`${channel}:${outcome}`) },
     } as unknown as PluginContext<'maps' | 'universe' | 'db' | 'discord' | 'clock'>;
 
-    app = new DiscordNotify(ctx, { fetch: fetchFn as typeof fetch, tickMs: 3_600_000, kills: false });
+    app = new DiscordNotify(ctx, { fetch: fetchFn as typeof fetch, tickMs: 3_600_000 });
     app.start();
     const call = async (method: string, suffix: string, body?: unknown, mapRole: string | null = 'admin') => {
       const route = routes.find((r) => r.method === method && r.path === `/maps/:mapId${suffix}`)!;

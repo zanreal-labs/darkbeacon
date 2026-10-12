@@ -4,6 +4,8 @@ export type StreamMessage = Extract<ServerMessage, { op: 'snapshot' | 'event' | 
 export type StreamListener = (message: StreamMessage) => void;
 export type PresenceMessage = Extract<ServerMessage, { op: 'presence' }>;
 export type PresenceListener = (message: PresenceMessage) => void;
+export type IntelMessage = Extract<ServerMessage, { op: 'intel' }>;
+export type IntelListener = (message: IntelMessage) => void;
 export type ConnectionStatus = 'connecting' | 'open' | 'closed';
 
 interface MinimalSocket {
@@ -40,6 +42,7 @@ export class RealtimeClient {
   /** What this tab shares per map, re-sent after a reconnect (presence is not stored anywhere). */
   private readonly presence = new Map<string, PresenceStatePatch>();
   private readonly presenceListeners = new Map<string, Set<PresenceListener>>();
+  private readonly intelListeners = new Map<string, Set<IntelListener>>();
   private readonly statusListeners = new Set<(status: ConnectionStatus) => void>();
   private readonly resetListeners = new Set<() => void>();
   private attempt = 0;
@@ -125,6 +128,17 @@ export class RealtimeClient {
     };
   }
 
+  /** Intel of a map stream the client follows (sovereignty, hourly figures, kill counts). */
+  onIntel(stream: string, listener: IntelListener): () => void {
+    let set = this.intelListeners.get(stream);
+    if (!set) this.intelListeners.set(stream, (set = new Set()));
+    set.add(listener);
+    return () => {
+      set.delete(listener);
+      if (set.size === 0) this.intelListeners.delete(stream);
+    };
+  }
+
   /** Called after the server's database was replaced (a restore): everything held is stale. */
   onReset(listener: () => void): () => void {
     this.resetListeners.add(listener);
@@ -175,6 +189,10 @@ export class RealtimeClient {
     if (parsed.op === 'pong' || parsed.op === 'unsubscribed') return;
     if (parsed.op === 'presence') {
       for (const listener of this.presenceListeners.get(parsed.stream) ?? []) listener(parsed);
+      return;
+    }
+    if (parsed.op === 'intel') {
+      for (const listener of this.intelListeners.get(parsed.stream) ?? []) listener(parsed);
       return;
     }
     const stream = parsed.op === 'event' ? parsed.event.stream : parsed.stream;

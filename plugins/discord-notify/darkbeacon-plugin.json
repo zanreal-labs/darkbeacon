@@ -2,11 +2,11 @@
   "id": "discord-notify",
   "name": "Discord notifications",
   "description": "Posts what matters on a map to a Discord channel: new connections and exits, end of life, danger, kills in the chain, pings, the way home and arrivals. Set it up in each map's Notifications tab.",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "sdk": "^1.0",
   "server": "dist/server.js",
   "ports": ["maps", "universe", "db", "discord", "clock"],
-  "events": ["system.*", "connection.*", "ping.*", "character.*", "map.*"],
+  "events": ["system.*", "connection.*", "ping.*", "character.*", "map.*", "kill.*"],
   "settings": "settings.schema.json",
   "migrations": "dist/migrations"
 }

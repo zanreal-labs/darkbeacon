@@ -214,4 +214,24 @@ describeEachDialect('RealtimeHub', (t) => {
     await c.until((m) => m.some((x) => x.op === 'error'));
     expect(c.messages.at(-1)).toMatchObject({ code: 'forbidden' });
   });
+
+  it('sends ephemeral intel to the stream and its views, each under its own name', async () => {
+    const { hub, connect } = setup(t.db);
+    const registry = (hub as unknown as { options: { registry: RealtimeRegistry } }).options.registry;
+    registry.registerStream('public', {
+      authorize: () => true,
+      view: { source: async () => 'map:m1', project: async (_id, event) => event },
+    });
+    const member = connect();
+    const visitor = connect(null);
+    member.send({ op: 'subscribe', stream: 'map:m1' });
+    visitor.send({ op: 'subscribe', stream: 'public:tok' });
+    await member.until((m) => m.some((x) => x.op === 'subscribed'));
+    await visitor.until((m) => m.some((x) => x.op === 'subscribed'));
+    expect(hub.followed('map')).toEqual(['m1']);
+    hub.broadcast('map:m1', { op: 'intel', stream: 'map:m1', systems: [] });
+    expect(member.messages.at(-1)).toEqual({ op: 'intel', stream: 'map:m1', systems: [] });
+    // The public view never learns the map's stream name.
+    expect(visitor.messages.at(-1)).toEqual({ op: 'intel', stream: 'public:tok', systems: [] });
+  });
 });

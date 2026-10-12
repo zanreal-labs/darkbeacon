@@ -16,6 +16,7 @@ import type { MassMode, PassageSource } from './dto/passages.js';
 import type { HubDto, MapExitDto } from './dto/routing.js';
 import type { CharacterPresenceDto } from './dto/tracking.js';
 import type { MapShareDto, MapSourceDto } from './dto/sharing.js';
+import type { KillmailDto } from './dto/intel.js';
 import type { McpMode } from './dto/publishing.js';
 import type { ShareScope } from './share-scope.js';
 
@@ -117,6 +118,11 @@ export interface EventPayloads {
   'routes.hubs_changed': { hubs: HubDto[] };
   'ping.created': PingDto;
   'ping.removed': { id: string };
+  /**
+   * A ship or pod was destroyed in a system the map shows (zKillboard's live feed, fresh kills
+   * only); on every map showing it, from the system actor `intel`.
+   */
+  'kill.reported': KillmailDto;
   'access.rule_added': AccessRuleDto;
   'access.rule_removed': { id: string };
   /**
@@ -202,6 +208,7 @@ export const EVENT_TYPES = [
   'routes.hubs_changed',
   'ping.created',
   'ping.removed',
+  'kill.reported',
   'access.rule_added',
   'access.rule_removed',
   'access.public_link_changed',

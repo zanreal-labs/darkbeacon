@@ -54,6 +54,7 @@ import { SHIP_SIZE_LABEL } from './ConnectionEdge';
 import { passageMenuItems } from './menus/passages';
 import { STATUS_LABEL } from './nodeFacts';
 import type { MapStore } from './useMapStore';
+import { holderStandingMenu, type HolderStanding } from './menus/intel';
 
 /*
  * The map's context menus. Short top levels with the details in submenus; only what the user
@@ -109,6 +110,8 @@ export interface SystemMenuContext {
   onManageLabels?(): void;
   /** Opens the map's Tags settings (managers). */
   onManageTags?(): void;
+  /** The alliance holding the system and the viewer's standing towards it (system intel). */
+  holder?: HolderStanding;
 }
 
 /** "WH1" or "WH1 — Static to high-sec": the name alone is often a letter or two. */
@@ -291,6 +294,7 @@ export function systemMenu(ctx: SystemMenuContext): MenuItem[] {
           : pilots.flatMap((c): MenuItem[] => [{ kind: 'label', label: c.name }, ...route(c)]),
     });
   }
+  if (ctx.holder) go.push(holderStandingMenu(ctx.holder));
   go.push({
     kind: 'action',
     label: 'Copy name',

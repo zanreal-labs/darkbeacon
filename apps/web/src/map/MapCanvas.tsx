@@ -28,6 +28,7 @@ import {
   type SystemLabelDto,
   type UniverseSystemDto,
 } from '@darkbeacon/shared';
+import { holderStanding, useMapIntel, useRouteHubs, useStandings } from '../lib/intel';
 import type { MapPermissions } from '../lib/roles';
 import { useMe, useProviders } from '../lib/session';
 import { track } from '../lib/telemetry';
@@ -129,6 +130,8 @@ interface Props {
    * preferences are read or saved, and the opening view does not look for the viewer's character.
    */
   readOnly?: boolean;
+  /** The public link a read-only view comes through: intel is read through it. */
+  publicToken?: string;
 }
 
 /**
@@ -165,6 +168,7 @@ export function MapCanvas({
   coveredRight = 0,
   coveredBottom = 0,
   readOnly = false,
+  publicToken,
 }: Props) {
   const { theme } = useTheme();
   const demo = useProviders({ enabled: !readOnly }).data?.demo ?? false;
@@ -184,6 +188,10 @@ export function MapCanvas({
   const canvasRef = useRef<HTMLDivElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const press = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number } | null>(null);
+  // A read-only view has intel only through its public link.
+  const intel = useMapIntel(mapId, publicToken, !readOnly || publicToken !== undefined);
+  const standings = useStandings(!readOnly);
+  const routeHubs = useRouteHubs(mapId, !readOnly);
 
   // The viewer's own character on the map: their main first, then any other one that is online.
   const myLocation = useMemo(() => {
@@ -237,10 +245,21 @@ export function MapCanvas({
   // Store -> React Flow, keeping what React Flow owns: measurements, selection, a drag in progress.
   useEffect(() => {
     const here = new Map<number, number>();
+    const pilotsHere = new Map<
+      number,
+      Array<{ id: number; name: string; ship: string | null; mine: boolean }>
+    >();
+    const own = new Set(me.data?.characters.map((c) => c.id));
     for (const c of state.characters.values()) {
-      if (c.online && c.solarSystemId !== null)
+      if (c.online && c.solarSystemId !== null) {
         here.set(c.solarSystemId, (here.get(c.solarSystemId) ?? 0) + 1);
+        const list = pilotsHere.get(c.solarSystemId) ?? [];
+        list.push({ id: c.characterId, name: c.name, ship: c.shipName, mine: own.has(c.characterId) });
+        pilotsHere.set(c.solarSystemId, list);
+      }
     }
+    for (const list of pilotsHere.values())
+      list.sort((a, b) => Number(b.mine) - Number(a.mine) || a.name.localeCompare(b.name));
     const hubs = exitHubs(state.exits);
     const tagById = new Map(labels.map((l) => [l.id, l]));
     setNodes((prev) => {
@@ -266,11 +285,26 @@ export function MapCanvas({
             bookmark: bookmarks.get(system.solarSystemId) ?? null,
             hub: hubs.get(system.solarSystemId) ?? null,
             mine: myLocation?.solarSystemId === system.solarSystemId,
+            intel: intel.systems.get(system.solarSystemId),
+            standing: holderStanding(intel.systems.get(system.solarSystemId), standings),
+            pulse: intel.pulses.has(system.solarSystemId),
+            withAccount: !readOnly,
+            pilots: pilotsHere.get(system.solarSystemId) ?? [],
+            routeHub: routeHubs.map.has(system.solarSystemId)
+              ? 'map'
+              : routeHubs.personal.has(system.solarSystemId)
+                ? 'personal'
+                : null,
           },
         };
       });
     });
   }, [
+    intel,
+    standings,
+    readOnly,
+    routeHubs,
+    me.data,
     state.systems,
     state.characters,
     state.exits,

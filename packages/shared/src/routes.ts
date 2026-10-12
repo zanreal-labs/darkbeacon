@@ -1702,6 +1702,63 @@ export const routes = {
       download: true,
     }),
   },
+
+  intel: {
+    /** Sovereignty and kills of the last hour of every system on the map. */
+    map: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/intel',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'read' },
+      mapRole: 'viewer',
+      response: dto.MapIntelDto,
+    }),
+    /** One system on the map: hourly figures, recent killmails and who is active there. */
+    system: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/intel/systems/:solarSystemId',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'read' },
+      mapRole: 'viewer',
+      response: dto.SystemActivityDto,
+    }),
+    /** Killmails of the map's visible systems (or some of them), newest first. */
+    kills: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/kills',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'read' },
+      mapRole: 'viewer',
+      query: dto.MapKillsQuery,
+      response: dto.MapKillsDto,
+    }),
+    /** The signed-in account's standings (contacts of its characters). */
+    standings: route({
+      method: 'GET',
+      path: '/api/accounts/me/standings',
+      auth: 'account',
+      scope: { resource: 'account', action: 'read' },
+      response: dto.StandingsDto,
+    }),
+    /** Sets the account's standing towards an alliance or corporation by hand (null: from contacts). */
+    setStanding: route({
+      method: 'PUT',
+      path: '/api/accounts/me/standings/:entityId',
+      auth: 'account',
+      scope: { resource: 'account', action: 'write' },
+      body: dto.SetStandingRequest,
+      response: dto.StandingsDto,
+    }),
+    /** Sovereignty and kills of the last hour of the systems a public link shows (public data). */
+    publicMap: route({
+      method: 'GET',
+      path: '/api/public/maps/:token/intel',
+      auth: 'public',
+      scope: 'none',
+      summary: 'Sovereignty and kills of the last hour of the systems a public map shows',
+      response: dto.MapIntelDto,
+    }),
+  },
 } as const;
 
 type PathParams<P extends string> = P extends `${string}:${infer Name}/${infer Rest}`

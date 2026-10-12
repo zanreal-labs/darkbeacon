@@ -1,0 +1,21 @@
+{
+  "name": "@darkbeacon/intel",
+  "version": "0.0.0",
+  "private": true,
+  "description": "System intel: sovereignty, hourly activity and killmails of the systems on maps",
+  "type": "module",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@darkbeacon/core": "workspace:*",
+    "@darkbeacon/shared": "workspace:*"
+  }
+}

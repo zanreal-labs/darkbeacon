@@ -3,6 +3,7 @@ import { AccessRuleDto } from './dto/access.js';
 import { EveId, Id, Timestamp } from './dto/common.js';
 import { InstanceRole } from './dto/identity.js';
 import { ImportJobDto, ImportOutcomeDto, ImportSourceDto } from './dto/importing.js';
+import { KillmailDto } from './dto/intel.js';
 import {
   ConnectionDto,
   LabelDto,
@@ -85,6 +86,7 @@ export const EVENT_DATA_SCHEMAS: Record<EventType, z.ZodType> = {
     createdAt: Timestamp,
   }),
   'ping.removed': z.object({ id: Id }),
+  'kill.reported': KillmailDto,
   'access.rule_added': AccessRuleDto,
   'access.rule_removed': z.object({ id: Id }),
   'access.public_link_changed': z.object({

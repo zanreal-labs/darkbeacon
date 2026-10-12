@@ -199,6 +199,7 @@ export function PublicMapScreen({ token, view: initial }: { token: string; view:
       <div className={styles.canvasArea}>
         <PublicCanvas
           mapId={view.map.id}
+          token={token}
           state={state}
           labels={labels}
           systemLabels={view.map.systemLabels ?? []}

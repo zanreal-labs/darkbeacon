@@ -128,4 +128,12 @@ describe('StaticUniverseCatalog', () => {
       expect(classes[listed!], type.code).toContain(type.targetClass);
     }
   });
+
+  it('marks the shattered systems the SDE overlays', () => {
+    const real = StaticUniverseCatalog.load('/nonexistent');
+    expect(real.getSystem(31002531)?.shattered).toBe(true); // J014348, a shattered C3
+    expect(real.getSystem(30002086)?.shattered).toBe(true); // Turnur
+    expect(real.getSystem(31000005)?.shattered).toBeUndefined(); // Thera
+    expect(real.getSystem(30000142)?.shattered).toBeUndefined();
+  });
 });
