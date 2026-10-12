@@ -30,6 +30,11 @@ export interface WandererMapDump {
   webhooks?: WandererWebhook[];
   /** Names of the map's own system labels by id (export version 2: `map.system_labels`). */
   labelNames: Record<string, string>;
+  /**
+   * The map's label list (`system_labels`: id, name, description) in order; empty when Wanderer
+   * uses its defaults (A, B, C, 1, 2, 3). Older stored dumps lack it (then `labelNames`).
+   */
+  systemLabels?: WandererLabel[];
   /** Tracked characters Wanderer listed (they are reported, not imported). */
   trackedCharacters: number;
   /** Problems reading the source that did not stop the import. */
@@ -135,6 +140,12 @@ export interface WandererPassage {
   characterEveId: number;
   shipTypeId: number | null;
   at: number | null;
+}
+
+export interface WandererLabel {
+  id: string;
+  name: string;
+  description: string | null;
 }
 
 export interface WandererWebhook {
@@ -427,6 +438,35 @@ export function readAll<T>(
   return out;
 }
 
+/**
+ * A map's `system_labels`: `[{id, name, color, description}]`, `{id: name}`, `{labels: [...]}`, or
+ * any of them as JSON text, so a change of serialisation does not lose them. Colour is dropped.
+ */
+export function readSystemLabels(value: unknown): WandererLabel[] {
+  let raw = value;
+  if (typeof raw === 'string') {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+  const out: WandererLabel[] = [];
+  if (Array.isArray(raw)) {
+    for (const entry of raw) {
+      if (!isRow(entry)) continue;
+      const id = text(entry.id) ?? text(entry.value);
+      const name = text(entry.name) ?? text(entry.label);
+      if (id && name) out.push({ id, name, description: text(entry.description) });
+    }
+  } else if (isRow(raw)) {
+    if (Array.isArray(raw.labels)) return readSystemLabels(raw.labels);
+    for (const [id, name] of Object.entries(raw))
+      if (typeof name === 'string' && name.trim()) out.push({ id, name, description: null });
+  }
+  return out;
+}
+
 /** A webhook subscription (`GET /api/maps/:map/webhooks`): `url`, `events`, `active`. */
 export function readWebhook(row: unknown): WandererWebhook | null {
   if (!isRow(row)) return null;
@@ -479,6 +519,7 @@ export function emptyDump(source: ImportSourceDto, readAt: number): WandererMapD
     hubs: [],
     webhooks: [],
     labelNames: {},
+    systemLabels: [],
     trackedCharacters: 0,
     warnings: [],
     rejected: {},

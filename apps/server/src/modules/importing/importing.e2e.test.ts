@@ -151,21 +151,32 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
     expect(map.systems).toHaveLength(28);
     expect(map.connections).toHaveLength(preview.counts.connections);
     const home = map.systems.find((s) => s.solarSystemId === 31002531)!;
-    expect(home).toMatchObject({ customName: 'Home sweet home', tag: 'HQ', status: 'home', locked: true });
+    expect(home).toMatchObject({ customName: 'Home sweet home', status: 'home', locked: true });
     expect(home.description).toContain('Structure: Fortizar “Home Fort”\nOwner: Wormhole Rescue Ltd [RESQ]');
     expect(home.description).toContain('Neut Loki on d-scan');
     // Changes carry Wanderer's times (the field times maps merging this one compare).
     const wandererHome = wanderer.map.systems.find((x) => x.solar_system_id === 31002531)!;
     expect(home.updatedAt).toBe(Date.parse(String(wandererHome.updated_at)));
-    expect(map.map.labels.map((l) => l.name).sort()).toEqual([
-      'Label 1',
-      'Label A',
-      'Label B',
-      'Looking for',
-      'Rolled',
-      'Secondary',
-      'Staging',
+    // Wanderer's label list becomes the map's Labels (ids kept, colours dropped).
+    expect(map.map.systemLabels).toEqual([
+      { id: 'a', name: 'A', description: '' },
+      { id: 'b', name: 'B', description: '' },
+      { id: '1', name: '1', description: 'First wave' },
+      { id: 'x1', name: 'Exit', description: 'Our way out to k-space' },
     ]);
+    // A system's labels are its Labels, its custom label stays one; Darkbeacon's `tag` is untouched.
+    expect(home).toMatchObject({ systemLabelIds: ['a', '1'], customLabel: 'Staging', tag: null });
+    expect(map.systems.find((s) => s.solarSystemId === 31000505)).toMatchObject({
+      systemLabelIds: ['x1'],
+      customLabel: 'Rolled',
+    });
+    expect(map.systems.find((s) => s.solarSystemId === 31001924)!.systemLabelIds).toEqual(['b']);
+    expect(map.systems.every((s) => s.tag === null)).toBe(true);
+    // Wanderer's tag becomes a Tag of that name; statuses without a match here become Tags too.
+    const tagNames = (ids: string[]) => ids.map((id) => map.map.labels.find((l) => l.id === id)!.name);
+    expect(tagNames(home.labelIds)).toEqual(['HQ']);
+    expect(tagNames(map.systems.find((s) => s.solarSystemId === 31001924)!.labelIds)).toContain('FARM');
+    expect(map.map.labels.map((l) => l.name).sort()).toEqual(['FARM', 'HQ', 'Looking for', 'Secondary']);
     expect(map.map.settings.scopes).toEqual(['wormhole']);
     // The map's description, shown in the list of maps.
     expect(map.map.description).toBe('Our main chain');
@@ -304,8 +315,11 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
     const before = await snapshot(owner, mapId);
     const home = before.systems.find((s) => s.solarSystemId === 31002531)!;
 
-    // Here: a new tag on the home system. In Wanderer: new notes on another system, one hole gone.
-    await owner.json(`/api/maps/${mapId}/systems/31002531`, { method: 'PATCH', json: { tag: 'HOME' } });
+    // Here: a new custom label on the home system. In Wanderer: new notes elsewhere, one hole gone.
+    await owner.json(`/api/maps/${mapId}/systems/31002531`, {
+      method: 'PATCH',
+      json: { customLabel: 'home' },
+    });
     // Here too: our own description, and one imported webhook deleted.
     await owner.json(`/api/maps/${mapId}`, { method: 'PATCH', json: { description: 'Ours now' } });
     const hooks = await owner.json<WebhookDto[]>(`/api/maps/${mapId}/webhooks`);
@@ -334,7 +348,10 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
     const after = await snapshot(owner, mapId);
     expect(after.systems).toHaveLength(before.systems.length);
     expect(after.signatures).toHaveLength(before.signatures.length);
-    expect(after.systems.find((s) => s.solarSystemId === 31002531)!.tag).toBe('HOME');
+    expect(after.systems.find((s) => s.solarSystemId === 31002531)!.customLabel).toBe('home');
+    // Labels and Tags are not doubled by a second import.
+    expect(after.map.systemLabels).toHaveLength(4);
+    expect(after.map.labels).toHaveLength(4);
     expect(after.systems.find((s) => s.solarSystemId === 31001924)!.description).toContain(
       'Moved out, empty now',
     );

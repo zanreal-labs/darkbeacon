@@ -36,6 +36,7 @@ const target = (map: MapDto): TargetMap => ({
   name: map.name,
   description: map.description ?? '',
   labels: map.labels,
+  systemLabels: map.systemLabels,
   settings: map.settings,
   kind: map.kind === 'composite' ? 'composite' : 'map',
 });
@@ -94,6 +95,10 @@ export class MappingChainTarget implements ChainTarget {
 
   ensureLabels(...args: Parameters<ChainTarget['ensureLabels']>) {
     return this.mapping.imports.ensureLabels(...args);
+  }
+
+  ensureSystemLabels(...args: Parameters<ChainTarget['ensureSystemLabels']>) {
+    return this.mapping.imports.ensureSystemLabels(...args);
   }
 
   async setScopes(actor: Actor, mapId: string, scopes: MapDto['settings']['scopes']): Promise<void> {

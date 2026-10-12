@@ -109,7 +109,14 @@ export class ImportService {
     const account = job.actor;
     const { plan } = translate(job.dump, { systemName: (id) => this.deps.universe.systemName(id) });
     if (request.mode === 'new') {
-      const state: TargetState = { labels: [], systems: [], connections: [], signatures: [], rules: [] };
+      const state: TargetState = {
+        labels: [],
+        systemLabels: [],
+        systems: [],
+        connections: [],
+        signatures: [],
+        rules: [],
+      };
       const { outcome } = assess(plan, state, new LinkIndex([]), {
         removeMissing: false,
         includeAccess: true,
@@ -137,7 +144,7 @@ export class ImportService {
     });
     const { outcome, conflicts } = assess(
       placed,
-      { labels: map.labels, systems, connections, signatures, rules },
+      { labels: map.labels, systemLabels: map.systemLabels, systems, connections, signatures, rules },
       index,
       { removeMissing: false, includeAccess: admin },
     );

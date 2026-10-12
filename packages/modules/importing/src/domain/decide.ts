@@ -9,10 +9,11 @@ export type SystemWrite = Partial<
     | 'position'
     | 'customName'
     | 'temporaryName'
-    | 'tag'
     | 'status'
     | 'description'
     | 'labelIds'
+    | 'systemLabelIds'
+    | 'customLabel'
     | 'locked'
     | 'visible'
   >
@@ -53,10 +54,11 @@ const SYSTEM_FIELDS = [
   'position',
   'customName',
   'temporaryName',
-  'tag',
   'status',
   'description',
   'labelIds',
+  'systemLabelIds',
+  'customLabel',
   'locked',
   'visible',
 ] as const;
@@ -72,15 +74,20 @@ export function decideSystem(
   base: SystemWrite | null,
   labelIds: ReadonlyMap<string, string>,
   options: { removeMissing: boolean },
+  /** The map's id of each planned Label id (by name); unknown ones are left out. */
+  systemLabelIds: ReadonlyMap<string, string> = new Map(),
 ): Decision<SystemWrite> {
   const wanderer: Required<SystemWrite> = {
     position: planned.fields.position,
     customName: planned.fields.customName,
     temporaryName: planned.fields.temporaryName,
-    tag: planned.fields.tag,
     status: planned.fields.status,
     description: planned.fields.description,
     labelIds: planned.fields.labelKeys.map((k) => labelIds.get(k)).filter((id): id is string => !!id),
+    systemLabelIds: planned.fields.systemLabelIds
+      .map((id) => systemLabelIds.get(id))
+      .filter((id): id is string => !!id),
+    customLabel: planned.fields.customLabel,
     locked: planned.fields.locked,
     visible: planned.fields.visible,
   };
@@ -96,7 +103,7 @@ export function decideSystem(
     hereAt: here.updatedAt,
     wandererAt: planned.remoteUpdatedAt,
     fields: SYSTEM_FIELDS,
-    joined: ['description', 'labelIds'],
+    joined: ['description', 'labelIds', 'systemLabelIds'],
     protect,
     blank: (field, value) =>
       value === null ||

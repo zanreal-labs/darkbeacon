@@ -13,7 +13,14 @@ import type { ConnectionWrite, SignatureWrite, SystemWrite } from '../domain/dec
 import { pairKey, translate, type ImportPlan } from '../domain/translate.js';
 import type { ImportJobRecord, ImportLinkRecord, ImportSyncRecord } from '../ports/repositories.js';
 import type { ImportingDeps } from './deps.js';
-import { characterNames, emptyOutcomes, labelIdsFor, LinkIndex, type ImportKind } from './planner.js';
+import {
+  characterNames,
+  emptyOutcomes,
+  labelIdsFor,
+  LinkIndex,
+  systemLabelIdsFor,
+  type ImportKind,
+} from './planner.js';
 import { auditChannel, importStream, sourceKey, toJobDto } from './views.js';
 
 /** Phases of a job, in order. A resumed job starts again at the phase it was in. */
@@ -178,6 +185,7 @@ export class ImportRunner {
     const accessWanted = options.includeAccess && plan.access.length > 0;
     r.total =
       plan.labels.length +
+      plan.systemLabels.length +
       plan.systems.length +
       plan.connections.length +
       plan.signatures.length +
@@ -191,6 +199,7 @@ export class ImportRunner {
 
     // Labels ------------------------------------------------------------------------------------
     let labels = map.labels;
+    let systemLabels = map.systemLabels;
     if (reached('labels')) {
       await job.phase('labels');
       if (plan.labels.length > 0) {
@@ -205,12 +214,30 @@ export class ImportRunner {
             step('labels', before.has(label.name.toLowerCase()) ? 'unchanged' : 'created');
         } else {
           for (let i = 0; i < plan.labels.length; i++) step('labels', 'skipped');
+          job.warn('Tags need a map manager; systems keep the tags the map has');
+        }
+      }
+      // The map's Labels: a new map takes Wanderer's list as it is, an existing one gains the
+      // Labels it lacks by name.
+      if (plan.systemLabels.length > 0) {
+        if (hasMapRole(role, 'manager')) {
+          const before = new Set(systemLabels.map((l) => l.name.toLowerCase()));
+          systemLabels = await deps.target.ensureSystemLabels(actor, mapId, plan.systemLabels, {
+            replace: r.mode === 'new',
+          });
+          for (const label of plan.systemLabels)
+            step('labels', before.has(label.name.toLowerCase()) ? 'unchanged' : 'created');
+        } else {
+          for (let i = 0; i < plan.systemLabels.length; i++) step('labels', 'skipped');
           job.warn('Labels need a map manager; systems keep the labels the map has');
         }
       }
-      await job.step(plan.labels.length);
+      await job.step(plan.labels.length + plan.systemLabels.length);
     }
     const labelIds = new Map([...labelIdsFor(plan, labels)].filter(([, id]) => !id.startsWith('new:')));
+    const systemLabelIds = new Map(
+      [...systemLabelIdsFor(plan, systemLabels)].filter(([, id]) => !id.startsWith('new:')),
+    );
 
     // Systems -----------------------------------------------------------------------------------
     if (reached('systems')) {
@@ -225,6 +252,7 @@ export class ImportRunner {
           (link?.written as SystemWrite) ?? null,
           labelIds,
           options,
+          systemLabelIds,
         );
         await this.item(job, 'systems', planned.name, async () => {
           if (decision.action === 'create' || decision.action === 'update') {

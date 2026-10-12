@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { CharacterDto, LabelDto, MapRole } from '@darkbeacon/shared';
+import type { CharacterDto, LabelDto, MapRole, SystemLabelDto } from '@darkbeacon/shared';
 import type { MenuItem } from '../components/ContextMenu';
 import { mapPermissions } from '../lib/roles';
 import type { SlotEntry } from '../plugins/registry';
@@ -18,6 +18,11 @@ const LABELS: LabelDto[] = [
   { id: 'l1', name: 'Scouted', color: '#3b82f6', description: '' },
   { id: 'l2', name: 'Rolling', color: '#f59e0b', description: '' },
 ] as LabelDto[];
+
+const SYSTEM_LABELS: SystemLabelDto[] = [
+  { id: 'wh1', name: 'WH1', description: '' },
+  { id: 'wh2', name: 'WH2', description: 'Static to high-sec' },
+];
 
 const pilot = (id: number, name: string, canSetWaypoints = true): CharacterDto => ({
   id,
@@ -50,10 +55,12 @@ function system(role: MapRole, extra: Parameters<typeof systemFixture>[1] = {}, 
     system: systemFixture(31000005, { labelIds: ['l1'], ...extra }),
     name: 'J123456',
     labels: LABELS,
+    systemLabels: SYSTEM_LABELS,
     can: mapPermissions(role),
     store: commands,
     plugins: [],
     onManageLabels: () => {},
+    onManageTags: () => {},
     ...more,
   });
   return { items, commands };
@@ -72,7 +79,7 @@ describe('system menu', () => {
     expect(rows(items)).toEqual([
       'Status',
       'Labels',
-      'Tag',
+      'Tags',
       'Rename',
       'Hide from routes',
       '—',
@@ -81,13 +88,59 @@ describe('system menu', () => {
       'Remove from map',
     ]);
     expect(items.filter((i) => i.kind !== 'separator').length).toBeLessThanOrEqual(8);
-    expect(rows(sub(items, 'Labels'))).toEqual(['Scouted', 'Rolling']);
+    expect(rows(sub(items, 'Labels'))).toEqual(['Custom label', '—', 'WH1', 'WH2 — Static to high-sec']);
+    expect(rows(sub(items, 'Tags'))).toEqual(['Scouted', 'Rolling']);
   });
 
-  it('gives managers Lock and "Manage labels…" at the bottom of Labels', () => {
+  it('gives managers Lock, "Manage labels…" and "Manage tags…" at the bottom of their submenus', () => {
     const { items } = system('manager');
     expect(rows(items)).toContain('Lock');
-    expect(rows(sub(items, 'Labels'))).toEqual(['Scouted', 'Rolling', '—', 'Manage labels…']);
+    expect(rows(sub(items, 'Labels'))).toEqual([
+      'Custom label',
+      '—',
+      'WH1',
+      'WH2 — Static to high-sec',
+      '—',
+      'Manage labels…',
+    ]);
+    expect(rows(sub(items, 'Tags'))).toEqual(['Scouted', 'Rolling', '—', 'Manage tags…']);
+  });
+
+  it('labels: the custom label first, toggles, Clear and Remove only when there is something', () => {
+    const { items, commands } = system('member', { systemLabelIds: ['wh2'], customLabel: 'bait' });
+    const labels = sub(items, 'Labels');
+    expect(rows(labels)).toEqual([
+      'Custom label',
+      'Remove custom label',
+      '—',
+      'WH1',
+      'WH2 — Static to high-sec',
+      '—',
+      'Clear',
+    ]);
+    // The submenu row names what is on.
+    const row = items.find((i) => i.kind === 'submenu' && i.label === 'Labels');
+    expect(row?.kind === 'submenu' && row.hint).toBe('WH2 bait');
+    expect(labels.filter((i) => i.kind === 'check' && i.checked).map((i) => 'label' in i && i.label)).toEqual(
+      ['WH2 — Static to high-sec'],
+    );
+
+    pick(labels, 'WH1');
+    expect(commands.updateSystem).toHaveBeenLastCalledWith(31000005, { systemLabelIds: ['wh2', 'wh1'] });
+    pick(labels, 'WH2 — Static to high-sec');
+    expect(commands.updateSystem).toHaveBeenLastCalledWith(31000005, { systemLabelIds: [] });
+    pick(labels, 'Clear');
+    expect(commands.updateSystem).toHaveBeenLastCalledWith(31000005, { systemLabelIds: [] });
+    pick(labels, 'Remove custom label');
+    expect(commands.updateSystem).toHaveBeenLastCalledWith(31000005, { customLabel: null });
+
+    const custom = labels[0]!;
+    if (custom.kind !== 'input') throw new Error('no field');
+    expect(custom).toMatchObject({ value: 'bait', maxLength: 16 });
+    custom.onSubmit('scout');
+    expect(commands.updateSystem).toHaveBeenLastCalledWith(31000005, { customLabel: 'scout' });
+    custom.onSubmit('');
+    expect(commands.updateSystem).toHaveBeenLastCalledWith(31000005, { customLabel: null });
   });
 
   it('a locked system offers Unlock and neither Remove nor Hide', () => {
@@ -97,7 +150,7 @@ describe('system menu', () => {
     expect(r).not.toContain('Hide from routes');
   });
 
-  it('marks the current status and sets another; toggles labels', () => {
+  it('marks the current status and sets another; toggles tags', () => {
     const { items, commands } = system('member', { status: 'hostile' });
     const status = sub(items, 'Status');
     expect(status.filter((i) => i.kind === 'radio' && i.checked).map((i) => 'label' in i && i.label)).toEqual(
@@ -106,25 +159,25 @@ describe('system menu', () => {
     pick(status, 'Friendly');
     expect(commands.updateSystem).toHaveBeenCalledWith(31000005, { status: 'friendly' });
 
-    const labels = sub(items, 'Labels');
-    pick(labels, 'Scouted');
-    pick(labels, 'Rolling');
+    const tags = sub(items, 'Tags');
+    pick(tags, 'Scouted');
+    pick(tags, 'Rolling');
     expect(commands.updateSystem).toHaveBeenCalledWith(31000005, { labelIds: [] });
     expect(commands.updateSystem).toHaveBeenCalledWith(31000005, { labelIds: ['l1', 'l2'] });
   });
 
-  it('saves the tag and name from their fields, an empty field clears them', () => {
+  it('saves the name from its field, an empty field clears it; the old free-text tag is gone', () => {
     const { items, commands } = system('member', { tag: 'C3a' });
     const field = (label: string) => {
       const item = items.find((i) => i.kind === 'input' && i.label === label);
       if (item?.kind !== 'input') throw new Error(label);
       return item;
     };
-    expect(field('Tag').hint).toBe('C3a');
-    field('Tag').onSubmit('');
+    expect(items.some((i) => 'label' in i && i.label === 'Tag')).toBe(false);
     field('Rename').onSubmit('Home');
-    expect(commands.updateSystem).toHaveBeenCalledWith(31000005, { tag: null });
+    field('Rename').onSubmit('');
     expect(commands.updateSystem).toHaveBeenCalledWith(31000005, { customName: 'Home' });
+    expect(commands.updateSystem).toHaveBeenCalledWith(31000005, { customName: null });
   });
 
   it('routes several characters separately and leaves out those without the EVE grant', () => {

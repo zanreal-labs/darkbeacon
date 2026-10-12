@@ -8,6 +8,7 @@ import type {
   MapSettings,
   MapSystemDto,
   SignatureDto,
+  SystemLabelDto,
 } from '@darkbeacon/shared';
 import type { ConnectionWrite, SignatureWrite, SystemWrite } from '../domain/decide.js';
 
@@ -18,7 +19,10 @@ export interface TargetMap {
   slug: string;
   name: string;
   description: string;
+  /** Tags. */
   labels: LabelDto[];
+  /** Labels (WH1, A, B...). */
+  systemLabels: SystemLabelDto[];
   settings: MapSettings;
   /** `composite` maps only show other maps' chains; nothing is imported into them. */
   kind: 'map' | 'composite';
@@ -75,7 +79,15 @@ export interface ChainTarget {
     },
     externalId: string,
   ): Promise<'created' | 'unchanged' | 'skipped'>;
+  /** Adds the Tags the map lacks by name. */
   ensureLabels(actor: Actor, mapId: string, labels: ReadonlyArray<Omit<LabelDto, 'id'>>): Promise<LabelDto[]>;
+  /** The map's Labels: `replace` makes the list exactly `labels`, else missing names are added. */
+  ensureSystemLabels(
+    actor: Actor,
+    mapId: string,
+    labels: readonly SystemLabelDto[],
+    options: { replace: boolean },
+  ): Promise<SystemLabelDto[]>;
   setScopes(actor: Actor, mapId: string, scopes: MapScope[]): Promise<void>;
   /** The map's description (map admins). */
   setDescription(actor: Actor, mapId: string, description: string): Promise<void>;

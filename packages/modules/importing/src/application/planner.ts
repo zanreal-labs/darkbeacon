@@ -7,6 +7,7 @@ import type {
   MapRole,
   MapSystemDto,
   SignatureDto,
+  SystemLabelDto,
 } from '@darkbeacon/shared';
 import {
   decideAccess,
@@ -64,7 +65,10 @@ export function emptyOutcomes(): Record<string, ImportOutcomeDto> {
 
 /** What an import writes into: the map as it is now. */
 export interface TargetState {
+  /** Tags. */
   labels: LabelDto[];
+  /** Labels (WH1, A, B...). */
+  systemLabels: SystemLabelDto[];
   systems: MapSystemDto[];
   connections: ConnectionDto[];
   signatures: SignatureDto[];
@@ -100,6 +104,18 @@ export function labelIdsFor(plan: ImportPlan, labels: readonly LabelDto[]): Map<
   return out;
 }
 
+/** Planned Label ids -> Label ids on the map (by name, without case); `new:` for missing ones. */
+export function systemLabelIdsFor(
+  plan: ImportPlan,
+  systemLabels: readonly SystemLabelDto[],
+): Map<string, string> {
+  const byName = new Map(systemLabels.map((l) => [l.name.toLowerCase(), l.id]));
+  const out = new Map<string, string>();
+  for (const label of plan.systemLabels)
+    out.set(label.id, byName.get(label.name.toLowerCase()) ?? `new:${label.id}`);
+  return out;
+}
+
 export interface Assessment {
   outcome: Record<string, ImportOutcomeDto>;
   conflicts: ImportConflictDto[];
@@ -118,14 +134,20 @@ export function assess(
   const outcome = emptyOutcomes();
   const conflicts: ImportConflictDto[] = [];
   const labelIds = labelIdsFor(plan, state.labels);
+  const systemLabelIds = systemLabelIdsFor(plan, state.systemLabels);
   const labelName = (id: string) =>
     state.labels.find((l) => l.id === id)?.name ??
     plan.labels.find((l) => `new:${l.key}` === id)?.name ??
+    state.systemLabels.find((l) => l.id === id)?.name ??
+    plan.systemLabels.find((l) => `new:${l.id}` === id)?.name ??
     'a label';
 
   const known = new Set(state.labels.map((l) => l.name.toLowerCase()));
   for (const label of plan.labels)
     outcome.labels![known.has(label.name.toLowerCase()) ? 'unchanged' : 'created']++;
+  const knownLabels = new Set(state.systemLabels.map((l) => l.name.toLowerCase()));
+  for (const label of plan.systemLabels)
+    outcome.labels![knownLabels.has(label.name.toLowerCase()) ? 'unchanged' : 'created']++;
 
   const systems = new Map(state.systems.map((s) => [s.solarSystemId, s]));
   const visibleAfter = new Set(state.systems.filter((s) => s.visible).map((s) => s.solarSystemId));
@@ -137,6 +159,7 @@ export function assess(
       base ?? null,
       labelIds,
       options,
+      systemLabelIds,
     );
     count(outcome.systems!, decision.action);
     const after = { ...systems.get(planned.solarSystemId), ...decision.write } as MapSystemDto;
@@ -226,10 +249,11 @@ const FIELD_NAMES: Record<string, string> = {
   position: 'Position',
   customName: 'Name',
   temporaryName: 'Temporary name',
-  tag: 'Tag',
   status: 'Status',
   description: 'Notes',
-  labelIds: 'Labels',
+  labelIds: 'Tags',
+  systemLabelIds: 'Labels',
+  customLabel: 'Custom label',
   locked: 'Locked',
   visible: 'On the map',
   type: 'Type',
@@ -267,7 +291,7 @@ function display(field: string, value: unknown, labelName: (id: string) => strin
     const p = value as { x: number; y: number };
     return `${Math.round(p.x)}, ${Math.round(p.y)}`;
   }
-  if (field === 'labelIds' && Array.isArray(value))
+  if ((field === 'labelIds' || field === 'systemLabelIds') && Array.isArray(value))
     return value.map((id) => labelName(String(id))).join(', ') || '—';
   if (field === 'connectionId') return 'linked';
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';

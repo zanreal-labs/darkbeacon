@@ -7,6 +7,7 @@ import {
   type LabelDto,
   type MapSystemDto,
   type SignatureDto,
+  type SystemLabelDto,
 } from '@darkbeacon/shared';
 import type { Connection, MapSystem, Signature } from '../domain/map.js';
 import {
@@ -16,6 +17,7 @@ import {
   defaultShipSize,
   defined,
   validateLabels,
+  validateSystemLabels,
 } from '../domain/rules.js';
 import { MappingUseCases, type EventBatch } from './base.js';
 import { renumberBookmarks } from './bookmark-numbers.js';
@@ -28,10 +30,11 @@ export type ImportedSystemFields = Partial<
     | 'position'
     | 'customName'
     | 'temporaryName'
-    | 'tag'
     | 'status'
     | 'description'
     | 'labelIds'
+    | 'systemLabelIds'
+    | 'customLabel'
     | 'locked'
     | 'visible'
   >
@@ -115,6 +118,7 @@ export class ChainImportUseCases extends MappingUseCases {
     const patch = defined(UpdateSystemRequest.parse(fields)) as ImportedSystemFields;
     return this.write(who, mapId, async (events) => {
       if (patch.labelIds) await this.checkLabels(mapId, patch.labelIds);
+      if (patch.systemLabelIds) await this.checkSystemLabels(mapId, patch.systemLabelIds);
       const now = this.ports.clock.now();
       const current = await this.ports.systems.find(mapId, solarSystemId);
       if (!current) {
@@ -128,6 +132,8 @@ export class ChainImportUseCases extends MappingUseCases {
           status: 'unknown',
           description: '',
           labelIds: [],
+          systemLabelIds: [],
+          customLabel: null,
           locked: false,
           visible: true,
           ...patch,
@@ -386,6 +392,54 @@ export class ChainImportUseCases extends MappingUseCases {
     });
   }
 
+  /**
+   * The map's Labels (WH1, A, B...) for an import (manager+). `replace` (a new map) makes the list
+   * exactly `wanted`; otherwise Labels the map lacks by name (any case) are added at the end, with
+   * their own id unless the map uses it already. Returns the map's list.
+   */
+  async ensureSystemLabels(
+    actor: Actor | null,
+    mapId: string,
+    wanted: readonly SystemLabelDto[],
+    options: { replace: boolean },
+  ): Promise<SystemLabelDto[]> {
+    const who = await this.authorize(actor, mapId, 'manager');
+    return this.write(who, mapId, async (events) => {
+      const map = await this.ports.maps.findById(mapId);
+      if (!map) throw new NotFoundError('Map');
+      let systemLabels: SystemLabelDto[];
+      if (options.replace) systemLabels = wanted.map((l) => ({ ...l }));
+      else {
+        systemLabels = [...map.systemLabels];
+        const names = new Set(systemLabels.map((l) => l.name.toLowerCase()));
+        const ids = new Set(systemLabels.map((l) => l.id));
+        for (const label of wanted) {
+          if (names.has(label.name.toLowerCase())) continue;
+          const id = ids.has(label.id) ? newId() : label.id;
+          names.add(label.name.toLowerCase());
+          ids.add(id);
+          systemLabels.push({ ...label, id });
+        }
+      }
+      if (systemLabels.length > 32) throw new ValidationError('A map holds at most 32 labels');
+      validateSystemLabels(systemLabels);
+      if (!changes(map, { systemLabels })) return map.systemLabels;
+      const now = this.ports.clock.now();
+      await this.ports.maps.update({ ...map, systemLabels, updatedAt: now });
+      events.add('system_labels.changed', { systemLabels }, { systemLabels: map.systemLabels });
+      // Systems lose Labels that are gone (only when the list was replaced).
+      const kept = new Set(systemLabels.map((l) => l.id));
+      for (const system of await this.ports.systems.list(mapId)) {
+        const systemLabelIds = system.systemLabelIds.filter((id) => kept.has(id));
+        if (systemLabelIds.length === system.systemLabelIds.length) continue;
+        const next = { ...system, systemLabelIds, updatedAt: now };
+        await this.ports.systems.update(next);
+        if (next.visible) events.add('system.updated', next, system);
+      }
+      return systemLabels;
+    });
+  }
+
   private async hidden(events: EventBatch, system: MapSystem, before: MapSystem): Promise<void> {
     for (const connection of await this.ports.connections.listForSystem(system.mapId, system.solarSystemId)) {
       await removeConnection(this.ports, events, connection);
@@ -404,7 +458,14 @@ export class ChainImportUseCases extends MappingUseCases {
     const map = await this.ports.maps.findById(mapId);
     const known = new Set(map?.labels.map((l) => l.id));
     const unknown = labelIds.filter((id) => !known.has(id));
-    if (unknown.length > 0) throw new ValidationError('Unknown label', { labelIds: unknown });
+    if (unknown.length > 0) throw new ValidationError('Unknown tag', { labelIds: unknown });
+  }
+
+  private async checkSystemLabels(mapId: string, systemLabelIds: string[]): Promise<void> {
+    const map = await this.ports.maps.findById(mapId);
+    const known = new Set(map?.systemLabels.map((l) => l.id));
+    const unknown = systemLabelIds.filter((id) => !known.has(id));
+    if (unknown.length > 0) throw new ValidationError('Unknown label', { systemLabelIds: unknown });
   }
 }
 

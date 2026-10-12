@@ -1,7 +1,7 @@
 'use client';
 
 import { ReactFlowProvider } from '@xyflow/react';
-import type { LabelDto, UniverseSystemDto } from '@darkbeacon/shared';
+import type { LabelDto, SystemLabelDto, UniverseSystemDto } from '@darkbeacon/shared';
 import { mapPermissions } from '../lib/roles';
 import { MapCanvas } from '../map/MapCanvas';
 import type { MapState } from '../map/mapState';
@@ -19,11 +19,13 @@ export function PublicMapCanvas({
   mapId,
   state,
   labels,
+  systemLabels = [],
   universe,
 }: {
   mapId: string;
   state: MapState;
   labels: LabelDto[];
+  systemLabels?: SystemLabelDto[];
   universe: Map<number, UniverseSystemDto>;
 }) {
   return (
@@ -33,6 +35,7 @@ export function PublicMapCanvas({
         state={state}
         loaded
         labels={labels}
+        systemLabels={systemLabels}
         universe={universe}
         can={VIEWER}
         store={NO_EDITS}

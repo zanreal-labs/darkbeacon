@@ -1,8 +1,8 @@
 import type { ChainDelta, ChainEntry, ChainObjectKind, ShareScope } from '@darkbeacon/shared';
 
 /**
- * Who may see a field outside its map. `local` fields never leave their map (label assignments
- * and locks point at things only that map has); they reach a map's own merged view only.
+ * Who may see a field outside its map. `local` fields never leave their map (Tags and locks
+ * point at things only that map has); they reach a map's own merged view only.
  */
 export type FieldScope = ShareScope | 'local';
 
@@ -20,6 +20,11 @@ export const FIELD_SCOPES: Record<ChainObjectKind, Record<string, FieldScope>> =
     notes: 'intel',
     /** The bookmark label (temporary name). */
     label: 'labels',
+    /** Names of the system's Labels (WH1, WH2...): each map matches them to its own by name. */
+    systemLabels: 'labels',
+    /** The system's free-text custom label. */
+    customLabel: 'labels',
+    /** The system's Tags: ids of the map's own list. */
     labelIds: 'local',
     locked: 'local',
   },

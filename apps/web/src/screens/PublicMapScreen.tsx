@@ -197,7 +197,13 @@ export function PublicMapScreen({ token, view: initial }: { token: string; view:
         {hidden && <p className={styles.note}>{hidden}.</p>}
       </header>
       <div className={styles.canvasArea}>
-        <PublicCanvas mapId={view.map.id} state={state} labels={labels} universe={universe} />
+        <PublicCanvas
+          mapId={view.map.id}
+          state={state}
+          labels={labels}
+          systemLabels={view.map.systemLabels ?? []}
+          universe={universe}
+        />
         {state.systems.size === 0 && (
           <div className={styles.overlay}>
             <EmptyState

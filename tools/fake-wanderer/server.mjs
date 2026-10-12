@@ -247,6 +247,8 @@ export function createFakeWanderer(map, options = {}) {
                 slug: map.map.slug,
                 description: map.map.description,
                 scope: map.map.scope,
+                // Wanderer keeps the map's label list as JSON text.
+                system_labels: JSON.stringify(map.map.system_labels ?? []),
               },
             },
           });

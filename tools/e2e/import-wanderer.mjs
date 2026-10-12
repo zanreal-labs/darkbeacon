@@ -106,6 +106,24 @@ const snapshot = await (
   await page.request.get(`${BASE}/api/streams/${encodeURIComponent(`map:${id}`)}/snapshot`)
 ).json();
 const { connections, signatures } = snapshot.data;
+// Wanderer's labels are the map's Labels, its tags Tags; Darkbeacon's own tag stays empty.
+assert.deepEqual(
+  snapshot.data.map.systemLabels.map((l) => l.name),
+  ['A', 'B', '1', 'Exit'],
+);
+assert.deepEqual(snapshot.data.map.labels.map((l) => l.name).sort(), [
+  'FARM',
+  'HQ',
+  'Looking for',
+  'Secondary',
+]);
+const home = snapshot.data.systems.find((s) => s.solarSystemId === 31002531);
+assert.deepEqual(home.systemLabelIds, ['a', '1']);
+assert.equal(home.customLabel, 'Staging');
+assert.ok(
+  snapshot.data.systems.every((s) => s.tag === null),
+  'no tag written',
+);
 assert.ok(
   signatures.some((x) => x.kind === 'anomaly'),
   'anomalies',
@@ -168,7 +186,7 @@ assert.deepEqual(
   [30000142, 30002187, 30002659],
 );
 await page.goto(`${BASE}/m/home-chain?settings=webhooks`, { waitUntil: 'networkidle' });
-await page.getByText('https://bots.example.org/darkbeacon').waitFor({ timeout: 15_000 });
+await page.getByText('https://bots.example.org/darkbeacon', { exact: true }).waitFor({ timeout: 15_000 });
 const switches = page.getByRole('switch');
 assert.equal(await switches.count(), 2, 'two imported webhooks');
 for (let i = 0; i < 2; i++) assert.equal(await switches.nth(i).getAttribute('aria-checked'), 'false');

@@ -282,6 +282,7 @@ const COUNT_LABELS: Array<[keyof ImportCountsDto, string]> = [
   ['structures', 'Structures'],
   ['comments', 'Comments'],
   ['labels', 'Labels'],
+  ['tags', 'Tags'],
   ['accessRules', 'Access rules'],
   ['hubs', 'Hubs'],
   ['webhooks', 'Webhooks (switched off)'],

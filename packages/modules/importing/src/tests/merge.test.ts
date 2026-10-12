@@ -113,6 +113,7 @@ describe('import decisions', () => {
   const { plan } = translate(apiDump(), { systemName, layoutScale: 1 });
   const planned = plan.systems.find((s) => s.solarSystemId === SYS.home)!;
   const labelIds = new Map(plan.labels.map((l) => [l.key, `id-${l.name}`]));
+  const systemLabelIds = new Map(plan.systemLabels.map((l) => [l.id, `sl-${l.name}`]));
   const here: MapSystemDto = {
     mapId: 'm',
     solarSystemId: SYS.home,
@@ -123,6 +124,8 @@ describe('import decisions', () => {
     status: 'unknown',
     description: 'Our notes',
     labelIds: ['id-Other'],
+    systemLabelIds: ['sl-B'],
+    customLabel: null,
     locked: true,
     visible: true,
     createdAt: 1,
@@ -130,24 +133,37 @@ describe('import decisions', () => {
   };
 
   it('creates a system as Wanderer has it', () => {
-    const decision = decideSystem(planned, undefined, null, labelIds, { removeMissing: false });
+    const decision = decideSystem(
+      planned,
+      undefined,
+      null,
+      labelIds,
+      { removeMissing: false },
+      systemLabelIds,
+    );
     expect(decision.action).toBe('create');
+    // Wanderer's labels are Labels, its custom label the custom label, its tag a Tag.
     expect(decision.write).toMatchObject({
       status: 'home',
       customName: 'Home sweet home',
-      labelIds: ['id-Label A', 'id-Label 1', 'id-Staging'],
+      labelIds: ['id-HQ'],
+      systemLabelIds: ['sl-A', 'sl-1'],
+      customLabel: 'Staging',
     });
+    expect(decision.write).not.toHaveProperty('tag');
   });
 
   it('merges into a system here: blanks filled, locks respected, notes and labels joined', () => {
-    const decision = decideSystem(planned, here, null, labelIds, { removeMissing: false });
+    const decision = decideSystem(planned, here, null, labelIds, { removeMissing: false }, systemLabelIds);
     expect(decision.action).toBe('update');
     expect(decision.write.customName).toBe('Home sweet home');
     expect(decision.write.status).toBe('home');
     expect(decision.write.position).toBeUndefined();
-    expect(decision.write.tag).toBeUndefined(); // both have one; the map changed later
+    expect(decision.write).not.toHaveProperty('tag'); // never written
+    expect(decision.write.customLabel).toBe('Staging'); // a blank here is filled
+    expect(decision.write.systemLabelIds).toEqual(['sl-B', 'sl-A', 'sl-1']);
     expect(decision.write.description?.startsWith('Our notes\n\nOur home.')).toBe(true);
-    expect(decision.write.labelIds).toEqual(['id-Other', 'id-Label A', 'id-Label 1', 'id-Staging']);
+    expect(decision.write.labelIds).toEqual(['id-Other', 'id-HQ']);
     expect(decision.conflicts.find((c) => c.field === 'position')?.why).toBe('The system is locked here');
   });
 

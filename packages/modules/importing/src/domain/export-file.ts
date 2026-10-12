@@ -10,6 +10,7 @@ import {
   readSignature,
   readStructure,
   readSystem,
+  readSystemLabels,
   text,
   time,
   type WandererMapDump,
@@ -57,7 +58,8 @@ export function readExportFile(document: unknown, fileName: string | null, now: 
     readAt,
   );
   dump.map = { name, slug: text(map.slug), description: text(map.description), scope: text(map.scope) };
-  dump.labelNames = labelNames(map.system_labels);
+  dump.systemLabels = readSystemLabels(map.system_labels);
+  dump.labelNames = Object.fromEntries(dump.systemLabels.map((l) => [l.id, l.name]));
   dump.systems = readAll(body.systems, readSystem, 'systems', dump.rejected);
   dump.connections = readAll(body.connections, readConnection, 'connections', dump.rejected);
   dump.signatures = readAll(body.signatures, readSignature, 'signatures', dump.rejected);
@@ -83,33 +85,4 @@ export function exportFormat(document: Record<string, unknown>): ExportFormat | 
   if (Array.isArray(document.systems)) return document.version !== undefined ? 'map-data' : 'map-settings';
   if (isRow(document.data) && Array.isArray(document.data.systems)) return 'api-backup';
   return null;
-}
-
-/**
- * `map.system_labels`: the map's own label names. Accepts `{id: name}`, `[{id, name}]`, or that as
- * JSON text, so a change of serialisation does not lose them.
- */
-function labelNames(value: unknown): Record<string, string> {
-  let raw = value;
-  if (typeof raw === 'string') {
-    try {
-      raw = JSON.parse(raw);
-    } catch {
-      return {};
-    }
-  }
-  const out: Record<string, string> = {};
-  if (Array.isArray(raw)) {
-    for (const entry of raw) {
-      if (!isRow(entry)) continue;
-      const id = text(entry.id) ?? text(entry.value);
-      const name = text(entry.name) ?? text(entry.label);
-      if (id && name) out[id] = name;
-    }
-  } else if (isRow(raw)) {
-    const list = Array.isArray(raw.labels) ? raw.labels : null;
-    if (list) return labelNames(list);
-    for (const [id, name] of Object.entries(raw)) if (typeof name === 'string' && name.trim()) out[id] = name;
-  }
-  return out;
 }

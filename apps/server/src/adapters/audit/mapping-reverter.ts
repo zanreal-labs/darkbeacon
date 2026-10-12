@@ -14,6 +14,7 @@ import type {
   MapDto,
   MapSystemDto,
   SignatureDto,
+  SystemLabelDto,
   UpdateConnectionRequest,
   UpdateSignatureRequest,
   UpdateSystemRequest,
@@ -27,6 +28,8 @@ const SYSTEM_FIELDS = [
   'status',
   'description',
   'labelIds',
+  'systemLabelIds',
+  'customLabel',
   'locked',
 ] as const satisfies ReadonlyArray<keyof UpdateSystemRequest>;
 const CONNECTION_FIELDS = [
@@ -78,6 +81,7 @@ export class MappingReverter implements ChangeReverter {
     'signature.updated',
     'signature.removed',
     'labels.changed',
+    'system_labels.changed',
     'map.settings_changed',
   ] as const;
 
@@ -199,6 +203,14 @@ export class MappingReverter implements ChangeReverter {
         if (!current || !change) throw new ConflictError('Nothing to revert');
         if (!sameValue(current.labels, change.after)) throw new ConflictError(CHANGED_SINCE);
         await this.uc.maps.setLabels(actor, mapId, (change.before ?? []) as LabelDto[]);
+        return;
+      }
+      case 'system_labels.changed': {
+        const current = await this.ports.maps.findById(mapId);
+        const change = diff.systemLabels;
+        if (!current || !change) throw new ConflictError('Nothing to revert');
+        if (!sameValue(current.systemLabels, change.after)) throw new ConflictError(CHANGED_SINCE);
+        await this.uc.maps.setSystemLabels(actor, mapId, (change.before ?? []) as SystemLabelDto[]);
         return;
       }
       case 'map.settings_changed': {

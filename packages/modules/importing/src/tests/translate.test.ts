@@ -47,11 +47,23 @@ describe('translating a Wanderer map', () => {
     const home = system(plan, SYS.home);
     expect(home.fields).toMatchObject({
       customName: 'Home sweet home',
-      tag: 'HQ',
       status: 'home',
       locked: true,
       visible: true,
+      // Wanderer's labels a and 1 are the map's Labels A and 1; its custom label stays one.
+      systemLabelIds: ['a', '1'],
+      customLabel: 'Staging',
     });
+    expect(home.fields).not.toHaveProperty('tag');
+    // Without a list of its own a Wanderer map has the labels A, B, C, 1, 2, 3.
+    expect(plan.systemLabels.map((l) => `${l.id}:${l.name}`)).toEqual([
+      'a:A',
+      'b:B',
+      'c:C',
+      '1:1',
+      '2:2',
+      '3:3',
+    ]);
     expect(home.createdAt).toBe(Date.parse('2026-10-10T12:00:00Z'));
     expect(home.remoteUpdatedAt).toBe(Date.parse('2026-10-12T08:30:15.123Z'));
     // Structures and comments become part of the notes.
@@ -69,22 +81,44 @@ describe('translating a Wanderer map', () => {
     expect(home.fields.description).toContain(
       'Comment by Scout Alt, 2026-10-11 19:00 UTC (Wanderer)\nNeut Loki on d-scan',
     );
-    // Labels: built-in A and 1, and the custom label, as map labels.
-    const names = home.fields.labelKeys.map((k) => plan.labels.find((l) => l.key === k)!.name);
-    expect(names).toEqual(['Label A', 'Label 1', 'Staging']);
+    // Wanderer's tag becomes a Tag of that name (neutral grey).
+    const tags = home.fields.labelKeys.map((k) => plan.labels.find((l) => l.key === k)!);
+    expect(tags.map((t) => [t.name, t.color])).toEqual([['HQ', '#6b7280']]);
 
     expect(system(plan, SYS.c2).fields).toMatchObject({ temporaryName: '1a', status: 'target' });
-    expect(system(plan, SYS.c5).fields.tag).toBe('FARMTAGISWAYTOOL');
     expect(system(plan, SYS.c1).fields).toMatchObject({
       visible: false,
       description: 'Hidden, but the notes stay',
     });
-    // "Looking for" has no status here; it becomes a label.
+    // "Looking for" has no status here; it becomes a Tag, next to the system's tag.
     const c5 = system(plan, SYS.c5);
     expect(c5.fields.status).toBe('unknown');
     expect(c5.fields.labelKeys.map((k) => plan.labels.find((l) => l.key === k)!.name)).toEqual([
+      'FARMTAGISWAYTOOLONGFORDB',
       'Looking for',
     ]);
+  });
+
+  it('takes the map’s own Labels in order: ids kept, names cut, colours dropped, duplicates merged', () => {
+    const dump = apiDump();
+    dump.systemLabels = [
+      { id: 'x1', name: 'Exit', description: 'Way out' },
+      { id: 'x2', name: 'VeryLongLabelName', description: null },
+      { id: 'x3', name: 'exit', description: 'Again' },
+      { id: 'la', name: 'A', description: null },
+    ];
+    dump.systems[0]!.labels = { ids: ['x3', 'x2', 'gone'], custom: 'a custom label too long' };
+    const { plan, report } = translate(dump, { systemName });
+    expect(plan.systemLabels).toEqual([
+      { id: 'x1', name: 'Exit', description: 'Way out' },
+      { id: 'x2', name: 'VeryLong', description: '' },
+      { id: 'a', name: 'A', description: '' },
+    ]);
+    const first = plan.systems.find((s) => s.solarSystemId === dump.systems[0]!.solarSystemId)!;
+    expect(first.fields.systemLabelIds).toEqual(['x1', 'x2']);
+    expect(first.fields.customLabel).toBe('a custom label t');
+    expect(line(report, 'dropped', /Label the map does not list/)).toBeDefined();
+    expect(line(report, 'approximated', /Label with the name of another/)?.examples).toEqual(['exit']);
   });
 
   it('spreads a tight layout to Darkbeacon node sizes', () => {

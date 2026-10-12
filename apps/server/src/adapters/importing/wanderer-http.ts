@@ -13,6 +13,7 @@ import {
   readSignature,
   readStructure,
   readSystem,
+  readSystemLabels,
   readUserHubs,
   readWebhook,
   SourceError,
@@ -167,6 +168,10 @@ export class WandererHttpSource implements MapImportSource {
       dump.map.name = text(attributes.name);
       dump.map.description = text(attributes.description);
       dump.map.scope = text(attributes.scope);
+      // The map's own label list, where the instance gives it (else Wanderer's defaults).
+      const options = isRow(attributes.options) ? attributes.options : null;
+      dump.systemLabels = readSystemLabels(attributes.system_labels ?? options?.system_labels);
+      dump.labelNames = Object.fromEntries(dump.systemLabels.map((l) => [l.id, l.name]));
       dump.source.name = dump.map.name;
     }
 

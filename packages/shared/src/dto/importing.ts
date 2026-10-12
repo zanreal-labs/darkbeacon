@@ -84,7 +84,10 @@ export const ImportCountsDto = z.object({
   passages: z.number().int().optional(),
   structures: z.number().int(),
   comments: z.number().int(),
+  /** The map's Labels (WH1, A, B...). */
   labels: z.number().int(),
+  /** Tags the systems use (Wanderer tags, statuses Darkbeacon has no value for). Optional: older jobs lack it. */
+  tags: z.number().int().optional(),
   accessRules: z.number().int(),
   hubs: z.number().int(),
   /** Webhook subscriptions that come over (switched off). Optional: older jobs lack it. */

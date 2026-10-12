@@ -17,7 +17,7 @@ import { MapSettingsDialog } from './MapSettings';
 import { MapView } from './MapView';
 
 // Nothing here needs the API's answers: lists stay empty, the account unknown.
-setupMockServer(http.get('*', () => new HttpResponse(null, { status: 404 })));
+const server = setupMockServer(http.get('*', () => new HttpResponse(null, { status: 404 })));
 beforeAll(() => installFlowMocks());
 
 const MAP: MapDto = {
@@ -27,6 +27,10 @@ const MAP: MapDto = {
   ownerAccountId: 'acc-1',
   settings: { scopes: ['wormhole'] },
   labels: [{ id: 'l1', name: 'Staging', color: '#38c6d6', description: '' }],
+  systemLabels: [
+    { id: 'wh1', name: 'WH1', description: '' },
+    { id: 'wh2', name: 'WH2', description: '' },
+  ],
   createdAt: 1,
   updatedAt: 1,
 };
@@ -114,23 +118,61 @@ describe('map settings dialog', () => {
   });
 
   it('opens a deep link on its section', async () => {
-    open('/m/home-chain?settings=labels');
+    open('/m/home-chain?settings=tags');
     await screen.findByRole('dialog', { name: 'Map settings' });
-    expect(screen.getByRole('tab', { name: 'Labels', selected: true })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Tags', selected: true })).toBeTruthy();
     expect(screen.getByRole('tabpanel')).toHaveProperty(
       'textContent',
-      expect.stringContaining('Tags for systems'),
+      expect.stringContaining('Coloured markers for systems'),
     );
+    expect((screen.getByRole('textbox', { name: 'Tag name' }) as HTMLInputElement).value).toBe('Staging');
     // The section's Save sits in the dialog's footer, tied to the section's form.
-    const save = screen.getByRole('button', { name: 'Save labels' });
-    expect(save.getAttribute('form')).toBe(screen.getByRole('form', { name: 'Labels' }).id);
+    const save = screen.getByRole('button', { name: 'Save tags' });
+    expect(save.getAttribute('form')).toBe(screen.getByRole('form', { name: 'Tags' }).id);
+  });
+
+  it('keeps the Labels in order: add, rename, move and save them', async () => {
+    const saved: unknown[] = [];
+    const user = userEvent.setup();
+    server.use(
+      http.put(`/api/maps/${MAP_ID}/system-labels`, async ({ request }) => {
+        const body = (await request.json()) as { systemLabels: unknown[] };
+        saved.push(body);
+        return HttpResponse.json(body.systemLabels);
+      }),
+    );
+    open('/m/home-chain?settings=labels');
+    await screen.findByRole('dialog', { name: 'Map settings' });
+    const names = () =>
+      screen.getAllByRole('textbox', { name: 'Label name' }).map((i) => (i as HTMLInputElement).value);
+    expect(names()).toEqual(['WH1', 'WH2']);
+    expect(screen.getByRole('button', { name: 'Save labels' })).toHaveProperty('disabled', true);
+
+    // A new one is the next free WH number; names are at most 8 characters.
+    await user.click(screen.getByRole('button', { name: 'Add label' }));
+    expect(names()).toEqual(['WH1', 'WH2', 'WH3']);
+    expect(screen.getAllByRole('textbox', { name: 'Label name' })[2]!.getAttribute('maxlength')).toBe('8');
+    await user.clear(screen.getAllByRole('textbox', { name: 'Label name' })[2]!);
+    await user.type(screen.getAllByRole('textbox', { name: 'Label name' })[2]!, 'A');
+    await user.type(screen.getByRole('textbox', { name: 'Description of A' }), 'Anchor');
+    await user.click(screen.getByRole('button', { name: 'Move A up' }));
+    expect(names()).toEqual(['WH1', 'A', 'WH2']);
+    await user.click(screen.getByRole('button', { name: 'Remove label WH1' }));
+    await user.click(screen.getByRole('button', { name: 'Save labels' }));
+    await waitFor(() => expect(saved).toHaveLength(1));
+    expect(saved[0]).toEqual({
+      systemLabels: [
+        { id: expect.any(String), name: 'A', description: 'Anchor' },
+        { id: 'wh2', name: 'WH2', description: '' },
+      ],
+    });
   });
 
   it('shows managers only what they may change, and falls back to it', async () => {
     open('/m/home-chain?settings=general', 'manager');
     await screen.findByRole('dialog', { name: 'Map settings' });
     const tabs = screen.getAllByRole('tab').map((t) => t.textContent);
-    expect(tabs).toEqual(['Labels', 'Bookmark labels', 'Import']);
+    expect(tabs).toEqual(['Labels', 'Tags', 'Bookmark labels', 'Import']);
     expect(screen.getByRole('tab', { name: 'Labels', selected: true })).toBeTruthy();
   });
 

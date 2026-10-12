@@ -28,7 +28,10 @@ export interface MappingTables {
     /** `standard` or `composite`. */
     kind: string;
     settings: string;
+    /** The map's Tags. */
     labels: string;
+    /** The map's Labels (WH1, WH2...). */
+    system_labels: string;
     created_at: number;
     updated_at: number;
   };
@@ -43,6 +46,8 @@ export interface MappingTables {
     status: string;
     description: string;
     label_ids: string;
+    system_label_ids: string;
+    custom_label: string | null;
     locked: number;
     visible: number;
     created_at: number;
@@ -543,6 +548,7 @@ function mapToRow(map: ChainMap): MapRow {
     owner_account_id: map.ownerAccountId,
     settings: json.encode(map.settings),
     labels: json.encode(map.labels),
+    system_labels: json.encode(map.systemLabels),
     created_at: map.createdAt,
     updated_at: map.updatedAt,
   };
@@ -558,6 +564,7 @@ function mapFromRow(row: MapRow): ChainMap {
     ownerAccountId: row.owner_account_id,
     settings: json.decode<ChainMap['settings']>(row.settings)!,
     labels: json.decode<ChainMap['labels']>(row.labels)!,
+    systemLabels: json.decode<ChainMap['systemLabels']>(row.system_labels) ?? [],
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
   };
@@ -575,6 +582,8 @@ function systemToRow(s: MapSystem): Omit<SystemRow, 'field_times'> {
     status: s.status,
     description: s.description,
     label_ids: json.encode(s.labelIds),
+    system_label_ids: json.encode(s.systemLabelIds),
+    custom_label: s.customLabel,
     locked: bool.encode(s.locked),
     visible: bool.encode(s.visible),
     created_at: s.createdAt,
@@ -593,6 +602,8 @@ function systemFromRow(row: SystemRow): MapSystem {
     status: row.status as MapSystem['status'],
     description: row.description,
     labelIds: json.decode<string[]>(row.label_ids)!,
+    systemLabelIds: json.decode<string[]>(row.system_label_ids) ?? [],
+    customLabel: row.custom_label,
     locked: bool.decode(row.locked),
     visible: bool.decode(row.visible),
     createdAt: Number(row.created_at),

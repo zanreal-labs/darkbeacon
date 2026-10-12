@@ -31,17 +31,44 @@ export type ChainCommand =
 const defined = <T extends object>(o: T) =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Record<string, unknown>;
 
-/** A system patch in wire fields; `position` is the merged map's own layout and never written back. */
-export function systemFields(request: UpdateSystemRequest): Record<string, unknown> {
+/**
+ * A system patch in wire fields; `position` is the merged map's own layout and never written back.
+ * Labels cross by name (`labelNames` turns the merged map's label ids into its names); without it
+ * a change of Labels is left out.
+ */
+export function systemFields(
+  request: UpdateSystemRequest,
+  labelNames?: (ids: readonly string[]) => string[],
+): Record<string, unknown> {
   return defined({
     status: request.status,
     tag: request.tag,
     customName: request.customName,
     notes: request.description,
     label: request.temporaryName,
+    systemLabels: request.systemLabelIds && labelNames ? labelNames(request.systemLabelIds) : undefined,
+    customLabel: request.customLabel,
     labelIds: request.labelIds,
     locked: request.locked,
   });
+}
+
+/** Ids of `list` named by `names` (any case), in the list's order; unknown names drop out. */
+export function labelIdsByName(
+  names: readonly unknown[],
+  list: ReadonlyArray<{ id: string; name: string }>,
+): string[] {
+  const wanted = new Set(names.filter((n): n is string => typeof n === 'string').map((n) => n.toLowerCase()));
+  return list.filter((l) => wanted.has(l.name.toLowerCase())).map((l) => l.id);
+}
+
+/** Names of the labels `ids` names, in the list's order. */
+export function labelNamesById(
+  ids: readonly string[],
+  list: ReadonlyArray<{ id: string; name: string }>,
+): string[] {
+  const on = new Set(ids);
+  return list.filter((l) => on.has(l.id)).map((l) => l.name);
 }
 
 /**
@@ -123,6 +150,6 @@ export const SCOPE_WORDS: Record<FieldScope, string> = {
   signatures: 'signatures',
   intel: 'system intel',
   characters: 'characters',
-  labels: 'bookmark labels',
-  local: 'the map’s own labels and locks',
+  labels: 'labels',
+  local: 'the map’s own tags and locks',
 };

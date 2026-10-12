@@ -11,7 +11,13 @@ import {
   type ReactNode,
 } from 'react';
 import { ClipboardPaste } from 'lucide-react';
-import type { CharacterDto, LabelDto, MapSystemDto, UniverseSystemDto } from '@darkbeacon/shared';
+import type {
+  CharacterDto,
+  LabelDto,
+  MapSystemDto,
+  SystemLabelDto,
+  UniverseSystemDto,
+} from '@darkbeacon/shared';
 import type { MapPermissions } from '../../lib/roles';
 import { SlotItem } from '../../plugins/PluginSlot';
 import type { SlotEntry } from '../../plugins/registry';
@@ -79,7 +85,10 @@ interface Props {
   system: MapSystemDto;
   info: UniverseSystemDto | undefined;
   universe: Map<number, UniverseSystemDto>;
+  /** The map's Tags (`labels` in the data). */
   labels: LabelDto[];
+  /** The map's Labels (WH1...). */
+  systemLabels?: readonly SystemLabelDto[];
   state: Pick<MapState, 'signatures' | 'connections' | 'characters' | 'has'>;
   can: MapPermissions;
   store: Pick<
@@ -113,6 +122,7 @@ export function SystemSidebar({
   info,
   universe,
   labels,
+  systemLabels = [],
   state,
   can,
   store,
@@ -333,6 +343,7 @@ export function SystemSidebar({
             system={system}
             info={info}
             labels={labels}
+            systemLabels={systemLabels}
             can={can}
             store={store}
             focusToken={focusToken}

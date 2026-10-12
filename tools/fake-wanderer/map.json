@@ -4,7 +4,33 @@
     "name": "Home Chain",
     "slug": "home-chain",
     "description": "Our main chain",
-    "scope": "wormholes"
+    "scope": "wormholes",
+    "system_labels": [
+      {
+        "id": "a",
+        "name": "A",
+        "color": "#22c55e",
+        "description": ""
+      },
+      {
+        "id": "b",
+        "name": "B",
+        "color": "#3b82f6",
+        "description": ""
+      },
+      {
+        "id": "1",
+        "name": "1",
+        "color": "#f59e0b",
+        "description": "First wave"
+      },
+      {
+        "id": "x1",
+        "name": "Exit",
+        "color": "#ef4444",
+        "description": "Our way out to k-space"
+      }
+    ]
   },
   "apiKey": "wanderer-map-key-0123456789",
   "systems": [
@@ -341,7 +367,7 @@
       "temporary_name": null,
       "description": null,
       "tag": null,
-      "labels": "{\"customLabel\": \"Rolled\", \"labels\": []}",
+      "labels": "{\"customLabel\": \"Rolled\", \"labels\": [\"x1\"]}",
       "status": 0,
       "visible": true,
       "locked": false,

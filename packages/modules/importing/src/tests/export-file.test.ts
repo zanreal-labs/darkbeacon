@@ -34,7 +34,9 @@ describe('Wanderer export files', () => {
     expect(plan.systems.find((s) => s.solarSystemId === SYS.c2)?.fields.description).toContain(
       'Comment (Wanderer)\nEmpty C2',
     );
-    expect(plan.labels.map((l) => l.name)).toEqual(['Exit']);
+    // The file's own label list is the map's Labels; the system's tag a Tag.
+    expect(plan.systemLabels.map((l) => [l.id, l.name])).toEqual([['x1', 'Exit']]);
+    expect(plan.labels.map((l) => l.name)).toEqual(['H']);
     // Rows without times count as changed when the file was exported.
     expect(plan.systems[0]!.remoteUpdatedAt).toBe(dump.readAt);
     expect(report.some((l) => /Access lists are not part of Wanderer export files/.test(l.what))).toBe(true);

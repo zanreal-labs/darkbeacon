@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ReactFlow, ReactFlowProvider } from '@xyflow/react';
-import type { LabelDto, UniverseSystemDto } from '@darkbeacon/shared';
+import type { LabelDto, SystemLabelDto, UniverseSystemDto } from '@darkbeacon/shared';
 import { installFlowMocks, renderWithProviders } from '../test/setup';
 import { MAP_ID, systemFixture } from '../test/fixtures';
 import { ToastProvider } from '../ui';
@@ -22,14 +22,23 @@ const info: UniverseSystemDto = {
   effect: null,
 };
 
-const label = (id: string, name: string): LabelDto => ({ id, name, color: '#336699', description: '' });
+const tag = (id: string, name: string): LabelDto => ({ id, name, color: '#336699', description: '' });
+const systemLabel = (id: string, name: string): SystemLabelDto => ({ id, name, description: '' });
 
 function renderNode(data: Partial<SystemNodeData>, connectable = true) {
   const node: SystemNodeType = {
     id: '31000001',
     type: 'system',
     position: { x: 0, y: 0 },
-    data: { mapId: MAP_ID, system: systemFixture(31000001), info, labels: [], characters: 0, ...data },
+    data: {
+      mapId: MAP_ID,
+      system: systemFixture(31000001),
+      info,
+      systemLabels: [],
+      tags: [],
+      characters: 0,
+      ...data,
+    },
   };
   return renderWithProviders(
     <ToastProvider>
@@ -63,12 +72,12 @@ describe('SystemNode', () => {
     expect(box(container).style.getPropertyValue('--node-status')).toBe('var(--dbk-status-hostile)');
     expect(screen.getByText('C3')).toBeTruthy();
     expect(screen.getByText('J100001')).toBeTruthy();
-    // Tag, notes and lock are not on the node, only in its tooltip.
+    // Notes and lock are not on the node, only in its tooltip; the old free-text tag is nowhere.
     expect(screen.queryByText('A1')).toBeNull();
     const title = box(container).title;
     expect(title).toContain('Status: Hostile');
     expect(title).toContain('A-R00001 · A-C00001');
-    expect(title).toContain('Tag: A1');
+    expect(title).not.toContain('A1');
     expect(title).toContain('Locked');
     expect(title).toContain('Notes: Rattlesnakes');
   });
@@ -90,19 +99,36 @@ describe('SystemNode', () => {
     expect(pill.style.background).not.toBe('');
   });
 
-  it('writes statics as plain text and puts the bookmark, then labels, above the node', () => {
+  it('writes statics as plain text and puts Labels, custom label, bookmark and Tags above the node', () => {
     const { container } = renderNode({
+      system: systemFixture(31000001, { customLabel: 'bait' }),
       info: { ...info, statics: ['D845', 'U210'] },
       bookmark: 'ABC-123',
-      labels: [label('a', 'Staging'), label('b', 'Sites')],
+      systemLabels: [systemLabel('wh1', 'WH1')],
+      tags: [tag('a', 'Staging'), tag('b', 'Sites')],
     });
     const statics = screen.getByRole('list', { name: 'Statics' });
     expect([...statics.querySelectorAll('li')].map((li) => li.textContent)).toEqual(['D845HS', 'U210LS']);
-    const above = screen.getByRole('list', { name: 'Labels' }).parentElement!;
-    expect([...above.querySelectorAll('li')].map((li) => li.textContent)).toEqual(['Staging', 'Sites']);
-    // Labels first, then the bookmark code; neither inside the node's rows.
-    expect(above.textContent).toBe('ABC-123StagingSites');
+    const labels = screen.getByRole('list', { name: 'Labels' });
+    expect([...labels.querySelectorAll('li')].map((li) => li.textContent)).toEqual(['WH1', 'bait']);
+    const tags = screen.getByRole('list', { name: 'Tags' });
+    expect([...tags.querySelectorAll('li')].map((li) => li.textContent)).toEqual(['Staging', 'Sites']);
+    // Left to right: Labels, the custom label, the bookmark code, Tags; none inside the node's rows.
+    const above = labels.parentElement!;
+    expect(tags.parentElement).toBe(above);
+    const chips = [...above.querySelectorAll('li, button')].map((el) => el.textContent);
+    expect(chips).toEqual(['WH1', 'bait', 'ABC-123', 'Staging', 'Sites']);
+    // Labels are neutral text markers; only Tags carry a colour.
+    expect(labels.querySelector('[style]')).toBeNull();
+    expect(tags.querySelector('li')!.getAttribute('style')).toContain('--label-color');
     expect(container.querySelector('[data-status] > [class*="line"]')?.textContent).toBe('D845HSU210LS');
+  });
+
+  it('shows a custom label alone, without Labels', () => {
+    renderNode({ system: systemFixture(31000001, { customLabel: 'scout' }) });
+    const labels = screen.getByRole('list', { name: 'Labels' });
+    expect(labels.textContent).toBe('scout');
+    expect(screen.queryByRole('list', { name: 'Tags' })).toBeNull();
   });
 
   it('shows the nearest hub under an exit, with a square only for one kind of space', () => {

@@ -29,17 +29,23 @@ import type {
 
 // ---- the plan: Darkbeacon-shaped data, keyed by stable external ids ------------------------------
 
-/** System attributes as Darkbeacon keeps them; labels by their plan key until the map has ids. */
+/**
+ * System attributes as Darkbeacon keeps them. Tags by their plan key and Labels by their Wanderer id
+ * until the map has ids. Darkbeacon's own free-text `tag` is never written.
+ */
 export interface SystemFields {
   position: Position;
   customName: string | null;
   temporaryName: string | null;
-  tag: string | null;
   status: SystemStatus;
   description: string;
   locked: boolean;
   visible: boolean;
+  /** Tags (`MapSystemDto.labelIds`): Wanderer's tag and the statuses Darkbeacon has no value for. */
   labelKeys: string[];
+  /** Labels (`MapSystemDto.systemLabelIds`), as ids of `ImportPlan.systemLabels`. */
+  systemLabelIds: string[];
+  customLabel: string | null;
 }
 
 export interface PlannedSystem {
@@ -56,8 +62,16 @@ export interface PlannedSystem {
   extra: Record<string, unknown> | null;
 }
 
+/** One of the map's Labels (WH1, A, B...), with Wanderer's id. */
+export interface PlannedSystemLabel {
+  id: string;
+  name: string;
+  description: string;
+}
+
+/** A Tag (`MapDto.labels`): a coloured marker of the map. */
 export interface PlannedLabel {
-  /** `label:<wanderer id>` or `label:custom:<name>`. */
+  /** `tag:<name in lower case>`. */
   key: string;
   name: string;
   color: string;
@@ -127,7 +141,10 @@ export interface PlannedSignature {
 export interface ImportPlan {
   mapName: string;
   mapSlug: string | null;
+  /** Tags the systems use (created in the map's Tags when missing). */
   labels: PlannedLabel[];
+  /** The map's Labels in Wanderer's order (its defaults A, B, C, 1, 2, 3 when it has none). */
+  systemLabels: PlannedSystemLabel[];
   systems: PlannedSystem[];
   connections: PlannedConnection[];
   signatures: PlannedSignature[];
@@ -200,18 +217,17 @@ const STATUS: Record<string, { status: SystemStatus; label?: string; approx?: st
   occupied: { status: 'occupied' },
 };
 
-/** Wanderer's built-in label ids and how they are named in its UI. */
-const BUILT_IN_LABELS: Record<string, string> = {
-  a: 'Label A',
-  b: 'Label B',
-  c: 'Label C',
-  '1': 'Label 1',
-  '2': 'Label 2',
-  '3': 'Label 3',
-};
+/** Wanderer's default labels, used when a map has none of its own. */
+const DEFAULT_LABELS: readonly PlannedSystemLabel[] = ['A', 'B', 'C', '1', '2', '3'].map((name) => ({
+  id: name.toLowerCase(),
+  name,
+  description: '',
+}));
 
-/** Label colours, in order of first use (labels are user data; these are only a start). */
-const LABEL_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#a855f7', '#ef4444', '#14b8a6', '#ec4899', '#84cc16'];
+/** Tag colours for the statuses Darkbeacon has no value for. */
+const STATUS_TAG_COLORS: Record<string, string> = { Secondary: '#f59e0b', 'Looking for': '#3b82f6' };
+/** Wanderer's tag becomes a neutral grey Tag. */
+const NEUTRAL_TAG = '#6b7280';
 
 const SHIP_SIZES: Record<number, { size: ShipSize; approx?: string }> = {
   0: { size: 'small' },
@@ -262,12 +278,14 @@ const LIMITS = {
   connectionNote: 2000,
   customName: 64,
   temporaryName: 64,
-  tag: 16,
   description: 10_000,
   sigName: 128,
   sigType: 64,
   sigDescription: 2000,
   label: 32,
+  systemLabel: 8,
+  systemLabelDescription: 120,
+  customLabel: 16,
 };
 const SIGNATURE_ID = /^[A-Z]{3}-\d{3}$/;
 const CUSTOM_ID_MAX = 32;
@@ -280,7 +298,8 @@ const CUSTOM_ID_MAX = 32;
  */
 export function translate(dump: WandererMapDump, context: TranslateContext): Translation {
   const report = new ReportBuilder();
-  const labels = new LabelSet(dump.labelNames);
+  const labels = new TagSet();
+  const systemLabels = new SystemLabelSet(dump, report);
   const systemsByUuid = new Map<string, number>();
   for (const s of dump.systems) if (s.uuid) systemsByUuid.set(s.uuid, s.solarSystemId);
   const nameOf = (id: number) => context.systemName(id) ?? String(id);
@@ -332,9 +351,20 @@ export function translate(dump: WandererMapDump, context: TranslateContext): Tra
     const extra: Record<string, unknown> = {};
     const status = systemStatus(system.status, report, name);
     const labelKeys: string[] = [];
-    for (const id of system.labels.ids) labelKeys.push(labels.forWanderer(id));
-    if (system.labels.custom) labelKeys.push(labels.custom(system.labels.custom, report, name));
-    if (status.label) labelKeys.push(labels.custom(status.label, null, name));
+    if (system.tag) {
+      labelKeys.push(labels.add(system.tag, NEUTRAL_TAG));
+      report.approximated('system', 'Tag became a Darkbeacon Tag', 'Tags are the map’s markers', name);
+    }
+    if (status.label)
+      labelKeys.push(labels.add(status.label, STATUS_TAG_COLORS[status.label] ?? NEUTRAL_TAG));
+    const systemLabelIds: string[] = [];
+    for (const id of system.labels.ids) {
+      const known = systemLabels.idFor(id);
+      if (known) systemLabelIds.push(known);
+      else
+        report.dropped('system', 'Label the map does not list', 'Wanderer had no label with that id', name);
+    }
+    const customLabel = cut(system.labels.custom, LIMITS.customLabel, 'system', 'Custom label', report, name);
 
     let position = positions.get(system.solarSystemId);
     if (!position) {
@@ -360,12 +390,13 @@ export function translate(dump: WandererMapDump, context: TranslateContext): Tra
         report,
         name,
       ),
-      tag: cut(system.tag, LIMITS.tag, 'system', 'Tag', report, name),
       status: status.status,
       description,
       locked: system.locked,
       visible: system.visible,
       labelKeys: [...new Set(labelKeys)].slice(0, 16),
+      systemLabelIds: [...new Set(systemLabelIds)].slice(0, 32),
+      customLabel: customLabel?.trim() || null,
     };
     report.mapped('system', system.visible ? 'System' : 'Hidden system (kept with its intel)', name);
     systems.push({
@@ -547,6 +578,7 @@ export function translate(dump: WandererMapDump, context: TranslateContext): Tra
     mapName: (dump.map.name ?? dump.source.name ?? dump.source.slug).slice(0, 64),
     mapSlug: dump.map.slug,
     labels: labels.list(),
+    systemLabels: systemLabels.list(),
     systems,
     connections,
     signatures,
@@ -566,7 +598,8 @@ export function translate(dump: WandererMapDump, context: TranslateContext): Tra
     passages: passages.length,
     structures: dump.structures.length,
     comments: dump.comments.length,
-    labels: plan.labels.length,
+    labels: plan.systemLabels.length,
+    tags: plan.labels.length,
     accessRules: access.length,
     hubs: hubs.length,
     webhooks: webhooks.length,
@@ -902,50 +935,73 @@ function linkSignatures(
   }
 }
 
-class LabelSet {
+/** Tags by name (any case): one Tag per name, whatever Wanderer tag or status it came from. */
+class TagSet {
   private readonly byKey = new Map<string, PlannedLabel>();
-  constructor(private readonly names: Record<string, string>) {}
 
-  forWanderer(id: string): string {
-    const normal = /^l[abc123]$/.test(id) ? id.slice(1) : id;
-    const key = `label:${normal}`;
-    if (!this.byKey.has(key)) {
-      const name = (this.names[id] ?? this.names[normal] ?? BUILT_IN_LABELS[normal] ?? normal).slice(
-        0,
-        LIMITS.label,
-      );
-      this.add(key, name, 'From Wanderer');
-    }
-    return this.byKey.get(key)!.key;
-  }
-
-  custom(name: string, report: ReportBuilder | null, example: string): string {
+  add(name: string, color: string): string {
     const trimmed = name.trim().slice(0, LIMITS.label);
-    const key = `label:custom:${trimmed.toLowerCase()}`;
-    if (!this.byKey.has(key)) this.add(key, trimmed, 'From Wanderer');
-    report?.approximated(
-      'system',
-      'Custom label became a map label',
-      'Darkbeacon labels are shared by the map',
-      example,
-    );
-    return this.byKey.get(key)!.key;
-  }
-
-  private add(key: string, name: string, description: string): void {
-    // Two Wanderer labels with one name (case aside) are one Darkbeacon label.
-    for (const label of this.byKey.values())
-      if (label.name.toLowerCase() === name.toLowerCase()) {
-        this.byKey.set(key, label);
-        return;
-      }
-    const color = LABEL_COLORS[new Set(this.byKey.values()).size % LABEL_COLORS.length]!;
-    this.byKey.set(key, { key, name, color, description });
+    const key = `tag:${trimmed.toLowerCase()}`;
+    if (!this.byKey.has(key)) this.byKey.set(key, { key, name: trimmed, color, description: '' });
+    return key;
   }
 
   list(): PlannedLabel[] {
-    return [...new Set(this.byKey.values())];
+    return [...this.byKey.values()];
   }
+}
+
+/**
+ * The map's Labels as Wanderer lists them (its defaults A, B, C, 1, 2, 3 when the map has none):
+ * ids kept, names cut to 8 characters, descriptions to 120, colours dropped, a later label with the
+ * name of an earlier one (any case) merged into it.
+ */
+class SystemLabelSet {
+  private readonly list_: PlannedSystemLabel[] = [];
+  private readonly ids = new Map<string, string>();
+
+  constructor(dump: WandererMapDump, report: ReportBuilder) {
+    const own: Array<{ id: string; name: string; description: string | null }> =
+      dump.systemLabels && dump.systemLabels.length > 0
+        ? dump.systemLabels
+        : Object.entries(dump.labelNames ?? {}).map(([id, name]) => ({ id, name, description: null }));
+    const source = own.length > 0 ? own : DEFAULT_LABELS;
+    for (const label of source) {
+      const id = normalLabelId(label.id);
+      const name = label.name.trim().slice(0, LIMITS.systemLabel);
+      if (!name) continue;
+      if (label.name.trim().length > LIMITS.systemLabel)
+        report.approximated('label', 'Label name', `Shortened to ${LIMITS.systemLabel} characters`, name);
+      const same = this.list_.find((l) => l.name.toLowerCase() === name.toLowerCase());
+      if (same) {
+        this.ids.set(id, same.id);
+        report.approximated('label', 'Label with the name of another', 'Merged into the first', name);
+        continue;
+      }
+      if (this.ids.has(id)) continue;
+      this.ids.set(id, id);
+      this.list_.push({
+        id,
+        name,
+        description: (label.description ?? '').trim().slice(0, LIMITS.systemLabelDescription),
+      });
+      report.mapped('label', own.length > 0 ? 'Label' : 'Default label', name);
+    }
+  }
+
+  /** The plan's id of a Wanderer label id, or null when the map does not list it. */
+  idFor(wandererId: string): string | null {
+    return this.ids.get(normalLabelId(wandererId)) ?? null;
+  }
+
+  list(): PlannedSystemLabel[] {
+    return this.list_;
+  }
+}
+
+/** Older Wanderer versions prefix the default ids (`la`, `l1`). */
+function normalLabelId(id: string): string {
+  return /^l[abc123]$/.test(id) ? id.slice(1) : id;
 }
 
 function groupBySystem<T extends { solarSystemId: number | null; systemUuid: string | null }>(

@@ -81,7 +81,9 @@ export function MapView({
   const connectionPlugins = useSlot('connectionContextMenu', map.id);
   const widgetPlugins = useSlot('widget', map.id);
 
+  // Tags (`labels` in the data) and Labels (WH1...) of the map.
   const labels = (state.map ?? map).labels;
+  const systemLabels = (state.map ?? map).systemLabels ?? [];
   const ids = useMemo(() => [...state.systems.keys()], [state.systems]);
   const universe = useUniverseSystems(ids);
   const onMap = useMemo(() => new Set(ids), [ids]);
@@ -116,12 +118,14 @@ export function MapView({
           system: sys,
           name,
           labels,
+          systemLabels,
           can: permissionsFor(can, sys.provenance, map.kind === 'composite'),
           store,
           plugins: systemPlugins,
           characters: me.data?.characters,
           notify: toast,
           onManageLabels: () => settings.show('labels'),
+          onManageTags: () => settings.show('tags'),
         }),
       };
     }
@@ -202,6 +206,7 @@ export function MapView({
         state={state}
         loaded={store.loaded}
         labels={labels}
+        systemLabels={systemLabels}
         universe={universe}
         can={can}
         store={store}
@@ -301,6 +306,7 @@ export function MapView({
           info={universe.get(system.solarSystemId)}
           universe={universe}
           labels={labels}
+          systemLabels={systemLabels}
           state={state}
           can={permissionsFor(can, system.provenance, map.kind === 'composite')}
           store={store}
