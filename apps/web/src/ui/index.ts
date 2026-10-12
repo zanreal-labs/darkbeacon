@@ -14,6 +14,7 @@ export * from './Input';
 export * from './Menu';
 export * from './Page';
 export * from './Picker';
+export * from './Popover';
 export * from './Select';
 export * from './Skeleton';
 export * from './Tabs';

@@ -267,6 +267,7 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
     before: { shipTypeId: 670, shipName: null },
   },
   'character.online_changed': { data: { characterId: 9, online: false } },
+  'character.docked_changed': { data: { characterId: 9, docked: true } },
   'character.tracked': { data: presence },
   'character.untracked': { data: { characterId: 9 }, before: presence },
   'map.settings_changed': { data: { ...map, name: 'Home' }, before: map },

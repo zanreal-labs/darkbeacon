@@ -43,3 +43,5 @@ export * from './undo.js';
 export * from './clipboard.js';
 export * from './pings.js';
 export * from './linked-maps.js';
+export * from './characters.js';
+export * from './auto-map.js';

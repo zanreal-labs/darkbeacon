@@ -125,6 +125,11 @@ describeEachDialect('tracking and universe over HTTP', (t) => {
   it('tracks a character, polls ESI and auto-maps its jumps', async () => {
     const track = (as: string, characterId: number, tracked: boolean) =>
       request('PUT', `/api/maps/${mapId}/tracking`, as, { characterId, tracked });
+    // Jita is never auto-mapped by default; this map takes it off the list.
+    const settings = await request('PATCH', `/api/maps/${mapId}`, 'alice', {
+      settings: { autoMap: { excludedSystems: [] } },
+    });
+    expect((settings.body as MapDto).settings.autoMap).toEqual({ excludedSystems: [] });
 
     expect((await track('alice', PILOT, true)).status).toBe(204);
     expect((await track('bob', ALT, true)).status).toBe(403);
@@ -164,6 +169,7 @@ describeEachDialect('tracking and universe over HTTP', (t) => {
     expect((await log.readSince(`map:${mapId}`, 0)).map((e) => e.type)).toEqual([
       'map.created',
       'access.rule_added',
+      'map.settings_changed',
       'character.tracked',
       'character.online_changed',
       'character.ship_changed',

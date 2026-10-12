@@ -5,6 +5,8 @@ import { getMe, getProviders, prefilled } from '../../server/api';
 import { AccountMenu } from '../../shell/AccountMenu';
 import { AccountPlaceholder, ADMIN_NAV, AppShell, RailLink, TabLink } from '../../shell/AppShell';
 import { DemoBadge } from '../../shell/DemoBadge';
+import { PreferenceMirror } from '../../shell/PreferenceMirror';
+import { ScopeNotice } from '../../shell/ScopeNotice';
 import { SessionSync, SignInRedirect } from '../../shell/Session';
 import { SlotBoundary } from '../../shell/SlotBoundary';
 
@@ -68,6 +70,8 @@ async function Account() {
       ])}
     >
       <SessionSync accountId={me.account.id} />
+      <PreferenceMirror />
+      <ScopeNotice me={me} />
       <AccountMenu me={me} />
     </HydrationBoundary>
   );

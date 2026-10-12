@@ -8,6 +8,7 @@ import {
   DiscordLogin,
   EveLogin,
   safeReturnTo,
+  parseExtras,
   SESSION_TTL_MS,
   SessionService,
   type PendingAuth,
@@ -148,10 +149,12 @@ export class AuthController {
   async eveLogin(
     @CurrentActor() actor: Actor | null,
     @Query('returnTo') returnTo: unknown,
+    @Query('extras') extras: unknown,
     @Res() reply: FastifyReply,
   ): Promise<void> {
+    // `?extras=assets,wallet` also asks for the opt-in scopes.
     await this.redirect(reply, '/', async () =>
-      this.begin(reply, await this.characters.startLink(actor, returnTo)),
+      this.begin(reply, await this.characters.startLink(actor, returnTo, parseExtras(extras))),
     );
   }
 

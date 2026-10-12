@@ -44,6 +44,7 @@ import { MapSharing } from './MapSharing';
 import { MapAccessSection } from './MapAccess';
 import { MapCharactersSection } from './MapCharacters';
 import { MapTransferSection } from './MapTransfer';
+import { MapAutoMapSettings } from './MapAutoMapSettings';
 import {
   buildPath,
   MAP_DESCRIPTION_MAX,
@@ -122,6 +123,16 @@ const SECTIONS: readonly Section[] = [
     title: 'General',
     icon: <Settings2 />,
     render: (map) => <GeneralSettings map={map} />,
+  },
+  {
+    id: 'automap',
+    title: 'Auto-mapping',
+    icon: <Radar />,
+    render: (map) => (
+      <Pane>
+        <MapAutoMapSettings key={map.id} map={map} />
+      </Pane>
+    ),
   },
   {
     id: 'access',

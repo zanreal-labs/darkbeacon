@@ -1,0 +1,155 @@
+.meta {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.where {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dbk-color-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.where img {
+  flex: none;
+}
+
+.online {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+  font-weight: 400;
+}
+
+.actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--dbk-space-2);
+}
+
+.wallet {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 var(--dbk-space-2);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+  background: var(--dbk-color-surface);
+  color: var(--dbk-color-text-muted);
+  font: inherit;
+  font-size: var(--dbk-font-size-small);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.wallet svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Blurred until asked for, as in Wanderer: a glance at the screen does not give it away. */
+.walletValue {
+  filter: blur(5px);
+  transition: filter var(--dbk-motion-fast) var(--dbk-motion-easing);
+  user-select: none;
+}
+
+.wallet[data-shown] .walletValue {
+  filter: none;
+  color: var(--dbk-color-text);
+  user-select: text;
+}
+
+/* Maps x characters; scrolls inside the card when there are many characters. */
+.matrixScroll {
+  overflow-x: auto;
+}
+
+.matrix {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--dbk-font-size-small);
+}
+
+.matrix th,
+.matrix td {
+  padding: var(--dbk-space-2) var(--dbk-space-3);
+  border-bottom: 1px solid var(--dbk-color-border);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.matrix tr:last-child > * {
+  border-bottom: 0;
+}
+
+.matrix th:first-child {
+  text-align: left;
+}
+
+.matrix thead th {
+  color: var(--dbk-color-text-muted);
+  font-weight: 500;
+}
+
+.matrix tbody th {
+  font-weight: 500;
+}
+
+.matrixHead {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  max-width: 96px;
+}
+
+.matrixHead span:last-child {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.matrixCheck {
+  justify-content: center;
+}
+
+.mapLink {
+  color: var(--dbk-color-text);
+  text-decoration: none;
+}
+
+.mapLink:hover {
+  color: var(--dbk-color-accent-text);
+}
+
+.viewOnly {
+  margin-left: var(--dbk-space-2);
+  color: var(--dbk-color-text-subtle);
+  font-weight: 400;
+}
+
+@media (max-width: 640px) {
+  .matrixHead span:last-child {
+    display: none;
+  }
+}
+
+/* Names and their badges wrap on narrow screens instead of cutting the name short. */
+.character [class*='rowTitle'] {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+.character [class*='rowTitle'] > span:first-child {
+  overflow: visible;
+}

@@ -30,6 +30,8 @@ import {
   EVE_SEARCH_SCOPE,
   initialInstanceRole,
   WAYPOINT_SCOPE,
+  grantedExtras,
+  missingScopes,
   withRecentMap,
 } from '../domain/rules.js';
 import type { AccountRepository } from '../ports/account-repository.js';
@@ -85,6 +87,7 @@ export function toCharacterDto(character: LinkedCharacter, scopes?: readonly str
     // Characters without an EVE grant (demo, fake) say nothing about search, so no "Search off".
     ...(scopes ? { canSearch: character.tokenValid && scopes.includes(EVE_SEARCH_SCOPE) } : {}),
     canSetWaypoints: character.tokenValid && (scopes?.includes(WAYPOINT_SCOPE) ?? false),
+    ...(scopes ? { missingScopes: missingScopes(scopes), extras: grantedExtras(scopes) } : {}),
     linkedAt: character.linkedAt,
   };
 }

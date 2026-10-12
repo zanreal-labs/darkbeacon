@@ -9,3 +9,5 @@ export type * from './identity-provider.js';
 export type * from './login-policy.js';
 export type * from './session-repository.js';
 export type * from './invite-repository.js';
+export type * from './eve-public.js';
+export type * from './user-preferences.js';

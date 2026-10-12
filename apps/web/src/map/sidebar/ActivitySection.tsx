@@ -11,6 +11,7 @@ import type {
   SystemActivityDto,
 } from '@darkbeacon/shared';
 import { evewho, images, useStandingsQuery, useSystemActivity, zkill } from '../../lib/intel';
+import { hereForReturn } from '../../lib/scope-health';
 import { eveLinkHref } from '../../shell/AccountMenu';
 import { track } from '../../lib/telemetry';
 import { Avatar, Segmented } from '../../ui';
@@ -102,10 +103,8 @@ export function SystemHolder({ mapId, solarSystemId }: { mapId: string; solarSys
       <SovereigntyLine intel={activity.data?.intel} />
       {held && standings.data?.missingScopes && (
         <p className={styles.relink}>
-          <a href={eveLinkHref(typeof window === 'undefined' ? '/account' : window.location.pathname)}>
-            Link your characters again
-          </a>{' '}
-          to colour holders by your standings (contacts were not asked for when they were linked).
+          <a href={eveLinkHref(hereForReturn())}>Link your characters again</a> to colour holders by your
+          standings (contacts were not asked for when they were linked).
         </p>
       )}
     </>

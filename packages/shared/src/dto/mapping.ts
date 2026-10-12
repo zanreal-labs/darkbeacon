@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { MapRole } from './access.js';
 import { AuthorDto } from './authors.js';
 import { StarterAccessRule } from './access-rules.js';
+import { AutoMapRulesDto } from './auto-map.js';
 import { BookmarkNumbering, BookmarkTemplate } from './bookmarks.js';
 import { EveId, Id, Timestamp } from './common.js';
 
@@ -32,6 +33,8 @@ export const MapSettings = z.object({
    * copy, members paste.
    */
   clipboard: z.object({ copy: MapRole, paste: MapRole }).optional(),
+  /** Excluded systems, the gate rule and bridge typing of auto-mapping; absent: the defaults. */
+  autoMap: AutoMapRulesDto.optional(),
 });
 export type MapSettings = z.infer<typeof MapSettings>;
 

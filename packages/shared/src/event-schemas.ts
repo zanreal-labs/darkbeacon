@@ -69,6 +69,7 @@ export const EVENT_DATA_SCHEMAS: Record<EventType, z.ZodType> = {
     shipName: z.string().nullable(),
   }),
   'character.online_changed': z.object({ characterId: EveId, online: z.boolean() }),
+  'character.docked_changed': z.object({ characterId: EveId, docked: z.boolean() }),
   'character.tracked': CharacterPresenceDto,
   'character.untracked': z.object({ characterId: EveId }),
   'map.settings_changed': MapDto,

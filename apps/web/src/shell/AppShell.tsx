@@ -1,14 +1,16 @@
 import Link from 'next/link';
 import { Suspense, type ReactElement, type ReactNode } from 'react';
-import { Map as MapIcon, Orbit, Shield, UserRound } from 'lucide-react';
+import { Map as MapIcon, Orbit, Shield, UserRound, UsersRound } from 'lucide-react';
 import { PluginsProvider } from '../plugins/PluginSlot';
 import { Skeleton, Tooltip } from '../ui';
 import { Breadcrumbs } from './Trail';
 import { BreadcrumbProvider } from './breadcrumbs';
 import { ConnectionIndicator } from './ConnectionIndicator';
+import { EveStatus } from './EveStatus';
 import { LogoMark } from './Logo';
 import { MapSettingsRailButton } from './MapSettingsButton';
 import { NavLink } from './NavLink';
+import { NewVersion } from './NewVersion';
 import { TelemetryRoot } from './Telemetry';
 import { ThemeMenu } from './ThemeMenu';
 import styles from './AppShell.module.css';
@@ -83,6 +85,8 @@ export const MAPS_NAV: NavItem = {
 export const JUMP_NAV: NavItem = { href: '/jump', label: 'Jump planner', icon: <Orbit /> };
 export const ADMIN_NAV: NavItem = { href: '/admin', label: 'Admin', icon: <Shield /> };
 export const ACCOUNT_NAV: NavItem = { href: '/account', label: 'Account', icon: <UserRound /> };
+/** My characters: where they are, their scopes, and which maps track them. */
+export const CHARACTERS_NAV: NavItem = { href: '/characters', label: 'Characters', icon: <UsersRound /> };
 
 /**
  * The signed-in frame: a slim rail on the left (bottom tabs on phones) and a top bar with the
@@ -120,6 +124,7 @@ export function AppShell({
               <MapSettingsRailButton />
             </Suspense>
             <RailLink item={JUMP_NAV} />
+            <RailLink item={CHARACTERS_NAV} />
             {adminRail}
           </nav>
           <header className={styles.topbar}>
@@ -131,6 +136,7 @@ export function AppShell({
             </Suspense>
             <span className={styles.spacer} />
             {demoBadge}
+            <EveStatus />
             <ConnectionIndicator />
             <ThemeMenu />
             {account}
@@ -147,6 +153,7 @@ export function AppShell({
           <Suspense fallback={null}>
             <TelemetryRoot />
           </Suspense>
+          <NewVersion />
         </div>
       </BreadcrumbProvider>
     </PluginsProvider>

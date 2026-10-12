@@ -506,7 +506,7 @@ describe('CharacterService', () => {
     await expect(t.service.startLink(null, '/')).rejects.toMatchObject({ code: 'unauthenticated' });
   });
 
-  it('refreshes expiring tokens once for concurrent callers and invalidates rejected ones', async () => {
+  it('refreshes expiring tokens once for concurrent callers and gives up after repeated refusals', async () => {
     const t = withEve();
     t.eve.codes.set('c1', eveTokens(1001, 'h1', 'a1', 'r1', t.clock.now() + 30_000));
     await link(t, 'acc-a', 'c1');
@@ -518,10 +518,35 @@ describe('CharacterService', () => {
 
     t.clock.set(Date.UTC(2027, 0, 1));
     t.eve.rejectRefresh = true;
+    // One refusal is not the end: EVE refuses now and then.
+    expect(await t.service.accessToken(1001)).toBeNull();
+    expect((await t.characters.findById(1001))?.tokenValid).toBe(true);
+    // Refusals far apart start counting again.
+    t.clock.set(Date.UTC(2027, 0, 1) + 3 * 60 * 60 * 1000);
+    expect(await t.service.accessToken(1001)).toBeNull();
+    expect(await t.service.accessToken(1001)).toBeNull();
+    expect((await t.characters.findById(1001))?.tokenValid).toBe(true);
+    // The third within two hours gives the token up.
     expect(await t.service.accessToken(1001)).toBeNull();
     expect((await t.characters.findById(1001))?.tokenValid).toBe(false);
     expect(await t.service.accessToken(1001)).toBeNull();
-    expect(t.eve.refreshes).toBe(2);
+    expect(t.eve.refreshes).toBe(5);
+  });
+
+  it('keeps a token after a refusal followed by a successful refresh', async () => {
+    const t = withEve();
+    t.eve.codes.set('c1', eveTokens(1001, 'h1', 'a1', 'r1', t.clock.now() + 30_000));
+    await link(t, 'acc-a', 'c1');
+    t.clock.set(Date.UTC(2027, 0, 1));
+    t.eve.rejectRefresh = true;
+    expect(await t.service.accessToken(1001)).toBeNull();
+    expect(await t.service.accessToken(1001)).toBeNull();
+    t.eve.rejectRefresh = false;
+    expect(await t.service.accessToken(1001)).not.toBeNull();
+    t.clock.set(Date.UTC(2028, 0, 1));
+    t.eve.rejectRefresh = true;
+    expect(await t.service.accessToken(1001)).toBeNull();
+    expect((await t.characters.findById(1001))?.tokenValid).toBe(true);
   });
 
   it('unlinks only own characters', async () => {

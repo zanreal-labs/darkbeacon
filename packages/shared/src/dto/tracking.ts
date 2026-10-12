@@ -11,6 +11,11 @@ export const CharacterPresenceDto = z.object({
   shipName: z.string().nullable(),
   online: z.boolean(),
   updatedAt: Timestamp,
+  /** Docked in a station or structure; absent when not known yet. */
+  docked: z.boolean().optional(),
+  /** The character's corporation and alliance (absent when not known). */
+  corporationId: EveId.optional(),
+  allianceId: EveId.nullable().optional(),
 });
 export type CharacterPresenceDto = z.infer<typeof CharacterPresenceDto>;
 

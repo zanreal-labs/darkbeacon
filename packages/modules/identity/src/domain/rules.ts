@@ -52,6 +52,57 @@ export const EVE_SCOPES: readonly string[] = [
   CORPORATION_STRUCTURES_SCOPE,
 ];
 
+/**
+ * Scopes a character only grants when its owner opts in (linking again with `extras`): the
+ * assets to weigh the ship actually flown, and the wallet balance on the characters page.
+ */
+export const OPTIONAL_EVE_SCOPES = {
+  assets: 'esi-assets.read_assets.v1',
+  wallet: 'esi-wallet.read_character_wallet.v1',
+} as const;
+export type OptionalEveScope = keyof typeof OPTIONAL_EVE_SCOPES;
+
+/** The extras named in a `?extras=assets,wallet` value; unknown names are ignored. */
+export function parseExtras(value: unknown): OptionalEveScope[] {
+  if (typeof value !== 'string') return [];
+  const names = value.split(',').map((v) => v.trim());
+  return (Object.keys(OPTIONAL_EVE_SCOPES) as OptionalEveScope[]).filter((k) => names.includes(k));
+}
+
+/** What EVE SSO is asked for when linking: every required scope plus the chosen extras. */
+export function linkScopes(extras: readonly OptionalEveScope[] = []): string[] {
+  return [...EVE_SCOPES, ...extras.map((e) => OPTIONAL_EVE_SCOPES[e])];
+}
+
+/** Required scopes a grant lacks (characters linked before a scope was added). */
+export function missingScopes(granted: readonly string[]): string[] {
+  return EVE_SCOPES.filter((s) => !granted.includes(s));
+}
+
+/** The opt-in extras a grant holds. */
+export function grantedExtras(granted: readonly string[]): OptionalEveScope[] {
+  return (Object.keys(OPTIONAL_EVE_SCOPES) as OptionalEveScope[]).filter((k) =>
+    granted.includes(OPTIONAL_EVE_SCOPES[k]),
+  );
+}
+
+/**
+ * EVE refuses a refresh now and then without the grant being gone; like Wanderer, a token is
+ * given up only after this many refusals within the window.
+ */
+export const TOKEN_STRIKES = { max: 3, windowMs: 2 * 60 * 60 * 1000 } as const;
+
+export interface TokenStrikes {
+  count: number;
+  firstAt: number;
+}
+
+/** Counts one more refusal; a refusal after the window starts a new count. */
+export function addStrike(previous: TokenStrikes | undefined, now: number): TokenStrikes {
+  if (!previous || now - previous.firstAt > TOKEN_STRIKES.windowMs) return { count: 1, firstAt: now };
+  return { count: previous.count + 1, firstAt: previous.firstAt };
+}
+
 /** How many recently opened maps an account remembers. */
 export const RECENT_MAPS = 5;
 

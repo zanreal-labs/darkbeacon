@@ -5,16 +5,21 @@ import { AutoMapper } from '../application/auto-mapper.js';
 import type { RecordedJump, UniverseLookup } from '../ports/index.js';
 import { fakeAccess, MemoryTrackingRepository } from '../test-support.js';
 
-const JITA = 30000142; // high-sec
-const PERIMETER = 30000144; // high-sec, gate-linked to Jita
+const JITA = 30000145; // high-sec (New Caldari; Jita itself is excluded by default)
+const PERIMETER = 30000144; // high-sec, gate-linked to it
+const REAL_JITA = 30000142;
 const AMAMAKE = 30002537; // low-sec
 const J_SPACE = 31000001; // C3
 const PILOT = 90000001;
 
 const universe: UniverseLookup = {
   getSystem: (id) =>
-    ({ [JITA]: { whClass: 7 }, [PERIMETER]: { whClass: 7 }, [AMAMAKE]: { whClass: 8 } })[id] ??
-    (id >= 31000000 ? { whClass: 3 } : null),
+    ({
+      [JITA]: { whClass: 7 },
+      [REAL_JITA]: { whClass: 7 },
+      [PERIMETER]: { whClass: 7 },
+      [AMAMAKE]: { whClass: 8 },
+    })[id] ?? (id >= 31000000 ? { whClass: 3 } : null),
   gateLinked: (a, b) => (a === JITA && b === PERIMETER) || (a === PERIMETER && b === JITA),
 };
 
@@ -81,6 +86,58 @@ describe('AutoMapper', () => {
     await mapper.handle(jumped('m1', JITA, PERIMETER));
     await mapper.handle(jumped('m1', PERIMETER, AMAMAKE));
     expect(recorded.map((j) => j.type)).toEqual(['gate', 'wormhole']);
+  });
+
+  it('maps gate-less known-space jumps, types known bridges and leaves Jita out', async () => {
+    mapper = new AutoMapper({
+      tracking,
+      access: fakeAccess(roles),
+      universe,
+      bridges: { linked: (_map, a, b) => Promise.resolve(a === AMAMAKE && b === PERIMETER) },
+      target: {
+        scopes: (mapId) => Promise.resolve(scopes[mapId] ?? null),
+        recordJump: (jump) => {
+          recorded.push(jump);
+          return Promise.resolve();
+        },
+      },
+    });
+    // High-sec to low-sec without a stargate went through a wormhole.
+    await mapper.handle(jumped('m1', PERIMETER, AMAMAKE));
+    await mapper.handle(jumped('m1', AMAMAKE, PERIMETER));
+    await mapper.handle(jumped('m1', J_SPACE, REAL_JITA));
+    expect(recorded.map((j) => [j.to, j.type])).toEqual([
+      [AMAMAKE, 'wormhole'],
+      [PERIMETER, 'bridge'],
+    ]);
+  });
+
+  it('adds where a character is found when tracking starts, in scope only', async () => {
+    const placed: number[] = [];
+    mapper = new AutoMapper({
+      tracking,
+      access: fakeAccess(roles),
+      universe,
+      target: {
+        scopes: (mapId) => Promise.resolve(scopes[mapId] ?? null),
+        recordJump: () => Promise.resolve(),
+        placeSystem: (input) => {
+          placed.push(input.solarSystemId);
+          return Promise.resolve();
+        },
+      },
+    });
+    const event = (type: string, data: unknown) => ({ ...jumped('m1', J_SPACE, JITA), type, data });
+    const presence = { characterId: PILOT, accountId: 'alice', name: 'P', shipTypeId: null, shipName: null };
+    await mapper.handle(
+      event('character.tracked', { ...presence, solarSystemId: J_SPACE, online: true, updatedAt: 0 }),
+    );
+    await mapper.handle(event('character.moved', { characterId: PILOT, from: null, to: J_SPACE + 1 }));
+    // Out of scope, a later move (a jump handles those) and someone else's character: nothing.
+    await mapper.handle(event('character.moved', { characterId: PILOT, from: null, to: AMAMAKE }));
+    await mapper.handle(event('character.moved', { characterId: PILOT, from: J_SPACE, to: J_SPACE + 2 }));
+    await mapper.handle({ ...event('character.moved', { characterId: 1, from: null, to: J_SPACE }) });
+    expect(placed).toEqual([J_SPACE, J_SPACE + 1]);
   });
 
   it('skips characters not tracked on the map, owners without edit rights and other events', async () => {

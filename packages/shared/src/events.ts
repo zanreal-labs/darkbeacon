@@ -198,6 +198,8 @@ export interface EventPayloads {
   };
   /** `import:<jobId>` stream: the job as it is now (progress, report). */
   'import.progress': ImportJobDto;
+  /** A tracked character docked in a station or structure (`docked`) or undocked. */
+  'character.docked_changed': { characterId: number; docked: boolean };
 }
 
 export type EventType = keyof EventPayloads;
@@ -260,6 +262,7 @@ export const EVENT_TYPES = [
   'import.finished',
   'import.sync_changed',
   'import.progress',
+  'character.docked_changed',
 ] as const satisfies readonly EventType[];
 
 export type TypedEvent<K extends EventType = EventType> = {

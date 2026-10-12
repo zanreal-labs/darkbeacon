@@ -6,6 +6,7 @@ export const MAP_SETTINGS_PARAM = 'settings';
 
 export const MAP_SETTINGS_SECTIONS = [
   'general',
+  'automap',
   'access',
   'characters',
   'sharing',

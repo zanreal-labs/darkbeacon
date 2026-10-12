@@ -34,6 +34,11 @@ export const HealthDto = z.object({
    * API only (tests, API-only deployments). While it does not answer, health is a 503 instead.
    */
   web: z.enum(['ok', 'off']),
+  /**
+   * The web app build this server serves; a page built from another one is out of date and
+   * offers a reload. Absent when unknown (development, API-only).
+   */
+  build: z.string().optional(),
 });
 export type HealthDto = z.infer<typeof HealthDto>;
 

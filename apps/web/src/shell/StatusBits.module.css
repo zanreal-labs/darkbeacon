@@ -1,0 +1,156 @@
+/* Small status pieces of the top bar: Tranquility, the re-link notice, the update prompt. */
+
+.tq {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 var(--dbk-space-2);
+  border-radius: var(--dbk-radius);
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tqLabel {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.tqName {
+  color: var(--dbk-color-text-subtle);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.notice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 var(--dbk-space-2);
+  border: 1px solid color-mix(in oklab, var(--notice) 45%, var(--dbk-color-border));
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--notice) 10%, var(--dbk-color-surface));
+  color: var(--dbk-color-text);
+  font: inherit;
+  font-size: var(--dbk-font-size-small);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.notice[data-tone='warning'] {
+  --notice: var(--dbk-color-warning);
+}
+
+.notice[data-tone='danger'] {
+  --notice: var(--dbk-color-danger);
+}
+
+.notice svg {
+  width: 14px;
+  height: 14px;
+  color: var(--notice);
+}
+
+.notice:hover,
+.notice[data-state='open'] {
+  background: color-mix(in oklab, var(--notice) 18%, var(--dbk-color-surface));
+}
+
+.noticeMenu {
+  max-width: min(360px, calc(100vw - 32px));
+}
+
+.attention {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.attention strong {
+  font-weight: 600;
+}
+
+.attentionWhy {
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+  white-space: normal;
+}
+
+.attentionAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--dbk-color-accent-text);
+  font-size: var(--dbk-font-size-small);
+}
+
+.attentionAction svg {
+  width: 12px;
+  height: 12px;
+}
+
+.update {
+  position: fixed;
+  z-index: 60;
+  left: calc(var(--rail-width, 56px) + var(--dbk-space-4));
+  bottom: var(--dbk-space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--dbk-space-2);
+  max-width: calc(100vw - 32px);
+  padding: var(--dbk-space-2) var(--dbk-space-2) var(--dbk-space-2) var(--dbk-space-3);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius-large);
+  background: var(--dbk-color-surface-raised);
+  box-shadow: var(--dbk-shadow-large);
+}
+
+.updateIcon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--dbk-color-accent);
+}
+
+.updateText {
+  display: grid;
+  margin-right: var(--dbk-space-2);
+  font-size: var(--dbk-font-size-small);
+}
+
+.updateText span {
+  color: var(--dbk-color-text-muted);
+}
+
+@media (max-width: 767px) {
+  .tqName,
+  .noticeLabel {
+    display: none;
+  }
+
+  .tq {
+    padding: 0 4px;
+  }
+
+  /* Phones have little room: Tranquility shows up only when it is down or in VIP. */
+  .tq[data-quiet] {
+    display: none;
+  }
+
+  .notice {
+    padding: 0 6px;
+  }
+
+  .update {
+    left: var(--dbk-space-4);
+    right: var(--dbk-space-4);
+    bottom: calc(64px + var(--dbk-space-3) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .updateText span {
+    display: none;
+  }
+}

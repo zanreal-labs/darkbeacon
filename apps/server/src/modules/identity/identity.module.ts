@@ -12,7 +12,10 @@ import type { Clock, EventLog, UnitOfWork } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
 import {
   AccountService,
+  AffiliationRefresh,
   CharacterService,
+  CharacterWallets,
+  UserPreferences,
   DemoLogin,
   DiscordBotService,
   DiscordLogin,
@@ -28,7 +31,9 @@ import {
 import { DiscordBotHttp } from '../../adapters/identity/discord-bot-http.js';
 import { DiscordHttpProvider } from '../../adapters/identity/discord-http.js';
 import { EsiDirectoryHttp } from '../../adapters/identity/esi-directory-http.js';
+import { EsiPublicHttp } from '../../adapters/identity/esi-public-http.js';
 import { EveSsoHttp } from '../../adapters/identity/eve-sso-http.js';
+import { KyselyUserPreferences } from '../../adapters/identity/kysely-user-preferences.js';
 import {
   KyselyAccountRepository,
   KyselyCharacterRepository,
@@ -51,6 +56,7 @@ import { AdminIdentityController } from './admin-identity.controller.js';
 import { AuthController, oauthCallbackUrl } from './auth.controller.js';
 import { readSessionCookie } from './cookies.js';
 import { PENDING_BOX } from './identity.tokens.js';
+import { PreferencesController } from './preferences.controller.js';
 import { SignInAudit } from './sign-in-audit.js';
 
 const DISCORD = 'identity.Discord';
@@ -58,6 +64,9 @@ const ACCOUNTS = 'identity.AccountRepository';
 const SESSIONS = 'identity.SessionRepository';
 const CHARACTERS = 'identity.CharacterRepository';
 const DISCORD_LINKS = 'identity.DiscordLinkRepository';
+const ESI_PUBLIC = 'identity.EsiPublic';
+/** How often every linked character's corporation and alliance is read again (ESI caches it an hour). */
+const AFFILIATION_INTERVAL_MS = 10 * 60 * 1000;
 
 /**
  * Accounts, sessions, Discord login and EVE character linking. Installs the actor resolver:
@@ -73,6 +82,7 @@ const DISCORD_LINKS = 'identity.DiscordLinkRepository';
     AdminIdentityController,
     EveDirectoryController,
     DiscordDirectoryController,
+    PreferencesController,
   ],
   providers: [
     SignInAudit,
@@ -274,9 +284,39 @@ const DISCORD_LINKS = 'identity.DiscordLinkRepository';
         }),
       inject: [APP_CONFIG, CHARACTERS, UNIT_OF_WORK, EVENT_LOG, CLOCK, HTTP_FETCH],
     },
+    {
+      provide: ESI_PUBLIC,
+      useFactory: (fetchFn: FetchLike, config: AppConfig) =>
+        new EsiPublicHttp(fetchFn, `Darkbeacon (+${config.publicUrl})`),
+      inject: [HTTP_FETCH, APP_CONFIG],
+    },
+    {
+      provide: UserPreferences,
+      useFactory: (db: Database, clock: Clock) =>
+        new UserPreferences({ preferences: new KyselyUserPreferences(db), clock }),
+      inject: [Database, CLOCK],
+    },
+    {
+      provide: CharacterWallets,
+      useFactory: (characters: CharacterService, esi: EsiPublicHttp, clock: Clock) =>
+        new CharacterWallets({ characters, wallet: esi, clock }),
+      inject: [CharacterService, ESI_PUBLIC, CLOCK],
+    },
+    {
+      provide: AffiliationRefresh,
+      useFactory: (
+        characters: CharacterRepository,
+        esi: EsiPublicHttp,
+        events: EventLog,
+        uow: UnitOfWork,
+        clock: Clock,
+      ) => new AffiliationRefresh({ characters, esi, events, uow, clock }),
+      inject: [CHARACTERS, ESI_PUBLIC, EVENT_LOG, UNIT_OF_WORK, CLOCK],
+    },
   ],
   exports: [
     AccountService,
+    UserPreferences,
     CharacterService,
     SignUpGate,
     SessionService,
@@ -290,6 +330,7 @@ const DISCORD_LINKS = 'identity.DiscordLinkRepository';
 export class IdentityModule implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger('Identity');
   private timer: NodeJS.Timeout | undefined;
+  private affiliationTimer: NodeJS.Timeout | undefined;
 
   constructor(
     @Inject(ActorResolverRegistry) private readonly actors: ActorResolverRegistry,
@@ -302,6 +343,8 @@ export class IdentityModule implements OnModuleInit, OnApplicationBootstrap, OnM
     @Inject(CHARACTERS) private readonly characterRepository: CharacterRepository,
     @Inject(DiscordBotService) private readonly bot: DiscordBotService,
     @Inject(MaintenanceMode) private readonly maintenance: MaintenanceMode,
+    @Inject(AffiliationRefresh) private readonly affiliations: AffiliationRefresh,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   onModuleInit(): void {
@@ -355,9 +398,19 @@ export class IdentityModule implements OnModuleInit, OnApplicationBootstrap, OnM
       },
       60 * 60 * 1000,
     ).unref();
+    // Tests run the refresh themselves.
+    if (this.config.env !== 'test') {
+      this.affiliationTimer = setInterval(() => {
+        if (this.maintenance.active) return;
+        this.affiliations
+          .run()
+          .catch((error: unknown) => this.logger.warn(`affiliation refresh failed: ${String(error)}`));
+      }, AFFILIATION_INTERVAL_MS).unref();
+    }
   }
 
   onModuleDestroy(): void {
     clearInterval(this.timer);
+    clearInterval(this.affiliationTimer);
   }
 }

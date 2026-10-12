@@ -2473,6 +2473,85 @@ export const routes = {
       response: z.array(dto.LinkedMapDto),
     }),
   },
+
+  characters: {
+    /** My characters' whereabouts and every map they may be tracked on (the characters page). */
+    myTracking: route({
+      method: 'GET',
+      path: '/api/accounts/me/tracking',
+      auth: 'account',
+      scope: { resource: 'account', action: 'read' },
+      response: dto.MyTrackingDto,
+    }),
+    /** The wallet balance of one of my characters that allowed it (opt-in scope). */
+    wallet: route({
+      method: 'GET',
+      path: '/api/accounts/me/characters/:characterId/wallet',
+      auth: 'account',
+      scope: 'session',
+      response: dto.CharacterWalletDto,
+    }),
+    /** My main character on this map and the character the map follows. */
+    mapSettings: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/tracking/me',
+      auth: 'account',
+      scope: { resource: 'tracking', action: 'read' },
+      mapRole: 'viewer',
+      response: dto.MapTrackingSettingsDto,
+    }),
+    updateMapSettings: route({
+      method: 'PUT',
+      path: '/api/maps/:mapId/tracking/me',
+      auth: 'account',
+      scope: { resource: 'tracking', action: 'read' },
+      mapRole: 'viewer',
+      body: dto.UpdateMapTrackingSettingsRequest,
+      response: dto.MapTrackingSettingsDto,
+    }),
+    /** Jumps and additions per character on the map over a period. */
+    activity: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/tracking/activity',
+      auth: 'account',
+      scope: { resource: 'tracking', action: 'read' },
+      mapRole: 'viewer',
+      query: dto.CharacterActivityQuery,
+      response: z.array(dto.CharacterActivityDto),
+    }),
+    /** How many tracked characters are online on each map I can see. */
+    onlineCounts: route({
+      method: 'GET',
+      path: '/api/tracking/online',
+      auth: 'account',
+      scope: { resource: 'tracking', action: 'read' },
+      response: dto.OnlineCountsDto,
+    }),
+    /** Tranquility's status and whether tracking waits for it. */
+    eveStatus: route({
+      method: 'GET',
+      path: '/api/eve/status',
+      auth: 'account',
+      scope: { resource: 'universe', action: 'read' },
+      response: dto.EveServerStatusDto,
+    }),
+    /** My preferences that follow me between browsers (canvas, signatures, Local, sidebar). */
+    preferences: route({
+      method: 'GET',
+      path: '/api/accounts/me/preferences',
+      auth: 'account',
+      scope: 'session',
+      response: dto.UserPreferencesDto,
+    }),
+    updatePreferences: route({
+      method: 'PUT',
+      path: '/api/accounts/me/preferences',
+      auth: 'account',
+      scope: 'session',
+      body: dto.UpdateUserPreferencesRequest,
+      response: dto.UserPreferencesDto,
+    }),
+  },
 } as const;
 
 type PathParams<P extends string> = P extends `${string}:${infer Name}/${infer Rest}`

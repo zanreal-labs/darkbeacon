@@ -130,6 +130,8 @@ export function applyMapEvent(state: MapState, event: TypedEvent): MapState {
       );
     case 'character.online_changed':
       return patchCharacter(state, event.data.characterId, { online: event.data.online }, event.occurredAt);
+    case 'character.docked_changed':
+      return patchCharacter(state, event.data.characterId, { docked: event.data.docked }, event.occurredAt);
     case 'character.tracked':
       return { ...state, characters: upsert(state.characters, event.data.characterId, event.data) };
     case 'character.untracked':
