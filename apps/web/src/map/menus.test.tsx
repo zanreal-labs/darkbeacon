@@ -71,8 +71,9 @@ describe('system menu', () => {
   it('shows a viewer only what a viewer can do', () => {
     expect(rows(system('viewer').items)).toEqual(['Links']);
     const withPilot = system('viewer', {}, { characters: [pilot(1, 'Ayla Vex')] }).items;
-    expect(rows(withPilot)).toEqual(['Set destination', 'Links']);
-    expect(rows(sub(withPilot, 'Set destination'))).toEqual([
+    expect(rows(withPilot)).toEqual(['Route', 'Links']);
+    expect(rows(sub(withPilot, 'Route'))).toEqual(['Set destination']);
+    expect(rows(sub(sub(withPilot, 'Route'), 'Set destination'))).toEqual([
       'Set destination',
       'Add waypoint',
       'Add waypoint first',
@@ -87,9 +88,10 @@ describe('system menu', () => {
       personal: [],
     };
     const viewer = system('viewer', {}, { routes: { hubs, canEdit: false, toggle } }).items;
-    expect(rows(viewer)).toEqual(['My hub', 'Links']);
+    expect(rows(viewer)).toEqual(['Route', 'Links']);
+    expect(rows(sub(viewer, 'Route'))).toEqual(['My hub']);
     const member = system('member', {}, { routes: { hubs, canEdit: true, toggle } }).items;
-    const mapHub = member.find((i) => i.kind === 'check' && i.label === 'Map hub');
+    const mapHub = sub(member, 'Route').find((i) => i.kind === 'check' && i.label === 'Map hub');
     if (mapHub?.kind !== 'check') throw new Error('Map hub');
     expect(mapHub.checked).toBe(true);
     mapHub.onSelect();
@@ -130,8 +132,8 @@ describe('system menu', () => {
       'Labels',
       'Tags',
       'Rename',
-      'Hide from routes',
       '—',
+      'Route',
       'Links',
       '—',
       'Remove from map',
@@ -237,8 +239,9 @@ describe('system menu', () => {
         characters: [pilot(1, 'Ayla Vex'), pilot(2, 'Bren Tal'), pilot(3, 'No Scope', false)],
       },
     );
-    expect(rows(sub(items, 'Set destination'))).toEqual(['All characters', '—', 'Ayla Vex', 'Bren Tal']);
-    expect(rows(sub(sub(items, 'Set destination'), 'Bren Tal'))).toEqual([
+    const route = sub(items, 'Route');
+    expect(rows(sub(route, 'Set destination'))).toEqual(['All characters', '—', 'Ayla Vex', 'Bren Tal']);
+    expect(rows(sub(sub(route, 'Set destination'), 'Bren Tal'))).toEqual([
       'Set destination',
       'Add waypoint',
       'Add waypoint first',

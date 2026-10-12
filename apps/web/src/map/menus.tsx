@@ -273,37 +273,52 @@ export function systemMenu(ctx: SystemMenuContext): MenuItem[] {
     });
   }
   // A locked system cannot be hidden (the server refuses), so the toggle goes with the lock.
-  if (can.edit && !system.locked) {
-    edit.push({
-      kind: 'check',
-      label: 'Hide from routes',
-      icon: <EyeOff />,
-      checked: !system.visible,
-      onSelect: () => update({ visible: !system.visible }),
-    });
-  }
+  const hide: MenuItem[] =
+    can.edit && !system.locked
+      ? [
+          {
+            kind: 'check',
+            label: 'Hide from routes',
+            icon: <EyeOff />,
+            checked: !system.visible,
+            onSelect: () => update({ visible: !system.visible }),
+          },
+        ]
+      : [];
 
   const rally = ctx.rally ? pingMenuItems({ ...ctx.rally, solarSystemId: id, canEdit: can.edit }) : [];
-  const go: MenuItem[] = [
-    ...rally,
+  // Everything about getting there, in one submenu: waypoints, hubs and whether routes use it.
+  const routeItems: MenuItem[] = [
     ...waypointMenu(
       ctx.characters,
       { solarSystemId: id, name: ctx.name, wormhole: isWormholeSpace(ctx.info) },
       ctx.notify,
     ),
     ...hubMenu(ctx.routes, { solarSystemId: id, name: ctx.name }),
+    ...hide,
+  ];
+  const links = linksMenu({
+    info: ctx.info,
+    name: ctx.name,
+    dotlan: ctx.dotlan ?? 'system',
+    onCopyName: () =>
+      void navigator.clipboard
+        ?.writeText(ctx.name)
+        .then(() => ctx.notify?.({ title: `Copied ${ctx.name}`, tone: 'success', duration: 2000 }))
+        .catch(() => {}),
+  });
+  // Other maps this system is on belong with the links out.
+  const linked = ctx.linked ? linkedMapItems(ctx.linked.maps, ctx.linked.open) : [];
+  const linkMenu = links.map((item) =>
+    item.kind === 'submenu' ? { ...item, items: groups(item.items, linked) } : item,
+  );
+  const go: MenuItem[] = [
+    ...rally,
+    ...(routeItems.length > 0
+      ? [{ kind: 'submenu' as const, label: 'Route', icon: <Route />, items: routeItems }]
+      : []),
     ...(ctx.holder ? [holderStandingMenu(ctx.holder)] : []),
-    ...linksMenu({
-      info: ctx.info,
-      name: ctx.name,
-      dotlan: ctx.dotlan ?? 'system',
-      onCopyName: () =>
-        void navigator.clipboard
-          ?.writeText(ctx.name)
-          .then(() => ctx.notify?.({ title: `Copied ${ctx.name}`, tone: 'success', duration: 2000 }))
-          .catch(() => {}),
-    }),
-    ...(ctx.linked ? linkedMapItems(ctx.linked.maps, ctx.linked.open) : []),
+    ...(links.length > 0 ? linkMenu : linked),
   ];
   go.push(...more(ctx.plugins, (close) => ({ mapId: ctx.mapId, solarSystemId: id, close })));
 
