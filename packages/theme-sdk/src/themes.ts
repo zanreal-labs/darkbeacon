@@ -139,15 +139,17 @@ const paired: Record<PairedToken, readonly [light: string, dark: string]> = {
   'pill-wormhole': ['#7b93ff', '#7b93ff'],
   'pill-special': ['#c39cf7', '#c39cf7'],
   // Connections: one thick two-layer line; the outer layer is time, the inner core is mass.
-  'edge-color': ['#8b94a5', '#5a6475'],
-  'edge-gate': ['#6f7889', '#8a93a5'],
+  // Normal connections are one solid, high-contrast line: a fresh core matches the outer layer, so
+  // only a state that matters (EOL, reduced or critical mass) shows a second colour.
+  'edge-color': ['#6b7486', '#9aa3b4'],
+  'edge-gate': ['#6b7486', '#9aa3b4'],
   'edge-bridge': ['#5b8a00', '#a3e635'],
-  'edge-mass-fresh': ['#c9cfd9', '#aab3c2'],
+  'edge-mass-fresh': ['#6b7486', '#9aa3b4'],
   'edge-time-eol': ['#8f3fc2', '#b25ee0'],
   'edge-time-critical': ['#e0338a', '#ff5fae'],
   'edge-mass-reduced': ['#f2b01e', '#f5b83a'],
   'edge-mass-critical': ['#e02424', '#ff4040'],
-  'edge-dangerous': ['rgba(209, 47, 47, 0.34)', 'rgba(240, 82, 82, 0.4)'],
+  'edge-dangerous': ['#d12f2f', '#f05252'],
   'edge-bubble': ['#c0267a', '#f472b6'],
   'edge-selected': ['#0b7f91', '#5dd3e0'],
   // People on the map: eight hues that stay apart from each other and readable on the canvas.

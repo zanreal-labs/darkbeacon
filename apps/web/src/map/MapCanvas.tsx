@@ -354,7 +354,7 @@ export function MapCanvas({
   useEffect(() => {
     const box = canvasRef.current?.getBoundingClientRect();
     const node = rf.getNodes().find((n) => n.selected);
-    if (!box || !node || (coveredRight === 0 && coveredBottom === 0)) return;
+    if (!box || !node || node.dragging || (coveredRight === 0 && coveredBottom === 0)) return;
     const { x, y, zoom } = rf.getViewport();
     const right = x + (node.position.x + (node.measured?.width ?? 230)) * zoom;
     const bottom = y + (node.position.y + (node.measured?.height ?? 90)) * zoom;
@@ -520,6 +520,9 @@ export function MapCanvas({
         nodesConnectable={can.edit}
         nodesDraggable={can.edit}
         nodeDragThreshold={4}
+        // Dragging moves a system without selecting it: the panel opening mid-drag shifted the
+        // view under the pointer and threw the system across the map.
+        selectNodesOnDrag={false}
         deleteKeyCode={null}
         colorMode={theme.colorScheme}
         defaultViewport={{ x: 0, y: 0, zoom: DEFAULT_ZOOM }}

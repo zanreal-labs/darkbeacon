@@ -65,10 +65,9 @@ export function MapView({
   const rf = useReactFlow();
   const can = mapPermissions(role);
   const [selected, setSelected] = useState<number | null>(null);
-  // The dock starts closed, so the first view has the whole width for the chain; on wide screens
-  // the first selection opens it, unless the user already opened or closed it themselves.
+  // The dock starts closed, so the first view has the whole width for the chain; selecting a
+  // system opens it on wide screens and clearing the selection closes it.
   const [dock, setDock] = useState({ tab: 'system', open: false });
-  const dockTouched = useRef(false);
   // Phones get the bottom dock, which covers nothing the view needs to avoid.
   const wide = typeof window !== 'undefined' && !window.matchMedia?.('(max-width: 760px)').matches;
   const [menu, setMenu] = useState<OpenMenu | null>(null);
@@ -266,8 +265,10 @@ export function MapView({
         store={store}
         onSelect={(id) => {
           setSelected(id);
-          if (id !== null && wide && !dockTouched.current)
-            setDock((d) => (d.open ? d : { ...d, open: true }));
+          // The panel belongs to the selection: it hides with nothing selected and comes back
+          // (on wide screens) with the next system.
+          if (id === null) setDock((d) => (d.open ? { ...d, open: false } : d));
+          else if (wide) setDock((d) => (d.open ? d : { ...d, open: true }));
         }}
         focus={focusNode}
         onMenu={openMenu}
@@ -345,10 +346,7 @@ export function MapView({
         tabs={tabs}
         active={dock.tab}
         open={dock.open}
-        onChange={(tab, open) => {
-          dockTouched.current = true;
-          setDock({ tab, open });
-        }}
+        onChange={(tab, open) => setDock({ tab, open })}
       />
 
       <ul className={styles.notices} aria-live="polite">

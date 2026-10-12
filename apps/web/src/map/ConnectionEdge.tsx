@@ -137,6 +137,7 @@ export const ConnectionEdge = memo(function ConnectionEdge({
     >
       {visual.halo && <path d={path} className={styles.halo} data-underlay="dangerous" />}
       <path d={path} className={styles.highlight} data-underlay="highlight" />
+      <path d={path} className={styles.casing} data-underlay="casing" />
       <BaseEdge id={id} path={path} interactionWidth={22} style={edgeOuterStyle(visual)} />
       {inner && <path d={path} fill="none" className={styles.core} style={inner} data-layer="mass" />}
       <EdgeLabelRenderer>

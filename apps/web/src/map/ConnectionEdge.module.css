@@ -2,12 +2,26 @@
   opacity: 0.6;
 }
 
-/* Dangerous: a red halo beyond the line. */
+/* Every layer is drawn with crisp geometry: no glow, no transparency, no blur. */
+.edge path {
+  shape-rendering: geometricPrecision;
+}
+
+/* Dangerous: a solid red outline beyond the line, kept apart from it by the casing. */
 .halo {
   fill: none;
   stroke: var(--dbk-edge-dangerous);
-  stroke-width: calc(var(--dbk-edge-width) * 2.1);
-  stroke-linecap: round;
+  stroke-width: calc(var(--dbk-edge-width) + 8px);
+  stroke-linecap: butt;
+  pointer-events: none;
+}
+
+/* A thin canvas-coloured casing gives every line a sharp edge against the grid and other lines. */
+.casing {
+  fill: none;
+  stroke: var(--dbk-color-canvas);
+  stroke-width: calc(var(--dbk-edge-width) + 3px);
+  stroke-linecap: butt;
   pointer-events: none;
 }
 
@@ -15,8 +29,8 @@
 .highlight {
   fill: none;
   stroke: var(--dbk-edge-selected);
-  stroke-width: calc(var(--dbk-edge-width) * 1.7);
-  stroke-linecap: round;
+  stroke-width: calc(var(--dbk-edge-width) + 8px);
+  stroke-linecap: butt;
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--dbk-motion-fast) var(--dbk-motion-easing);

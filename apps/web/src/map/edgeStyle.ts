@@ -147,7 +147,7 @@ interface LineStyle {
 export function edgeOuterStyle(v: EdgeVisual): LineStyle {
   return {
     stroke: cssVar(v.outer),
-    strokeWidth: v.dotted ? 'calc(var(--dbk-edge-width) * 0.7)' : 'var(--dbk-edge-width)',
+    strokeWidth: 'var(--dbk-edge-width)',
     ...(v.dotted ? { strokeDasharray: '0.01 calc(var(--dbk-edge-width) * 1.4)' } : {}),
     strokeLinecap: v.dotted ? 'round' : 'butt',
   };
