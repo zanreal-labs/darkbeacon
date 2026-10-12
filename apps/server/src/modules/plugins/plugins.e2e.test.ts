@@ -29,7 +29,7 @@ describeEachDialect('plugins and themes over HTTP', (t) => {
       ...parseEnv({ NODE_ENV: 'test', DATA_DIR: tempDir('dbk-data-') }),
       secretKey: 'x'.repeat(32),
     };
-    app = await createApp(config, { database: t.db, logger: false, webDist: '/nonexistent' });
+    app = await createApp(config, { database: t.db, logger: false });
     app.get(ActorResolverRegistry).use(async (req) => actors[String(req.headers.authorization)] ?? null);
     await app.listen({ port: 0, host: '127.0.0.1' });
     base = `http://127.0.0.1:${(app.getHttpServer().address() as AddressInfo).port}`;

@@ -17,7 +17,7 @@ describeEachDialect('server', (t) => {
 
   beforeEach(async () => {
     const config = { ...parseEnv({ NODE_ENV: 'test' }), secretKey: 'x'.repeat(32) };
-    app = await createApp(config, { database: t.db, logger: false, webDist: '/nonexistent' });
+    app = await createApp(config, { database: t.db, logger: false });
     // Stand-in for the identity module: a bearer header names the account.
     app
       .get(ActorResolverRegistry)

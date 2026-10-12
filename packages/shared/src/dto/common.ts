@@ -14,6 +14,7 @@ export const ApiErrorCode = z.enum([
   'validation',
   'bad_request',
   'internal',
+  'unavailable',
 ]);
 export type ApiErrorCode = z.infer<typeof ApiErrorCode>;
 
@@ -27,6 +28,11 @@ export const HealthDto = z.object({
   status: z.literal('ok'),
   version: z.string(),
   database: z.enum(['sqlite', 'postgres']),
+  /**
+   * The web app's server behind the API: `ok` when it answers, `off` when this process serves the
+   * API only (tests, API-only deployments). While it does not answer, health is a 503 instead.
+   */
+  web: z.enum(['ok', 'off']),
 });
 export type HealthDto = z.infer<typeof HealthDto>;
 

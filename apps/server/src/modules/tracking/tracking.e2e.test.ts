@@ -61,7 +61,7 @@ describeEachDialect('tracking and universe over HTTP', (t) => {
       secretKey: 'x'.repeat(32),
       dataDir: '/nonexistent',
     };
-    app = await createApp(config, { database: t.db, logger: false, webDist: '/nonexistent' });
+    app = await createApp(config, { database: t.db, logger: false });
     await app.getHttpAdapter().getInstance().ready();
     await signIn('alice', { id: PILOT, name: 'Pilot' });
     await signIn('bob', { id: ALT, name: 'Alt' });

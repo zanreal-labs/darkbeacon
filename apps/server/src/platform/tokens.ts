@@ -17,3 +17,5 @@ export const UNIVERSE_CATALOG = 'UniverseCatalog';
 export const CHARACTER_TOKENS = 'CharacterTokenSource';
 /** AutoMapTarget for tracking's auto-mapping, composed from mapping. */
 export const AUTO_MAP_TARGET = 'AutoMapTarget';
+/** The web app's server behind the API (`WebUpstream | null`), for health checks. */
+export const WEB_UPSTREAM = 'WebUpstream';

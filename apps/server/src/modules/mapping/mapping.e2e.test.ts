@@ -59,7 +59,7 @@ describeEachDialect('mapping over HTTP and WebSocket', (t) => {
       secretKey: 'x'.repeat(32),
       dataDir: dataDirWithUniverse(),
     };
-    app = await createApp(config, { database: t.db, logger: false, webDist: '/nonexistent' });
+    app = await createApp(config, { database: t.db, logger: false });
     // Stand-in for the identity module: the bearer token names the account.
     app.get(ActorResolverRegistry).use(async (req) => {
       const match = /^Bearer (\w+)$/.exec(String(req.headers.authorization ?? ''));

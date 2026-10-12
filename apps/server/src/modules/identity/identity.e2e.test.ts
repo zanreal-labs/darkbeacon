@@ -101,7 +101,6 @@ describeEachDialect('identity and access over HTTP', (t) => {
     app = await createApp(config, {
       database: t.db,
       logger: false,
-      webDist: '/nonexistent',
       fetch: network.fetch,
     });
     await app.listen({ port: 0, host: '127.0.0.1' });
