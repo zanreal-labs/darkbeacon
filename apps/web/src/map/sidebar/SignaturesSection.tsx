@@ -280,14 +280,11 @@ export function SignaturesSection({
   const onKeyDown = (e: KeyboardEvent) => {
     const target = e.target as HTMLElement;
     if (target.closest('input, textarea, select, [contenteditable="true"]')) return;
-    const mod = e.metaKey || e.ctrlKey;
-    // Ctrl/⌘+A as in Wanderer, or just A while the table has the focus.
+    // Ctrl/⌘+A as in Wanderer, or just A while the table has the focus. Ctrl+Z is the map's: its
+    // one undo stack takes these removals too.
     if (e.key.toLowerCase() === 'a' && !e.altKey && !e.shiftKey) {
       e.preventDefault();
       setSelected(new Set(rows.map((r) => r.id)));
-    } else if (mod && e.key.toLowerCase() === 'z' && undo.batches.length > 0) {
-      e.preventDefault();
-      void removal.restore(undo.batches);
     } else if ((e.key === 'Delete' || e.key === 'Backspace') && selected.size > 0 && can.edit) {
       e.preventDefault();
       removeSelected([...selected]);

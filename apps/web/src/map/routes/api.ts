@@ -12,6 +12,7 @@ import {
   type HubRoutesDto,
   type HubsDto,
   type MapRoutingSettingsDto,
+  type RouteDto,
   type RoutePreferencesDto,
   type RoutesByDto,
   type RoutesByKind,
@@ -50,6 +51,9 @@ const ROUTE_EVENTS = new Set([
   'routes.bridges_changed',
   'routes.settings_changed',
   'routes.exits_changed',
+  // Pinged systems head the map's hubs.
+  'ping.created',
+  'ping.removed',
 ]);
 
 /** Reloads the map's routes (debounced) when its chain, hubs or bridges change. */
@@ -140,6 +144,28 @@ export function useRoutesBy(
     placeholderData: keepPreviousData,
     staleTime: 60_000,
     enabled,
+  });
+}
+
+/** One route between two systems with the viewer's options (the rally card's way there). */
+export function useRoute(
+  mapId: string,
+  from: number | null,
+  to: number | null,
+  preferences: RoutePreferencesDto,
+  enabled = true,
+) {
+  const params = new URLSearchParams({
+    from: String(from ?? 0),
+    to: String(to ?? 0),
+    ...routeOptionsParams(pilotSafe(preferences)),
+  }).toString();
+  return useQuery({
+    queryKey: [...routeKeys.all(mapId), 'route', params] as const,
+    queryFn: () => api<RouteDto>(`${buildPath(routes.routing.route.path, { mapId })}?${params}`),
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+    enabled: enabled && from !== null && to !== null && from !== to,
   });
 }
 

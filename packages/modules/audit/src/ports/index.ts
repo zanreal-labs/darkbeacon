@@ -46,10 +46,21 @@ export interface AuditStore {
   find(eventId: string): Promise<StoredEvent | null>;
   /** For each given id that was reverted: the id of the (latest) reverting event. */
   revertsOf(eventIds: readonly string[]): Promise<Map<string, string>>;
+  /** Events of one stream found by `ref`, oldest first (an action's changes). */
+  byRef(stream: string, ref: string, limit: number): Promise<StoredEvent[]>;
   /** Events written while reverting `eventId`. */
   writtenBy(revertOf: string): Promise<StoredEvent[]>;
   /** Checks the hash chain of every stream. */
   verify(): Promise<AuditStreamCheckDto[]>;
+}
+
+/**
+ * Shared by the reverts of one undo: a connection put back gets a new id, and the signatures
+ * that led through it are linked to the new one.
+ */
+export interface RevertContext {
+  /** Old connection id -> the id of the connection that replaced it. */
+  connectionIds: Map<string, string>;
 }
 
 /** Undoes one kind of change; provided by the module that owns the state (mapping). */
@@ -60,5 +71,5 @@ export interface ChangeReverter {
    * (the revert would overwrite someone else's later change). Runs as `actor`, through the
    * owning module's use cases, so it is authorized and recorded like any change.
    */
-  revert(actor: Actor, mapId: string, entry: StoredEvent): Promise<void>;
+  revert(actor: Actor, mapId: string, entry: StoredEvent, context?: RevertContext): Promise<void>;
 }

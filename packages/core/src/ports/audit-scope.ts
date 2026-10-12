@@ -28,6 +28,11 @@ export interface AuditContext {
   via?: AuditMapRef;
   /** Written by a map that merges others: the source map the change came from. */
   mergedFrom?: AuditMapRef;
+  /**
+   * One user action, as the client names it (a random id per gesture): every change it makes is
+   * found by it, so the whole gesture can be undone at once.
+   */
+  action?: string;
 }
 
 /** A map named in an audit record, possibly on another instance (`local` for this one). */

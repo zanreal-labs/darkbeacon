@@ -3,7 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { act, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw/http';
-import { buildPath, routes, type MapSystemDto, type StreamSnapshotDto } from '@darkbeacon/shared';
+import { useState } from 'react';
+import {
+  ACTION_HEADER,
+  buildPath,
+  routes,
+  type MapSystemDto,
+  type StreamSnapshotDto,
+} from '@darkbeacon/shared';
 import { connectionFixture, eventMessage, MAP_ID, systemFixture } from '../test/fixtures';
 import { FakeSocket, fakeRealtime, renderWithProviders, setupMockServer } from '../test/setup';
 import { useMapStore } from './useMapStore';
@@ -152,5 +159,55 @@ describe('useMapStore with a server-rendered snapshot', () => {
     const message = eventMessage(STREAM, 'system.updated', systemFixture(SYSTEM, { status: 'hostile' }));
     act(() => socket.push({ ...message, event: { ...message.event, seq: 8 } }));
     expect(text('status')).toBe('hostile');
+  });
+});
+
+function UndoProbe() {
+  const store = useMapStore(MAP_ID, undefined, { nameOf: (id) => (id === SYSTEM ? 'J100001' : String(id)) });
+  const [said, setSaid] = useState('');
+  return (
+    <div>
+      <p data-testid="undo">{store.undoLabel ?? 'nothing'}</p>
+      <p data-testid="said">{said}</p>
+      <button onClick={() => void store.removeSystem(SYSTEM)}>remove</button>
+      <button
+        onClick={() =>
+          void store.undo().then((r) => setSaid(r ? `${r.label}: ${r.outcome.ok ? 'ok' : 'no'}` : 'none'))
+        }
+      >
+        undo
+      </button>
+    </div>
+  );
+}
+
+describe('useMapStore undo', () => {
+  it('names each gesture with an action id and undoes it through the history', async () => {
+    const seen: Array<string | null> = [];
+    let undone: unknown = null;
+    server.use(
+      http.delete(removePath, ({ request }) => {
+        seen.push(request.headers.get(ACTION_HEADER));
+        return new HttpResponse(null, { status: 204 });
+      }),
+      http.post(buildPath(routes.undo.action.path, { mapId: MAP_ID }), async ({ request }) => {
+        undone = await request.json();
+        const { action } = undone as { action: string };
+        return HttpResponse.json({ action, reverted: ['e1'], entries: [], failed: [] });
+      }),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<UndoProbe />, { realtime: fakeRealtime() });
+    expect(text('undo')).toBe('nothing');
+    await user.click(screen.getByRole('button', { name: 'remove' }));
+    await act(() => delay(0));
+    expect(text('undo')).toBe('Removed J100001');
+    expect(seen[0]).toMatch(/^[A-Za-z0-9_-]{8,64}$/);
+
+    await user.click(screen.getByRole('button', { name: 'undo' }));
+    await act(() => delay(0));
+    expect(undone).toEqual({ action: seen[0] });
+    expect(text('said')).toBe('Removed J100001: ok');
+    expect(text('undo')).toBe('nothing');
   });
 });

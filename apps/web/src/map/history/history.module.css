@@ -1,0 +1,9 @@
+/* Period, kind and person side by side in one row; they wrap on a phone. */
+.filters.filters > * {
+  flex: 1 1 150px;
+}
+
+/* The revert button sits at the end of the entry's meta line. */
+.revert {
+  margin-left: auto;
+}

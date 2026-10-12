@@ -78,6 +78,18 @@ export class KyselyAuditStore implements AuditStore {
     return found;
   }
 
+  async byRef(stream: string, ref: string, limit: number): Promise<StoredEvent[]> {
+    const rows = await this.db
+      .selectFrom('event_log')
+      .selectAll()
+      .where('stream', '=', stream)
+      .where((eb) => hasRef(eb, ref))
+      .orderBy('seq')
+      .limit(limit)
+      .execute();
+    return rows.map(toStored);
+  }
+
   async writtenBy(revertOf: string): Promise<StoredEvent[]> {
     const rows = await this.db
       .selectFrom('event_log')

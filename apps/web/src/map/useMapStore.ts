@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
+  ACTION_HEADER,
   buildPath,
   routes,
   type ConnectionDto,
@@ -17,6 +18,8 @@ import { api, ApiError } from '../lib/api';
 import { useStream } from '../lib/RealtimeProvider';
 import { applyMapMessage, emptyMapState, type MapState } from './mapState';
 import { confirmPending, dropPending, settlePending, withPending, type PendingChange } from './optimistic';
+import { connectionChangeLabel, count, systemChangeLabel } from './undo/labels';
+import { newActionId, undoAction, UndoStack } from './undo/undoStack';
 
 /** Reads the map's snapshot again over REST and shows it. */
 async function reloadSnapshot(mapId: string, set: (update: (s: MapState) => MapState) => void) {
@@ -38,11 +41,38 @@ export interface Notice {
   message: string;
 }
 
+/** Undoes a gesture once its request is through; refused when it never went through. */
+async function undoWhenSent(sent: Promise<unknown>, mapId: string, action: string) {
+  try {
+    await sent;
+  } catch {
+    return { ok: false as const, reason: 'It never went through' };
+  }
+  return undoAction(mapId, action);
+}
+
+/**
+ * One gesture that sends several requests (a bulk change of a selection, a paste): they share
+ * one action id and are undone together. Made by `store.gesture`.
+ */
+export interface Gesture {
+  readonly action: string;
+  /** Some request of it went through: it is worth undoing. */
+  succeeded: boolean;
+}
+
 interface ChangeSpec {
   apply(state: MapState): MapState;
   confirmedBy(event: TypedEvent): boolean;
-  request(): Promise<unknown>;
+  request(headers: Record<string, string>): Promise<unknown>;
   failure: string;
+  /** A gesture of its own with this label (pushed on the undo stack), or part of a larger one. */
+  undo?: string | Gesture;
+}
+
+export interface MapStoreOptions {
+  /** A system's display name, for the undo labels ("Removed J123456"). */
+  nameOf?(solarSystemId: number): string;
 }
 
 function mapWith<K, V>(map: Map<K, V>, key: K, update: (v: V) => V): Map<K, V> {
@@ -61,7 +91,7 @@ function mapWithout<K, V>(map: Map<K, V>, keep: (v: V, k: K) => boolean): Map<K,
  * `initial` is the snapshot the server rendered the page with: the map shows at once and the
  * stream resumes after its seq, so nothing is loaded twice.
  */
-export function useMapStore(mapId: string, initial?: StreamSnapshotDto) {
+export function useMapStore(mapId: string, initial?: StreamSnapshotDto, options: MapStoreOptions = {}) {
   const [confirmed, setConfirmed] = useState(() =>
     initial
       ? applyMapMessage(emptyMapState(), {
@@ -78,6 +108,13 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto) {
   const [streamError, setStreamError] = useState<string | null>(null);
   const nextId = useRef(0);
   const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  // The tab's undo stack lives as long as the map view.
+  const [undoStack] = useState(() => new UndoStack());
+  const undoEntries = useSyncExternalStore(undoStack.subscribe, undoStack.getSnapshot, undoStack.getSnapshot);
+  const names = useRef(options.nameOf);
+  useEffect(() => {
+    names.current = options.nameOf;
+  });
 
   useEffect(() => {
     const all = timers.current;
@@ -144,23 +181,40 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto) {
         confirmed: false,
       };
       setPending((p) => [...p, change]);
+      const gesture: Gesture | null =
+        typeof spec.undo === 'string' ? { action: newActionId(), succeeded: false } : (spec.undo ?? null);
+      const sent = spec.request(gesture ? { [ACTION_HEADER]: gesture.action } : {});
+      // On the stack at once, so Ctrl+Z right after a change undoes it (once it went through).
+      const entry =
+        gesture && typeof spec.undo === 'string'
+          ? undoStack.push({ label: spec.undo, undo: () => undoWhenSent(sent, mapId, gesture.action) })
+          : null;
       try {
-        await spec.request();
+        await sent;
+        if (gesture) gesture.succeeded = true;
         setPending((p) => settlePending(p, id));
         later(CONFIRM_GRACE_MS, () => setPending((p) => dropPending(p, id)));
         return true;
       } catch (error) {
+        if (entry !== null) undoStack.forget(entry);
         setPending((p) => dropPending(p, id));
         notify(`${spec.failure}: ${error instanceof ApiError ? error.message : 'network error'}`);
         return false;
       }
     },
-    [later, notify],
+    [later, notify, undoStack, mapId],
   );
 
   const state = useMemo(() => withPending(confirmed, pending), [confirmed, pending]);
+  // Commands read the latest state for their undo labels without being rebuilt on every event.
+  const latest = useRef(state);
+  useEffect(() => {
+    latest.current = state;
+  });
 
   const commands = useMemo(() => {
+    const nameOf = (id: number) => names.current?.(id) ?? String(id);
+    const ends = (a: number, b: number) => `${nameOf(a)} – ${nameOf(b)}`;
     const isSystemEvent = (types: string[], ids: number[]) => (e: TypedEvent) =>
       types.includes(e.type) &&
       'solarSystemId' in e.data &&
@@ -168,7 +222,7 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto) {
       ids.includes(e.data.solarSystemId);
 
     return {
-      addSystem(solarSystemId: number, position: Position) {
+      addSystem(solarSystemId: number, position: Position, gesture?: Gesture) {
         const now = Date.now();
         const placeholder: MapSystemDto = {
           mapId,
@@ -193,32 +247,36 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto) {
               ? s
               : { ...s, systems: new Map(s.systems).set(solarSystemId, placeholder) },
           confirmedBy: isSystemEvent(['system.added', 'system.updated'], [solarSystemId]),
-          request: () =>
+          request: (headers) =>
             api(buildPath(routes.systems.add.path, { mapId }), {
               method: 'POST',
               json: { solarSystemId, position },
+              headers,
             }),
           failure: 'Could not add the system',
+          undo: gesture ?? `Added ${nameOf(solarSystemId)}`,
         });
       },
 
-      updateSystem(solarSystemId: number, patch: UpdateSystemRequest) {
+      updateSystem(solarSystemId: number, patch: UpdateSystemRequest, gesture?: Gesture) {
         return run({
           apply: (s) => ({
             ...s,
             systems: mapWith(s.systems, solarSystemId, (sys) => ({ ...sys, ...patch })),
           }),
           confirmedBy: isSystemEvent(['system.updated'], [solarSystemId]),
-          request: () =>
+          request: (headers) =>
             api(buildPath(routes.systems.update.path, { mapId, solarSystemId }), {
               method: 'PATCH',
               json: patch,
+              headers,
             }),
           failure: 'Could not update the system',
+          undo: gesture ?? systemChangeLabel(nameOf(solarSystemId), patch),
         });
       },
 
-      moveSystems(positions: { solarSystemId: number; x: number; y: number }[]) {
+      moveSystems(positions: { solarSystemId: number; x: number; y: number }[], gesture?: Gesture) {
         if (positions.length === 0) return Promise.resolve(true);
         const byId = new Map(positions.map((p) => [p.solarSystemId, p]));
         return run({
@@ -231,13 +289,22 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto) {
             return { ...s, systems };
           },
           confirmedBy: isSystemEvent(['system.updated'], [...byId.keys()]),
-          request: () =>
-            api(buildPath(routes.systems.move.path, { mapId }), { method: 'POST', json: { positions } }),
+          request: (headers) =>
+            api(buildPath(routes.systems.move.path, { mapId }), {
+              method: 'POST',
+              json: { positions },
+              headers,
+            }),
           failure: 'Could not move the systems',
+          undo:
+            gesture ??
+            (positions.length === 1
+              ? `Moved ${nameOf(positions[0]!.solarSystemId)}`
+              : `Moved ${count(positions.length, 'system')}`),
         });
       },
 
-      removeSystem(solarSystemId: number) {
+      removeSystem(solarSystemId: number, gesture?: Gesture) {
         return run({
           apply: (s) => ({
             ...s,
@@ -248,13 +315,17 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto) {
             ),
           }),
           confirmedBy: isSystemEvent(['system.removed'], [solarSystemId]),
-          request: () =>
-            api(buildPath(routes.systems.remove.path, { mapId, solarSystemId }), { method: 'DELETE' }),
+          request: (headers) =>
+            api(buildPath(routes.systems.remove.path, { mapId, solarSystemId }), {
+              method: 'DELETE',
+              headers,
+            }),
           failure: 'Could not remove the system',
+          undo: gesture ?? `Removed ${nameOf(solarSystemId)}`,
         });
       },
 
-      addConnection(source: number, target: number) {
+      addConnection(source: number, target: number, gesture?: Gesture) {
         const now = Date.now();
         const id = `pending:${source}:${target}`;
         const placeholder: ConnectionDto = {
@@ -281,16 +352,19 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto) {
               ? s
               : { ...s, connections: new Map(s.connections).set(id, placeholder) },
           confirmedBy: (e) => e.type === 'connection.added' && joins(e.data),
-          request: () =>
+          request: (headers) =>
             api(buildPath(routes.connections.add.path, { mapId }), {
               method: 'POST',
               json: { source, target },
+              headers,
             }),
           failure: 'Could not connect the systems',
+          undo: gesture ?? `Connected ${nameOf(source)} and ${nameOf(target)}`,
         });
       },
 
-      updateConnection(connectionId: string, patch: UpdateConnectionRequest) {
+      updateConnection(connectionId: string, patch: UpdateConnectionRequest, gesture?: Gesture) {
+        const known = latest.current.connections.get(connectionId);
         return run({
           apply: (s) => ({
             ...s,
@@ -304,52 +378,69 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto) {
             }),
           }),
           confirmedBy: (e) => e.type === 'connection.updated' && e.data.id === connectionId,
-          request: () =>
+          request: (headers) =>
             api(buildPath(routes.connections.update.path, { mapId, connectionId }), {
               method: 'PATCH',
               json: patch,
+              headers,
             }),
           failure: 'Could not update the connection',
+          undo:
+            gesture ??
+            connectionChangeLabel(known ? ends(known.source, known.target) : 'a connection', patch),
         });
       },
 
       /** `withSignatures`: the signatures leading through it go too. */
-      removeConnection(connectionId: string, options: { withSignatures?: boolean } = {}) {
+      removeConnection(connectionId: string, options: { withSignatures?: boolean } = {}, gesture?: Gesture) {
         const query = options.withSignatures ? '?withSignatures=true' : '';
+        const known = latest.current.connections.get(connectionId);
         return run({
           apply: (s) => ({ ...s, connections: mapWithout(s.connections, (_, id) => id !== connectionId) }),
           confirmedBy: (e) => e.type === 'connection.removed' && e.data.id === connectionId,
-          request: () =>
+          request: (headers) =>
             api(`${buildPath(routes.connections.remove.path, { mapId, connectionId })}${query}`, {
               method: 'DELETE',
+              headers,
             }),
           failure: 'Could not remove the connection',
+          undo:
+            gesture ??
+            (known ? `Removed the connection ${ends(known.source, known.target)}` : 'Removed a connection'),
         });
       },
 
-      updateSignature(signatureId: string, patch: UpdateSignatureRequest) {
+      updateSignature(signatureId: string, patch: UpdateSignatureRequest, gesture?: Gesture) {
+        const known = latest.current.signatures.get(signatureId);
         return run({
           apply: (s) => ({
             ...s,
             signatures: mapWith(s.signatures, signatureId, (sig) => ({ ...sig, ...patch })),
           }),
           confirmedBy: (e) => e.type === 'signature.updated' && e.data.id === signatureId,
-          request: () =>
+          request: (headers) =>
             api(buildPath(routes.signatures.update.path, { mapId, signatureId }), {
               method: 'PATCH',
               json: patch,
+              headers,
             }),
           failure: 'Could not update the signature',
+          undo: gesture ?? (known ? `Changed signature ${known.eveId}` : 'Changed a signature'),
         });
       },
 
-      removeSignature(signatureId: string) {
+      removeSignature(signatureId: string, gesture?: Gesture) {
+        const known = latest.current.signatures.get(signatureId);
         return run({
           apply: (s) => ({ ...s, signatures: mapWithout(s.signatures, (_, id) => id !== signatureId) }),
           confirmedBy: (e) => e.type === 'signature.removed' && e.data.id === signatureId,
-          request: () =>
-            api(buildPath(routes.signatures.remove.path, { mapId, signatureId }), { method: 'DELETE' }),
+          request: (headers) =>
+            api(buildPath(routes.signatures.remove.path, { mapId, signatureId }), {
+              method: 'DELETE',
+              headers,
+            }),
           failure: 'Could not remove the signature',
+          undo: gesture ?? (known ? `Removed signature ${known.eveId}` : 'Removed a signature'),
         });
       },
 
@@ -358,11 +449,17 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto) {
         solarSystemId: number,
         request: PasteSignaturesRequest,
       ): Promise<PasteSignaturesResult | null> {
+        const action = newActionId();
         try {
-          return await api<PasteSignaturesResult>(
+          const result = await api<PasteSignaturesResult>(
             buildPath(routes.signatures.paste.path, { mapId, solarSystemId }),
-            { method: 'POST', json: request },
+            { method: 'POST', json: request, headers: { [ACTION_HEADER]: action } },
           );
+          undoStack.push({
+            label: `Pasted signatures in ${nameOf(solarSystemId)}`,
+            undo: () => undoAction(mapId, action),
+          });
+          return result;
         } catch (error) {
           notify(
             `Could not read the signatures: ${error instanceof ApiError ? error.message : 'network error'}`,
@@ -370,6 +467,92 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto) {
           return null;
         }
       },
+
+      /**
+       * Removes several systems and connections in one request (Delete on a selection): one
+       * transaction, one gesture to undo.
+       */
+      removeMany(selection: { systems: number[]; connections: string[] }, label: string) {
+        const systems = new Set(selection.systems);
+        const connections = new Set(selection.connections);
+        if (systems.size + connections.size === 0) return Promise.resolve(true);
+        return run({
+          apply: (s) => ({
+            ...s,
+            systems: mapWithout(s.systems, (_, id) => !systems.has(id)),
+            connections: mapWithout(
+              s.connections,
+              (c, id) => !connections.has(id) && !systems.has(c.source) && !systems.has(c.target),
+            ),
+          }),
+          confirmedBy: (e) =>
+            (e.type === 'system.removed' && systems.has(e.data.solarSystemId)) ||
+            (e.type === 'connection.removed' && connections.has(e.data.id)),
+          request: (headers) =>
+            api(buildPath(routes.mapApi.batchDelete.path, { mapId }), {
+              method: 'POST',
+              json: { systems: [...systems], connections: [...connections] },
+              headers,
+            }),
+          failure: 'Could not remove the selection',
+          undo: label,
+        });
+      },
+
+      /** The same change to several systems in one request (a status for a selection). */
+      updateMany(patches: Array<{ solarSystemId: number; patch: UpdateSystemRequest }>, label: string) {
+        if (patches.length === 0) return Promise.resolve(true);
+        const byId = new Map(patches.map((p) => [p.solarSystemId, p.patch]));
+        return run({
+          apply: (s) => {
+            const next = new Map(s.systems);
+            for (const [id, patch] of byId) {
+              const sys = next.get(id);
+              if (sys) next.set(id, { ...sys, ...patch });
+            }
+            return { ...s, systems: next };
+          },
+          confirmedBy: isSystemEvent(['system.updated'], [...byId.keys()]),
+          request: (headers) =>
+            api(buildPath(routes.mapApi.batchUpsert.path, { mapId }), {
+              method: 'POST',
+              json: { systems: patches.map((p) => ({ solarSystemId: p.solarSystemId, ...p.patch })) },
+              headers,
+            }),
+          failure: 'Could not change the systems',
+          undo: label,
+        });
+      },
+
+      /**
+       * Runs a gesture of several requests (each command given the `Gesture`); it goes on the undo
+       * stack as one entry when any of them went through.
+       */
+      async gesture<T>(label: string, work: (gesture: Gesture) => Promise<T>): Promise<T> {
+        const gesture: Gesture = { action: newActionId(), succeeded: false };
+        const done = work(gesture);
+        const entry = undoStack.push({
+          label,
+          undo: async () => {
+            await done.catch(() => undefined);
+            return gesture.succeeded
+              ? undoAction(mapId, gesture.action)
+              : { ok: false, reason: 'None of it went through' };
+          },
+        });
+        try {
+          return await done;
+        } finally {
+          if (!gesture.succeeded) undoStack.forget(entry);
+        }
+      },
+
+      /** Undoes the newest gesture of this tab (Ctrl+Z); null when there is none. */
+      undo: () => undoStack.undo(),
+
+      /** Something else that can be taken back joins the same stack (removed signatures). */
+      pushUndo: (entry: Parameters<UndoStack['push']>[0]) => undoStack.push(entry),
+      forgetUndo: (id: number) => undoStack.forget(id),
 
       /** Merges data loaded over REST for a part the snapshot did not carry. */
       seed(update: (state: MapState) => MapState) {
@@ -380,9 +563,18 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto) {
         setNotices((n) => n.filter((x) => x.id !== noticeId));
       },
     };
-  }, [mapId, run, notify]);
+  }, [mapId, run, notify, undoStack]);
 
-  return { state, loaded, notices, streamError, pendingCount: pending.length, ...commands };
+  return {
+    state,
+    loaded,
+    notices,
+    streamError,
+    pendingCount: pending.length,
+    /** The label of the gesture Ctrl+Z would undo; null when there is none. */
+    undoLabel: undoEntries.at(-1)?.label ?? null,
+    ...commands,
+  };
 }
 
 export type MapStore = ReturnType<typeof useMapStore>;

@@ -86,14 +86,27 @@ export function requestOrigin(request: RequestLike): AuditOrigin {
   return { country, userAgent: agent ? agent.slice(0, MAX_USER_AGENT) : null };
 }
 
+/** The header a client names one gesture with, so all of its changes can be undone together. */
+export const ACTION_HEADER = 'x-darkbeacon-action';
+const ACTION_ID = /^[A-Za-z0-9_-]{8,64}$/;
+
+/** The gesture a request belongs to, when the client named one in a usable form. */
+export function requestAction(request: RequestLike): string | undefined {
+  const value = header(request, ACTION_HEADER);
+  return value && ACTION_ID.test(value) ? value : undefined;
+}
+
 /** The audit facts of an HTTP request made by `actor`. */
 export function requestContext(request: RequestLike, actor: Actor | null): AuditContext {
   const origin = requestOrigin(request);
+  const action = requestAction(request);
+  const extra = action ? { action } : {};
   const grant = grantOf(actor);
   // "via key <name>": the key and its name as they were, over the REST API or the MCP endpoint.
-  if (grant) return { channel: { kind: grant.channel, id: grant.credentialId, name: grant.name }, origin };
-  if (actor?.kind === 'plugin') return { channel: { kind: 'plugin', id: actor.id }, origin };
-  return { channel: { kind: 'web' }, origin };
+  if (grant)
+    return { channel: { kind: grant.channel, id: grant.credentialId, name: grant.name }, origin, ...extra };
+  if (actor?.kind === 'plugin') return { channel: { kind: 'plugin', id: actor.id }, origin, ...extra };
+  return { channel: { kind: 'web' }, origin, ...extra };
 }
 
 /**

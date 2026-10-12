@@ -582,6 +582,10 @@ importers:
 
   plugins/theme-amarr: {}
 
+  plugins/theme-large: {}
+
+  plugins/theme-pathfinder: {}
+
 packages:
 
   '@ai-sdk/gateway@3.0.13':

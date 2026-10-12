@@ -11,6 +11,7 @@ import type { Connection, MapSystem } from '../domain/map.js';
 import { changes, defined, nextPosition } from '../domain/rules.js';
 import { MappingUseCases, type EventBatch, type MappingPorts } from './base.js';
 import { renumberBookmarks } from './bookmark-numbers.js';
+import { guardPinged } from './pings.js';
 
 /**
  * Systems on a map. Removing a system only hides it: its attributes and signatures stay, its
@@ -93,6 +94,7 @@ export class SystemUseCases extends MappingUseCases {
       const next: MapSystem = { ...current, ...patch, updatedAt: this.ports.clock.now() };
       if (!current.visible) return this.restore(events, next, current);
       if (!next.visible) {
+        await guardPinged(this.ports.pings, mapId, solarSystemId);
         await this.guardLockedConnections(who, mapId, solarSystemId);
         await this.hide(events, next, current);
         await renumberBookmarks(this.ports, events, mapId);
@@ -128,6 +130,7 @@ export class SystemUseCases extends MappingUseCases {
     await this.write(who, mapId, async (events) => {
       const current = await this.visibleSystem(mapId, solarSystemId);
       if (current.locked) throw new ConflictError('The system is locked');
+      await guardPinged(this.ports.pings, mapId, solarSystemId);
       await this.guardLockedConnections(who, mapId, solarSystemId);
       await this.hide(events, { ...current, visible: false, updatedAt: this.ports.clock.now() }, current);
       await renumberBookmarks(this.ports, events, mapId);

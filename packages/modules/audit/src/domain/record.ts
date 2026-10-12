@@ -24,6 +24,8 @@ export interface AuditRecord {
   via?: AuditMapRefDto | null;
   /** Written by a map that merges others, from this source map. Absent on older records. */
   mergedFrom?: AuditMapRefDto | null;
+  /** The user action (gesture) the change belonged to, when the client named one. Absent on older records. */
+  action?: string;
 }
 
 /** Names and characters of the people behind an event, looked up when it is written. */
@@ -104,6 +106,7 @@ export function buildAuditRecord(
   const refs = new Set(descriptor.refs?.(data, before) ?? []);
   if (facts.accountId) refs.add(`account:${facts.accountId}`);
   if (facts.characterId) refs.add(`character:${facts.characterId}`);
+  if (context.action) refs.add(`action:${context.action}`);
 
   return {
     record: {
@@ -117,6 +120,7 @@ export function buildAuditRecord(
       revertOf: context.revertOf ?? null,
       ...(context.via ? { via: context.via } : {}),
       ...(context.mergedFrom ? { mergedFrom: context.mergedFrom } : {}),
+      ...(context.action ? { action: context.action } : {}),
     },
     refs: [...refs],
   };

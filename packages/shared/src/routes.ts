@@ -2384,6 +2384,95 @@ export const routes = {
       response: dto.MapIntelDto,
     }),
   },
+  undo: {
+    /**
+     * Undoes one gesture of the caller on the map (every change made with its `x-darkbeacon-action`
+     * header), newest first, each through the history's revert. Changes that changed again since
+     * stay and are listed; 409 when none could be undone.
+     */
+    action: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/history/undo',
+      auth: 'account',
+      scope: { resource: 'audit', action: 'write' },
+      status: 200,
+      mapRole: 'member',
+      body: dto.UndoActionRequest,
+      response: dto.UndoResultDto,
+      summary: 'Undo one gesture of the caller (all changes made with one action id)',
+    }),
+  },
+
+  /** Rally pings: one system of the map everyone is called to (Wanderer's rally points). */
+  pings: {
+    list: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/pings',
+      auth: 'account',
+      scope: { resource: 'systems', action: 'read' },
+      mapRole: 'viewer',
+      response: z.array(dto.MapPingDto),
+    }),
+    /** Calls a rally on a system; it replaces the map's ping before it (`ping.created`). */
+    create: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/pings',
+      auth: 'account',
+      scope: { resource: 'systems', action: 'write' },
+      mapRole: 'member',
+      body: dto.CreatePingRequest,
+      response: dto.MapPingDto,
+    }),
+    /** Cancels a ping (`ping.removed`). */
+    remove: route({
+      method: 'DELETE',
+      path: '/api/maps/:mapId/pings/:pingId',
+      auth: 'account',
+      scope: { resource: 'systems', action: 'write' },
+      mapRole: 'member',
+    }),
+  },
+
+  /** Copy and paste of systems between maps, keeping their attributes. */
+  clipboard: {
+    /**
+     * Places copied systems (a `darkbeacon/systems` clipboard) with their status, names, notes,
+     * Labels and Tags (by name) and connects them with their flags, in one transaction. Who may
+     * paste is the map's `settings.clipboard.paste` (members by default).
+     */
+    paste: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/paste',
+      auth: 'account',
+      scope: { resource: 'systems', action: 'write' },
+      mapRole: 'member',
+      status: 200,
+      body: dto.PasteSystemsRequest,
+      response: dto.PasteSystemsResultDto,
+    }),
+    /** Who may copy systems off the map and paste onto it (manager+). */
+    setRoles: route({
+      method: 'PUT',
+      path: '/api/maps/:mapId/clipboard-roles',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'write' },
+      mapRole: 'manager',
+      body: dto.ClipboardRolesRequest,
+      response: dto.MapDto,
+    }),
+  },
+
+  /** The other maps a system is on (Wanderer's "Also on <map>"), for a read-only preview. */
+  linkedMaps: {
+    elsewhere: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/systems/:solarSystemId/elsewhere',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'read' },
+      mapRole: 'viewer',
+      response: z.array(dto.LinkedMapDto),
+    }),
+  },
 
   characters: {
     /** My characters' whereabouts and every map they may be tracked on (the characters page). */

@@ -10,8 +10,10 @@ import {
 } from 'react';
 import {
   Background,
+  BackgroundVariant,
   ConnectionMode,
   ReactFlow,
+  SelectionMode,
   useEdgesState,
   useNodesState,
   useReactFlow,
@@ -25,6 +27,7 @@ import {
   bookmarkLabel,
   DEFAULT_BOOKMARK_TEMPLATE,
   type LabelDto,
+  type PresencePeerDto,
   type SystemLabelDto,
   type UniverseSystemDto,
 } from '@darkbeacon/shared';
@@ -35,6 +38,10 @@ import { track } from '../lib/telemetry';
 import { useTheme } from '../theme/ThemeProvider';
 import { useToast } from '../ui';
 import { ConnectionEdge, type ConnectionEdgeType, type ConnectionTraffic } from './ConnectionEdge';
+import type { PresencePublisher } from '../lib/presence';
+import { CanvasMinimap } from './canvas/CanvasMinimap';
+import { PresenceCursors } from './presence/PresenceCursors';
+import { SNAP_GRID, useCanvasPrefs } from './canvas/prefs';
 import { boundsOf, fitViewport, type Point, type Rect } from './geometry';
 import { MapControls } from './MapControls';
 import { DEFAULT_ZOOM, FIT_MIN_ZOOM, mapTypeVars } from './mapType';
@@ -98,8 +105,15 @@ export interface FocusRequest {
   n: number;
 }
 
+/** What is selected on the canvas: systems and connections. */
+export interface CanvasSelection {
+  systems: number[];
+  connections: string[];
+}
+
 export type MenuTarget =
   | { kind: 'system'; solarSystemId: number }
+  | { kind: 'selection'; selection: CanvasSelection }
   | { kind: 'connection'; connectionId: string }
   | { kind: 'pane'; flow: { x: number; y: number }; fitChain(): void; centerOnMe(): void };
 
@@ -132,6 +146,18 @@ interface Props {
   readOnly?: boolean;
   /** The public link a read-only view comes through: intel is read through it. */
   publicToken?: string;
+  /** Delete or Backspace with something selected. */
+  onDeleteSelection?(selection: CanvasSelection): void;
+  /** Where the mouse points on the map (map coordinates); null when it leaves the canvas. */
+  onPointerAt?(point: Point | null): void;
+  /** Systems with a rally ping: drawn as rally points. */
+  rallies?: ReadonlySet<number>;
+  /** Others on the map (their cursors are drawn) and where this tab shares its own. */
+  presence?: { peers: readonly PresencePeerDto[]; publish: PresencePublisher };
+  /** Read-only previews: systems and connections drawn as selected (the way in). */
+  highlight?: { systems: ReadonlySet<number>; connections: ReadonlySet<string> };
+  /** Read-only previews: the system the view opens on, instead of the whole chain. */
+  openOn?: number;
 }
 
 /**
@@ -169,6 +195,12 @@ export function MapCanvas({
   coveredBottom = 0,
   readOnly = false,
   publicToken,
+  onDeleteSelection,
+  onPointerAt,
+  rallies,
+  presence,
+  highlight,
+  openOn,
 }: Props) {
   const { theme } = useTheme();
   const demo = useProviders({ enabled: !readOnly }).data?.demo ?? false;
@@ -180,6 +212,12 @@ export function MapCanvas({
     update: updatePreferences,
   } = useMapPreferences(mapId, { enabled: !readOnly });
   const editable = can.edit && !readOnly;
+  // Public views draw the defaults: a visitor's browser settings are not asked for.
+  const ownPrefs = useCanvasPrefs();
+  const prefs = readOnly ? { ...ownPrefs, minimap: 'off' as const, dragSelects: false } : ownPrefs;
+  // A right drag pans in the drag-to-select mode; its release must not open the pane menu.
+  const rightDrag = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  const sharedSelection = useRef('null');
   const rf = useReactFlow<SystemNodeType, ConnectionEdgeType>();
   const [nodes, setNodes, onNodesChange] = useNodesState<SystemNodeType>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<ConnectionEdgeType>([]);
@@ -280,6 +318,8 @@ export function MapCanvas({
           type: 'system',
           position: old?.dragging ? old.position : system.position,
           draggable: editable && !system.locked,
+          className: rallies?.has(system.solarSystemId) ? styles.rally : undefined,
+          ...(highlight ? { selected: highlight.systems.has(system.solarSystemId) } : {}),
           data: {
             mapId,
             system,
@@ -322,6 +362,8 @@ export function MapCanvas({
     setNodes,
     bookmarks,
     myLocation,
+    rallies,
+    highlight,
   ]);
 
   useEffect(() => {
@@ -338,7 +380,7 @@ export function MapCanvas({
           type: 'connection',
           source: String(c.source),
           target: String(c.target),
-          selected: selected.has(c.id),
+          selected: highlight ? highlight.connections.has(c.id) : selected.has(c.id),
           data: {
             mapId,
             connection: c,
@@ -348,7 +390,7 @@ export function MapCanvas({
           },
         }));
     });
-  }, [state.connections, state.systems, universe, mapId, setEdges, traffic]);
+  }, [state.connections, state.systems, universe, mapId, setEdges, traffic, highlight]);
 
   /** Rectangles of the given nodes (all when omitted), as React Flow measured them. */
   const rectsOf = useCallback(
@@ -464,8 +506,27 @@ export function MapCanvas({
     if (!readOnly || opened.current || !loaded || nodes.length === 0) return;
     if (!nodes.every((n) => n.measured?.width)) return;
     opened.current = true;
-    fitChain();
-  }, [readOnly, loaded, nodes, fitChain]);
+    // A preview opens on what it is about: the marked way, else its system, at a readable zoom.
+    const marked =
+      highlight && highlight.systems.size > 1
+        ? boundsOf(rectsOf(new Set([...highlight.systems].map(String))))
+        : null;
+    const box = canvasRef.current?.getBoundingClientRect();
+    if (marked && box) {
+      void rf.setViewport(
+        fitViewport(
+          marked,
+          box,
+          { top: 48, right: 48, bottom: 48, left: 72 },
+          { minZoom: FIT_MIN_ZOOM, maxZoom: DEFAULT_ZOOM },
+        ),
+      );
+      return;
+    }
+    const at = openOn !== undefined ? centerOfSystem(openOn) : null;
+    if (at) centerOn(at, DEFAULT_ZOOM, false);
+    else fitChain();
+  }, [readOnly, loaded, nodes, fitChain, openOn, centerOfSystem, centerOn, highlight, rectsOf, rf]);
 
   const centerOnMe = useCallback(() => {
     const at = myLocation ? centerOfSystem(myLocation.solarSystemId) : null;
@@ -526,11 +587,34 @@ export function MapCanvas({
     writeStored(LEGEND_KEY, open);
   }, []);
 
-  // F fits the chain, C centres on me, L toggles the legend.
+  /** The selection as React Flow holds it (pending connections left out). */
+  const selection = useCallback(
+    (): CanvasSelection => ({
+      systems: rf
+        .getNodes()
+        .filter((n) => n.selected)
+        .map((n) => Number(n.id)),
+      connections: rf
+        .getEdges()
+        .filter((e) => e.selected && !e.id.startsWith('pending:'))
+        .map((e) => e.id),
+    }),
+    [rf],
+  );
+
+  // F fits the chain, C centres on me, L toggles the legend, Delete removes the selection.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
       const key = e.key.toLowerCase();
+      if ((key === 'delete' || key === 'backspace') && editable && onDeleteSelection) {
+        const selected = selection();
+        if (selected.systems.length + selected.connections.length === 0) return;
+        e.preventDefault();
+        track('shortcut_used', { shortcut: 'delete_selection' });
+        onDeleteSelection(selected);
+        return;
+      }
       if (key === 'f') fitChain();
       else if (key === 'c' && !readOnly) centerOnMe();
       else if (key === 'l') setLegend(!legend);
@@ -542,7 +626,15 @@ export function MapCanvas({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [fitChain, centerOnMe, setLegend, legend, readOnly]);
+  }, [fitChain, centerOnMe, setLegend, legend, readOnly, editable, onDeleteSelection, selection]);
+
+  /** A system's menu, or the selection's when it is one of several selected systems. */
+  const systemTarget = (id: number): MenuTarget => {
+    const selected = selection();
+    return selected.systems.length > 1 && selected.systems.includes(id)
+      ? { kind: 'selection', selection: selected }
+      : { kind: 'system', solarSystemId: id };
+  };
 
   useEffect(
     () => () => {
@@ -599,7 +691,11 @@ export function MapCanvas({
 
   // Touch has no right click: a long press opens the same context menu.
   const onPointerDown = (e: ReactPointerEvent) => {
-    if (readOnly || e.pointerType === 'mouse') return;
+    if (e.pointerType === 'mouse') {
+      rightDrag.current = e.button === 2 ? { x: e.clientX, y: e.clientY, moved: false } : null;
+      return;
+    }
+    if (readOnly) return;
     cancelPress();
     const target = e.target as Element;
     const { clientX: x, clientY: y } = e;
@@ -616,11 +712,23 @@ export function MapCanvas({
   const onPointerMove = (e: ReactPointerEvent) => {
     if (press.current && Math.hypot(e.clientX - press.current.x, e.clientY - press.current.y) > 10)
       cancelPress();
+    const drag = rightDrag.current;
+    if (drag && !drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > 4) drag.moved = true;
+    if (e.pointerType === 'mouse' && (onPointerAt || presence)) {
+      const at = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      onPointerAt?.(at);
+      // Others see where this mouse points; the presence store keeps it to its rate.
+      presence?.publish.cursor({ x: Math.round(at.x), y: Math.round(at.y) });
+    }
   };
 
   const openMenuAt = (target: Element, x: number, y: number) => {
     const node = target.closest<HTMLElement>('.react-flow__node');
-    if (node?.dataset.id) return onMenu({ kind: 'system', solarSystemId: Number(node.dataset.id) }, x, y);
+    if (node?.dataset.id) return onMenu(systemTarget(Number(node.dataset.id)), x, y);
+    if (target.closest('.react-flow__nodesselection')) {
+      const selected = selection();
+      if (selected.systems.length > 0) return onMenu({ kind: 'selection', selection: selected }, x, y);
+    }
     const edge = target.closest<SVGElement>('.react-flow__edge');
     if (edge?.dataset.id) return onMenu({ kind: 'connection', connectionId: edge.dataset.id }, x, y);
     if (target.closest('.react-flow__pane')) {
@@ -629,6 +737,22 @@ export function MapCanvas({
   };
 
   const onSelectionChange = ({ nodes: selected, edges: edgesSelected }: OnSelectionChangeParams) => {
+    // React Flow reports the selection again on every render: share it only when it changed.
+    const shared =
+      selected.length + edgesSelected.length > 0
+        ? {
+            systems: selected.slice(0, 200).map((n) => Number(n.id)),
+            connections: edgesSelected
+              .filter((e) => !e.id.startsWith('pending:'))
+              .slice(0, 200)
+              .map((e) => e.id),
+          }
+        : null;
+    const key = JSON.stringify(shared);
+    if (presence && key !== sharedSelection.current) {
+      sharedSelection.current = key;
+      presence.publish.selection(shared);
+    }
     setSelectedId(selected.length === 1 ? selected[0]!.id : null);
     // A click on a connection selects it alone; the sidebar then shows the connection.
     const edge = selected.length === 0 && edgesSelected.length === 1 ? edgesSelected[0]!.id : null;
@@ -645,11 +769,16 @@ export function MapCanvas({
     <div
       ref={canvasRef}
       className={styles.canvas}
+      data-soft={prefs.softBackground || undefined}
       style={mapTypeVars}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={cancelPress}
       onPointerCancel={cancelPress}
+      onPointerLeave={() => {
+        onPointerAt?.(null);
+        presence?.publish.cursor(null);
+      }}
     >
       <ReactFlow<SystemNodeType, ConnectionEdgeType>
         nodes={nodes}
@@ -677,7 +806,17 @@ export function MapCanvas({
             ? undefined
             : (e, node) => {
                 e.preventDefault();
-                onMenu({ kind: 'system', solarSystemId: Number(node.id) }, e.clientX, e.clientY);
+                onMenu(systemTarget(Number(node.id)), e.clientX, e.clientY);
+              }
+        }
+        onSelectionContextMenu={
+          readOnly
+            ? undefined
+            : (e, picked) => {
+                e.preventDefault();
+                const selected = selection();
+                if (picked.length === 0 && selected.systems.length === 0) return;
+                onMenu({ kind: 'selection', selection: selected }, e.clientX, e.clientY);
               }
         }
         onEdgeContextMenu={
@@ -693,6 +832,8 @@ export function MapCanvas({
             ? undefined
             : (e) => {
                 e.preventDefault();
+                // The end of a right-drag pan, not a click.
+                if (rightDrag.current?.moved) return;
                 const flow = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY });
                 onMenu({ kind: 'pane', flow, fitChain, centerOnMe }, e.clientX, e.clientY);
               }
@@ -701,6 +842,12 @@ export function MapCanvas({
         nodesConnectable={editable}
         nodesDraggable={editable}
         nodeDragThreshold={4}
+        snapToGrid={prefs.snapToGrid}
+        snapGrid={SNAP_GRID}
+        // Pathfinder's way: a left drag selects, the right (or middle) button pans.
+        {...(prefs.dragSelects
+          ? { selectionOnDrag: true, panOnDrag: [1, 2], selectionMode: SelectionMode.Partial }
+          : {})}
         // Dragging moves a system without selecting it: the panel opening mid-drag shifted the
         // view under the pointer and threw the system across the map.
         selectNodesOnDrag={false}
@@ -713,7 +860,14 @@ export function MapCanvas({
         maxZoom={MAX_ZOOM}
         proOptions={{ hideAttribution: true }}
       >
-        <Background gap={24} />
+        {prefs.background !== 'none' && (
+          <Background
+            gap={24}
+            variant={prefs.background === 'lines' ? BackgroundVariant.Lines : BackgroundVariant.Dots}
+          />
+        )}
+        {prefs.minimap !== 'off' && <CanvasMinimap corner={prefs.minimap} />}
+        {presence && <PresenceCursors peers={presence.peers} />}
         <MapControls
           mapId={mapId}
           can={can}

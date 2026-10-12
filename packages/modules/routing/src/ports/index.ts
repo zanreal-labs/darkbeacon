@@ -152,10 +152,7 @@ export interface StationCatalog {
   places(kind: 'securityOffice' | 'blueLoot' | 'redLoot' | 'tradeHubs'): StationDto[];
 }
 
-/**
- * Systems with an active ping on a map: temporary route targets. Pings are not built yet; the
- * server passes an adapter that finds none until they are.
- */
+/** Systems with an active ping on a map: temporary route targets (mapping's rally pings). */
 export interface PingTargets {
   pinged(mapId: string): Promise<number[]>;
 }

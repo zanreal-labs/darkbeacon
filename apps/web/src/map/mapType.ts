@@ -24,10 +24,13 @@ export const READABLE = { name: 13, secondary: 11.5, edge: 11 } as const;
 /** Fit chain never zooms out further than this. */
 export const FIT_MIN_ZOOM = 0.5;
 
+/** A size times the theme's map text scale (large-text themes raise it). */
+const scaled = (px: number) => `calc(${px}px * var(--dbk-map-text-scale, 1))`;
+
 export const mapTypeVars = {
-  '--map-text-name': `${MAP_TYPE.name}px`,
-  '--map-text-secondary': `${MAP_TYPE.secondary}px`,
-  '--map-text-edge': `${MAP_TYPE.edge}px`,
-  '--map-text-bookmark': `${MAP_TYPE.bookmark}px`,
-  '--map-text-chip': `${MAP_TYPE.chip}px`,
+  '--map-text-name': scaled(MAP_TYPE.name),
+  '--map-text-secondary': scaled(MAP_TYPE.secondary),
+  '--map-text-edge': scaled(MAP_TYPE.edge),
+  '--map-text-bookmark': scaled(MAP_TYPE.bookmark),
+  '--map-text-chip': scaled(MAP_TYPE.chip),
 } as CSSProperties;

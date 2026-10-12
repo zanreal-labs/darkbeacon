@@ -199,10 +199,14 @@ describe('FilePluginInstaller', () => {
     await expect(installer.stage({ kind: 'catalog', name: 'nope' })).rejects.toThrow('No catalogue entry');
   });
 
-  it('ships the first-party theme in the real catalogue', async () => {
+  it('ships the first-party themes in the real catalogue', async () => {
     const real = new FilePluginInstaller({ pluginsDir, catalogDir: CATALOG_DIR });
     expect(await real.catalog()).toEqual(
-      expect.arrayContaining([expect.objectContaining({ source: 'catalog:theme-amarr', id: 'amarr' })]),
+      expect.arrayContaining([
+        expect.objectContaining({ source: 'catalog:theme-amarr', id: 'amarr' }),
+        expect.objectContaining({ source: 'catalog:theme-large', id: 'large' }),
+        expect.objectContaining({ source: 'catalog:theme-pathfinder', id: 'pathfinder' }),
+      ]),
     );
   });
 });

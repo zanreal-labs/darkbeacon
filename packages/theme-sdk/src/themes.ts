@@ -58,6 +58,7 @@ const shared = {
   'font-size-large': '15px',
   'font-size-title': '20px',
   'line-height': '1.5',
+  'map-text-scale': '1',
   'space-1': '4px',
   'space-2': '8px',
   'space-3': '12px',
