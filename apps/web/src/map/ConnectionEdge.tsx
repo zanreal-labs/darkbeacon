@@ -13,6 +13,7 @@ import type { ConnectionDto, ShipSize } from '@darkbeacon/shared';
 import { PluginSlot } from '../plugins/PluginSlot';
 import { edgeInnerStyle, edgeOuterStyle, edgeVisual, SHIP_SIZE_TEXT, type EdgeVisual } from './edgeStyle';
 import { floatingEnds, type Point, type Rect } from './geometry';
+import { lifetimeText } from './sidebar/ConnectionsSection';
 import styles from './ConnectionEdge.module.css';
 
 /** What went through a connection since its mass was last marked, for the hover card. */
@@ -93,7 +94,10 @@ function EdgeDetails({ data, visual, at }: { data: ConnectionEdgeData; visual: E
     ...visual.states.filter((s) => s.kind !== 'size').map((s) => s.title),
     ...visual.bubbles.map((end) => `Bubbled on the ${name(end)} side`),
     ...(c.type === 'wormhole' && c.massStatus === 'fresh' ? ['Mass fresh: over 50 % left'] : []),
-    ...(c.type === 'wormhole' && c.timeStatus === 'normal' ? ['Lifetime normal'] : []),
+    ...(c.type === 'wormhole' && c.timeStatus === 'normal' && !c.lifetime ? ['Lifetime normal'] : []),
+    ...(c.type === 'wormhole' && c.lifetime ? [`Lifetime ${lifetimeText(c)}`] : []),
+    ...(c.locked ? ['Locked: a map manager can change it'] : []),
+    ...(c.note ? [`Note: ${c.note.length > 120 ? `${c.note.slice(0, 119)}…` : c.note}`] : []),
     ...(c.type === 'wormhole' && trafficLine(data.traffic) ? [trafficLine(data.traffic)!] : []),
   ];
   return (

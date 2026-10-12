@@ -259,6 +259,7 @@ function InstanceTab() {
       <DiscordBotSettings />
       {providers.data?.loginMethod === 'discord' && <DiscordAdminSettings />}
       <WebhookSettings />
+      <ImportSettings />
       <ChainCleanup />
       <TelemetryCard />
       <PluginSlot slot="settingsPage" props={{ mapId: null }} />
@@ -653,6 +654,25 @@ function WebhookSettings() {
           onCheckedChange={(on) => save.mutate({ webhooksToPrivateNetworks: on })}
           label="Allow webhooks to private networks"
           description="Off by default: webhooks cannot reach this server, its local network or cloud metadata addresses. Turn it on only if every map admin may send requests into your network."
+        />
+      </CardBody>
+    </Card>
+  );
+}
+
+function ImportSettings() {
+  const settings = useInstanceSettings();
+  const save = useSaveSettings();
+  return (
+    <Card>
+      <CardHeader title="Imports" description="Where imports from Wanderer may read maps from." />
+      <CardBody>
+        <Switch
+          checked={settings.data?.importsFromPrivateNetworks ?? false}
+          disabled={!settings.data || save.isPending}
+          onCheckedChange={(on) => save.mutate({ importsFromPrivateNetworks: on })}
+          label="Allow imports from private networks"
+          description="Off by default: imports read public Wanderer instances over https only. Turn it on for a Wanderer on this server's network (plain http allowed too)."
         />
       </CardBody>
     </Card>

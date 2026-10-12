@@ -1,6 +1,7 @@
 import { ConflictError, NotFoundError, ValidationError, newId, type Actor } from '@darkbeacon/core';
 import {
   DEFAULT_SIGNATURE_RETENTION_DAYS,
+  isScannerSignatureId,
   type AddSignatureRequest,
   type AuthorDto,
   type PasteSignaturesRequest,
@@ -12,7 +13,7 @@ import {
 } from '@darkbeacon/shared';
 import type { Connection, Signature } from '../domain/map.js';
 import { signatureTypeCode } from '../domain/intel.js';
-import { changes, defined } from '../domain/rules.js';
+import { changes, compactSignature, defined } from '../domain/rules.js';
 import { pairKey, signatureKey } from '../domain/stamps.js';
 import { parseSignaturePaste } from '../domain/signature-paste.js';
 import { MappingUseCases, type EventBatch } from './base.js';
@@ -61,6 +62,8 @@ export class SignatureUseCases extends MappingUseCases {
     request: AddSignatureRequest,
   ): Promise<Signature> {
     const who = await this.authorizeEdit(actor, mapId);
+    if (!request.custom && !isScannerSignatureId(request.eveId))
+      throw new ValidationError('expected ABC-123 (or mark the entry as custom)');
     const author = await this.author(who);
     return this.write(who, mapId, async (events) => {
       await this.visibleSystem(mapId, solarSystemId);
@@ -68,7 +71,7 @@ export class SignatureUseCases extends MappingUseCases {
       if (existing.some((s) => s.eveId === request.eveId))
         throw new ConflictError(`Signature ${request.eveId} already exists`);
       const now = this.ports.clock.now();
-      const signature: Signature = {
+      const signature: Signature = compactSignature({
         id: newId(),
         mapId,
         solarSystemId,
@@ -78,6 +81,8 @@ export class SignatureUseCases extends MappingUseCases {
         name: request.name ?? null,
         description: request.description ?? '',
         connectionId: null,
+        kind: request.kind ?? 'signature',
+        custom: request.custom ?? false,
         createdAt: now,
         updatedAt: now,
         ...blank(),
@@ -88,7 +93,7 @@ export class SignatureUseCases extends MappingUseCases {
         bubbled: request.bubbled ?? false,
         createdBy: author,
         updatedBy: author,
-      };
+      });
       await this.ports.signatures.insert(signature);
       events.add('signature.added', signature);
       return signature;
@@ -112,7 +117,11 @@ export class SignatureUseCases extends MappingUseCases {
     return this.write(who, mapId, async (events) => {
       const current = await this.load(mapId, signatureId);
       const patch = defined(request) as Partial<Signature>;
+      if (patch.kind === 'signature' && !current.kind) delete patch.kind;
       if (!changes(current, patch)) return current;
+      // Scanner entries keep scanner ids; only custom entries take free text.
+      if (patch.eveId && !current.custom && !isScannerSignatureId(patch.eveId))
+        throw new ValidationError('expected ABC-123 (custom entries may use any id)');
       const now = this.ports.clock.now();
       if (patch.eveId && patch.eveId !== current.eveId) {
         const siblings = await this.ports.signatures.listForSystem(mapId, current.solarSystemId);
@@ -129,7 +138,7 @@ export class SignatureUseCases extends MappingUseCases {
         patch.group = 'wormhole';
       }
       const linked = patch.connectionId !== undefined && patch.connectionId !== current.connectionId;
-      const next: Signature = { ...current, ...patch, updatedAt: now, updatedBy: author };
+      const next: Signature = compactSignature({ ...current, ...patch, updatedAt: now, updatedBy: author });
       await this.ports.signatures.update(next);
       events.add('signature.updated', next, current);
       if (!next.connectionId) return next;
@@ -196,7 +205,8 @@ export class SignatureUseCases extends MappingUseCases {
         const sameSide = here.filter(
           (s) => !ids.has(s.id) && s.connectionId === connection.id && s.id !== signature.id,
         );
-        if (request.withConnections) {
+        // A locked connection stays (only a manager removes it, from the connection itself).
+        if (request.withConnections && !connection.locked) {
           for (const back of far) await drop(back);
           await this.ports.stamps.putTombstone(
             mapId,
@@ -243,14 +253,14 @@ export class SignatureUseCases extends MappingUseCases {
           connection &&
           (connection.source === removed.solarSystemId || connection.target === removed.solarSystemId);
         const { provenance: _provenance, ...fields } = removed;
-        const signature: Signature = {
+        const signature: Signature = compactSignature({
           ...blank(),
           ...fields,
           mapId,
           connectionId: touches ? connection.id : null,
           updatedAt: now,
           updatedBy: author,
-        };
+        });
         await this.ports.signatures.insert(signature, { restoredAt: now });
         events.add('signature.added', signature);
         restored.push(signature);
@@ -287,22 +297,23 @@ export class SignatureUseCases extends MappingUseCases {
         const current = existing.get(found.eveId);
         existing.delete(found.eveId);
         if (!current) {
-          const signature: Signature = {
+          const signature: Signature = compactSignature({
             id: newId(),
             mapId,
             solarSystemId,
             eveId: found.eveId,
             group: found.group,
-            type: null,
+            type: found.type,
             name: found.name,
             description: '',
             connectionId: null,
+            kind: found.kind,
             createdAt: now,
             updatedAt: now,
             ...blank(),
             createdBy: author,
             updatedBy: author,
-          };
+          });
           await this.ports.signatures.insert(signature);
           events.add('signature.added', signature);
           result.added++;
@@ -311,11 +322,12 @@ export class SignatureUseCases extends MappingUseCases {
         const patch: Partial<Signature> = {};
         if (found.group !== 'unknown') patch.group = found.group;
         if (found.name) patch.name = found.name;
+        if (found.kind !== (current.kind ?? 'signature')) patch.kind = found.kind;
         if (!changes(current, patch)) {
           if (now - current.updatedAt > TOUCH_AFTER_MS) seen.push(current.id);
           continue;
         }
-        const next = { ...current, ...patch, updatedAt: now, updatedBy: author };
+        const next = compactSignature({ ...current, ...patch, updatedAt: now, updatedBy: author });
         await this.ports.signatures.update(next);
         events.add('signature.updated', next, current);
         result.updated++;
@@ -324,7 +336,11 @@ export class SignatureUseCases extends MappingUseCases {
 
       if (request.mode === 'replace' && parsed.signatures.length > 0) {
         result.removedSignatures = [];
+        // Only kinds the paste lists: a paste without anomalies (filtered in the game) keeps them.
+        // Custom entries were never on the scanner and stay.
+        const kinds = new Set(parsed.signatures.map((p) => p.kind));
         for (const stale of existing.values()) {
+          if (stale.custom || !kinds.has(stale.kind ?? 'signature')) continue;
           await this.tombstone(stale, now);
           await this.ports.signatures.delete(mapId, stale.id);
           events.add('signature.removed', { id: stale.id, solarSystemId }, stale);
@@ -389,7 +405,8 @@ export class SignatureUseCases extends MappingUseCases {
     const connection = signature.connectionId
       ? await this.ports.connections.findById(signature.mapId, signature.connectionId)
       : null;
-    if (!connection || connection.type !== 'wormhole') return signature;
+    // A locked connection keeps what it says.
+    if (!connection || connection.type !== 'wormhole' || connection.locked) return signature;
     const sizeOf = (s: Signature) => {
       const code = signatureTypeCode(s);
       return code && code !== 'K162' ? (this.ports.universe.wormholeType(code)?.shipSize ?? null) : null;

@@ -22,6 +22,7 @@ import { OnLinkSettings } from './OnLinkSettings';
 import {
   ALL_GROUPS,
   groupShown,
+  kindShown,
   setSignaturePrefs,
   useSignaturePrefs,
   type SignatureColumn,
@@ -35,6 +36,12 @@ const COLUMN_LABEL: Record<SignatureColumn, string> = {
   updated: 'Updated',
   author: 'Added by',
 };
+
+const KINDS = [
+  ['signature', 'Signatures'],
+  ['anomaly', 'Anomalies'],
+  ['other', 'Ships, structures and the rest'],
+] as const;
 
 /** Opens the wormhole types reference wherever the map mounts it (see `SignatureLayer`). */
 export const OPEN_WORMHOLE_REFERENCE = 'dbk:wormhole-reference';
@@ -58,8 +65,19 @@ export function SignatureSettingsMenu({ can }: { can: { edit: boolean } }) {
         </MenuTrigger>
         <MenuContent>
           <MenuSub>
-            <MenuSubTrigger icon={<Filter />}>Show groups</MenuSubTrigger>
+            <MenuSubTrigger icon={<Filter />}>Show</MenuSubTrigger>
             <MenuSubContent>
+              {KINDS.map(([kind, name]) => (
+                <MenuCheckboxItem
+                  key={kind}
+                  checked={kindShown(prefs, kind)}
+                  onSelect={keep}
+                  onCheckedChange={(on) => set({ kinds: { ...prefs.kinds, [kind]: on } })}
+                >
+                  {name}
+                </MenuCheckboxItem>
+              ))}
+              <MenuSeparator />
               {ALL_GROUPS.map((g) => (
                 <MenuCheckboxItem
                   key={g}

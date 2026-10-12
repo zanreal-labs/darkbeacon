@@ -58,6 +58,9 @@ export function projectConnection(connection: ConnectionDto, scopes: Scopes): Co
     bubbled: status ? connection.bubbled : 'none',
     eolAt: status ? connection.eolAt : null,
     ...(status && connection.massStatusAt !== undefined ? { massStatusAt: connection.massStatusAt } : {}),
+    // The lifetime mark is connection status; the note is intel; the lock stays on its map.
+    ...(status && connection.lifetime ? { lifetime: connection.lifetime } : {}),
+    ...(has(scopes, 'intel') && connection.note ? { note: connection.note } : {}),
     createdAt: connection.createdAt,
     updatedAt: connection.updatedAt,
   };
@@ -78,6 +81,8 @@ export function projectSignature(signature: SignatureDto): SignatureDto {
     name: signature.name,
     description: signature.description,
     connectionId: signature.connectionId,
+    ...(signature.kind ? { kind: signature.kind } : {}),
+    ...(signature.custom ? { custom: signature.custom } : {}),
     createdAt: signature.createdAt,
     updatedAt: signature.updatedAt,
     tempName: signature.tempName ?? null,

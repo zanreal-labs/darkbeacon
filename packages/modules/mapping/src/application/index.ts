@@ -5,6 +5,7 @@ export * from './bookmark-numbers.js';
 export * from './comments.js';
 export * from './structures.js';
 export * from './connections.js';
+export * from './imports.js';
 export * from './intel.js';
 export * from './maps.js';
 export * from './passages.js';

@@ -24,9 +24,11 @@ describe('probe scanner paste in other client languages', () => {
     ].join('\n');
     expect(parseSignaturePaste(text)).toEqual({
       signatures: [
-        { eveId: 'ABC-123', group: 'wormhole', name: null },
-        { eveId: 'DEF-456', group: 'gas', name: 'Something Reservoir' },
-        { eveId: 'GHI-789', group: 'unknown', name: null },
+        { eveId: 'ABC-123', kind: 'signature', group: 'wormhole', name: null, type: null },
+        { eveId: 'DEF-456', kind: 'signature', group: 'gas', name: 'Something Reservoir', type: null },
+        { eveId: 'GHI-789', kind: 'signature', group: 'unknown', name: null, type: null },
+        // Anomalies are kept as anomalies; their group column is in the client's language too.
+        { eveId: 'JKL-012', kind: 'anomaly', group: 'unknown', name: 'Blood Hideaway', type: null },
       ],
       skipped: [],
     });

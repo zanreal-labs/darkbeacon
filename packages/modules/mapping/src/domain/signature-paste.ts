@@ -1,4 +1,4 @@
-import type { SignatureGroup } from '@darkbeacon/shared';
+import type { SignatureGroup, SignatureKind } from '@darkbeacon/shared';
 
 /**
  * Parser for the clipboard of the in-game probe scanner. Each line is tab separated:
@@ -6,15 +6,18 @@ import type { SignatureGroup } from '@darkbeacon/shared';
  *   ABC-123 <TAB> Cosmic Signature <TAB> Wormhole <TAB> Unstable Wormhole <TAB> 100.0% <TAB> 4.32 AU
  *
  * id, scan group, group, type name, signal strength, distance. Group and name stay empty until
- * the signature is scanned far enough. Labels depend on the client language, so they live in
+ * the signature is scanned far enough. Cosmic signatures, cosmic anomalies and the other rows the
+ * scanner lists (ships, structures...) are all kept, by kind. Labels depend on the client language, so they live in
  * one table per language; add a language by adding an entry to SCANNER_LANGUAGES.
  */
 export interface ScannerLanguage {
   code: string;
-  /** Scan group of cosmic signatures, the only rows that become signatures. */
+  /** Scan group of cosmic signatures. */
   cosmicSignature: string;
-  /** Scan groups that are understood but not stored (anomalies are always visible anyway). */
-  ignoredScanGroups: string[];
+  /** Scan group of cosmic anomalies (kept as anomalies). */
+  cosmicAnomaly: string;
+  /** Other scan groups the scanner lists (ships, structures...), kept as `other` results. */
+  otherScanGroups: string[];
   /** Group column -> signature group. */
   groups: Record<string, SignatureGroup>;
   /** Type names that say nothing beyond the group, e.g. every wormhole is "Unstable Wormhole". */
@@ -24,7 +27,8 @@ export interface ScannerLanguage {
 export const ENGLISH: ScannerLanguage = {
   code: 'en',
   cosmicSignature: 'Cosmic Signature',
-  ignoredScanGroups: ['Cosmic Anomaly'],
+  cosmicAnomaly: 'Cosmic Anomaly',
+  otherScanGroups: ['Ship', 'Structure', 'Deployable', 'Drone', 'Starbase', 'Celestial'],
   groups: {
     Wormhole: 'wormhole',
     'Combat Site': 'combat',
@@ -36,10 +40,12 @@ export const ENGLISH: ScannerLanguage = {
   genericNames: ['Unstable Wormhole'],
 };
 
+// Russian, French and German clients, as Wanderer reads them.
 export const RUSSIAN: ScannerLanguage = {
   code: 'ru',
   cosmicSignature: 'Скрытый сигнал',
-  ignoredScanGroups: ['Космическая аномалия'],
+  cosmicAnomaly: 'Космическая аномалия',
+  otherScanGroups: ['Корабль', 'Сооружение', 'Полевые блоки', 'Дрон', 'Starbase'],
   groups: {
     Червоточина: 'wormhole',
     'Боевой район': 'combat',
@@ -55,7 +61,8 @@ export const RUSSIAN: ScannerLanguage = {
 export const FRENCH: ScannerLanguage = {
   code: 'fr',
   cosmicSignature: 'Signature cosmique (type)',
-  ignoredScanGroups: ['Anomalie cosmique'],
+  cosmicAnomaly: 'Anomalie cosmique',
+  otherScanGroups: ['Vaisseau', 'Structure', 'Déployable', 'Drone', 'Base stellaire'],
   groups: {
     'Trou de ver': 'wormhole',
     'Site de combat': 'combat',
@@ -71,7 +78,8 @@ export const FRENCH: ScannerLanguage = {
 export const GERMAN: ScannerLanguage = {
   code: 'de',
   cosmicSignature: 'Kosmische Signatur (typ)',
-  ignoredScanGroups: ['Kosmische Anomalie'],
+  cosmicAnomaly: 'Kosmische Anomalie',
+  otherScanGroups: ['Schiff', 'Struktur', 'Mobile Struktur', 'Drohne', 'Sternenbasis'],
   groups: {
     Wurmloch: 'wormhole',
     Kampfgebiet: 'combat',
@@ -92,9 +100,12 @@ const sameLabel = (a: string, b: string) =>
 
 export interface ParsedSignature {
   eveId: string;
+  kind: SignatureKind;
   group: SignatureGroup;
   /** Site name; null when not scanned yet or when it is a generic name. */
   name: string | null;
+  /** For `other` rows: what the scanner calls it (Ship, Structure...) and its group column. */
+  type: string | null;
 }
 
 export interface SignaturePaste {
@@ -118,18 +129,25 @@ export function parseSignaturePaste(
     const eveId = id.toUpperCase();
     const language = languages.find(
       (l) =>
-        sameLabel(l.cosmicSignature, scanGroup) || l.ignoredScanGroups.some((g) => sameLabel(g, scanGroup)),
+        sameLabel(l.cosmicSignature, scanGroup) ||
+        sameLabel(l.cosmicAnomaly, scanGroup) ||
+        l.otherScanGroups.some((g) => sameLabel(g, scanGroup)),
     );
     if (!EVE_ID.test(eveId) || !language) {
       skipped.push(line);
       continue;
     }
-    if (!sameLabel(language.cosmicSignature, scanGroup)) continue;
-    const known = Object.entries(language.groups).find(([label]) => sameLabel(label, group));
+    const kind: SignatureKind = sameLabel(language.cosmicSignature, scanGroup)
+      ? 'signature'
+      : sameLabel(language.cosmicAnomaly, scanGroup)
+        ? 'anomaly'
+        : 'other';
     byId.set(eveId, {
       eveId,
-      group: known?.[1] ?? 'unknown',
+      kind,
+      group: Object.entries(language.groups).find(([label]) => sameLabel(label, group))?.[1] ?? 'unknown',
       name: name && !language.genericNames.includes(name) ? name : null,
+      type: kind === 'other' ? [scanGroup, group].filter(Boolean).join(' · ') : null,
     });
   }
   return { signatures: [...byId.values()], skipped };

@@ -287,7 +287,14 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto) {
         return run({
           apply: (s) => ({
             ...s,
-            connections: mapWith(s.connections, connectionId, (c) => ({ ...c, ...patch })),
+            connections: mapWith(s.connections, connectionId, (c) => {
+              // A lifetime mark is sent by name; the connection holds it with the time it was set.
+              const { lifetime, ...rest } = patch;
+              const next: ConnectionDto = { ...c, ...rest };
+              if (lifetime !== undefined)
+                next.lifetime = lifetime === null ? null : { mark: lifetime, at: Date.now() };
+              return next;
+            }),
           }),
           confirmedBy: (e) => e.type === 'connection.updated' && e.data.id === connectionId,
           request: () =>

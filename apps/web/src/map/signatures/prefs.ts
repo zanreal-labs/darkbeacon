@@ -1,7 +1,7 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
-import { SignatureGroup } from '@darkbeacon/shared';
+import { SignatureGroup, type SignatureKind } from '@darkbeacon/shared';
 
 /*
  * How this browser shows and handles signatures (Wanderer's signature settings): columns, filters,
@@ -18,6 +18,8 @@ export interface SignaturePrefs {
   columns: Record<SignatureColumn, boolean>;
   /** Groups shown; a group missing here is shown. */
   groups: Partial<Record<SignatureGroup, boolean>>;
+  /** Kinds of scan results shown (signatures, anomalies, the rest); missing: shown. */
+  kinds: Partial<Record<SignatureKind, boolean>>;
   sort: { field: SignatureSortField; dir: 'asc' | 'desc' };
   /** Rows tinted by group (wormholes, sites, unknown). */
   colorByGroup: boolean;
@@ -45,6 +47,7 @@ export const DEFAULT_SIGNATURE_PREFS: SignaturePrefs = {
   // The sidebar is narrow: the group shows as the row's colour and the site's name.
   columns: { group: false, description: false, added: true, updated: false, author: false },
   groups: {},
+  kinds: {},
   sort: { field: 'added', dir: 'desc' },
   colorByGroup: true,
   lazyDelete: true,
@@ -68,6 +71,7 @@ function read(): SignaturePrefs {
       ...stored,
       columns: { ...DEFAULT_SIGNATURE_PREFS.columns, ...stored.columns },
       groups: { ...stored.groups },
+      kinds: { ...stored.kinds },
       sort: { ...DEFAULT_SIGNATURE_PREFS.sort, ...stored.sort },
       onLink: { ...DEFAULT_SIGNATURE_PREFS.onLink, ...stored.onLink },
     };
@@ -112,5 +116,7 @@ export function useSignaturePrefs(): SignaturePrefs {
 }
 
 export const groupShown = (prefs: SignaturePrefs, group: SignatureGroup) => prefs.groups[group] !== false;
+export const kindShown = (prefs: SignaturePrefs, kind: SignatureKind | undefined) =>
+  prefs.kinds[kind ?? 'signature'] !== false;
 
 export const ALL_GROUPS = SignatureGroup.options;

@@ -14,6 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   ArrowDown,
   ArrowUp,
+  ChevronRight,
   CircleDot,
   ClipboardPaste,
   Clock,
@@ -40,6 +41,7 @@ import { Button, Checkbox, CharacterAvatar, IconButton, Kbd, Skeleton, useToast 
 import { seedSignatures } from '../mapState';
 import { TypeLabel } from '../signatures/catalog';
 import { ageLabel, freshness, GROUP_LABEL, targetOf, visibleSignatures } from '../signatures/facts';
+import { OtherFilters } from '../signatures/FilterChips';
 import { LeadsToMenu } from '../signatures/LeadsToMenu';
 import { announceLink } from '../signatures/onLink';
 import {
@@ -227,9 +229,17 @@ export function SignaturesSection({
   const [anchor, setAnchor] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const focusTable = useCallback(() => rootRef.current?.focus({ preventScroll: true }), []);
 
+  // Probed signatures in the table; anomalies and other scanner rows fold away below it.
   const rows = useMemo(() => visibleSignatures(signatures, prefs), [signatures, prefs]);
-  const hidden = signatures.length - rows.length;
+  const probed = rows.filter((x) => (x.kind ?? 'signature') === 'signature');
+  const others = rows.filter((x) => (x.kind ?? 'signature') !== 'signature');
+  const hiddenOthers = signatures.filter(
+    (x) => (x.kind ?? 'signature') !== 'signature' && !rows.includes(x),
+  ).length;
+  const hidden = signatures.filter((x) => (x.kind ?? 'signature') === 'signature').length - probed.length;
+  const [showOthers, setShowOthers] = useState(false);
   const live = new Set(signatures.map((s) => s.eveId));
   const ghosts = undo.batches
     .flatMap((b) => b.signatures)
@@ -329,9 +339,208 @@ export function SignaturesSection({
     return ok;
   };
 
+  /** One table of scan results; selection, editing and the undo rows are shared. */
+  const renderTable = (list: SignatureDto[], label: string, withGhosts: boolean) => (
+    <table
+      className={`${styles.table} ${sig.table}`}
+      data-edit={can.edit || undefined}
+      aria-multiselectable={can.edit || undefined}
+      aria-label={label}
+    >
+      <thead>
+        <tr>
+          {header('eveId', 'ID', sig.colId)}
+          {columns.group && header('group', 'Group', sig.colGroup)}
+          {header('info', 'Info')}
+          {columns.description && header('description', 'Notes')}
+          {columns.added && header('added', 'Added', `${styles.num} ${sig.colAge}`)}
+          {columns.updated && header('updated', 'Upd.', `${styles.num} ${sig.colAge}`)}
+          {columns.author && header('author', 'By', sig.colAuthor)}
+          {can.edit && <th aria-label="Actions" className={sig.colActions} />}
+        </tr>
+      </thead>
+      <tbody>
+        {list.map((s) => {
+          const target = targetOf(s, connections);
+          const connection = s.connectionId ? connections.get(s.connectionId) : undefined;
+          const info = s.connectionId ? intel.get(s.connectionId) : undefined;
+          const wormhole = s.group === 'wormhole';
+          const time = connection?.timeStatus ?? s.timeStatus;
+          const mass = connection?.massStatus ?? s.massStatus;
+          const code = s.type?.toUpperCase();
+          const resolved =
+            info?.wormholeType && (!code || code === 'K162') && info.wormholeType !== code
+              ? info.wormholeType
+              : null;
+          const isSelected = selected.has(s.id);
+          return (
+            <tr
+              key={s.id}
+              data-group={s.group}
+              data-selected={isSelected || undefined}
+              data-bubbled={s.bubbled || undefined}
+              aria-selected={can.edit ? isSelected : undefined}
+              onClick={(e) => {
+                if ((e.target as HTMLElement).closest('button, a, input')) return;
+                select(e, s.id);
+                (e.currentTarget.closest('[data-signatures]') as HTMLElement | null)?.focus({
+                  preventScroll: true,
+                });
+              }}
+              onDoubleClick={(e) => {
+                if (!can.edit || (e.target as HTMLElement).closest('button, a')) return;
+                setEditing(s.id);
+              }}
+            >
+              <td className={styles.sigId}>
+                {s.eveId}
+                {s.custom && (
+                  <span className={styles.customMark} title="Written by someone, not from the scanner">
+                    custom
+                  </span>
+                )}
+              </td>
+              {columns.group && <td className={sig.group}>{GROUP_LABEL[s.group]}</td>}
+              <td>
+                <span className={sig.info}>
+                  {/* Once linked, the temporary name is on the system it leads to. */}
+                  {s.tempName && target === null && <strong className={sig.tempName}>{s.tempName}</strong>}
+                  {wormhole && time === 'eol' && <Clock className={sig.iconEol} aria-label="End of life" />}
+                  {wormhole && mass && mass !== 'fresh' && (
+                    <TriangleAlert
+                      className={mass === 'critical' ? sig.iconCritical : sig.iconReduced}
+                      aria-label={mass === 'critical' ? 'Mass critical' : 'Mass reduced'}
+                    />
+                  )}
+                  {s.bubbled && <CircleDot className={sig.iconBubble} aria-label="Hole is inside a bubble" />}
+                  {wormhole ? (
+                    code ? (
+                      <TypeLabel code={code} destination={target === null ? s.destination : null} />
+                    ) : (
+                      !resolved && <span className="subtle">?</span>
+                    )
+                  ) : (
+                    <span className={`${styles.ellipsis} ${sig.grow}`}>
+                      {s.name ?? <span className="subtle">—</span>}
+                    </span>
+                  )}
+                  {resolved && (
+                    <span className={sig.resolved} title="Type from the other side of the hole">
+                      ({resolved})
+                    </span>
+                  )}
+                  {info && info.urgency !== 'ok' && (
+                    <span
+                      className={sig.urgency}
+                      data-urgency={info.urgency}
+                      title={[URGENCY_TEXT[info.urgency], timeLeft(info.time.remainingMs, true)]
+                        .filter(Boolean)
+                        .join(': ')}
+                    >
+                      {timeLeft(info.time.remainingMs) ?? URGENCY_TEXT[info.urgency]}
+                    </span>
+                  )}
+                  {target !== null && (
+                    <button
+                      type="button"
+                      className={`${styles.target} ${sig.grow}`}
+                      title={`Leads to ${systemName(target)}: select it`}
+                      onClick={() => onSelectSystem(target)}
+                    >
+                      <span aria-hidden>→ </span>
+                      {systemName(target)}
+                    </button>
+                  )}
+                  {s.description && !columns.description && (
+                    <span className={sig.iconNote} role="img" aria-label="Has notes" title={s.description}>
+                      <MessageSquareText aria-hidden />
+                    </span>
+                  )}
+                </span>
+              </td>
+              {columns.description && (
+                <td className={`${styles.ellipsis} ${sig.description}`} title={s.description || undefined}>
+                  {s.description}
+                </td>
+              )}
+              {columns.added && (
+                <td
+                  className={`${styles.num} ${styles.age}`}
+                  data-fresh={freshness(s.createdAt, now)}
+                  title={new Date(s.createdAt).toLocaleString()}
+                >
+                  {ageLabel(s.createdAt, now)}
+                </td>
+              )}
+              {columns.updated && (
+                <td className={`${styles.num} ${styles.age}`} title={new Date(s.updatedAt).toLocaleString()}>
+                  {ageLabel(s.updatedAt, now)}
+                </td>
+              )}
+              {columns.author && (
+                <td className={sig.author} title={s.createdBy?.name}>
+                  {s.createdBy?.characterId ? (
+                    <CharacterAvatar
+                      id={s.createdBy.characterId}
+                      name={s.createdBy.name}
+                      size={16}
+                      decorative
+                    />
+                  ) : null}
+                  <span className={styles.ellipsis}>{s.createdBy?.name ?? '—'}</span>
+                </td>
+              )}
+              {can.edit && (
+                <td className={styles.actionCell}>
+                  <span className={sig.actions}>
+                    {wormhole && target === null && (
+                      <LeadsToMenu
+                        signature={s}
+                        connections={connections}
+                        universe={universe}
+                        systemName={systemName}
+                        linkedTo={target}
+                        onLink={(connectionId) => void update(s.id, { connectionId })}
+                      />
+                    )}
+                    <IconButton
+                      size="sm"
+                      tooltip={false}
+                      className={styles.rowRemove}
+                      label={`Edit ${s.eveId}`}
+                      icon={<Pencil />}
+                      onClick={() => setEditing(s.id)}
+                    />
+                    <IconButton
+                      size="sm"
+                      tooltip={false}
+                      className={styles.rowRemove}
+                      label={`Remove ${s.eveId}`}
+                      icon={<X />}
+                      onClick={() => removeSelected(selected.has(s.id) ? [...selected] : [s.id])}
+                    />
+                  </span>
+                </td>
+              )}
+            </tr>
+          );
+        })}
+        {(withGhosts ? ghosts : []).map((s) => (
+          <tr key={`ghost:${s.id}`} data-removed>
+            <td className={styles.sigId}>{s.eveId}</td>
+            <td colSpan={columnCount - 1} className={sig.ghost}>
+              removed{s.type ? ` · ${s.type}` : s.name ? ` · ${s.name}` : ''}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+
   return (
     <div
       ref={rootRef}
+      data-signatures
       className={styles.signatures}
       tabIndex={-1}
       onKeyDown={onKeyDown}
@@ -389,7 +598,7 @@ export function SignaturesSection({
         </div>
       )}
 
-      {rows.length === 0 && ghosts.length === 0 ? (
+      {probed.length === 0 && ghosts.length === 0 ? (
         listed.isLoading ? (
           <div className={styles.padded} aria-busy="true">
             {[0, 1, 2].map((i) => (
@@ -400,216 +609,40 @@ export function SignaturesSection({
           <p className={styles.empty}>
             <Radar aria-hidden />
             {hidden > 0
-              ? `${hidden} hidden by the group filter.`
-              : can.edit
-                ? 'No signatures yet. Copy the probe scanner and paste.'
-                : 'Nobody has scanned here yet.'}
+              ? `${hidden} hidden by the filters.`
+              : others.length + hiddenOthers > 0
+                ? 'No probed signatures yet.'
+                : can.edit
+                  ? 'No signatures yet. Copy the probe scanner and paste.'
+                  : 'Nobody has scanned here yet.'}
           </p>
         )
       ) : (
-        <table
-          className={`${styles.table} ${sig.table}`}
-          data-edit={can.edit || undefined}
-          aria-multiselectable={can.edit || undefined}
-        >
-          <thead>
-            <tr>
-              {header('eveId', 'ID', sig.colId)}
-              {columns.group && header('group', 'Group', sig.colGroup)}
-              {header('info', 'Info')}
-              {columns.description && header('description', 'Notes')}
-              {columns.added && header('added', 'Added', `${styles.num} ${sig.colAge}`)}
-              {columns.updated && header('updated', 'Upd.', `${styles.num} ${sig.colAge}`)}
-              {columns.author && header('author', 'By', sig.colAuthor)}
-              {can.edit && <th aria-label="Actions" className={sig.colActions} />}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((s) => {
-              const target = targetOf(s, connections);
-              const connection = s.connectionId ? connections.get(s.connectionId) : undefined;
-              const info = s.connectionId ? intel.get(s.connectionId) : undefined;
-              const wormhole = s.group === 'wormhole';
-              const time = connection?.timeStatus ?? s.timeStatus;
-              const mass = connection?.massStatus ?? s.massStatus;
-              const code = s.type?.toUpperCase();
-              const resolved =
-                info?.wormholeType && (!code || code === 'K162') && info.wormholeType !== code
-                  ? info.wormholeType
-                  : null;
-              const isSelected = selected.has(s.id);
-              return (
-                <tr
-                  key={s.id}
-                  data-group={s.group}
-                  data-selected={isSelected || undefined}
-                  data-bubbled={s.bubbled || undefined}
-                  aria-selected={can.edit ? isSelected : undefined}
-                  onClick={(e) => {
-                    if ((e.target as HTMLElement).closest('button, a, input')) return;
-                    select(e, s.id);
-                    rootRef.current?.focus({ preventScroll: true });
-                  }}
-                  onDoubleClick={(e) => {
-                    if (!can.edit || (e.target as HTMLElement).closest('button, a')) return;
-                    setEditing(s.id);
-                  }}
-                >
-                  <td className={styles.sigId}>{s.eveId}</td>
-                  {columns.group && <td className={sig.group}>{GROUP_LABEL[s.group]}</td>}
-                  <td>
-                    <span className={sig.info}>
-                      {/* Once linked, the temporary name is on the system it leads to. */}
-                      {s.tempName && target === null && (
-                        <strong className={sig.tempName}>{s.tempName}</strong>
-                      )}
-                      {wormhole && time === 'eol' && (
-                        <Clock className={sig.iconEol} aria-label="End of life" />
-                      )}
-                      {wormhole && mass && mass !== 'fresh' && (
-                        <TriangleAlert
-                          className={mass === 'critical' ? sig.iconCritical : sig.iconReduced}
-                          aria-label={mass === 'critical' ? 'Mass critical' : 'Mass reduced'}
-                        />
-                      )}
-                      {s.bubbled && (
-                        <CircleDot className={sig.iconBubble} aria-label="Hole is inside a bubble" />
-                      )}
-                      {wormhole ? (
-                        code ? (
-                          <TypeLabel code={code} destination={target === null ? s.destination : null} />
-                        ) : (
-                          !resolved && <span className="subtle">?</span>
-                        )
-                      ) : (
-                        <span className={`${styles.ellipsis} ${sig.grow}`}>
-                          {s.name ?? <span className="subtle">—</span>}
-                        </span>
-                      )}
-                      {resolved && (
-                        <span className={sig.resolved} title="Type from the other side of the hole">
-                          ({resolved})
-                        </span>
-                      )}
-                      {info && info.urgency !== 'ok' && (
-                        <span
-                          className={sig.urgency}
-                          data-urgency={info.urgency}
-                          title={[URGENCY_TEXT[info.urgency], timeLeft(info.time.remainingMs, true)]
-                            .filter(Boolean)
-                            .join(': ')}
-                        >
-                          {timeLeft(info.time.remainingMs) ?? URGENCY_TEXT[info.urgency]}
-                        </span>
-                      )}
-                      {target !== null && (
-                        <button
-                          type="button"
-                          className={`${styles.target} ${sig.grow}`}
-                          title={`Leads to ${systemName(target)}: select it`}
-                          onClick={() => onSelectSystem(target)}
-                        >
-                          <span aria-hidden>→ </span>
-                          {systemName(target)}
-                        </button>
-                      )}
-                      {s.description && !columns.description && (
-                        <span
-                          className={sig.iconNote}
-                          role="img"
-                          aria-label="Has notes"
-                          title={s.description}
-                        >
-                          <MessageSquareText aria-hidden />
-                        </span>
-                      )}
-                    </span>
-                  </td>
-                  {columns.description && (
-                    <td
-                      className={`${styles.ellipsis} ${sig.description}`}
-                      title={s.description || undefined}
-                    >
-                      {s.description}
-                    </td>
-                  )}
-                  {columns.added && (
-                    <td
-                      className={`${styles.num} ${styles.age}`}
-                      data-fresh={freshness(s.createdAt, now)}
-                      title={new Date(s.createdAt).toLocaleString()}
-                    >
-                      {ageLabel(s.createdAt, now)}
-                    </td>
-                  )}
-                  {columns.updated && (
-                    <td
-                      className={`${styles.num} ${styles.age}`}
-                      title={new Date(s.updatedAt).toLocaleString()}
-                    >
-                      {ageLabel(s.updatedAt, now)}
-                    </td>
-                  )}
-                  {columns.author && (
-                    <td className={sig.author} title={s.createdBy?.name}>
-                      {s.createdBy?.characterId ? (
-                        <CharacterAvatar
-                          id={s.createdBy.characterId}
-                          name={s.createdBy.name}
-                          size={16}
-                          decorative
-                        />
-                      ) : null}
-                      <span className={styles.ellipsis}>{s.createdBy?.name ?? '—'}</span>
-                    </td>
-                  )}
-                  {can.edit && (
-                    <td className={styles.actionCell}>
-                      <span className={sig.actions}>
-                        {wormhole && target === null && (
-                          <LeadsToMenu
-                            signature={s}
-                            connections={connections}
-                            universe={universe}
-                            systemName={systemName}
-                            linkedTo={target}
-                            onLink={(connectionId) => void update(s.id, { connectionId })}
-                          />
-                        )}
-                        <IconButton
-                          size="sm"
-                          tooltip={false}
-                          className={styles.rowRemove}
-                          label={`Edit ${s.eveId}`}
-                          icon={<Pencil />}
-                          onClick={() => setEditing(s.id)}
-                        />
-                        <IconButton
-                          size="sm"
-                          tooltip={false}
-                          className={styles.rowRemove}
-                          label={`Remove ${s.eveId}`}
-                          icon={<X />}
-                          onClick={() => removeSelected(selected.has(s.id) ? [...selected] : [s.id])}
-                        />
-                      </span>
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-            {ghosts.map((s) => (
-              <tr key={`ghost:${s.id}`} data-removed>
-                <td className={styles.sigId}>{s.eveId}</td>
-                <td colSpan={columnCount - 1} className={sig.ghost}>
-                  removed{s.type ? ` · ${s.type}` : s.name ? ` · ${s.name}` : ''}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        renderTable(probed, 'Signatures', true)
       )}
-      {hidden > 0 && rows.length > 0 && <p className={sig.hiddenNote}>{hidden} hidden by the group filter</p>}
+      {others.length + hiddenOthers > 0 && (
+        <div className={styles.others}>
+          <button
+            type="button"
+            className={styles.othersToggle}
+            aria-expanded={showOthers}
+            onClick={() => setShowOthers((v) => !v)}
+          >
+            <ChevronRight className={styles.chevron} aria-hidden />
+            Anomalies and other results
+            <span className={styles.sectionCount}>{others.length}</span>
+          </button>
+          {showOthers && (
+            <>
+              <OtherFilters />
+              {others.length > 0 && renderTable(others, 'Anomalies and other results', false)}
+            </>
+          )}
+        </div>
+      )}
+      {hidden > 0 && probed.length > 0 && (
+        <p className={sig.hiddenNote}>{hidden} hidden by the filters (signature settings)</p>
+      )}
 
       {editingSig && (
         <SignatureEditor
@@ -621,7 +654,7 @@ export function SignaturesSection({
           onSave={(patch) => update(editingSig.id, patch)}
           onClose={() => {
             setEditing(null);
-            rootRef.current?.focus({ preventScroll: true });
+            focusTable();
           }}
         />
       )}

@@ -17,12 +17,14 @@ import {
   type SignatureRepository,
   type SystemRepository,
 } from '@darkbeacon/mapping';
+import type { LifetimeMark, SignatureKind } from '@darkbeacon/shared';
 
 export interface MappingTables {
   maps: {
     id: string;
     slug: string;
     name: string;
+    description: string;
     owner_account_id: string;
     /** `standard` or `composite`. */
     kind: string;
@@ -70,6 +72,10 @@ export interface MappingTables {
     mass_status_at: number | null;
     bookmark_number: number | null;
     bookmark_parent: number | null;
+    note: string;
+    locked: number;
+    lifetime_mark: string | null;
+    lifetime_at: number | null;
     created_at: number;
     updated_at: number;
     /** min(source, target) and max(source, target): unique per map. */
@@ -88,6 +94,8 @@ export interface MappingTables {
     name: string | null;
     description: string;
     connection_id: string | null;
+    kind: string;
+    custom: number;
     created_at: number;
     updated_at: number;
     /** JSON field -> when it last changed; see `ChangeStamps`. */
@@ -630,6 +638,7 @@ function mapToRow(map: ChainMap): MapRow {
     id: map.id,
     slug: map.slug,
     name: map.name,
+    description: map.description ?? '',
     kind: map.kind ?? 'standard',
     owner_account_id: map.ownerAccountId,
     settings: json.encode(map.settings),
@@ -645,6 +654,7 @@ function mapFromRow(row: MapRow): ChainMap {
     id: row.id,
     slug: row.slug,
     name: row.name,
+    ...(row.description ? { description: row.description } : {}),
     ...(row.kind === 'composite' ? { kind: 'composite' as const } : {}),
     ownerAccountId: row.owner_account_id,
     settings: json.decode<ChainMap['settings']>(row.settings)!,
@@ -713,6 +723,10 @@ function connectionToRow(c: Connection): Omit<ConnectionRow, 'field_times'> {
     mass_status_at: c.massStatusAt ?? null,
     bookmark_number: c.bookmarkNumber ?? null,
     bookmark_parent: c.bookmarkParent ?? null,
+    note: c.note ?? '',
+    locked: bool.encode(c.locked ?? false),
+    lifetime_mark: c.lifetime?.mark ?? null,
+    lifetime_at: c.lifetime?.at ?? null,
     created_at: c.createdAt,
     updated_at: c.updatedAt,
     pair_low: Math.min(c.source, c.target),
@@ -737,6 +751,12 @@ function connectionFromRow(row: ConnectionRow): Connection {
     massStatusAt: row.mass_status_at == null ? null : Number(row.mass_status_at),
     bookmarkNumber: row.bookmark_number == null ? null : Number(row.bookmark_number),
     bookmarkParent: row.bookmark_parent == null ? null : Number(row.bookmark_parent),
+    // Defaults stay absent, so a connection reads the same as before these fields existed.
+    ...(bool.decode(row.locked) ? { locked: true } : {}),
+    ...(row.note ? { note: row.note } : {}),
+    ...(row.lifetime_mark && row.lifetime_at != null
+      ? { lifetime: { mark: row.lifetime_mark as LifetimeMark, at: Number(row.lifetime_at) } }
+      : {}),
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
   };
@@ -753,6 +773,8 @@ function signatureToRow(s: Signature): Omit<SignatureRow, 'field_times'> {
     name: s.name,
     description: s.description,
     connection_id: s.connectionId,
+    kind: s.kind ?? 'signature',
+    custom: bool.encode(s.custom ?? false),
     created_at: s.createdAt,
     updated_at: s.updatedAt,
     temp_name: s.tempName ?? null,
@@ -776,6 +798,8 @@ function signatureFromRow(row: SignatureRow): Signature {
     name: row.name,
     description: row.description,
     connectionId: row.connection_id,
+    ...(row.kind && row.kind !== 'signature' ? { kind: row.kind as SignatureKind } : {}),
+    ...(bool.decode(row.custom) ? { custom: true } : {}),
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
     tempName: row.temp_name,

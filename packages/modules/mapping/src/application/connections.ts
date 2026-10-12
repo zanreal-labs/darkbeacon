@@ -1,7 +1,15 @@
-import { ConflictError, NotFoundError, ValidationError, newId, type Actor } from '@darkbeacon/core';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+  hasMapRole,
+  newId,
+  type Actor,
+} from '@darkbeacon/core';
 import type { AddConnectionRequest, UpdateConnectionRequest } from '@darkbeacon/shared';
 import type { Connection, Signature } from '../domain/map.js';
-import { changes, defaultShipSize, defined } from '../domain/rules.js';
+import { changes, compactConnection, defaultShipSize, defined } from '../domain/rules.js';
 import { pairKey, signatureKey } from '../domain/stamps.js';
 import { MappingUseCases, type EventBatch, type MappingPorts } from './base.js';
 import { renumberBookmarks } from './bookmark-numbers.js';
@@ -62,8 +70,10 @@ export class ConnectionUseCases extends MappingUseCases {
   }
 
   /**
-   * Time, mass, size, type, mass-saved, dangerous and bubbled. Marking EOL stamps `eolAt`; setting
-   * the mass status stamps `massStatusAt`, from when mass estimates count passages.
+   * Time, mass, size, type, mass-saved, dangerous, bubbled, note, lifetime mark and lock. Marking
+   * EOL stamps `eolAt`; setting the mass status stamps `massStatusAt`, from when mass estimates
+   * count passages; a lifetime mark is stamped with the time it was set. Only managers lock,
+   * unlock and change locked connections; processes (auto-mapping) never change a locked one.
    */
   async update(
     actor: Actor | null,
@@ -74,9 +84,18 @@ export class ConnectionUseCases extends MappingUseCases {
     const who = await this.authorizeEdit(actor, mapId);
     return this.write(who, mapId, async (events) => {
       const current = await this.load(mapId, connectionId);
-      const patch = defined(request);
+      const now = this.ports.clock.now();
+      const { lifetime, ...rest } = defined(request);
+      const patch: Partial<Connection> = { ...rest };
+      if (lifetime !== undefined && lifetime !== (current.lifetime?.mark ?? null))
+        patch.lifetime = lifetime === null ? null : { mark: lifetime, at: now };
+      if (patch.locked === false && !current.locked) delete patch.locked;
+      if (patch.note === '' && !current.note) delete patch.note;
       if (!changes(current, patch)) return current;
-      const next = patchConnection(current, patch, this.ports.clock.now());
+      await this.guardLock(who, mapId, current, patch.locked);
+      const next: Connection = compactConnection({ ...current, ...patch, updatedAt: now });
+      if (patch.timeStatus) next.eolAt = patch.timeStatus === 'eol' ? (current.eolAt ?? now) : null;
+      if (patch.massStatus && patch.massStatus !== current.massStatus) next.massStatusAt = now;
       await this.ports.connections.update(next);
       events.add('connection.updated', next, current);
       // Only wormholes are numbered.
@@ -102,6 +121,7 @@ export class ConnectionUseCases extends MappingUseCases {
     const who = await this.authorizeEdit(actor, mapId);
     await this.write(who, mapId, async (events) => {
       const connection = await this.load(mapId, connectionId);
+      await this.guardLock(who, mapId, connection, undefined);
       const now = this.ports.clock.now();
       // A deliberate removal (the hole closed): maps merging this one drop older copies too.
       await this.ports.stamps.putTombstone(
@@ -115,6 +135,27 @@ export class ConnectionUseCases extends MappingUseCases {
       // Siblings keep their numbers (a gap), unless the map renumbers on close.
       await renumberBookmarks(this.ports, events, mapId);
     });
+  }
+
+  /**
+   * Locking and unlocking, and changing or removing a locked connection, need a map manager;
+   * processes acting on their own (auto-mapping, cleanups) leave locked connections alone.
+   */
+  private async guardLock(
+    who: Actor,
+    mapId: string,
+    current: Connection,
+    locked: boolean | undefined,
+  ): Promise<void> {
+    const toggles = locked !== undefined && locked !== (current.locked ?? false);
+    if (!toggles && !current.locked) return;
+    if (who.kind === 'system' && current.locked) throw new ConflictError('The connection is locked');
+    if (!hasMapRole(await this.ports.access.roleOf(who, mapId), 'manager'))
+      throw new ForbiddenError(
+        toggles
+          ? 'Only a map manager can lock or unlock a connection'
+          : 'The connection is locked; a map manager can change it',
+      );
   }
 
   private async load(mapId: string, connectionId: string): Promise<Connection> {

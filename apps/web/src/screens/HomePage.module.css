@@ -70,6 +70,14 @@
   white-space: nowrap;
 }
 
+.description {
+  overflow: hidden;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .meta {
   overflow: hidden;
   color: var(--dbk-color-text-muted);

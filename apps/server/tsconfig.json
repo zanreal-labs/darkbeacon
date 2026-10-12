@@ -67,6 +67,9 @@
       "path": "../../packages/modules/backups"
     },
     {
+      "path": "../../packages/modules/importing"
+    },
+    {
       "path": "../../packages/modules/api-keys"
     },
     {

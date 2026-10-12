@@ -51,8 +51,16 @@ export class WebhookAdmin {
     return (await this.deps.webhooks.listForMap(mapId)).map(toWebhookDto);
   }
 
-  /** The secret is returned only here; afterwards it is only used to sign. */
-  async create(actor: Actor | null, mapId: string, input: CreateWebhookRequest): Promise<CreatedWebhookDto> {
+  /**
+   * The secret is returned only here; afterwards it is only used to sign. `enabled: false` adds it
+   * switched off (imports: the receiver is not set up for this map's secret yet).
+   */
+  async create(
+    actor: Actor | null,
+    mapId: string,
+    input: CreateWebhookRequest,
+    options: { enabled?: boolean } = {},
+  ): Promise<CreatedWebhookDto> {
     await requireMapRole(this.deps.access, actor, mapId, 'admin');
     const author = actor!;
     checkUrl(input.url);
@@ -63,7 +71,7 @@ export class WebhookAdmin {
       url: input.url,
       events: [...new Set(input.events)],
       secret: newWebhookSecret(),
-      enabled: true,
+      enabled: options.enabled ?? true,
       createdAt: this.deps.clock.now(),
     };
     await this.deps.uow.transaction(async () => {
@@ -93,6 +101,20 @@ export class WebhookAdmin {
       await this.record(actor!, 'webhook.updated', auditDto(updated), auditDto(webhook));
     });
     return toWebhookDto(updated);
+  }
+
+  /**
+   * A new signing secret, returned only here (the old one stops working at once). Imported
+   * webhooks need one: nobody saw the secret they were created with.
+   */
+  async rotateSecret(actor: Actor | null, mapId: string, webhookId: string): Promise<CreatedWebhookDto> {
+    const webhook = await this.require(actor, mapId, webhookId);
+    const updated: Webhook = { ...webhook, secret: newWebhookSecret() };
+    await this.deps.uow.transaction(async () => {
+      await this.deps.webhooks.update(updated);
+      await this.record(actor!, 'webhook.updated', auditDto(updated), auditDto(webhook));
+    });
+    return { ...toWebhookDto(updated), secret: updated.secret };
   }
 
   async remove(actor: Actor | null, mapId: string, webhookId: string): Promise<void> {

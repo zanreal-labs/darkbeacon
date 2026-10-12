@@ -10,7 +10,7 @@ import {
   type WormholeDestination,
 } from '@darkbeacon/shared';
 import type { SignaturePrefs, SignatureSortField } from './prefs';
-import { groupShown } from './prefs';
+import { groupShown, kindShown } from './prefs';
 
 export const GROUP_LABEL: Record<SignatureGroup, string> = {
   unknown: 'Unknown',
@@ -152,15 +152,18 @@ export function visibleSignatures(
 ): SignatureDto[] {
   const { field, dir } = prefs.sort;
   const sign = dir === 'asc' ? 1 : -1;
-  return signatures
-    .filter((s) => groupShown(prefs, s.group))
-    .sort((a, b) => {
-      const x = sortValue(a, field);
-      const y = sortValue(b, field);
-      const order =
-        typeof x === 'number' && typeof y === 'number' ? x - y : collator.compare(String(x), String(y));
-      return sign * order || collator.compare(a.eveId, b.eveId);
-    });
+  return (
+    signatures
+      // `other` results (ships, structures) have no site group: only their kind filters them.
+      .filter((s) => kindShown(prefs, s.kind) && (s.kind === 'other' || groupShown(prefs, s.group)))
+      .sort((a, b) => {
+        const x = sortValue(a, field);
+        const y = sortValue(b, field);
+        const order =
+          typeof x === 'number' && typeof y === 'number' ? x - y : collator.compare(String(x), String(y));
+        return sign * order || collator.compare(a.eveId, b.eveId);
+      })
+  );
 }
 
 /** "D HH:MM:SS"-like age for the Added and Updated columns, compact: `45s`, `12m`, `3h 05m`, `2d 4h`. */
