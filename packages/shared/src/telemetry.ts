@@ -12,7 +12,15 @@ export const FIRST_PARTY_PLUGIN_IDS = ['discord-notify', 'sample-widget'] as con
 export const FirstPartyPluginId = z.enum(FIRST_PARTY_PLUGIN_IDS);
 
 /** Built-in themes, `system` and the first-party theme packages; any other theme is `custom`. */
-export const FIRST_PARTY_THEME_IDS = ['system', 'default', 'dark', 'contrast', 'amarr'] as const;
+export const FIRST_PARTY_THEME_IDS = [
+  'system',
+  'default',
+  'dark',
+  'contrast',
+  'amarr',
+  'large',
+  'pathfinder',
+] as const;
 export const TelemetryThemeId = z.enum([...FIRST_PARTY_THEME_IDS, 'custom']);
 export type TelemetryThemeId = z.infer<typeof TelemetryThemeId>;
 

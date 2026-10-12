@@ -1,0 +1,9 @@
+{
+  "name": "@darkbeacon/theme-large",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The dark theme with larger text everywhere, the map included",
+  "files": [
+    "darkbeacon-theme.json"
+  ]
+}

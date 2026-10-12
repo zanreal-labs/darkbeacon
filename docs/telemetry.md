@@ -99,7 +99,7 @@ Sent once a day (checked hourly; the first one a minute after a new instance sta
 | `discord_bot`                      | an instance Discord bot is connected                                                      |
 | `plugins_first_party`              | enabled plugins shipped with Darkbeacon (`discord-notify`, `sample-widget`)               |
 | `plugins_third_party`              | bucket: other enabled plugins (never their ids)                                           |
-| `theme_default`                    | `system`, `default`, `dark`, `contrast`, `amarr` or `custom`                              |
+| `theme_default`                    | `system`, `default`, `dark`, `contrast`, `amarr`, `large`, `pathfinder` or `custom`       |
 | `themes_third_party`               | bucket: installed themes that are not first-party                                         |
 | `event_retention`                  | an event log retention is set                                                             |
 | `accounts`                         | number of accounts                                                                        |
