@@ -89,11 +89,11 @@ describe('ConnectionEdge', () => {
     // The halo is drawn first, so it sits beneath the line.
     expect(halo.compareDocumentPosition(line(container))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
 
-    // Centres radius + 5 px past the node borders (160 and 400), so the rings never cover a node.
+    // Centred on the line's ends at the node borders (160 and 400), under the cards.
     const bubbles = [...container.querySelectorAll<SVGCircleElement>('[data-bubble]')];
     expect(bubbles.map((b) => [b.dataset.bubble, b.getAttribute('cx'), b.getAttribute('cy')])).toEqual([
-      ['source', '185', '30'],
-      ['target', '375', '30'],
+      ['source', '160', '30'],
+      ['target', '400', '30'],
     ]);
 
     expect(line(container).style.stroke).toBe('var(--dbk-edge-time-eol)');

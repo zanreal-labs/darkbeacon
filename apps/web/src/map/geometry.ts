@@ -39,27 +39,6 @@ export function along(a: Point, b: Point, distance: number): Point {
   return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
 }
 
-/** Distance from a point to the nearest edge of a rectangle (0 inside it). */
-export function distanceToRect(p: Point, r: Rect): number {
-  const dx = Math.max(r.x - p.x, 0, p.x - (r.x + r.width));
-  const dy = Math.max(r.y - p.y, 0, p.y - (r.y + r.height));
-  return Math.hypot(dx, dy);
-}
-
-/**
- * The first point along `from` → `to`, at least `start` away from `from`, whose circle of `radius`
- * keeps `gap` clear of the rectangle: a diagonal line leaves a node at a shallow angle, so a fixed
- * distance would let the circle cover the node's corner.
- */
-export function clearOf(from: Point, to: Point, rect: Rect, radius: number, gap: number, start: number): Point {
-  const length = Math.hypot(to.x - from.x, to.y - from.y);
-  for (let d = start; d < length / 2; d += 2) {
-    const at = along(from, to, d);
-    if (distanceToRect(at, rect) >= radius + gap) return at;
-  }
-  return along(from, to, Math.max(start, length / 2));
-}
-
 /** Room a system node takes with its bookmark tag, with a margin (every node has the same box). */
 const NODE_BOX = { width: SYSTEM_PLACEMENT.x - 40, height: SYSTEM_PLACEMENT.y - 10 };
 

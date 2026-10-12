@@ -523,6 +523,8 @@ export function MapCanvas({
         // Dragging moves a system without selecting it: the panel opening mid-drag shifted the
         // view under the pointer and threw the system across the map.
         selectNodesOnDrag={false}
+        // Double click is not a zoom: it jumped the view in close in the middle of work.
+        zoomOnDoubleClick={false}
         deleteKeyCode={null}
         colorMode={theme.colorScheme}
         defaultViewport={{ x: 0, y: 0, zoom: DEFAULT_ZOOM }}

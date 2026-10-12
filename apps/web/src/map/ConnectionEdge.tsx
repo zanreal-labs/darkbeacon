@@ -12,7 +12,7 @@ import {
 import type { ConnectionDto, ShipSize } from '@darkbeacon/shared';
 import { PluginSlot } from '../plugins/PluginSlot';
 import { edgeInnerStyle, edgeOuterStyle, edgeVisual, SHIP_SIZE_TEXT, type EdgeVisual } from './edgeStyle';
-import { clearOf, floatingEnds, type Point, type Rect } from './geometry';
+import { floatingEnds, type Point, type Rect } from './geometry';
 import styles from './ConnectionEdge.module.css';
 
 export interface ConnectionEdgeData extends Record<string, unknown> {
@@ -43,12 +43,12 @@ function rectOf(node: InternalNode): Rect {
   };
 }
 
-/** Bubble ring radius: big enough to read at a glance, like a warp disruption bubble in space. */
-export const BUBBLE_RADIUS = 20;
-/** The bubble's centre sits this far past the node border along the line: never on the node. */
-export const BUBBLE_OFFSET = BUBBLE_RADIUS + 5;
-/** Clear space between the ring and the node, whatever the angle of the line. */
-export const BUBBLE_GAP = 4;
+/**
+ * Bubble ring radius. The ring is centred on the end of the line at the bubbled system and drawn
+ * in the edge layer, so the system card covers its inner half: what shows is a wide dashed arc
+ * hugging that side of the card, like a warp disruption bubble around the gate you land on.
+ */
+export const BUBBLE_RADIUS = 26;
 
 /** Re-renders once a minute while `on`, so EOL estimates count down. */
 function useMinuteClock(on: boolean): number {
@@ -97,8 +97,8 @@ function EdgeDetails({ data, visual, at }: { data: ConnectionEdgeData; visual: E
 
 /**
  * The one connection edge: a straight two-layer line between node borders in the language of
- * `edgeStyle.ts`. Only a size letter sits at the midpoint; bubbles sit on the line just outside
- * the bubbled system; the whole line lights up while hovered or selected.
+ * `edgeStyle.ts`. Only a size letter sits at the midpoint; bubbles sit at the bubbled end, under
+ * the system card; the whole line lights up while hovered or selected.
  */
 export const ConnectionEdge = memo(function ConnectionEdge({
   id,
@@ -117,17 +117,12 @@ export const ConnectionEdge = memo(function ConnectionEdge({
   const c = data.connection;
   const visual = edgeVisual(c, now);
   const inner = edgeInnerStyle(visual);
-  const sourceRect = rectOf(sourceNode);
-  const targetRect = rectOf(targetNode);
-  const { from, to } = floatingEnds(sourceRect, targetRect);
+  const { from, to } = floatingEnds(rectOf(sourceNode), rectOf(targetNode));
   const path = `M ${from.x},${from.y} L ${to.x},${to.y}`;
   const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
   const bubbles = visual.bubbles.map((end) => ({
     end,
-    at:
-      end === 'source'
-        ? clearOf(from, to, sourceRect, BUBBLE_RADIUS, BUBBLE_GAP, BUBBLE_OFFSET)
-        : clearOf(to, from, targetRect, BUBBLE_RADIUS, BUBBLE_GAP, BUBBLE_OFFSET),
+    at: end === 'source' ? from : to,
   }));
 
   return (

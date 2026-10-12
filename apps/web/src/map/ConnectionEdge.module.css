@@ -45,11 +45,11 @@
   pointer-events: none;
 }
 
-/* A bubble: a dashed amber ring with a light fill, on the line just outside the bubbled system. */
+/* A bubble: a dashed amber ring with a light fill around the bubbled end, under the system card. */
 .bubble {
-  fill: color-mix(in oklab, var(--dbk-edge-bubble) 20%, transparent);
+  fill: color-mix(in oklab, var(--dbk-edge-bubble) 22%, transparent);
   stroke: var(--dbk-edge-bubble);
-  stroke-width: 2.5px;
+  stroke-width: 3px;
   stroke-dasharray: 6 4;
   pointer-events: none;
 }
