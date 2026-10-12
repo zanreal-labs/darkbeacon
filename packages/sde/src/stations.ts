@@ -156,7 +156,8 @@ export function buildStations(input: StationInput): StationData {
     }
   }
   const known = new Set(stations.map((s) => s[0]));
-  const only = (ids: readonly number[]) => [...new Set(ids)].filter((id) => known.has(id)).sort((a, b) => a - b);
+  const only = (ids: readonly number[]) =>
+    [...new Set(ids)].filter((id) => known.has(id)).sort((a, b) => a - b);
   const date = input.meta.releaseDate ? ` (${input.meta.releaseDate.slice(0, 10)})` : '';
   return {
     source: `SDE build ${input.meta.buildNumber}${date}; loot buyers: ${input.buyOrdersSource}`,
@@ -208,7 +209,12 @@ export async function npcBuyStations(
         )) as Array<{ location_id: number; duration: number; is_buy_order: boolean }> | null;
         if (!orders || orders.length === 0) break;
         for (const o of orders) {
-          if (o.is_buy_order && o.duration === 365 && o.location_id >= 60_000_000 && o.location_id < 64_000_000)
+          if (
+            o.is_buy_order &&
+            o.duration === 365 &&
+            o.location_id >= 60_000_000 &&
+            o.location_id < 64_000_000
+          )
             found.add(o.location_id);
         }
         if (orders.length < 1000) break;

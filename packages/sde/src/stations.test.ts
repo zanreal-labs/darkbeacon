@@ -1,11 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import { loadInvasionData, loadStationData, loadUniverseData } from './index.js';
-import { buildStations, formatStations, npcBuyStations, planetNames, roman, stationName } from './stations.js';
+import {
+  buildStations,
+  formatStations,
+  npcBuyStations,
+  planetNames,
+  roman,
+  stationName,
+} from './stations.js';
 
 describe('station names', () => {
   it('are written the way the game writes them', () => {
     expect([1, 4, 8, 9, 14, 19].map(roman)).toEqual(['I', 'IV', 'VIII', 'IX', 'XIV', 'XIX']);
-    const jita = { _key: 60003760, solarSystemID: 30000142, ownerID: 1, operationID: 14, celestialIndex: 4, orbitIndex: 4, useOperationName: true };
+    const jita = {
+      _key: 60003760,
+      solarSystemID: 30000142,
+      ownerID: 1,
+      operationID: 14,
+      celestialIndex: 4,
+      orbitIndex: 4,
+      useOperationName: true,
+    };
     expect(stationName(jita, 'Jita', 'Caldari Navy', 'Assembly Plant')).toBe(
       'Jita IV - Moon 4 - Caldari Navy Assembly Plant',
     );
@@ -16,7 +31,13 @@ describe('station names', () => {
       'Jita IV - Moon 4 - Caldari Navy',
     );
     expect(
-      stationName({ ...jita, orbitIndex: undefined }, 'Amarr', 'Emperor Family', 'Academy', 'Amarr VIII (Oris)'),
+      stationName(
+        { ...jita, orbitIndex: undefined },
+        'Amarr',
+        'Emperor Family',
+        'Academy',
+        'Amarr VIII (Oris)',
+      ),
     ).toBe('Amarr VIII (Oris) - Emperor Family Academy');
   });
 
@@ -24,16 +45,40 @@ describe('station names', () => {
     const data = buildStations({
       meta: { buildNumber: 1 },
       stations: [
-        { _key: 60000001, solarSystemID: 1, ownerID: 1000125, operationID: 33, celestialIndex: 2, orbitIndex: 1, useOperationName: true },
-        { _key: 60000002, solarSystemID: 2, ownerID: 1000125, operationID: 33, celestialIndex: 1, useOperationName: true },
-        { _key: 60000003, solarSystemID: 1, ownerID: 1000035, operationID: 33, celestialIndex: 1, useOperationName: true },
+        {
+          _key: 60000001,
+          solarSystemID: 1,
+          ownerID: 1000125,
+          operationID: 33,
+          celestialIndex: 2,
+          orbitIndex: 1,
+          useOperationName: true,
+        },
+        {
+          _key: 60000002,
+          solarSystemID: 2,
+          ownerID: 1000125,
+          operationID: 33,
+          celestialIndex: 1,
+          useOperationName: true,
+        },
+        {
+          _key: 60000003,
+          solarSystemID: 1,
+          ownerID: 1000035,
+          operationID: 33,
+          celestialIndex: 1,
+          useOperationName: true,
+        },
       ],
       operations: [{ _key: 33, operationName: { en: 'Bureau' }, services: [27] }],
       corporations: [
         { _key: 1000125, name: { en: 'CONCORD' } },
         { _key: 1000035, name: { en: 'Caldari Navy' } },
       ],
-      planetNames: planetNames([{ solarSystemID: 2, celestialIndex: 1, uniqueName: { en: 'High I (Named)' } }]),
+      planetNames: planetNames([
+        { solarSystemID: 2, celestialIndex: 1, uniqueName: { en: 'High I (Named)' } },
+      ]),
       systems: new Map([
         [1, { name: 'Low', security: 0.3 }],
         [2, { name: 'High', security: 0.9 }],
@@ -95,7 +140,9 @@ describe('the committed station and invasion data', () => {
 
   it('lists 137 EDENCOM, 28 Triglavian and the 27 Pochven systems', () => {
     const invasions = loadInvasionData();
-    expect([invasions.edencom.length, invasions.triglavian.length, invasions.final.length]).toEqual([137, 28, 27]);
+    expect([invasions.edencom.length, invasions.triglavian.length, invasions.final.length]).toEqual([
+      137, 28, 27,
+    ]);
     for (const id of invasions.final) expect(byId.get(id)!.regionId).toBe(10000070);
   });
 });
