@@ -153,7 +153,7 @@ async function worker(index) {
         if (event.type === 'system.updated' && event.data.position?.y < 0 && event.data.position.x >= 0)
           metrics.edit.add(age(event.data.position.x));
         else if (event.type === 'character.jumped')
-          metrics.jumpSeen.push([event.data.characterId, event.data.to, Date.now()]);
+          metrics.jumpSeen.push([event.id, event.data.characterId, event.data.to, Date.now()]);
       } else if (message.op === 'presence' && !message.full) {
         for (const peer of message.peers) if (peer.cursor) metrics.presence.add(age(peer.cursor.x));
       } else if (message.op === 'error') {
@@ -170,11 +170,10 @@ async function worker(index) {
   mine.forEach((i, n) => setTimeout(() => void open(i), n * ramp));
   await new Promise((resolve) => setTimeout(resolve, stopAt - Date.now()));
   for (const ws of sockets) ws.terminate();
-  // Keep only jumps seen on the main map's clients once per (character, system).
+  // Each jump event once (many clients see it), when it first arrived.
   const seen = new Map();
-  for (const [c, s, at] of metrics.jumpSeen) {
-    const key = `${c}:${s}`;
-    if (!seen.has(key) || seen.get(key) > at) seen.set(key, at);
+  for (const [id, c, s, at] of metrics.jumpSeen) {
+    if (!seen.has(id) || seen.get(id)[2] > at) seen.set(id, [c, s, at]);
   }
   metrics.jumpSeen = [...seen];
   return metrics;
@@ -243,12 +242,21 @@ async function run() {
   };
   const histograms = ['snapshotBytes', 'pageSnapshot', 'subscribe', 'edit', 'presence'];
   const merged = Object.fromEntries(histograms.map((h) => [h, new Histogram()]));
-  const jumpSeen = new Map();
+  const firstSeen = new Map();
   for (const r of results) {
     for (const key of Object.keys(total)) total[key] += r[key];
     for (const h of histograms) merged[h].merge(Histogram.from(r[h]));
-    for (const [key, at] of r.jumpSeen)
-      if (!jumpSeen.has(key) || jumpSeen.get(key) > at) jumpSeen.set(key, at);
+    for (const [id, entry] of r.jumpSeen)
+      if (!firstSeen.has(id) || firstSeen.get(id)[2] > entry[2]) firstSeen.set(id, entry);
+  }
+  /** `${character}:${system}` -> when jumps there were seen, in order. */
+  const jumpSeen = new Map();
+  for (const [c, s, at] of firstSeen.values()) {
+    const key = `${c}:${s}`;
+    jumpSeen.set(
+      key,
+      [...(jumpSeen.get(key) ?? []), at].sort((a, b) => a - b),
+    );
   }
 
   // Jumps on the main map that a client saw: how long after the fake ESI made them.
@@ -261,13 +269,24 @@ async function run() {
   const onMain = new Set(
     fixture.tracking.filter((t) => t.mapIds.includes(main.id)).map((t) => t.characterId),
   );
+  // A jump counts when the map saw the character arrive before it jumped on; a character that
+  // jumps again within one poll is seen where it ended up (the system between is "passed").
   const jumpLatency = new Histogram(60_000);
   let missed = 0;
+  let passed = 0;
+  const byCharacter = new Map();
   for (const j of jumps) {
     if (!onMain.has(j.characterId)) continue;
-    const at = jumpSeen.get(`${j.characterId}:${j.to}`);
-    if (at && at >= j.at) jumpLatency.add(at - j.at);
-    else missed++;
+    byCharacter.set(j.characterId, [...(byCharacter.get(j.characterId) ?? []), j]);
+  }
+  for (const list of byCharacter.values()) {
+    list.forEach((j, i) => {
+      const next = list[i + 1]?.at ?? Infinity;
+      const at = (jumpSeen.get(`${j.characterId}:${j.to}`) ?? []).find((t) => t >= j.at);
+      if (at !== undefined && at <= next) jumpLatency.add(at - j.at);
+      else if (next - j.at < 6_000) passed++;
+      else missed++;
+    });
   }
 
   const seconds = config.durationSeconds;
@@ -284,7 +303,7 @@ async function run() {
     editFanoutMs: merged.edit.summary(),
     editRest: edits,
     presenceFanoutMs: merged.presence.summary(),
-    jumpToMapMs: { ...jumpLatency.summary(), missed },
+    jumpToMapMs: { ...jumpLatency.summary(), passed, missed },
     esi,
   };
   const text = JSON.stringify(report, null, 2);
