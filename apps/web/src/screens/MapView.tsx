@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import {
   SYSTEM_PLACEMENT,
@@ -9,17 +9,7 @@ import {
   type StreamSnapshotDto,
   type UniverseSystemDto,
 } from '@darkbeacon/shared';
-import {
-  AlertTriangle,
-  Info,
-  MousePointerClick,
-  Plus,
-  Puzzle,
-  Radar,
-  UsersRound,
-  Waypoints,
-  X,
-} from 'lucide-react';
+import { AlertTriangle, PanelRight, Plus, Waypoints, X } from 'lucide-react';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
 import { mapPermissions } from '../lib/roles';
 import { useMe } from '../lib/session';
@@ -33,16 +23,10 @@ import { freeSpot } from '../map/geometry';
 import { connectionMenu, paneMenu, systemMenu } from '../map/menus';
 import { systemDisplayName } from '../map/SystemNode';
 import { useMapStore } from '../map/useMapStore';
-import { LocalWidget } from '../map/widgets/LocalWidget';
-import { SignaturesWidget } from '../map/widgets/SignaturesWidget';
-import { SystemInfoWidget } from '../map/widgets/SystemInfoWidget';
-import { WidgetDock, type DockTab } from '../map/widgets/WidgetDock';
-import { SlotItem, useSlot } from '../plugins/PluginSlot';
+import { SystemSidebar } from '../map/sidebar/SystemSidebar';
+import { useSlot } from '../plugins/PluginSlot';
 import { Button, EmptyState, IconButton, Spinner, useToast } from '../ui';
 import styles from './MapPage.module.css';
-
-/** The phone dock's sheet at its tallest: 58 % of the screen above the 52 px tab bar. */
-const sheetHeight = () => (typeof window === 'undefined' ? 0 : Math.round(window.innerHeight * 0.58) + 52);
 
 interface OpenMenu {
   target: MenuTarget;
@@ -50,7 +34,7 @@ interface OpenMenu {
   y: number;
 }
 
-/** The live map: canvas, search, dock with widgets, context menus. Browser only (React Flow). */
+/** The live map: canvas, search, the selected system's sidebar, context menus. Browser only (React Flow). */
 export function MapView({
   map,
   role,
@@ -68,18 +52,19 @@ export function MapView({
   const toast = useToast();
   const can = mapPermissions(role);
   const [selected, setSelected] = useState<number | null>(null);
-  // The dock starts closed, so the first view has the whole width for the chain; selecting a
-  // system opens it on wide screens and clearing the selection closes it.
-  const [dock, setDock] = useState({ tab: 'system', open: false });
+  // The sidebar belongs to the selection: hidden with nothing selected, shown with each newly
+  // selected system; the top bar's toggle hides it while the selection stays.
+  const [panel, setPanel] = useState(true);
+  const [cover, setCover] = useState({ right: 0, bottom: 0 });
+  const onCover = useCallback(
+    (next: { right: number; bottom: number }) =>
+      setCover((c) => (c.right === next.right && c.bottom === next.bottom ? c : next)),
+    [],
+  );
   usePageView('map');
   useEffect(() => {
-    if (!dock.open) return;
-    const panel =
-      dock.tab === 'system' || dock.tab === 'signatures' || dock.tab === 'local' ? dock.tab : 'plugin';
-    track('panel_opened', { panel });
-  }, [dock.open, dock.tab]);
-  // Phones get the bottom dock, which covers nothing the view needs to avoid.
-  const wide = typeof window !== 'undefined' && !window.matchMedia?.('(max-width: 760px)').matches;
+    if (panel && selected !== null) track('panel_opened', { panel: 'system' });
+  }, [panel, selected]);
   const [menu, setMenu] = useState<OpenMenu | null>(null);
   const [addAt, setAddAt] = useState<{ x: number; y: number } | null>(null);
   const [focus, setFocus] = useState({ search: 0, name: 0 });
@@ -95,11 +80,15 @@ export function MapView({
   const system = selected !== null ? state.systems.get(selected) : undefined;
 
   const closeMenu = useCallback(() => setMenu(null), []);
+  const covered = system && panel ? cover : { right: 0, bottom: 0 };
 
   const select = (solarSystemId: number, center = false) => {
     setSelected(solarSystemId);
+    setPanel(true);
     setFocusNode((f) => ({ id: solarSystemId, center, n: (f?.n ?? 0) + 1 }));
   };
+
+  const deselect = () => setFocusNode((f) => ({ id: null, center: false, n: (f?.n ?? 0) + 1 }));
 
   // A right click only opens the menu: it does not select the system or open the panel.
   const openMenu = (target: MenuTarget, x: number, y: number) => setMenu({ target, x, y });
@@ -179,93 +168,23 @@ export function MapView({
     if (system) return { x: system.position.x + SYSTEM_PLACEMENT.x, y: system.position.y };
     const bounds = document.querySelector('.react-flow')?.getBoundingClientRect();
     if (!bounds) return { x: 0, y: 0 };
-    const panel = dock.open && bounds.width > 760 ? 360 : 0;
     return rf.screenToFlowPosition({
-      x: bounds.left + (bounds.width - panel) / 2,
-      y: bounds.top + bounds.height / 2,
+      x: bounds.left + (bounds.width - covered.right) / 2,
+      y: bounds.top + (bounds.height - covered.bottom) / 2,
     });
   };
 
-  const characters = [...state.characters.values()];
-  const signatureCount = system
-    ? [...state.signatures.values()].filter((s) => s.solarSystemId === system.solarSystemId).length
-    : 0;
-  const nothingSelected = (
-    <EmptyState
-      compact
-      icon={<MousePointerClick />}
-      title="No system selected"
-      description="Click a system on the map to see its details. Right-click it for quick actions."
-    />
-  );
-  const tabs: DockTab[] = [
-    {
-      id: 'system',
-      title: 'System',
-      icon: <Info />,
-      render: () =>
-        system ? (
-          <SystemInfoWidget
-            system={system}
-            info={universe.get(system.solarSystemId)}
-            labels={labels}
-            can={can}
-            store={store}
-            focusToken={focus.name}
-          />
-        ) : (
-          nothingSelected
-        ),
-    },
-    {
-      id: 'signatures',
-      title: 'Signatures',
-      icon: <Radar />,
-      count: signatureCount,
-      render: () =>
-        system ? (
-          <SignaturesWidget
-            key={system.solarSystemId}
-            mapId={map.id}
-            solarSystemId={system.solarSystemId}
-            signatures={[...state.signatures.values()].filter(
-              (s) => s.solarSystemId === system.solarSystemId,
-            )}
-            streamed={state.has.signatures}
-            can={can}
-            store={store}
-          />
-        ) : (
-          nothingSelected
-        ),
-    },
-    {
-      id: 'local',
-      title: 'Local',
-      icon: <UsersRound />,
-      count: characters.filter((c) => c.online).length,
-      render: () => (
-        <LocalWidget
-          mapId={map.id}
-          selected={selected}
-          characters={characters}
-          universe={universe}
-          myCharacters={me.data?.characters ?? []}
-          can={can}
-          store={store}
-        />
-      ),
-    },
-    ...widgetPlugins.map((entry): DockTab => ({
-      id: entry.key,
-      title: entry.title,
-      icon: <Puzzle />,
-      render: () => <SlotItem entry={entry} props={{ mapId: map.id }} />,
-    })),
-  ];
-
   return (
-    <div className={styles.page} data-immersive>
+    <div
+      className={styles.page}
+      data-immersive
+      style={
+        {
+          '--covered-right': `${covered.right}px`,
+          '--covered-bottom': `${covered.bottom}px`,
+        } as CSSProperties
+      }
+    >
       <MapCanvas
         mapId={map.id}
         state={state}
@@ -275,19 +194,16 @@ export function MapView({
         can={can}
         store={store}
         onSelect={(id) => {
+          if (id !== null && id !== selected) setPanel(true);
           setSelected(id);
-          // The panel belongs to the selection: it hides with nothing selected and comes back
-          // (on wide screens) with the next system.
-          if (id === null) setDock((d) => (d.open ? { ...d, open: false } : d));
-          else if (wide) setDock((d) => (d.open ? d : { ...d, open: true }));
         }}
         focus={focusNode}
         onMenu={openMenu}
-        coveredRight={dock.open && wide ? 360 : 0}
-        coveredBottom={dock.open && !wide ? sheetHeight() : 0}
+        coveredRight={covered.right}
+        coveredBottom={covered.bottom}
       />
 
-      <div className={styles.topbar} data-dock={dock.open && wide ? 'open' : undefined}>
+      <div className={styles.topbar}>
         {can.edit && (
           <AddSystemSearch
             onMap={onMap}
@@ -302,10 +218,21 @@ export function MapView({
             Saving…
           </span>
         )}
+        <span className={styles.spacer} />
+        {system && (
+          <IconButton
+            variant="secondary"
+            className={styles.toolButton}
+            label={panel ? 'Hide system panel' : 'Show system panel'}
+            aria-pressed={panel}
+            icon={<PanelRight />}
+            onClick={() => setPanel((p) => !p)}
+          />
+        )}
       </div>
 
       {store.loaded && state.systems.size === 0 && (
-        <div className={styles.overlayCard} data-dock={dock.open && wide ? 'open' : undefined}>
+        <div className={styles.overlayCard}>
           <EmptyState
             icon={<Waypoints />}
             title="This map is empty"
@@ -341,12 +268,25 @@ export function MapView({
         </div>
       )}
 
-      <WidgetDock
-        tabs={tabs}
-        active={dock.tab}
-        open={dock.open}
-        onChange={(tab, open) => setDock({ tab, open })}
-      />
+      {system && (
+        <SystemSidebar
+          mapId={map.id}
+          system={system}
+          info={universe.get(system.solarSystemId)}
+          universe={universe}
+          labels={labels}
+          state={state}
+          can={can}
+          store={store}
+          myCharacters={me.data?.characters ?? []}
+          plugins={widgetPlugins}
+          open={panel}
+          focusToken={focus.name}
+          onClose={deselect}
+          onSelectSystem={(id) => select(id, true)}
+          onCover={onCover}
+        />
+      )}
 
       <ul className={styles.notices} aria-live="polite">
         {store.notices.map((n) => (

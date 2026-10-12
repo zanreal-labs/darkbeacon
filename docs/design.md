@@ -177,7 +177,24 @@ unless the template places `{tempName}` itself. The chain is walked from the hom
 
 - Map settings open as a modal dialog from an icon in the left rail; the map stays live behind it.
   There is no settings button on the canvas, and no settings screen replaces the map.
-- The side area is docked, resizable panels, hidden while nothing is selected.
+- The selected system has one sidebar, docked to the right edge under the top bar (380 px, resized
+  by dragging its left edge, width remembered) and hidden while nothing is selected; the close
+  button clears the selection, a toggle in the top bar hides it and keeps the selection. No tabs:
+  it shows everything at once, stacked: the system's header (always in view), System, Signatures,
+  Local and plugin widgets. Each section has a compact header (title, count, at most one action)
+  and folds; folded sections stay folded. Phones get the same content in a bottom sheet with a
+  handle (peek shows the header, then half and full).
+- The header carries what is needed at a glance: the designation pill (the node's), the name and
+  custom name, region › constellation, the kind of space ("Class 3 wormhole", "High-sec 0.82"),
+  the effect (its summary on hover) and the statics as plain text (`D845 HS`), the tag and the
+  lock. The System section edits status, labels, names, tag and notes in place (saved on Enter or
+  leaving the field) and links out to zKillboard, Dotlan and Anoikis; Set destination is its
+  action. Kills and jumps show there once an intel source provides them.
+- Signatures are a table (id, group, type or name with where a wormhole leads, age), edited in
+  place. Ctrl+V anywhere outside a text field pastes probe scanner results into the selected
+  system; a toast says "3 new / 1 updated".
+- Local lists the tracked characters in the system (portrait, name, ship), yours first and
+  highlighted; tracking your characters is the section's action.
 - Context menus are short lists (at most about eight items, one line each with an icon and a key
   hint) with submenus for choices (`Status ▸`, `Labels ▸`, `Mass ▸`, `Time ▸`...), never settings
   panels with chips or switches.

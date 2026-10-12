@@ -381,7 +381,7 @@ async function run() {
       });
       await page.evaluate(() => globalThis.__presenceSocket.close());
     });
-    await check('plugin widgets fit in the dock, open or closed', async () => {
+    await check('the system sidebar shows every section at once, plugin widgets included', async () => {
       // Install and switch on the sample widget (the demo pilot owns the instance).
       const api = context.request;
       const installed = await api.post(`${BASE}/api/admin/plugins`, {
@@ -397,23 +397,25 @@ async function run() {
           await page.setViewportSize({ width, height: 800 });
           await page.goto(`${BASE}/m/${MAP}`);
           await page.locator('.react-flow__node').first().waitFor({ timeout: 15_000 });
-          const tablist = page.getByRole('tablist', { name: 'Widgets' });
-          const pluginTab = tablist.getByRole('tab', { name: /Added since start|Sample/ });
-          await pluginTab.waitFor({ timeout: 15_000 });
-          for (const state of ['closed', 'open']) {
-            const strip = await tablist.boundingBox();
-            assert.ok(strip.x >= 0 && strip.x + strip.width <= width, `${width} ${state}: strip in view`);
-            // Settings open from the rail, never from the canvas.
-            assert.equal(await page.locator('main').getByRole('link', { name: 'Map settings' }).count(), 0);
-            // Clicking the plugin tab opens the dock on it, clicking it again closes the dock.
-            await pluginTab.click();
-            const panel = page.getByRole('tabpanel');
-            await panel.waitFor({ state: state === 'closed' ? 'visible' : 'hidden' });
-            const pageWidth = await page.evaluate(() => globalThis.document.documentElement.scrollWidth);
-            assert.ok(pageWidth <= width, `${width} ${state}: no sideways page scroll`);
-            const search = await page.getByRole('combobox', { name: 'Search systems to add' }).boundingBox();
-            if (search) assert.ok(search.x >= 0, `${width} ${state}: the search box stays put`);
-          }
+          // Settings open from the rail, never from the canvas.
+          assert.equal(await page.locator('main').getByRole('link', { name: 'Map settings' }).count(), 0);
+          // Nothing selected: no sidebar and no tabs.
+          const sidebar = page.getByRole('complementary', { name: 'System' });
+          assert.equal(await sidebar.count(), 0, `${width}: no sidebar without a selection`);
+          assert.equal(await page.getByRole('tablist').count(), 0, `${width}: no tabs`);
+          await page.locator(`.react-flow__node[data-id="${HOME}"]`).dispatchEvent('click');
+          await sidebar.waitFor();
+          for (const name of ['System', 'Signatures', 'Local', /Added since start|Sample/])
+            await sidebar.getByRole('region', { name }).waitFor({ timeout: 15_000 });
+          const box = await sidebar.boundingBox();
+          assert.ok(Math.abs(box.x + box.width - width) <= 1, `${width}: docked to the right edge`);
+          const pageWidth = await page.evaluate(() => globalThis.document.documentElement.scrollWidth);
+          assert.ok(pageWidth <= width, `${width}: no sideways page scroll`);
+          const search = await page.getByRole('combobox', { name: 'Search systems to add' }).boundingBox();
+          if (search) assert.ok(search.x >= 0 && search.x + search.width <= box.x, `${width}: search clear`);
+          // Closing it clears the selection.
+          await sidebar.getByRole('button', { name: 'Close' }).click();
+          await sidebar.waitFor({ state: 'detached' });
         }
       } finally {
         await page.setViewportSize({ width: 1280, height: 720 });

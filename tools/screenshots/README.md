@@ -24,7 +24,7 @@ docker rm -f dbk-demo dbk-login dbk-eve && docker network rm dbk-shots
 
 Every navigation waits for the network to go idle, so the page is hydrated before the tool clicks
 anything; shots use reduced motion. Besides the screens it takes close-ups of nodes and an edge, the
-dock tabs, the context menus and the connection legend.
+system sidebar, the context menus and the connection legend.
 
 `ONLY=<regex>` limits the run to some scenes (`signin`, `signin-eve`, `landing`, `maps`, `map`,
 `map-settings`, `admin`, `account`, `components`, `not-found`); `SIZES` and `SCHEMES` take comma
