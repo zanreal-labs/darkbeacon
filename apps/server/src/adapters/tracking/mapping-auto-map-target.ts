@@ -62,6 +62,17 @@ export class MappingAutoMapTarget implements AutoMapTarget {
     );
   }
 
+  async placeSystem(input: { mapId: string; solarSystemId: number; characterId: number; accountId: string }) {
+    const actor: Actor = { kind: 'account', id: input.accountId, instanceRole: 'user' };
+    const all = await this.ports.systems.list(input.mapId);
+    if (all.find((s) => s.solarSystemId === input.solarSystemId)?.visible) return;
+    await this.audit.run(
+      { channel: { kind: 'system', id: 'auto-mapping' }, characterId: input.characterId },
+      () =>
+        this.systems.add(actor, input.mapId, { solarSystemId: input.solarSystemId }).then(() => undefined),
+    );
+  }
+
   /** Adds (or restores) `solarSystemId` next to `near` unless it is already on the map. */
   private async place(actor: Actor, mapId: string, solarSystemId: number, near: number): Promise<void> {
     const all = await this.ports.systems.list(mapId);

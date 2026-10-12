@@ -112,6 +112,34 @@ describe('AutoMapper', () => {
     ]);
   });
 
+  it('adds where a character is found when tracking starts, in scope only', async () => {
+    const placed: number[] = [];
+    mapper = new AutoMapper({
+      tracking,
+      access: fakeAccess(roles),
+      universe,
+      target: {
+        scopes: (mapId) => Promise.resolve(scopes[mapId] ?? null),
+        recordJump: () => Promise.resolve(),
+        placeSystem: (input) => {
+          placed.push(input.solarSystemId);
+          return Promise.resolve();
+        },
+      },
+    });
+    const event = (type: string, data: unknown) => ({ ...jumped('m1', J_SPACE, JITA), type, data });
+    const presence = { characterId: PILOT, accountId: 'alice', name: 'P', shipTypeId: null, shipName: null };
+    await mapper.handle(
+      event('character.tracked', { ...presence, solarSystemId: J_SPACE, online: true, updatedAt: 0 }),
+    );
+    await mapper.handle(event('character.moved', { characterId: PILOT, from: null, to: J_SPACE + 1 }));
+    // Out of scope, a later move (a jump handles those) and someone else's character: nothing.
+    await mapper.handle(event('character.moved', { characterId: PILOT, from: null, to: AMAMAKE }));
+    await mapper.handle(event('character.moved', { characterId: PILOT, from: J_SPACE, to: J_SPACE + 2 }));
+    await mapper.handle({ ...event('character.moved', { characterId: 1, from: null, to: J_SPACE }) });
+    expect(placed).toEqual([J_SPACE, J_SPACE + 1]);
+  });
+
   it('skips characters not tracked on the map, owners without edit rights and other events', async () => {
     await mapper.handle(jumped('m2', J_SPACE, JITA));
     roles.m1!.alice = 'viewer';

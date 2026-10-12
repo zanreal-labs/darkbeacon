@@ -27,6 +27,13 @@ export class SharingAutoMapTarget implements AutoMapTarget {
     return this.base.rules ? this.base.rules(mapId) : Promise.resolve(null);
   }
 
+  /** Only on maps of their own: a merged map shows its sources' systems. */
+  async placeSystem(input: { mapId: string; solarSystemId: number; characterId: number; accountId: string }) {
+    const sharing = this.sharing();
+    if (sharing && (await sharing.merger.state(input.mapId))) return;
+    await this.base.placeSystem?.(input);
+  }
+
   async recordJump(jump: RecordedJump): Promise<void> {
     const sharing = this.sharing();
     const merged = sharing ? await sharing.merger.state(jump.mapId) : null;

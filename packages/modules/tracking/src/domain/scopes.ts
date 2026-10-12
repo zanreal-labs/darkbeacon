@@ -88,6 +88,18 @@ export function jumpAllowed(
 }
 
 /**
+ * Whether the system a character is in may be added on its own (Wanderer's `can_add_location`):
+ * a known system, not excluded, in one of the map's scopes.
+ */
+export function locationAllowed(
+  rules: Pick<AutoMapRules, 'scopes' | 'excludedSystems'>,
+  at: JumpEnd,
+): boolean {
+  const scope = scopeOf(at.whClass);
+  return scope !== null && rules.scopes.includes(scope) && !rules.excludedSystems.includes(at.id);
+}
+
+/**
  * Auto-mapping records a jump when either end is in one of the map's scopes, so leaving the
  * chain into known space still shows the exit, while travel inside excluded space is ignored.
  * (The scope part of `jumpAllowed`, kept for callers that only know the classes.)

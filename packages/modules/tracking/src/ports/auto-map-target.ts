@@ -27,6 +27,16 @@ export interface AutoMapTarget {
    * Must be idempotent: several characters may report the same jump.
    */
   recordJump(jump: RecordedJump): Promise<void>;
+  /**
+   * Adds (or brings back) one system where a tracked character was found, unless the map shows
+   * it already. Optional: targets without it only map jumps.
+   */
+  placeSystem?(input: {
+    mapId: string;
+    solarSystemId: number;
+    characterId: number;
+    accountId: string;
+  }): Promise<void>;
 }
 
 /** Static universe data (the mapping module's UniverseCatalog satisfies it). */

@@ -65,7 +65,7 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
     this.consumers.register({
       name: 'auto-mapping',
       streams: ['map'],
-      types: ['character.jumped'],
+      types: ['character.jumped', 'character.tracked', 'character.moved'],
       handle: (event) => this.autoMapper.handle(event),
     });
     this.consumers.register({
