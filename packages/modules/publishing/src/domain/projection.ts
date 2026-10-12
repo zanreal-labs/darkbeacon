@@ -164,6 +164,7 @@ export function projectEvent(event: DomainEvent, scopes: Scopes, stream: string)
       return has(scopes, 'characters') ? forward(projectCharacter(event.data as CharacterPresenceDto)) : null;
     case 'character.untracked':
     case 'character.online_changed':
+    case 'character.docked_changed':
     case 'character.moved':
     case 'character.ship_changed':
       return has(scopes, 'characters') ? forward(d) : null;

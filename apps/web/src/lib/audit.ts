@@ -571,6 +571,8 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
       return read('changed ship', 'tracking');
     case 'character.online_changed':
       return read(entry.diff.online?.after ? 'came online' : 'went offline', 'tracking');
+    case 'character.docked_changed':
+      return read(entry.diff.docked?.after ? 'docked' : 'undocked', 'tracking');
     case 'character.tracked':
       return read('started tracking a character', 'tracking');
     case 'character.untracked':

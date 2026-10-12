@@ -72,14 +72,22 @@ export class SetTracking {
       if (presence.accountId !== stored?.accountId || presence.name !== stored.name) {
         await tracking.savePresence(presence);
       }
-      await events.append([newEvent({ ...base, type: 'character.tracked', data: presence })]);
+      const [shown] = await withAffiliation(characters, [presence]);
+      await events.append([newEvent({ ...base, type: 'character.tracked', data: shown ?? presence })]);
     });
   }
 }
 
 /** Characters tracked on a map with their last known presence (viewer+). */
 export class ListMapCharacters {
-  constructor(private readonly deps: { tracking: TrackingRepository; access: MapAccess }) {}
+  constructor(
+    private readonly deps: {
+      tracking: TrackingRepository;
+      access: MapAccess;
+      /** Adds corporation and alliance when given. */
+      characters?: CharacterTokenSource;
+    },
+  ) {}
 
   async execute(actor: Actor | null, mapId: string): Promise<CharacterPresenceDto[]> {
     await requireMapRole(this.deps.access, actor, mapId, 'viewer');
@@ -90,7 +98,8 @@ export class ListMapCharacters {
   async forMap(mapId: string): Promise<CharacterPresenceDto[]> {
     const tracked = await this.deps.tracking.listTrackedOnMap(mapId);
     const presence = await this.deps.tracking.listPresence(tracked.map((t) => t.characterId));
-    return presence.sort((a, b) => a.name.localeCompare(b.name) || a.characterId - b.characterId);
+    const shown = this.deps.characters ? await withAffiliation(this.deps.characters, presence) : presence;
+    return shown.sort((a, b) => a.name.localeCompare(b.name) || a.characterId - b.characterId);
   }
 }
 
@@ -167,4 +176,17 @@ export function blankPresence(characterId: number, now: number): CharacterPresen
     online: false,
     updatedAt: now,
   };
+}
+
+/** Presence with each character's corporation and alliance, as identity knows them. */
+export async function withAffiliation(
+  characters: CharacterTokenSource,
+  presence: readonly CharacterPresenceDto[],
+): Promise<CharacterPresenceDto[]> {
+  if (!characters.linked || presence.length === 0) return [...presence];
+  const linked = new Map((await characters.linked(presence.map((p) => p.characterId))).map((c) => [c.id, c]));
+  return presence.map((p) => {
+    const c = linked.get(p.characterId);
+    return c ? { ...p, corporationId: c.corporationId, allianceId: c.allianceId } : p;
+  });
 }

@@ -29,7 +29,8 @@ export type PresenceChange =
   | {
       type: 'character.ship_changed';
       data: { characterId: number; shipTypeId: number; shipName: string | null };
-    };
+    }
+  | { type: 'character.docked_changed'; data: { characterId: number; docked: boolean } };
 
 /**
  * Applies an observation to the stored presence and lists the resulting events.
@@ -68,6 +69,13 @@ export function observe(
         data: { characterId, from, to, shipTypeId: next.shipTypeId },
       });
     }
+  }
+  const docked = seen.location?.docked;
+  if (docked !== undefined && docked !== presence.docked) {
+    next.docked = docked;
+    // Learning it for the first time is no news: it is kept with the next change.
+    if (presence.docked !== undefined)
+      changes.push({ type: 'character.docked_changed', data: { characterId, docked } });
   }
   if (changes.length > 0) next.updatedAt = now;
   return { presence: next, changes };

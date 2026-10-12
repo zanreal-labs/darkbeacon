@@ -9,13 +9,22 @@ import {
 import type { EventBus } from '@darkbeacon/core';
 import type { DomainTelemetry } from '@darkbeacon/observability';
 import { isEventOfType } from '@darkbeacon/shared';
-import { AutoMapper, ListMapCharacters, TrackingCleanup, TrackingPoller } from '@darkbeacon/tracking';
+import {
+  AutoMapper,
+  ListMapCharacters,
+  ServerStatusWatch,
+  STATUS_INTERVAL_MS,
+  TrackingCleanup,
+  TrackingPoller,
+  type MapCharacterSettingsRepository,
+} from '@darkbeacon/tracking';
 import type { AppConfig } from '../../config/config.js';
 import { EventConsumers } from '../../platform/event-consumers.js';
 import { MaintenanceMode } from '../../platform/maintenance.js';
 import { APP_CONFIG, EVENT_BUS, OBSERVABILITY } from '../../platform/tokens.js';
 import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
 import { OfflineVisibility } from './offline-visibility.js';
+import { MAP_CHARACTER_SETTINGS } from './tracking.tokens.js';
 
 /**
  * Starts the ESI poller, runs auto-mapping and the cleanups after deleted maps and characters
@@ -25,6 +34,7 @@ import { OfflineVisibility } from './offline-visibility.js';
 @Injectable()
 export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
   private timer: NodeJS.Timeout | undefined;
+  private statusTimer: NodeJS.Timeout | undefined;
   private unsubscribe: (() => void) | undefined;
   private polling = false;
 
@@ -39,6 +49,8 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
     @Inject(EVENT_BUS) private readonly bus: EventBus,
     @Inject(MaintenanceMode) private readonly maintenance: MaintenanceMode,
     @Inject(OfflineVisibility) private readonly offline: OfflineVisibility,
+    @Inject(ServerStatusWatch) private readonly serverStatus: ServerStatusWatch,
+    @Inject(MAP_CHARACTER_SETTINGS) private readonly mapSettings: MapCharacterSettingsRepository,
     @Optional() @Inject(OBSERVABILITY) private readonly telemetry?: DomainTelemetry | null,
   ) {}
 
@@ -61,7 +73,9 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
       streams: ['map'],
       types: ['map.removed'],
       handle: async (event) => {
-        if (isEventOfType(event, 'map.removed')) await this.cleanup.forgetMap(event.data.id);
+        if (!isEventOfType(event, 'map.removed')) return;
+        await this.cleanup.forgetMap(event.data.id);
+        await this.mapSettings.forgetMap(event.data.id);
       },
     });
     this.consumers.register({
@@ -95,11 +109,14 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
     // Tests drive the poller themselves.
     if (this.config.env !== 'test') {
       this.timer = setInterval(() => void this.tick(), 1000).unref();
+      // Downtime: TQ's status decides whether polling characters makes sense.
+      void this.serverStatus.refresh();
+      this.statusTimer = setInterval(() => void this.serverStatus.refresh(), STATUS_INTERVAL_MS).unref();
     }
   }
 
   private async tick(): Promise<void> {
-    if (this.maintenance.active) return;
+    if (this.maintenance.active || this.serverStatus.paused) return;
     const telemetry = this.telemetry;
     if (!telemetry) return this.poller.tick();
     // A poll still running makes the next tick a no-op; only whole polls are measured.
@@ -116,6 +133,7 @@ export class TrackingRuntime implements OnModuleInit, OnApplicationBootstrap, On
 
   onModuleDestroy(): void {
     clearInterval(this.timer);
+    clearInterval(this.statusTimer);
     this.unsubscribe?.();
   }
 }
