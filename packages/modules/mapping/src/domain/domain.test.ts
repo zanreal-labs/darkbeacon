@@ -9,6 +9,8 @@ const universe = (whClass: number | null) => ({
   constellationName: '',
   security: -1,
   whClass,
+  statics: [],
+  effect: null,
 });
 
 describe('signature paste', () => {

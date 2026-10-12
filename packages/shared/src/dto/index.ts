@@ -7,3 +7,4 @@ export * from './plugins.js';
 export * from './themes.js';
 export * from './tracking.js';
 export * from './universe.js';
+export * from './wormholes.js';

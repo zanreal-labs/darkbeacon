@@ -16,6 +16,8 @@ const info: UniverseSystemDto = {
   constellationName: 'A-C00001',
   security: -0.99,
   whClass: 3,
+  statics: [],
+  effect: null,
 };
 
 const label: LabelDto = { id: 'l1', name: 'static', color: '#336699', description: 'Home static' };

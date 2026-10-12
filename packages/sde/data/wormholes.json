@@ -1,0 +1,9 @@
+{
+  "source": "Game data checked by hand per system; add systems as they are verified",
+  "systems": {
+    "31000220": { "statics": ["N110"], "effect": "blackHole" },
+    "31000399": { "statics": ["B274", "O477"], "effect": "magnetar" },
+    "31001924": { "statics": ["D364"], "effect": "pulsar" },
+    "31002531": { "statics": ["D845", "U210"], "effect": "redGiant" }
+  }
+}

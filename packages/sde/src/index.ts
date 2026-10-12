@@ -43,3 +43,19 @@ export const UNIVERSE_DATA_FILE = fileURLToPath(new URL('../data/universe.json',
 export function loadUniverseData(file = UNIVERSE_DATA_FILE): UniverseData {
   return JSON.parse(readFileSync(file, 'utf8')) as UniverseData;
 }
+
+/**
+ * Wormhole facts the SDE does not carry in a usable form: the static wormhole types of a system
+ * and its effect. Keyed by solar system id; systems that are not listed have neither (as far as
+ * the dataset knows).
+ */
+export interface WormholeData {
+  source: string;
+  systems: Record<string, { statics?: string[]; effect?: string | null }>;
+}
+
+export const WORMHOLE_DATA_FILE = fileURLToPath(new URL('../data/wormholes.json', import.meta.url));
+
+export function loadWormholeData(file = WORMHOLE_DATA_FILE): WormholeData {
+  return JSON.parse(readFileSync(file, 'utf8')) as WormholeData;
+}

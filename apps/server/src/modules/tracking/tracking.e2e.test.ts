@@ -94,6 +94,8 @@ describeEachDialect('tracking and universe over HTTP', (t) => {
         constellationName: 'Kimotoro',
         security: expect.any(Number) as number,
         whClass: 7,
+        statics: [],
+        effect: null,
       },
     ]);
     expect((await request('GET', '/api/universe/systems?q=a&limit=3', 'alice')).body).toHaveLength(3);
@@ -106,6 +108,8 @@ describeEachDialect('tracking and universe over HTTP', (t) => {
       constellationName: 'Kimotoro',
       security: expect.any(Number) as number,
       whClass: 7,
+      statics: [],
+      effect: null,
     });
 
     expect((await request('GET', `/api/universe/systems/${J_SPACE}`, 'alice')).body).toMatchObject({

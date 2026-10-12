@@ -1,7 +1,15 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { UniverseCatalog, UniverseSystem } from '@darkbeacon/mapping';
-import { loadUniverseData, UNIVERSE_DATA_FILE, type UniverseData } from '@darkbeacon/sde';
+import { WormholeEffect } from '@darkbeacon/shared';
+import {
+  loadUniverseData,
+  loadWormholeData,
+  UNIVERSE_DATA_FILE,
+  WORMHOLE_DATA_FILE,
+  type UniverseData,
+  type WormholeData,
+} from '@darkbeacon/sde';
 
 /** UniverseCatalog over the dataset built from the SDE, held in memory. */
 export class StaticUniverseCatalog implements UniverseCatalog {
@@ -10,7 +18,7 @@ export class StaticUniverseCatalog implements UniverseCatalog {
   /** Systems with lower-cased names, sorted by name, for search. */
   private readonly byName: Array<{ key: string; system: UniverseSystem }>;
 
-  constructor(data: UniverseData) {
+  constructor(data: UniverseData, wormholes: WormholeData = { source: 'none', systems: {} }) {
     const regions = new Map(data.regions.map((r) => [r.id, r.name]));
     const constellations = new Map(data.constellations.map((c) => [c.id, c.name]));
     for (const s of data.systems) {
@@ -21,6 +29,7 @@ export class StaticUniverseCatalog implements UniverseCatalog {
         constellationName: constellations.get(s.constellationId) ?? '',
         security: s.security,
         whClass: s.whClass,
+        ...wormholeFacts(wormholes.systems[s.id]),
       });
       this.gates.set(s.id, new Set(s.gates));
     }
@@ -30,18 +39,22 @@ export class StaticUniverseCatalog implements UniverseCatalog {
   }
 
   /**
-   * `universe.json` from the data directory when an operator put one there, else the dataset
-   * committed in `@darkbeacon/sde`. Each file is parsed once per process.
+   * `universe.json` and `wormholes.json` from the data directory when an operator put them there,
+   * else the datasets committed in `@darkbeacon/sde`. The committed pair is parsed once per process.
    */
   static load(dataDir: string): StaticUniverseCatalog {
-    const custom = join(dataDir, 'universe.json');
-    const file = existsSync(custom) ? custom : UNIVERSE_DATA_FILE;
-    let catalog = loaded.get(file);
-    if (!catalog) {
-      catalog = new StaticUniverseCatalog(loadUniverseData(file));
-      // Only the committed dataset is cached; a custom file may change between test apps.
-      if (file === UNIVERSE_DATA_FILE) loaded.set(file, catalog);
-    }
+    const pick = (name: string, committed: string) => {
+      const custom = join(dataDir, name);
+      return existsSync(custom) ? custom : committed;
+    };
+    const file = pick('universe.json', UNIVERSE_DATA_FILE);
+    const wormholeFile = pick('wormholes.json', WORMHOLE_DATA_FILE);
+    const committed = file === UNIVERSE_DATA_FILE && wormholeFile === WORMHOLE_DATA_FILE;
+    // Only the committed datasets are cached; custom files may change between test apps.
+    const cached = committed ? loaded : undefined;
+    if (cached) return cached;
+    const catalog = new StaticUniverseCatalog(loadUniverseData(file), loadWormholeData(wormholeFile));
+    if (committed) loaded = catalog;
     return catalog;
   }
 
@@ -71,4 +84,15 @@ export class StaticUniverseCatalog implements UniverseCatalog {
   }
 }
 
-const loaded = new Map<string, StaticUniverseCatalog>();
+let loaded: StaticUniverseCatalog | undefined;
+
+/** Statics (upper-cased) and a known effect of one system; anything else in the file is ignored. */
+function wormholeFacts(
+  entry: WormholeData['systems'][string] | undefined,
+): Pick<UniverseSystem, 'statics' | 'effect'> {
+  const effect = WormholeEffect.safeParse(entry?.effect);
+  return {
+    statics: (entry?.statics ?? []).map((type) => type.trim().toUpperCase()).filter(Boolean),
+    effect: effect.success ? effect.data : null,
+  };
+}

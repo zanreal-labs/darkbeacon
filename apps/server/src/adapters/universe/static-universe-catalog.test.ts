@@ -1,17 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { StaticUniverseCatalog } from './static-universe-catalog.js';
 
-const small = new StaticUniverseCatalog({
-  source: 'test',
-  regions: [{ id: 1, name: 'The Forge' }],
-  constellations: [{ id: 2, name: 'Kimotoro', regionId: 1 }],
-  systems: [
-    { id: 10, name: 'Jita', regionId: 1, constellationId: 2, security: 0.9459, whClass: 7, gates: [11] },
-    { id: 11, name: 'Perimeter', regionId: 1, constellationId: 2, security: 0.95, whClass: 7, gates: [10] },
-    { id: 12, name: 'Ajita', regionId: 1, constellationId: 2, security: 0.5, whClass: 7, gates: [] },
-    { id: 13, name: 'Jitanen', regionId: 1, constellationId: 2, security: 0.5, whClass: 7, gates: [] },
-  ],
-});
+const small = new StaticUniverseCatalog(
+  {
+    source: 'test',
+    regions: [{ id: 1, name: 'The Forge' }],
+    constellations: [{ id: 2, name: 'Kimotoro', regionId: 1 }],
+    systems: [
+      { id: 10, name: 'Jita', regionId: 1, constellationId: 2, security: 0.9459, whClass: 7, gates: [11] },
+      { id: 11, name: 'Perimeter', regionId: 1, constellationId: 2, security: 0.95, whClass: 7, gates: [10] },
+      { id: 12, name: 'Ajita', regionId: 1, constellationId: 2, security: 0.5, whClass: 7, gates: [] },
+      { id: 13, name: 'Jitanen', regionId: 1, constellationId: 2, security: 0.5, whClass: 7, gates: [] },
+      { id: 14, name: 'J100001', regionId: 1, constellationId: 2, security: -0.99, whClass: 3, gates: [] },
+    ],
+  },
+  {
+    source: 'test',
+    systems: { '14': { statics: ['d845', ' U210 '], effect: 'redGiant' }, '13': { effect: 'nonsense' } },
+  },
+);
 
 describe('StaticUniverseCatalog', () => {
   it('returns systems with region and constellation names', () => {
@@ -22,8 +29,15 @@ describe('StaticUniverseCatalog', () => {
       constellationName: 'Kimotoro',
       security: 0.9459,
       whClass: 7,
+      statics: [],
+      effect: null,
     });
     expect(small.getSystem(99)).toBeNull();
+  });
+
+  it('adds statics and the effect from the wormhole dataset', () => {
+    expect(small.getSystem(14)).toMatchObject({ statics: ['D845', 'U210'], effect: 'redGiant' });
+    expect(small.getSystem(13)).toMatchObject({ statics: [], effect: null });
   });
 
   it('searches case-insensitively, prefix matches first, up to the limit', () => {
@@ -46,5 +60,6 @@ describe('StaticUniverseCatalog', () => {
     expect(catalog.searchSystems('thera', 5)[0]).toMatchObject({ id: 31000005, whClass: 12 });
     expect(catalog.getSystem(30000142)).toMatchObject({ name: 'Jita', regionName: 'The Forge' });
     expect(catalog.gateLinked(30000142, 30000144)).toBe(true);
+    expect(catalog.getSystem(31002531)).toMatchObject({ name: 'J014348', statics: ['D845', 'U210'] });
   });
 });
