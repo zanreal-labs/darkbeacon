@@ -5,6 +5,7 @@ import SQLite from 'better-sqlite3';
 import { Kysely, PostgresDialect, SqliteDialect, type Transaction } from 'kysely';
 import pg from 'pg';
 import type { UnitOfWork } from '@darkbeacon/core';
+import { WalCheckpointer } from './checkpointer.js';
 import { migrateToLatest } from './migrator.js';
 import { SplitSqliteDialect } from './sqlite-split.js';
 
@@ -56,6 +57,8 @@ export class Database implements UnitOfWork {
     readonly schema?: string,
     /** SQLite files: a read-only connection for read-only transactions. */
     private readonly snapshots?: Kysely<unknown>,
+    /** Also stopped on close (the SQLite checkpointer). */
+    private readonly companions: Array<{ stop(): Promise<void> }> = [],
   ) {}
 
   /** The open transaction inside `transaction()`, the root handle outside. */
@@ -106,6 +109,7 @@ export class Database implements UnitOfWork {
   }
 
   async close(): Promise<void> {
+    for (const companion of this.companions) await companion.stop();
     await this.snapshots?.destroy();
     await this.kysely.destroy();
   }
@@ -130,14 +134,23 @@ export async function createDatabase(options: DatabaseOptions = {}): Promise<Dat
   }
   mkdirSync(dirname(filename), { recursive: true });
   const writer = openSqlite(filename);
+  // Checkpoints happen on a thread of their own (WalCheckpointer); the commit that crosses this
+  // many pages (about 400 MB) still does one, should that thread ever fall behind.
+  writer.pragma('wal_autocheckpoint = 100000');
+  // Once checkpointed, a WAL bigger than this is cut back.
+  writer.pragma('journal_size_limit = 67108864');
   // WAL lets readers work next to the writer, each seeing the last commit.
   const reader = openSqlite(filename, { readonly: true });
   const snapshots = openSqlite(filename, { readonly: true });
+  const checkpointer = new WalCheckpointer(filename, 1_000, (message) =>
+    console.error(`SQLite checkpoint failed: ${message}`),
+  );
   return new Database(
     new Kysely({ dialect: new SplitSqliteDialect(writer, reader) }),
     'sqlite',
     undefined,
     new Kysely({ dialect: new SqliteDialect({ database: snapshots }) }),
+    [checkpointer],
   );
 }
 

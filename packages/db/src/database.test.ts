@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { sql } from 'kysely';
 import { cachePreparedStatements, createDatabase } from './database.js';
 import { bool, isUniqueViolation, json } from './portable.js';
@@ -113,12 +113,28 @@ describe('portable helpers', () => {
     expect(bool.decode(0)).toBe(false);
   });
 
-  it('uses WAL for file databases', async () => {
-    const { mkdtempSync } = await import('node:fs');
+  it('uses WAL for file databases, checkpointed off the event loop', async () => {
+    const { mkdtempSync, statSync } = await import('node:fs');
     const { tmpdir } = await import('node:os');
-    const db = await createDatabase({ dataDir: mkdtempSync(`${tmpdir()}/dbk-`) });
+    const dir = mkdtempSync(`${tmpdir()}/dbk-`);
+    const db = await createDatabase({ dataDir: dir });
     const result = await sql<{ journal_mode: string }>`pragma journal_mode`.execute(db.kysely);
     expect(result.rows[0]?.journal_mode).toBe('wal');
+    const auto = await sql<{ wal_autocheckpoint: number }>`pragma wal_autocheckpoint`.execute(db.kysely);
+    expect(auto.rows[0]?.wal_autocheckpoint).toBe(100000);
+
+    // Commits leave pages in the WAL; the checkpointer copies them into the database file.
+    await db.migrate();
+    const before = statSync(`${dir}/app.db`).size;
+    await db
+      .db<Tables>()
+      .insertInto('event_stream')
+      .values(Array.from({ length: 2000 }, (_, i) => ({ stream: `${'s'.repeat(200)}${i}`, head_seq: i })))
+      .execute();
+    await vi.waitFor(() => expect(statSync(`${dir}/app.db`).size).toBeGreaterThan(before), {
+      timeout: 5_000,
+      interval: 100,
+    });
     await db.close();
   });
 
