@@ -107,7 +107,7 @@ export const TELEMETRY_SERVER_EVENTS = {
   waypoint_set: z.strictObject({ mode: z.enum(['destination', 'waypoint']) }),
   /** An import from Wanderer finished: how it was read and how much it wrote, never from where. */
   import_completed: z.strictObject({
-    source: z.enum(['api', 'file']),
+    source: z.enum(['api', 'file', 'database']),
     status: z.enum(['done', 'failed', 'cancelled']),
     systems: CountBucket,
     connections: CountBucket,

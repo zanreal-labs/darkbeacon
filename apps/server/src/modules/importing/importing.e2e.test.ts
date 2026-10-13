@@ -84,7 +84,7 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
         method: 'POST',
         json: source(),
       }),
-    ).toMatchObject({ ok: true, systems: 30, message: null });
+    ).toMatchObject({ ok: true, systems: 28, hiddenSystems: 2, message: null });
     expect(
       await owner.json<WandererTestResultDto>('/api/imports/wanderer/test', {
         method: 'POST',
@@ -104,14 +104,16 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
       mapId: null,
       source: { kind: 'wanderer-api', slug: 'home-chain', name: 'Home Chain' },
     });
-    expect(preview.counts).toMatchObject({ systems: 28, hiddenSystems: 2, structures: 4, comments: 3 });
+    // Hidden systems come over too, with their intel (the hidden one's structure and comment).
+    expect(preview.counts).toMatchObject({ systems: 28, hiddenSystems: 2, structures: 5, comments: 4 });
     // Anomalies, other scanner rows and custom entries come over too.
     expect(preview.report.some((l) => l.bucket === 'mapped' && /anomaly/.test(l.what))).toBe(true);
     expect(preview.report.filter((l) => l.bucket === 'dropped').map((l) => l.what)).toEqual(
-      expect.not.arrayContaining([expect.stringMatching(/anomal|Lock|custom|note|Passage/i)]),
+      expect.not.arrayContaining([expect.stringMatching(/anomal|Lock|custom|note/i)]),
     );
-    expect(preview.counts.passages).toBe(5);
-    // ACL members with the names ESI gives now; the Officers ACL needs its own key.
+    // Wanderer's API counts passages per connection only (its database lists them one by one).
+    expect(preview.counts.passages).toBe(0);
+    // ACL members with the names ESI gives now, every ACL read with the map key over JSON:API.
     const ccp = preview.access.find((a) => a.subjectId === '109299958')!;
     expect(ccp).toMatchObject({
       subjectKind: 'corporation',
@@ -123,7 +125,8 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
       role: 'blocked',
       esiName: null,
     });
-    expect(preview.report.some((l) => /Members of the ACL “Officers”/.test(l.what))).toBe(true);
+    expect(preview.access.find((a) => a.subjectId === '2116161003')).toMatchObject({ role: 'admin' });
+    expect(preview.report.some((l) => /Members of the ACL/.test(l.what))).toBe(false);
     // Nobody else sees someone's import.
     const other = new Browser(base);
     await other.json('/api/auth/dev', { method: 'POST', json: { name: 'stranger' } });
@@ -134,7 +137,7 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
       json: { mode: 'new' },
     });
     expect(plan.outcome.systems).toMatchObject({ created: 30 });
-    // The new map's default Farm Tag takes Wanderer's FARM; HQ and two statuses are new Tags, and
+    // The new map's default Farm Tag takes Wanderer's FARM; HQ, OLD and Looking for are new Tags, and
     // the four Labels are new.
     expect(plan.outcome.labels).toMatchObject({ created: 7, unchanged: 1 });
 
@@ -200,7 +203,7 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
         .slice(DEFAULT_TAGS.length)
         .map((l) => l.name)
         .sort(),
-    ).toEqual(['HQ', 'Looking for', 'Secondary']);
+    ).toEqual(['HQ', 'Looking for', 'OLD']);
     expect(map.map.settings.scopes).toEqual(['wormhole']);
     // The map's description, shown in the list of maps.
     expect(map.map.description).toBe('Our main chain');
@@ -285,10 +288,6 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
       const marks = ['', '1h', '4h', '4.5h', '16h', '24h', '48h'];
       if (Number(w.time_status) > 0) expect(here.lifetime?.mark).toBe(marks[Number(w.time_status)]);
     }
-    const passages = await owner.json<Array<{ characterId: number; shipTypeId: number | null }>>(
-      `/api/maps/${mapId}/connections/${pairOf(wanderer.map.connections[0]!)!.id}/passages`,
-    );
-    expect(passages.map((p) => p.shipTypeId).sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([605, 22456]);
     // Who wrote a comment comes from the character name Wanderer resolves.
     const thread = await owner.json<CommentDto[]>(`/api/maps/${mapId}/systems/31002531/comments`);
     expect(thread.some((c) => c.author?.name === 'Scout Alt')).toBe(true);
@@ -303,6 +302,7 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
       'character:2112625428:admin',
       'character:2116161001:manager',
       'character:2116161002:blocked',
+      'character:2116161003:admin',
       'corporation:109299958:member',
       'corporation:98000001:blocked',
     ]);
@@ -370,7 +370,7 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
     const merged = await owner.json<ImportJobDto>(`/api/imports/${again.id}`);
     expect(merged.status).toBe('done');
     expect(merged.outcome.systems).toMatchObject({ created: 0, updated: 1, removed: 0 });
-    expect(merged.outcome.access).toMatchObject({ created: 0, unchanged: 6 });
+    expect(merged.outcome.access).toMatchObject({ created: 0, unchanged: 7 });
     // Comments and structures are not doubled either.
     expect(merged.outcome.comments).toMatchObject({ created: 0 });
     expect(merged.outcome.structures).toMatchObject({ created: 0 });
@@ -386,7 +386,7 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
     );
     // The hole Wanderer lost is still here: removals were not asked for.
     expect(after.connections).toHaveLength(before.connections.length);
-    expect((await owner.json<AccessRuleDto[]>(`/api/maps/${mapId}/access-rules`)).length).toBe(6);
+    expect((await owner.json<AccessRuleDto[]>(`/api/maps/${mapId}/access-rules`)).length).toBe(7);
     expect(home.position).toEqual(after.systems.find((s) => s.solarSystemId === 31002531)!.position);
     // Our description stays; the deleted webhook is not added again, the other not doubled.
     expect(after.map.description).toBe('Ours now');
@@ -467,7 +467,9 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
         .slice(0, 5)
         .map((s) => ({ ...s, position: { x: s.position_x, y: s.position_y } })),
       connections: [],
-      signatures: wanderer.map.signatures.filter((s) => s.solar_system_id === 31002531),
+      signatures: wanderer.map.signatures
+        .filter((s) => s.system_id === wanderer.map.systems.find((x) => x.solar_system_id === 31002531)!.id)
+        .map((s) => ({ ...s, solar_system_id: 31002531 })),
       comments: [],
       structures: [],
     };

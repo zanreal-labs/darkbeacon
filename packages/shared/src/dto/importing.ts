@@ -33,7 +33,48 @@ export const WandererApiSourceRequest = z.object({
 });
 export type WandererApiSourceRequest = z.infer<typeof WandererApiSourceRequest>;
 
-export const ImportSourceKind = z.enum(['wanderer-api', 'wanderer-file']);
+/**
+ * A Wanderer's own Postgres database (instance admins only): everything a map holds, hidden
+ * systems and the map's label names included, read with SELECTs in a read-only transaction.
+ */
+export const WandererDbConnectRequest = z.object({
+  /** `postgres://user:password@host:5432/database` (a read-only role is enough). */
+  connectionString: z
+    .string()
+    .trim()
+    .min(1)
+    .max(2000)
+    .regex(/^postgres(ql)?:\/\//, 'A Postgres connection string starts with postgres://'),
+});
+export type WandererDbConnectRequest = z.infer<typeof WandererDbConnectRequest>;
+
+export const WandererDbSourceRequest = WandererDbConnectRequest.extend({
+  /** The map's slug. */
+  slug: z.string().trim().min(1).max(100),
+  /**
+   * The Wanderer's own address (optional): imports from its database and from its API then count
+   * as one source, so either can update what the other brought.
+   */
+  wandererUrl: z.string().trim().max(300).optional(),
+});
+export type WandererDbSourceRequest = z.infer<typeof WandererDbSourceRequest>;
+
+/** POST /api/imports/wanderer-db/maps: the maps a Wanderer database holds. */
+export const WandererDbMapsDto = z.object({
+  /** The database's host, as imports from it are filed when no Wanderer address is given. */
+  host: z.string(),
+  maps: z.array(
+    z.object({
+      slug: z.string(),
+      name: z.string().nullable(),
+      systems: z.number().int(),
+      hiddenSystems: z.number().int(),
+    }),
+  ),
+});
+export type WandererDbMapsDto = z.infer<typeof WandererDbMapsDto>;
+
+export const ImportSourceKind = z.enum(['wanderer-api', 'wanderer-file', 'wanderer-db']);
 export type ImportSourceKind = z.infer<typeof ImportSourceKind>;
 
 /** Where an import came from, as shown to people (never the key). */
@@ -52,8 +93,13 @@ export type ImportSourceDto = z.infer<typeof ImportSourceDto>;
 export const WandererTestResultDto = z.object({
   ok: z.boolean(),
   host: z.string(),
-  /** Systems the key can read (visible and hidden). */
+  /** Systems shown on the Wanderer map. */
   systems: z.number().int(),
+  /**
+   * Systems taken off the Wanderer map (hidden), which come over hidden with their intel; null
+   * when the instance does not list them.
+   */
+  hiddenSystems: z.number().int().nullable(),
   /** Why it did not work, in words. */
   message: z.string().nullable(),
 });
@@ -62,7 +108,7 @@ export type WandererTestResultDto = z.infer<typeof WandererTestResultDto>;
 export const ImportReportBucket = z.enum(['mapped', 'approximated', 'dropped']);
 export type ImportReportBucket = z.infer<typeof ImportReportBucket>;
 
-/** One line of a mapping report: "12 systems: status Target (secondary) became Target". */
+/** One line of a mapping report: "12 systems: Looking for became a Tag". */
 export const ImportReportLineDto = z.object({
   bucket: ImportReportBucket,
   /** system, connection, signature, structure, comment, label, access, setting, character... */

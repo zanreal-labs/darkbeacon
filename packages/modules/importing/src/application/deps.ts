@@ -6,13 +6,13 @@ import type {
   ImportSyncRepository,
   SecretSealer,
 } from '../ports/repositories.js';
-import type { MapImportSource } from '../ports/source.js';
+import type { MapImportSource, WandererDbSource } from '../ports/source.js';
 import type { AccessTarget, ChainTarget, EveNames, SystemNames, WebhookTarget } from '../ports/target.js';
 
 /** Everything the import use cases need, wired by the composition root. */
 export interface ImportingDeps {
-  /** Wanderer's API and Wanderer's export files. */
-  sources: { api: MapImportSource; file: MapImportSource };
+  /** Wanderer's API, Wanderer's export files and Wanderer's database. */
+  sources: { api: MapImportSource; file: MapImportSource; db: WandererDbSource };
   target: ChainTarget;
   access: AccessTarget;
   webhooks: WebhookTarget;

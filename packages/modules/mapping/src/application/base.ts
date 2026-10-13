@@ -141,4 +141,14 @@ export abstract class MappingUseCases {
     if (!system?.visible) throw new NotFoundError('System');
     return system;
   }
+
+  /**
+   * A system the map holds, shown or hidden: imports keep the intel of systems taken off the map
+   * (structures, comments), there when the system shows up again.
+   */
+  protected async knownSystem(mapId: string, solarSystemId: number): Promise<MapSystem> {
+    const system = await this.ports.systems.find(mapId, solarSystemId);
+    if (!system) throw new NotFoundError('System');
+    return system;
+  }
 }

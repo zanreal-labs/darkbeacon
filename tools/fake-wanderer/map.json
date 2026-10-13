@@ -38,14 +38,14 @@
       "id": "d79da6a3-6294-8bfe-edc4-6fb9ed0a656a",
       "map_id": "5f8c2a10-7d3e-4b8e-9c1a-2b3c4d5e6f70",
       "solar_system_id": 31002531,
-      "name": "HOME",
+      "name": "Home sweet home",
       "original_name": "J014348",
-      "custom_name": "Home sweet home",
+      "custom_name": null,
       "temporary_name": null,
       "description": "Our home. Rolling schedule: Tue/Thu downtime.",
       "tag": "HQ",
       "labels": "{\"customLabel\": \"Staging\", \"labels\": [\"a\", \"1\"]}",
-      "status": 8,
+      "status": 1,
       "visible": true,
       "locked": true,
       "position_x": 0,
@@ -64,7 +64,7 @@
       "description": null,
       "tag": null,
       "labels": "",
-      "status": 1,
+      "status": 2,
       "visible": true,
       "locked": false,
       "position_x": 0,
@@ -83,7 +83,7 @@
       "description": "Hostile C5 residents, careful",
       "tag": "FARM",
       "labels": "{\"customLabel\": \"\", \"labels\": [\"b\"]}",
-      "status": 5,
+      "status": 6,
       "visible": true,
       "locked": false,
       "position_x": 0,
@@ -159,7 +159,7 @@
       "description": null,
       "tag": null,
       "labels": "",
-      "status": 5,
+      "status": 6,
       "visible": true,
       "locked": false,
       "position_x": 680,
@@ -235,7 +235,7 @@
       "description": null,
       "tag": null,
       "labels": "",
-      "status": 2,
+      "status": 4,
       "visible": true,
       "locked": false,
       "position_x": 0,
@@ -292,7 +292,7 @@
       "description": null,
       "tag": null,
       "labels": "",
-      "status": 3,
+      "status": 5,
       "visible": true,
       "locked": false,
       "position_x": 170,
@@ -311,7 +311,7 @@
       "description": null,
       "tag": null,
       "labels": "",
-      "status": 4,
+      "status": 5,
       "visible": true,
       "locked": false,
       "position_x": 170,
@@ -349,7 +349,7 @@
       "description": null,
       "tag": null,
       "labels": "",
-      "status": 7,
+      "status": 3,
       "visible": true,
       "locked": false,
       "position_x": 170,
@@ -570,18 +570,18 @@
       "id": "f7ff0426-721d-cfa1-ee9f-585d85131e93",
       "map_id": "5f8c2a10-7d3e-4b8e-9c1a-2b3c4d5e6f70",
       "solar_system_id": 31002385,
-      "name": "J152550",
+      "name": "Dead end",
       "original_name": "J152550",
       "custom_name": null,
       "temporary_name": null,
-      "description": null,
-      "tag": null,
-      "labels": "",
-      "status": 0,
+      "description": "Old static, Sansha fleet lives here",
+      "tag": "OLD",
+      "labels": "{\"customLabel\":\"OLD\",\"labels\":[\"b\",\"\"]}",
+      "status": 6,
       "visible": false,
       "locked": false,
-      "position_x": 510,
-      "position_y": 210,
+      "position_x": 720,
+      "position_y": 300,
       "_inserted_ago_min": 2712,
       "_updated_ago_min": 41
     },
@@ -1133,8 +1133,6 @@
     {
       "id": "499b18e5-0a17-5b0e-f36b-f2113c953f5d",
       "system_id": "d79da6a3-6294-8bfe-edc4-6fb9ed0a656a",
-      "solar_system_id": 31002531,
-      "solar_system_name": "J014348",
       "eve_id": "DKM-763",
       "name": null,
       "description": null,
@@ -1146,13 +1144,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": "1a",
       "_inserted_ago_min": 200,
-      "_updated_ago_min": 4
+      "_updated_ago_min": 4,
+      "deleted": false
     },
     {
       "id": "83870307-ebca-6ca9-f4c1-f93ef5866403",
       "system_id": "56fbc2f1-f8e9-6431-73cc-2690133d4b63",
-      "solar_system_id": 31000399,
-      "solar_system_name": "J130256",
       "eve_id": "JCP-704",
       "name": null,
       "description": null,
@@ -1164,13 +1161,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 576,
-      "_updated_ago_min": 5
+      "_updated_ago_min": 5,
+      "deleted": false
     },
     {
       "id": "21a16b16-82fa-5847-1fb9-396f70a25794",
       "system_id": "d79da6a3-6294-8bfe-edc4-6fb9ed0a656a",
-      "solar_system_id": 31002531,
-      "solar_system_name": "J014348",
       "eve_id": "KOT-395",
       "name": null,
       "description": null,
@@ -1182,13 +1178,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 310,
-      "_updated_ago_min": 8
+      "_updated_ago_min": 8,
+      "deleted": false
     },
     {
       "id": "d6f9ac8b-4983-cdd8-8bdb-460abd8b16d7",
       "system_id": "d79da6a3-6294-8bfe-edc4-6fb9ed0a656a",
-      "solar_system_id": 31002531,
-      "solar_system_name": "J014348",
       "eve_id": "PUX-683",
       "name": null,
       "description": null,
@@ -1200,13 +1195,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 256,
-      "_updated_ago_min": 21
+      "_updated_ago_min": 21,
+      "deleted": false
     },
     {
       "id": "75fc74c4-5de7-818b-b5da-24688c6f5a9c",
       "system_id": "a0d09c62-1d98-a474-7a3f-f3113bdfae68",
-      "solar_system_id": 31001924,
-      "solar_system_name": "J130026",
       "eve_id": "SKU-589",
       "name": null,
       "description": null,
@@ -1218,13 +1212,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 510,
-      "_updated_ago_min": 27
+      "_updated_ago_min": 27,
+      "deleted": false
     },
     {
       "id": "556b29dd-3e04-6328-07ed-25f34f7d39da",
       "system_id": "56fbc2f1-f8e9-6431-73cc-2690133d4b63",
-      "solar_system_id": 31000399,
-      "solar_system_name": "J130256",
       "eve_id": "HGR-659",
       "name": null,
       "description": null,
@@ -1236,13 +1229,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 422,
-      "_updated_ago_min": 19
+      "_updated_ago_min": 19,
+      "deleted": false
     },
     {
       "id": "dca332df-298c-21ba-5a47-75f8ec97d7e1",
       "system_id": "0e859f16-bc6e-9d5f-38be-1ce354fc94a4",
-      "solar_system_id": 31000220,
-      "solar_system_name": "J121158",
       "eve_id": "HLS-433",
       "name": null,
       "description": null,
@@ -1254,13 +1246,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 533,
-      "_updated_ago_min": 9
+      "_updated_ago_min": 9,
+      "deleted": false
     },
     {
       "id": "375504a5-fccd-7d53-e0dd-06f248e9f659",
       "system_id": "56fbc2f1-f8e9-6431-73cc-2690133d4b63",
-      "solar_system_id": 31000399,
-      "solar_system_name": "J130256",
       "eve_id": "KBZ-122",
       "name": null,
       "description": null,
@@ -1272,13 +1263,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 192,
-      "_updated_ago_min": 18
+      "_updated_ago_min": 18,
+      "deleted": false
     },
     {
       "id": "a8603999-70a2-ee42-5916-31cddf0bbe3e",
       "system_id": "1e832d72-4946-9368-d5d5-0f767a3a8394",
-      "solar_system_id": 31000005,
-      "solar_system_name": "Thera",
       "eve_id": "BRN-954",
       "name": null,
       "description": null,
@@ -1290,13 +1280,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 480,
-      "_updated_ago_min": 12
+      "_updated_ago_min": 12,
+      "deleted": false
     },
     {
       "id": "855b9df9-1bf7-6e53-c349-dc1abc4406c6",
       "system_id": "a0d09c62-1d98-a474-7a3f-f3113bdfae68",
-      "solar_system_id": 31001924,
-      "solar_system_name": "J130026",
       "eve_id": "HWY-258",
       "name": null,
       "description": null,
@@ -1308,13 +1297,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 456,
-      "_updated_ago_min": 11
+      "_updated_ago_min": 11,
+      "deleted": false
     },
     {
       "id": "9dc59da0-33d6-8d17-ace3-57b423ec7c0c",
       "system_id": "a0d09c62-1d98-a474-7a3f-f3113bdfae68",
-      "solar_system_id": 31001924,
-      "solar_system_name": "J130026",
       "eve_id": "UJR-197",
       "name": null,
       "description": null,
@@ -1326,13 +1314,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 786,
-      "_updated_ago_min": 28
+      "_updated_ago_min": 28,
+      "deleted": false
     },
     {
       "id": "44c862cf-79a9-398b-fedf-9a7dc27b5104",
       "system_id": "0e859f16-bc6e-9d5f-38be-1ce354fc94a4",
-      "solar_system_id": 31000220,
-      "solar_system_name": "J121158",
       "eve_id": "VXV-820",
       "name": null,
       "description": null,
@@ -1344,13 +1331,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 160,
-      "_updated_ago_min": 14
+      "_updated_ago_min": 14,
+      "deleted": false
     },
     {
       "id": "8cc948e7-c403-6eab-6911-2487011b5d7d",
       "system_id": "1e832d72-4946-9368-d5d5-0f767a3a8394",
-      "solar_system_id": 31000005,
-      "solar_system_name": "Thera",
       "eve_id": "TDQ-507",
       "name": null,
       "description": null,
@@ -1362,13 +1348,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 615,
-      "_updated_ago_min": 5
+      "_updated_ago_min": 5,
+      "deleted": false
     },
     {
       "id": "9f140adb-df6d-487a-4780-c42fc89fa771",
       "system_id": "696a8617-6b13-4907-4432-9463263e8db3",
-      "solar_system_id": 30002813,
-      "solar_system_name": "Tama",
       "eve_id": "UDN-972",
       "name": null,
       "description": null,
@@ -1380,13 +1365,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 493,
-      "_updated_ago_min": 23
+      "_updated_ago_min": 23,
+      "deleted": false
     },
     {
       "id": "5a453866-b91a-8326-49be-7f8075391799",
       "system_id": "1e832d72-4946-9368-d5d5-0f767a3a8394",
-      "solar_system_id": 31000005,
-      "solar_system_name": "Thera",
       "eve_id": "KMN-638",
       "name": null,
       "description": null,
@@ -1398,13 +1382,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 598,
-      "_updated_ago_min": 20
+      "_updated_ago_min": 20,
+      "deleted": false
     },
     {
       "id": "beeb48dd-c97d-f06b-01bb-277e526e2f0b",
       "system_id": "7db2a17e-42bb-68de-2af4-cce5cddc68d6",
-      "solar_system_id": 30001984,
-      "solar_system_name": "EC-P8R",
       "eve_id": "QNP-407",
       "name": null,
       "description": null,
@@ -1416,13 +1399,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 218,
-      "_updated_ago_min": 18
+      "_updated_ago_min": 18,
+      "deleted": false
     },
     {
       "id": "6f867ce3-251e-1ae1-cd8e-4dc54dd5169a",
       "system_id": "0e859f16-bc6e-9d5f-38be-1ce354fc94a4",
-      "solar_system_id": 31000220,
-      "solar_system_name": "J121158",
       "eve_id": "TNT-337",
       "name": null,
       "description": null,
@@ -1434,13 +1416,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 120,
-      "_updated_ago_min": 27
+      "_updated_ago_min": 27,
+      "deleted": false
     },
     {
       "id": "9bab7a3e-d7e8-6685-f80d-1a6552e8f127",
       "system_id": "250bc6e7-e3aa-471c-8da9-ec93738d7ccc",
-      "solar_system_id": 30001376,
-      "solar_system_name": "Nourvukaiken",
       "eve_id": "HLG-536",
       "name": null,
       "description": null,
@@ -1452,13 +1433,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 40,
-      "_updated_ago_min": 1
+      "_updated_ago_min": 1,
+      "deleted": false
     },
     {
       "id": "4cc0eedb-7f51-800b-e559-29b1909f8ff1",
       "system_id": "1d3a2005-7b80-f213-e736-086174c8847b",
-      "solar_system_id": 30000142,
-      "solar_system_name": "Jita",
       "eve_id": "SZK-651",
       "name": null,
       "description": null,
@@ -1470,13 +1450,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 664,
-      "_updated_ago_min": 14
+      "_updated_ago_min": 14,
+      "deleted": false
     },
     {
       "id": "ba243b69-846b-853b-d35f-847e84777780",
       "system_id": "712e17f6-041a-7212-a3ca-8d60fa8792bf",
-      "solar_system_id": 31000019,
-      "solar_system_name": "J154535",
       "eve_id": "WON-575",
       "name": null,
       "description": null,
@@ -1488,13 +1467,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 396,
-      "_updated_ago_min": 2
+      "_updated_ago_min": 2,
+      "deleted": false
     },
     {
       "id": "02a83c34-f2a9-91f8-73fc-117459e2221f",
       "system_id": "007e0712-7168-fcfb-23e0-709e82c2c4ba",
-      "solar_system_id": 31000558,
-      "solar_system_name": "J134534",
       "eve_id": "WCR-334",
       "name": null,
       "description": null,
@@ -1506,13 +1484,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 131,
-      "_updated_ago_min": 14
+      "_updated_ago_min": 14,
+      "deleted": false
     },
     {
       "id": "a6067a27-66a0-f7da-803b-8f4d5fd9b34a",
       "system_id": "d51321ff-0eb7-2a15-2985-8691e56d5404",
-      "solar_system_id": 31000343,
-      "solar_system_name": "J104201",
       "eve_id": "STE-292",
       "name": null,
       "description": null,
@@ -1524,13 +1501,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 461,
-      "_updated_ago_min": 16
+      "_updated_ago_min": 16,
+      "deleted": false
     },
     {
       "id": "ff0200ae-e62e-e61c-9fe6-0efbc46f9c9a",
       "system_id": "0a6158eb-6f6c-80fa-5c2f-76262f91f0c5",
-      "solar_system_id": 31000816,
-      "solar_system_name": "J141637",
       "eve_id": "TLX-642",
       "name": null,
       "description": null,
@@ -1542,13 +1518,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 794,
-      "_updated_ago_min": 27
+      "_updated_ago_min": 27,
+      "deleted": false
     },
     {
       "id": "516d8b3b-5cdb-039e-2bb4-754a179d3907",
       "system_id": "0a6158eb-6f6c-80fa-5c2f-76262f91f0c5",
-      "solar_system_id": 31000816,
-      "solar_system_name": "J141637",
       "eve_id": "MCK-624",
       "name": null,
       "description": null,
@@ -1560,13 +1535,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 209,
-      "_updated_ago_min": 4
+      "_updated_ago_min": 4,
+      "deleted": false
     },
     {
       "id": "d20fde9d-57e6-1ea6-b09c-724a4b7fe9b1",
       "system_id": "d51321ff-0eb7-2a15-2985-8691e56d5404",
-      "solar_system_id": 31000343,
-      "solar_system_name": "J104201",
       "eve_id": "ROV-260",
       "name": null,
       "description": null,
@@ -1578,13 +1552,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 566,
-      "_updated_ago_min": 10
+      "_updated_ago_min": 10,
+      "deleted": false
     },
     {
       "id": "3027db71-e4a4-e6b8-8140-4caf3532000c",
       "system_id": "2cf5ec78-b62c-9dcb-3afc-d2aec53beebd",
-      "solar_system_id": 31000778,
-      "solar_system_name": "J153003",
       "eve_id": "OFB-745",
       "name": null,
       "description": null,
@@ -1596,13 +1569,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 608,
-      "_updated_ago_min": 20
+      "_updated_ago_min": 20,
+      "deleted": false
     },
     {
       "id": "a2f279aa-a19e-1497-fe66-52b991e2cd45",
       "system_id": "e3aad2d2-1661-392b-d437-6fb5144ad2a4",
-      "solar_system_id": 31001168,
-      "solar_system_name": "J101354",
       "eve_id": "YBX-521",
       "name": null,
       "description": null,
@@ -1614,13 +1586,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 40,
-      "_updated_ago_min": 26
+      "_updated_ago_min": 26,
+      "deleted": false
     },
     {
       "id": "b0d1937a-b5ec-5c29-4e86-8ac300b62052",
       "system_id": "d51321ff-0eb7-2a15-2985-8691e56d5404",
-      "solar_system_id": 31000343,
-      "solar_system_name": "J104201",
       "eve_id": "SAK-507",
       "name": null,
       "description": null,
@@ -1632,13 +1603,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 130,
-      "_updated_ago_min": 19
+      "_updated_ago_min": 19,
+      "deleted": false
     },
     {
       "id": "7f73d6f2-2cd9-86e8-3257-ae42078f6a4c",
       "system_id": "23151b8d-34be-81ec-2ce1-a325461d8db6",
-      "solar_system_id": 31001142,
-      "solar_system_name": "J120357",
       "eve_id": "ZST-372",
       "name": null,
       "description": null,
@@ -1650,13 +1620,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 692,
-      "_updated_ago_min": 29
+      "_updated_ago_min": 29,
+      "deleted": false
     },
     {
       "id": "24caabd0-ff42-9589-83ab-84e3880fa3ce",
       "system_id": "23151b8d-34be-81ec-2ce1-a325461d8db6",
-      "solar_system_id": 31001142,
-      "solar_system_name": "J120357",
       "eve_id": "TGO-716",
       "name": null,
       "description": null,
@@ -1668,13 +1637,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 154,
-      "_updated_ago_min": 5
+      "_updated_ago_min": 5,
+      "deleted": false
     },
     {
       "id": "076ec848-1b4d-294b-826d-cfa8c26e5270",
       "system_id": "10d16824-0291-be02-33c9-55324edbfef8",
-      "solar_system_id": 31000936,
-      "solar_system_name": "J165302",
       "eve_id": "DCF-635",
       "name": null,
       "description": null,
@@ -1686,13 +1654,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 532,
-      "_updated_ago_min": 27
+      "_updated_ago_min": 27,
+      "deleted": false
     },
     {
       "id": "ce7d5793-6e3d-3278-9ced-d8ab77af3bd4",
       "system_id": "d51321ff-0eb7-2a15-2985-8691e56d5404",
-      "solar_system_id": 31000343,
-      "solar_system_name": "J104201",
       "eve_id": "BVA-800",
       "name": null,
       "description": null,
@@ -1704,13 +1671,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 622,
-      "_updated_ago_min": 11
+      "_updated_ago_min": 11,
+      "deleted": false
     },
     {
       "id": "2b5ec1ce-4683-beba-5a95-92b13cfecc85",
       "system_id": "0e2cd8ad-ea8f-3be0-b8be-7212d75037b1",
-      "solar_system_id": 31001583,
-      "solar_system_name": "J152628",
       "eve_id": "BJV-201",
       "name": null,
       "description": null,
@@ -1722,13 +1688,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 626,
-      "_updated_ago_min": 3
+      "_updated_ago_min": 3,
+      "deleted": false
     },
     {
       "id": "9fbea640-7328-9c32-3110-2878595116e1",
       "system_id": "0e2cd8ad-ea8f-3be0-b8be-7212d75037b1",
-      "solar_system_id": 31001583,
-      "solar_system_name": "J152628",
       "eve_id": "NAB-325",
       "name": null,
       "description": null,
@@ -1740,13 +1705,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 435,
-      "_updated_ago_min": 19
+      "_updated_ago_min": 19,
+      "deleted": false
     },
     {
       "id": "9ec3fd06-0df9-3e22-708c-51620b3e93e1",
       "system_id": "d51321ff-0eb7-2a15-2985-8691e56d5404",
-      "solar_system_id": 31000343,
-      "solar_system_name": "J104201",
       "eve_id": "HHH-145",
       "name": null,
       "description": null,
@@ -1758,13 +1722,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 193,
-      "_updated_ago_min": 19
+      "_updated_ago_min": 19,
+      "deleted": false
     },
     {
       "id": "ddf2d709-e61c-32c0-0193-ebab50964e95",
       "system_id": "c352b37e-e903-e9cd-68d6-174303f43676",
-      "solar_system_id": 31001377,
-      "solar_system_name": "J113925",
       "eve_id": "PKO-717",
       "name": null,
       "description": null,
@@ -1776,13 +1739,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 288,
-      "_updated_ago_min": 29
+      "_updated_ago_min": 29,
+      "deleted": false
     },
     {
       "id": "ad62558b-3e30-851d-1149-6151f3204836",
       "system_id": "3f933587-4429-95fa-aa5d-0b4bdf3c49ba",
-      "solar_system_id": 31001825,
-      "solar_system_name": "J122706",
       "eve_id": "NWX-698",
       "name": null,
       "description": null,
@@ -1794,13 +1756,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 256,
-      "_updated_ago_min": 14
+      "_updated_ago_min": 14,
+      "deleted": false
     },
     {
       "id": "b636d53e-e014-2b98-660a-83b74f24f882",
       "system_id": "d51321ff-0eb7-2a15-2985-8691e56d5404",
-      "solar_system_id": 31000343,
-      "solar_system_name": "J104201",
       "eve_id": "QAH-189",
       "name": null,
       "description": null,
@@ -1812,13 +1773,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 207,
-      "_updated_ago_min": 6
+      "_updated_ago_min": 6,
+      "deleted": false
     },
     {
       "id": "e1de878c-f8b7-555c-01f4-25722fc1ec5d",
       "system_id": "0963423a-5dfa-535e-fc57-b67cd4e53bb1",
-      "solar_system_id": 31001912,
-      "solar_system_name": "J111106",
       "eve_id": "KNS-471",
       "name": null,
       "description": null,
@@ -1830,13 +1790,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 147,
-      "_updated_ago_min": 11
+      "_updated_ago_min": 11,
+      "deleted": false
     },
     {
       "id": "55fc410d-62b6-8280-df19-a22888a3df20",
       "system_id": "0963423a-5dfa-535e-fc57-b67cd4e53bb1",
-      "solar_system_id": 31001912,
-      "solar_system_name": "J111106",
       "eve_id": "NVC-226",
       "name": null,
       "description": null,
@@ -1848,13 +1807,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 462,
-      "_updated_ago_min": 27
+      "_updated_ago_min": 27,
+      "deleted": false
     },
     {
       "id": "30f2300d-632a-42b9-3eb4-20db8dc88649",
       "system_id": "d79da6a3-6294-8bfe-edc4-6fb9ed0a656a",
-      "solar_system_id": 31002531,
-      "solar_system_name": "J014348",
       "eve_id": "PKM-342",
       "name": "Forgotten Perimeter Coronation Platform",
       "description": null,
@@ -1866,13 +1824,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 476,
-      "_updated_ago_min": 2
+      "_updated_ago_min": 2,
+      "deleted": false
     },
     {
       "id": "57675f82-0679-0646-aa0d-e39947754001",
       "system_id": "d79da6a3-6294-8bfe-edc4-6fb9ed0a656a",
-      "solar_system_id": 31002531,
-      "solar_system_name": "J014348",
       "eve_id": "EHX-232",
       "name": "Unsecured Perimeter Amplifier",
       "description": null,
@@ -1884,13 +1841,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 124,
-      "_updated_ago_min": 7
+      "_updated_ago_min": 7,
+      "deleted": false
     },
     {
       "id": "c99716ef-d5c3-1443-8b7c-5a454508f0a2",
       "system_id": "a0d09c62-1d98-a474-7a3f-f3113bdfae68",
-      "solar_system_id": 31001924,
-      "solar_system_name": "J130026",
       "eve_id": "ESP-578",
       "name": "Core Garrison",
       "description": null,
@@ -1902,13 +1858,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 275,
-      "_updated_ago_min": 6
+      "_updated_ago_min": 6,
+      "deleted": false
     },
     {
       "id": "b8f38d1b-376a-fb43-5a58-e0c15e2fd186",
       "system_id": "a0d09c62-1d98-a474-7a3f-f3113bdfae68",
-      "solar_system_id": 31001924,
-      "solar_system_name": "J130026",
       "eve_id": "NNV-694",
       "name": "Vital Core Reservoir",
       "description": null,
@@ -1920,13 +1875,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 243,
-      "_updated_ago_min": 10
+      "_updated_ago_min": 10,
+      "deleted": false
     },
     {
       "id": "34568a23-813c-855c-79d8-1d15f370bdbc",
       "system_id": "56fbc2f1-f8e9-6431-73cc-2690133d4b63",
-      "solar_system_id": 31000399,
-      "solar_system_name": "J130256",
       "eve_id": "HPW-234",
       "name": "Ordinary Perimeter Deposit",
       "description": null,
@@ -1938,13 +1892,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 753,
-      "_updated_ago_min": 9
+      "_updated_ago_min": 9,
+      "deleted": false
     },
     {
       "id": "966a93e1-70ba-90f0-e64d-52a098906251",
       "system_id": "007e0712-7168-fcfb-23e0-709e82c2c4ba",
-      "solar_system_id": 31000558,
-      "solar_system_name": "J134534",
       "eve_id": "MSH-513",
       "name": null,
       "description": null,
@@ -1956,13 +1909,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 652,
-      "_updated_ago_min": 17
+      "_updated_ago_min": 17,
+      "deleted": false
     },
     {
       "id": "c02cbb7c-df54-fa50-2021-dc2c3669265a",
       "system_id": "1e832d72-4946-9368-d5d5-0f767a3a8394",
-      "solar_system_id": 31000005,
-      "solar_system_name": "Thera",
       "eve_id": "DWR-193",
       "name": null,
       "description": null,
@@ -1974,13 +1926,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 585,
-      "_updated_ago_min": 28
+      "_updated_ago_min": 28,
+      "deleted": false
     },
     {
       "id": "c3cac55e-c591-0954-bc66-74134539884c",
       "system_id": "d79da6a3-6294-8bfe-edc4-6fb9ed0a656a",
-      "solar_system_id": 31002531,
-      "solar_system_name": "J014348",
       "eve_id": "NAW-835",
       "name": null,
       "description": null,
@@ -1992,13 +1943,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 611,
-      "_updated_ago_min": 5
+      "_updated_ago_min": 5,
+      "deleted": false
     },
     {
       "id": "b5f0bd5f-63d2-c4cb-03d7-10354f8fdd84",
       "system_id": "56fbc2f1-f8e9-6431-73cc-2690133d4b63",
-      "solar_system_id": 31000399,
-      "solar_system_name": "J130256",
       "eve_id": "CXF-894",
       "name": "Perimeter Camp",
       "description": null,
@@ -2010,13 +1960,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 267,
-      "_updated_ago_min": 11
+      "_updated_ago_min": 11,
+      "deleted": false
     },
     {
       "id": "1be4e39e-e42d-981a-a9a9-e7cc30355fd2",
       "system_id": "a0d09c62-1d98-a474-7a3f-f3113bdfae68",
-      "solar_system_id": 31001924,
-      "solar_system_name": "J130026",
       "eve_id": "CSM-924",
       "name": "Ordinary Perimeter Deposit",
       "description": null,
@@ -2028,13 +1977,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 542,
-      "_updated_ago_min": 25
+      "_updated_ago_min": 25,
+      "deleted": false
     },
     {
       "id": "b7fdf4c5-10df-8af2-315c-efd14c057b32",
       "system_id": "a0d09c62-1d98-a474-7a3f-f3113bdfae68",
-      "solar_system_id": 31001924,
-      "solar_system_name": "J130026",
       "eve_id": "KCH-395",
       "name": "Bountiful Frontier Reservoir",
       "description": null,
@@ -2046,13 +1994,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 159,
-      "_updated_ago_min": 27
+      "_updated_ago_min": 27,
+      "deleted": false
     },
     {
       "id": "5b1c2724-4849-02df-6623-1401b779220f",
       "system_id": "d79da6a3-6294-8bfe-edc4-6fb9ed0a656a",
-      "solar_system_id": 31002531,
-      "solar_system_name": "J014348",
       "eve_id": "TOWER-1",
       "name": "Our Raitaru, moon 3",
       "description": "Custom entry",
@@ -2064,13 +2011,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 673,
-      "_updated_ago_min": 28
+      "_updated_ago_min": 28,
+      "deleted": false
     },
     {
       "id": "46ca151e-efce-3323-21d5-c0a7dcf3e9b8",
       "system_id": "007e0712-7168-fcfb-23e0-709e82c2c4ba",
-      "solar_system_id": 31000558,
-      "solar_system_name": "J134534",
       "eve_id": "FAM-795",
       "name": null,
       "description": null,
@@ -2082,13 +2028,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 709,
-      "_updated_ago_min": 23
+      "_updated_ago_min": 23,
+      "deleted": false
     },
     {
       "id": "0677acf5-699e-3b2a-e59e-1f0c59f7412d",
       "system_id": "d79da6a3-6294-8bfe-edc4-6fb9ed0a656a",
-      "solar_system_id": 31002531,
-      "solar_system_name": "J014348",
       "eve_id": "WXX-573",
       "name": "Astrahus",
       "description": null,
@@ -2100,13 +2045,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 284,
-      "_updated_ago_min": 28
+      "_updated_ago_min": 28,
+      "deleted": false
     },
     {
       "id": "a0fad25a-e7f2-9ab1-5a24-1c926688e8aa",
       "system_id": "56fbc2f1-f8e9-6431-73cc-2690133d4b63",
-      "solar_system_id": 31000399,
-      "solar_system_name": "J130256",
       "eve_id": "AB-12",
       "name": null,
       "description": null,
@@ -2118,13 +2062,12 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 307,
-      "_updated_ago_min": 20
+      "_updated_ago_min": 20,
+      "deleted": false
     },
     {
       "id": "ad6b4d7f-b66c-1b49-381c-f55cbbeaec5a",
       "system_id": "3ea65dd8-b6ef-5dfc-5b51-e2c01eeae938",
-      "solar_system_id": 31002404,
-      "solar_system_name": "J110834",
       "eve_id": "BNB-723",
       "name": "Ruined Sansha Temple Site",
       "description": "Kept although the system is hidden",
@@ -2136,7 +2079,42 @@
       "character_eve_id": "2112625428",
       "temporary_name": null,
       "_inserted_ago_min": 195,
-      "_updated_ago_min": 14
+      "_updated_ago_min": 14,
+      "deleted": false
+    },
+    {
+      "id": "5e5e5e5e-0000-4000-8000-000000000001",
+      "system_id": "f7ff0426-721d-cfa1-ee9f-585d85131e93",
+      "eve_id": "HID-001",
+      "name": null,
+      "description": "Static to C5, rolled",
+      "type": "H296",
+      "linked_system_id": null,
+      "kind": "Cosmic Signature",
+      "group": "Wormhole",
+      "custom_info": "{\"time_status\":1}",
+      "character_eve_id": "2116161001",
+      "temporary_name": null,
+      "_inserted_ago_min": 9000,
+      "_updated_ago_min": 8000,
+      "deleted": false
+    },
+    {
+      "id": "5e5e5e5e-0000-4000-8000-000000000002",
+      "system_id": "f7ff0426-721d-cfa1-ee9f-585d85131e93",
+      "eve_id": "DEL-404",
+      "name": null,
+      "description": null,
+      "type": null,
+      "linked_system_id": null,
+      "kind": "Cosmic Signature",
+      "group": "Gas Site",
+      "custom_info": null,
+      "character_eve_id": "2116161001",
+      "temporary_name": null,
+      "deleted": true,
+      "_inserted_ago_min": 9000,
+      "_updated_ago_min": 8000
     }
   ],
   "structures": [
@@ -2211,35 +2189,54 @@
       "owner_id": null,
       "_inserted_ago_min": 500,
       "_updated_ago_min": 100
+    },
+    {
+      "id": "6f6f6f6f-0000-4000-8000-000000000001",
+      "system_id": "f7ff0426-721d-cfa1-ee9f-585d85131e93",
+      "solar_system_id": 31002385,
+      "solar_system_name": "J152550",
+      "structure_type_id": "35832",
+      "structure_type": "Astrahus",
+      "character_eve_id": "2116161001",
+      "name": "Sansha Tower",
+      "notes": "Seen from the hole",
+      "owner_name": "Sansha Remnants",
+      "owner_ticker": "SAN",
+      "owner_id": "98000077",
+      "status": "Powered",
+      "end_time": null,
+      "_inserted_ago_min": 9000,
+      "_updated_ago_min": 9000
     }
   ],
   "comments": [
     {
-      "system": 31002531,
+      "id": "8551cc0e-b775-55e7-7f75-d5c291f659b6",
+      "system_id": "d79da6a3-6294-8bfe-edc4-6fb9ed0a656a",
+      "character_id": "c0000000-0000-4000-8000-002112625428",
       "text": "Rolled the static at 18:00, new C3 is quiet",
-      "_ago": 180,
-      "character_eve_id": "2112625428",
-      "character_name": "CCP Bartender",
-      "system_uuid": "d79da6a3-6294-8bfe-edc4-6fb9ed0a656a",
-      "id": "8551cc0e-b775-55e7-7f75-d5c291f659b6"
+      "_ago": 180
     },
     {
-      "system": 31002531,
+      "id": "ab8de210-6f57-b993-ecfa-355341349d66",
+      "system_id": "d79da6a3-6294-8bfe-edc4-6fb9ed0a656a",
+      "character_id": "c0000000-0000-4000-8000-002116161001",
       "text": "Neut Loki on d-scan for 10 min, gone",
-      "_ago": 60,
-      "character_eve_id": "2116161001",
-      "character_name": "Scout Alt",
-      "system_uuid": "d79da6a3-6294-8bfe-edc4-6fb9ed0a656a",
-      "id": "ab8de210-6f57-b993-ecfa-355341349d66"
+      "_ago": 60
     },
     {
-      "system": 31001924,
+      "id": "ef886112-595a-a0bc-9345-3d6faf3018d7",
+      "system_id": "a0d09c62-1d98-a474-7a3f-f3113bdfae68",
+      "character_id": "c0000000-0000-4000-8000-002116161003",
       "text": "Dreads seen here last week",
-      "_ago": 4000,
-      "character_eve_id": "2116161003",
-      "character_name": "Fleet Boss",
-      "system_uuid": "a0d09c62-1d98-a474-7a3f-f3113bdfae68",
-      "id": "ef886112-595a-a0bc-9345-3d6faf3018d7"
+      "_ago": 4000
+    },
+    {
+      "id": "7a7a7a7a-0000-4000-8000-000000000001",
+      "system_id": "f7ff0426-721d-cfa1-ee9f-585d85131e93",
+      "character_id": "c0000000-0000-4000-8000-002116161003",
+      "text": "Do not jump in solo",
+      "_ago": 9000
     }
   ],
   "passages": [
@@ -2247,46 +2244,46 @@
       "id": "86febef8-47fa-7998-3886-6458d4287253",
       "solar_system_source_id": 31002531,
       "solar_system_target_id": 31000399,
-      "character_eve_id": "2112625428",
       "ship_type_id": 605,
       "ship_name": null,
-      "_inserted_ago_min": 30
+      "_inserted_ago_min": 30,
+      "character_id": "c0000000-0000-4000-8000-002112625428"
     },
     {
       "id": "f319c55a-f244-bf16-595a-75ee1705e32d",
       "solar_system_source_id": 31002531,
       "solar_system_target_id": 31000399,
-      "character_eve_id": "2116161001",
       "ship_type_id": 22456,
       "ship_name": null,
-      "_inserted_ago_min": 37
+      "_inserted_ago_min": 37,
+      "character_id": "c0000000-0000-4000-8000-002116161001"
     },
     {
       "id": "571dde8c-ee22-27bb-714b-6caa6c89ac3d",
       "solar_system_source_id": 31002531,
       "solar_system_target_id": 30001376,
-      "character_eve_id": "2116161003",
       "ship_type_id": 29990,
       "ship_name": null,
-      "_inserted_ago_min": 44
+      "_inserted_ago_min": 44,
+      "character_id": "c0000000-0000-4000-8000-002116161003"
     },
     {
       "id": "b03bed0c-bd15-9778-80c9-81cfb10e0b0c",
       "solar_system_source_id": 31002531,
       "solar_system_target_id": 31001924,
-      "character_eve_id": "2112625428",
       "ship_type_id": 670,
       "ship_name": null,
-      "_inserted_ago_min": 51
+      "_inserted_ago_min": 51,
+      "character_id": "c0000000-0000-4000-8000-002112625428"
     },
     {
       "id": "a03e2c7c-a0cb-3cc3-d6c1-5464d47a2ebb",
       "solar_system_source_id": 31002531,
       "solar_system_target_id": 31001924,
-      "character_eve_id": "2116161001",
       "ship_type_id": 605,
       "ship_name": null,
-      "_inserted_ago_min": 58
+      "_inserted_ago_min": 58,
+      "character_id": "c0000000-0000-4000-8000-002116161001"
     }
   ],
   "acls": [
@@ -2374,36 +2371,42 @@
   ],
   "characters": [
     {
+      "id": "c0000000-0000-4000-8000-002112625428",
       "eve_id": "2112625428",
-      "name": "CCP Bartender"
+      "name": "CCP Bartender",
+      "tracked": true
     },
     {
+      "id": "c0000000-0000-4000-8000-002116161001",
       "eve_id": "2116161001",
-      "name": "Scout Alt"
+      "name": "Scout Alt",
+      "tracked": true
     },
     {
+      "id": "c0000000-0000-4000-8000-002116161003",
       "eve_id": "2116161003",
-      "name": "Fleet Boss"
+      "name": "Fleet Boss",
+      "tracked": true
     }
   ],
   "user_settings": [
     {
       "id": "us-1",
       "map_id": "5f8c2a10-7d3e-4b8e-9c1a-2b3c4d5e6f70",
-      "character_eve_id": 2112625428,
-      "hubs": ["30000142", "30002187"]
+      "hubs": ["30000142", "30002187"],
+      "main_character_eve_id": "2112625428"
     },
     {
       "id": "us-2",
       "map_id": "5f8c2a10-7d3e-4b8e-9c1a-2b3c4d5e6f70",
-      "character_eve_id": 2112625429,
-      "hubs": ["30000142", "30002659"]
+      "hubs": ["30000142", "30002659"],
+      "main_character_eve_id": "2112625429"
     },
     {
       "id": "us-3",
       "map_id": "00000000-0000-4000-8000-000000000000",
-      "character_eve_id": 2112625430,
-      "hubs": ["30002510"]
+      "hubs": ["30002510"],
+      "main_character_eve_id": "2112625430"
     }
   ],
   "webhooks": [

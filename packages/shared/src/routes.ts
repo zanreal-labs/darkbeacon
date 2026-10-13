@@ -1221,6 +1221,24 @@ export const routes = {
       body: dto.WandererApiSourceRequest,
       response: dto.ImportJobDto,
     }),
+    /** The maps a Wanderer database holds (instance admins). */
+    dbMaps: route({
+      method: 'POST',
+      path: '/api/imports/wanderer-db/maps',
+      auth: 'admin',
+      scope: 'session',
+      body: dto.WandererDbConnectRequest,
+      response: dto.WandererDbMapsDto,
+    }),
+    /** Reads the whole map from a Wanderer database and stages it as a preview (instance admins). */
+    previewDb: route({
+      method: 'POST',
+      path: '/api/imports/wanderer-db',
+      auth: 'admin',
+      scope: 'session',
+      body: dto.WandererDbSourceRequest,
+      response: dto.ImportJobDto,
+    }),
     /**
      * Stages a Wanderer export file: the raw JSON as the body with content type
      * `WANDERER_EXPORT_CONTENT_TYPE` (streamed, 25 MB at most); `?name=` the file's name.

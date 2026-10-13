@@ -1,0 +1,2124 @@
+{
+  "GET /api/maps/:map/systems": {
+    "path": "/api/maps/import-probe/systems",
+    "status": 200,
+    "body": {
+      "data": {
+        "connections": [
+          {
+            "id": "cccccccc-0000-4000-8000-000000000001",
+            "type": 0,
+            "locked": true,
+            "map_id": "aaaaaaaa-0000-4000-8000-000000000001",
+            "mass_status": 1,
+            "ship_size_type": 2,
+            "time_status": 4,
+            "inserted_at": "2026-10-11T08:00:00.000000Z",
+            "updated_at": "2026-10-11T09:00:00.000000Z",
+            "solar_system_target": 31002238,
+            "solar_system_source": 31001269,
+            "wormhole_type": "H296"
+          },
+          {
+            "id": "cccccccc-0000-4000-8000-000000000002",
+            "type": 0,
+            "locked": false,
+            "map_id": "aaaaaaaa-0000-4000-8000-000000000001",
+            "mass_status": 2,
+            "ship_size_type": 3,
+            "time_status": 1,
+            "inserted_at": "2026-10-11T10:00:00.000000Z",
+            "updated_at": "2026-10-11T10:30:00.000000Z",
+            "solar_system_target": 30000142,
+            "solar_system_source": 31001269,
+            "wormhole_type": null
+          },
+          {
+            "id": "cccccccc-0000-4000-8000-000000000003",
+            "type": 1,
+            "locked": null,
+            "map_id": "aaaaaaaa-0000-4000-8000-000000000001",
+            "mass_status": 0,
+            "ship_size_type": 4,
+            "time_status": 0,
+            "inserted_at": "2026-10-12T07:00:00.000000Z",
+            "updated_at": "2026-10-12T07:00:00.000000Z",
+            "solar_system_target": 30002187,
+            "solar_system_source": 30000142,
+            "wormhole_type": null
+          }
+        ],
+        "systems": [
+          {
+            "id": "bbbbbbbb-0000-4000-8000-000000000003",
+            "name": "Jita",
+            "status": 2,
+            "tag": "Market",
+            "visible": true,
+            "description": null,
+            "labels": "{\"customLabel\":\"\",\"labels\":[\"\"]}",
+            "locked": false,
+            "map_id": "aaaaaaaa-0000-4000-8000-000000000001",
+            "solar_system_id": 30000142,
+            "inserted_at": "2026-10-03T10:00:00.000000Z",
+            "updated_at": "2026-10-11T13:00:00.000000Z",
+            "temporary_name": null,
+            "position_y": 200,
+            "position_x": 500,
+            "custom_name": null,
+            "original_name": "Jita"
+          },
+          {
+            "id": "bbbbbbbb-0000-4000-8000-000000000005",
+            "name": "K1",
+            "status": 4,
+            "tag": null,
+            "visible": true,
+            "description": null,
+            "labels": "",
+            "locked": false,
+            "map_id": "aaaaaaaa-0000-4000-8000-000000000001",
+            "solar_system_id": 30002187,
+            "inserted_at": "2026-10-04T10:00:00.000000Z",
+            "updated_at": "2026-10-12T08:00:00.000000Z",
+            "temporary_name": "K1",
+            "position_y": 400,
+            "position_x": 500,
+            "custom_name": "Trade hub",
+            "original_name": "Amarr"
+          },
+          {
+            "id": "bbbbbbbb-0000-4000-8000-000000000001",
+            "name": "Home Hole",
+            "status": 1,
+            "tag": "HQ",
+            "visible": true,
+            "description": "Our home. Static C3/HS.",
+            "labels": "{\"customLabel\":\"HOME\",\"labels\":[\"b\"]}",
+            "locked": true,
+            "map_id": "aaaaaaaa-0000-4000-8000-000000000001",
+            "solar_system_id": 31001269,
+            "inserted_at": "2026-10-01T10:00:00.000000Z",
+            "updated_at": "2026-10-10T12:00:00.000000Z",
+            "temporary_name": null,
+            "position_y": 200,
+            "position_x": 100,
+            "custom_name": "Home Hole",
+            "original_name": "J164751"
+          },
+          {
+            "id": "bbbbbbbb-0000-4000-8000-000000000002",
+            "name": "C5a",
+            "status": 6,
+            "tag": null,
+            "visible": true,
+            "description": null,
+            "labels": "{\"customLabel\":\"\",\"labels\":[\"a\",\"1\"]}",
+            "locked": false,
+            "map_id": "aaaaaaaa-0000-4000-8000-000000000001",
+            "solar_system_id": 31002238,
+            "inserted_at": "2026-10-02T10:00:00.000000Z",
+            "updated_at": "2026-10-11T12:00:00.000000Z",
+            "temporary_name": "C5a",
+            "position_y": 200,
+            "position_x": 300,
+            "custom_name": null,
+            "original_name": "J115405"
+          }
+        ]
+      }
+    }
+  },
+  "GET /api/map/systems?slug=": {
+    "path": "/api/map/systems?slug=import-probe",
+    "status": 200,
+    "body": {
+      "data": {
+        "connections": [
+          {
+            "id": "cccccccc-0000-4000-8000-000000000001",
+            "type": 0,
+            "locked": true,
+            "map_id": "aaaaaaaa-0000-4000-8000-000000000001",
+            "mass_status": 1,
+            "ship_size_type": 2,
+            "time_status": 4,
+            "inserted_at": "2026-10-11T08:00:00.000000Z",
+            "updated_at": "2026-10-11T09:00:00.000000Z",
+            "solar_system_target": 31002238,
+            "solar_system_source": 31001269,
+            "wormhole_type": "H296"
+          },
+          {
+            "id": "cccccccc-0000-4000-8000-000000000002",
+            "type": 0,
+            "locked": false,
+            "map_id": "aaaaaaaa-0000-4000-8000-000000000001",
+            "mass_status": 2,
+            "ship_size_type": 3,
+            "time_status": 1,
+            "inserted_at": "2026-10-11T10:00:00.000000Z",
+            "updated_at": "2026-10-11T10:30:00.000000Z",
+            "solar_system_target": 30000142,
+            "solar_system_source": 31001269,
+            "wormhole_type": null
+          },
+          {
+            "id": "cccccccc-0000-4000-8000-000000000003",
+            "type": 1,
+            "locked": null,
+            "map_id": "aaaaaaaa-0000-4000-8000-000000000001",
+            "mass_status": 0,
+            "ship_size_type": 4,
+            "time_status": 0,
+            "inserted_at": "2026-10-12T07:00:00.000000Z",
+            "updated_at": "2026-10-12T07:00:00.000000Z",
+            "solar_system_target": 30002187,
+            "solar_system_source": 30000142,
+            "wormhole_type": null
+          }
+        ],
+        "systems": [
+          {
+            "id": "bbbbbbbb-0000-4000-8000-000000000003",
+            "name": "Jita",
+            "status": 2,
+            "tag": "Market",
+            "visible": true,
+            "description": null,
+            "labels": "{\"customLabel\":\"\",\"labels\":[\"\"]}",
+            "locked": false,
+            "map_id": "aaaaaaaa-0000-4000-8000-000000000001",
+            "solar_system_id": 30000142,
+            "inserted_at": "2026-10-03T10:00:00.000000Z",
+            "updated_at": "2026-10-11T13:00:00.000000Z",
+            "temporary_name": null,
+            "position_y": 200,
+            "position_x": 500,
+            "custom_name": null,
+            "original_name": "Jita"
+          },
+          {
+            "id": "bbbbbbbb-0000-4000-8000-000000000005",
+            "name": "K1",
+            "status": 4,
+            "tag": null,
+            "visible": true,
+            "description": null,
+            "labels": "",
+            "locked": false,
+            "map_id": "aaaaaaaa-0000-4000-8000-000000000001",
+            "solar_system_id": 30002187,
+            "inserted_at": "2026-10-04T10:00:00.000000Z",
+            "updated_at": "2026-10-12T08:00:00.000000Z",
+            "temporary_name": "K1",
+            "position_y": 400,
+            "position_x": 500,
+            "custom_name": "Trade hub",
+            "original_name": "Amarr"
+          },
+          {
+            "id": "bbbbbbbb-0000-4000-8000-000000000001",
+            "name": "Home Hole",
+            "status": 1,
+            "tag": "HQ",
+            "visible": true,
+            "description": "Our home. Static C3/HS.",
+            "labels": "{\"customLabel\":\"HOME\",\"labels\":[\"b\"]}",
+            "locked": true,
+            "map_id": "aaaaaaaa-0000-4000-8000-000000000001",
+            "solar_system_id": 31001269,
+            "inserted_at": "2026-10-01T10:00:00.000000Z",
+            "updated_at": "2026-10-10T12:00:00.000000Z",
+            "temporary_name": null,
+            "position_y": 200,
+            "position_x": 100,
+            "custom_name": "Home Hole",
+            "original_name": "J164751"
+          },
+          {
+            "id": "bbbbbbbb-0000-4000-8000-000000000002",
+            "name": "C5a",
+            "status": 6,
+            "tag": null,
+            "visible": true,
+            "description": null,
+            "labels": "{\"customLabel\":\"\",\"labels\":[\"a\",\"1\"]}",
+            "locked": false,
+            "map_id": "aaaaaaaa-0000-4000-8000-000000000001",
+            "solar_system_id": 31002238,
+            "inserted_at": "2026-10-02T10:00:00.000000Z",
+            "updated_at": "2026-10-11T12:00:00.000000Z",
+            "temporary_name": "C5a",
+            "position_y": 200,
+            "position_x": 300,
+            "custom_name": null,
+            "original_name": "J115405"
+          }
+        ]
+      }
+    }
+  },
+  "GET /api/maps/:map/systems/:solar_system_id (hidden)": {
+    "path": "/api/maps/import-probe/systems/31000005",
+    "status": 200,
+    "body": {
+      "data": {
+        "id": "bbbbbbbb-0000-4000-8000-000000000004",
+        "name": "Thera",
+        "status": 3,
+        "tag": null,
+        "visible": false,
+        "description": "Hidden but keep these notes",
+        "labels": "{\"customLabel\":\"old\",\"labels\":[]}",
+        "locked": false,
+        "map_id": "aaaaaaaa-0000-4000-8000-000000000001",
+        "solar_system_id": 31000005,
+        "inserted_at": "2026-09-20T10:00:00.000000Z",
+        "updated_at": "2026-09-25T12:00:00.000000Z",
+        "temporary_name": null,
+        "position_y": 400,
+        "position_x": 700,
+        "custom_name": null,
+        "original_name": "Thera"
+      }
+    }
+  },
+  "GET /api/maps/:map/connections": {
+    "path": "/api/maps/import-probe/connections",
+    "status": 200,
+    "body": {
+      "data": [
+        {
+          "id": "cccccccc-0000-4000-8000-000000000001",
+          "type": 0,
+          "locked": true,
+          "map_id": "aaaaaaaa-0000-4000-8000-000000000001",
+          "mass_status": 1,
+          "ship_size_type": 2,
+          "time_status": 4,
+          "inserted_at": "2026-10-11T08:00:00.000000Z",
+          "updated_at": "2026-10-11T09:00:00.000000Z",
+          "solar_system_target": 31002238,
+          "solar_system_source": 31001269,
+          "wormhole_type": "H296"
+        },
+        {
+          "id": "cccccccc-0000-4000-8000-000000000002",
+          "type": 0,
+          "locked": false,
+          "map_id": "aaaaaaaa-0000-4000-8000-000000000001",
+          "mass_status": 2,
+          "ship_size_type": 3,
+          "time_status": 1,
+          "inserted_at": "2026-10-11T10:00:00.000000Z",
+          "updated_at": "2026-10-11T10:30:00.000000Z",
+          "solar_system_target": 30000142,
+          "solar_system_source": 31001269,
+          "wormhole_type": null
+        },
+        {
+          "id": "cccccccc-0000-4000-8000-000000000003",
+          "type": 1,
+          "locked": null,
+          "map_id": "aaaaaaaa-0000-4000-8000-000000000001",
+          "mass_status": 0,
+          "ship_size_type": 4,
+          "time_status": 0,
+          "inserted_at": "2026-10-12T07:00:00.000000Z",
+          "updated_at": "2026-10-12T07:00:00.000000Z",
+          "solar_system_target": 30002187,
+          "solar_system_source": 30000142,
+          "wormhole_type": null
+        }
+      ]
+    }
+  },
+  "GET /api/maps/:map/signatures": {
+    "path": "/api/maps/import-probe/signatures",
+    "status": 200,
+    "body": {
+      "data": [
+        {
+          "id": "dddddddd-0000-4000-8000-000000000001",
+          "name": null,
+          "type": "H296",
+          "description": "to the C5",
+          "group": "Wormhole",
+          "kind": "Cosmic Signature",
+          "deleted": false,
+          "solar_system_id": 31001269,
+          "inserted_at": "2026-10-11T08:00:00.000000Z",
+          "updated_at": "2026-10-11T08:05:00.000000Z",
+          "__lateral_join_source__": null,
+          "__metadata__": {
+            "selected": [
+              "id",
+              "name",
+              "type",
+              "description",
+              "group",
+              "kind",
+              "deleted",
+              "inserted_at",
+              "updated_at",
+              "eve_id",
+              "system_id",
+              "custom_info",
+              "temporary_name",
+              "character_eve_id",
+              "linked_system_id",
+              "update_forced_at"
+            ]
+          },
+          "__order__": null,
+          "eve_id": "ABC-123",
+          "custom_info": "{\"time_status\":4,\"mass_status\":1,\"isEOL\":false,\"bookmark_index\":\"1a\"}",
+          "temporary_name": "C5a",
+          "character_eve_id": "2112000001",
+          "linked_system_id": 31002238,
+          "update_forced_at": null
+        },
+        {
+          "id": "dddddddd-0000-4000-8000-000000000003",
+          "name": "Forgotten Perimeter Gateway",
+          "type": null,
+          "description": null,
+          "group": "Combat Site",
+          "kind": "Cosmic Anomaly",
+          "deleted": false,
+          "solar_system_id": 31001269,
+          "inserted_at": "2026-10-11T08:20:00.000000Z",
+          "updated_at": "2026-10-11T08:20:00.000000Z",
+          "__lateral_join_source__": null,
+          "__metadata__": {
+            "selected": [
+              "id",
+              "name",
+              "type",
+              "description",
+              "group",
+              "kind",
+              "deleted",
+              "inserted_at",
+              "updated_at",
+              "eve_id",
+              "system_id",
+              "custom_info",
+              "temporary_name",
+              "character_eve_id",
+              "linked_system_id",
+              "update_forced_at"
+            ]
+          },
+          "__order__": null,
+          "eve_id": "QQQ-111",
+          "custom_info": null,
+          "temporary_name": null,
+          "character_eve_id": "2112000001",
+          "linked_system_id": null,
+          "update_forced_at": null
+        },
+        {
+          "id": "dddddddd-0000-4000-8000-000000000002",
+          "name": "Unsecured Frontier Enclave Relay",
+          "type": null,
+          "description": null,
+          "group": "Data Site",
+          "kind": "Cosmic Signature",
+          "deleted": false,
+          "solar_system_id": 31001269,
+          "inserted_at": "2026-10-11T08:10:00.000000Z",
+          "updated_at": "2026-10-11T08:10:00.000000Z",
+          "__lateral_join_source__": null,
+          "__metadata__": {
+            "selected": [
+              "id",
+              "name",
+              "type",
+              "description",
+              "group",
+              "kind",
+              "deleted",
+              "inserted_at",
+              "updated_at",
+              "eve_id",
+              "system_id",
+              "custom_info",
+              "temporary_name",
+              "character_eve_id",
+              "linked_system_id",
+              "update_forced_at"
+            ]
+          },
+          "__order__": null,
+          "eve_id": "XYZ-987",
+          "custom_info": null,
+          "temporary_name": null,
+          "character_eve_id": "2112000001",
+          "linked_system_id": null,
+          "update_forced_at": null
+        },
+        {
+          "id": "dddddddd-0000-4000-8000-000000000006",
+          "name": "Fleet bookmark",
+          "type": null,
+          "description": "custom entry",
+          "group": "Unknown",
+          "kind": "Cosmic Signature",
+          "deleted": false,
+          "solar_system_id": 31002238,
+          "inserted_at": "2026-10-11T09:20:00.000000Z",
+          "updated_at": "2026-10-11T09:20:00.000000Z",
+          "__lateral_join_source__": null,
+          "__metadata__": {
+            "selected": [
+              "id",
+              "name",
+              "type",
+              "description",
+              "group",
+              "kind",
+              "deleted",
+              "inserted_at",
+              "updated_at",
+              "eve_id",
+              "system_id",
+              "custom_info",
+              "temporary_name",
+              "character_eve_id",
+              "linked_system_id",
+              "update_forced_at"
+            ]
+          },
+          "__order__": null,
+          "eve_id": "custom-note",
+          "custom_info": null,
+          "temporary_name": null,
+          "character_eve_id": "2112000001",
+          "linked_system_id": null,
+          "update_forced_at": null
+        }
+      ]
+    }
+  },
+  "GET /api/maps/:map/structures": {
+    "path": "/api/maps/import-probe/structures",
+    "status": 200,
+    "body": {
+      "data": [
+        {
+          "id": "eeeeeeee-0000-4000-8000-000000000001",
+          "system_id": "bbbbbbbb-0000-4000-8000-000000000001",
+          "solar_system_id": 31001269,
+          "solar_system_name": "J164751",
+          "structure_type_id": "35832",
+          "structure_type": "Astrahus",
+          "character_eve_id": "2112000001",
+          "name": "Home Astra",
+          "notes": "ours",
+          "owner_name": "Zanreal Corp",
+          "owner_ticker": "ZNRL",
+          "owner_id": "98000001",
+          "status": "Powered",
+          "end_time": null,
+          "inserted_at": "2026-10-05T10:00:00.000000Z",
+          "updated_at": "2026-10-05T10:00:00.000000Z"
+        },
+        {
+          "id": "eeeeeeee-0000-4000-8000-000000000002",
+          "system_id": "bbbbbbbb-0000-4000-8000-000000000002",
+          "solar_system_id": 31002238,
+          "solar_system_name": "J115405",
+          "structure_type_id": "35833",
+          "structure_type": "Fortizar",
+          "character_eve_id": "2112000001",
+          "name": "Hostile Fort",
+          "notes": "reinforced",
+          "owner_name": "Hard Knocks Citizens",
+          "owner_ticker": "HKRAB",
+          "owner_id": "98000002",
+          "status": "Reinforced",
+          "end_time": "2026-10-14T18:30:00.000000Z",
+          "inserted_at": "2026-10-11T10:00:00.000000Z",
+          "updated_at": "2026-10-11T11:00:00.000000Z"
+        }
+      ]
+    }
+  },
+  "GET /api/maps/:map/export": {
+    "path": "/api/maps/import-probe/export",
+    "status": 200,
+    "body": {
+      "data": {
+        "comments": [
+          {
+            "solar_system_id": 31001269,
+            "text": "Rolled the static at 18:00"
+          },
+          {
+            "solar_system_id": 31002238,
+            "text": "Hostiles seen here, Loki fleet"
+          },
+          {
+            "solar_system_id": 31000005,
+            "text": "Comment on hidden Thera"
+          }
+        ],
+        "connections": [
+          {
+            "bubbled": 2,
+            "custom_info": "rolled once",
+            "dangerous": true,
+            "locked": true,
+            "mass_status": 1,
+            "ship_size_type": 2,
+            "source": 31001269,
+            "target": 31002238,
+            "time_status": 4,
+            "type": 0,
+            "wormhole_type": "H296"
+          },
+          {
+            "bubbled": 0,
+            "custom_info": null,
+            "dangerous": false,
+            "locked": false,
+            "mass_status": 2,
+            "ship_size_type": 3,
+            "source": 31001269,
+            "target": 30000142,
+            "time_status": 1,
+            "type": 0,
+            "wormhole_type": null
+          },
+          {
+            "bubbled": 3,
+            "custom_info": null,
+            "dangerous": false,
+            "locked": null,
+            "mass_status": 0,
+            "ship_size_type": 4,
+            "source": 30000142,
+            "target": 30002187,
+            "time_status": 0,
+            "type": 1,
+            "wormhole_type": null
+          }
+        ],
+        "exported_at": "2026-10-13T08:34:48.541335Z",
+        "map": {
+          "description": "Chain for the importer test",
+          "name": "Import probe",
+          "slug": "import-probe",
+          "system_labels": [
+            {
+              "color": "#2d803b",
+              "description": "",
+              "id": "a",
+              "name": "WH-ST"
+            },
+            {
+              "color": "#3d94af",
+              "description": "",
+              "id": "b",
+              "name": "WH1"
+            },
+            {
+              "color": "#3d94af",
+              "description": "",
+              "id": "c",
+              "name": "WH2"
+            },
+            {
+              "color": "#563daf",
+              "description": "third hole",
+              "id": "1",
+              "name": "WH3"
+            }
+          ]
+        },
+        "signatures": [
+          {
+            "custom_info": "{\"time_status\":4,\"mass_status\":1,\"isEOL\":false,\"bookmark_index\":\"1a\"}",
+            "description": "to the C5",
+            "eve_id": "ABC-123",
+            "group": "Wormhole",
+            "kind": "Cosmic Signature",
+            "linked_system_id": 31002238,
+            "name": null,
+            "solar_system_id": 31001269,
+            "temporary_name": "C5a",
+            "type": "H296"
+          },
+          {
+            "custom_info": null,
+            "description": null,
+            "eve_id": "XYZ-987",
+            "group": "Data Site",
+            "kind": "Cosmic Signature",
+            "linked_system_id": null,
+            "name": "Unsecured Frontier Enclave Relay",
+            "solar_system_id": 31001269,
+            "temporary_name": null,
+            "type": null
+          },
+          {
+            "custom_info": null,
+            "description": null,
+            "eve_id": "QQQ-111",
+            "group": "Combat Site",
+            "kind": "Cosmic Anomaly",
+            "linked_system_id": null,
+            "name": "Forgotten Perimeter Gateway",
+            "solar_system_id": 31001269,
+            "temporary_name": null,
+            "type": null
+          },
+          {
+            "custom_info": "{\"time_status\":1}",
+            "description": "sig in hidden Thera",
+            "eve_id": "THR-555",
+            "group": "Wormhole",
+            "kind": "Cosmic Signature",
+            "linked_system_id": null,
+            "name": null,
+            "solar_system_id": 31000005,
+            "temporary_name": null,
+            "type": "K162"
+          },
+          {
+            "custom_info": null,
+            "description": "custom entry",
+            "eve_id": "custom-note",
+            "group": "Unknown",
+            "kind": "Cosmic Signature",
+            "linked_system_id": null,
+            "name": "Fleet bookmark",
+            "solar_system_id": 31002238,
+            "temporary_name": null,
+            "type": null
+          }
+        ],
+        "structures": [
+          {
+            "end_time": null,
+            "name": "Home Astra",
+            "notes": "ours",
+            "owner_id": "98000001",
+            "owner_name": "Zanreal Corp",
+            "owner_ticker": "ZNRL",
+            "solar_system_id": 31001269,
+            "solar_system_name": "J164751",
+            "status": "Powered",
+            "structure_type": "Astrahus",
+            "structure_type_id": "35832"
+          },
+          {
+            "end_time": "2026-10-14T18:30:00.000000Z",
+            "name": "Hostile Fort",
+            "notes": "reinforced",
+            "owner_id": "98000002",
+            "owner_name": "Hard Knocks Citizens",
+            "owner_ticker": "HKRAB",
+            "solar_system_id": 31002238,
+            "solar_system_name": "J115405",
+            "status": "Reinforced",
+            "structure_type": "Fortizar",
+            "structure_type_id": "35833"
+          },
+          {
+            "end_time": "2026-10-20T12:00:00.000000Z",
+            "name": "Thera Rai",
+            "notes": null,
+            "owner_id": null,
+            "owner_name": null,
+            "owner_ticker": null,
+            "solar_system_id": 31000005,
+            "solar_system_name": "Thera",
+            "status": "Anchoring",
+            "structure_type": "Raitaru",
+            "structure_type_id": "35825"
+          }
+        ],
+        "systems": [
+          {
+            "custom_name": null,
+            "description": null,
+            "labels": "{\"customLabel\":\"\",\"labels\":[\"\"]}",
+            "linked_sig_eve_id": null,
+            "locked": false,
+            "name": "Jita",
+            "position": {
+              "x": 500,
+              "y": 200
+            },
+            "solar_system_id": 30000142,
+            "status": 2,
+            "tag": "Market",
+            "temporary_name": null,
+            "visible": true
+          },
+          {
+            "custom_name": "Trade hub",
+            "description": null,
+            "labels": "",
+            "linked_sig_eve_id": null,
+            "locked": false,
+            "name": "Amarr",
+            "position": {
+              "x": 500,
+              "y": 400
+            },
+            "solar_system_id": 30002187,
+            "status": 4,
+            "tag": null,
+            "temporary_name": "K1",
+            "visible": true
+          },
+          {
+            "custom_name": null,
+            "description": "Hidden but keep these notes",
+            "labels": "{\"customLabel\":\"old\",\"labels\":[]}",
+            "linked_sig_eve_id": null,
+            "locked": false,
+            "name": "Thera",
+            "position": {
+              "x": 700,
+              "y": 400
+            },
+            "solar_system_id": 31000005,
+            "status": 3,
+            "tag": null,
+            "temporary_name": null,
+            "visible": false
+          },
+          {
+            "custom_name": null,
+            "description": "Our home. Static C3/HS.",
+            "labels": "{\"customLabel\":\"HOME\",\"labels\":[\"b\"]}",
+            "linked_sig_eve_id": null,
+            "locked": true,
+            "name": "Home Hole",
+            "position": {
+              "x": 100,
+              "y": 200
+            },
+            "solar_system_id": 31001269,
+            "status": 1,
+            "tag": "HQ",
+            "temporary_name": null,
+            "visible": true
+          },
+          {
+            "custom_name": null,
+            "description": null,
+            "labels": "{\"customLabel\":\"\",\"labels\":[\"a\",\"1\"]}",
+            "linked_sig_eve_id": "ABC-123",
+            "locked": false,
+            "name": "J115405",
+            "position": {
+              "x": 300,
+              "y": 200
+            },
+            "solar_system_id": 31002238,
+            "status": 6,
+            "tag": null,
+            "temporary_name": "C5a",
+            "visible": true
+          }
+        ],
+        "version": 2
+      }
+    }
+  },
+  "GET /api/maps/:map/tracked-characters": {
+    "path": "/api/maps/import-probe/tracked-characters",
+    "status": 200,
+    "body": {
+      "data": [
+        {
+          "id": "a1a1a1a1-0000-4000-8000-000000000001",
+          "character": {
+            "name": "Probe Pilot",
+            "alliance_ticker": "PRBA",
+            "alliance_id": 99000101,
+            "corporation_id": 98000101,
+            "corporation_ticker": "PRBE",
+            "eve_id": "2112000001"
+          },
+          "character_id": "5ceab9b8-3774-477a-969a-2ad4ca18654c",
+          "map_id": "aaaaaaaa-0000-4000-8000-000000000001",
+          "tracked": true,
+          "inserted_at": "2026-10-13T08:20:10.847818Z",
+          "updated_at": "2026-10-13T08:20:10.847818Z",
+          "followed": false
+        }
+      ]
+    }
+  },
+  "GET /api/map/characters?slug=": {
+    "path": "/api/map/characters?slug=import-probe",
+    "status": 200,
+    "body": {
+      "data": [
+        {
+          "id": "a1a1a1a1-0000-4000-8000-000000000001",
+          "character": {
+            "name": "Probe Pilot",
+            "alliance_ticker": "PRBA",
+            "alliance_id": 99000101,
+            "corporation_id": 98000101,
+            "corporation_ticker": "PRBE",
+            "eve_id": "2112000001"
+          },
+          "character_id": "5ceab9b8-3774-477a-969a-2ad4ca18654c",
+          "map_id": "aaaaaaaa-0000-4000-8000-000000000001",
+          "tracked": true,
+          "inserted_at": "2026-10-13T08:20:10.847818Z",
+          "updated_at": "2026-10-13T08:20:10.847818Z",
+          "followed": false
+        }
+      ]
+    }
+  },
+  "GET /api/maps/:map/webhooks (webhooks switched off)": {
+    "path": "/api/maps/import-probe/webhooks",
+    "status": 403,
+    "body": "Webhooks are disabled. Set WANDERER_WEBHOOKS_ENABLED=true to enable."
+  },
+  "GET /api/map/acls?slug=": {
+    "path": "/api/map/acls?slug=import-probe",
+    "status": 200,
+    "body": {
+      "data": [
+        {
+          "id": "acacacac-0000-4000-8000-000000000001",
+          "name": "Corp ACL",
+          "description": "members",
+          "inserted_at": "2026-10-13T08:17:52.734013Z",
+          "updated_at": "2026-10-13T08:17:52.734013Z",
+          "owner_eve_id": "2112000001"
+        },
+        {
+          "id": "acacacac-0000-4000-8000-000000000002",
+          "name": "Blues",
+          "description": "allies",
+          "inserted_at": "2026-10-13T08:17:52.734013Z",
+          "updated_at": "2026-10-13T08:17:52.734013Z",
+          "owner_eve_id": "2112000001"
+        }
+      ]
+    }
+  },
+  "GET /api/v1/maps/:slug": {
+    "path": "/api/v1/maps/import-probe",
+    "status": 200,
+    "body": {
+      "data": {
+        "attributes": {
+          "name": "Import probe",
+          "scope": "all",
+          "description": "Chain for the importer test",
+          "scopes": ["wormholes", "low"],
+          "webhooks_enabled": true,
+          "slug": "import-probe",
+          "owner_id": "5ceab9b8-3774-477a-969a-2ad4ca18654c",
+          "personal_note": null,
+          "sse_enabled": false
+        },
+        "id": "aaaaaaaa-0000-4000-8000-000000000001",
+        "links": {},
+        "meta": {},
+        "type": "maps",
+        "relationships": {
+          "owner": {
+            "links": {},
+            "meta": {}
+          },
+          "characters": {
+            "links": {},
+            "meta": {}
+          },
+          "acls": {
+            "links": {},
+            "meta": {}
+          }
+        }
+      },
+      "links": {
+        "self": "http://localhost:4444/api/v1/maps/import-probe"
+      },
+      "meta": {},
+      "jsonapi": {
+        "version": "1.0"
+      }
+    }
+  },
+  "GET /api/v1/map_systems": {
+    "path": "/api/v1/map_systems?page[limit]=500&page[offset]=0",
+    "status": 200,
+    "body": {
+      "data": [
+        {
+          "attributes": {
+            "name": "Home Hole",
+            "status": 1,
+            "tag": "HQ",
+            "description": "Our home. Static C3/HS.",
+            "labels": "{\"customLabel\":\"HOME\",\"labels\":[\"b\"]}",
+            "solar_system_id": 31001269,
+            "temporary_name": null,
+            "custom_name": null
+          },
+          "id": "bbbbbbbb-0000-4000-8000-000000000001",
+          "links": {},
+          "meta": {},
+          "type": "map_systems",
+          "relationships": {
+            "map": {
+              "links": {},
+              "meta": {}
+            }
+          }
+        },
+        {
+          "attributes": {
+            "name": "J115405",
+            "status": 6,
+            "tag": null,
+            "description": null,
+            "labels": "{\"customLabel\":\"\",\"labels\":[\"a\",\"1\"]}",
+            "solar_system_id": 31002238,
+            "temporary_name": "C5a",
+            "custom_name": null
+          },
+          "id": "bbbbbbbb-0000-4000-8000-000000000002",
+          "links": {},
+          "meta": {},
+          "type": "map_systems",
+          "relationships": {
+            "map": {
+              "links": {},
+              "meta": {}
+            }
+          }
+        },
+        {
+          "attributes": {
+            "name": "Jita",
+            "status": 2,
+            "tag": "Market",
+            "description": null,
+            "labels": "{\"customLabel\":\"\",\"labels\":[\"\"]}",
+            "solar_system_id": 30000142,
+            "temporary_name": null,
+            "custom_name": null
+          },
+          "id": "bbbbbbbb-0000-4000-8000-000000000003",
+          "links": {},
+          "meta": {},
+          "type": "map_systems",
+          "relationships": {
+            "map": {
+              "links": {},
+              "meta": {}
+            }
+          }
+        },
+        {
+          "attributes": {
+            "name": "Thera",
+            "status": 3,
+            "tag": null,
+            "description": "Hidden but keep these notes",
+            "labels": "{\"customLabel\":\"old\",\"labels\":[]}",
+            "solar_system_id": 31000005,
+            "temporary_name": null,
+            "custom_name": null
+          },
+          "id": "bbbbbbbb-0000-4000-8000-000000000004",
+          "links": {},
+          "meta": {},
+          "type": "map_systems",
+          "relationships": {
+            "map": {
+              "links": {},
+              "meta": {}
+            }
+          }
+        },
+        {
+          "attributes": {
+            "name": "Amarr",
+            "status": 4,
+            "tag": null,
+            "description": null,
+            "labels": "",
+            "solar_system_id": 30002187,
+            "temporary_name": "K1",
+            "custom_name": "Trade hub"
+          },
+          "id": "bbbbbbbb-0000-4000-8000-000000000005",
+          "links": {},
+          "meta": {},
+          "type": "map_systems",
+          "relationships": {
+            "map": {
+              "links": {},
+              "meta": {}
+            }
+          }
+        }
+      ],
+      "links": {
+        "first": "http://localhost:4444/api/v1/map_systems?page[limit]=500",
+        "self": "http://localhost:4444/api/v1/map_systems?page[limit]=500",
+        "next": null,
+        "prev": null
+      },
+      "meta": {
+        "page": {}
+      },
+      "jsonapi": {
+        "version": "1.0"
+      }
+    }
+  },
+  "GET /api/v1/map_systems (paged)": {
+    "path": "/api/v1/map_systems?page[limit]=2&page[offset]=2",
+    "status": 200,
+    "body": {
+      "data": [
+        {
+          "attributes": {
+            "name": "Jita",
+            "status": 2,
+            "tag": "Market",
+            "description": null,
+            "labels": "{\"customLabel\":\"\",\"labels\":[\"\"]}",
+            "solar_system_id": 30000142,
+            "temporary_name": null,
+            "custom_name": null
+          },
+          "id": "bbbbbbbb-0000-4000-8000-000000000003",
+          "links": {},
+          "meta": {},
+          "type": "map_systems",
+          "relationships": {
+            "map": {
+              "links": {},
+              "meta": {}
+            }
+          }
+        },
+        {
+          "attributes": {
+            "name": "Thera",
+            "status": 3,
+            "tag": null,
+            "description": "Hidden but keep these notes",
+            "labels": "{\"customLabel\":\"old\",\"labels\":[]}",
+            "solar_system_id": 31000005,
+            "temporary_name": null,
+            "custom_name": null
+          },
+          "id": "bbbbbbbb-0000-4000-8000-000000000004",
+          "links": {},
+          "meta": {},
+          "type": "map_systems",
+          "relationships": {
+            "map": {
+              "links": {},
+              "meta": {}
+            }
+          }
+        }
+      ],
+      "links": {
+        "first": "http://localhost:4444/api/v1/map_systems?page[limit]=2",
+        "self": "http://localhost:4444/api/v1/map_systems?page[offset]=2&page[limit]=2",
+        "next": "http://localhost:4444/api/v1/map_systems?page[offset]=4&page[limit]=2",
+        "prev": "http://localhost:4444/api/v1/map_systems?page[limit]=2"
+      },
+      "meta": {
+        "page": {}
+      },
+      "jsonapi": {
+        "version": "1.0"
+      }
+    }
+  },
+  "GET /api/v1/map_connections": {
+    "path": "/api/v1/map_connections?page[limit]=500&page[offset]=0",
+    "status": 200,
+    "body": {
+      "data": [
+        {
+          "attributes": {
+            "type": 0,
+            "locked": true,
+            "mass_status": 1,
+            "ship_size_type": 2,
+            "time_status": 4,
+            "custom_info": "rolled once",
+            "solar_system_target": 31002238,
+            "solar_system_source": 31001269,
+            "dangerous": true,
+            "bubbled": 2,
+            "wormhole_type": "H296",
+            "mass_status_updated_at": "2026-10-11T08:30:00.000000Z",
+            "count_of_passage": 7,
+            "locked_at": "2026-10-11T09:00:00.000000Z"
+          },
+          "id": "cccccccc-0000-4000-8000-000000000001",
+          "links": {},
+          "meta": {},
+          "type": "map_connections",
+          "relationships": {
+            "map": {
+              "links": {},
+              "meta": {}
+            },
+            "locked_by": {
+              "links": {},
+              "meta": {}
+            }
+          }
+        },
+        {
+          "attributes": {
+            "type": 0,
+            "locked": false,
+            "mass_status": 2,
+            "ship_size_type": 3,
+            "time_status": 1,
+            "custom_info": null,
+            "solar_system_target": 30000142,
+            "solar_system_source": 31001269,
+            "dangerous": false,
+            "bubbled": 0,
+            "wormhole_type": null,
+            "mass_status_updated_at": null,
+            "count_of_passage": 0,
+            "locked_at": null
+          },
+          "id": "cccccccc-0000-4000-8000-000000000002",
+          "links": {},
+          "meta": {},
+          "type": "map_connections",
+          "relationships": {
+            "map": {
+              "links": {},
+              "meta": {}
+            },
+            "locked_by": {
+              "links": {},
+              "meta": {}
+            }
+          }
+        },
+        {
+          "attributes": {
+            "type": 1,
+            "locked": null,
+            "mass_status": 0,
+            "ship_size_type": 4,
+            "time_status": 0,
+            "custom_info": null,
+            "solar_system_target": 30002187,
+            "solar_system_source": 30000142,
+            "dangerous": false,
+            "bubbled": 3,
+            "wormhole_type": null,
+            "mass_status_updated_at": null,
+            "count_of_passage": 3,
+            "locked_at": null
+          },
+          "id": "cccccccc-0000-4000-8000-000000000003",
+          "links": {},
+          "meta": {},
+          "type": "map_connections",
+          "relationships": {
+            "map": {
+              "links": {},
+              "meta": {}
+            },
+            "locked_by": {
+              "links": {},
+              "meta": {}
+            }
+          }
+        }
+      ],
+      "links": {
+        "self": "http://localhost:4444/api/v1/map_connections?page[limit]=500&page[offset]=0"
+      },
+      "meta": {},
+      "jsonapi": {
+        "version": "1.0"
+      }
+    }
+  },
+  "GET /api/v1/map_system_signatures?include=system": {
+    "path": "/api/v1/map_system_signatures?include=system&page[limit]=200&page[offset]=0",
+    "status": 200,
+    "body": {
+      "data": [
+        {
+          "attributes": {
+            "name": null,
+            "type": "H296",
+            "description": "to the C5",
+            "group": "Wormhole",
+            "kind": "Cosmic Signature",
+            "deleted": false,
+            "eve_id": "ABC-123",
+            "custom_info": "{\"time_status\":4,\"mass_status\":1,\"isEOL\":false,\"bookmark_index\":\"1a\"}",
+            "temporary_name": "C5a",
+            "character_eve_id": "2112000001",
+            "linked_system_id": 31002238
+          },
+          "id": "dddddddd-0000-4000-8000-000000000001",
+          "links": {},
+          "meta": {},
+          "type": "map_system_signatures",
+          "relationships": {
+            "system": {
+              "data": {
+                "id": "bbbbbbbb-0000-4000-8000-000000000001",
+                "type": "map_systems"
+              },
+              "links": {},
+              "meta": {}
+            }
+          }
+        },
+        {
+          "attributes": {
+            "name": "Unsecured Frontier Enclave Relay",
+            "type": null,
+            "description": null,
+            "group": "Data Site",
+            "kind": "Cosmic Signature",
+            "deleted": false,
+            "eve_id": "XYZ-987",
+            "custom_info": null,
+            "temporary_name": null,
+            "character_eve_id": "2112000001",
+            "linked_system_id": null
+          },
+          "id": "dddddddd-0000-4000-8000-000000000002",
+          "links": {},
+          "meta": {},
+          "type": "map_system_signatures",
+          "relationships": {
+            "system": {
+              "data": {
+                "id": "bbbbbbbb-0000-4000-8000-000000000001",
+                "type": "map_systems"
+              },
+              "links": {},
+              "meta": {}
+            }
+          }
+        },
+        {
+          "attributes": {
+            "name": "Forgotten Perimeter Gateway",
+            "type": null,
+            "description": null,
+            "group": "Combat Site",
+            "kind": "Cosmic Anomaly",
+            "deleted": false,
+            "eve_id": "QQQ-111",
+            "custom_info": null,
+            "temporary_name": null,
+            "character_eve_id": "2112000001",
+            "linked_system_id": null
+          },
+          "id": "dddddddd-0000-4000-8000-000000000003",
+          "links": {},
+          "meta": {},
+          "type": "map_system_signatures",
+          "relationships": {
+            "system": {
+              "data": {
+                "id": "bbbbbbbb-0000-4000-8000-000000000001",
+                "type": "map_systems"
+              },
+              "links": {},
+              "meta": {}
+            }
+          }
+        },
+        {
+          "attributes": {
+            "name": null,
+            "type": null,
+            "description": null,
+            "group": "Gas Site",
+            "kind": "Cosmic Signature",
+            "deleted": true,
+            "eve_id": "DEL-000",
+            "custom_info": null,
+            "temporary_name": null,
+            "character_eve_id": "2112000001",
+            "linked_system_id": null
+          },
+          "id": "dddddddd-0000-4000-8000-000000000004",
+          "links": {},
+          "meta": {},
+          "type": "map_system_signatures",
+          "relationships": {
+            "system": {
+              "data": {
+                "id": "bbbbbbbb-0000-4000-8000-000000000001",
+                "type": "map_systems"
+              },
+              "links": {},
+              "meta": {}
+            }
+          }
+        },
+        {
+          "attributes": {
+            "name": null,
+            "type": "K162",
+            "description": "sig in hidden Thera",
+            "group": "Wormhole",
+            "kind": "Cosmic Signature",
+            "deleted": false,
+            "eve_id": "THR-555",
+            "custom_info": "{\"time_status\":1}",
+            "temporary_name": null,
+            "character_eve_id": "2100000001",
+            "linked_system_id": null
+          },
+          "id": "dddddddd-0000-4000-8000-000000000005",
+          "links": {},
+          "meta": {},
+          "type": "map_system_signatures",
+          "relationships": {
+            "system": {
+              "data": {
+                "id": "bbbbbbbb-0000-4000-8000-000000000004",
+                "type": "map_systems"
+              },
+              "links": {},
+              "meta": {}
+            }
+          }
+        },
+        {
+          "attributes": {
+            "name": "Fleet bookmark",
+            "type": null,
+            "description": "custom entry",
+            "group": "Unknown",
+            "kind": "Cosmic Signature",
+            "deleted": false,
+            "eve_id": "custom-note",
+            "custom_info": null,
+            "temporary_name": null,
+            "character_eve_id": "2112000001",
+            "linked_system_id": null
+          },
+          "id": "dddddddd-0000-4000-8000-000000000006",
+          "links": {},
+          "meta": {},
+          "type": "map_system_signatures",
+          "relationships": {
+            "system": {
+              "data": {
+                "id": "bbbbbbbb-0000-4000-8000-000000000002",
+                "type": "map_systems"
+              },
+              "links": {},
+              "meta": {}
+            }
+          }
+        }
+      ],
+      "links": {
+        "first": "http://localhost:4444/api/v1/map_system_signatures?include=system&page[limit]=200",
+        "self": "http://localhost:4444/api/v1/map_system_signatures?include=system&page[limit]=200",
+        "next": null,
+        "prev": null
+      },
+      "meta": {
+        "page": {}
+      },
+      "included": [
+        {
+          "attributes": {
+            "name": "Home Hole",
+            "status": 1,
+            "tag": "HQ",
+            "description": "Our home. Static C3/HS.",
+            "labels": "{\"customLabel\":\"HOME\",\"labels\":[\"b\"]}",
+            "solar_system_id": 31001269,
+            "temporary_name": null,
+            "custom_name": null
+          },
+          "id": "bbbbbbbb-0000-4000-8000-000000000001",
+          "links": {},
+          "meta": {},
+          "type": "map_systems",
+          "relationships": {
+            "map": {
+              "links": {},
+              "meta": {}
+            }
+          }
+        },
+        {
+          "attributes": {
+            "name": "J115405",
+            "status": 6,
+            "tag": null,
+            "description": null,
+            "labels": "{\"customLabel\":\"\",\"labels\":[\"a\",\"1\"]}",
+            "solar_system_id": 31002238,
+            "temporary_name": "C5a",
+            "custom_name": null
+          },
+          "id": "bbbbbbbb-0000-4000-8000-000000000002",
+          "links": {},
+          "meta": {},
+          "type": "map_systems",
+          "relationships": {
+            "map": {
+              "links": {},
+              "meta": {}
+            }
+          }
+        },
+        {
+          "attributes": {
+            "name": "Thera",
+            "status": 3,
+            "tag": null,
+            "description": "Hidden but keep these notes",
+            "labels": "{\"customLabel\":\"old\",\"labels\":[]}",
+            "solar_system_id": 31000005,
+            "temporary_name": null,
+            "custom_name": null
+          },
+          "id": "bbbbbbbb-0000-4000-8000-000000000004",
+          "links": {},
+          "meta": {},
+          "type": "map_systems",
+          "relationships": {
+            "map": {
+              "links": {},
+              "meta": {}
+            }
+          }
+        }
+      ],
+      "jsonapi": {
+        "version": "1.0"
+      }
+    }
+  },
+  "GET /api/v1/map_system_structures": {
+    "path": "/api/v1/map_system_structures?page[limit]=500&page[offset]=0",
+    "status": 200,
+    "body": {
+      "data": [
+        {
+          "attributes": {
+            "name": "Home Astra",
+            "status": "Powered",
+            "solar_system_id": 31001269,
+            "solar_system_name": "J164751",
+            "owner_id": "98000001",
+            "character_eve_id": "2112000001",
+            "end_time": null,
+            "notes": "ours",
+            "owner_name": "Zanreal Corp",
+            "owner_ticker": "ZNRL",
+            "structure_type": "Astrahus",
+            "structure_type_id": "35832"
+          },
+          "id": "eeeeeeee-0000-4000-8000-000000000001",
+          "links": {},
+          "meta": {},
+          "type": "map_system_structures",
+          "relationships": {
+            "system": {
+              "links": {},
+              "meta": {}
+            }
+          }
+        },
+        {
+          "attributes": {
+            "name": "Hostile Fort",
+            "status": "Reinforced",
+            "solar_system_id": 31002238,
+            "solar_system_name": "J115405",
+            "owner_id": "98000002",
+            "character_eve_id": "2112000001",
+            "end_time": "2026-10-14T18:30:00.000000Z",
+            "notes": "reinforced",
+            "owner_name": "Hard Knocks Citizens",
+            "owner_ticker": "HKRAB",
+            "structure_type": "Fortizar",
+            "structure_type_id": "35833"
+          },
+          "id": "eeeeeeee-0000-4000-8000-000000000002",
+          "links": {},
+          "meta": {},
+          "type": "map_system_structures",
+          "relationships": {
+            "system": {
+              "links": {},
+              "meta": {}
+            }
+          }
+        },
+        {
+          "attributes": {
+            "name": "Thera Rai",
+            "status": "Anchoring",
+            "solar_system_id": 31000005,
+            "solar_system_name": "Thera",
+            "owner_id": null,
+            "character_eve_id": "2100000001",
+            "end_time": "2026-10-20T12:00:00.000000Z",
+            "notes": null,
+            "owner_name": null,
+            "owner_ticker": null,
+            "structure_type": "Raitaru",
+            "structure_type_id": "35825"
+          },
+          "id": "eeeeeeee-0000-4000-8000-000000000003",
+          "links": {},
+          "meta": {},
+          "type": "map_system_structures",
+          "relationships": {
+            "system": {
+              "links": {},
+              "meta": {}
+            }
+          }
+        }
+      ],
+      "links": {
+        "first": "http://localhost:4444/api/v1/map_system_structures?page[limit]=500",
+        "self": "http://localhost:4444/api/v1/map_system_structures?page[limit]=500",
+        "next": null,
+        "prev": null
+      },
+      "meta": {
+        "page": {}
+      },
+      "jsonapi": {
+        "version": "1.0"
+      }
+    }
+  },
+  "GET /api/v1/map_system_comments?include=system,character": {
+    "path": "/api/v1/map_system_comments?include=system,character&page[limit]=100&page[offset]=0",
+    "status": 200,
+    "body": {
+      "data": [
+        {
+          "attributes": {
+            "text": "Rolled the static at 18:00"
+          },
+          "id": "ffffffff-0000-4000-8000-000000000001",
+          "links": {},
+          "meta": {},
+          "type": "map_system_comments",
+          "relationships": {
+            "system": {
+              "data": {
+                "id": "bbbbbbbb-0000-4000-8000-000000000001",
+                "type": "map_systems"
+              },
+              "links": {},
+              "meta": {}
+            },
+            "character": {
+              "data": {
+                "id": "5ceab9b8-3774-477a-969a-2ad4ca18654c",
+                "type": null
+              },
+              "links": {},
+              "meta": {}
+            }
+          }
+        },
+        {
+          "attributes": {
+            "text": "Hostiles seen here, Loki fleet"
+          },
+          "id": "ffffffff-0000-4000-8000-000000000002",
+          "links": {},
+          "meta": {},
+          "type": "map_system_comments",
+          "relationships": {
+            "system": {
+              "data": {
+                "id": "bbbbbbbb-0000-4000-8000-000000000002",
+                "type": "map_systems"
+              },
+              "links": {},
+              "meta": {}
+            },
+            "character": {
+              "data": {
+                "id": "456604bc-0cad-4f4b-abee-09844eebf3cf",
+                "type": null
+              },
+              "links": {},
+              "meta": {}
+            }
+          }
+        },
+        {
+          "attributes": {
+            "text": "Comment on hidden Thera"
+          },
+          "id": "ffffffff-0000-4000-8000-000000000003",
+          "links": {},
+          "meta": {},
+          "type": "map_system_comments",
+          "relationships": {
+            "system": {
+              "data": {
+                "id": "bbbbbbbb-0000-4000-8000-000000000004",
+                "type": "map_systems"
+              },
+              "links": {},
+              "meta": {}
+            },
+            "character": {
+              "data": {
+                "id": "5ceab9b8-3774-477a-969a-2ad4ca18654c",
+                "type": null
+              },
+              "links": {},
+              "meta": {}
+            }
+          }
+        }
+      ],
+      "links": {
+        "first": "http://localhost:4444/api/v1/map_system_comments?include=system%2Ccharacter&page[limit]=100",
+        "self": "http://localhost:4444/api/v1/map_system_comments?include=system%2Ccharacter&page[limit]=100",
+        "next": null,
+        "prev": null
+      },
+      "meta": {
+        "page": {}
+      },
+      "included": [
+        {
+          "attributes": {},
+          "id": "456604bc-0cad-4f4b-abee-09844eebf3cf",
+          "links": {},
+          "meta": {},
+          "type": null,
+          "relationships": {}
+        },
+        {
+          "attributes": {},
+          "id": "5ceab9b8-3774-477a-969a-2ad4ca18654c",
+          "links": {},
+          "meta": {},
+          "type": null,
+          "relationships": {}
+        },
+        {
+          "attributes": {
+            "name": "Home Hole",
+            "status": 1,
+            "tag": "HQ",
+            "description": "Our home. Static C3/HS.",
+            "labels": "{\"customLabel\":\"HOME\",\"labels\":[\"b\"]}",
+            "solar_system_id": 31001269,
+            "temporary_name": null,
+            "custom_name": null
+          },
+          "id": "bbbbbbbb-0000-4000-8000-000000000001",
+          "links": {},
+          "meta": {},
+          "type": "map_systems",
+          "relationships": {
+            "map": {
+              "links": {},
+              "meta": {}
+            }
+          }
+        },
+        {
+          "attributes": {
+            "name": "J115405",
+            "status": 6,
+            "tag": null,
+            "description": null,
+            "labels": "{\"customLabel\":\"\",\"labels\":[\"a\",\"1\"]}",
+            "solar_system_id": 31002238,
+            "temporary_name": "C5a",
+            "custom_name": null
+          },
+          "id": "bbbbbbbb-0000-4000-8000-000000000002",
+          "links": {},
+          "meta": {},
+          "type": "map_systems",
+          "relationships": {
+            "map": {
+              "links": {},
+              "meta": {}
+            }
+          }
+        },
+        {
+          "attributes": {
+            "name": "Thera",
+            "status": 3,
+            "tag": null,
+            "description": "Hidden but keep these notes",
+            "labels": "{\"customLabel\":\"old\",\"labels\":[]}",
+            "solar_system_id": 31000005,
+            "temporary_name": null,
+            "custom_name": null
+          },
+          "id": "bbbbbbbb-0000-4000-8000-000000000004",
+          "links": {},
+          "meta": {},
+          "type": "map_systems",
+          "relationships": {
+            "map": {
+              "links": {},
+              "meta": {}
+            }
+          }
+        }
+      ],
+      "jsonapi": {
+        "version": "1.0"
+      }
+    }
+  },
+  "GET /api/v1/map_user_settings": {
+    "path": "/api/v1/map_user_settings?page[limit]=100&page[offset]=0",
+    "status": 200,
+    "body": {
+      "data": [
+        {
+          "attributes": {
+            "settings": "{}",
+            "hubs": ["30000142"],
+            "main_character_eve_id": null,
+            "following_character_eve_id": null
+          },
+          "id": "aaaaaaaa-0000-4000-8000-000000000001-5790b645-497b-4c3f-94dd-258b1bd08713",
+          "links": {},
+          "meta": {},
+          "type": "map_user_settings",
+          "relationships": {
+            "map": {
+              "links": {},
+              "meta": {}
+            },
+            "user": {
+              "links": {},
+              "meta": {}
+            }
+          }
+        },
+        {
+          "attributes": {
+            "settings": "{}",
+            "hubs": ["30000142", "30002187"],
+            "main_character_eve_id": "2112000001",
+            "following_character_eve_id": null
+          },
+          "id": "aaaaaaaa-0000-4000-8000-000000000001-428365d7-cfc9-4802-a390-cb4dfc117c45",
+          "links": {},
+          "meta": {},
+          "type": "map_user_settings",
+          "relationships": {
+            "map": {
+              "links": {},
+              "meta": {}
+            },
+            "user": {
+              "links": {},
+              "meta": {}
+            }
+          }
+        }
+      ],
+      "links": {
+        "first": "http://localhost:4444/api/v1/map_user_settings?page[limit]=100",
+        "self": "http://localhost:4444/api/v1/map_user_settings?page[limit]=100",
+        "next": null,
+        "prev": null
+      },
+      "meta": {
+        "page": {}
+      },
+      "jsonapi": {
+        "version": "1.0"
+      }
+    }
+  },
+  "GET /api/v1/access_lists?include=members": {
+    "path": "/api/v1/access_lists?include=members&page[limit]=100&page[offset]=0",
+    "status": 200,
+    "body": {
+      "data": [
+        {
+          "attributes": {
+            "name": "Corp ACL",
+            "description": "members"
+          },
+          "id": "acacacac-0000-4000-8000-000000000001",
+          "links": {},
+          "meta": {},
+          "type": "access_lists",
+          "relationships": {
+            "owner": {
+              "links": {},
+              "meta": {}
+            },
+            "members": {
+              "data": [
+                {
+                  "id": "adadadad-0000-4000-8000-000000000002",
+                  "type": "access_list_members"
+                },
+                {
+                  "id": "adadadad-0000-4000-8000-000000000001",
+                  "type": "access_list_members"
+                }
+              ],
+              "links": {},
+              "meta": {}
+            }
+          }
+        },
+        {
+          "attributes": {
+            "name": "Blues",
+            "description": "allies"
+          },
+          "id": "acacacac-0000-4000-8000-000000000002",
+          "links": {},
+          "meta": {},
+          "type": "access_lists",
+          "relationships": {
+            "owner": {
+              "links": {},
+              "meta": {}
+            },
+            "members": {
+              "data": [
+                {
+                  "id": "adadadad-0000-4000-8000-000000000003",
+                  "type": "access_list_members"
+                },
+                {
+                  "id": "adadadad-0000-4000-8000-000000000004",
+                  "type": "access_list_members"
+                },
+                {
+                  "id": "adadadad-0000-4000-8000-000000000005",
+                  "type": "access_list_members"
+                }
+              ],
+              "links": {},
+              "meta": {}
+            }
+          }
+        }
+      ],
+      "links": {
+        "first": "http://localhost:4444/api/v1/access_lists?include=members&page[limit]=100",
+        "self": "http://localhost:4444/api/v1/access_lists?include=members&page[limit]=100",
+        "next": null,
+        "prev": null
+      },
+      "meta": {
+        "page": {}
+      },
+      "included": [
+        {
+          "attributes": {
+            "name": "Probe Pilot",
+            "role": "admin",
+            "eve_character_id": "2112000001",
+            "eve_corporation_id": null,
+            "eve_alliance_id": null
+          },
+          "id": "adadadad-0000-4000-8000-000000000001",
+          "links": {},
+          "meta": {},
+          "type": "access_list_members",
+          "relationships": {
+            "access_list": {
+              "links": {},
+              "meta": {}
+            }
+          }
+        },
+        {
+          "attributes": {
+            "name": "Zanreal Corp",
+            "role": "member",
+            "eve_character_id": null,
+            "eve_corporation_id": "98000001",
+            "eve_alliance_id": null
+          },
+          "id": "adadadad-0000-4000-8000-000000000002",
+          "links": {},
+          "meta": {},
+          "type": "access_list_members",
+          "relationships": {
+            "access_list": {
+              "links": {},
+              "meta": {}
+            }
+          }
+        },
+        {
+          "attributes": {
+            "name": "Blue Alliance",
+            "role": "viewer",
+            "eve_character_id": null,
+            "eve_corporation_id": null,
+            "eve_alliance_id": "99000001"
+          },
+          "id": "adadadad-0000-4000-8000-000000000003",
+          "links": {},
+          "meta": {},
+          "type": "access_list_members",
+          "relationships": {
+            "access_list": {
+              "links": {},
+              "meta": {}
+            }
+          }
+        },
+        {
+          "attributes": {
+            "name": "Scout",
+            "role": "manager",
+            "eve_character_id": "2100000001",
+            "eve_corporation_id": null,
+            "eve_alliance_id": null
+          },
+          "id": "adadadad-0000-4000-8000-000000000004",
+          "links": {},
+          "meta": {},
+          "type": "access_list_members",
+          "relationships": {
+            "access_list": {
+              "links": {},
+              "meta": {}
+            }
+          }
+        },
+        {
+          "attributes": {
+            "name": "Blocked Guy",
+            "role": "blocked",
+            "eve_character_id": "2100000002",
+            "eve_corporation_id": null,
+            "eve_alliance_id": null
+          },
+          "id": "adadadad-0000-4000-8000-000000000005",
+          "links": {},
+          "meta": {},
+          "type": "access_list_members",
+          "relationships": {
+            "access_list": {
+              "links": {},
+              "meta": {}
+            }
+          }
+        }
+      ],
+      "jsonapi": {
+        "version": "1.0"
+      }
+    }
+  },
+  "GET /api/v1/map_chain_passages": {
+    "path": "/api/v1/map_chain_passages?page[limit]=200&page[offset]=0",
+    "status": 404,
+    "body": {
+      "errors": [
+        {
+          "code": "no_route_found",
+          "id": "564b0736-9cf4-4d45-8403-21e103f3c086",
+          "meta": {},
+          "status": "404",
+          "title": "NoRouteFound",
+          "detail": "no route found"
+        }
+      ],
+      "jsonapi": {
+        "version": "1.0"
+      }
+    }
+  },
+  "GET /api/acls/:id (map key)": {
+    "path": "/api/acls/acacacac-0000-4000-8000-000000000001",
+    "status": 401,
+    "body": "Unauthorized (invalid API key for ACL)"
+  },
+  "GET /api/acls/:id (ACL key)": {
+    "path": "/api/acls/acacacac-0000-4000-8000-000000000001",
+    "status": 200,
+    "body": {
+      "data": {
+        "id": "acacacac-0000-4000-8000-000000000001",
+        "name": "Corp ACL",
+        "description": "members",
+        "api_key": "REDACTED",
+        "members": [
+          {
+            "id": "adadadad-0000-4000-8000-000000000001",
+            "name": "Probe Pilot",
+            "role": "admin",
+            "inserted_at": "2026-10-13T08:17:52.734013Z",
+            "updated_at": "2026-10-13T08:17:52.734013Z",
+            "eve_character_id": "2112000001"
+          },
+          {
+            "id": "adadadad-0000-4000-8000-000000000002",
+            "name": "Zanreal Corp",
+            "role": "member",
+            "inserted_at": "2026-10-13T08:17:52.734013Z",
+            "updated_at": "2026-10-13T08:17:52.734013Z",
+            "eve_corporation_id": "98000001"
+          }
+        ],
+        "inserted_at": "2026-10-13T08:17:52.734013Z",
+        "updated_at": "2026-10-13T08:17:52.734013Z",
+        "owner_id": "5ceab9b8-3774-477a-969a-2ad4ca18654c"
+      }
+    }
+  },
+  "GET /api/maps/:map/systems (wrong key)": {
+    "path": "/api/maps/import-probe/systems",
+    "status": 401,
+    "body": {
+      "error": "Unauthorized (invalid token for map)"
+    }
+  },
+  "GET /api/maps/:map/systems (no such map)": {
+    "path": "/api/maps/no-such-map/systems",
+    "status": 404,
+    "body": {
+      "error": "Map not found for identifier: no-such-map"
+    }
+  }
+}

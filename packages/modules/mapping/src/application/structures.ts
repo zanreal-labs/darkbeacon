@@ -200,7 +200,8 @@ export class StructureUseCases extends MappingUseCases {
     const { author, createdAt, changedAt, ...fields } = input;
     const wanted = { ...fields, endsAt: timed(fields.status, fields.endsAt) };
     return this.write(who, mapId, async (events) => {
-      await this.visibleSystem(mapId, input.solarSystemId);
+      // Hidden systems keep their structures: they are intel for when the system shows up again.
+      await this.knownSystem(mapId, input.solarSystemId);
       const existing = existingId ? await this.ports.structures.findById(mapId, existingId) : null;
       if (existing) {
         const { solarSystemId: _s, typeId: _t, typeName: _n, ...patch } = wanted;

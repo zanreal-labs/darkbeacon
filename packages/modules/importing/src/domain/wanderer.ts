@@ -2,14 +2,25 @@ import type { ImportSourceDto } from '@darkbeacon/shared';
 
 /**
  * What a Wanderer map holds, read from its API or its export file and normalised. Field names
- * and value codes follow Wanderer's published API documentation (see
- * docs/migrate-from-wanderer.md, "Sources"); the readers below accept the variants that the API
- * versions and the two export formats use (numbers as strings, `position` or `position_x/y`,
- * labels as JSON or as a comma list).
+ * and value codes are the ones a running Wanderer answers with (recorded in
+ * tools/fake-wanderer/recorded); the readers below accept the variants that the API routes and
+ * the export formats use (numbers as strings, `position` or `position_x/y`, labels as JSON or as
+ * a comma list, JSON:API resources flattened to their attributes).
  */
 export interface WandererMapDump {
   source: ImportSourceDto;
-  map: { name: string | null; slug: string | null; description: string | null; scope: string | null };
+  map: {
+    name: string | null;
+    slug: string | null;
+    description: string | null;
+    /** The map's single scope (`wormholes`, `stargates`, `all`, `none`). */
+    scope: string | null;
+    /**
+     * The scopes of a Wanderer that keeps several (`wormholes`, `hi`, `low`, `null`, `pochven`);
+     * they win over `scope`. Older stored dumps lack it.
+     */
+    scopes?: string[] | null;
+  };
   systems: WandererSystem[];
   connections: WandererConnection[];
   signatures: WandererSignature[];
@@ -50,6 +61,12 @@ export interface WandererSystem {
   uuid: string | null;
   solarSystemId: number;
   customName: string | null;
+  /**
+   * Wanderer's own `name` of the system where the source does not say whether it is the real one
+   * (export files, JSON:API): a name other than the system's real name is the one someone gave
+   * it, and wins over `customName` as it does in Wanderer. Older stored dumps lack it.
+   */
+  rawName?: string | null;
   temporaryName: string | null;
   description: string | null;
   tag: string | null;
@@ -80,6 +97,8 @@ export interface WandererConnection {
   /** 0 none, 1 source, 2 target, 3 both. */
   bubbled: number | null;
   customInfo: string | null;
+  /** When the mass status was last set (JSON:API `mass_status_updated_at`), where known. */
+  massStatusAt?: number | null;
   countOfPassage: number | null;
   insertedAt: number | null;
   updatedAt: number | null;
@@ -265,23 +284,31 @@ function position(row: Row): { x: number; y: number } | null {
   return row.position_x !== undefined && Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
 }
 
-/** A system row of `GET /api/map/systems`, `/api/maps/:map/systems` or an export file. */
+/**
+ * A system row: the REST API's (`/api/maps/:map/systems`: `name` is the name shown, temporary
+ * name first, `custom_name` already resolved, `original_name` the real one), an export file's or
+ * a flattened JSON:API `map_systems` resource (Wanderer's own `name` and `custom_name`).
+ */
 export function readSystem(row: unknown): WandererSystem | null {
   if (!isRow(row)) return null;
   // The settings export keys systems by `id` (the solar system id as a string).
   const solarSystemId = eveIdNumber(row.solar_system_id) ?? eveIdNumber(row.id);
   if (solarSystemId === null) return null;
   const uuid = typeof row.id === 'string' && !/^\d+$/.test(row.id) ? row.id : null;
-  // The API's `name` is the name shown (temporary, custom or real); `custom_name` is the real one.
   const custom = text(row.custom_name);
   const shown = text(row.name);
+  const temporary = text(row.temporary_name);
   const original = text(row.original_name) ?? text(row.solar_system_name);
-  const customName = custom ?? (shown && original && shown !== original ? shown : null);
+  // With the real name at hand, a shown name that is neither it nor the temporary one is custom
+  // (for APIs that do not resolve `custom_name`); without it, the translation compares.
+  const customName =
+    custom ?? (shown && original && shown !== original && shown !== temporary ? shown : null);
   return {
     uuid,
     solarSystemId,
     customName,
-    temporaryName: text(row.temporary_name),
+    rawName: original ? null : shown,
+    temporaryName: temporary,
     description: text(row.description),
     tag: text(row.tag),
     labels: readLabels(row.labels),
@@ -312,6 +339,7 @@ export function readConnection(row: unknown): WandererConnection | null {
     dangerous: bool(row.dangerous),
     bubbled: int(row.bubbled),
     customInfo: text(row.custom_info),
+    massStatusAt: time(row.mass_status_updated_at),
     countOfPassage: int(row.count_of_passage),
     insertedAt: time(row.inserted_at),
     updatedAt: time(row.updated_at),
@@ -517,6 +545,7 @@ export function emptyDump(source: ImportSourceDto, readAt: number): WandererMapD
       slug: source.kind === 'wanderer-api' ? source.slug : null,
       description: null,
       scope: null,
+      scopes: null,
     },
     systems: [],
     connections: [],

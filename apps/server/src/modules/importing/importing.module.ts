@@ -53,6 +53,7 @@ import {
   MappingChainTarget,
   MapWebhooksTarget,
 } from '../../adapters/importing/targets.js';
+import { WandererDatabaseSource } from '../../adapters/importing/wanderer-db.js';
 import { WandererFileSource, WandererHttpSource } from '../../adapters/importing/wanderer-http.js';
 import { SecretBox } from '../../adapters/notifications/secret-box.js';
 import type { AppConfig } from '../../config/config.js';
@@ -224,6 +225,7 @@ export class ImportingRuntime implements OnModuleInit, OnApplicationBootstrap, O
         const deps: ImportingDeps = {
           sources: {
             api: new WandererHttpSource(),
+            db: new WandererDatabaseSource(),
             file: new WandererFileSource((document, fileName) =>
               readExportFile(document, fileName, clock.now()),
             ),
