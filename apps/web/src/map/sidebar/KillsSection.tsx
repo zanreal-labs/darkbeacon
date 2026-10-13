@@ -157,8 +157,8 @@ function KillRow({ kill, systemName }: { kill: KillmailDto; systemName: string |
           className={styles.killIcon}
           src={images.type(ship.id)}
           alt=""
-          width={32}
-          height={32}
+          width={24}
+          height={24}
           loading="lazy"
         />
       ) : (
@@ -197,6 +197,22 @@ function KillRow({ kill, systemName }: { kill: KillmailDto; systemName: string |
 }
 
 /**
+ * The killmails the section lists, with the viewer's choices: also read by the sidebar for the
+ * count in the folded title bar (one query either way).
+ */
+export function useKillList(mapId: string, solarSystemId: number, settings: KillsSettings) {
+  const all = settings.scope === 'all';
+  const kills = useMapKills(mapId, {
+    hours: settings.hours,
+    ...(all ? {} : { systems: [solarSystemId] }),
+    wormholes: settings.wormholes,
+    limit: 50,
+  });
+  const list = (kills.data?.kills ?? []).filter((k) => !all || !settings.excluded.includes(k.solarSystemId));
+  return { kills, list };
+}
+
+/**
  * Killmails of the selected system, or of every visible system on the map (minus those left
  * out), newest first, with the time and space the viewer picked.
  */
@@ -212,13 +228,7 @@ export function KillsSection({
   universe: ReadonlyMap<number, UniverseSystemDto>;
 }) {
   const all = settings.scope === 'all';
-  const kills = useMapKills(mapId, {
-    hours: settings.hours,
-    ...(all ? {} : { systems: [solarSystemId] }),
-    wormholes: settings.wormholes,
-    limit: 50,
-  });
-  const list = (kills.data?.kills ?? []).filter((k) => !all || !settings.excluded.includes(k.solarSystemId));
+  const { kills, list } = useKillList(mapId, solarSystemId, settings);
   if (kills.isLoading) return <p className={styles.empty}>Loading kills…</p>;
   if (list.length === 0)
     return (

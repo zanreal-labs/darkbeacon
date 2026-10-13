@@ -202,7 +202,7 @@ export function LocalSection({
               data-mine={mine.has(c.characterId) || undefined}
               data-online={c.online}
             >
-              <CharacterAvatar id={c.characterId} name={c.name} size={options.compact ? 20 : 24} />
+              <CharacterAvatar id={c.characterId} name={c.name} size={options.compact ? 18 : 20} />
               <span className={styles.pilotText}>
                 <span className={styles.pilotName}>
                   {c.name}

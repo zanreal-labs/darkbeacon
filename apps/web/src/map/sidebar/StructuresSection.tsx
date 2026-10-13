@@ -83,6 +83,10 @@ export function StructuresSection({
   const [owners, setOwners] = useState(false);
   const [busy, setBusy] = useState(false);
   const list = structures.data ?? [];
+  // The timer that runs out first, for the title bar.
+  const next = list
+    .filter((s) => TIMED_STRUCTURE_STATUSES.includes(s.status) && s.endsAt !== null && s.endsAt > now)
+    .sort((a, b) => a.endsAt! - b.endsAt!)[0];
 
   const fail = (title: string) => (error: unknown) =>
     toast({
@@ -155,6 +159,8 @@ export function StructuresSection({
       id="structures"
       title="Structures"
       count={structures.data ? list.length : undefined}
+      summary={next ? `${STRUCTURE_STATUS_LABEL[next.status]} ${countdown(next.endsAt!, now)}` : undefined}
+      alert={!!next}
       collapsed={collapsed}
       onToggle={onToggle}
       action={

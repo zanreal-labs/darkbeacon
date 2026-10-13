@@ -7,7 +7,7 @@ import { Markdown } from '../../components/Markdown';
 import { api, ApiError } from '../../lib/api';
 import type { MapPermissions } from '../../lib/roles';
 import { relativeTime } from '../../lib/time';
-import { CharacterAvatar, ConfirmDialog, IconButton, Kbd, Skeleton, useToast } from '../../ui';
+import { CharacterAvatar, ConfirmDialog, IconButton, Skeleton, useToast } from '../../ui';
 import { SidebarSection } from './SidebarSection';
 import { useSystemList } from './useSystemList';
 import styles from './sidebar.module.css';
@@ -87,17 +87,18 @@ export function CommentsSection({
       id="comments"
       title="Comments"
       count={comments.data ? list.length : undefined}
+      summary={list[0] ? `latest ${relativeTime(list[0].createdAt)}` : undefined}
       collapsed={collapsed}
       onToggle={onToggle}
     >
       {can.edit && (
         <div className={own.composer}>
           <textarea
-            className={styles.notes}
+            className={`${styles.notes} ${own.composerField}`}
             aria-label="New comment"
-            rows={2}
+            rows={draft.includes('\n') ? 3 : 1}
             maxLength={COMMENT_MAX_LENGTH}
-            placeholder="Write a comment… (Markdown)"
+            placeholder={`Comment… (${isMac ? '⌘' : 'Ctrl'}+Enter sends)`}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
@@ -107,20 +108,20 @@ export function CommentsSection({
               }
             }}
           />
-          <div className={own.composerBar}>
+          <IconButton
+            size="sm"
+            variant="primary"
+            label="Send comment"
+            icon={<SendHorizontal />}
+            loading={busy}
+            disabled={!draft.trim()}
+            onClick={() => void send()}
+          />
+          {draft.length > COMMENT_MAX_LENGTH * 0.8 && (
             <span className={own.hint}>
-              <Kbd>{isMac ? '⌘' : 'Ctrl'}</Kbd> <Kbd>Enter</Kbd> sends · {draft.length}/{COMMENT_MAX_LENGTH}
+              {draft.length}/{COMMENT_MAX_LENGTH}
             </span>
-            <IconButton
-              size="sm"
-              variant="primary"
-              label="Send comment"
-              icon={<SendHorizontal />}
-              loading={busy}
-              disabled={!draft.trim()}
-              onClick={() => void send()}
-            />
-          </div>
+          )}
         </div>
       )}
       {comments.isLoading ? (

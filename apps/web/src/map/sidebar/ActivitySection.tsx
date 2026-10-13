@@ -77,7 +77,7 @@ export function Sparkline({
 function GroupLogo({
   kind,
   entity,
-  size = 24,
+  size = 20,
 }: {
   kind: 'alliance' | 'corporation';
   entity: IntelEntityDto;
@@ -103,8 +103,13 @@ export function SystemHolder({ mapId, solarSystemId }: { mapId: string; solarSys
       <SovereigntyLine intel={activity.data?.intel} />
       {held && standings.data?.missingScopes && (
         <p className={styles.relink}>
-          <a href={eveLinkHref(hereForReturn())}>Link your characters again</a> to colour holders by your
-          standings (contacts were not asked for when they were linked).
+          <a
+            href={eveLinkHref(hereForReturn())}
+            title="Contacts were not asked for when your characters were linked"
+          >
+            Link your characters again
+          </a>{' '}
+          for standings
         </p>
       )}
     </>
@@ -122,7 +127,7 @@ export function SovereigntyLine({ intel }: { intel: SystemActivityDto['intel'] |
         <Avatar
           src={faction ? images.corporation(sov.holder.id) : images.alliance(sov.holder.id)}
           name={sov.holder.name ?? '?'}
-          size={20}
+          size={16}
           shape="rounded"
         />
         <span>
@@ -152,7 +157,7 @@ export function SovereigntyLine({ intel }: { intel: SystemActivityDto['intel'] |
         <Avatar
           src={images.alliance(region.holder.id)}
           name={region.holder.name ?? '?'}
-          size={20}
+          size={16}
           shape="rounded"
         />
         <span>

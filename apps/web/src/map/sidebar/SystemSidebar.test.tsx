@@ -11,18 +11,19 @@ import {
   type CharacterPresenceDto,
   type KillmailDto,
   type MapDto,
+  type MapSystemDto,
   type SystemActivityDto,
   type StreamSnapshotDto,
   type UniverseSystemDto,
 } from '@darkbeacon/shared';
 import { mapPermissions } from '../../lib/roles';
 import { MapView } from '../../screens/MapView';
-import { MAP_ID, meFixture, signatureFixture, systemFixture } from '../../test/fixtures';
+import { connectionFixture, MAP_ID, meFixture, signatureFixture, systemFixture } from '../../test/fixtures';
 import { installFlowMocks, renderWithProviders, setupMockServer } from '../../test/setup';
 import { ToastProvider, TooltipProvider } from '../../ui';
 import { emptyMapState, type MapState } from '../mapState';
 import { useMapStore } from '../useMapStore';
-import { COLLAPSED_KEY, WIDTH_KEY } from './storage';
+import { OPEN_KEY, WIDTH_KEY } from './storage';
 import { SystemSidebar } from './SystemSidebar';
 
 installFlowMocks();
@@ -270,10 +271,12 @@ describe('the map view', () => {
 function Sidebar({
   state,
   solarSystemId = WH,
+  system,
   onClose = () => {},
 }: {
   state: Partial<MapState>;
   solarSystemId?: number;
+  system?: Partial<MapSystemDto>;
   onClose?: () => void;
 }) {
   const store = useMapStore(MAP_ID);
@@ -282,7 +285,7 @@ function Sidebar({
     <div style={{ height: 800 }}>
       <SystemSidebar
         mapId={MAP_ID}
-        system={systemFixture(solarSystemId)}
+        system={systemFixture(solarSystemId, system)}
         info={universe[solarSystemId]}
         universe={new Map(Object.values(universe).map((u) => [u.id, u]))}
         labels={mapDto.labels}
@@ -333,20 +336,93 @@ describe('SystemSidebar', () => {
     expect(screen.queryByRole('link', { name: 'Anoikis' })).toBeNull();
   });
 
-  it('folds sections and remembers them', async () => {
+  const toggleOf = (name: string) => within(screen.getByRole('region', { name })).getAllByRole('button')[0]!;
+
+  it('opens Signatures and Local, folds the rest, and remembers what I open or fold', async () => {
     const user = userEvent.setup();
     const first = wrap(<Sidebar state={{}} />);
-    const toggle = screen.getByRole('button', { name: /Signatures/ });
-    expect(toggle.getAttribute('aria-expanded')).toBe('true');
-    await user.click(toggle);
-    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    const open = (name: string) => toggleOf(name).getAttribute('aria-expanded');
+    expect(
+      [
+        'System',
+        'Signatures',
+        'Local',
+        'Structures',
+        'Comments',
+        'Connections',
+        'Kills',
+        'Activity',
+        'History',
+      ].map(open),
+    ).toEqual(['false', 'true', 'true', 'false', 'false', 'false', 'false', 'false', 'false']);
+    // Signatures and Local come right after System.
+    const order = (name: string) => Number(screen.getByRole('region', { name }).style.order);
+    expect(order('Signatures')).toBe(1);
+    expect(order('Local')).toBe(2);
+
+    await user.click(toggleOf('Signatures'));
+    expect(open('Signatures')).toBe('false');
     expect(screen.queryByRole('textbox', { name: 'Paste probe scanner results' })).toBeNull();
-    expect(JSON.parse(window.localStorage.getItem(COLLAPSED_KEY)!)).toEqual({ signatures: true });
+    await user.click(toggleOf('History'));
+    expect(JSON.parse(window.localStorage.getItem(OPEN_KEY)!)).toEqual({ signatures: false, history: true });
     first.unmount();
 
     wrap(<Sidebar state={{}} />);
-    expect(screen.getByRole('button', { name: /Signatures/ }).getAttribute('aria-expanded')).toBe('false');
-    expect(screen.getByRole('button', { name: /System/ }).getAttribute('aria-expanded')).toBe('true');
+    expect(open('Signatures')).toBe('false');
+    expect(open('History')).toBe('true');
+    expect(open('System')).toBe('false');
+    expect(open('Local')).toBe('true');
+  });
+
+  it('sums each section up in its title bar, folded or not', async () => {
+    const signatures = [
+      signatureFixture('s1', WH, 'ABC-123', { group: 'wormhole', type: 'D845' }),
+      signatureFixture('s2', WH, 'DEF-456'),
+      signatureFixture('s3', WH, 'GHI-789'),
+      signatureFixture('s4', WH, 'JKL-012', { kind: 'anomaly', group: 'combat' }),
+    ];
+    const connections = [connectionFixture('c1', WH, JITA, { timeStatus: 'eol', massStatus: 'critical' })];
+    wrap(
+      <Sidebar
+        state={{
+          signatures: new Map(signatures.map((s) => [s.id, s])),
+          connections: new Map(connections.map((c) => [c.id, c])),
+          characters: new Map([pilots[0]!, { ...pilots[1]!, online: false }].map((p) => [p.characterId, p])),
+        }}
+        system={{ systemLabelIds: ['wh1'], labelIds: ['l1'] }}
+      />,
+    );
+    expect(toggleOf('Signatures').textContent).toBe('Signatures32 unscanned · 1 WH');
+    expect(toggleOf('Local').textContent).toBe('Local21 offline');
+    expect(toggleOf('Connections').textContent).toBe('Connections11 EOL · 1 crit');
+    expect(toggleOf('System').textContent).toBe('SystemWH1 · Staging');
+    await waitFor(() => expect(toggleOf('Activity').textContent).toBe('Activity6 kills /1h'));
+    await waitFor(() => expect(toggleOf('Kills').textContent).toBe('Kills14h'));
+  });
+
+  it('carries the status and a preview of the notes in the header; the preview opens them', async () => {
+    const patches: unknown[] = [];
+    server.use(
+      http.patch(
+        buildPath(routes.systems.update.path, { mapId: MAP_ID, solarSystemId: WH }),
+        async ({ request }) => {
+          patches.push(await request.json());
+          return HttpResponse.json(systemFixture(WH));
+        },
+      ),
+    );
+    const user = userEvent.setup();
+    wrap(<Sidebar state={{}} system={{ status: 'hostile', description: 'Loki **fleet** in\n\nthe C3' }} />);
+    const header = document.querySelector<HTMLElement>('[data-identity]')!;
+    await user.click(within(header).getByRole('button', { name: 'Status: Hostile' }));
+    await user.click(await screen.findByRole('menuitemradio', { name: 'Friendly' }));
+    await waitFor(() => expect(patches).toEqual([{ status: 'friendly' }]));
+
+    await user.click(within(header).getByRole('button', { name: 'Notes: Loki fleet in the C3' }));
+    expect(toggleOf('System').getAttribute('aria-expanded')).toBe('true');
+    // Shown in full below now, not twice.
+    expect(within(header).queryByRole('button', { name: /^Notes:/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Notes: click to edit' })).toBeTruthy();
   });
 
   it('pastes probe scanner text with Ctrl+V anywhere outside a text field', async () => {
@@ -361,6 +437,7 @@ describe('SystemSidebar', () => {
       ),
     );
     wrap(<Sidebar state={{}} />);
+    await userEvent.setup().click(toggleOf('System'));
     const paste = (target: EventTarget, text: string) => {
       const event = new Event('paste', { bubbles: true, cancelable: true }) as ClipboardEvent;
       Object.defineProperty(event, 'clipboardData', { value: { getData: () => text } });
@@ -404,6 +481,7 @@ describe('SystemSidebar', () => {
     );
     const user = userEvent.setup();
     wrap(<Sidebar state={{}} />);
+    await user.click(toggleOf('System'));
     expect(screen.queryByRole('textbox', { name: 'Tag' })).toBeNull();
     // Labels come before Tags, each a row of its own.
     const terms = [...document.querySelectorAll('dt')].map((d) => d.textContent);
@@ -464,6 +542,8 @@ describe('SystemSidebar', () => {
   it('shows activity, who flies here and the kills, with choices for the list', async () => {
     const user = userEvent.setup();
     wrap(<Sidebar state={{}} />);
+    await user.click(toggleOf('Activity'));
+    await user.click(toggleOf('Kills'));
     const activity = screen.getByRole('region', { name: 'Activity' });
     // Kills of the last hour, busy from five on.
     const kills = await within(activity).findByText('Kills');
