@@ -78,7 +78,8 @@ describe('SystemNode', () => {
     expect(screen.queryByText('A1')).toBeNull();
     const title = box(container).title;
     expect(title).toContain('Status: Hostile');
-    expect(title).toContain('A-R00001 · A-C00001');
+    // A wormhole's region and constellation are codes: not shown.
+    expect(title).not.toContain('A-R00001');
     expect(title).not.toContain('A1');
     expect(title).toContain('Locked');
     expect(title).toContain('Notes: Rattlesnakes');

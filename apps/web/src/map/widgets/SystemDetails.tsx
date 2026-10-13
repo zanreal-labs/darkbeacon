@@ -285,9 +285,12 @@ export function SystemInfoWidget({
     >
       {info && (
         <div className={styles.where}>
-          <span className={styles.place}>
-            {info.regionName} › {info.constellationName}
-          </span>
+          {/* A wormhole's region and constellation are codes (C-R00014) that tell a pilot nothing. */}
+          {!isWormholeSpace(info) && (
+            <span className={styles.place}>
+              {info.regionName} › {info.constellationName}
+            </span>
+          )}
           {info.effect && <Effect effect={info.effect} whClass={info.whClass} />}
           <StaticsLine statics={info.statics} />
         </div>

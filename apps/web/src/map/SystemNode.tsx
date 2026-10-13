@@ -136,7 +136,8 @@ export function systemTooltip(
   const name = nodeName(system, info);
   const lines = [name === info?.name || !info ? name : `${name} (${info.name})`];
   if (system.temporaryName) lines.push(`Temporary name: ${system.temporaryName}`);
-  if (info)
+  // A wormhole's region and constellation are codes (C-R00014) that tell a pilot nothing.
+  if (info && isKnownSpace(info))
     lines.push(`${info.regionName} · ${info.constellationName} · security ${info.security.toFixed(2)}`);
   lines.push(`Status: ${STATUS_LABEL[system.status]}`);
   if (info?.effect)

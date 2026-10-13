@@ -545,7 +545,8 @@ describe('the widgets', () => {
     wrap(<Widgets state={{}} />);
     const info = region('System info');
     expect(info.textContent).toContain('C3');
-    expect(info.textContent).toContain('A-R00001 › A-C00311');
+    // A wormhole's region and constellation codes are not shown.
+    expect(info.textContent).not.toContain('A-R00001');
     expect(info.textContent).toContain('Class 3 wormhole');
     const effect = screen.getByLabelText(/^Pulsar: /);
     // Its tooltip lists what it changes in this class.
