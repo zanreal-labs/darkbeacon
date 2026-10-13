@@ -22,10 +22,6 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
-  bookmarkChain,
-  bookmarkClassLabel,
-  bookmarkLabel,
-  DEFAULT_BOOKMARK_TEMPLATE,
   type LabelDto,
   type PresencePeerDto,
   type SystemLabelDto,
@@ -48,6 +44,7 @@ import { DEFAULT_ZOOM, FIT_MIN_ZOOM, mapTypeVars } from './mapType';
 import type { MapState } from './mapState';
 import { exitHubs } from './nodeFacts';
 import { SystemNode, systemDisplayName, type SystemNodeType } from './SystemNode';
+import { useBookmarkLabels } from './useBookmarkLabels';
 import { useMapPreferences } from './useMapPreferences';
 import type { MapStore } from './useMapStore';
 import styles from './MapCanvas.module.css';
@@ -255,42 +252,7 @@ export function MapCanvas({
       : null;
   }, [me.data, state.characters, state.systems]);
 
-  const template =
-    preferences.bookmarkTemplate ?? state.map?.settings.bookmarkTemplate ?? DEFAULT_BOOKMARK_TEMPLATE;
-  // `{n}` in the viewer's own order is counted here; in the map's order it is the shared number.
-  const mapOrder = state.map?.settings.bookmarkNumbering?.order ?? 'found';
-  const startAtZero = state.map?.settings.bookmarkNumbering?.startAtZero;
-  const values = state.map?.settings.bookmarkNumbering?.values;
-  const ownOrder =
-    preferences.bookmarkOrder && preferences.bookmarkOrder !== mapOrder
-      ? preferences.bookmarkOrder
-      : undefined;
-  const bookmarks = useMemo(() => {
-    const chain = bookmarkChain({
-      systems: [...state.systems.values()],
-      connections: [...state.connections.values()],
-      signatures: [...state.signatures.values()],
-      classOf: (id) => bookmarkClassLabel(universe.get(id)),
-      systemLabels,
-      // Stored numbers are the sources' own on a merged map: it counts in its order here.
-      order: ownOrder ?? (state.sources ? mapOrder : undefined),
-      startAtZero,
-      staticsOf: (id) => universe.get(id)?.statics,
-    });
-    return new Map([...chain].map(([id, vars]) => [id, bookmarkLabel(template, vars, values)]));
-  }, [
-    state.systems,
-    state.connections,
-    state.signatures,
-    state.sources,
-    systemLabels,
-    universe,
-    template,
-    ownOrder,
-    mapOrder,
-    startAtZero,
-    values,
-  ]);
+  const bookmarks = useBookmarkLabels({ state, universe, systemLabels, preferences });
 
   // Store -> React Flow, keeping what React Flow owns: measurements, selection, a drag in progress.
   useEffect(() => {

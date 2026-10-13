@@ -218,17 +218,6 @@
   margin: 0;
 }
 
-/* The custom and the temporary name on one row. */
-.names {
-  gap: 8px;
-}
-
-.namesLabel {
-  flex: none;
-  color: var(--dbk-color-text-muted);
-  font-size: var(--dbk-font-size-small);
-}
-
 .effect {
   display: inline-flex;
   align-items: center;
@@ -299,27 +288,6 @@
   gap: 4px;
 }
 
-.props {
-  display: grid;
-  grid-template-columns: 64px minmax(0, 1fr);
-  gap: 0 8px;
-  align-items: center;
-  margin: 0;
-}
-
-.props dt {
-  color: var(--dbk-color-text-muted);
-  font-size: var(--dbk-font-size-small);
-}
-
-.props dd {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  min-height: 26px;
-  margin: 0;
-}
-
 /* Text edited in place: looks like a value until hovered or focused. */
 .inline {
   width: calc(100% + 7px);
@@ -366,90 +334,6 @@
   border-radius: 50%;
 }
 
-.labelChips {
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 2px 0;
-}
-
-.labelChip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 22px;
-  padding: 0 8px;
-  border: 1px solid var(--dbk-color-border);
-  border-radius: 999px;
-  background: none;
-  color: var(--dbk-color-text-muted);
-  font: inherit;
-  font-size: var(--dbk-font-size-small);
-  cursor: pointer;
-}
-
-.labelChip:hover:not(:disabled) {
-  border-color: var(--dbk-color-border-strong);
-  color: var(--dbk-color-text);
-}
-
-.labelChip[aria-pressed='true'],
-.labelChip[aria-checked='true'] {
-  border-color: color-mix(in oklab, var(--label-color) 60%, transparent);
-  background: color-mix(in oklab, var(--label-color) 16%, transparent);
-  color: var(--dbk-color-text);
-}
-
-.labelChip:disabled {
-  cursor: default;
-}
-
-/* Labels (WH1...) are plain text markers: neutral, bold, filled when on. */
-.systemLabelChip {
-  display: inline-flex;
-  align-items: center;
-  height: 20px;
-  padding: 0 6px;
-  border: 1px solid var(--dbk-color-border);
-  border-radius: var(--dbk-radius-small);
-  background: none;
-  color: var(--dbk-color-text-muted);
-  font: inherit;
-  font-size: var(--dbk-font-size-small);
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.systemLabelChip:hover:not(:disabled, [aria-pressed='true']) {
-  border-color: var(--dbk-color-border-strong);
-  color: var(--dbk-color-text);
-}
-
-/* On: filled with the text colour, so on and off read apart without any hue. */
-.systemLabelChip[aria-pressed='true'],
-.systemLabelChip[data-custom] {
-  border-color: var(--dbk-color-text);
-  background: var(--dbk-color-text);
-  color: var(--dbk-color-surface);
-}
-
-.systemLabelChip:disabled {
-  cursor: default;
-}
-
-/* The custom label field after the chips: room for a word, the rest of the row when there is. */
-.customLabel {
-  flex: 1 1 72px;
-  min-width: 72px;
-  padding-left: 7px;
-}
-
-.labelSwatch {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  background: var(--label-color);
-}
-
 .activity {
   gap: 12px;
   font-variant-numeric: tabular-nums;
@@ -478,39 +362,6 @@
   border-color: var(--dbk-color-focus);
   outline: none;
   box-shadow: 0 0 0 2px var(--dbk-color-accent-subtle);
-}
-
-.notesText {
-  margin: 0;
-}
-
-.notesText > :first-child,
-.notesView > * > :first-child {
-  margin-top: 0;
-}
-
-.notesText > :last-child,
-.notesView > * > :last-child {
-  margin-bottom: 0;
-}
-
-/* Rendered notes an editor can click into. */
-.notesView {
-  min-height: 26px;
-  margin: 0 -8px;
-  padding: 2px 8px;
-  border: 1px solid transparent;
-  border-radius: var(--dbk-radius);
-  cursor: text;
-}
-
-.notesView:hover {
-  border-color: var(--dbk-color-border);
-}
-
-.notesView:focus-visible {
-  border-color: var(--dbk-color-focus);
-  outline: none;
 }
 
 .links {
@@ -1175,31 +1026,4 @@
 .notesExcerpt:focus-visible {
   outline: 2px solid var(--dbk-color-focus);
   outline-offset: 1px;
-}
-
-/* ---- Edit system ---- */
-
-.editTitle {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.editForm {
-  display: grid;
-  gap: 10px;
-}
-
-.editForm .props {
-  grid-template-columns: 72px minmax(0, 1fr);
-  gap: 6px 10px;
-}
-
-.editForm .notesTerm {
-  align-self: start;
-  padding-top: 4px;
-}
-
-.editForm .notesValue {
-  display: block;
 }

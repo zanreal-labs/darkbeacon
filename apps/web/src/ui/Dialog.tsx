@@ -21,15 +21,28 @@ export interface DialogContentProps {
   footer?: ReactNode;
   /** Max width in px (default 480). */
   width?: number;
+  /** On phones, fill the screen (a full-height sheet) instead of floating; for long forms. */
+  sheetOnPhone?: boolean;
+  /** Escape was pressed; `event.preventDefault()` keeps the dialog open. */
+  onEscapeKeyDown?(event: KeyboardEvent): void;
 }
 
 /** A centred modal with a title, optional description, body and footer. Escape and the X close it. */
-export function DialogContent({ title, description, children, footer, width }: DialogContentProps) {
+export function DialogContent({
+  title,
+  description,
+  children,
+  footer,
+  width,
+  sheetOnPhone,
+  onEscapeKeyDown,
+}: DialogContentProps) {
   return (
     <D.Portal>
       <D.Overlay className={styles.overlay} />
       <D.Content
-        className={styles.dialog}
+        className={cx(styles.dialog, sheetOnPhone && styles.phoneSheet)}
+        onEscapeKeyDown={onEscapeKeyDown}
         style={width ? ({ '--dialog-width': `${width}px` } as CSSProperties) : undefined}
       >
         <div className={styles.dialogHeader}>

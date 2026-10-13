@@ -12,6 +12,18 @@ export const STATUS_LABEL: Record<SystemStatus, string> = {
   target: 'Target',
 };
 
+/** What each status tells the fleet, one line each, for the status list. */
+export const STATUS_MEANING: Record<SystemStatus, string> = {
+  unknown: 'Nobody has looked yet.',
+  home: 'Where we live.',
+  friendly: 'Friends live here.',
+  empty: 'Scouted: nobody lives here.',
+  occupied: 'Someone lives here, not known to be hostile.',
+  warning: 'Careful: something was seen here.',
+  hostile: 'Hostiles live or roam here.',
+  target: 'We are going after someone here.',
+};
+
 /**
  * The node border of each status: grey by default (unknown, empty), coloured where it means
  * something. One token each, so themes recolour them.

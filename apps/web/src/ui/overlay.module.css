@@ -193,6 +193,26 @@
   }
 }
 
+/* A dialog that fills a phone's screen (DialogContent's `sheetOnPhone`): the body scrolls, the
+   footer stays at the bottom. */
+@media (max-width: 767px) {
+  .phoneSheet {
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100dvh;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    transform: none;
+    animation: sheetIn var(--dbk-motion-normal) var(--dbk-motion-easing);
+  }
+
+  .phoneSheet .dialogBody {
+    flex: 1;
+  }
+}
+
 /* Two classes: the button's own `position: relative` must not win, whichever stylesheet loads last. */
 .dialog .close {
   position: absolute;
@@ -275,6 +295,24 @@
 
 .selectViewport {
   padding: 0;
+}
+
+/* An option with a line under its name (SelectOption's `description`). */
+.item:has(.itemDescription) {
+  align-items: flex-start;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.itemText {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.itemDescription {
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
 }
 
 @keyframes pop {

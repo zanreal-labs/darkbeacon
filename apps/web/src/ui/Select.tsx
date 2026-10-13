@@ -12,6 +12,8 @@ export interface SelectOption {
   value: string;
   label: ReactNode;
   icon?: ReactNode;
+  /** A line under the label in the list (not in the closed select). */
+  description?: ReactNode;
   disabled?: boolean;
 }
 
@@ -66,7 +68,14 @@ export function Select({
             {options.map((o) => (
               <S.Item key={o.value} value={o.value} disabled={o.disabled} className={styles.item}>
                 {o.icon}
-                <S.ItemText>{o.label}</S.ItemText>
+                {o.description ? (
+                  <span className={styles.itemText}>
+                    <S.ItemText>{o.label}</S.ItemText>
+                    <span className={styles.itemDescription}>{o.description}</span>
+                  </span>
+                ) : (
+                  <S.ItemText>{o.label}</S.ItemText>
+                )}
                 <S.ItemIndicator className={styles.itemIndicator}>
                   <Check />
                 </S.ItemIndicator>

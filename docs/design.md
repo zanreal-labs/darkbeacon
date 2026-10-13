@@ -204,6 +204,13 @@ unless the template places `{tempName}` itself. The chain is walked from the hom
   place (saved on Enter or
   leaving the field) and links out to zKillboard, Dotlan and Anoikis; Set destination is its
   action.
+- Edit system (double-click, the context menu's Edit…, System info's pencil) is one calm form, titles
+  above controls, in this order: names (custom and temporary side by side), status (one select whose
+  list says what each status means), Labels as toggle chips with the custom label field under them and
+  a preview of the chips above the node in map order, Tags as toggle chips, notes (Markdown), and the
+  lock for managers. A chip that is on is filled (Labels inverted as on the map, Tags in their colour)
+  with a check; off is a faint outline. Every change saves at once ("Saving…" / "Saved" under the
+  title); Escape first puts back unsaved typing, then closes. On phones it fills the screen.
 - Under the header's place line, who holds the system with the logo ("Held by Goonswarm Federation
   [CONDI]", "Faction space: Sansha's Nation"; for unclaimed null-sec the region's holder with
   held/total).
