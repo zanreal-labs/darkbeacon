@@ -31,8 +31,10 @@ const PAGE =
 const PUBLIC_PAGE = /^\/p\/[^/]+\/?$/;
 
 /**
- * The support hub's page: its own EVE sign-in, never the app's session or a demo sign-in, and its
- * address (the opener and the context) never leaves as a referrer.
+ * The support hub's page: it reads the app's session, but a signed-out visit is neither signed in
+ * to the demo nor sent to `/login` here. The page first takes the context from the popup's opener
+ * (kept in session storage), then offers the app's sign-in, which comes back to it (`/login?next=`).
+ * Its address (the opener and the context) never leaves as a referrer.
  */
 const SUPPORT_PAGE = /^\/support\/?$/;
 

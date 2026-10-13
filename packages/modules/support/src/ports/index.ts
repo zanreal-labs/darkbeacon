@@ -6,7 +6,7 @@ import type {
   SupportPriority,
   SupportTicketStatus,
 } from '@darkbeacon/shared';
-import type { SupportIdentity, SupportIdentityRecord } from '../domain/identity.js';
+import type { CharacterOwner, SupportIdentity, SupportIdentityRecord } from '../domain/identity.js';
 
 export type { Clock, EventLog } from '@darkbeacon/core';
 
@@ -106,6 +106,21 @@ export interface FeedbackSink {
   send(submission: FeedbackSubmission): Promise<void>;
 }
 
+/** A linked EVE character of an account on the hub. */
+export interface AccountCharacter extends CharacterOwner {
+  /** The account's main character (or its first one when no main is set). */
+  main: boolean;
+}
+
+/**
+ * The hub's accounts: pilots sign in to the hub as to any instance (the app's own session), and
+ * their tickets belong to the EVE characters linked to that account.
+ */
+export interface SupportAccounts {
+  /** The account's linked characters, main first; empty for an account that linked none. */
+  characters(accountId: string): Promise<AccountCharacter[]>;
+}
+
 /** Every owner the hub has seen per character. */
 export interface SupportIdentityStore {
   ofCharacter(characterId: number): Promise<SupportIdentityRecord[]>;
@@ -123,7 +138,8 @@ export interface TicketNotes {
 
 export interface StoredHandle {
   id: string;
-  distinctId: string;
+  /** The hub account it shows the unread answers of (every character of it). */
+  accountId: string;
   origin: string;
   createdAt: number;
   lastUsedAt: number | null;
@@ -133,9 +149,9 @@ export interface StoredHandle {
 export interface SupportHandleStore {
   create(handle: StoredHandle & { tokenHash: string }): Promise<void>;
   byTokenHash(tokenHash: string): Promise<StoredHandle | null>;
-  ofIdentity(distinctId: string): Promise<StoredHandle[]>;
-  /** False when there is no such handle of this identity. */
-  revoke(distinctId: string, id: string): Promise<boolean>;
+  ofAccount(accountId: string): Promise<StoredHandle[]>;
+  /** False when there is no such handle of this account. */
+  revoke(accountId: string, id: string): Promise<boolean>;
   touch(id: string, at: number): Promise<void>;
 }
 

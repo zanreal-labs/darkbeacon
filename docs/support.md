@@ -7,13 +7,13 @@ account menu. They open the **support hub**: by default the maintainers' own ins
 the answer shows up on the hub's page and, as a count, on the help icon of the instance the pilot came from.
 
 This is separate from [anonymous telemetry](telemetry.md): a ticket carries what someone wrote and is tied
-to the EVE character they sign in with, so it never goes through telemetry, and nothing is sent until
-someone presses Send.
+to one of their EVE characters, so it never goes through telemetry, and nothing is sent until someone
+presses Send.
 
 ## What a ticket sends
 
-The message, the category (bug, help, question), the EVE character the pilot signs in with on the hub, and
-the details below. The hub shows every detail as a line before sending, and each line can be removed.
+The message, the category (bug, help, question), the EVE character the pilot picks from their account on
+the hub (their main character unless they pick another), and the details below. The hub shows every detail as a line before sending, and each line can be removed.
 
 | Detail             | Example                                                               |
 | ------------------ | --------------------------------------------------------------------- |
@@ -39,7 +39,7 @@ The hub accepts only the fields of `SupportContext` (`packages/shared/src/suppor
 The ticket form says:
 
 > This sends your message and the details listed below to the Darkbeacon maintainers (ZanReal), stored in
-> PostHog (EU). Your ticket is linked to the EVE character you sign in with, so you can follow it from any
+> PostHog (EU). Your ticket is linked to the EVE character you pick, so you can follow it from any
 > Darkbeacon instance. We don't send map contents, system names or your instance's address unless you
 > tick them. You can ask us to delete your tickets.
 
@@ -62,29 +62,42 @@ and point its builds at it with `SUPPORT_HUB_URL`.
 
 ## How it works
 
-- **Sign-in on the hub.** The hub has its own EVE SSO sign-in (`/support/login`, back at
-  `/support/callback`): authorization code with PKCE, **no scopes**, and no token is kept. It sets the
-  hub's own cookie (`dbk_support`, sent only to `/api/support`), unrelated to any instance account. Every
-  change the hub's page makes is same-origin and carries the session's CSRF token (`x-support-csrf`).
-- **Who owns a ticket.** Tickets belong to the EVE character: the support identity is `eve:<characterId>`.
-  The hub keeps the SSO `owner` hash of each character. When it changes (the character was sold or moved to
-  another account) the new owner gets a fresh identity, `eve:<characterId>:o2`, then `:o3`, so a buyer never
-  sees the seller's tickets; a character that returns to an earlier owner finds that owner's tickets again.
+- **Sign-in on the hub.** The hub is an ordinary Darkbeacon instance and pilots sign in to it the same way
+  as to any instance: its sign-in page (EVE Online or Discord, whichever the hub uses), its session cookie
+  and its account. There is no separate support sign-in. A signed-out pilot on `/support` is offered the
+  hub's sign-in page (`/login?next=/support?...`), which comes back to the support page afterwards; the
+  return address is checked twice (the page only builds `/support` addresses, the sign-in only follows paths
+  on its own site), so it can never send anyone elsewhere. Changes are protected like every other route of
+  the app: the session cookie is `SameSite=Lax` and the server ignores it on any request whose `Origin` is
+  not the hub's own (a cross-site request is anonymous: 401). The account on the hub is not the account on
+  the instance the pilot came from.
+- **Who owns a ticket.** Tickets belong to an EVE character linked to the pilot's account on the hub: the
+  form has a character picker (the main character by default), and My tickets lists the tickets of every
+  linked character, grouped by character. A character the account does not hold is refused (403). An
+  account without an EVE character (signed in with Discord and nothing linked) is asked to link one first,
+  with a link to the app's link-character flow. The support identity is `eve:<characterId>`. The app keeps
+  the EVE SSO `owner` hash of every linked character (from its sign-in or link); when it changes (the
+  character was sold or moved to another EVE account, and the new owner signed in or linked it) the new owner
+  gets a fresh identity, `eve:<characterId>:o2`, then `:o3`, so a buyer never sees the seller's tickets; a
+  character that returns to an earlier owner finds that owner's tickets again.
 - **The popup.** The instance opens `<hub>/support?kind=…&origin=<instance>&ctx=…`. When the hub's page
   is ready it posts `ready` to the instance's origin (and nowhere else); the instance answers with the
   context, checking that the message came from the hub's origin and from the popup it opened. The hub
   checks the context came from the opener and from the origin in the URL, sanitizes it to the allow-list and
   shows it. The short `?ctx=` (no errors, no opt-ins) is the fallback when the popup lost its opener; the
-  context is kept in the popup's session storage across the EVE sign-in.
+  context is kept in the popup's session storage across the sign-in.
 - **Unread badge.** After signing in from an instance, the hub asks "Show answers on map.example.com?".
-  When the pilot allows it, the hub makes an opaque, revocable handle bound to that origin and posts it to
-  the opener, which keeps it for the account (sealed in its database). The instance's pages then poll
+  When the pilot allows it, the hub makes an opaque, revocable handle bound to that origin and to the
+  pilot's hub account (the answers of every character of it), and posts it to the opener, which keeps it
+  for its own account (sealed in its database). The instance's pages then poll
   `GET <hub>/api/support/unread?h=<handle>` every two minutes: any origin may read it (no cookies), it
   answers `{ "unread": n }` and nothing else, refuses a handle from another origin, and is limited to six
   checks a minute per handle. The hub keeps only a SHA-256 of each handle; the pilot can revoke them on the
-  hub's My tickets tab. On the hub itself all of this runs in the app with the hub session.
+  hub's My tickets tab. On the hub itself the help menu opens the support page in the app, with the app's
+  session, and the badge counts the signed-in account's unread answers.
 - **Limits on the hub**, per character: 5 new tickets an hour, 30 replies an hour, 10 feedback answers an
-  hour (per address when anonymous), 10 new handles an hour; on top of the instance's limit per address.
+  hour (per address when anonymous); per account, 10 new handles an hour; on top of the instance's limit
+  per address.
   Ticket lists and threads are reused for 45 seconds.
 - **Audit.** On the hub, `support.ticket_created` (ticket id, category, desk, character id; never the
   message or the context), `support.replied` and `support.ticket_updated` are on the instance audit.
@@ -95,19 +108,24 @@ A hub is an ordinary Darkbeacon instance with `SUPPORT_HUB=on`. Tickets live eit
 (`SUPPORT_BACKEND=posthog`, the default) or in the hub's own database (`SUPPORT_BACKEND=local`), where its
 instance admins answer them in **Admin > Support**. Pilots see no difference between the two.
 
-| Variable                                              | Needed for       | Meaning                                                                    |
-| ----------------------------------------------------- | ---------------- | -------------------------------------------------------------------------- |
-| `SUPPORT_HUB`                                         | a hub            | `on`                                                                       |
-| `SUPPORT_BACKEND`                                     | a hub            | `posthog` (default) or `local`                                             |
-| `EVE_CLIENT_ID` / `_SECRET`                           | a hub            | the instance's EVE SSO app, if its callbacks include `/support/callback`   |
-| `SUPPORT_EVE_CLIENT_ID` / `SUPPORT_EVE_CLIENT_SECRET` | a hub            | a separate "Authentication only" EVE app for the hub (wins over the above) |
-| `SUPPORT_POSTHOG_HOST`                                | posthog          | default `https://eu.i.posthog.com`                                         |
-| `SUPPORT_PUBLIC_TOKEN`                                | posthog          | the Support widget's public token                                          |
-| `SUPPORT_SECRET_KEY`                                  | posthog          | the Support "Secret API key" (identity verification); server only          |
-| `SUPPORT_SURVEYS_KEY`                                 | posthog feedback | the support project's API key (`phc_...`); server only                     |
-| `SUPPORT_SURVEY_QUICK`                                | posthog feedback | `<survey id>:<rating question id>:<text question id>`                      |
-| `SUPPORT_SURVEY_FEATURE`                              | posthog feedback | `<survey id>:<text question id>`                                           |
-| `SUPPORT_WEBHOOK_SECRET`                              | optional         | 24+ characters; turns on `POST /api/support/webhook`                       |
+| Variable                    | Needed for       | Meaning                                                                     |
+| --------------------------- | ---------------- | --------------------------------------------------------------------------- |
+| `SUPPORT_HUB`               | a hub            | `on`                                                                        |
+| `SUPPORT_BACKEND`           | a hub            | `posthog` (default) or `local`                                              |
+| `EVE_CLIENT_ID` / `_SECRET` | a hub            | the instance's own EVE SSO app, as on any instance (pilots link characters) |
+| `SUPPORT_POSTHOG_HOST`      | posthog          | default `https://eu.i.posthog.com`                                          |
+| `SUPPORT_PUBLIC_TOKEN`      | posthog          | the Support widget's public token                                           |
+| `SUPPORT_SECRET_KEY`        | posthog          | the Support "Secret API key" (identity verification); server only           |
+| `SUPPORT_SURVEYS_KEY`       | posthog feedback | the support project's API key (`phc_...`); server only                      |
+| `SUPPORT_SURVEY_QUICK`      | posthog feedback | `<survey id>:<rating question id>:<text question id>`                       |
+| `SUPPORT_SURVEY_FEATURE`    | posthog feedback | `<survey id>:<text question id>`                                            |
+| `SUPPORT_WEBHOOK_SECRET`    | optional         | 24+ characters; turns on `POST /api/support/webhook`                        |
+
+The hub needs no EVE application or callback of its own: pilots sign in with the instance's sign-in and
+link characters with its EVE SSO app (callback `<PUBLIC_URL>/api/auth/eve/callback`, already registered for
+any instance). Pilots from other instances make an account on the hub, so a public hub keeps sign-ups open
+(Admin > Access, the default). `SUPPORT_EVE_CLIENT_ID` / `SUPPORT_EVE_CLIENT_SECRET` from earlier versions
+are no longer read (the hub logs a reminder when they are set).
 
 No secret ever reaches a browser: the hub's server talks to PostHog. A misconfigured hub logs why at start
 and stays off (its routes answer 404; the page says support is not set up).
@@ -140,11 +158,7 @@ staff API cannot create tickets, which is why it is not used. If it breaks, swit
    `x-support-webhook-secret: <SUPPORT_WEBHOOK_SECRET>` and the body `{"distinct_id": "<the ticket's distinct
 id>"}` (pick the workflow's variable for it).
    Without it answers show within a minute (the hub's cache).
-7. **EVE SSO**: the hub's sign-in returns to `https://darkbeacon.zanreal.app/support/callback`. Either add
-   that callback to the instance's EVE application (if the developer portal allows a second callback URL for
-   it), or create a separate application of type **Authentication only** with that callback and set
-   `SUPPORT_EVE_CLIENT_ID` / `SUPPORT_EVE_CLIENT_SECRET`.
-8. Answer tickets in PostHog (Support inbox). The character's name is the ticket's name; the details are
+7. Answer tickets in PostHog (Support inbox). The character's name is the ticket's name; the details are
    in the ticket's session context, with `category`.
 
 ### Environment on the maintainers' instance (mothership)
@@ -159,28 +173,51 @@ SUPPORT_SURVEYS_KEY=phc_<support project key>
 SUPPORT_SURVEY_QUICK=<survey id>:<rating question id>:<text question id>
 SUPPORT_SURVEY_FEATURE=<survey id>:<text question id>
 SUPPORT_WEBHOOK_SECRET=<openssl rand -base64 32>   # optional, step 6
-SUPPORT_EVE_CLIENT_ID=<...>                         # only with a separate EVE app, step 7
-SUPPORT_EVE_CLIENT_SECRET=<...>
 ```
+
+The instance's own `EVE_CLIENT_ID` / `EVE_CLIENT_SECRET` (and Discord, if it uses Discord) are all the
+sign-in the hub needs.
 
 `SUPPORT_HUB_URL` stays unset there: a hub sends its own help menu to itself (in the app, not a popup).
 `PUBLIC_URL` must be `https://darkbeacon.zanreal.app`.
 
 ### The hub's own store
 
-`SUPPORT_BACKEND=local` needs nothing but EVE SSO. Tickets, messages and feedback are kept in the hub's
+`SUPPORT_BACKEND=local` needs nothing but the instance's own sign-in. Tickets, messages and feedback are kept in the hub's
 database (tables `support_*`, in backups like everything else). Instance admins get **Admin > Support**:
 the open tickets (newest change first), each with its thread, the details sent with it, an answer box, the
 status (new, waiting on us, waiting on the pilot, on hold, resolved) and the priority; and the feedback.
 Answers carry the name "Darkbeacon support". To delete a pilot's tickets on request, delete their rows from
 `support_tickets` and `support_messages` (`distinct_id` = `eve:<character id>`, and `:o<n>` variants).
 
+### Trying a hub locally
+
+Any instance can be a hub with its own store. With [`tools/local.sh`](../tools/local.sh), add to
+`.env.local` next to the usual `PUBLIC_URL=https://darkbeacon.localhost` and EVE app:
+
+```sh
+SUPPORT_HUB=on
+SUPPORT_BACKEND=local
+```
+
+`tools/local.sh up`, sign in at https://darkbeacon.localhost as usual, and the help menu opens the support
+page in the app (no popup: the instance is its own hub). Tickets show up in Admin > Support. Nothing else is
+needed: no second EVE callback and no separate application.
+
+### Earlier versions
+
+The first hub had its own EVE sign-in (`/support/login`, `/support/callback`, the `dbk_support` cookie and
+`SUPPORT_EVE_CLIENT_*`). Those are gone. Its sessions were sealed cookies (no table); the unread handles it
+made belonged to one character and could not be tied to an account, so migration `support/0002_app_sign_in`
+drops them. An instance that polls such a handle gets a 404, forgets it, and the hub offers "Show answers on
+..." again at the next visit. Tickets, identities and notes are unchanged.
+
 ## Code
 
 - `packages/modules/support`: identity rules, limits, survey events, the `SupportDesk` port and the use
   cases (`SupportHub`, `SupportInbox`, `SupportClientService`).
 - `apps/server/src/adapters/support`: `PostHogSupportDesk`, `PostHogSurveys`, `LocalSupportDesk`, the
-  Kysely stores.
-- `apps/server/src/modules/support`: settings, the hub session and the controllers.
+  Kysely stores, and `AppSupportAccounts` (the account's linked characters from identity).
+- `apps/server/src/modules/support`: settings and the controllers (on the app's session).
 - `apps/web/src/shell/HelpMenu.tsx`, `apps/web/src/lib/support.ts`: the help menu, the context and the
   popup handshake; `apps/web/src/screens/SupportPage.tsx` (the hub page) and `SupportInbox.tsx`.

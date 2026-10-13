@@ -18,8 +18,9 @@ import {
   type SupportMessageDto,
   type SupportThreadDto,
   type SupportTicketDto,
+  type SupportTicketGroupDto,
 } from '@darkbeacon/shared';
-import { identityOf, resolveIdentity, type EveSignIn, type SupportIdentity } from '../domain/identity.js';
+import { identityOf, resolveIdentity, type SupportIdentity } from '../domain/identity.js';
 import {
   SUPPORT_CACHE_MS,
   SUPPORT_HANDLES_MAX,
@@ -28,12 +29,14 @@ import {
   type SupportLimitName,
 } from '../domain/limits.js';
 import type {
+  AccountCharacter,
   DeskMessage,
   DeskThread,
   DeskTicket,
   FeedbackSink,
   SupportCrypto,
   SupportDesk,
+  SupportAccounts,
   SupportHandleStore,
   SupportIdentityStore,
   SupportLimiter,
@@ -45,6 +48,8 @@ export interface SupportHubDeps {
   desk: SupportDesk;
   /** Null when feedback has nowhere to go (PostHog desk without a surveys project). */
   feedback: FeedbackSink | null;
+  /** The hub's accounts and their linked characters (the app's own sign-in). */
+  accounts: SupportAccounts;
   identities: SupportIdentityStore;
   handles: SupportHandleStore;
   notes: TicketNotes;
@@ -56,11 +61,14 @@ export interface SupportHubDeps {
 
 const PREVIEW = 160;
 
+/** Shown where a ticket needs a character and the account has none (a Discord account). */
+export const SUPPORT_NEEDS_CHARACTER = 'Link an EVE character to your account first';
+
 /**
- * The support hub's use cases: signing a pilot in as a support identity, their tickets and
- * threads (through the desk, cached briefly), feedback, and unread handles for other instances.
- * The HTTP edge has already checked the hub session and its CSRF token; this checks ownership,
- * limits and input once more.
+ * The support hub's use cases: the support identity of each EVE character of a signed-in account,
+ * their tickets and threads (through the desk, cached briefly), feedback, and unread handles for
+ * other instances. The HTTP edge has already checked the app session (same origin only); this
+ * checks that the character is the account's, ownership, limits and input once more.
  */
 export class SupportHub {
   private readonly lists: TtlCache<DeskTicket[]>;
@@ -79,11 +87,57 @@ export class SupportHub {
     return this.deps.feedback !== null;
   }
 
-  /** The identity of a verified EVE sign-in: the owner's own, or a new one for a new owner. */
-  async signIn(eve: EveSignIn): Promise<SupportIdentity> {
-    const known = await this.deps.identities.ofCharacter(eve.characterId);
-    const { record } = resolveIdentity(known, eve);
-    await this.deps.identities.save(record, this.deps.clock.now());
+  /** The account's linked characters, main first (empty: it has to link one for tickets). */
+  characters(accountId: string): Promise<AccountCharacter[]> {
+    return this.deps.accounts.characters(accountId);
+  }
+
+  /**
+   * The support identity of one of the account's characters (`characterId`, or the main one):
+   * its current owner's, or a new one when the owner hash the app holds for it changed. A
+   * character of another account is refused.
+   */
+  async identity(accountId: string, characterId?: number | null): Promise<SupportIdentity> {
+    const characters = await this.characters(accountId);
+    if (characters.length === 0) throw new ForbiddenError(SUPPORT_NEEDS_CHARACTER);
+    const character =
+      characterId === undefined || characterId === null
+        ? characters[0]!
+        : characters.find((c) => c.characterId === characterId);
+    if (!character) throw new ForbiddenError('That character is not linked to your account');
+    return this.resolve(character);
+  }
+
+  /** The identity of every character of the account, main first. */
+  async identities(accountId: string): Promise<SupportIdentity[]> {
+    const characters = await this.characters(accountId);
+    return Promise.all(characters.map((c) => this.resolve(c)));
+  }
+
+  /** My tickets: each character's, main first. */
+  async ticketGroups(accountId: string): Promise<SupportTicketGroupDto[]> {
+    const identities = await this.identities(accountId);
+    return Promise.all(
+      identities.map(async (identity) => ({
+        character: { id: identity.characterId, name: identity.characterName },
+        tickets: await this.tickets(identity),
+      })),
+    );
+  }
+
+  /** Unread answers over every character of the account. */
+  async unreadOfAccount(accountId: string): Promise<number> {
+    const counts = await Promise.all((await this.identities(accountId)).map((i) => this.unread(i)));
+    return counts.reduce((sum, n) => sum + n, 0);
+  }
+
+  private async resolve(character: AccountCharacter): Promise<SupportIdentity> {
+    const known = await this.deps.identities.ofCharacter(character.characterId);
+    const { record, isNew } = resolveIdentity(known, character);
+    const before = known.find((r) => r.ownerHash === record.ownerHash);
+    // Written when a new owner shows up or the character was renamed, not on every request.
+    if (isNew || before?.characterName !== record.characterName)
+      await this.deps.identities.save(record, this.deps.clock.now());
     return identityOf(record);
   }
 
@@ -178,25 +232,25 @@ export class SupportHub {
   }
 
   /**
-   * An opaque handle another instance can poll for this identity's unread count (and nothing
-   * else). Returned once; the hub keeps its hash.
+   * An opaque handle another instance can poll for this account's unread count (every character
+   * of it, and nothing else). Returned once; the hub keeps its hash.
    */
-  async createHandle(identity: SupportIdentity, origin: string): Promise<string> {
+  async createHandle(accountId: string, origin: string): Promise<string> {
     if (!isSupportOrigin(origin))
       throw new ForbiddenError('Unread replies can only be shown on an https address');
-    this.limit('handles', identity.distinctId);
-    const existing = await this.deps.handles.ofIdentity(identity.distinctId);
+    this.limit('handles', `account:${accountId}`);
+    const existing = await this.deps.handles.ofAccount(accountId);
     // One per instance: a new one replaces the old.
     for (const old of existing.filter((h) => h.origin === origin))
-      await this.deps.handles.revoke(identity.distinctId, old.id);
+      await this.deps.handles.revoke(accountId, old.id);
     const others = existing.filter((h) => h.origin !== origin).sort((a, b) => a.createdAt - b.createdAt);
     for (const old of others.slice(0, Math.max(0, others.length - (SUPPORT_HANDLES_MAX - 1))))
-      await this.deps.handles.revoke(identity.distinctId, old.id);
+      await this.deps.handles.revoke(accountId, old.id);
     const token = `dbsh_${this.deps.crypto.randomToken(32)}`;
     await this.deps.handles.create({
       id: this.deps.crypto.uuid(),
       tokenHash: this.deps.crypto.sha256Hex(token),
-      distinctId: identity.distinctId,
+      accountId,
       origin,
       createdAt: this.deps.clock.now(),
       lastUsedAt: null,
@@ -204,15 +258,15 @@ export class SupportHub {
     return token;
   }
 
-  async handles(identity: SupportIdentity): Promise<SupportHandleDto[]> {
-    const handles = await this.deps.handles.ofIdentity(identity.distinctId);
+  async handles(accountId: string): Promise<SupportHandleDto[]> {
+    const handles = await this.deps.handles.ofAccount(accountId);
     return handles
       .sort((a, b) => b.createdAt - a.createdAt)
       .map(({ id, origin, createdAt, lastUsedAt }) => ({ id, origin, createdAt, lastUsedAt }));
   }
 
-  async revokeHandle(identity: SupportIdentity, id: string): Promise<void> {
-    if (!(await this.deps.handles.revoke(identity.distinctId, id))) throw new NotFoundError('Handle');
+  async revokeHandle(accountId: string, id: string): Promise<void> {
+    if (!(await this.deps.handles.revoke(accountId, id))) throw new NotFoundError('Handle');
   }
 
   /**
@@ -237,8 +291,7 @@ export class SupportHub {
     // Recording every poll would be a write each two minutes per pilot; once an hour says enough.
     if (handle.lastUsedAt === null || now - handle.lastUsedAt > 60 * 60 * 1000)
       await this.deps.handles.touch(handle.id, now);
-    const identity = identityFromDistinctId(handle.distinctId);
-    return this.unread(identity);
+    return this.unreadOfAccount(handle.accountId);
   }
 
   /** A reply was posted somewhere this hub does not see (PostHog): read the list again next time. */
@@ -282,12 +335,6 @@ export class SupportHub {
       );
     }
   }
-}
-
-/** A handle only knows the distinct id; the name is not needed to read a count. */
-function identityFromDistinctId(distinctId: string): SupportIdentity {
-  const match = /^eve:(\d+)/.exec(distinctId);
-  return { distinctId, characterId: match ? Number(match[1]) : 0, characterName: '' };
 }
 
 function checkTicketId(ticketId: string): void {

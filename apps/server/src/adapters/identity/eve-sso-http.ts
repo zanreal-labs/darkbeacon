@@ -50,7 +50,7 @@ export class EveSsoHttp implements EveSso {
       response_type: 'code',
       client_id: this.client.clientId,
       redirect_uri: input.redirectUri,
-      // Without scopes (sign-in only, as the support hub does) the parameter is left out.
+      // Without scopes (sign-in only) the parameter is left out.
       ...(input.scopes.length > 0 ? { scope: input.scopes.join(' ') } : {}),
       state: input.state,
       code_challenge: input.codeChallenge,

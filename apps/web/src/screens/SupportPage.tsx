@@ -10,6 +10,7 @@ import {
   CircleHelp,
   Inbox,
   LifeBuoy,
+  Link2,
   LogOut,
   MessageSquareHeart,
   Send,
@@ -29,7 +30,9 @@ import {
   SUPPORT_MESSAGE_SOURCE,
   SUPPORT_TICKET_CONSENT,
   supportContextLines,
+  supportReturnTo,
   withoutContextLine,
+  type SupportAccountCharacterDto,
   type SupportCategory,
   type SupportContext,
   type SupportFeedbackKind,
@@ -38,11 +41,12 @@ import {
   type SupportSessionDto,
   type SupportThreadDto,
   type SupportTicketCreatedDto,
-  type SupportTicketDto,
+  type SupportTicketGroupDto,
   type SupportTicketStatus,
   type SupportWindowMessage,
 } from '@darkbeacon/shared';
 import { api, ApiError } from '../lib/api';
+import { relinkHref } from '../lib/scope-health';
 import { IN_APP_CONTEXT_KEY, type SupportKind } from '../lib/support';
 import { relativeTime } from '../lib/time';
 import { LogoMark } from '../shell/Logo';
@@ -65,6 +69,7 @@ import {
   Row,
   Rows,
   Segmented,
+  Select,
   Skeleton,
   Tabs,
   TabsContent,
@@ -79,9 +84,9 @@ import styles from './SupportPage.module.css';
 const sessionKey = ['support-session'] as const;
 const ticketsKey = ['support-tickets'] as const;
 const handlesKey = ['support-handles'] as const;
-const threadKey = (id: string) => ['support-thread', id] as const;
+const threadKey = (id: string, characterId: number) => ['support-thread', id, characterId] as const;
 
-/** Keeps what the opener sent across the EVE sign-in (the popup navigates away and back). */
+/** Keeps what the opener sent across the sign-in (the popup navigates away and back). */
 const STASH_KEY = 'dbk-support-stash';
 const DISMISSED_KEY = 'dbk-support-handle-dismissed';
 
@@ -134,13 +139,9 @@ function optionalOf(raw: unknown): SupportContext {
   return { ...(instanceHost ? { instanceHost } : {}), ...(mapCounts ? { mapCounts } : {}) };
 }
 
-/** Requests of the hub's pages: same origin, with the session's CSRF token on changes. */
-function hubApi<T>(
-  path: string,
-  csrf: string | null,
-  init: RequestInit & { json?: unknown } = {},
-): Promise<T> {
-  return api<T>(path, { ...init, headers: { ...(csrf ? { 'x-support-csrf': csrf } : {}), ...init.headers } });
+/** A ticket route of one character of the account (`?character=`). */
+function asCharacter(path: string, characterId: number): string {
+  return `${path}?${new URLSearchParams({ character: String(characterId) })}`;
 }
 
 function errorText(error: unknown): string {
@@ -149,8 +150,10 @@ function errorText(error: unknown): string {
 
 /**
  * The support hub's page (`/support`), usually in a popup from another instance: open a ticket,
- * send feedback, follow my tickets. The context from the opener is untrusted: it is sanitized to
- * the allow-list and shown line by line, each removable, before anything is sent.
+ * send feedback, follow my tickets. Pilots sign in with the hub's own sign-in page, as to any
+ * instance, and come back here; a ticket belongs to one of their account's EVE characters. The
+ * context from the opener is untrusted: it is sanitized to the allow-list and shown line by line,
+ * each removable, before anything is sent.
  */
 export function SupportScreen() {
   const params = useSearchParams();
@@ -161,7 +164,6 @@ export function SupportScreen() {
   const originParam = params.get('origin');
   const openerOrigin = isSupportOrigin(originParam) ? originParam : null;
   const ctxParam = params.get('ctx');
-  const authError = params.get('support_error');
 
   const session = useQuery({
     queryKey: sessionKey,
@@ -217,23 +219,43 @@ export function SupportScreen() {
   }, [openerOrigin, ctxParam]);
 
   const data = session.data;
-  const signedIn = !!data?.character;
-  const csrf = data?.csrf ?? null;
-  const returnTo = `/support?kind=${tab}${openerOrigin ? `&origin=${encodeURIComponent(openerOrigin)}` : ''}`;
-  const signInHref = `/support/login?returnTo=${encodeURIComponent(returnTo)}`;
+  const signedIn = !!data?.signedIn;
+  const characters = data?.characters ?? [];
+  const main = characters.find((c) => c.main) ?? characters[0] ?? null;
+  const ready = signedIn && main !== null;
+  // Back here after the app's sign-in (or linking a character), with the tab and the opener.
+  const returnTo = supportReturnTo(
+    `/support?kind=${tab}${openerOrigin ? `&origin=${encodeURIComponent(openerOrigin)}` : ''}`,
+  );
+  // `/login` sends a browser that still holds a session cookie straight on to `next`; a cookie the
+  // API no longer knows (expired, signed out elsewhere) would bounce back here. `reset` drops it
+  // first, then shows the sign-in page, which returns here.
+  const signInHref = `/login?${new URLSearchParams({
+    reset: '1',
+    next: `/login?${new URLSearchParams({ next: returnTo })}`,
+  })}`;
+  const linkHref = relinkHref(returnTo);
 
+  // Signing out here is signing out of the hub's app.
   const logout = useMutation({
-    mutationFn: () => hubApi<void>(routes.support.logout.path, null, { method: 'POST' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: sessionKey }),
+    mutationFn: () => api<void>(routes.auth.logout.path, { method: 'POST' }),
+    onSuccess: () => {
+      queryClient.removeQueries({ queryKey: ticketsKey });
+      queryClient.removeQueries({ queryKey: handlesKey });
+      return queryClient.invalidateQueries({ queryKey: sessionKey });
+    },
   });
 
   const tickets = useQuery({
     queryKey: ticketsKey,
-    queryFn: () => api<SupportTicketDto[]>(routes.support.tickets.path),
-    enabled: signedIn,
+    queryFn: () => api<SupportTicketGroupDto[]>(routes.support.tickets.path),
+    enabled: ready,
     refetchInterval: 60_000,
   });
-  const unread = (tickets.data ?? []).reduce((sum, t) => sum + t.unread, 0);
+  const unread = (tickets.data ?? []).reduce(
+    (sum, g) => sum + g.tickets.reduce((n, t) => n + t.unread, 0),
+    0,
+  );
 
   return (
     <div className={styles.screen}>
@@ -243,10 +265,14 @@ export function SupportScreen() {
           <span className={styles.brandText}>Darkbeacon support</span>
         </div>
         <div className={styles.topActions}>
-          {data?.character && (
+          {signedIn && (
             <span className={styles.who}>
-              <CharacterAvatar id={data.character.id} name={data.character.name} size={24} />
-              <span className={styles.whoName}>{data.character.name}</span>
+              {main && (
+                <>
+                  <CharacterAvatar id={main.id} name={main.name} size={24} />
+                  <span className={styles.whoName}>{main.name}</span>
+                </>
+              )}
               <IconButton
                 label="Sign out"
                 icon={<LogOut />}
@@ -261,11 +287,6 @@ export function SupportScreen() {
       </header>
 
       <main className={styles.main}>
-        {authError && (
-          <Callout tone="danger" title="Sign-in did not work">
-            {authError}
-          </Callout>
-        )}
         {session.isError ? (
           <ErrorState error={session.error} onRetry={() => void session.refetch()} />
         ) : !data ? (
@@ -283,8 +304,8 @@ export function SupportScreen() {
           />
         ) : (
           <>
-            {signedIn && hasOpener && openerOrigin && stash.hasHandle === false && (
-              <AllowUnread origin={openerOrigin} csrf={csrf} />
+            {ready && hasOpener && openerOrigin && stash.hasHandle === false && (
+              <AllowUnread origin={openerOrigin} />
             )}
             <Tabs value={tab} onValueChange={(v) => setTab(v as SupportKind)}>
               <TabsList className={styles.tabs} aria-label="Support">
@@ -304,9 +325,9 @@ export function SupportScreen() {
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="ticket">
-                {signedIn ? (
+                {ready ? (
                   <NewTicket
-                    csrf={csrf}
+                    characters={characters}
                     stash={stash}
                     onContext={(context) => {
                       const next = { ...stash, context };
@@ -315,28 +336,27 @@ export function SupportScreen() {
                     }}
                     onSent={() => setTab('tickets')}
                   />
+                ) : signedIn ? (
+                  <LinkCharacter href={linkHref} />
                 ) : (
                   <SignIn
                     href={signInHref}
-                    why="Tickets are linked to the EVE character you sign in with, so you can follow the answer from any Darkbeacon instance."
+                    why="Tickets are linked to one of your EVE characters, so you can follow the answer from any Darkbeacon instance."
                   />
                 )}
               </TabsContent>
               <TabsContent value="feedback">
-                <Feedback session={data} stash={stash} />
+                <Feedback session={data} as={signedIn ? main : null} stash={stash} />
               </TabsContent>
               <TabsContent value="tickets">
-                {signedIn ? (
-                  <MyTickets
-                    csrf={csrf}
-                    tickets={tickets.data}
-                    error={tickets.error}
-                    onNew={() => setTab('ticket')}
-                  />
+                {ready ? (
+                  <MyTickets groups={tickets.data} error={tickets.error} onNew={() => setTab('ticket')} />
+                ) : signedIn ? (
+                  <LinkCharacter href={linkHref} />
                 ) : (
                   <SignIn
                     href={signInHref}
-                    why="Sign in with the character you opened your tickets with to read the answers."
+                    why="Sign in to read the answers to the tickets of every character of your account."
                   />
                 )}
               </TabsContent>
@@ -353,19 +373,37 @@ export function SupportScreen() {
   );
 }
 
+/** Signed out: the app's own sign-in page, then back here (the opener's details are kept). */
 function SignIn({ href, why }: { href: string; why: ReactNode }) {
   return (
     <Card>
-      <CardHeader title="Sign in with EVE Online" description={why} />
+      <CardHeader title="Sign in to Darkbeacon" description={why} />
       <CardBody>
         <p className={styles.muted}>
-          Sign-in only: no ESI access is asked for and no token is kept. Your instance account is not
-          involved.
+          You sign in here as on any Darkbeacon instance, and come back to this page. The account here is not
+          the one on the instance you came from.
         </p>
       </CardBody>
       <CardFooter>
         <Button asChild variant="primary">
-          <a href={href}>Sign in with EVE Online</a>
+          <a href={href}>Sign in</a>
+        </Button>
+      </CardFooter>
+    </Card>
+  );
+}
+
+/** Signed in without an EVE character (a Discord account): tickets need one. */
+function LinkCharacter({ href }: { href: string }) {
+  return (
+    <Card>
+      <CardHeader
+        title="Link an EVE character first"
+        description="Tickets belong to an EVE character, so you can follow the answer from any Darkbeacon instance. Your account has none yet."
+      />
+      <CardFooter>
+        <Button asChild variant="primary" icon={<Link2 />}>
+          <a href={href}>Link an EVE character</a>
         </Button>
       </CardFooter>
     </Card>
@@ -373,16 +411,13 @@ function SignIn({ href, why }: { href: string; why: ReactNode }) {
 }
 
 /** Offers the opener a handle for the unread badge (once per instance; revocable below the tickets). */
-function AllowUnread({ origin, csrf }: { origin: string; csrf: string | null }) {
+function AllowUnread({ origin }: { origin: string }) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const [dismissed, setDismissed] = useState(() => readJson(() => sessionStorage, DISMISSED_KEY) === origin);
   const allow = useMutation({
     mutationFn: () =>
-      hubApi<SupportHandleCreatedDto>(routes.support.createHandle.path, csrf, {
-        method: 'POST',
-        json: { origin },
-      }),
+      api<SupportHandleCreatedDto>(routes.support.createHandle.path, { method: 'POST', json: { origin } }),
     onSuccess: ({ handle }) => {
       const opener = window.opener as Window | null;
       const message: SupportWindowMessage = { source: SUPPORT_MESSAGE_SOURCE, type: 'handle', handle };
@@ -421,12 +456,12 @@ function AllowUnread({ origin, csrf }: { origin: string; csrf: string | null }) 
 }
 
 function NewTicket({
-  csrf,
+  characters,
   stash,
   onContext,
   onSent,
 }: {
-  csrf: string | null;
+  characters: SupportAccountCharacterDto[];
   stash: Stash;
   onContext(context: SupportContext): void;
   onSent(): void;
@@ -434,6 +469,7 @@ function NewTicket({
   const toast = useToast();
   const queryClient = useQueryClient();
   const [category, setCategory] = useState<SupportCategory>('bug');
+  const [characterId, setCharacterId] = useState(() => (characters.find((c) => c.main) ?? characters[0])!.id);
   const [message, setMessage] = useState('');
   const [ticked, setTicked] = useState<Record<OptIn, boolean>>({ instanceHost: false, mapCounts: false });
   const lines = supportContextLines(stash.context);
@@ -443,9 +479,9 @@ function NewTicket({
     mutationFn: () => {
       const context: SupportContext = { ...stash.context };
       for (const key of offered) if (ticked[key]) Object.assign(context, { [key]: stash.optional[key] });
-      return hubApi<SupportTicketCreatedDto>(routes.support.createTicket.path, csrf, {
+      return api<SupportTicketCreatedDto>(routes.support.createTicket.path, {
         method: 'POST',
-        json: { category, message, context },
+        json: { characterId, category, message, context },
       });
     },
     onSuccess: async () => {
@@ -469,6 +505,21 @@ function NewTicket({
         description="One ticket per problem; you can add to it later."
       />
       <CardBody className={styles.form}>
+        <Field
+          label="Character"
+          hint="The ticket belongs to this character; follow the answer from any instance."
+        >
+          <Select
+            value={String(characterId)}
+            onValueChange={(v) => setCharacterId(Number(v))}
+            disabled={characters.length < 2}
+            options={characters.map((c) => ({
+              value: String(c.id),
+              label: c.main ? `${c.name} (main)` : c.name,
+              icon: <CharacterAvatar id={c.id} name={c.name} size={20} />,
+            }))}
+          />
+        </Field>
         <ChoiceGroup
           aria-label="What is it about?"
           value={category}
@@ -509,7 +560,7 @@ function NewTicket({
             Sent with your ticket
           </h3>
           {lines.length === 0 ? (
-            <p className={styles.muted}>Nothing but your message and your character.</p>
+            <p className={styles.muted}>Nothing but your message and the character above.</p>
           ) : (
             <ul className={styles.lines}>
               {lines.map((line) => (
@@ -552,7 +603,16 @@ function NewTicket({
   );
 }
 
-function Feedback({ session, stash }: { session: SupportSessionDto; stash: Stash }) {
+function Feedback({
+  session,
+  as,
+  stash,
+}: {
+  session: SupportSessionDto;
+  /** Signed in: feedback is sent as the main character; null: anonymous. */
+  as: SupportAccountCharacterDto | null;
+  stash: Stash;
+}) {
   const toast = useToast();
   const [kind, setKind] = useState<SupportFeedbackKind>('quick');
   const [rating, setRating] = useState<number | null>(null);
@@ -560,7 +620,7 @@ function Feedback({ session, stash }: { session: SupportSessionDto; stash: Stash
   const [sent, setSent] = useState(false);
   const send = useMutation({
     mutationFn: () =>
-      hubApi<void>(routes.support.feedback.path, session.csrf, {
+      api<void>(routes.support.feedback.path, {
         method: 'POST',
         json: {
           kind,
@@ -603,7 +663,7 @@ function Feedback({ session, stash }: { session: SupportSessionDto; stash: Stash
     <Card>
       <CardHeader
         title="Send feedback"
-        description={session.character ? `As ${session.character.name}.` : 'Anonymous.'}
+        description={as ? `As ${as.name}.` : 'Anonymous.'}
         actions={
           <Segmented
             aria-label="Kind of feedback"
@@ -673,28 +733,35 @@ function Feedback({ session, stash }: { session: SupportSessionDto; stash: Stash
 }
 
 function MyTickets({
-  csrf,
-  tickets,
+  groups,
   error,
   onNew,
 }: {
-  csrf: string | null;
-  tickets: SupportTicketDto[] | undefined;
+  groups: SupportTicketGroupDto[] | undefined;
   error: unknown;
   onNew(): void;
 }) {
-  const [open, setOpen] = useState<string | null>(null);
-  if (open) return <Thread id={open} csrf={csrf} onBack={() => setOpen(null)} />;
+  const [open, setOpen] = useState<{ id: string; characterId: number } | null>(null);
+  if (open) return <Thread {...open} onBack={() => setOpen(null)} />;
+  const none = !!groups && groups.every((g) => g.tickets.length === 0);
   return (
     <>
-      <Card>
-        <CardHeader title="My tickets" description="Answers from the Darkbeacon maintainers show up here." />
-        <CardBody flush>
-          {error ? (
+      {error ? (
+        <Card>
+          <CardHeader title="My tickets" />
+          <CardBody>
             <ErrorState compact error={error} />
-          ) : !tickets ? (
-            <Skeleton height={120} />
-          ) : tickets.length === 0 ? (
+          </CardBody>
+        </Card>
+      ) : !groups ? (
+        <Skeleton height={160} radius={12} />
+      ) : none ? (
+        <Card>
+          <CardHeader
+            title="My tickets"
+            description="Answers from the Darkbeacon maintainers show up here."
+          />
+          <CardBody flush>
             <EmptyState
               compact
               icon={<Inbox />}
@@ -702,67 +769,100 @@ function MyTickets({
               description="Report a problem or ask for help, and follow the answer here."
               actions={<Button onClick={onNew}>New ticket</Button>}
             />
-          ) : (
-            <Rows>
-              {tickets.map((t) => (
-                <li key={t.id} className={styles.ticketRow}>
-                  <button type="button" className={styles.ticketButton} onClick={() => setOpen(t.id)}>
-                    <span className={styles.ticketTitle}>
-                      <span className={styles.ticketNumber}>
-                        {t.number !== null ? `#${t.number}` : 'Ticket'}
-                      </span>
-                      {t.category && <span className={styles.ticketCategory}>{CATEGORY[t.category]}</span>}
-                      <Badge tone={STATUS[t.status].tone} dot>
-                        {STATUS[t.status].label}
-                      </Badge>
-                      {t.unread > 0 && (
-                        <Badge tone="accent">
-                          {t.unread === 1 ? '1 new answer' : `${t.unread} new answers`}
-                        </Badge>
-                      )}
-                    </span>
-                    <span className={styles.ticketPreview}>{t.preview ?? ''}</span>
-                    <span className={styles.ticketMeta}>
-                      {t.messageCount} {t.messageCount === 1 ? 'message' : 'messages'} ·{' '}
-                      {relativeTime(t.lastMessageAt ?? t.createdAt)}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </Rows>
-          )}
-        </CardBody>
-      </Card>
-      <Handles csrf={csrf} />
+          </CardBody>
+        </Card>
+      ) : (
+        groups.map((group) => (
+          <Card key={group.character.id}>
+            <CardHeader
+              icon={<CharacterAvatar id={group.character.id} name={group.character.name} size={28} />}
+              title={group.character.name}
+              description={
+                group.tickets.length === 0
+                  ? 'No tickets'
+                  : group.tickets.length === 1
+                    ? '1 ticket'
+                    : `${group.tickets.length} tickets`
+              }
+            />
+            {group.tickets.length > 0 && (
+              <CardBody flush>
+                <Rows>
+                  {group.tickets.map((t) => (
+                    <li key={t.id} className={styles.ticketRow}>
+                      <button
+                        type="button"
+                        className={styles.ticketButton}
+                        onClick={() => setOpen({ id: t.id, characterId: group.character.id })}
+                      >
+                        <span className={styles.ticketTitle}>
+                          <span className={styles.ticketNumber}>
+                            {t.number !== null ? `#${t.number}` : 'Ticket'}
+                          </span>
+                          {t.category && (
+                            <span className={styles.ticketCategory}>{CATEGORY[t.category]}</span>
+                          )}
+                          <Badge tone={STATUS[t.status].tone} dot>
+                            {STATUS[t.status].label}
+                          </Badge>
+                          {t.unread > 0 && (
+                            <Badge tone="accent">
+                              {t.unread === 1 ? '1 new answer' : `${t.unread} new answers`}
+                            </Badge>
+                          )}
+                        </span>
+                        <span className={styles.ticketPreview}>{t.preview ?? ''}</span>
+                        <span className={styles.ticketMeta}>
+                          {t.messageCount} {t.messageCount === 1 ? 'message' : 'messages'} ·{' '}
+                          {relativeTime(t.lastMessageAt ?? t.createdAt)}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </Rows>
+              </CardBody>
+            )}
+          </Card>
+        ))
+      )}
+      <Handles />
     </>
   );
 }
 
-function Thread({ id, csrf, onBack }: { id: string; csrf: string | null; onBack(): void }) {
+function Thread({ id, characterId, onBack }: { id: string; characterId: number; onBack(): void }) {
   const queryClient = useQueryClient();
   const toast = useToast();
   const [reply, setReply] = useState('');
   const thread = useQuery({
-    queryKey: threadKey(id),
-    queryFn: () => api<SupportThreadDto>(buildPath(routes.support.messages.path, { ticketId: id })),
+    queryKey: threadKey(id, characterId),
+    queryFn: () =>
+      api<SupportThreadDto>(
+        asCharacter(buildPath(routes.support.messages.path, { ticketId: id }), characterId),
+      ),
     refetchInterval: 60_000,
   });
   const unread = thread.data?.ticket.unread ?? 0;
   useEffect(() => {
     if (unread === 0) return;
-    void hubApi<void>(buildPath(routes.support.markRead.path, { ticketId: id }), csrf, { method: 'POST' })
+    void api<void>(asCharacter(buildPath(routes.support.markRead.path, { ticketId: id }), characterId), {
+      method: 'POST',
+    })
       .then(() => queryClient.invalidateQueries({ queryKey: ticketsKey }))
       .catch(() => {});
-  }, [unread, id, csrf, queryClient]);
+  }, [unread, id, characterId, queryClient]);
   const send = useMutation({
     mutationFn: () =>
-      hubApi<SupportThreadDto>(buildPath(routes.support.reply.path, { ticketId: id }), csrf, {
-        method: 'POST',
-        json: { message: reply },
-      }),
+      api<SupportThreadDto>(
+        asCharacter(buildPath(routes.support.reply.path, { ticketId: id }), characterId),
+        {
+          method: 'POST',
+          json: { message: reply },
+        },
+      ),
     onSuccess: (data) => {
       setReply('');
-      queryClient.setQueryData(threadKey(id), data);
+      queryClient.setQueryData(threadKey(id, characterId), data);
       void queryClient.invalidateQueries({ queryKey: ticketsKey });
     },
     onError: (error) => toast({ title: 'Could not send it', description: errorText(error), tone: 'danger' }),
@@ -827,8 +927,8 @@ function Thread({ id, csrf, onBack }: { id: string; csrf: string | null; onBack(
   );
 }
 
-/** Instances allowed to show this character's unread count; revocable. */
-function Handles({ csrf }: { csrf: string | null }) {
+/** Instances allowed to show this account's unread count; revocable. */
+function Handles() {
   const queryClient = useQueryClient();
   const handles = useQuery({
     queryKey: handlesKey,
@@ -836,7 +936,7 @@ function Handles({ csrf }: { csrf: string | null }) {
   });
   const revoke = useMutation({
     mutationFn: (handleId: string) =>
-      hubApi<void>(buildPath(routes.support.revokeHandle.path, { handleId }), csrf, { method: 'DELETE' }),
+      api<void>(buildPath(routes.support.revokeHandle.path, { handleId }), { method: 'DELETE' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: handlesKey }),
   });
   if (!handles.data?.length) return null;

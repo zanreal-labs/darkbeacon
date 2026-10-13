@@ -1606,9 +1606,9 @@ export const routes = {
 
   /**
    * Support tickets and feedback (docs/support.md). `client` and the handle routes are on every
-   * instance; the rest answer on the support hub only (404 elsewhere). Hub routes use the hub's
-   * own EVE sign-in (a cookie under /api/support), never the app session, and every change needs
-   * the session's CSRF token in `x-support-csrf`.
+   * instance; the rest answer on the support hub only (404 elsewhere). Hub routes use the app's
+   * own session and account (like every other route: cookies count only from the instance's own
+   * pages), and tickets belong to one of the account's linked EVE characters.
    */
   support: {
     /** Where this instance's support entries go, and what they may say about it. */
@@ -1633,7 +1633,7 @@ export const routes = {
       auth: 'account',
       scope: 'session',
     }),
-    /** Hub: whether support is on, who is signed in, and the CSRF token. */
+    /** Hub: whether support is on, whether someone is signed in, and their EVE characters. */
     session: route({
       method: 'GET',
       path: '/api/support/session',
@@ -1641,60 +1641,50 @@ export const routes = {
       scope: 'session',
       response: support.SupportSessionDto,
     }),
-    /** Hub: EVE SSO without scopes (PKCE). Also served at `/support/login`. */
-    login: route({
-      method: 'GET',
-      path: '/api/support/auth/login',
-      auth: 'public',
-      scope: 'session',
-      redirect: true,
-    }),
-    /** Hub: where EVE SSO returns; registered as `<hub>/support/callback`. */
-    callback: route({
-      method: 'GET',
-      path: '/api/support/auth/callback',
-      auth: 'public',
-      scope: 'session',
-      redirect: true,
-    }),
-    logout: route({ method: 'POST', path: '/api/support/auth/logout', auth: 'public', scope: 'session' }),
-    /** Hub: my tickets, newest first (cached for up to a minute). */
+    /** Hub: my tickets, per character of my account, main first (cached for up to a minute). */
     tickets: route({
       method: 'GET',
       path: '/api/support/tickets',
-      auth: 'public',
+      auth: 'account',
       scope: 'session',
-      response: z.array(support.SupportTicketDto),
+      response: z.array(support.SupportTicketGroupDto),
     }),
-    /** Hub: opens a ticket; recorded on the hub's audit as `support.ticket_created`. */
+    /**
+     * Hub: opens a ticket for one of my characters (`characterId`, default the main one);
+     * recorded on the hub's audit as `support.ticket_created`.
+     */
     createTicket: route({
       method: 'POST',
       path: '/api/support/tickets',
-      auth: 'public',
+      auth: 'account',
       scope: 'session',
       body: support.CreateSupportTicketRequest,
       response: support.SupportTicketCreatedDto,
     }),
+    /** Hub: a ticket of the character in `?character=` (default the main one). */
     messages: route({
       method: 'GET',
       path: '/api/support/tickets/:ticketId/messages',
-      auth: 'public',
+      auth: 'account',
       scope: 'session',
+      query: support.SupportCharacterQuery,
       response: support.SupportThreadDto,
     }),
     reply: route({
       method: 'POST',
       path: '/api/support/tickets/:ticketId/messages',
-      auth: 'public',
+      auth: 'account',
       scope: 'session',
+      query: support.SupportCharacterQuery,
       body: support.SupportReplyRequest,
       response: support.SupportThreadDto,
     }),
     markRead: route({
       method: 'POST',
       path: '/api/support/tickets/:ticketId/read',
-      auth: 'public',
+      auth: 'account',
       scope: 'session',
+      query: support.SupportCharacterQuery,
     }),
     /** Hub: a survey answer; anonymous unless signed in. */
     feedback: route({
@@ -1709,7 +1699,7 @@ export const routes = {
     createHandle: route({
       method: 'POST',
       path: '/api/support/handles',
-      auth: 'public',
+      auth: 'account',
       scope: 'session',
       body: support.CreateSupportHandleRequest,
       response: support.SupportHandleCreatedDto,
@@ -1717,18 +1707,18 @@ export const routes = {
     handles: route({
       method: 'GET',
       path: '/api/support/handles',
-      auth: 'public',
+      auth: 'account',
       scope: 'session',
       response: z.array(support.SupportHandleDto),
     }),
     revokeHandle: route({
       method: 'DELETE',
       path: '/api/support/handles/:handleId',
-      auth: 'public',
+      auth: 'account',
       scope: 'session',
     }),
     /**
-     * Hub: unread replies for a handle (`?h=`), or for the hub session. Any origin may read it
+     * Hub: unread replies for a handle (`?h=`), or for the signed-in account. Any origin may read it
      * (no credentials); answers nothing but the count, and is rate-limited per handle.
      */
     unread: route({

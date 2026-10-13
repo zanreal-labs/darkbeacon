@@ -144,16 +144,17 @@ describeEachDialect('the hub’s own support store', (t) => {
     await handles.create({
       id: 'h1',
       tokenHash: 'hash1',
-      distinctId: ME.distinctId,
+      accountId: 'account-me',
       origin: 'https://a.example',
       createdAt: 1,
       lastUsedAt: null,
     });
     expect(await handles.byTokenHash('hash1')).toMatchObject({ id: 'h1', origin: 'https://a.example' });
     await handles.touch('h1', 5);
-    expect((await handles.ofIdentity(ME.distinctId))[0]?.lastUsedAt).toBe(5);
-    expect(await handles.revoke(BUYER.distinctId, 'h1')).toBe(false);
-    expect(await handles.revoke(ME.distinctId, 'h1')).toBe(true);
+    expect((await handles.ofAccount('account-me'))[0]?.lastUsedAt).toBe(5);
+    expect(await handles.ofAccount('account-other')).toEqual([]);
+    expect(await handles.revoke('account-other', 'h1')).toBe(false);
+    expect(await handles.revoke('account-me', 'h1')).toBe(true);
     expect(await handles.byTokenHash('hash1')).toBeNull();
 
     const box = new SecretBox('k'.repeat(32), 'support-handle');

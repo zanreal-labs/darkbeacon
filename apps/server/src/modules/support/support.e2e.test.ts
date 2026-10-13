@@ -6,10 +6,11 @@ import type {
   AdminSupportFeedbackDto,
   AdminSupportInboxDto,
   AdminSupportThreadDto,
+  MeDto,
   SupportClientDto,
   SupportSessionDto,
   SupportThreadDto,
-  SupportTicketDto,
+  SupportTicketGroupDto,
 } from '@darkbeacon/shared';
 import { EVE_CLIENT, FakeNetwork, type EveCharacter } from '../../adapters/identity/fake-network.js';
 import { createApp } from '../../app.js';
@@ -20,6 +21,15 @@ import { FakePostHogSupport } from '../../test-support/fake-posthog-support.js';
 
 const HUB = 'http://dbk.test';
 const PILOT: EveCharacter = { id: 2112000001, name: 'Pilot One', owner: 'owner-a', corporationId: 98000001 };
+const ALT: EveCharacter = { id: 2112000003, name: 'Pilot Alt', owner: 'owner-a', corporationId: 98000001 };
+const STRANGER: EveCharacter = {
+  id: 2112000002,
+  name: 'Someone Else',
+  owner: 'owner-c',
+  corporationId: 98000002,
+};
+/** Where the hub's page sends a signed-out pilot from another instance's popup. */
+const BACK = `/support?kind=ticket&origin=${encodeURIComponent('https://map.example.com')}`;
 
 describeEachDialect('support hub over HTTP', (t) => {
   let app: NestFastifyApplication | undefined;
@@ -57,26 +67,22 @@ describeEachDialect('support hub over HTTP', (t) => {
     vi.unstubAllEnvs();
   });
 
-  /** Signs in on the hub with EVE SSO (no scopes) and returns the browser and its CSRF token. */
-  const hubSignIn = async (character: EveCharacter, browser = new Browser(base)) => {
-    const begin = await browser.request('/support/login?returnTo=%2Fsupport%3Fkind%3Dticket');
-    expect(begin.status).toBe(302);
-    const sso = new URL(begin.headers.get('location')!);
-    expect(sso.host).toBe('login.eveonline.com');
-    expect(sso.searchParams.has('scope')).toBe(false);
-    expect(sso.searchParams.get('redirect_uri')).toBe(`${HUB}/support/callback`);
-    const code = network.approveEve(character, sso.searchParams.get('code_challenge'));
-    const back = await browser.request(
-      `/support/callback?code=${code}&state=${sso.searchParams.get('state')}`,
+  /**
+   * Signs in to the hub the way any instance is signed in to: the app's EVE sign-in, back on the
+   * support page the popup came from. The session is the app's own cookie.
+   */
+  const appSignIn = async (character: EveCharacter, browser = new Browser(base)) => {
+    const back = await browser.oauth(`/api/auth/eve/signin?returnTo=${encodeURIComponent(BACK)}`, (c) =>
+      network.approveEve(character, c),
     );
-    expect(back.status).toBe(302);
-    expect(back.headers.get('location')).toBe('/support?kind=ticket');
-    const session = await browser.json<SupportSessionDto>('/api/support/session');
-    expect(session.character).toEqual({ id: character.id, name: character.name });
-    return { browser, csrf: session.csrf! };
+    expect(back).toBe(BACK);
+    expect(browser.cookies.get('dbk_session')).toBeTruthy();
+    return browser;
   };
 
-  const write = (csrf: string, origin = HUB) => ({ origin, 'x-support-csrf': csrf });
+  /** Links another character to the signed-in account (the app's link-character flow). */
+  const link = (browser: Browser, character: EveCharacter) =>
+    browser.oauth('/api/auth/eve/login?returnTo=%2Fsupport', (c) => network.approveEve(character, c));
 
   const owner = async () => {
     const browser = new Browser(base);
@@ -87,25 +93,79 @@ describeEachDialect('support hub over HTTP', (t) => {
     return browser;
   };
 
-  it('runs the local desk end to end: sign-in, tickets, the admin inbox, unread handles', async () => {
-    await start({ SUPPORT_HUB: 'on', SUPPORT_BACKEND: 'local' });
-    const admin = await owner();
+  const groups = (browser: Browser) => browser.json<SupportTicketGroupDto[]>('/api/support/tickets');
 
-    expect(await new Browser(base).json<SupportSessionDto>('/api/support/session')).toEqual({
+  it('signs pilots in with the app’s own session and sends them back to the support page only', async () => {
+    await start({ SUPPORT_HUB: 'on', SUPPORT_BACKEND: 'local' });
+    await owner();
+
+    // Signed out: the page says so, and nothing of a pilot's answers.
+    const anonymous = new Browser(base);
+    expect(await anonymous.json<SupportSessionDto>('/api/support/session')).toEqual({
       available: true,
       backend: 'local',
       feedback: true,
-      character: null,
-      csrf: null,
+      signedIn: false,
+      characters: [],
     });
-    // Anonymous: no tickets.
-    expect((await new Browser(base).request('/api/support/tickets')).status).toBe(401);
+    for (const path of ['/api/support/tickets', '/api/support/handles'])
+      expect((await anonymous.request(path)).status, path).toBe(401);
+    expect(
+      (
+        await anonymous.request('/api/support/tickets', {
+          method: 'POST',
+          json: { category: 'bug', message: 'x' },
+        })
+      ).status,
+    ).toBe(401);
+    expect(await anonymous.json('/api/support/unread')).toEqual({ unread: 0 });
+    // The separate sign-in is gone.
+    for (const path of ['/api/support/auth/login', '/api/support/auth/callback'])
+      expect((await anonymous.request(path)).status, path).toBe(404);
 
-    const { browser: pilot, csrf } = await hubSignIn(PILOT);
-    const cookie = pilot.cookies.get('dbk_support');
-    expect(cookie).toBeTruthy();
-    // The hub session is not an app session.
-    expect((await pilot.request('/api/accounts/me')).status).toBe(401);
+    // The app's sign-in comes back to the support page, with the popup's query.
+    const pilot = await appSignIn(PILOT);
+    expect(pilot.cookies.has('dbk_support')).toBe(false);
+    expect(await pilot.json<SupportSessionDto>('/api/support/session')).toMatchObject({
+      signedIn: true,
+      characters: [{ id: PILOT.id, name: PILOT.name, main: true }],
+    });
+    // It is the app session: the same cookie opens the app.
+    expect((await pilot.json<MeDto>('/api/accounts/me')).account.mainCharacterId).toBe(PILOT.id);
+
+    // returnTo is a path on this site, never another one.
+    for (const evil of [
+      'https://evil.example/support',
+      '//evil.example/support',
+      '/\\evil.example/support',
+      '/\t/evil.example',
+      'javascript:alert(1)',
+    ])
+      expect(
+        await new Browser(base).oauth(`/api/auth/eve/signin?returnTo=${encodeURIComponent(evil)}`, (c) =>
+          network.approveEve(PILOT, c),
+        ),
+        evil,
+      ).toBe('/');
+
+    // Signing out of the app signs out of the hub.
+    expect((await pilot.request('/api/auth/logout', { method: 'POST' })).status).toBe(204);
+    expect((await pilot.request('/api/support/tickets')).status).toBe(401);
+    expect((await pilot.json<SupportSessionDto>('/api/support/session')).signedIn).toBe(false);
+  });
+
+  it('runs the local desk end to end: characters, tickets, the admin inbox, unread handles', async () => {
+    await start({ SUPPORT_HUB: 'on', SUPPORT_BACKEND: 'local' });
+    const admin = await owner();
+    const pilot = await appSignIn(PILOT);
+    await link(pilot, ALT);
+    const stranger = await appSignIn(STRANGER);
+
+    // Every character of the account, main first.
+    expect((await pilot.json<SupportSessionDto>('/api/support/session')).characters).toEqual([
+      { id: PILOT.id, name: PILOT.name, main: true },
+      { id: ALT.id, name: ALT.name, main: false },
+    ]);
 
     const body = {
       category: 'bug',
@@ -116,78 +176,96 @@ describeEachDialect('support hub over HTTP', (t) => {
         errors: ['TypeError: x of "J100101" at https://a.test/m/home'],
       },
     };
-    // CSRF: no token, a wrong token, another origin, no origin.
-    expect(
-      (await pilot.request('/api/support/tickets', { method: 'POST', json: body, headers: { origin: HUB } }))
-        .status,
-    ).toBe(403);
-    expect(
-      (await pilot.request('/api/support/tickets', { method: 'POST', json: body, headers: write('nope') }))
-        .status,
-    ).toBe(403);
-    expect(
-      (
-        await pilot.request('/api/support/tickets', {
-          method: 'POST',
-          json: body,
-          headers: write(csrf, 'https://evil.example'),
-        })
-      ).status,
-    ).toBe(403);
-    expect(
-      (
-        await pilot.request('/api/support/tickets', {
-          method: 'POST',
-          json: body,
-          headers: { 'x-support-csrf': csrf },
-        })
-      ).status,
-    ).toBe(403);
-    // Context fields outside the list are refused.
-    expect(
-      (
-        await pilot.request('/api/support/tickets', {
-          method: 'POST',
-          json: { ...body, context: { slug: 'home' } },
-          headers: write(csrf),
-        })
-      ).status,
-    ).toBe(400);
+    const post = (browser: Browser, path: string, json?: unknown, origin = HUB) =>
+      browser.request(path, { method: 'POST', ...(json === undefined ? {} : { json }), headers: { origin } });
 
-    const created = await pilot.request('/api/support/tickets', {
-      method: 'POST',
-      json: body,
-      headers: write(csrf),
+    // CSRF: the session cookie counts only from the hub's own pages.
+    expect((await post(pilot, '/api/support/tickets', body, 'https://evil.example')).status).toBe(401);
+    expect(
+      (await post(pilot, '/api/support/handles', { origin: 'https://evil.example' }, 'https://evil.example'))
+        .status,
+    ).toBe(401);
+    expect(await pilot.json('/api/support/unread', { headers: { origin: 'https://evil.example' } })).toEqual({
+      unread: 0,
     });
+    // Context fields outside the list are refused.
+    expect((await post(pilot, '/api/support/tickets', { ...body, context: { slug: 'home' } })).status).toBe(
+      400,
+    );
+    // A character of another account, or none at all, is refused.
+    for (const characterId of [STRANGER.id, 2112999999])
+      expect(
+        (await post(pilot, '/api/support/tickets', { ...body, characterId })).status,
+        String(characterId),
+      ).toBe(403);
+
+    // The main character by default, another one when picked.
+    const created = await post(pilot, '/api/support/tickets', body);
     expect(created.status).toBe(201);
     const { id } = (await created.json()) as { id: string };
+    const onAlt = await post(pilot, '/api/support/tickets', {
+      ...body,
+      characterId: ALT.id,
+      message: 'On the alt',
+    });
+    expect(onAlt.status).toBe(201);
+    const { id: altId } = (await onAlt.json()) as { id: string };
 
-    const mine = await pilot.json<SupportTicketDto[]>('/api/support/tickets');
-    expect(mine).toMatchObject([{ id, number: 1, category: 'bug', status: 'new', unread: 0 }]);
+    // My tickets: per character, main first.
+    const mine = await groups(pilot);
+    expect(mine.map((g) => [g.character, g.tickets.map((x) => x.id)])).toEqual([
+      [{ id: PILOT.id, name: PILOT.name }, [id]],
+      [{ id: ALT.id, name: ALT.name }, [altId]],
+    ]);
+    expect(mine[0]!.tickets).toMatchObject([{ id, number: 1, category: 'bug', status: 'new', unread: 0 }]);
+    // A thread opens as the character it belongs to.
+    expect((await pilot.request(`/api/support/tickets/${altId}/messages`)).status).toBe(404);
+    expect(
+      (await pilot.json<SupportThreadDto>(`/api/support/tickets/${altId}/messages?character=${ALT.id}`))
+        .messages,
+    ).toMatchObject([{ author: 'you', body: 'On the alt' }]);
+    expect((await pilot.request(`/api/support/tickets/${id}/messages?character=${STRANGER.id}`)).status).toBe(
+      403,
+    );
+    expect((await pilot.request(`/api/support/tickets/${id}/messages?character=nope`)).status).toBe(400);
+    // Someone else's account sees none of it.
+    expect(await groups(stranger)).toEqual([
+      { character: { id: STRANGER.id, name: STRANGER.name }, tickets: [] },
+    ]);
+    expect((await stranger.request(`/api/support/tickets/${id}/messages`)).status).toBe(404);
+    expect((await stranger.request(`/api/support/tickets/${id}/messages?character=${PILOT.id}`)).status).toBe(
+      403,
+    );
 
     // The admin inbox: the ticket, its (scrubbed) context, an answer and a status.
     const inbox = await admin.json<AdminSupportInboxDto>('/api/admin/support/tickets');
-    expect(inbox).toMatchObject({
-      unanswered: 1,
-      tickets: [{ id, unread: 1, character: { name: 'Pilot One' } }],
-    });
+    expect(inbox.unanswered).toBe(2);
+    expect(inbox.tickets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id, unread: 1, character: { id: PILOT.id, name: 'Pilot One' } }),
+      ]),
+    );
     const detail = await admin.json<AdminSupportThreadDto>(`/api/admin/support/tickets/${id}`);
     expect(detail.context.errors).toEqual(['TypeError: x of <str> at <url>']);
-    expect((await pilot.request(`/api/admin/support/tickets/${id}`)).status).toBe(401);
-    const answered = await admin.json<AdminSupportThreadDto>(`/api/admin/support/tickets/${id}/messages`, {
-      method: 'POST',
-      json: { message: 'Fixed in 0.1.1, please update' },
-    });
-    expect(answered.ticket.status).toBe('pending');
+    expect((await pilot.request(`/api/admin/support/tickets/${id}`)).status).toBe(403);
+    for (const [ticket, message] of [
+      [id, 'Fixed in 0.1.1, please update'],
+      [altId, 'And on the alt'],
+    ] as const) {
+      const answered = await admin.json<AdminSupportThreadDto>(
+        `/api/admin/support/tickets/${ticket}/messages`,
+        {
+          method: 'POST',
+          json: { message },
+        },
+      );
+      expect(answered.ticket.status).toBe('pending');
+    }
     await admin.json(`/api/admin/support/tickets/${id}`, { method: 'PATCH', json: { priority: 'high' } });
 
-    // The pilot sees the answer as unread, on the hub and through a handle.
-    expect(await pilot.json('/api/support/unread')).toEqual({ unread: 1 });
-    const handleAnswer = await pilot.request('/api/support/handles', {
-      method: 'POST',
-      json: { origin: 'https://map.example.com' },
-      headers: write(csrf),
-    });
+    // The pilot sees the answers as unread, over every character, on the hub and through a handle.
+    expect(await pilot.json('/api/support/unread')).toEqual({ unread: 2 });
+    const handleAnswer = await post(pilot, '/api/support/handles', { origin: 'https://map.example.com' });
     expect(handleAnswer.status).toBe(201);
     const { handle } = (await handleAnswer.json()) as { handle: string };
 
@@ -198,7 +276,7 @@ describeEachDialect('support hub over HTTP', (t) => {
     expect(polled.status).toBe(200);
     expect(polled.headers.get('access-control-allow-origin')).toBe('https://map.example.com');
     expect(polled.headers.get('access-control-allow-credentials')).toBeNull();
-    expect(await polled.json()).toEqual({ unread: 1 });
+    expect(await polled.json()).toEqual({ unread: 2 });
     expect(
       (
         await anonymous.request(`/api/support/unread?h=${handle}`, {
@@ -208,94 +286,115 @@ describeEachDialect('support hub over HTTP', (t) => {
     ).toBe(403);
     expect((await anonymous.request(`/api/support/unread?h=dbsh_${'x'.repeat(43)}`)).status).toBe(404);
     expect((await anonymous.request('/api/support/unread?h=garbage')).status).toBe(400);
-    // Another origin cannot read the pilot's count with their cookie.
-    expect(
-      await (
-        await pilot.request('/api/support/unread', { headers: { origin: 'https://evil.example' } })
-      ).json(),
-    ).toEqual({ unread: 0 });
 
     const thread = await pilot.json<SupportThreadDto>(`/api/support/tickets/${id}/messages`);
     expect(thread.messages.map((m) => [m.author, m.authorName, m.body])).toEqual([
       ['you', null, 'Signatures vanish after paste'],
       ['support', 'Darkbeacon support', 'Fixed in 0.1.1, please update'],
     ]);
-    expect(
-      (await pilot.request(`/api/support/tickets/${id}/read`, { method: 'POST', headers: write(csrf) }))
-        .status,
-    ).toBe(204);
+    expect((await post(pilot, `/api/support/tickets/${id}/read`)).status).toBe(204);
+    expect((await post(pilot, `/api/support/tickets/${altId}/read?character=${ALT.id}`)).status).toBe(204);
     expect(await pilot.json('/api/support/unread')).toEqual({ unread: 0 });
-    const replied = await pilot.request(`/api/support/tickets/${id}/messages`, {
-      method: 'POST',
-      json: { message: 'Works now, thanks' },
-      headers: write(csrf),
+    // Read and reply from another origin: refused like any change.
+    expect(
+      (await post(pilot, `/api/support/tickets/${id}/messages`, { message: 'x' }, 'https://evil.example'))
+        .status,
+    ).toBe(401);
+    const replied = await post(pilot, `/api/support/tickets/${id}/messages`, {
+      message: 'Works now, thanks',
     });
     expect(replied.status).toBe(200);
 
-    // Handles can be listed and revoked.
+    // Handles belong to the account: listed and revoked by it, not by someone else.
     const handles = await pilot.json<Array<{ id: string; origin: string }>>('/api/support/handles');
     expect(handles).toMatchObject([{ origin: 'https://map.example.com' }]);
+    expect(await stranger.json('/api/support/handles')).toEqual([]);
+    expect(
+      (
+        await stranger.request(`/api/support/handles/${handles[0]!.id}`, {
+          method: 'DELETE',
+          headers: { origin: HUB },
+        })
+      ).status,
+    ).toBe(404);
     expect(
       (
         await pilot.request(`/api/support/handles/${handles[0]!.id}`, {
           method: 'DELETE',
-          headers: write(csrf),
+          headers: { origin: HUB },
         })
       ).status,
     ).toBe(204);
     expect((await anonymous.request(`/api/support/unread?h=${handle}`)).status).toBe(404);
 
-    // The character changes hands: the buyer starts clean and cannot reach the seller's ticket.
-    const { browser: buyer, csrf: buyerCsrf } = await hubSignIn({ ...PILOT, owner: 'owner-b' });
-    expect(await buyer.json('/api/support/tickets')).toEqual([]);
+    // The main character is sold: the buyer signs in with it under a new EVE owner and starts clean.
+    const buyer = await appSignIn({ ...PILOT, owner: 'owner-b' });
+    expect(await groups(buyer)).toEqual([{ character: { id: PILOT.id, name: PILOT.name }, tickets: [] }]);
     expect((await buyer.request(`/api/support/tickets/${id}/messages`)).status).toBe(404);
-    expect(
-      (
-        await buyer.request(`/api/support/tickets/${id}/messages`, {
-          method: 'POST',
-          json: { message: 'mine?' },
-          headers: write(buyerCsrf),
-        })
-      ).status,
-    ).toBe(404);
-    // ...and the seller, signing in again, still has it.
-    const { browser: seller } = await hubSignIn(PILOT);
-    expect(await seller.json<SupportTicketDto[]>('/api/support/tickets')).toHaveLength(1);
+    expect((await post(buyer, `/api/support/tickets/${id}/messages`, { message: 'mine?' })).status).toBe(404);
+    // The seller no longer holds it: only the alt's tickets are left, the main one is refused.
+    expect((await groups(pilot)).map((g) => g.character.id)).toEqual([ALT.id]);
+    expect((await pilot.request(`/api/support/tickets/${id}/messages?character=${PILOT.id}`)).status).toBe(
+      403,
+    );
+    // Bought back by the first owner: their tickets again.
+    await link(pilot, PILOT);
+    expect((await groups(pilot)).find((g) => g.character.id === PILOT.id)?.tickets.map((x) => x.id)).toEqual([
+      id,
+    ]);
 
-    // Five new tickets an hour per character.
+    // Five new tickets an hour per character; the other character is not held up.
     for (let i = 0; i < 4; i++)
-      expect(
-        (await pilot.request('/api/support/tickets', { method: 'POST', json: body, headers: write(csrf) }))
-          .status,
-      ).toBe(201);
-    const limited = await pilot.request('/api/support/tickets', {
-      method: 'POST',
-      json: body,
-      headers: write(csrf),
-    });
-    expect(limited.status).toBe(429);
+      expect((await post(pilot, '/api/support/tickets', { ...body, characterId: PILOT.id })).status).toBe(
+        201,
+      );
+    expect((await post(pilot, '/api/support/tickets', { ...body, characterId: PILOT.id })).status).toBe(429);
+    expect((await post(pilot, '/api/support/tickets', { ...body, characterId: ALT.id })).status).toBe(201);
 
-    // Feedback: anonymous from the hub's page, never from elsewhere.
+    // An account without an EVE character (Discord) is asked to link one.
+    const discord = new Browser(base);
+    await discord.json('/api/auth/dev', { method: 'POST', json: { name: 'Discord Only' } });
+    expect(await discord.json<SupportSessionDto>('/api/support/session')).toMatchObject({
+      signedIn: true,
+      characters: [],
+    });
+    expect(await groups(discord)).toEqual([]);
+    const refused = await post(discord, '/api/support/tickets', body);
+    expect(refused.status).toBe(403);
+    expect(((await refused.json()) as { error: { message: string } }).error.message).toBe(
+      'Link an EVE character to your account first',
+    );
+
+    // Feedback: anonymous from the hub's page, never from elsewhere; signed in as the main character.
     expect(
-      (
-        await anonymous.request('/api/support/feedback', {
-          method: 'POST',
-          json: { kind: 'quick', rating: 5, text: 'Love it' },
-          headers: { origin: HUB },
-        })
-      ).status,
+      (await post(anonymous, '/api/support/feedback', { kind: 'quick', rating: 5, text: 'Love it' })).status,
     ).toBe(202);
     expect(
       (
         await anonymous.request('/api/support/feedback', {
           method: 'POST',
           json: { kind: 'quick', rating: 5 },
-          headers: { origin: 'https://evil.example' },
         })
       ).status,
     ).toBe(403);
+    expect(
+      (await post(anonymous, '/api/support/feedback', { kind: 'quick', rating: 5 }, 'https://evil.example'))
+        .status,
+    ).toBe(403);
+    expect((await post(pilot, '/api/support/feedback', { kind: 'feature', text: 'Dark mode' })).status).toBe(
+      202,
+    );
     const feedback = await admin.json<AdminSupportFeedbackDto[]>('/api/admin/support/feedback');
-    expect(feedback).toMatchObject([{ kind: 'quick', rating: 5, text: 'Love it', character: null }]);
+    expect(feedback).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'quick', rating: 5, text: 'Love it', character: null }),
+        expect.objectContaining({
+          kind: 'feature',
+          text: 'Dark mode',
+          character: { id: PILOT.id, name: PILOT.name },
+        }),
+      ]),
+    );
 
     // Audited without content.
     const audit = await admin.json<{ entries: Array<{ type: string }> }>('/api/admin/audit');
@@ -312,11 +411,6 @@ describeEachDialect('support hub over HTTP', (t) => {
         .status,
     ).toBe(404);
 
-    // Signing out ends the hub session.
-    expect(
-      (await pilot.request('/api/support/auth/logout', { method: 'POST', headers: { origin: HUB } })).status,
-    ).toBe(204);
-    expect((await pilot.request('/api/support/tickets')).status).toBe(401);
     // This instance is the hub: the help menu opens it in the app.
     expect(await admin.json<SupportClientDto>('/api/support/client')).toMatchObject({
       hubUrl: HUB,
@@ -344,11 +438,11 @@ describeEachDialect('support hub over HTTP', (t) => {
       backend: 'posthog',
       feedback: true,
     });
-    const { browser: pilot, csrf } = await hubSignIn(PILOT);
+    const pilot = await appSignIn(PILOT);
     const created = await pilot.request('/api/support/tickets', {
       method: 'POST',
       json: { category: 'question', message: 'How do I import from Wanderer?', context: { page: 'import' } },
-      headers: write(csrf),
+      headers: { origin: HUB },
     });
     expect(created.status).toBe(201);
     const { id } = (await created.json()) as { id: string };
@@ -358,9 +452,7 @@ describeEachDialect('support hub over HTTP', (t) => {
       sessionContext: { category: 'question', page: 'import' },
     });
     // The category comes from the hub's own note.
-    expect(await pilot.json<SupportTicketDto[]>('/api/support/tickets')).toMatchObject([
-      { id, category: 'question', unread: 0 },
-    ]);
+    expect((await groups(pilot))[0]!.tickets).toMatchObject([{ id, category: 'question', unread: 0 }]);
 
     posthog.answer(id, 'Admin > Import, paste the Wanderer URL');
     // Cached: the hub does not know yet...
@@ -387,6 +479,17 @@ describeEachDialect('support hub over HTTP', (t) => {
     expect(await pilot.json('/api/support/unread')).toEqual({ unread: 1 });
     const thread = await pilot.json<SupportThreadDto>(`/api/support/tickets/${id}/messages`);
     expect(thread.messages.at(-1)).toMatchObject({ author: 'support', authorName: 'Zan' });
+
+    // A new owner of the character is a new person in PostHog.
+    const buyer = await appSignIn({ ...PILOT, owner: 'owner-b' });
+    const bought = await buyer.request('/api/support/tickets', {
+      method: 'POST',
+      json: { category: 'bug', message: 'New owner here' },
+      headers: { origin: HUB },
+    });
+    expect(bought.status).toBe(201);
+    const { id: boughtId } = (await bought.json()) as { id: string };
+    expect(posthog.tickets.get(boughtId)).toMatchObject({ distinctId: `eve:${PILOT.id}:o2` });
 
     // Feedback goes to the surveys project; feature requests are not set up here.
     const sent = await anonymous.request('/api/support/feedback', {
@@ -419,14 +522,13 @@ describeEachDialect('support hub over HTTP', (t) => {
     const anonymous = new Browser(base);
     expect(await anonymous.json<SupportSessionDto>('/api/support/session')).toMatchObject({
       available: false,
+      signedIn: false,
     });
-    expect((await anonymous.request('/support/login')).headers.get('location')).toMatch(
-      /^\/support\?support_error=/,
-    );
     expect((await anonymous.request('/api/support/tickets')).status).toBe(404);
     expect((await anonymous.request(`/api/support/unread?h=dbsh_${'a'.repeat(43)}`)).status).toBe(404);
 
     const account = await owner();
+    expect((await account.request('/api/support/tickets')).status).toBe(404);
     expect(await account.json<SupportClientDto>('/api/support/client')).toMatchObject({
       hubUrl: 'https://hub.example',
       inApp: false,

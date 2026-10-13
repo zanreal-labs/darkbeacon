@@ -160,8 +160,8 @@ made while seeding the demo map or by cleanups count as nothing; a history rever
 
 ## Support tickets and feedback are not telemetry
 
-The help menu's "Report a problem" and "Send feedback" carry what a person writes and are tied to the EVE
-character they sign in with, so they never go through telemetry: they go to the support hub, a separate
+The help menu's "Report a problem" and "Send feedback" carry what a person writes and are tied to one of
+their EVE characters, so they never go through telemetry: they go to the support hub, a separate
 PostHog project, only when someone sends them (see [docs/support.md](support.md)). The only help-menu
 signal that is telemetry is the thumbs up or down (`feedback_rated`): an enum and the kind of page, nothing
 typed.

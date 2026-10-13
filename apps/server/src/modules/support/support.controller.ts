@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { timingSafeEqual } from 'node:crypto';
 import {
   Body,
   Controller,
@@ -6,7 +6,6 @@ import {
   Get,
   HttpCode,
   Inject,
-  Logger,
   Param,
   Patch,
   Post,
@@ -15,8 +14,7 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
-import { isDomainError, NotFoundError, type Actor } from '@darkbeacon/core';
-import type { EveSso } from '@darkbeacon/identity';
+import { ForbiddenError, NotFoundError, requireAccount, type Actor } from '@darkbeacon/core';
 import {
   AdminSupportTicketsQuery,
   AdminSupportTicketUpdate,
@@ -25,6 +23,7 @@ import {
   nestPath,
   routes,
   SaveSupportHandleRequest,
+  SupportCharacterQuery,
   SupportFeedbackRequest,
   SupportReplyRequest,
   SupportUnreadQuery,
@@ -38,24 +37,15 @@ import {
   type SupportSessionDto,
   type SupportThreadDto,
   type SupportTicketCreatedDto,
-  type SupportTicketDto,
+  type SupportTicketGroupDto,
   type SupportUnreadDto,
 } from '@darkbeacon/shared';
 import { SupportClientService, type SupportHub, type SupportInbox } from '@darkbeacon/support';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { ClientIp, CurrentActor } from '../../platform/actor.js';
+import { ClientIp, CurrentActor, sameOrigin } from '../../platform/actor.js';
 import { ZodPipe } from '../../platform/http.js';
-import { supportReturnTo, type HubSession, type SupportSessions } from './support-session.js';
-import {
-  SUPPORT_EVE_SSO,
-  SUPPORT_HUB,
-  SUPPORT_INBOX,
-  SUPPORT_SESSIONS,
-  SUPPORT_SETTINGS,
-} from './support.tokens.js';
+import { SUPPORT_HUB, SUPPORT_INBOX, SUPPORT_SETTINGS } from './support.tokens.js';
 import type { SupportSettings } from './support.settings.js';
-
-const LOGIN_TTL_MS = 10 * 60 * 1000;
 
 /** Every instance: where the help menu goes, and the unread handle of the signed-in account. */
 @Controller()
@@ -84,180 +74,137 @@ export class SupportClientController {
 }
 
 /**
- * The support hub's pages talk to these: its own EVE sign-in (no scopes) and session, tickets,
- * feedback and unread handles. Nothing here answers unless the instance is a hub.
+ * The support hub's pages talk to these: tickets, feedback and unread handles. Pilots are signed
+ * in with the app's own session (the actor guard reads the session cookie only on requests from
+ * the instance's own pages, and the cookie is SameSite=Lax), and act as one of their account's EVE
+ * characters. Nothing here answers unless the instance is a hub.
  */
 @Controller()
 export class SupportHubController {
-  private readonly logger = new Logger('Support');
+  private readonly publicOrigin: string;
 
   constructor(
     @Inject(SUPPORT_HUB) private readonly hub: SupportHub | null,
-    @Inject(SUPPORT_SESSIONS) private readonly sessions: SupportSessions,
-    @Inject(SUPPORT_EVE_SSO) private readonly eve: EveSso | null,
     @Inject(SUPPORT_SETTINGS) private readonly settings: SupportSettings & { publicUrl: string },
-  ) {}
+  ) {
+    this.publicOrigin = new URL(settings.publicUrl).origin;
+  }
 
   @Get(nestPath(routes.support.session.path))
-  session(
-    @Req() request: FastifyRequest,
+  async session(
+    @CurrentActor() actor: Actor | null,
     @Res({ passthrough: true }) reply: FastifyReply,
-  ): SupportSessionDto {
+  ): Promise<SupportSessionDto> {
     void reply.header('cache-control', 'no-store');
-    if (!this.hub) return { available: false, backend: null, feedback: false, character: null, csrf: null };
-    const session = this.sessions.read(request);
+    if (!this.hub)
+      return { available: false, backend: null, feedback: false, signedIn: false, characters: [] };
+    const account = sessionAccount(actor);
+    const characters = account ? await this.hub.characters(account) : [];
     return {
       available: true,
       backend: this.hub.backend,
       feedback: this.hub.feedbackEnabled,
-      character: session ? { id: session.identity.characterId, name: session.identity.characterName } : null,
-      csrf: session?.csrf ?? null,
+      signedIn: account !== null,
+      characters: characters.map((c) => ({ id: c.characterId, name: c.characterName, main: c.main })),
     };
   }
 
-  @Get(nestPath(routes.support.login.path))
-  async login(@Query('returnTo') returnTo: unknown, @Res() reply: FastifyReply): Promise<void> {
-    const back = supportReturnTo(returnTo);
-    if (!this.hub || !this.eve) return this.redirect(reply, withError(back, 'Support is not set up here'));
-    const verifier = randomBytes(32).toString('base64url');
-    const state = randomBytes(16).toString('base64url');
-    reply.header(
-      'set-cookie',
-      this.sessions.pendingCookie({ state, verifier, returnTo: back, expiresAt: Date.now() + LOGIN_TTL_MS }),
-    );
-    // Authentication only: no ESI scopes, no token is kept.
-    const url = this.eve.authorizationUrl({
-      state,
-      codeChallenge: createHash('sha256').update(verifier).digest('base64url'),
-      redirectUri: this.callbackUrl,
-      scopes: [],
-    });
-    return this.redirect(reply, url);
-  }
-
-  @Get(nestPath(routes.support.callback.path))
-  async callback(
-    @Query() query: { code?: string; state?: string; error?: string },
-    @Req() request: FastifyRequest,
-    @Res() reply: FastifyReply,
-  ): Promise<void> {
-    const pending = this.sessions.readPending(request);
-    const cookies = [this.sessions.clearPending()];
-    const back = pending?.returnTo ?? '/support';
-    let location: string;
-    try {
-      if (!this.hub || !this.eve) throw new NotFoundError('Support');
-      if (query.error) throw new Error('cancelled');
-      if (!pending || !query.state || query.state !== pending.state || !query.code)
-        throw new Error('The sign-in expired; try again');
-      const tokens = await this.eve.exchangeCode({
-        code: query.code,
-        codeVerifier: pending.verifier,
-        redirectUri: this.callbackUrl,
-      });
-      const identity = await this.hub.signIn(tokens.identity);
-      cookies.push(this.sessions.sessionCookie(identity, randomBytes(24).toString('base64url')));
-      location = back;
-    } catch (error) {
-      const message =
-        error instanceof Error && error.message === 'cancelled'
-          ? 'Sign-in was cancelled'
-          : isDomainError(error) || (error instanceof Error && error.message.startsWith('The sign-in'))
-            ? (error as Error).message
-            : 'Sign-in failed, please try again';
-      if (!isDomainError(error) && !(error instanceof Error && /cancelled|expired/.test(error.message)))
-        this.logger.warn(`support sign-in failed: ${String(error)}`);
-      location = withError(back, message);
-    }
-    reply.header('set-cookie', cookies);
-    return this.redirect(reply, location);
-  }
-
-  @Post(nestPath(routes.support.logout.path))
-  @HttpCode(204)
-  logout(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply): void {
-    this.sessions.checkOrigin(request);
-    reply.header('set-cookie', this.sessions.clearSession());
-  }
-
   @Get(nestPath(routes.support.tickets.path))
-  tickets(@Req() request: FastifyRequest): Promise<SupportTicketDto[]> {
-    const { hub, session } = this.signedIn(request, false);
-    return hub.tickets(session.identity);
+  tickets(@CurrentActor() actor: Actor | null): Promise<SupportTicketGroupDto[]> {
+    const { hub, accountId } = this.signedIn(actor);
+    return hub.ticketGroups(accountId);
   }
 
   @Post(nestPath(routes.support.createTicket.path))
-  createTicket(
-    @Req() request: FastifyRequest,
+  async createTicket(
+    @CurrentActor() actor: Actor | null,
     @Body(new ZodPipe(CreateSupportTicketRequest)) body: CreateSupportTicketRequest,
   ): Promise<SupportTicketCreatedDto> {
-    const { hub, session } = this.signedIn(request, true);
-    return hub.create(session.identity, body);
+    const { hub, accountId } = this.signedIn(actor);
+    const { characterId, ...ticket } = body;
+    return hub.create(await hub.identity(accountId, characterId), ticket);
   }
 
   @Get(nestPath(routes.support.messages.path))
-  thread(@Req() request: FastifyRequest, @Param('ticketId') ticketId: string): Promise<SupportThreadDto> {
-    const { hub, session } = this.signedIn(request, false);
-    return hub.thread(session.identity, ticketId);
+  async thread(
+    @CurrentActor() actor: Actor | null,
+    @Param('ticketId') ticketId: string,
+    @Query(new ZodPipe(SupportCharacterQuery)) query: SupportCharacterQuery,
+  ): Promise<SupportThreadDto> {
+    const { hub, accountId } = this.signedIn(actor);
+    return hub.thread(await hub.identity(accountId, query.character), ticketId);
   }
 
   @Post(nestPath(routes.support.reply.path))
   @HttpCode(200)
-  reply(
-    @Req() request: FastifyRequest,
+  async reply(
+    @CurrentActor() actor: Actor | null,
     @Param('ticketId') ticketId: string,
+    @Query(new ZodPipe(SupportCharacterQuery)) query: SupportCharacterQuery,
     @Body(new ZodPipe(SupportReplyRequest)) body: SupportReplyRequest,
   ): Promise<SupportThreadDto> {
-    const { hub, session } = this.signedIn(request, true);
-    return hub.reply(session.identity, ticketId, body.message);
+    const { hub, accountId } = this.signedIn(actor);
+    return hub.reply(await hub.identity(accountId, query.character), ticketId, body.message);
   }
 
   @Post(nestPath(routes.support.markRead.path))
   @HttpCode(204)
-  async markRead(@Req() request: FastifyRequest, @Param('ticketId') ticketId: string): Promise<void> {
-    const { hub, session } = this.signedIn(request, true);
-    await hub.markRead(session.identity, ticketId);
+  async markRead(
+    @CurrentActor() actor: Actor | null,
+    @Param('ticketId') ticketId: string,
+    @Query(new ZodPipe(SupportCharacterQuery)) query: SupportCharacterQuery,
+  ): Promise<void> {
+    const { hub, accountId } = this.signedIn(actor);
+    await hub.markRead(await hub.identity(accountId, query.character), ticketId);
   }
 
   @Post(nestPath(routes.support.feedback.path))
   @HttpCode(202)
   async feedback(
+    @CurrentActor() actor: Actor | null,
     @Req() request: FastifyRequest,
     @ClientIp() ip: string | null,
     @Body(new ZodPipe(SupportFeedbackRequest)) body: SupportFeedbackRequest,
   ): Promise<void> {
     const hub = this.requireHub();
-    // Signed in: the session's token; anonymous: at least from the hub's own page.
-    const session = this.sessions.read(request);
-    if (session) this.sessions.require(request, true);
-    else this.sessions.checkOrigin(request);
-    await hub.feedback(session?.identity ?? null, body, ip);
+    // Signed in: as the main character (anonymous for an account without one). Anonymous: at
+    // least from the hub's own page.
+    const account = sessionAccount(actor);
+    if (!account && (!request.headers.origin || !sameOrigin(request.headers, this.publicOrigin)))
+      throw new ForbiddenError('Send this from the support page');
+    const identity =
+      account && (await hub.characters(account)).length > 0 ? await hub.identity(account) : null;
+    await hub.feedback(identity, body, ip);
   }
 
   @Post(nestPath(routes.support.createHandle.path))
   async createHandle(
-    @Req() request: FastifyRequest,
+    @CurrentActor() actor: Actor | null,
     @Body(new ZodPipe(CreateSupportHandleRequest)) body: CreateSupportHandleRequest,
   ): Promise<SupportHandleCreatedDto> {
-    const { hub, session } = this.signedIn(request, true);
-    return { handle: await hub.createHandle(session.identity, body.origin) };
+    const { hub, accountId } = this.signedIn(actor);
+    return { handle: await hub.createHandle(accountId, body.origin) };
   }
 
   @Get(nestPath(routes.support.handles.path))
-  handles(@Req() request: FastifyRequest): Promise<SupportHandleDto[]> {
-    const { hub, session } = this.signedIn(request, false);
-    return hub.handles(session.identity);
+  handles(@CurrentActor() actor: Actor | null): Promise<SupportHandleDto[]> {
+    const { hub, accountId } = this.signedIn(actor);
+    return hub.handles(accountId);
   }
 
   @Delete(nestPath(routes.support.revokeHandle.path))
   @HttpCode(204)
-  async revokeHandle(@Req() request: FastifyRequest, @Param('handleId') handleId: string): Promise<void> {
-    const { hub, session } = this.signedIn(request, true);
-    await hub.revokeHandle(session.identity, handleId);
+  async revokeHandle(
+    @CurrentActor() actor: Actor | null,
+    @Param('handleId') handleId: string,
+  ): Promise<void> {
+    const { hub, accountId } = this.signedIn(actor);
+    await hub.revokeHandle(accountId, handleId);
   }
 
   @Get(nestPath(routes.support.unread.path))
   async unread(
+    @CurrentActor() actor: Actor | null,
     @Req() request: FastifyRequest,
     @Query(new ZodPipe(SupportUnreadQuery)) query: SupportUnreadQuery,
     @Res({ passthrough: true }) reply: FastifyReply,
@@ -268,14 +215,10 @@ export class SupportHubController {
       const origin = request.headers.origin;
       return { unread: await hub.unreadForHandle(query.h, typeof origin === 'string' ? origin : null) };
     }
-    // Without a handle: the hub's own pages, with the hub session (same origin only).
-    const session = this.sessions.read(request);
-    if (
-      !session ||
-      (request.headers.origin && request.headers.origin !== new URL(this.settings.publicUrl).origin)
-    )
-      return { unread: 0 };
-    return { unread: await hub.unread(session.identity) };
+    // Without a handle: the hub's own pages, with the app session (the guard ignores the cookie
+    // on a request from another origin).
+    const account = sessionAccount(actor);
+    return { unread: account ? await hub.unreadOfAccount(account) : 0 };
   }
 
   @Post(nestPath(routes.support.webhook.path))
@@ -291,23 +234,23 @@ export class SupportHubController {
     hub.replyPosted(body.distinct_id);
   }
 
-  private get callbackUrl(): string {
-    return `${this.settings.publicUrl}/support/callback`;
-  }
-
   private requireHub(): SupportHub {
     if (!this.hub) throw new NotFoundError('Support');
     return this.hub;
   }
 
-  private signedIn(request: FastifyRequest, change: boolean): { hub: SupportHub; session: HubSession } {
+  /** The hub, and the account of the app session (401 without one). */
+  private signedIn(actor: Actor | null): { hub: SupportHub; accountId: string } {
     const hub = this.requireHub();
-    return { hub, session: this.sessions.require(request, change) };
+    const account = requireAccount(actor);
+    if (account.grant) throw new ForbiddenError('Support needs a browser session');
+    return { hub, accountId: account.id };
   }
+}
 
-  private async redirect(reply: FastifyReply, location: string): Promise<void> {
-    await reply.code(302).header('cache-control', 'no-store').header('location', location).send();
-  }
+/** The account of a browser session, or null (anonymous, or an API key). */
+function sessionAccount(actor: Actor | null): string | null {
+  return actor?.kind === 'account' && !actor.grant ? actor.id : null;
 }
 
 /** The hub's instance admins answer tickets here when it keeps them itself. */
@@ -365,10 +308,4 @@ function equal(a: string, b: string): boolean {
   const x = Buffer.from(a);
   const y = Buffer.from(b);
   return x.length === y.length && timingSafeEqual(x, y);
-}
-
-function withError(path: string, message: string): string {
-  const url = new URL(path, 'http://hub.invalid');
-  url.searchParams.set('support_error', message);
-  return `${url.pathname}${url.search}`;
 }

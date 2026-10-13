@@ -135,8 +135,8 @@ reasoning and the PostHog setup are in [docs/telemetry.md](docs/telemetry.md).
 
 The help menu (the question mark at the bottom of the left rail) has **Report a problem**, **Send
 feedback** and **My tickets**. They open the maintainers' support hub in a small window, where pilots sign
-in with an EVE character (no scopes, no token kept) and follow the answers from any instance; the help icon
-shows unread answers. Nothing is sent until someone presses Send, and the form lists every detail that goes
+in as on any Darkbeacon instance, pick which of their EVE characters a ticket belongs to and follow the
+answers from any instance; the help icon shows unread answers. Nothing is sent until someone presses Send, and the form lists every detail that goes
 with a ticket (version, database, page kind, browser family, the last scrubbed errors), each removable; your
 instance's address and the map's size only when ticked. Never map contents, system names, map addresses,
 notes, IPs or emails. Tickets are personal data and never go through telemetry. Hide the entries with
