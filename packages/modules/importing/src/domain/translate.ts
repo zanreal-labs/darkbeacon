@@ -947,11 +947,20 @@ function linkSignatures(
     if (s.linkedTo === null) continue;
     const key = pairKey(s.solarSystemId, s.linkedTo);
     if (!pairs.has(key)) {
-      report.dropped(
+      // No connection to link to (it is gone or was never mapped): the hole still leads there,
+      // so the signature keeps it in words and stays a wormhole.
+      const leads = `→ ${nameOf(s.linkedTo)}`;
+      const description = s.fields.description ? `${leads}\n${s.fields.description}` : leads;
+      s.fields.description =
+        description.length > LIMITS.sigDescription
+          ? `${description.slice(0, LIMITS.sigDescription - 1)}…`
+          : description;
+      s.fields.group = 'wormhole';
+      report.approximated(
         'signature',
-        'Link to a system without a connection',
-        'Darkbeacon links a signature to a connection',
-        `${s.name} → ${nameOf(s.linkedTo)}`,
+        'Link to a system without a connection kept in the description',
+        'Darkbeacon links a signature to a connection, and there is none',
+        `${s.name} ${leads}`,
       );
       s.linkedTo = null;
       continue;

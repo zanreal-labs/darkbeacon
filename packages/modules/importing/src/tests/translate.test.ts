@@ -305,10 +305,12 @@ describe('translating a Wanderer map', () => {
     );
     // Leads to Jita, but nothing connects the two here.
     expect(signature(plan, 'RST-444')?.linkedTo).toBeNull();
+    expect(signature(plan, 'RST-444')?.fields.description).toMatch(/^→ Jita/);
+    expect(signature(plan, 'RST-444')?.fields.group).toBe('wormhole');
 
     expect(line(report, 'mapped', /Combat anomaly/)?.examples).toEqual(['JKL-222 in J130026']);
     expect(line(report, 'mapped', /Data signature \(custom entry\)/)).toBeDefined();
-    expect(line(report, 'dropped', /Link to a system without a connection/)).toBeDefined();
+    expect(line(report, 'approximated', /Link to a system without a connection/)).toBeDefined();
     expect(line(report, 'approximated', /Wormhole type kept in the connection note/)?.examples[0]).toContain(
       'U210',
     );
