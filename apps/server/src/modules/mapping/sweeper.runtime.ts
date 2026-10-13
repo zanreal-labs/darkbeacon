@@ -22,7 +22,7 @@ export const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 /**
  * Runs the sweeper (`ChainSweeper`) over every map every five minutes with the instance's
  * settings (Admin, Instance): EOL as lifetimes run out, expired wormholes deleted, idle systems
- * hidden. Not in tests (they call `runOnce`), not during maintenance.
+ * hidden. Not in tests (they call `runOnce`), not in demo mode, not during maintenance.
  */
 @Injectable()
 export class SweeperRuntime implements OnApplicationBootstrap, OnModuleDestroy {
@@ -46,7 +46,8 @@ export class SweeperRuntime implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   onApplicationBootstrap(): void {
-    if (this.config.env === 'test') return;
+    // The demo's seeded chain is a showcase with fixed timestamps: sweeping would empty it overnight.
+    if (this.config.env === 'test' || this.config.demoMode) return;
     // One replica sweeps (the leader): two would mark the same connections twice.
     this.timer = setInterval(() => {
       if (this.leadership.isLeader()) void this.runOnce();
