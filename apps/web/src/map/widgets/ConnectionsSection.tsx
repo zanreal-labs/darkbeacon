@@ -11,7 +11,7 @@ import type { MapPermissions } from '../../lib/roles';
 import { IconButton } from '../../ui';
 import type { MapStore } from '../useMapStore';
 import { InlineText } from './InlineText';
-import styles from './sidebar.module.css';
+import styles from './widgets.module.css';
 
 const TYPE_NAME = { wormhole: 'Wormhole', gate: 'Stargate', bridge: 'Jump bridge' } as const;
 const HOUR = 3_600_000;

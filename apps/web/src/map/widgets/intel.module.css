@@ -1,4 +1,4 @@
-/* The system sidebar's Activity and Kills sections, and the holder line under the header. */
+/* The Kills widget (activity, killmails, who flies here) and the holder line in System info. */
 
 .empty {
   margin: 0;
@@ -63,22 +63,26 @@
   gap: 8px;
 }
 
+/* Three cells in a row: what, the last hour big, the day small, 24 bars under them. */
 .stats {
   display: grid;
-  gap: 4px;
-  margin: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 6px;
 }
 
 .stat {
   display: grid;
-  grid-template-columns: 6.5em 3em 96px minmax(0, 1fr);
-  gap: 10px;
-  align-items: center;
-  min-height: 24px;
+  gap: 1px;
+  min-width: 0;
 }
 
 .stat dt {
   color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 
 .stat dd {
@@ -86,10 +90,17 @@
 }
 
 .statHour {
+  overflow: hidden;
   font-size: 15px;
   font-weight: 700;
+  line-height: 18px;
   font-variant-numeric: tabular-nums;
-  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.statHour .statDay {
+  font-weight: 500;
 }
 
 .stat[data-tone='hot'] .statHour {

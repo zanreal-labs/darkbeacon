@@ -2,8 +2,7 @@
 
 import { useId, type ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
-import { useSectionPlacement } from './layout';
-import styles from './sidebar.module.css';
+import styles from './panel.module.css';
 
 interface Props {
   id: string;
@@ -24,8 +23,8 @@ interface Props {
   children: ReactNode;
 }
 
-/** One part of the system sidebar: a compact title bar that folds it, and its content. */
-export function SidebarSection({
+/** One part of the connection panel: a compact title bar that folds it, and its content. */
+export function PanelSection({
   id,
   title,
   count,
@@ -37,13 +36,9 @@ export function SidebarSection({
   children,
 }: Props) {
   const bodyId = useId();
-  // My layout may hide the section or move it (see `layout.tsx`).
-  const placement = useSectionPlacement(id);
-  if (placement?.hidden) return null;
   return (
     <section
       className={styles.section}
-      style={placement ? { order: placement.order } : undefined}
       data-section={id}
       data-collapsed={collapsed || undefined}
       aria-label={title}

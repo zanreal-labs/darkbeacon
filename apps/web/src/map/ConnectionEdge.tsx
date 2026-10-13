@@ -13,7 +13,7 @@ import type { ConnectionDto, ShipSize } from '@darkbeacon/shared';
 import { PluginSlot } from '../plugins/PluginSlot';
 import { edgeInnerStyle, edgeOuterStyle, edgeVisual, SHIP_SIZE_TEXT, type EdgeVisual } from './edgeStyle';
 import { floatingEnds, type Point, type Rect } from './geometry';
-import { lifetimeText } from './sidebar/ConnectionsSection';
+import { lifetimeText } from './widgets/ConnectionsSection';
 import styles from './ConnectionEdge.module.css';
 
 /** What went through a connection since its mass was last marked, for the hover card. */

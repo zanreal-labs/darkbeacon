@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Lock, LockOpen, Map as MapIcon, Navigation, Orbit, Skull, Telescope, X } from 'lucide-react';
+import { Lock, LockOpen, Map as MapIcon, Navigation, Orbit, Skull, Telescope } from 'lucide-react';
 import {
   buildPath,
   routes,
@@ -38,7 +38,8 @@ import { destinationToken } from '../WormholeFacts';
 import { EffectTable } from './EffectTable';
 import { InlineText } from './InlineText';
 import { NotesField } from './NotesField';
-import styles from './sidebar.module.css';
+import { WidgetWindow } from './WidgetWindow';
+import styles from './widgets.module.css';
 
 /**
  * Kills and jumps of the last hour and day, when an intel source provides them. Nothing in the
@@ -126,15 +127,6 @@ function Effect({ effect, whClass }: { effect: WormholeEffect; whClass: number |
 const statusColor = (s: SystemStatus) =>
   s === 'unknown' ? 'var(--dbk-color-border-strong)' : cssVar(`status-${s}`);
 
-/** Markdown notes as one quiet run of plain text, for the header's preview. */
-export function notesPreview(markdown: string): string {
-  return markdown
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/[*_`#>~]+/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
 /** The status as a small coloured chip; members pick another from its menu. */
 function StatusChip({ system, can, store }: { system: MapSystemDto; can: MapPermissions; store: Store }) {
   const status = system.status;
@@ -181,48 +173,53 @@ function StatusChip({ system, can, store }: { system: MapSystemDto; can: MapPerm
 }
 
 /**
- * The top of the sidebar, always in view and read at a glance: pill, name, status, lock and close
- * on one line; where it is, the effect and the statics on the next; who holds it; and the notes
- * in a line or two while the System section is folded (a click opens them there).
+ * The System info widget, read at a glance: the title bar is the system (pill, name, the real name
+ * under a custom one) with its status, lock, Set destination and the links out; under it where it
+ * is, the effect and the statics on one line, who holds it, then Labels, Tags, names and notes,
+ * edited in place.
  */
-export function SystemIdentity({
+export function SystemInfoWidget({
   system,
   info,
+  labels,
+  systemLabels,
   can,
   store,
-  onClose,
-  dragHandle,
   holder,
-  notes,
-  onOpenNotes,
+  note,
+  focusToken,
+  focusedRef,
 }: {
   system: MapSystemDto;
   info: UniverseSystemDto | undefined;
+  labels: LabelDto[];
+  systemLabels: readonly SystemLabelDto[];
   can: MapPermissions;
   store: Store;
-  onClose(): void;
-  /** The phone sheet's handle, above the name. */
-  dragHandle?: ReactNode;
   /** Who holds the system (intel), under where it is. */
   holder?: ReactNode;
-  /** The notes to preview; nothing while they are shown in full below. */
-  notes?: string;
-  /** Opens the notes (the System section). */
-  onOpenNotes?(): void;
+  /** One quiet line (where a merged system comes from). */
+  note?: ReactNode;
+  focusToken: number;
+  focusedRef: { current: number };
 }) {
   const realName = info?.name ?? 'Unknown system';
   const custom = system.customName || system.temporaryName;
-  const preview = notes ? notesPreview(notes) : '';
   return (
-    <header className={styles.identity} data-identity>
-      {dragHandle}
-      <div className={styles.identityTop}>
-        <DesignationPill info={info} />
-        <h2 className={styles.systemName} title={custom ? `${custom} (${realName})` : realName}>
-          {custom || realName}
-        </h2>
-        {custom && <span className={styles.realName}>{realName}</span>}
-        <span className={styles.identityActions}>
+    <WidgetWindow
+      id="info"
+      title="System info"
+      heading={
+        <span className={styles.heading} data-identity>
+          <DesignationPill info={info} />
+          <h2 className={styles.systemName} title={custom ? `${custom} (${realName})` : realName}>
+            {custom || realName}
+          </h2>
+          {custom && <span className={styles.realName}>{realName}</span>}
+        </span>
+      }
+      actions={
+        <>
           <StatusChip system={system} can={can} store={store} />
           {can.edit ? (
             <IconButton
@@ -237,35 +234,40 @@ export function SystemIdentity({
           ) : (
             system.locked && <Lock className={styles.lockIcon} aria-label="Locked" />
           )}
-          <IconButton size="sm" label="Close" tooltipSide="left" icon={<X />} onClick={onClose} />
-        </span>
+          <SetDestination solarSystemId={system.solarSystemId} name={realName} />
+          {info && <SystemLinks info={info} />}
+        </>
+      }
+    >
+      <div className={styles.facts}>
+        {info && (
+          <div className={styles.where}>
+            <span className={styles.place}>
+              {info.regionName} › {info.constellationName}
+            </span>
+            {info.effect && <Effect effect={info.effect} whClass={info.whClass} />}
+            <StaticsLine statics={info.statics} />
+          </div>
+        )}
+        {holder}
+        {note}
       </div>
-      {info && (
-        <div className={styles.where}>
-          <span className={styles.place}>
-            {info.regionName} › {info.constellationName}
-          </span>
-          {info.effect && <Effect effect={info.effect} whClass={info.whClass} />}
-          <StaticsLine statics={info.statics} />
-        </div>
-      )}
-      {holder}
-      {preview && (
-        <button
-          type="button"
-          className={styles.notesPreview}
-          title={notes}
-          aria-label={`Notes: ${preview}`}
-          onClick={onOpenNotes}
-        >
-          {preview}
-        </button>
-      )}
-    </header>
+      <SystemDetails
+        // A field being edited belongs to its system: another system starts clean.
+        key={system.solarSystemId}
+        system={system}
+        labels={labels}
+        systemLabels={systemLabels}
+        can={can}
+        store={store}
+        focusToken={focusToken}
+        focusedRef={focusedRef}
+      />
+    </WidgetWindow>
   );
 }
 
-/** zKillboard, Dotlan and (in wormhole space) Anoikis: in the System section's title bar. */
+/** zKillboard, Dotlan and (in wormhole space) Anoikis: in System info's title bar. */
 export function SystemLinks({ info }: { info: UniverseSystemDto }) {
   const dotlan = `https://evemaps.dotlan.net/system/${encodeURIComponent(info.name.replace(/ /g, '_'))}`;
   return (
@@ -344,21 +346,6 @@ export function SetDestination({ solarSystemId, name }: { solarSystemId: number;
       </MenuContent>
     </Menu>
   );
-}
-
-/** What the System section's title bar says while folded: the Labels, custom label and Tags on. */
-export function marksSummary(
-  system: Pick<MapSystemDto, 'labelIds' | 'systemLabelIds' | 'customLabel'>,
-  labels: readonly LabelDto[],
-  systemLabels: readonly SystemLabelDto[],
-): string {
-  return [
-    ...systemLabels.filter((l) => system.systemLabelIds.includes(l.id)).map((l) => l.name),
-    system.customLabel,
-    ...labels.filter((l) => system.labelIds.includes(l.id)).map((l) => l.name),
-  ]
-    .filter(Boolean)
-    .join(' · ');
 }
 
 /** Labels, Tags, names, notes of the selected system: dense, edited in place. */
@@ -480,7 +467,7 @@ export function SystemDetails({
         {can.edit ? (
           <>
             <dt>Name</dt>
-            <dd>
+            <dd className={styles.names}>
               <InlineText
                 label="Custom name"
                 inputRef={nameRef}
@@ -489,9 +476,9 @@ export function SystemDetails({
                 maxLength={64}
                 onCommit={(customName) => void update(id, { customName })}
               />
-            </dd>
-            <dt>Temp.</dt>
-            <dd>
+              <span className={styles.namesLabel} aria-hidden>
+                Temp.
+              </span>
               <InlineText
                 label="Temporary name"
                 value={system.temporaryName ?? ''}

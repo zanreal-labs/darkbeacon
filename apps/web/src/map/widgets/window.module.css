@@ -1,0 +1,340 @@
+/*
+ * The widget windows: a 28 px title bar over content that scrolls on its own; on phones a dock of
+ * the shown widgets and one sheet above it (Wanderer's mobile widgets).
+ */
+
+/* The layer the windows float in: the map below the top bar. Only the windows take the pointer. */
+.layer {
+  position: absolute;
+  z-index: 6;
+  top: 52px;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.window,
+.plain,
+.sheet {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius-large);
+  background: var(--dbk-color-surface);
+  color: var(--dbk-color-text);
+  font-size: var(--dbk-font-size);
+}
+
+.window {
+  position: absolute;
+  box-shadow: var(--dbk-shadow-medium);
+  pointer-events: auto;
+}
+
+.window:focus-visible {
+  outline: 2px solid var(--dbk-color-focus);
+  outline-offset: 1px;
+}
+
+.window[data-moving] {
+  box-shadow: var(--dbk-shadow-large);
+  user-select: none;
+}
+
+.titleBar {
+  flex: none;
+  container-type: inline-size;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 4px 0 10px;
+  border-bottom: 1px solid var(--dbk-color-border);
+  background: var(--dbk-color-surface-raised, var(--dbk-color-surface));
+  cursor: move;
+  touch-action: none;
+  user-select: none;
+}
+
+.plain .titleBar,
+.sheet .titleBar {
+  cursor: default;
+}
+
+.title {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.titleText {
+  flex: none;
+  margin: 0;
+  color: var(--dbk-color-text);
+  font-size: var(--dbk-font-size-xs);
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.count {
+  flex: none;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--dbk-color-surface-active);
+  color: var(--dbk-color-text);
+  font-family: var(--dbk-font-family-mono);
+  font-size: var(--dbk-font-size-xs);
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.count[data-zero] {
+  background: none;
+  color: var(--dbk-color-text-subtle);
+}
+
+.summary {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary[data-alert] {
+  color: var(--dbk-status-warning);
+  font-weight: 600;
+}
+
+.actions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  cursor: default;
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  --widget-pad: 10px;
+  padding: 6px var(--widget-pad) 8px;
+}
+
+.none {
+  margin: 0;
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-small);
+}
+
+/* Wanderer's corner marks: 15 px handles, a 5 px L drawn on hover. */
+.corner {
+  position: absolute;
+  z-index: 2;
+  width: 15px;
+  height: 15px;
+  touch-action: none;
+}
+
+.corner::after {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border: 0 solid transparent;
+  transition: border-color var(--dbk-motion-fast) var(--dbk-motion-easing);
+}
+
+.window:hover .corner::after,
+.window[data-moving] .corner::after {
+  border-color: var(--dbk-color-border-strong);
+}
+
+.corner:hover::after {
+  border-color: var(--dbk-color-accent) !important;
+}
+
+.corner[data-corner='nw'] {
+  top: -4px;
+  left: -4px;
+  cursor: nwse-resize;
+}
+
+.corner[data-corner='nw']::after {
+  top: 4px;
+  left: 4px;
+  border-top-width: 2px;
+  border-left-width: 2px;
+}
+
+.corner[data-corner='ne'] {
+  top: -4px;
+  right: -4px;
+  cursor: nesw-resize;
+}
+
+.corner[data-corner='ne']::after {
+  top: 4px;
+  right: 4px;
+  border-top-width: 2px;
+  border-right-width: 2px;
+}
+
+.corner[data-corner='sw'] {
+  bottom: -4px;
+  left: -4px;
+  cursor: nesw-resize;
+}
+
+.corner[data-corner='sw']::after {
+  bottom: 4px;
+  left: 4px;
+  border-bottom-width: 2px;
+  border-left-width: 2px;
+}
+
+.corner[data-corner='se'] {
+  right: -4px;
+  bottom: -4px;
+  cursor: nwse-resize;
+}
+
+.corner[data-corner='se']::after {
+  right: 4px;
+  bottom: 4px;
+  border-right-width: 2px;
+  border-bottom-width: 2px;
+}
+
+/* ---- Phones: a dock of the shown widgets, one sheet above it ---- */
+
+.dock {
+  position: absolute;
+  z-index: 8;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  gap: 2px;
+  height: calc(54px + env(safe-area-inset-bottom));
+  margin: 0;
+  padding: 4px 16px env(safe-area-inset-bottom);
+  overflow-x: auto;
+  border-top: 1px solid var(--dbk-color-border);
+  background: var(--dbk-color-surface);
+  list-style: none;
+  scrollbar-width: none;
+}
+
+.dock li {
+  flex: 1 0 auto;
+}
+
+.dockButton {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  min-width: 58px;
+  height: 46px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--dbk-radius);
+  background: none;
+  color: var(--dbk-color-text-muted);
+  font: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.dockButton svg {
+  width: 18px;
+  height: 18px;
+}
+
+.dockButton[aria-pressed='true'] {
+  background: var(--dbk-color-accent-subtle);
+  color: var(--dbk-color-accent-text);
+}
+
+.dockButton:focus-visible {
+  outline: 2px solid var(--dbk-color-focus);
+  outline-offset: -2px;
+}
+
+.dockCount {
+  position: absolute;
+  top: 2px;
+  left: calc(50% + 6px);
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--dbk-color-surface-active);
+  color: var(--dbk-color-text);
+  font-family: var(--dbk-font-family-mono);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+}
+
+.dockCount[data-alert] {
+  background: var(--dbk-status-warning);
+  color: var(--dbk-node-pill-text);
+}
+
+.backdrop {
+  position: absolute;
+  z-index: 8;
+  inset: 0;
+  border: 0;
+  background: rgb(0 0 0 / 45%);
+}
+
+.sheet {
+  position: absolute;
+  z-index: 9;
+  right: 0;
+  bottom: calc(54px + env(safe-area-inset-bottom));
+  left: 0;
+  height: 62%;
+  border-width: 1px 0 0;
+  border-radius: var(--dbk-radius-large) var(--dbk-radius-large) 0 0;
+  box-shadow: var(--dbk-shadow-large);
+}
+
+.sheet .body {
+  --widget-pad: 16px;
+  padding: 6px var(--widget-pad) 12px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sheet {
+    animation: sheetIn var(--dbk-motion-normal) var(--dbk-motion-easing);
+  }
+}
+
+@keyframes sheetIn {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}

@@ -15,7 +15,7 @@ import { MAP_ID, meFixture } from '../../test/fixtures';
 import { renderWithProviders, setupMockServer } from '../../test/setup';
 import { ToastProvider, TooltipProvider } from '../../ui';
 import { SECURITY_COLORS } from '../nodeFacts';
-import { RoutesSidebarSection } from './RoutesSection';
+import { RoutesWidget } from './RoutesSection';
 import { stepClass, stepLook } from './RouteStrip';
 
 const step = (
@@ -82,15 +82,13 @@ const section = (onSelectSystem = vi.fn()) => {
   renderWithProviders(
     <TooltipProvider>
       <ToastProvider>
-        <RoutesSidebarSection
+        <RoutesWidget
           mapId={MAP_ID}
           solarSystemId={31000001}
           can={mapPermissions('member')}
           myCharacters={meFixture().characters}
           onMap={new Set([31000001, 30002813])}
           onSelectSystem={onSelectSystem}
-          collapsed={false}
-          onToggle={() => {}}
         />
       </ToastProvider>
     </TooltipProvider>,

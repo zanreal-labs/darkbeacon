@@ -45,10 +45,10 @@ import {
   Skeleton,
   useToast,
 } from '../../ui';
-import { SidebarSection } from '../sidebar/SidebarSection';
-import { SidebarShell } from '../sidebar/SidebarShell';
-import { DesignationPill } from '../sidebar/SystemDetails';
-import { useCollapsedSections } from '../sidebar/storage';
+import { PanelSection } from './PanelSection';
+import { PanelShell } from './PanelShell';
+import { DesignationPill } from '../widgets/SystemDetails';
+import { useCollapsedSections } from '../widgets/storage';
 import { eolRemaining, SHIP_SIZE_TEXT } from '../edgeStyle';
 import type { MapStore } from '../useMapStore';
 import { useConnectionIntel, usePassageCommands, usePassages } from './data';
@@ -63,7 +63,7 @@ import {
   MODE_WORD,
 } from './format';
 import { shipIcon } from './ShipPicker';
-import sidebarStyles from '../sidebar/sidebar.module.css';
+import sidebarStyles from '../widgets/widgets.module.css';
 import styles from './connection.module.css';
 
 type Store = Pick<MapStore, 'updateConnection'>;
@@ -678,7 +678,7 @@ export function ConnectionSidebar({
   ]);
 
   return (
-    <SidebarShell
+    <PanelShell
       label="Connection"
       open={open}
       resetKey={connection.id}
@@ -697,11 +697,11 @@ export function ConnectionSidebar({
         />
       )}
     >
-      <SidebarSection id="connection" title="Connection" collapsed={!!collapsed.connection} onToggle={toggle}>
+      <PanelSection id="connection" title="Connection" collapsed={!!collapsed.connection} onToggle={toggle}>
         <ConnectionDetails connection={connection} intel={intel.data} can={can} store={store} now={now} />
-      </SidebarSection>
+      </PanelSection>
       {wormhole && (
-        <SidebarSection
+        <PanelSection
           id="mass"
           title="Mass"
           collapsed={!!collapsed.mass}
@@ -735,9 +735,9 @@ export function ConnectionSidebar({
           }
         >
           <MassEstimate connection={connection} intel={intel.data} onPlanRoll={onPlanRoll} />
-        </SidebarSection>
+        </PanelSection>
       )}
-      <SidebarSection
+      <PanelSection
         id="passages"
         title="Passages"
         count={passages.data?.length}
@@ -759,7 +759,7 @@ export function ConnectionSidebar({
           merged={merged}
           now={now}
         />
-      </SidebarSection>
-    </SidebarShell>
+      </PanelSection>
+    </PanelShell>
   );
 }

@@ -317,8 +317,7 @@ describe('the connection sidebar', () => {
 
     // Clicking an end selects that system instead.
     fireEvent.click(within(sidebar).getByRole('button', { name: /Tama/ }));
-    expect(await screen.findByRole('complementary', { name: 'System' })).toBeTruthy();
-    expect(screen.queryByRole('complementary', { name: 'Connection' })).toBeNull();
+    await waitFor(() => expect(screen.queryByRole('complementary', { name: 'Connection' })).toBeNull());
   });
 
   it('refreshes the log when a passage lands', async () => {

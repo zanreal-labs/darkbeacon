@@ -3,7 +3,7 @@
 import type { SignatureGroup } from '@darkbeacon/shared';
 import { GROUP_LABEL } from './facts';
 import { groupShown, kindShown, setSignaturePrefs, useSignaturePrefs } from './prefs';
-import styles from '../sidebar/sidebar.module.css';
+import styles from '../widgets/widgets.module.css';
 
 const ANOMALY_GROUPS: SignatureGroup[] = ['combat', 'ore', 'relic', 'data', 'gas'];
 

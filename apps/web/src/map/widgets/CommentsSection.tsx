@@ -8,9 +8,9 @@ import { api, ApiError } from '../../lib/api';
 import type { MapPermissions } from '../../lib/roles';
 import { relativeTime } from '../../lib/time';
 import { CharacterAvatar, ConfirmDialog, IconButton, Skeleton, useToast } from '../../ui';
-import { SidebarSection } from './SidebarSection';
+import { WidgetWindow } from './WidgetWindow';
 import { useSystemList } from './useSystemList';
-import styles from './sidebar.module.css';
+import styles from './widgets.module.css';
 import own from './records.module.css';
 
 const newestFirst = (a: CommentDto, b: CommentDto) => b.createdAt - a.createdAt || b.id.localeCompare(a.id);
@@ -24,14 +24,10 @@ export function CommentsSection({
   mapId,
   solarSystemId,
   can,
-  collapsed,
-  onToggle,
 }: {
   mapId: string;
   solarSystemId: number;
   can: MapPermissions;
-  collapsed: boolean;
-  onToggle(id: string): void;
 }) {
   const toast = useToast();
   const comments = useSystemList<CommentDto>({
@@ -83,13 +79,11 @@ export function CommentsSection({
   };
 
   return (
-    <SidebarSection
+    <WidgetWindow
       id="comments"
       title="Comments"
       count={comments.data ? list.length : undefined}
       summary={list[0] ? `latest ${relativeTime(list[0].createdAt)}` : undefined}
-      collapsed={collapsed}
-      onToggle={onToggle}
     >
       {can.edit && (
         <div className={own.composer}>
@@ -172,6 +166,6 @@ export function CommentsSection({
         tone="danger"
         onConfirm={() => (removing ? remove(removing) : undefined)}
       />
-    </SidebarSection>
+    </WidgetWindow>
   );
 }

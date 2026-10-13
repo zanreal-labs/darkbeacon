@@ -25,10 +25,10 @@ import {
   Skeleton,
   useToast,
 } from '../../ui';
-import { SidebarSection } from './SidebarSection';
+import { WidgetWindow } from './WidgetWindow';
 import { ownerOf, StructureEditor, type StructureDraft } from './StructureEditor';
 import { useSystemList } from './useSystemList';
-import styles from './sidebar.module.css';
+import styles from './widgets.module.css';
 import own from './records.module.css';
 
 const byAdded = (a: StructureDto, b: StructureDto) => a.createdAt - b.createdAt || a.id.localeCompare(b.id);
@@ -59,14 +59,10 @@ export function StructuresSection({
   mapId,
   solarSystemId,
   can,
-  collapsed,
-  onToggle,
 }: {
   mapId: string;
   solarSystemId: number;
   can: MapPermissions;
-  collapsed: boolean;
-  onToggle(id: string): void;
 }) {
   const toast = useToast();
   const now = useNow();
@@ -155,15 +151,13 @@ export function StructuresSection({
   };
 
   return (
-    <SidebarSection
+    <WidgetWindow
       id="structures"
       title="Structures"
       count={structures.data ? list.length : undefined}
       summary={next ? `${STRUCTURE_STATUS_LABEL[next.status]} ${countdown(next.endsAt!, now)}` : undefined}
       alert={!!next}
-      collapsed={collapsed}
-      onToggle={onToggle}
-      action={
+      actions={
         can.edit && (
           <span className={own.headerActions}>
             {list.length > 1 && (
@@ -332,7 +326,7 @@ export function StructuresSection({
           }
         />
       )}
-    </SidebarSection>
+    </WidgetWindow>
   );
 }
 

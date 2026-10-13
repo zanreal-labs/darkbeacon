@@ -54,7 +54,7 @@ export function installFlowMocks(size = { width: 160, height: 60 }) {
 export function setupMockServer(...handlers: Parameters<typeof setupServer>) {
   // ThemeProvider asks for installed themes; without them it keeps the built-in ones.
   const themes = http.get(routes.themes.list.path, () => new HttpResponse(null, { status: 404 }));
-  // Sidebar sections load their own lists; empty unless a test says otherwise.
+  // Widgets load their own lists; empty unless a test says otherwise.
   const empty = [
     routes.comments.list.path,
     routes.structures.list.path,

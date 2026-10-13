@@ -1,60 +1,36 @@
 /*
- * The selected system's sidebar: docked to the right edge on wide screens, a bottom sheet on
- * phones. One surface, hairlines between sections, labels muted and values bright; no boxes
- * inside it.
+ * What the map widgets show: the selected system's facts, tables and lists. Dense, labels muted
+ * and values bright, no boxes inside a window.
  */
 
-.sidebar {
-  position: absolute;
-  z-index: 6;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  border-left: 1px solid var(--dbk-color-border);
-  background: var(--dbk-color-surface);
+/* The count after a title, and the chevron of a fold. */
+.sectionCount {
+  flex: none;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--dbk-color-surface-active);
   color: var(--dbk-color-text);
-  font-size: var(--dbk-font-size);
+  font-family: var(--dbk-font-family-mono);
+  font-size: var(--dbk-font-size-xs);
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
-.sidebar[hidden] {
-  display: none;
+.chevron {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--dbk-color-text-subtle);
+  transition: transform var(--dbk-motion-fast) var(--dbk-motion-easing);
 }
 
-/* ---- Resize handle (wide screens) ---- */
-
-.resize {
-  position: absolute;
-  z-index: 3;
-  top: 0;
-  bottom: 0;
-  left: -4px;
-  width: 8px;
-  cursor: col-resize;
-  touch-action: none;
-}
-
-.resize::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 3px;
-  width: 2px;
-  background: transparent;
-  transition: background var(--dbk-motion-fast) var(--dbk-motion-easing);
-}
-
-.resize:hover::after,
-.resize:active::after,
-.resize:focus-visible::after {
-  background: var(--dbk-color-accent);
-}
-
-.resize:focus-visible {
-  outline: none;
+.sectionActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 
 /* ---- Identity: always in view ---- */
@@ -200,33 +176,44 @@
   font-weight: 500;
 }
 
-/* The notes while the System section is folded: two lines, a click opens them. */
-.notesPreview {
-  display: -webkit-box;
-  overflow: hidden;
-  margin: 2px 0 0;
-  padding: 0 8px 0 0;
-  border: 0;
-  background: none;
+/* System info's title bar: the system itself, pill and name. */
+.heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.heading .pill {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.heading .systemName {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+/* Where it is, who holds it: the first lines of System info. */
+.facts {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+
+.facts p {
+  margin: 0;
+}
+
+/* The custom and the temporary name on one row. */
+.names {
+  gap: 8px;
+}
+
+.namesLabel {
+  flex: none;
   color: var(--dbk-color-text-muted);
-  font: inherit;
   font-size: var(--dbk-font-size-small);
-  line-height: 17px;
-  text-align: left;
-  cursor: pointer;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-}
-
-.notesPreview:hover {
-  color: var(--dbk-color-text);
-}
-
-.notesPreview:focus-visible {
-  border-radius: var(--dbk-radius-small);
-  outline: 2px solid var(--dbk-color-focus);
-  outline-offset: 1px;
 }
 
 .effect {
@@ -271,147 +258,6 @@
 .staticCode {
   color: var(--dbk-color-text);
   font-weight: 500;
-}
-
-/* ---- Sections ---- */
-
-.scroll {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-/* Sections keep their height; my layout orders them (`order`). */
-.scroll > * {
-  flex: none;
-}
-
-.section {
-  border-bottom: 1px solid var(--dbk-color-border);
-}
-
-/* The title bar: 30px, sticky, the same in every section. */
-.sectionHeader {
-  position: sticky;
-  z-index: 2;
-  top: 0;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  height: 30px;
-  padding: 0 8px 0 6px;
-  background: var(--dbk-color-surface);
-}
-
-.section[data-collapsed] .sectionHeader:hover {
-  background: var(--dbk-color-surface-hover);
-}
-
-.sectionToggle {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  height: 26px;
-  padding: 0 4px;
-  border: 0;
-  border-radius: var(--dbk-radius-small);
-  background: none;
-  color: var(--dbk-color-text-muted);
-  font: inherit;
-  font-size: var(--dbk-font-size-xs);
-  font-weight: 650;
-  letter-spacing: 0.05em;
-  text-align: left;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-
-.sectionToggle:hover {
-  color: var(--dbk-color-text);
-}
-
-.sectionToggle:focus-visible {
-  outline: 2px solid var(--dbk-color-focus);
-  outline-offset: -2px;
-}
-
-.chevron {
-  flex: none;
-  width: 14px;
-  height: 14px;
-  color: var(--dbk-color-text-subtle);
-  transition: transform var(--dbk-motion-fast) var(--dbk-motion-easing);
-}
-
-.sectionToggle[aria-expanded='true'] .chevron {
-  transform: rotate(90deg);
-}
-
-.sectionTitle {
-  flex: none;
-  color: var(--dbk-color-text);
-  white-space: nowrap;
-}
-
-/* What is in the section, in a few words: readable while folded. */
-.sectionSummary {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--dbk-color-text-muted);
-  font-size: var(--dbk-font-size-small);
-  font-weight: 500;
-  letter-spacing: 0;
-  text-overflow: ellipsis;
-  text-transform: none;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
-.sectionSummary[data-alert] {
-  color: var(--dbk-status-warning);
-  font-weight: 600;
-}
-
-.sectionCount[data-zero] {
-  background: none;
-  color: var(--dbk-color-text-subtle);
-}
-
-.sectionCount {
-  flex: none;
-  min-width: 18px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: var(--dbk-color-surface-active);
-  color: var(--dbk-color-text);
-  font-family: var(--dbk-font-family-mono);
-  font-size: var(--dbk-font-size-xs);
-  font-weight: 600;
-  letter-spacing: 0;
-  line-height: 16px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-
-.sectionAction {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-}
-
-.sectionActions {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.sectionBody {
-  padding: 0 16px 8px;
 }
 
 .empty {
@@ -662,7 +508,7 @@
 /* ---- Signatures ---- */
 
 .signatures {
-  margin: 0 -16px;
+  margin: 0 calc(-1 * var(--widget-pad, 16px));
 }
 
 .signatures .empty,
@@ -742,8 +588,22 @@
 }
 
 .replace {
+  display: inline-flex;
   flex: none;
+  margin-right: 4px;
   font-size: var(--dbk-font-size-small);
+}
+
+/* A narrow Signatures title bar keeps its counts and shows only the box (named all the same). */
+@container (max-width: 500px) {
+  .replaceText {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 .table {
@@ -755,7 +615,7 @@
 .table th {
   position: sticky;
   z-index: 1;
-  top: 30px;
+  top: -6px;
   height: 22px;
   padding: 0 4px;
   border-bottom: 1px solid var(--dbk-color-border);
@@ -987,58 +847,6 @@
   border-radius: 3px;
 }
 
-/* ---- Phones: a bottom sheet ---- */
-
-.handle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(100% + 24px);
-  height: 18px;
-  margin: -8px -8px 0 -16px;
-  padding: 0;
-  border: 0;
-  background: none;
-  cursor: grab;
-  touch-action: none;
-}
-
-.handle span {
-  width: 36px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--dbk-color-border-strong);
-}
-
-.handle:focus-visible {
-  outline: 2px solid var(--dbk-color-focus);
-  outline-offset: -2px;
-}
-
-.sidebar[data-phone] {
-  top: auto;
-  left: 0;
-  max-height: 100%;
-  border-top: 1px solid var(--dbk-color-border);
-  border-left: 0;
-  border-radius: var(--dbk-radius-large) var(--dbk-radius-large) 0 0;
-  box-shadow: var(--dbk-shadow-large);
-  padding-bottom: env(safe-area-inset-bottom);
-  transition: height var(--dbk-motion-normal) var(--dbk-motion-easing);
-}
-
-.sidebar[data-dragging] {
-  transition: none;
-}
-
-.sidebar[data-phone] .identity {
-  padding-top: 8px;
-}
-
-.sidebar[data-phone] .table th {
-  top: 30px;
-}
-
 /* Anomalies and other scanner results: a fold under the signatures, collapsed by default. */
 .others {
   border-top: 1px solid var(--dbk-color-border);
@@ -1100,7 +908,7 @@
 
 /* Connections of the selected system. */
 .connections {
-  margin: 0 -16px;
+  margin: 0 calc(-1 * var(--widget-pad, 16px));
   padding: 0;
   list-style: none;
 }
@@ -1243,62 +1051,4 @@
   margin: var(--dbk-space-1) 0 0;
   color: var(--dbk-color-text-subtle);
   font-size: var(--dbk-font-size-small);
-}
-
-/* Sidebar sections dialog, and the quiet link to it under the last section. */
-.layoutList {
-  display: grid;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.layoutRow {
-  display: flex;
-  align-items: center;
-  gap: var(--dbk-space-1);
-  padding: 6px 0;
-}
-
-.layoutRow + .layoutRow {
-  border-top: 1px solid var(--dbk-color-border);
-}
-
-.layoutRow[data-hidden] {
-  color: var(--dbk-color-text-muted);
-}
-
-.layoutSwitch {
-  flex: 1;
-}
-
-.customize {
-  order: 1000;
-  display: flex;
-  justify-content: center;
-  padding: 6px 0 10px;
-}
-
-.customize button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border: 0;
-  border-radius: var(--dbk-radius);
-  background: none;
-  color: var(--dbk-color-text-subtle);
-  font: inherit;
-  font-size: var(--dbk-font-size-small);
-  cursor: pointer;
-}
-
-.customize button:hover {
-  background: var(--dbk-color-surface-hover);
-  color: var(--dbk-color-text);
-}
-
-.customize svg {
-  width: 14px;
-  height: 14px;
 }

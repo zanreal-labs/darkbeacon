@@ -48,8 +48,11 @@ import { RallyCard } from '../map/pings/RallyCard';
 import { useLinkedMaps } from '../map/linked/api';
 import { LinkedMapPreview } from '../map/linked/LinkedMapPreview';
 import { usePingCommands, usePings } from '../map/pings/api';
-import { isWormholeSpace } from '../map/sidebar/SystemDetails';
-import { SystemSidebar } from '../map/sidebar/SystemSidebar';
+import { isWormholeSpace } from '../map/widgets/SystemDetails';
+import { MapWidgets } from '../map/widgets/MapWidgets';
+import { usePhone } from '../map/widgets/storage';
+import { useWidgetsLayout } from '../map/widgets/useWidgetsLayout';
+import { WidgetsMenu } from '../map/widgets/WidgetsMenu';
 import { SignatureLayer } from '../map/signatures/SignatureLayer';
 import { filterableSources, permissionsFor, withoutSources } from '../map/sharing/chain';
 import { ProvenanceLine, provenanceText } from '../map/sharing/ProvenanceLine';
@@ -116,7 +119,7 @@ function LogDialog({
   );
 }
 
-/** The live map: canvas, search, the selected system's sidebar, context menus. Browser only (React Flow). */
+/** The live map: canvas, search, the widgets, the connection panel, context menus. Browser only (React Flow). */
 export function MapView({
   map,
   role,
@@ -168,8 +171,8 @@ export function MapView({
       ),
     [intel.data],
   );
-  // The sidebar belongs to the selection: hidden with nothing selected, shown with each newly
-  // selected system; the top bar's toggle hides it while the selection stays.
+  // The connection panel belongs to a selected connection: shown with each newly selected one;
+  // the top bar's toggle hides it while the selection stays.
   const [panel, setPanel] = useState(true);
   const [cover, setCover] = useState({ right: 0, bottom: 0 });
   const onCover = useCallback(
@@ -177,10 +180,20 @@ export function MapView({
       setCover((c) => (c.right === next.right && c.bottom === next.bottom ? c : next)),
     [],
   );
+  // The widgets: always over the map, showing the selected system (Wanderer's windows).
+  const widgets = useWidgetsLayout();
+  const [widgetsShown, setWidgetsShown] = useState(true);
+  const [widgetCover, setWidgetCover] = useState({ right: 0, bottom: 0 });
+  const onWidgetCover = useCallback(
+    (next: { right: number; bottom: number }) =>
+      setWidgetCover((c) => (c.right === next.right && c.bottom === next.bottom ? c : next)),
+    [],
+  );
+  const phone = usePhone();
   usePageView('map');
   useEffect(() => {
-    if (panel && selected !== null) track('panel_opened', { panel: 'system' });
-  }, [panel, selected]);
+    if (widgetsShown && selected !== null) track('panel_opened', { panel: 'system' });
+  }, [widgetsShown, selected]);
   useEffect(() => {
     if (panel && selectedConnection !== null) track('panel_opened', { panel: 'connections' });
   }, [panel, selectedConnection]);
@@ -241,7 +254,18 @@ export function MapView({
   useSignatureUndoBridge(map.id, store, endName);
 
   const closeMenu = useCallback(() => setMenu(null), []);
-  const covered = (system || connection) && panel ? cover : { right: 0, bottom: 0 };
+  const panelCover = connection && !system && panel ? cover : { right: 0, bottom: 0 };
+  // On phones the connection's sheet takes the bottom; the widgets' dock steps aside meanwhile.
+  const widgetsOn = widgetsShown && !(phone && connection && !system && panel);
+  const covered = {
+    right: panelCover.right,
+    bottom: Math.max(panelCover.bottom, widgetsOn ? widgetCover.bottom : 0),
+  };
+  // The canvas also keeps the chain clear of the column of widget windows on the right.
+  const canvasCover = {
+    right: Math.max(covered.right, widgetsOn ? widgetCover.right : 0),
+    bottom: covered.bottom,
+  };
 
   const select = (solarSystemId: number, center = false) => {
     setSelectedConnection(null);
@@ -566,7 +590,7 @@ export function MapView({
     const bounds = document.querySelector('.react-flow')?.getBoundingClientRect();
     if (!bounds) return { x: 0, y: 0 };
     return rf.screenToFlowPosition({
-      x: bounds.left + (bounds.width - covered.right) / 2,
+      x: bounds.left + (bounds.width - canvasCover.right) / 2,
       y: bounds.top + (bounds.height - covered.bottom) / 2,
     });
   };
@@ -611,7 +635,7 @@ export function MapView({
         }}
         rallies={pinged}
         presence={presence}
-        coveredRight={covered.right}
+        coveredRight={canvasCover.right}
         coveredBottom={covered.bottom}
       />
 
@@ -639,19 +663,18 @@ export function MapView({
           onToggle={sourceFilter.toggle}
           className={styles.toolButton}
         />
-        {(system || connection) && (
+        <WidgetsMenu
+          controller={widgets}
+          plugins={widgetPlugins}
+          shown={widgetsShown}
+          onShownChange={setWidgetsShown}
+          className={styles.toolButton}
+        />
+        {connection && !system && (
           <IconButton
             variant="secondary"
             className={styles.toolButton}
-            label={
-              connection
-                ? panel
-                  ? 'Hide connection panel'
-                  : 'Show connection panel'
-                : panel
-                  ? 'Hide system panel'
-                  : 'Show system panel'
-            }
+            label={panel ? 'Hide connection panel' : 'Show connection panel'}
             aria-pressed={panel}
             icon={<PanelRight />}
             onClick={() => setPanel((p) => !p)}
@@ -712,27 +735,25 @@ export function MapView({
         </div>
       )}
 
-      {system && (
-        <SystemSidebar
-          mapId={map.id}
-          system={system}
-          info={universe.get(system.solarSystemId)}
-          universe={universe}
-          labels={labels}
-          systemLabels={systemLabels}
-          state={state}
-          can={permissionsFor(can, system.provenance, map.kind === 'composite')}
-          store={store}
-          myCharacters={me.data?.characters ?? []}
-          plugins={widgetPlugins}
-          open={panel}
-          focusToken={focus.name}
-          onClose={deselect}
-          onSelectSystem={(id) => select(id, true)}
-          onCover={onCover}
-          note={<ProvenanceLine provenance={system.provenance} sources={state.sources} />}
-        />
-      )}
+      <MapWidgets
+        mapId={map.id}
+        system={system}
+        info={system ? universe.get(system.solarSystemId) : undefined}
+        universe={universe}
+        labels={labels}
+        systemLabels={systemLabels}
+        state={state}
+        can={system ? permissionsFor(can, system.provenance, map.kind === 'composite') : can}
+        store={store}
+        myCharacters={me.data?.characters ?? []}
+        plugins={widgetPlugins}
+        controller={widgets}
+        shown={widgetsOn}
+        focusToken={focus.name}
+        onSelectSystem={(id) => select(id, true)}
+        onCover={onWidgetCover}
+        note={system && <ProvenanceLine provenance={system.provenance} sources={state.sources} />}
+      />
 
       <SignatureLayer mapId={map.id} state={state} universe={universe} store={store} canEdit={can.edit} />
       {connection && !system && (

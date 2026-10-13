@@ -114,7 +114,7 @@
 .structures {
   display: grid;
   gap: 4px;
-  margin: 0 -16px;
+  margin: 0 calc(-1 * var(--widget-pad, 16px));
 }
 
 .structures > label {

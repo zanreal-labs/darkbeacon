@@ -11,36 +11,30 @@ import { useStream } from '../../lib/RealtimeProvider';
 import type { MapPermissions } from '../../lib/roles';
 import { relativeTime } from '../../lib/time';
 import { Button, IconButton, Skeleton, useToast } from '../../ui';
-import { SidebarSection } from './SidebarSection';
-import styles from './sidebar.module.css';
+import { WidgetWindow } from './WidgetWindow';
+import styles from './widgets.module.css';
 import own from './records.module.css';
 
 /**
  * What happened in the system, newest first: the system itself, its signatures, the connections
  * touching it, comments and structures, by whom. Members can put back one change when nothing
- * changed it since. Loaded only while the section is open.
+ * changed it since. Loaded only while the widget is shown (it is off by default).
  */
 export function HistorySection({
   mapId,
   solarSystemId,
   universe,
   can,
-  collapsed,
-  onToggle,
 }: {
   mapId: string;
   solarSystemId: number;
   universe: Map<number, UniverseSystemDto>;
   can: MapPermissions;
-  collapsed: boolean;
-  onToggle(id: string): void;
 }) {
   return (
-    <SidebarSection id="history" title="History" collapsed={collapsed} onToggle={onToggle}>
-      {!collapsed && (
-        <HistoryList mapId={mapId} solarSystemId={solarSystemId} universe={universe} can={can} />
-      )}
-    </SidebarSection>
+    <WidgetWindow id="history" title="History">
+      <HistoryList mapId={mapId} solarSystemId={solarSystemId} universe={universe} can={can} />
+    </WidgetWindow>
   );
 }
 

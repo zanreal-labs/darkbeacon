@@ -10,25 +10,25 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
-import { readStored, usePhone, WIDTH_KEY, writeStored } from './storage';
-import styles from './sidebar.module.css';
+import { readStored, usePhone, WIDTH_KEY, writeStored } from '../widgets/storage';
+import styles from './panel.module.css';
 
-export const SIDEBAR_WIDTH = { default: 380, min: 320, max: 640 };
+export const PANEL_WIDTH = { default: 380, min: 320, max: 640 };
 
 const isWidth = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const clampWidth = (w: number) =>
   Math.round(
     Math.min(
-      Math.max(w, SIDEBAR_WIDTH.min),
-      Math.min(SIDEBAR_WIDTH.max, typeof window === 'undefined' ? Infinity : window.innerWidth - 240),
+      Math.max(w, PANEL_WIDTH.min),
+      Math.min(PANEL_WIDTH.max, typeof window === 'undefined' ? Infinity : window.innerWidth - 240),
     ),
   );
 
 /** The sidebar's remembered width, with a setter that keeps it in bounds and stores it. */
-export function useSidebarWidth() {
+export function usePanelWidth() {
   const [width, setWidthState] = useState(() =>
     clampWidth(
-      (typeof window === 'undefined' ? null : readStored(WIDTH_KEY, isWidth)) ?? SIDEBAR_WIDTH.default,
+      (typeof window === 'undefined' ? null : readStored(WIDTH_KEY, isWidth)) ?? PANEL_WIDTH.default,
     ),
   );
   const setWidth = useCallback((w: number, persist = true) => {
@@ -68,13 +68,13 @@ interface Props {
 }
 
 /**
- * The map's one sidebar shell: docked to the right on wide screens (resizable from its left edge,
- * width remembered), a bottom sheet with peek, half and full stops on phones. The system sidebar
- * and the connection sidebar put their header and sections in it.
+ * The connection panel's shell, as Wanderer's "Connection Info" sidebar: docked to the right on
+ * wide screens (resizable from its left edge, width remembered), a bottom sheet with peek, half and
+ * full stops on phones. The selected system's data lives in the map widgets instead.
  */
-export function SidebarShell({ label, open, resetKey, header, note, onCover, children }: Props) {
+export function PanelShell({ label, open, resetKey, header, note, onCover, children }: Props) {
   const phone = usePhone();
-  const [width, setWidth] = useSidebarWidth();
+  const [width, setWidth] = usePanelWidth();
   const [stop, setStop] = useState<SheetStop>('peek');
   const [drag, setDrag] = useState<number | null>(null);
   const [box, setBox] = useState({ room: 0, peek: 120 });
@@ -216,12 +216,12 @@ export function SidebarShell({ label, open, resetKey, header, note, onCover, chi
           aria-orientation="vertical"
           aria-label="Resize the panel"
           aria-valuenow={width}
-          aria-valuemin={SIDEBAR_WIDTH.min}
-          aria-valuemax={SIDEBAR_WIDTH.max}
+          aria-valuemin={PANEL_WIDTH.min}
+          aria-valuemax={PANEL_WIDTH.max}
           tabIndex={0}
           onPointerDown={startResize}
           onKeyDown={resizeKey}
-          onDoubleClick={() => setWidth(SIDEBAR_WIDTH.default)}
+          onDoubleClick={() => setWidth(PANEL_WIDTH.default)}
         />
       )}
       {header(handle)}

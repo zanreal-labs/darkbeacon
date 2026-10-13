@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type KeyboardEvent, type Ref } from 'react';
-import styles from './sidebar.module.css';
+import styles from './widgets.module.css';
 
 /** A text value edited in place: saved on Enter or leaving the field, Escape puts it back. */
 export function InlineText({

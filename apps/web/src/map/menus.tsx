@@ -60,7 +60,7 @@ import { linksMenu } from './menus/links';
 import { linkedMapItems } from './menus/linked';
 import { pingMenuItems, type PingMenuContext } from './menus/pings';
 import type { DotlanTarget } from './canvas/prefs';
-import { isWormholeSpace } from './sidebar/SystemDetails';
+import { isWormholeSpace } from './widgets/SystemDetails';
 
 /*
  * The map's context menus. Short top levels with the details in submenus; only what the user

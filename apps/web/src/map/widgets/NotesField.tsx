@@ -2,7 +2,7 @@
 
 import { useLayoutEffect, useRef, useState } from 'react';
 import { Markdown } from '../../components/Markdown';
-import styles from './sidebar.module.css';
+import styles from './widgets.module.css';
 
 /**
  * Markdown notes. Shown rendered (links open in a new tab); editors click the text (or the empty

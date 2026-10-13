@@ -22,7 +22,7 @@ import {
 } from '../../ui';
 import { seedCharacters } from '../mapState';
 import type { MapStore } from '../useMapStore';
-import styles from './sidebar.module.css';
+import styles from './widgets.module.css';
 
 /**
  * Tracked characters of the map over REST, merged into the stream's: new ones only reach the

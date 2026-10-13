@@ -53,7 +53,8 @@ import {
 import { SignatureEditor } from '../signatures/SignatureEditor';
 import { rememberRemoved, useSignatureRemoval, useUndo } from '../signatures/undo';
 import type { MapStore } from '../useMapStore';
-import styles from './sidebar.module.css';
+import { usePhone } from './storage';
+import styles from './widgets.module.css';
 import sig from '../signatures/signatures.module.css';
 
 export { GROUP_LABEL };
@@ -170,6 +171,20 @@ function timeLeft(ms: number | null, words = false): string | null {
   return words ? `about ${Math.round(h)} h left` : `${Math.round(h)}h`;
 }
 
+/** Wanderer's "Lazy delete" in the Signatures title bar: the next paste also removes missing ones. */
+export function RemoveMissing({ paste }: { paste: SignaturePaste }) {
+  return (
+    <span className={styles.replace} title="Remove missing: the next paste also removes signatures not in it">
+      <Checkbox
+        checked={paste.replace}
+        onCheckedChange={paste.setReplace}
+        // In a narrow title bar only the box shows; the counts come first.
+        label={<span className={styles.replaceText}>Remove missing</span>}
+      />
+    </span>
+  );
+}
+
 interface Props {
   mapId: string;
   solarSystemId: number;
@@ -185,6 +200,11 @@ interface Props {
   onSelectSystem(solarSystemId: number): void;
   /** Name of a system on the map (custom name or real name). */
   systemName?(solarSystemId: number): string;
+  /**
+   * The paste field above the table. On wide screens Ctrl+V anywhere pastes and the window's title
+   * bar has the button, so it shows only while the table is empty; phones always have it.
+   */
+  pasteField?: 'always' | 'empty';
 }
 
 /**
@@ -205,6 +225,7 @@ export function SignaturesSection({
   paste,
   onSelectSystem,
   systemName = (id) => universe.get(id)?.name ?? String(id),
+  pasteField = 'always',
 }: Props) {
   const listed = useQuery({
     queryKey: ['signatures', mapId, solarSystemId],
@@ -217,6 +238,7 @@ export function SignaturesSection({
   }, [listed.data, seed]);
 
   const prefs = useSignaturePrefs();
+  const phone = usePhone();
   const now = useNow();
   const intel = useConnectionIntel(mapId, connections, signatures);
   const removal = useSignatureRemoval(mapId);
@@ -545,12 +567,18 @@ export function SignaturesSection({
       onKeyDown={onKeyDown}
       data-color={prefs.colorByGroup || undefined}
     >
-      {can.edit && (
+      {can.edit && (pasteField === 'always' || signatures.length === 0) && (
         <div className={styles.pasteRow}>
           <label className={styles.pasteZone} data-busy={paste.busy || undefined}>
             <ClipboardPaste aria-hidden />
             <span>
-              <Kbd>{MOD}</Kbd> <Kbd>V</Kbd> pastes the scan
+              {phone ? (
+                'Long-press here to paste the scan'
+              ) : (
+                <>
+                  <Kbd>{MOD}</Kbd> <Kbd>V</Kbd> pastes the scan
+                </>
+              )}
             </span>
             <textarea
               className={styles.pasteArea}
@@ -562,12 +590,6 @@ export function SignaturesSection({
               disabled={paste.busy}
             />
           </label>
-          <Checkbox
-            className={styles.replace}
-            checked={paste.replace}
-            onCheckedChange={paste.setReplace}
-            label="Remove missing"
-          />
         </div>
       )}
 

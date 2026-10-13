@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, useSyncExternalStore } from 'react';
-import { Download, PanelRight, RotateCcw, Upload } from 'lucide-react';
+import { Download, LayoutGrid, RotateCcw, Upload } from 'lucide-react';
 import { ApiError } from '../lib/api';
 import {
   BROWSER_AREA,
@@ -12,26 +12,23 @@ import {
   useSavePreferences,
   writeBrowserOptions,
 } from '../lib/preferences';
-import { useLocalOptions } from '../map/sidebar/LocalSection';
-import { SectionsDialog } from '../map/sidebar/SectionsDialog';
-import { SIDEBAR_SECTIONS, useSidebarLayout } from '../map/sidebar/layout';
+import { useLocalOptions } from '../map/widgets/LocalSection';
+import { CORE_WIDGETS } from '../map/widgets/layout';
+import { useWidgetsLayout } from '../map/widgets/useWidgetsLayout';
 import { Button, Card, CardBody, CardFooter, CardHeader, ConfirmDialog, Switch, useToast } from '../ui';
 import styles from './AccountPage.module.css';
 
-const sectionTitle = (id: string) => SIDEBAR_SECTIONS.find((s) => s.id === id)?.title ?? id;
-
 /**
  * "My preferences": the options that follow me between browsers in one place, with export,
- * import and reset. Local and the sidebar are set here; the options other parts of the map keep
- * (signature columns, the legend, kills and routes) travel along from wherever they were set.
+ * import and reset. Local and the map widgets are set here; the options other parts of the map
+ * keep (signature columns, the legend, kills and routes) travel along from wherever they were set.
  */
 export function MyPreferences() {
   const toast = useToast();
   const preferences = usePreferences();
   const save = useSavePreferences();
   const [local, setLocal] = useLocalOptions();
-  const [layout] = useSidebarLayout();
-  const [sections, setSections] = useState(false);
+  const widgets = useWidgetsLayout();
   const [resetting, setResetting] = useState(false);
   const [importing, setImporting] = useState<Record<string, unknown> | null>(null);
   const file = useRef<HTMLInputElement>(null);
@@ -48,15 +45,6 @@ export function MyPreferences() {
     () => Object.keys(readBrowserOptions()).length,
     () => 0,
   );
-  const layoutText =
-    layout.hidden.length === 0 && layout.order.length === 0
-      ? 'Every section, in the usual order.'
-      : [
-          layout.hidden.length > 0 ? `Hidden: ${layout.hidden.map(sectionTitle).join(', ')}.` : null,
-          layout.order.length > 0 ? 'Your own order.' : null,
-        ]
-          .filter(Boolean)
-          .join(' ');
 
   const download = () => {
     const data = exportPreferences(preferences.data?.preferences ?? {});
@@ -98,14 +86,27 @@ export function MyPreferences() {
       />
       <CardBody>
         <div className={styles.prefs}>
-          <div className={styles.prefRow}>
-            <div className={styles.prefText}>
-              <strong>Sidebar sections</strong>
-              <span className="muted">{layoutText}</span>
+          <div className={styles.prefGroup}>
+            <div className={styles.prefRow}>
+              <div className={styles.prefText}>
+                <strong>Map widgets</strong>
+                <span className="muted">
+                  Windows over the map, each with one job. Drag them by the title, resize them from a corner;
+                  where you leave them is kept.
+                </span>
+              </div>
+              <Button size="sm" icon={<LayoutGrid />} onClick={widgets.reset}>
+                Reset layout
+              </Button>
             </div>
-            <Button size="sm" icon={<PanelRight />} onClick={() => setSections(true)}>
-              Customize…
-            </Button>
+            {CORE_WIDGETS.map((w) => (
+              <Switch
+                key={w.id}
+                checked={widgets.isVisible(w.id)}
+                onCheckedChange={(on) => widgets.setShown(w.id, on)}
+                label={w.title}
+              />
+            ))}
           </div>
           <div className={styles.prefGroup}>
             <strong>Local</strong>
@@ -152,12 +153,11 @@ export function MyPreferences() {
           Reset…
         </Button>
       </CardFooter>
-      <SectionsDialog open={sections} onOpenChange={setSections} />
       <ConfirmDialog
         open={resetting}
         onOpenChange={setResetting}
         title="Reset my preferences?"
-        description="The sidebar, Local, On the map and the options set on maps go back to their defaults, in every browser. Theme, default map and live cursors stay."
+        description="The map widgets, Local, On the map and the options set on maps go back to their defaults, in every browser. Theme, default map and live cursors stay."
         confirmLabel="Reset"
         tone="danger"
         onConfirm={() =>

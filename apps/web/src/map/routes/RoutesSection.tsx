@@ -17,8 +17,8 @@ import type { MapPermissions } from '../../lib/roles';
 import { track } from '../../lib/telemetry';
 import { Button, Checkbox, Segmented, Select, SearchPicker, type PickerOption, useToast } from '../../ui';
 import { hubMenu, stationsMenu, waypointMenu } from '../menus/routes';
-import { SidebarSection } from '../sidebar/SidebarSection';
-import { readStored, writeStored } from '../sidebar/storage';
+import { WidgetWindow } from '../widgets/WidgetWindow';
+import { readStored, writeStored } from '../widgets/storage';
 import {
   useHubRoutes,
   useHubs,
@@ -63,28 +63,24 @@ interface Props {
   /** Systems on the map (a click on one of them selects and centres it). */
   onMap: ReadonlySet<number>;
   onSelectSystem(solarSystemId: number): void;
-  collapsed: boolean;
-  onToggle(id: string): void;
 }
 
 /**
- * The routes section of the system sidebar: from the selected system to every map hub, to the
- * viewer's own hubs, or to the nearest places of a kind (Routes By), each with its jump count
- * and the systems on the way. Options live in the section's menu and follow the viewer.
+ * The Routes widget: from the selected system to every map hub, to the viewer's own hubs, or to
+ * the nearest places of a kind (Wanderer's Routes, User Routes and Routes By in one window), each
+ * with its jump count and the systems on the way. Options live in its menu and follow the viewer.
  */
-export function RoutesSidebarSection(props: Props) {
-  const { mapId, collapsed, onToggle } = props;
+export function RoutesWidget(props: Props) {
+  const { mapId } = props;
   const prefs = useRoutePreferences();
   useEffect(() => {
-    if (!collapsed) track('panel_opened', { panel: 'routes' });
-  }, [collapsed]);
+    track('panel_opened', { panel: 'routes' });
+  }, []);
   return (
-    <SidebarSection
+    <WidgetWindow
       id="routes"
       title="Routes"
-      collapsed={collapsed}
-      onToggle={onToggle}
-      action={
+      actions={
         <RouteSettingsMenu
           preferences={prefs.preferences}
           characters={props.myCharacters}
@@ -93,7 +89,7 @@ export function RoutesSidebarSection(props: Props) {
       }
     >
       <RoutesBody key={mapId} {...props} preferences={prefs.preferences} />
-    </SidebarSection>
+    </WidgetWindow>
   );
 }
 

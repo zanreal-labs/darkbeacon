@@ -4,7 +4,7 @@ import { Copy, ExternalLink } from 'lucide-react';
 import type { UniverseSystemDto } from '@darkbeacon/shared';
 import type { MenuItem } from '../../components/ContextMenu';
 import { dotlanUrl, type DotlanTarget } from '../canvas/prefs';
-import { isWormholeSpace } from '../sidebar/SystemDetails';
+import { isWormholeSpace } from '../widgets/SystemDetails';
 
 export interface LinksMenuContext {
   /** The system as the universe knows it; without it only the name can be copied. */

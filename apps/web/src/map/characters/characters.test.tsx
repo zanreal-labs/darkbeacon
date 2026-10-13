@@ -12,7 +12,6 @@ import {
 import { isOutdated } from '../../shell/NewVersion';
 import { latencyColor } from '../../shell/ConnectionIndicator';
 import { describeTq } from '../../shell/EveStatus';
-import { moveSection, orderedSections } from '../sidebar/layout';
 import { ownOnMap, whereabouts } from './CharacterBar';
 import { useFollowCharacter } from './useFollow';
 
@@ -101,16 +100,6 @@ describe('characters needing attention', () => {
       [1, false, ['Character contacts (standings)']],
     ]);
     expect(relinkHref('/m/home', ['wallet'])).toBe('/api/auth/eve/login?returnTo=%2Fm%2Fhome&extras=wallet');
-  });
-});
-
-describe('sidebar layout', () => {
-  it('orders sections by my choice, then the defaults, and moves them one place', () => {
-    const layout = { hidden: [], order: ['local'] };
-    expect(orderedSections(layout).slice(0, 3)).toEqual(['local', 'system', 'signatures']);
-    expect(orderedSections({ hidden: [], order: [] }, ['plugin:x']).at(-1)).toBe('plugin:x');
-    expect(moveSection(layout, 'system', -1).order.slice(0, 2)).toEqual(['system', 'local']);
-    expect(moveSection(layout, 'local', -1)).toBe(layout);
   });
 });
 

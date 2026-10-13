@@ -38,15 +38,17 @@ export function Sparkline({
   hours,
   pick,
   label,
+  width = 96,
+  height = 20,
 }: {
   hours: readonly ActivityHourDto[];
   pick: (h: ActivityHourDto) => number | null;
   label: string;
+  width?: number;
+  height?: number;
 }) {
   const values = hours.map(pick);
   const max = Math.max(1, ...values.map((v) => v ?? 0));
-  const width = 96;
-  const height = 20;
   const step = width / Math.max(values.length, 1);
   return (
     <svg
@@ -176,33 +178,6 @@ export function SovereigntyLine({ intel }: { intel: SystemActivityDto['intel'] |
   return null;
 }
 
-function Stat({
-  label,
-  hour,
-  day,
-  hours,
-  pick,
-  tone,
-}: {
-  label: string;
-  hour: number | null;
-  day: number | null;
-  hours: readonly ActivityHourDto[];
-  pick: (h: ActivityHourDto) => number | null;
-  tone?: 'hot';
-}) {
-  return (
-    <div className={styles.stat} data-tone={tone}>
-      <dt>{label}</dt>
-      <dd className={styles.statHour}>{hour ?? '–'}</dd>
-      <dd className={styles.statSpark}>
-        <Sparkline hours={hours} pick={pick} label={`${label} per hour, last 24 hours`} />
-      </dd>
-      <dd className={styles.statDay}>{day === null ? '' : `${day} / 24h`}</dd>
-    </div>
-  );
-}
-
 function Group({ group }: { group: ActiveGroupDto }) {
   const { kind, entity } = group;
   const name = entity.name ?? (kind === 'alliance' ? 'An alliance' : 'A corporation');
@@ -245,44 +220,86 @@ function Group({ group }: { group: ActiveGroupDto }) {
   );
 }
 
+function Stat({
+  label,
+  hour,
+  day,
+  hours,
+  pick,
+  tone,
+}: {
+  label: string;
+  hour: number | null;
+  day: number | null;
+  hours: readonly ActivityHourDto[];
+  pick: (h: ActivityHourDto) => number | null;
+  tone?: 'hot';
+}) {
+  return (
+    <div className={styles.stat} data-tone={tone}>
+      <dt>{label}</dt>
+      <dd className={styles.statHour}>
+        {hour ?? '–'}
+        <span className={styles.statDay}>{day === null ? '' : ` · ${day} /24h`}</span>
+      </dd>
+      <dd className={styles.statSpark}>
+        <Sparkline
+          hours={hours}
+          pick={pick}
+          label={`${label} per hour, last 24 hours`}
+          width={84}
+          height={14}
+        />
+      </dd>
+    </div>
+  );
+}
+
 /**
- * The selected system's activity: kills, NPC kills and jumps of the last hour with the day as
- * bars, and who flies there (alliances, or corporations without one, from its killmails).
+ * The selected system's last hour in one row: kills (busy from five on), NPC kills and jumps, each
+ * with the day as 24 bars. The top of the Kills widget.
  */
-export function ActivitySection({ mapId, solarSystemId }: { mapId: string; solarSystemId: number }) {
+export function ActivityStrip({ mapId, solarSystemId }: { mapId: string; solarSystemId: number }) {
   const activity = useSystemActivity(mapId, solarSystemId);
-  const [span, setSpan] = useState<ActivityWindow>('24h');
   if (activity.isLoading) return <p className={styles.empty}>Loading activity…</p>;
   if (!activity.data) return <p className={styles.empty}>Activity is not available right now.</p>;
-  const { intel, hours, groups } = activity.data;
-  const kills24 = sum(hours, shipAndPod);
-  const shown = groups[span];
+  const { intel, hours } = activity.data;
+  return (
+    <dl className={styles.stats} aria-label="Last hour">
+      <Stat
+        label="Kills 1h"
+        hour={intel.kills1h}
+        day={sum(hours, shipAndPod)}
+        hours={hours}
+        pick={shipAndPod}
+        {...(intel.kills1h >= 5 ? { tone: 'hot' as const } : {})}
+      />
+      <Stat
+        label="NPC 1h"
+        hour={intel.npcKills1h}
+        day={sum(hours, (h) => h.npcKills)}
+        hours={hours}
+        pick={(h) => h.npcKills}
+      />
+      <Stat
+        label="Jumps 1h"
+        hour={intel.jumps1h}
+        day={sum(hours, (h) => h.jumps)}
+        hours={hours}
+        pick={(h) => h.jumps}
+      />
+    </dl>
+  );
+}
+
+/** Who flies in the selected system: alliances, or corporations without one, from its killmails. */
+export function WhoFliesHere({ mapId, solarSystemId }: { mapId: string; solarSystemId: number }) {
+  const activity = useSystemActivity(mapId, solarSystemId);
+  const [span, setSpan] = useState<ActivityWindow>('24h');
+  if (!activity.data) return null;
+  const shown = activity.data.groups[span];
   return (
     <div className={styles.activity}>
-      <dl className={styles.stats}>
-        <Stat
-          label="Kills"
-          hour={intel.kills1h}
-          day={kills24}
-          hours={hours}
-          pick={shipAndPod}
-          {...(intel.kills1h >= 5 ? { tone: 'hot' as const } : {})}
-        />
-        <Stat
-          label="NPC kills"
-          hour={intel.npcKills1h}
-          day={sum(hours, (h) => h.npcKills)}
-          hours={hours}
-          pick={(h) => h.npcKills}
-        />
-        <Stat
-          label="Jumps"
-          hour={intel.jumps1h}
-          day={sum(hours, (h) => h.jumps)}
-          hours={hours}
-          pick={(h) => h.jumps}
-        />
-      </dl>
       <div className={styles.groupsHeader}>
         <h3>
           <Users aria-hidden /> Who flies here

@@ -11,7 +11,7 @@ import { renderWithProviders, setupMockServer } from '../../test/setup';
 import { ToastProvider, TooltipProvider } from '../../ui';
 import { useMapStore } from '../useMapStore';
 import { DEFAULT_SIGNATURE_PREFS, setSignaturePrefs } from '../signatures/prefs';
-import { pasteSummary, SignaturesSection, useSignaturePaste } from './SignaturesSection';
+import { pasteSummary, RemoveMissing, SignaturesSection, useSignaturePaste } from './SignaturesSection';
 
 const SYSTEM = 31000001;
 const OTHER = 31000002;
@@ -50,6 +50,7 @@ function Section({
         paste={paste}
         onSelectSystem={onSelectSystem}
       />
+      <RemoveMissing paste={paste} />
       {store.notices.map((n) => (
         <p key={n.id}>{n.message}</p>
       ))}

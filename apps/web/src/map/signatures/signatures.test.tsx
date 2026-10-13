@@ -30,9 +30,9 @@ import {
 } from '../../test/setup';
 import { signatureUndoables, subscribeSignatureUndo } from './undo';
 import { ToastProvider, TooltipProvider } from '../../ui';
-import { CommentsSection } from '../sidebar/CommentsSection';
-import { SignaturesSection, useSignaturePaste } from '../sidebar/SignaturesSection';
-import { countdown } from '../sidebar/StructuresSection';
+import { CommentsSection } from '../widgets/CommentsSection';
+import { SignaturesSection, useSignaturePaste } from '../widgets/SignaturesSection';
+import { countdown } from '../widgets/StructuresSection';
 import { useMapStore } from '../useMapStore';
 import { ageLabel, destinationChoices, freshness, leadsToChoices, signatureLeadsTo } from './facts';
 import { DEFAULT_SIGNATURE_PREFS, setSignaturePrefs, SIGNATURE_PREFS_KEY } from './prefs';
@@ -245,15 +245,7 @@ describe('CommentsSection', () => {
       ),
     );
     const user = userEvent.setup();
-    render(
-      <CommentsSection
-        mapId={MAP_ID}
-        solarSystemId={SYSTEM}
-        can={mapPermissions('member')}
-        collapsed={false}
-        onToggle={() => {}}
-      />,
-    );
+    render(<CommentsSection mapId={MAP_ID} solarSystemId={SYSTEM} can={mapPermissions('member')} />);
     expect(await screen.findByText('Ayla Vex')).toBeTruthy();
     expect(screen.getByText('here').tagName).toBe('STRONG');
     await user.type(screen.getByRole('textbox', { name: 'New comment' }), 'Gone now');
