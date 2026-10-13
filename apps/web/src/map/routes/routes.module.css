@@ -1,11 +1,46 @@
 /*
- * The routes section of the system sidebar and the route strips: dense rows, one per hub, the
- * jump count in a fixed column and the systems on the way as small marks.
+ * The Routes widget and the route strips: dense 21 px rows, one per hub, the systems on the way
+ * as small marks and the jump count in a fixed column on the right.
  */
 
 .routes {
   display: grid;
-  gap: 8px;
+  gap: 4px;
+}
+
+/* The lists as small tabs in the title bar: "Map 5 · Mine · Nearest". */
+.tabs {
+  gap: 1px;
+  padding: 1px;
+}
+
+.tabs > * {
+  height: 18px;
+  padding: 0 6px;
+  font-size: var(--dbk-font-size-xs);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.tabCount {
+  color: var(--dbk-color-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Route options other than the plain shortest route: a dot on the options button. */
+.optionsSet {
+  position: relative;
+}
+
+.optionsSet::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--dbk-color-accent);
 }
 
 .bar {
@@ -20,30 +55,26 @@
   min-width: 0;
 }
 
-.options {
-  margin: -2px 0 0;
-  overflow: hidden;
-  color: var(--dbk-color-text-muted);
-  font-size: var(--dbk-font-size-xs);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .list {
   display: grid;
   gap: 1px;
-  margin: 0 -8px;
+  margin: 0 calc(-1 * var(--widget-pad, 8px));
   padding: 0;
   list-style: none;
 }
 
+/*
+ * One route a row, 21 px: the name, the systems on the way as a strip, the jumps on the right.
+ * The actions button shows over the end of the strip while the row is hovered or focused.
+ */
 .row {
+  position: relative;
   display: grid;
-  grid-template-columns: 18px minmax(0, 7.5em) 3ch minmax(0, 1fr);
-  column-gap: 6px;
+  grid-template-columns: minmax(0, 7.5em) minmax(0, 1fr) 3ch;
+  column-gap: 8px;
   align-items: center;
-  min-height: 26px;
-  padding: 2px 8px 2px 4px;
+  min-height: 21px;
+  padding: 0 var(--widget-pad, 8px);
   border-radius: var(--dbk-radius);
 }
 
@@ -53,6 +84,9 @@
 }
 
 .rowMenu {
+  position: absolute;
+  top: 50%;
+  right: calc(var(--widget-pad, 8px) + 3ch + 4px);
   display: inline-grid;
   width: 18px;
   height: 18px;
@@ -60,10 +94,11 @@
   place-items: center;
   border: 0;
   border-radius: var(--dbk-radius-small);
-  background: none;
+  background: var(--dbk-color-surface-hover);
   color: var(--dbk-color-text-subtle);
   cursor: pointer;
-  opacity: 0.55;
+  opacity: 0;
+  transform: translateY(-50%);
 }
 
 .row:hover .rowMenu,
@@ -100,6 +135,10 @@
   white-space: nowrap;
 }
 
+.row[data-unreachable] .name {
+  color: var(--dbk-color-text-muted);
+}
+
 .name[data-on-map] {
   cursor: pointer;
 }
@@ -127,15 +166,41 @@
   color: var(--dbk-color-text);
   font-family: var(--dbk-font-family-mono);
   font-size: var(--dbk-font-size-small);
-  font-weight: 600;
+  font-weight: 700;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
+.row[data-unreachable] .jumps {
+  color: var(--dbk-color-text-subtle);
+  font-weight: 400;
+}
+
 .none {
   color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-xs);
+}
+
+/* No hub reachable: why, in one line, and the hubs it is about. */
+.unreachable {
+  display: grid;
+  gap: 2px;
+  padding: 2px 0;
+}
+
+.why {
+  margin: 0;
+  color: var(--dbk-color-text);
   font-size: var(--dbk-font-size-small);
-  font-style: italic;
+}
+
+.hubNames {
+  margin: 0;
+  overflow: hidden;
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ---- The strip ---- */
@@ -178,6 +243,23 @@
   box-shadow:
     0 0 0 1px var(--dbk-color-surface),
     0 0 0 2px var(--dbk-color-accent);
+}
+
+/*
+ * In a row the strip stays on one line: each mark narrows (down to 2 px) as routes get longer, a
+ * compact security strip of the route.
+ */
+.row .strip {
+  flex-wrap: nowrap;
+  gap: 1px;
+  padding: 0;
+}
+
+.row .step {
+  flex: 0 1 8px;
+  width: auto;
+  min-width: 2px;
+  height: 8px;
 }
 
 .strip[data-hovering] .step:not([data-active]) {
@@ -243,7 +325,7 @@
 }
 
 .stations {
-  grid-column: 2 / -1;
+  grid-column: 1 / -1;
   overflow: hidden;
   color: var(--dbk-color-text-muted);
   font-size: var(--dbk-font-size-xs);

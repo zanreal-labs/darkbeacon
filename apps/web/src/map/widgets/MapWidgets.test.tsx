@@ -541,17 +541,17 @@ describe('widget windows', () => {
     const local = windowBox('Local');
     const corner = region('Local').querySelector<HTMLElement>('[data-corner="se"]')!;
     fireEvent.pointerDown(corner, { button: 0, clientX: 0, clientY: 0, pointerId: 2 });
-    fireEvent.pointerMove(corner, { clientX: 0, clientY: 60, pointerId: 2 });
+    fireEvent.pointerMove(corner, { clientX: 0, clientY: 40, pointerId: 2 });
     fireEvent.pointerUp(corner, { pointerId: 2 });
-    expect(storedLayout()!.caps).toEqual({ local: local.h + 60 });
-    expect(windowBox('Local')).toEqual({ ...local, h: local.h + 60 });
+    expect(storedLayout()!.caps).toEqual({ local: local.h + 40 });
+    expect(windowBox('Local')).toEqual({ ...local, h: local.h + 40 });
     expect(region('Local').dataset.docked).toBe('true');
     // The windows under it move down.
-    expect(windowBox('Routes').y).toBe(local.y + local.h + 60 + DOCK_GAP);
+    expect(windowBox('Routes').y).toBe(local.y + local.h + 40 + DOCK_GAP);
     // Its content grows: the window keeps its height and the content scrolls.
     contentOf.local = 500;
     remeasure();
-    expect(windowBox('Local').h).toBe(local.h + 60);
+    expect(windowBox('Local').h).toBe(local.h + 40);
     // Never smaller than its minimum.
     fireEvent.pointerDown(corner, { button: 0, clientX: 0, clientY: 0, pointerId: 3 });
     fireEvent.pointerMove(corner, { clientX: 0, clientY: -400, pointerId: 3 });
@@ -949,7 +949,7 @@ describe('window geometry', () => {
     expect(minSize('signatures')).toEqual({ w: 320, h: 180 });
     expect(minSize('info')).toEqual({ w: 300, h: 110 });
     expect(minSize('local')).toEqual({ w: 240, h: 130 });
-    expect(minSize('routes')).toEqual({ w: 280, h: 130 });
+    expect(minSize('routes')).toEqual({ w: 280, h: 150 });
     expect(minSize('kills')).toEqual({ w: 280, h: 130 });
     expect(minSize('comments')).toEqual({ w: 260, h: 140 });
     expect(
@@ -981,7 +981,9 @@ describe('window geometry', () => {
     expect(column.kills!.h).toBe(minSize('kills').h);
     expect(column.routes!.h).toBe(minSize('routes').h);
     expect(column.signatures!.h).toBe(minSize('signatures').h);
-    expect(column.local!.h).toBe(800 - 2 * GUTTER - 4 * DOCK_GAP - 150 - 180 - 2 * 130);
+    expect(column.local!.h).toBe(
+      800 - 2 * GUTTER - 4 * DOCK_GAP - 150 - 180 - minSize('kills').h - minSize('routes').h,
+    );
 
     // Too small for all of them: each stays at its minimum and scrolls, never smaller.
     const small = dockColumn(ids, { width: 1000, height: 600 }, natural);
@@ -992,12 +994,12 @@ describe('window geometry', () => {
     const layout: WidgetsLayout = {
       ...EMPTY_LAYOUT,
       // Over the column's left part, a third of the way down.
-      boxes: { signatures: { x: 900, y: 300, w: 400, h: 250, fixed: true } },
+      boxes: { signatures: { x: 900, y: 300, w: 400, h: 230, fixed: true } },
     };
     const natural = { info: 150, local: 150, routes: 150, kills: 150 };
     const resolved = resolveBoxes(layout, area, DEFAULT_VISIBLE, natural);
     const sigs = resolved.boxes.signatures!;
-    expect(sigs).toEqual({ x: 900, y: 300, w: 400, h: 250 });
+    expect(sigs).toEqual({ x: 900, y: 300, w: 400, h: 230 });
     // Nothing docked under it, all inside the map, in the column's order, 8 px apart at least.
     const docked = ['info', 'local', 'routes', 'kills'].map((id) => resolved.boxes[id]!);
     for (const box of docked) {

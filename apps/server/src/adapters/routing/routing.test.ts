@@ -314,6 +314,60 @@ describeEachDialect('routing over a map', (t) => {
     expect((await queries.sharedExits(map.id)).map((e) => e.name)).toEqual(['J014348', 'J130256']);
   });
 
+  it('routes to the map hubs out of a chain whose holes are all end of life', async () => {
+    // A chain like the one behind "No connection" on every hub: home C3 J164751 -> C2 J110043,
+    // which leads to Charmerout (high-sec) and S9X-AX (null-sec), every hole marked EOL.
+    const C = { home: 31001269, c2: 31000429, charmerout: 30004976, s9x: 30003741 };
+    const shck = await new MapUseCases(env.ports).create(alice, { name: 'SHCK' });
+    env.access.grant('bob', shck.id, 'viewer');
+    for (const id of Object.values(C)) await systems.add(alice, shck.id, { solarSystemId: id });
+    for (const [a, b] of [
+      [C.home, C.c2],
+      [C.c2, C.charmerout],
+      [C.c2, C.s9x],
+    ] as const) {
+      const link = await connections.add(alice, shck.id, { source: a, target: b });
+      await connections.update(alice, shck.id, link.id, { timeStatus: 'eol' });
+    }
+    await hubs.setMapHubs(alice, shck.id, [S.jita, S.amarr, S.dodixie, S.rens, S.hek]);
+    router.invalidate(shck.id);
+
+    const fromHome = await queries.hubRoutes(bob, shck.id, { from: C.home, hubs: 'map', mode: 'shortest' });
+    // Out through Charmerout: two holes, then Charmerout's seven gates to Dodixie.
+    expect(fromHome.routes.map((r) => [r.name, r.jumps])).toEqual([
+      ['Dodixie', 9],
+      ['Jita', 13],
+      ['Hek', 14],
+      ['Rens', 18],
+      ['Amarr', 19],
+    ]);
+    expect(fromHome.unreachable).toBeUndefined();
+    expect(fromHome.routes[0]!.steps.slice(0, 3).map((s) => [s.name, s.via])).toEqual([
+      ['J164751', 'start'],
+      ['J110043', 'wormhole'],
+      ['Charmerout', 'wormhole'],
+    ]);
+    // Skipping EOL holes leaves the home system no way out: every hub has no route.
+    const noEol = await queries.hubRoutes(bob, shck.id, {
+      from: C.home,
+      hubs: 'map',
+      mode: 'shortest',
+      skip: ['eol'],
+    });
+    expect(noEol.routes.every((r) => r.jumps === null)).toBe(true);
+    expect(noEol.unreachable).toBe('no-exit');
+    // Known space reached, but the mode keeps every (high-sec) hub out of reach.
+    const outlaw = await queries.hubRoutes(bob, shck.id, { from: C.home, hubs: 'map', mode: 'outlaw' });
+    expect(outlaw).toMatchObject({ unreachable: 'options' });
+
+    // Once the holes are gone (the sweeper removes expired ones), only the home is left.
+    for (const id of [C.c2, C.charmerout, C.s9x]) await systems.remove(alice, shck.id, id);
+    router.invalidate(shck.id);
+    const alone = await queries.hubRoutes(bob, shck.id, { from: C.home, hubs: 'map', mode: 'shortest' });
+    expect(alone.routes.map((r) => r.jumps)).toEqual([null, null, null, null, null]);
+    expect(alone.unreachable).toBe('isolated');
+  });
+
   it('hides routes from people who cannot see the map', async () => {
     await expect(
       queries.route(account('eve'), map.id, { from: S.tama, to: S.jita, mode: 'shortest' }),

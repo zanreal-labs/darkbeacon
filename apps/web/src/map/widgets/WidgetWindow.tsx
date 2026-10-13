@@ -77,6 +77,11 @@ interface Props {
   actions?: ReactNode;
   /** The title's own content when it says more than a word (System info: the system). */
   heading?: ReactNode;
+  /**
+   * Controls in the title bar right after the title (Routes' small tabs), so the content keeps
+   * all its height; pressed, never dragged.
+   */
+  tabs?: ReactNode;
   children: ReactNode;
 }
 
@@ -90,13 +95,13 @@ function measure(section: HTMLElement, header: HTMLElement, content: HTMLElement
 }
 
 /**
- * One widget: a window over the map with a 26 px title bar (title, count, a few words, its buttons)
- * and its content below, as tall as the content up to its cap, then scrolling. In the column it
+ * One widget: a window over the map with a 26 px title bar (title, count, small tabs, a few words,
+ * its buttons) and its content below, as tall as the content up to its cap, then scrolling. In the column it
  * stays docked; dragged by the title bar it floats where it is left. It is resized from its
  * corners, brought to the front when touched, and moved or resized with the arrow keys (Shift)
  * while it has the focus. On phones the same content opens in the bottom sheet.
  */
-export function WidgetWindow({ id, title, count, summary, alert, actions, heading, children }: Props) {
+export function WidgetWindow({ id, title, count, summary, alert, actions, heading, tabs, children }: Props) {
   const host = useContext(WidgetHostContext);
   const hintId = useId();
   const [live, setLive] = useState<Box | null>(null);
@@ -141,6 +146,11 @@ export function WidgetWindow({ id, title, count, summary, alert, actions, headin
           <span className={styles.count} data-zero={count === 0 || undefined}>
             {count}
           </span>
+        )}
+        {tabs && (
+          <div className={styles.tabs} data-no-drag>
+            {tabs}
+          </div>
         )}
         {summary ? (
           <span className={styles.summary} data-alert={alert || undefined}>

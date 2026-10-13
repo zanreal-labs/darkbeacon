@@ -6,6 +6,7 @@ import {
   routes,
   type CharacterDto,
   type HubRouteDto,
+  type HubRoutesDto,
   type RoutesByEntryDto,
   type RoutesByKind,
   type RouteStepDto,
@@ -15,7 +16,16 @@ import { ContextMenu, type MenuItem } from '../../components/ContextMenu';
 import { api } from '../../lib/api';
 import type { MapPermissions } from '../../lib/roles';
 import { track } from '../../lib/telemetry';
-import { Button, Checkbox, Segmented, Select, SearchPicker, type PickerOption, useToast } from '../../ui';
+import {
+  Button,
+  Checkbox,
+  IconButton,
+  Segmented,
+  Select,
+  SearchPicker,
+  type PickerOption,
+  useToast,
+} from '../../ui';
 import { hubMenu, stationsMenu, waypointMenu } from '../menus/routes';
 import { WidgetWindow } from '../widgets/WidgetWindow';
 import { readStored, writeStored } from '../widgets/storage';
@@ -68,11 +78,25 @@ interface Props {
 /**
  * The Routes widget: from the selected system to every map hub, to the viewer's own hubs, or to
  * the nearest places of a kind (Wanderer's Routes, User Routes and Routes By in one window), each
- * with its jump count and the systems on the way. Options live in its menu and follow the viewer.
+ * with its jump count and the systems on the way. The three lists are small tabs in the title
+ * bar and adding a hub is a button there, so the content is only rows: the map's five default
+ * hubs fit without scrolling. Options live in its menu and follow the viewer.
  */
 export function RoutesWidget(props: Props) {
-  const { mapId } = props;
+  const { mapId, can } = props;
   const prefs = useRoutePreferences();
+  const [tab, setTabState] = useState<Tab>(() =>
+    typeof window === 'undefined' ? 'map' : (readStored(TAB_KEY, isTab) ?? 'map'),
+  );
+  const [adding, setAdding] = useState(false);
+  const setTab = (next: Tab) => {
+    setTabState(next);
+    setAdding(false);
+    writeStored(TAB_KEY, next);
+  };
+  const hubs = useHubs(mapId);
+  const counts = { map: hubs.data?.map.length ?? 0, personal: hubs.data?.personal.length ?? 0 };
+  const canAdd = tab === 'personal' || (tab === 'map' && can.edit);
   useEffect(() => {
     track('panel_opened', { panel: 'routes' });
   }, []);
@@ -80,16 +104,58 @@ export function RoutesWidget(props: Props) {
     <WidgetWindow
       id="routes"
       title="Routes"
-      actions={
-        <RouteSettingsMenu
-          preferences={prefs.preferences}
-          characters={props.myCharacters}
-          onChange={prefs.update}
+      tabs={
+        <Segmented
+          className={styles.tabs}
+          aria-label="Routes to"
+          value={tab}
+          onValueChange={(v) => setTab(v as Tab)}
+          options={[
+            { value: 'map', label: <TabLabel name="Map" count={counts.map} /> },
+            { value: 'personal', label: <TabLabel name="Mine" count={counts.personal} /> },
+            { value: 'by', label: 'Nearest' },
+          ]}
         />
       }
+      actions={
+        <>
+          {canAdd && (
+            <IconButton
+              size="sm"
+              label={tab === 'map' ? 'Add a map hub' : 'Add a hub of mine'}
+              tooltipSide="left"
+              icon={<Plus />}
+              aria-pressed={adding}
+              onClick={() => setAdding((on) => !on)}
+            />
+          )}
+          <RouteSettingsMenu
+            preferences={prefs.preferences}
+            characters={props.myCharacters}
+            onChange={prefs.update}
+          />
+        </>
+      }
     >
-      <RoutesBody key={mapId} {...props} preferences={prefs.preferences} />
+      <RoutesBody
+        key={mapId}
+        {...props}
+        tab={tab}
+        adding={adding && canAdd}
+        onAddDone={() => setAdding(false)}
+        preferences={prefs.preferences}
+      />
     </WidgetWindow>
+  );
+}
+
+/** "Map 5": a tab's name and, when it has any, how many hubs it lists. */
+function TabLabel({ name, count }: { name: string; count: number }) {
+  return (
+    <>
+      {name}
+      {count > 0 && <span className={styles.tabCount}>{` ${count}`}</span>}
+    </>
   );
 }
 
@@ -101,15 +167,17 @@ function RoutesBody({
   onMap,
   onSelectSystem,
   preferences,
-}: Props & { preferences: ReturnType<typeof useRoutePreferences>['preferences'] }) {
+  tab,
+  adding,
+  onAddDone,
+}: Props & {
+  preferences: ReturnType<typeof useRoutePreferences>['preferences'];
+  tab: Tab;
+  /** The hub search is open (the title bar's + button). */
+  adding: boolean;
+  onAddDone(): void;
+}) {
   const toast = useToast();
-  const [tab, setTabState] = useState<Tab>(() =>
-    typeof window === 'undefined' ? 'map' : (readStored(TAB_KEY, isTab) ?? 'map'),
-  );
-  const setTab = (next: Tab) => {
-    setTabState(next);
-    writeStored(TAB_KEY, next);
-  };
   const [kind, setKind] = useState<RoutesByKind>('blueLoot');
   const [highsec, setHighsec] = useState(false);
   const [menu, setMenu] = useState<MenuTarget | null>(null);
@@ -119,7 +187,7 @@ function RoutesBody({
   const hubList = tab === 'by' ? 'map' : tab;
   const hubRoutes = useHubRoutes(mapId, solarSystemId, hubList, preferences, tab !== 'by');
   const by = useRoutesBy(mapId, solarSystemId, kind, highsec, preferences, tab === 'by');
-  const summary = optionsSummary(preferences);
+  const optionsSet = optionsSummary(preferences) !== null;
   const counts = { map: hubs.data?.map.length ?? 0, personal: hubs.data?.personal.length ?? 0 };
 
   const select = (id: number) => {
@@ -134,18 +202,6 @@ function RoutesBody({
 
   return (
     <div className={styles.routes}>
-      <Segmented
-        aria-label="Routes to"
-        value={tab}
-        onValueChange={(v) => setTab(v as Tab)}
-        options={[
-          { value: 'map', label: counts.map > 0 ? `Map hubs ${counts.map}` : 'Map hubs' },
-          { value: 'personal', label: counts.personal > 0 ? `My hubs ${counts.personal}` : 'My hubs' },
-          { value: 'by', label: 'Nearest' },
-        ]}
-      />
-      {summary && <p className={styles.options}>{summary}</p>}
-
       {tab === 'by' ? (
         <>
           <div className={styles.bar}>
@@ -170,29 +226,44 @@ function RoutesBody({
             </p>
           ) : (
             <ul className={styles.list} aria-label="Nearest places">
-              {by.data!.entries.map((entry) => (
-                <li key={entry.solarSystemId} className={styles.row}>
-                  <RowMenuButton onOpen={(e) => openMenu({ ...entry, stations: entry.stations }, e)} />
-                  <NameButton id={entry.solarSystemId} name={entry.name} onMap={onMap} onSelect={select} />
-                  <span className={styles.jumps}>{entry.jumps}</span>
-                  <RouteStrip
-                    steps={entry.steps}
-                    onSelect={(s) => select(s.solarSystemId)}
-                    onMenu={stepMenu}
-                  />
-                  {entry.stations.length > 0 && (
-                    <span className={styles.stations} title={entry.stations.map((s) => s.name).join('\n')}>
-                      {entry.stations[0]!.name}
-                      {entry.stations.length > 1 ? ` and ${entry.stations.length - 1} more` : ''}
-                    </span>
-                  )}
-                </li>
-              ))}
+              {by.data!.entries.map((entry) => {
+                const onMenu = (e: MouseEvent) => openMenu({ ...entry, stations: entry.stations }, e);
+                return (
+                  <li key={entry.solarSystemId} className={styles.row} onContextMenu={onMenu}>
+                    <NameButton id={entry.solarSystemId} name={entry.name} onMap={onMap} onSelect={select} />
+                    <RouteStrip
+                      steps={entry.steps}
+                      onSelect={(s) => select(s.solarSystemId)}
+                      onMenu={stepMenu}
+                    />
+                    <span className={styles.jumps}>{entry.jumps}</span>
+                    <RowMenuButton onOpen={onMenu} />
+                    {entry.stations.length > 0 && (
+                      <span className={styles.stations} title={entry.stations.map((s) => s.name).join('\n')}>
+                        {entry.stations[0]!.name}
+                        {entry.stations.length > 1 ? ` and ${entry.stations.length - 1} more` : ''}
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </>
       ) : (
         <>
+          {adding && (
+            <AddHub
+              list={tab}
+              limit={hubRoutes.data?.limit ?? 20}
+              count={tab === 'map' ? counts.map : counts.personal}
+              onAdd={(system) => {
+                void toggleHub(tab, { solarSystemId: system.id, name: system.name }, true);
+                onAddDone();
+              }}
+              onCancel={onAddDone}
+            />
+          )}
           {hubRoutes.isPending ? (
             <p className={styles.hint}>Finding routes…</p>
           ) : hubRoutes.isError ? (
@@ -201,10 +272,12 @@ function RoutesBody({
             <p className={styles.hint}>
               {tab === 'map'
                 ? can.edit
-                  ? 'No map hubs. Add one, or right-click a system › Map hub.'
+                  ? 'No map hubs. Add one with +, or right-click a system › Map hub.'
                   : 'This map has no hubs yet.'
-                : 'No hubs of yours (they show on every map). Add one, or right-click a system › My hub.'}
+                : 'No hubs of yours (they show on every map). Add one with +, or right-click a system › My hub.'}
             </p>
+          ) : hubRoutes.data!.routes.every((r) => r.jumps === null) ? (
+            <Unreachable result={hubRoutes.data!} optionsSet={optionsSet} />
           ) : (
             <ul
               className={styles.list}
@@ -221,14 +294,6 @@ function RoutesBody({
                 />
               ))}
             </ul>
-          )}
-          {(tab === 'personal' || can.edit) && (
-            <AddHub
-              list={tab}
-              limit={hubRoutes.data?.limit ?? 20}
-              count={tab === 'map' ? counts.map : counts.personal}
-              onAdd={(system) => void toggleHub(tab, { solarSystemId: system.id, name: system.name }, true)}
-            />
           )}
         </>
       )}
@@ -249,6 +314,31 @@ function RoutesBody({
   );
 }
 
+/** Why no hub can be reached from the selected system, as one line. */
+export function unreachableText(reason: HubRoutesDto['unreachable'], optionsSet: boolean): string {
+  switch (reason) {
+    case 'isolated':
+      return 'This system has no connections on the map, so no route leads to a hub.';
+    case 'no-exit':
+      return `No route out of this chain to k-space${optionsSet ? ' with these route options' : ''}.`;
+    case 'options':
+      return 'No route to any hub with these route options.';
+    default:
+      return 'No route to any of these hubs.';
+  }
+}
+
+/** No hub reachable: one line saying why instead of a row per hub, then the hubs it is about. */
+function Unreachable({ result, optionsSet }: { result: HubRoutesDto; optionsSet: boolean }) {
+  return (
+    <div className={styles.unreachable} role="status">
+      <p className={styles.why}>{unreachableText(result.unreachable, optionsSet)}</p>
+      <p className={styles.hubNames}>{result.routes.map((r) => r.name).join(' · ')}</p>
+    </div>
+  );
+}
+
+/** A row's actions: shown while the row is hovered or focused; a right-click opens them too. */
 function RowMenuButton({ onOpen }: { onOpen(e: MouseEvent): void }) {
   return (
     <button type="button" className={styles.rowMenu} aria-label="Route actions" onClick={onOpen}>
@@ -285,6 +375,7 @@ function NameButton({
   );
 }
 
+/** A hub: its name, the systems on the way as a strip, the jumps (a dash without a route). */
 function HubRow({
   route,
   onMap,
@@ -299,8 +390,7 @@ function HubRow({
   onStepMenu(step: RouteStepDto, at: { x: number; y: number }): void;
 }) {
   return (
-    <li className={styles.row} onContextMenu={onMenu}>
-      <RowMenuButton onOpen={onMenu} />
+    <li className={styles.row} data-unreachable={route.jumps === null || undefined} onContextMenu={onMenu}>
       <NameButton
         id={route.solarSystemId}
         name={route.name}
@@ -308,14 +398,21 @@ function HubRow({
         onMap={onMap}
         onSelect={onSelect}
       />
-      <span className={styles.jumps}>{route.jumps ?? ''}</span>
       {route.jumps === null ? (
-        <span className={styles.none}>No connection</span>
+        <span />
       ) : route.jumps === 0 ? (
-        <span className={styles.none}>You are here</span>
+        <span className={styles.none}>here</span>
       ) : (
         <RouteStrip steps={route.steps} onSelect={(s) => onSelect(s.solarSystemId)} onMenu={onStepMenu} />
       )}
+      {route.jumps === null ? (
+        <span className={styles.jumps} title="No route">
+          —
+        </span>
+      ) : (
+        <span className={styles.jumps}>{route.jumps}</span>
+      )}
+      <RowMenuButton onOpen={onMenu} />
     </li>
   );
 }
@@ -329,28 +426,20 @@ function AddHub({
   limit,
   count,
   onAdd,
+  onCancel,
 }: {
   list: 'map' | 'personal';
   limit: number;
   count: number;
   onAdd(system: UniverseSystemDto): void;
+  onCancel(): void;
 }) {
-  const [open, setOpen] = useState(false);
   if (count >= limit) {
     return (
       <p className={styles.hint}>
         {list === 'map' ? 'The map' : 'You'} already {list === 'map' ? 'has' : 'have'} {limit} hubs, the most
         there can be. Remove one to add another.
       </p>
-    );
-  }
-  if (!open) {
-    return (
-      <div className={styles.add}>
-        <Button size="sm" variant="ghost" icon={<Plus />} onClick={() => setOpen(true)}>
-          {list === 'map' ? 'Add a map hub' : 'Add a hub of mine'}
-        </Button>
-      </div>
     );
   }
   return (
@@ -376,12 +465,10 @@ function AddHub({
           };
         }}
         onChange={(picked) => {
-          if (!picked) return;
-          onAdd(picked.system);
-          setOpen(false);
+          if (picked) onAdd(picked.system);
         }}
       />
-      <Button size="sm" variant="ghost" icon={<X />} aria-label="Cancel" onClick={() => setOpen(false)} />
+      <Button size="sm" variant="ghost" icon={<X />} aria-label="Cancel" onClick={onCancel} />
     </div>
   );
 }

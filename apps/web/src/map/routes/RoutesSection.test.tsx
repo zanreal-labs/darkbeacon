@@ -15,7 +15,7 @@ import { MAP_ID, meFixture } from '../../test/fixtures';
 import { renderWithProviders, setupMockServer } from '../../test/setup';
 import { ToastProvider, TooltipProvider } from '../../ui';
 import { SECURITY_COLORS } from '../nodeFacts';
-import { RoutesWidget } from './RoutesSection';
+import { RoutesWidget, unreachableText } from './RoutesSection';
 import { stepClass, stepLook } from './RouteStrip';
 
 const step = (
@@ -53,6 +53,8 @@ const jita: HubRouteDto = {
 const far: HubRouteDto = { ...jita, solarSystemId: 30002187, name: 'Amarr', jumps: null, steps: [] };
 
 const queries: URLSearchParams[] = [];
+/** What the next hub routes request answers for the map's hubs. */
+let mapHubRoutes: Pick<HubRoutesDto, 'routes' | 'unreachable'> = { routes: [jita, far] };
 setupMockServer(
   http.get(routes.accounts.me.path, () => HttpResponse.json(meFixture())),
   http.get(routes.routing.hubs.path, () => HttpResponse.json({ trade: [], map: [jita, far], personal: [] })),
@@ -62,8 +64,8 @@ setupMockServer(
     const body: HubRoutesDto = {
       from: 31000001,
       mode: 'shortest',
-      routes: query.get('hubs') === 'personal' ? [] : [jita, far],
       limit: 20,
+      ...(query.get('hubs') === 'personal' ? { routes: [] } : mapHubRoutes),
     };
     return HttpResponse.json(body);
   }),
@@ -76,6 +78,7 @@ setupMockServer(
 beforeEach(() => {
   window.localStorage.clear();
   queries.length = 0;
+  mapHubRoutes = { routes: [jita, far] };
 });
 
 const section = (onSelectSystem = vi.fn()) => {
@@ -109,11 +112,12 @@ describe('route strip', () => {
 });
 
 describe('routes section', () => {
-  it('lists the map hubs nearest first, with a strip per route and no connection last', async () => {
+  it('lists the map hubs nearest first, with a strip per route and a dash without one', async () => {
     const select = section();
     const list = await screen.findByRole('list', { name: 'Routes to map hubs' });
     const rows = within(list).getAllByRole('listitem');
-    expect(rows.map((r) => r.textContent)).toEqual(['Jita3', 'AmarrNo connection']);
+    expect(rows.map((r) => r.textContent)).toEqual(['Jita3', 'Amarr—']);
+    expect(within(rows[1]!).getByTitle('No route')).toBeTruthy();
     const marks = within(rows[0]!).getAllByRole('button', { name: /Tama|Perimeter|Jita,/ });
     expect(marks.map((m) => m.getAttribute('aria-label'))).toEqual([
       '0.3 Tama, The Citadel, through a wormhole',
@@ -131,10 +135,19 @@ describe('routes section', () => {
     expect(queries[0]!.get('hubs')).toBe('map');
   });
 
-  it('switches to my hubs and remembers the tab', async () => {
+  it('has its tabs in the title bar, switches to my hubs and remembers the tab', async () => {
     section();
     await screen.findByRole('list', { name: 'Routes to map hubs' });
-    await userEvent.click(screen.getByRole('radio', { name: 'My hubs' }));
+    const titleBar = document.querySelector('header')!;
+    const tabs = within(titleBar).getByRole('radiogroup', { name: 'Routes to' });
+    await waitFor(() =>
+      expect(
+        within(tabs)
+          .getAllByRole('radio')
+          .map((t) => t.textContent),
+      ).toEqual(['Map 2', 'Mine', 'Nearest']),
+    );
+    await userEvent.click(within(tabs).getByRole('radio', { name: 'Mine' }));
     expect(await screen.findByText(/No hubs of yours/)).toBeTruthy();
     expect(window.localStorage.getItem('dbk-routes-tab')).toBe('"personal"');
   });
@@ -145,6 +158,33 @@ describe('routes section', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Route options' }));
     await userEvent.click(await screen.findByRole('menuitemcheckbox', { name: 'End-of-life holes' }));
     await waitFor(() => expect(queries.at(-1)!.get('skip')).toBe('eol'));
-    expect(screen.getByText('no EOL')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Route options: no EOL', hidden: true })).toBeTruthy();
+  });
+
+  it('says once why no hub can be reached instead of a row per hub', async () => {
+    mapHubRoutes = {
+      routes: [far, { ...far, solarSystemId: 30002659, name: 'Dodixie' }],
+      unreachable: 'no-exit',
+    };
+    section();
+    const status = await screen.findByRole('status');
+    expect(status.textContent).toBe('No route out of this chain to k-space.Amarr · Dodixie');
+    expect(screen.queryByRole('list', { name: 'Routes to map hubs' })).toBeNull();
+    expect(unreachableText('isolated', false)).toMatch(/no connections on the map/);
+    expect(unreachableText('no-exit', true)).toBe(
+      'No route out of this chain to k-space with these route options.',
+    );
+  });
+
+  it('adds a hub from the title bar', async () => {
+    section();
+    await screen.findByRole('list', { name: 'Routes to map hubs' });
+    expect(screen.queryByRole('combobox', { name: 'Add a map hub' })).toBeNull();
+    await userEvent.click(
+      within(document.querySelector('header')!).getByRole('button', { name: 'Add a map hub' }),
+    );
+    expect(await screen.findByRole('combobox', { name: 'Add a map hub' })).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('combobox', { name: 'Add a map hub' })).toBeNull();
   });
 });

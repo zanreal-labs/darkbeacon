@@ -20,6 +20,7 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from '../../ui';
+import styles from './routes.module.css';
 
 const MODES: ReadonlyArray<{ mode: Exclude<RouteMode, 'pilot'>; label: string; short: string }> = [
   { mode: 'shortest', label: 'Shortest', short: 'Shortest' },
@@ -68,7 +69,8 @@ const toggle = <T,>(list: readonly T[], value: T, on: boolean): T[] =>
 
 /**
  * The route options, in the routes section's header: the mode, which holes and bridges count and
- * what to keep out of. They follow the viewer to every map and device.
+ * what to keep out of. They follow the viewer to every map and device. Options other than the
+ * plain shortest route light a dot on the button, and its name and tooltip sum them up.
  */
 export function RouteSettingsMenu({
   preferences: p,
@@ -81,10 +83,17 @@ export function RouteSettingsMenu({
 }) {
   const keep = (e: Event) => e.preventDefault();
   const modeValue = p.mode === 'pilot' && p.characterId !== null ? `pilot:${p.characterId}` : p.mode;
+  const summary = optionsSummary(p);
   return (
     <Menu>
       <MenuTrigger asChild>
-        <IconButton size="sm" label="Route options" tooltipSide="left" icon={<SlidersHorizontal />} />
+        <IconButton
+          size="sm"
+          label={summary ? `Route options: ${summary}` : 'Route options'}
+          tooltipSide="left"
+          className={summary ? styles.optionsSet : undefined}
+          icon={<SlidersHorizontal />}
+        />
       </MenuTrigger>
       <MenuContent>
         <MenuLabel>Route</MenuLabel>

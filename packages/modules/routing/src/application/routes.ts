@@ -17,6 +17,7 @@ import {
   type HubRouteDto,
   type HubRoutesDto,
   type HubRoutesQuery,
+  type HubsUnreachable,
   type HubsDto,
   type MapExitDto,
   type MapExitsDto,
@@ -32,7 +33,7 @@ import {
   type WayHomeRouteDto,
   type WormholeDestination,
 } from '@darkbeacon/shared';
-import { findRoute, routesFrom, type RouteStep } from '../domain/graph.js';
+import { findRoute, routesFrom, type RouteGraph, type RouteStep, type RouteTree } from '../domain/graph.js';
 import { isLowSec, MAX_HUBS, TRADE_HUBS } from '../domain/hubs.js';
 import { isWormholeSpace, policyFor, routeSpace, type RouteNode, type RoutePolicy } from '../domain/modes.js';
 import { DEFAULT_ROUTE_OPTIONS, routeOptions, withAvoidance, type RouteOptions } from '../domain/options.js';
@@ -138,7 +139,33 @@ export class RouteQueries {
         (a.jumps ?? Infinity) - (b.jumps ?? Infinity) ||
         a.name.localeCompare(b.name),
     );
-    return { from: query.from, mode: query.mode, routes, limit: MAX_HUBS };
+    const none = routes.length > 0 && routes.every((r) => r.jumps === null);
+    return {
+      from: query.from,
+      mode: query.mode,
+      routes,
+      limit: MAX_HUBS,
+      ...(none ? { unreachable: await this.unreachable(mapId, query.from, graph, tree) } : {}),
+    };
+  }
+
+  /**
+   * Why no hub can be reached from a system: it has no connection on the map at all (a lone
+   * wormhole system), no route leaves its chain for known space, or the route options keep
+   * every hub out of reach.
+   */
+  private async unreachable(
+    mapId: string,
+    fromId: number,
+    graph: RouteGraph,
+    tree: RouteTree,
+  ): Promise<HubsUnreachable> {
+    const at = graph.base.index.get(fromId);
+    const chain = await this.deps.router.chain(mapId);
+    const linked = chain?.connections.some((c) => c.source === fromId || c.target === fromId) ?? false;
+    if (!linked && at !== undefined && graph.links(at).next().done) return 'isolated';
+    const known = (node: RouteNode) => !isWormholeSpace(node) && node.whClass !== 25;
+    return tree.reaches(known) ? 'options' : 'no-exit';
   }
 
   /** The nearest places of a kind from one system, with their stations and the way there. */

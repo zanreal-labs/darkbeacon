@@ -35,6 +35,9 @@ export const HubRouteDto = HubDto.extend({
 });
 export type HubRouteDto = z.infer<typeof HubRouteDto>;
 
+export const HubsUnreachable = z.enum(['isolated', 'no-exit', 'options']);
+export type HubsUnreachable = z.infer<typeof HubsUnreachable>;
+
 export const HubRoutesDto = z.object({
   from: EveId,
   mode: RouteMode,
@@ -42,6 +45,12 @@ export const HubRoutesDto = z.object({
   routes: z.array(HubRouteDto),
   /** The most hubs a list may hold. */
   limit: z.number().int(),
+  /**
+   * Why no hub has a route, when none has: `isolated`, the system has no connection on the map
+   * (nor a gate); `no-exit`, no route leaves the chain for known space; `options`, known space is
+   * reached but the mode or the avoided systems keep every hub out of reach.
+   */
+  unreachable: HubsUnreachable.optional(),
 });
 export type HubRoutesDto = z.infer<typeof HubRoutesDto>;
 

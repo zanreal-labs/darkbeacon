@@ -36,14 +36,15 @@ export const MIN_SIZE = { w: 260, h: 140 };
 
 /**
  * The smallest each window gets, enough to read something: Signatures its title and about five
- * rows, System info the header and two lines of facts, Local three pilots, Routes and Kills three
- * rows. A window sized by its content never goes below it, and neither does a resize.
+ * rows, System info the header and two lines of facts, Local three pilots, Routes the five trade
+ * hubs every map starts with (title bar 26, five 21 px rows 109, padding 10, border 2), Kills
+ * three rows. A window sized by its content never goes below it, and neither does a resize.
  */
 const MIN_SIZES: Record<string, { w: number; h: number }> = {
   signatures: { w: 320, h: 180 },
   info: { w: 300, h: 110 },
   local: { w: 240, h: 130 },
-  routes: { w: 280, h: 130 },
+  routes: { w: 280, h: 150 },
   kills: { w: 280, h: 130 },
 };
 

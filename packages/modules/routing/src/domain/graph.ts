@@ -266,6 +266,8 @@ function walkBack(graph: RouteGraph, from: number, to: number, prev: Int32Array,
 export interface RouteTree {
   /** The cheapest route to `toId`, or null when there is none. */
   to(toId: number): RouteStep[] | null;
+  /** Whether a route reaches any system `test` accepts (the start included). */
+  reaches(test: (node: RouteNode) => boolean): boolean;
 }
 
 /**
@@ -274,7 +276,7 @@ export interface RouteTree {
  */
 export function routesFrom(graph: RouteGraph, fromId: number, policy: RoutePolicy): RouteTree {
   const from = graph.base.index.get(fromId);
-  if (from === undefined) return { to: () => null };
+  if (from === undefined) return { to: () => null, reaches: () => false };
   const n = graph.base.size;
   const cost = new Float64Array(n).fill(Infinity);
   const hops = new Int32Array(n).fill(-1);
@@ -309,6 +311,10 @@ export function routesFrom(graph: RouteGraph, fromId: number, policy: RoutePolic
       const to = graph.base.index.get(toId);
       if (to === undefined || !done[to]) return null;
       return walkBack(graph, from, to, prev, prevLink);
+    },
+    reaches(test) {
+      for (let i = 0; i < n; i++) if (done[i] && test(graph.base.nodes[i]!)) return true;
+      return false;
     },
   };
 }

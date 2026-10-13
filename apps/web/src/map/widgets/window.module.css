@@ -116,6 +116,15 @@
   color: var(--dbk-color-text-subtle);
 }
 
+/* Small tabs in the title bar (Routes): they keep their size, the summary gives way. */
+.tabs {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-width: 0;
+  cursor: default;
+}
+
 .summary {
   min-width: 0;
   overflow: hidden;
