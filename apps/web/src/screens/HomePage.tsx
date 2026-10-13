@@ -325,6 +325,12 @@ export function FirstMapPage() {
           </div>
         </Card>
       )}
+      {mayCreate && (
+        <div className={styles.firstImport}>
+          <span className="muted">Already mapping somewhere else? Bring the whole map over.</span>
+          <ImportMenu />
+        </div>
+      )}
       {demo && (
         <p className={`${styles.firstNote} muted`}>
           In the demo every visitor shares one account, so others see your map too.
