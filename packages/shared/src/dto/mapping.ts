@@ -74,6 +74,36 @@ export const DEFAULT_SYSTEM_LABELS: readonly SystemLabelDto[] = [
   { id: 'wh3', name: 'WH3', description: '' },
 ];
 
+/**
+ * The Tags every new map starts with (existing maps gain the ones they lack by name in migration
+ * `mapping/0600_default_tags`). Ids are only unique within a map, so they can be fixed. Colours are
+ * muted mid-tones, like the status borders, so they read on the light and the dark canvas alike.
+ */
+export const DEFAULT_TAGS: readonly LabelDto[] = [
+  {
+    id: 'staging',
+    name: 'Staging',
+    color: '#5a9bbd',
+    description: 'Where the fleet forms up and ships wait.',
+  },
+  {
+    id: 'sites',
+    name: 'Sites',
+    color: '#6a9f5b',
+    description: 'Combat, relic, data or gas sites worth running.',
+  },
+  {
+    id: 'hostile',
+    name: 'Hostile',
+    color: '#c45c5c',
+    description: 'Hostiles live or were seen here. Scout first.',
+  },
+  { id: 'exit', name: 'Exit', color: '#8a93a3', description: 'A way out to known space.' },
+  { id: 'home', name: 'Home', color: '#4ea39a', description: 'Our home hole.' },
+  { id: 'farm', name: 'Farm', color: '#c3994a', description: 'A system we farm regularly.' },
+  { id: 'fleet', name: 'Fleet', color: '#9583cc', description: 'Our fleet is here or heading here.' },
+];
+
 /** Longest custom label of a system: a word, like "bait" or "scout". */
 export const CUSTOM_LABEL_MAX = 16;
 

@@ -1,16 +1,19 @@
 /*
- * Every node has the same box: as wide as the widest system name of the game next to the widest
- * designation pill and a pilot count (invisible sizers set it), two rows of fixed height. The
- * background is the plain node surface; the 3 px border is the status.
+ * The node is as wide as its own content (the pill and the name; the statics, the corner marks and
+ * the live counts), never narrower than the theme's minimum and never wider than the cap, where a
+ * long custom name is cut with an ellipsis. Two rows of fixed height. The background is the plain
+ * node surface; the 3 px border is the status.
  */
 .node {
+  --node-max-width: calc(var(--dbk-node-min-width) * 1.6);
+
   position: relative;
-  display: grid;
-  grid-template-columns: max-content;
-  grid-auto-rows: auto;
+  display: flex;
+  flex-direction: column;
   row-gap: 4px;
   width: max-content;
   min-width: var(--dbk-node-min-width);
+  max-width: var(--node-max-width);
   padding: var(--dbk-node-padding);
   border: var(--dbk-node-border-width) solid var(--node-status, var(--dbk-node-border));
   border-radius: var(--dbk-node-radius);
@@ -36,43 +39,11 @@
   box-shadow: none;
 }
 
-/* Takes the node's width without adding to it. */
-.fill {
-  width: 0;
-  min-width: 100%;
-}
-
-.head {
-  display: grid;
-}
-
-.head > .row {
-  grid-area: 1 / 1;
-}
-
 .row {
   display: flex;
   align-items: center;
   gap: 7px;
   height: 24px;
-}
-
-.stack {
-  display: grid;
-}
-
-.stack > * {
-  grid-area: 1 / 1;
-}
-
-.sizer {
-  visibility: hidden;
-}
-
-/* As wide as the effect square and the shattered star, which may follow any name. */
-.effectSizer {
-  flex: none;
-  width: calc(9px + 7px + 12px);
 }
 
 /* The designation pill: solid, fixed width, dark bold monospace text on the EVE colour. */
@@ -129,13 +100,12 @@
 .line {
   display: flex;
   align-items: center;
+  gap: 8px;
   height: 20px;
-  overflow: hidden;
 }
 
-/* The right end of a row: kills and pilots on top, the lock and sovereignty in the corner below. */
-.end,
-.corner {
+/* The right end of the second row: notes, route hub, lock and sovereignty, then kills and pilots. */
+.end {
   display: inline-flex;
   flex: none;
   align-items: center;
@@ -143,8 +113,27 @@
   margin-left: auto;
 }
 
-/* K-space without a custom name: the region (Pochven: the constellation), muted. */
+/*
+ * A live count (kills, pilots) gets a slot as wide as a two-digit count, there only while the
+ * count is: the node does not breathe with every update.
+ */
+.slot {
+  display: inline-flex;
+  flex: none;
+  justify-content: flex-end;
+  min-width: calc(13px + 3px + 2ch);
+  font-size: var(--map-text-secondary, 13px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * K-space without a custom name: the region (Pochven: the constellation), muted. It fills what
+ * the row has left and never widens the node.
+ */
 .region {
+  flex: 1 1 0;
+  width: 0;
   min-width: 0;
   overflow: hidden;
   color: var(--dbk-color-text-muted);
@@ -190,10 +179,18 @@
   height: 14px;
 }
 
-/* Statics as plain text: "D845 HS", no chips. */
+/*
+ * Statics as plain text: "D845 HS", no chips. In a node at its widest, the statics that do not fit
+ * wrap out of sight whole (a Drifter system has four) instead of being cut mid-letter; the
+ * tooltip lists them all.
+ */
 .statics {
   display: flex;
-  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+  height: 20px;
+  gap: 0 10px;
+  overflow: hidden;
   margin: 0;
   padding: 0;
   list-style: none;

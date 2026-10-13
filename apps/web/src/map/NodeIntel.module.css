@@ -12,7 +12,7 @@
   font-size: var(--map-text-secondary, 13px);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  line-height: 22px;
+  line-height: 20px;
   cursor: help;
 }
 

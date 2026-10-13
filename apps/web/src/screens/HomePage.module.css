@@ -192,6 +192,20 @@
   padding: var(--dbk-space-4);
 }
 
+/* Under the form: import a map instead of starting an empty one. */
+.firstImport {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dbk-space-3);
+  margin-top: var(--dbk-space-4);
+  padding: var(--dbk-space-3) var(--dbk-space-4);
+  border: 1px dashed var(--dbk-color-border-strong);
+  border-radius: var(--dbk-radius-large);
+  font-size: var(--dbk-font-size-small);
+}
+
 .firstNote {
   margin-top: var(--dbk-space-3);
   font-size: var(--dbk-font-size-small);

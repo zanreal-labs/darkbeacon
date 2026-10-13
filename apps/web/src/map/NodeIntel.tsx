@@ -49,16 +49,6 @@ export function NodeKills({
   );
 }
 
-/** The sizer twin of NodeKills: the widest it gets, invisible. */
-export function NodeKillsSizer({ className }: { className?: string }) {
-  return (
-    <span className={`${styles.kills} ${className ?? ''}`} aria-hidden>
-      <Skull aria-hidden />
-      99
-    </span>
-  );
-}
-
 function NodeKillList({
   mapId,
   solarSystemId,

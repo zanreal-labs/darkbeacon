@@ -57,9 +57,6 @@ export type ClassPill =
   | { kind: 'class'; label: string; token: 'pill-wormhole' | 'pill-special' }
   | { kind: 'unknown'; label: string };
 
-/** Every label a pill can show, for sizing the node (see node-sizers.ts). */
-export const PILL_LABELS = ['C6', '-1.0', '0.5', 'Thera', 'C13', 'Drifter', 'Pochven'];
-
 /**
  * The designation pill: wormhole classes and special space filled with their colour, known space
  * with its security colour; the text is always dark (`node-pill-text`).

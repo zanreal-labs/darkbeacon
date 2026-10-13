@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { MapExitDto, UniverseSystemDto } from '@darkbeacon/shared';
 import { contrastRatio, darkTheme, lightTheme } from '@darkbeacon/theme-sdk';
 import { DEFAULT_ZOOM, MAP_TYPE, READABLE } from './mapType';
-import { classPill, exitHubs, PILL_LABELS, SECURITY_COLORS, shownSecurity } from './nodeFacts';
-import { nodeNameSizers } from './node-sizers';
+import { classPill, exitHubs, SECURITY_COLORS, shownSecurity } from './nodeFacts';
 
 const sys = (extra: Partial<UniverseSystemDto>): UniverseSystemDto => ({
   id: 1,
@@ -49,12 +48,9 @@ describe('class and security pill', () => {
     }
   });
 
-  it('lists every pill label for the node sizers', () => {
+  it('names wormhole classes and special space on the pill', () => {
     const labels = [3, 12, 13, 15, 25].map((whClass) => classPill(sys({ whClass })).label);
     expect(labels).toEqual(['C3', 'Thera', 'C13', 'Drifter', 'Pochven']);
-    for (const label of labels.slice(1)) expect(PILL_LABELS).toContain(label);
-    // C1-C6 have the width of C6; security the width of -1.0 or 0.5.
-    expect(PILL_LABELS).toEqual(expect.arrayContaining(['C6', '-1.0', '0.5']));
   });
 });
 
@@ -87,12 +83,6 @@ describe('exit hubs', () => {
 });
 
 describe('node size', () => {
-  it('sizes by the longest names within three letters', () => {
-    expect(
-      nodeNameSizers(['Jita', 'Liberated Barbican', 'Tash-Murkon Prime', 'Ardishapur Prime', 'Amarr']),
-    ).toEqual(['Liberated Barbican', 'Tash-Murkon Prime', 'Ardishapur Prime']);
-  });
-
   it('opens at a zoom where every text on the canvas stays readable', () => {
     expect(DEFAULT_ZOOM).toBeGreaterThanOrEqual(0.85);
     expect(DEFAULT_ZOOM).toBeLessThanOrEqual(1);

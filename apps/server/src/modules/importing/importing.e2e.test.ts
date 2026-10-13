@@ -5,6 +5,7 @@ import { ImportRunner, SyncScheduler, type ImportingDeps } from '@darkbeacon/imp
 import {
   WANDERER_EXPORT_CONTENT_TYPE,
   type AccessRuleDto,
+  DEFAULT_TAGS,
   type AuditPageDto,
   type CommentDto,
   type HubsDto,
@@ -133,6 +134,9 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
       json: { mode: 'new' },
     });
     expect(plan.outcome.systems).toMatchObject({ created: 30 });
+    // The new map's default Farm Tag takes Wanderer's FARM; HQ and two statuses are new Tags, and
+    // the four Labels are new.
+    expect(plan.outcome.labels).toMatchObject({ created: 7, unchanged: 1 });
 
     const started = await owner.json<ImportJobDto>(`/api/imports/${preview.id}/start`, {
       method: 'POST',
@@ -144,6 +148,7 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
     expect(job).toMatchObject({ status: 'done', phase: 'done', mapName: 'Imported chain', error: null });
     expect(job.done).toBe(job.total);
     expect(job.outcome.systems).toMatchObject({ created: 30, skipped: 0 });
+    expect(job.outcome.labels).toMatchObject({ created: 7, unchanged: 1 });
     expect(job.outcome.connections!.created).toBe(preview.counts.connections);
     expect(job.outcome.signatures!.created).toBe(preview.counts.signatures);
     expect(job.outcome.access!.created).toBe(preview.counts.accessRules);
@@ -184,11 +189,18 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
     });
     expect(map.systems.find((s) => s.solarSystemId === 31001924)!.systemLabelIds).toEqual(['b']);
     expect(map.systems.every((s) => s.tag === null)).toBe(true);
-    // Wanderer's tag becomes a Tag of that name; statuses without a match here become Tags too.
+    // Wanderer's tag becomes a Tag of that name; statuses without a match here become Tags too. A
+    // name the map's default Tags have already (FARM, any case) reuses that Tag, never a second one.
     const tagNames = (ids: string[]) => ids.map((id) => map.map.labels.find((l) => l.id === id)!.name);
     expect(tagNames(home.labelIds)).toEqual(['HQ']);
-    expect(tagNames(map.systems.find((s) => s.solarSystemId === 31001924)!.labelIds)).toContain('FARM');
-    expect(map.map.labels.map((l) => l.name).sort()).toEqual(['FARM', 'HQ', 'Looking for', 'Secondary']);
+    expect(tagNames(map.systems.find((s) => s.solarSystemId === 31001924)!.labelIds)).toContain('Farm');
+    expect(map.map.labels.slice(0, DEFAULT_TAGS.length)).toEqual(DEFAULT_TAGS);
+    expect(
+      map.map.labels
+        .slice(DEFAULT_TAGS.length)
+        .map((l) => l.name)
+        .sort(),
+    ).toEqual(['HQ', 'Looking for', 'Secondary']);
     expect(map.map.settings.scopes).toEqual(['wormhole']);
     // The map's description, shown in the list of maps.
     expect(map.map.description).toBe('Our main chain');
@@ -368,7 +380,7 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
     expect(after.systems.find((s) => s.solarSystemId === 31002531)!.customLabel).toBe('home');
     // Labels and Tags are not doubled by a second import.
     expect(after.map.systemLabels).toHaveLength(4);
-    expect(after.map.labels).toHaveLength(4);
+    expect(after.map.labels).toHaveLength(DEFAULT_TAGS.length + 3);
     expect(after.systems.find((s) => s.solarSystemId === 31001924)!.description).toContain(
       'Moved out, empty now',
     );

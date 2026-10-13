@@ -308,7 +308,8 @@ describeEachDialect('sharing and merged chains', (t) => {
 
     // Nothing of it in the composite's events either.
     const text = JSON.stringify((await env.events(alliance.id)).map((e) => e.data));
-    expect(text).not.toContain('hostile');
+    // (The composite's own default Hostile Tag is in its map.created; the status is what matters.)
+    expect(text).not.toContain('"status":"hostile"');
     expect(text).not.toContain('Our POS');
     expect(text).not.toContain('XYZ-999');
     expect(text).not.toContain('reduced');
