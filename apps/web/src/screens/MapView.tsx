@@ -50,6 +50,8 @@ import { LinkedMapPreview } from '../map/linked/LinkedMapPreview';
 import { usePingCommands, usePings } from '../map/pings/api';
 import { isWormholeSpace } from '../map/widgets/SystemDetails';
 import { EditSystemDialog } from '../map/widgets/EditSystemDialog';
+import { useBookmarkLabels } from '../map/useBookmarkLabels';
+import { useMapPreferences } from '../map/useMapPreferences';
 import { MapWidgets, type WidgetCover } from '../map/widgets/MapWidgets';
 import { usePhone } from '../map/widgets/storage';
 import { useWidgetsLayout } from '../map/widgets/useWidgetsLayout';
@@ -219,6 +221,15 @@ export function MapView({
   const systemLabels = useMemo(() => shownMap.systemLabels ?? [], [shownMap]);
   const ids = useMemo(() => [...state.systems.keys()], [state.systems]);
   const universe = useUniverseSystems(ids);
+  // The bookmark label of the system in Edit system, for its preview (worked out only while open).
+  const { preferences } = useMapPreferences(map.id);
+  const bookmarks = useBookmarkLabels({
+    state,
+    universe,
+    systemLabels,
+    preferences,
+    enabled: editing !== null,
+  });
   const onMap = useMemo(() => new Set(ids), [ids]);
   const system = selected !== null ? state.systems.get(selected) : undefined;
   const connection = selectedConnection !== null ? state.connections.get(selectedConnection) : undefined;
@@ -773,11 +784,20 @@ export function MapView({
         info={editing !== null ? universe.get(editing) : undefined}
         labels={labels}
         systemLabels={systemLabels}
+        bookmark={editing !== null ? bookmarks.get(editing) : null}
         can={(() => {
           const sys = editing !== null ? state.systems.get(editing) : undefined;
           return sys ? permissionsFor(can, sys.provenance, map.kind === 'composite') : can;
         })()}
         store={store}
+        onManageLabels={() => {
+          setEditing(null);
+          settings.show('labels');
+        }}
+        onManageTags={() => {
+          setEditing(null);
+          settings.show('tags');
+        }}
         onClose={() => setEditing(null)}
       />
 

@@ -1,0 +1,380 @@
+/* Edit system: a calm form, one section per thing a pilot sets, titles above their controls. */
+
+.title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.realName {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Under the title: where the system is, and whether the last change is saved. */
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  font-size: var(--dbk-font-size-small);
+}
+
+.save {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-small);
+}
+
+.save svg {
+  width: 13px;
+  height: 13px;
+}
+
+.save[data-state='saved'] svg {
+  color: var(--dbk-color-success);
+}
+
+.save[data-state='failed'] {
+  color: var(--dbk-color-danger);
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.form {
+  display: grid;
+  gap: 22px;
+  padding-bottom: 2px;
+}
+
+.section {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 20px;
+}
+
+.sectionTitle {
+  margin: 0;
+  color: var(--dbk-color-text-muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.manage {
+  margin: -4px -8px -4px 0;
+  color: var(--dbk-color-text-muted);
+}
+
+/* Two fields side by side (one column on narrow phones); a lone field keeps the left one's width. */
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.half {
+  width: calc(50% - 6px);
+}
+
+@media (max-width: 479px) {
+  .pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .half {
+    width: 100%;
+  }
+}
+
+.subField {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.subLabel {
+  color: var(--dbk-color-text);
+  font-size: var(--dbk-font-size-small);
+  font-weight: 500;
+}
+
+.hint {
+  margin: 0;
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-xs, 11.5px);
+  line-height: 1.4;
+}
+
+.hint code {
+  font-family: var(--dbk-font-family-mono);
+  font-size: 0.95em;
+}
+
+.empty {
+  margin: 0;
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-small);
+}
+
+.clear {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-right: -6px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dbk-radius-small);
+  background: none;
+  color: var(--dbk-color-text-subtle);
+  cursor: pointer;
+}
+
+.clear:hover {
+  background: var(--dbk-color-surface-hover);
+  color: var(--dbk-color-text);
+}
+
+.clear svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Status: the dot and the name, in the closed select and in the list. */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.statusDot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+/* ---- Toggle chips: off is a faint outline, on is filled with a check. ---- */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* The custom label is a field of its own, a step away from the chips. */
+.chips + .pair,
+.empty + .pair {
+  margin-top: 6px;
+}
+
+.labelChip,
+.tagChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in oklab, var(--dbk-color-border-strong) 55%, var(--dbk-color-border));
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dbk-color-text-muted);
+  font: inherit;
+  font-size: var(--dbk-font-size-small);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--dbk-motion-fast) var(--dbk-motion-easing),
+    border-color var(--dbk-motion-fast) var(--dbk-motion-easing),
+    color var(--dbk-motion-fast) var(--dbk-motion-easing);
+}
+
+.labelChip:hover,
+.tagChip:hover {
+  border-color: var(--dbk-color-border-strong);
+  color: var(--dbk-color-text);
+}
+
+.labelChip:focus-visible,
+.tagChip:focus-visible {
+  outline: 2px solid var(--dbk-color-focus);
+  outline-offset: 2px;
+}
+
+.labelChip svg,
+.tagChip svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-left: -3px;
+  stroke-width: 3;
+}
+
+/* A Label on: filled and inverted, exactly as the map draws it above the node. */
+.labelChip {
+  font-weight: 700;
+}
+
+.labelChip[aria-pressed='true'] {
+  border-color: var(--dbk-node-text);
+  background: var(--dbk-node-text);
+  color: var(--dbk-node-bg);
+  font-weight: 800;
+}
+
+/* A Tag on: filled with its colour. Off, only a small swatch of it. */
+.tagChip[aria-pressed='true'] {
+  border-color: var(--tag);
+  background: var(--tag);
+  color: var(--tag-text);
+  font-weight: 650;
+}
+
+.swatch {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-right: 2px;
+  border-radius: 2px;
+  background: var(--tag);
+  opacity: 0.7;
+}
+
+/* ---- Preview: the chips above a node, on the canvas colour. ---- */
+
+.preview {
+  display: grid;
+  gap: 5px;
+  margin: 6px 0 0;
+}
+
+.canvas {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  padding: 12px 14px 0;
+  overflow: hidden;
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+  background: var(--dbk-color-canvas);
+}
+
+.above {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.above > li {
+  cursor: default;
+}
+
+.nothing {
+  align-self: center;
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-small);
+  font-style: italic;
+}
+
+/* The top of the node, cut off by the preview's edge: pill, name and the status border. */
+.node {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 200px;
+  height: 34px;
+  margin-bottom: -6px;
+  padding: 0 10px 6px;
+  border: var(--dbk-node-border-width, 3px) solid var(--node-status, var(--dbk-node-border));
+  border-radius: var(--dbk-node-radius, 8px) var(--dbk-node-radius, 8px) 0 0;
+  background: var(--dbk-node-bg);
+  color: var(--dbk-node-text);
+}
+
+.nodeName {
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ---- Notes ---- */
+
+.notesControl {
+  display: flex;
+}
+
+.notes {
+  display: block;
+  width: 100%;
+  min-height: calc(5 * 1.45em + 18px);
+  padding: 8px 12px;
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+  background: var(--dbk-color-surface);
+  box-shadow: var(--dbk-shadow-small);
+  color: var(--dbk-color-text);
+  font: inherit;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.notes::placeholder {
+  color: var(--dbk-color-text-subtle);
+}
+
+.notes:hover {
+  border-color: var(--dbk-color-border-strong);
+}
+
+.notes:focus {
+  border-color: var(--dbk-color-focus);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--dbk-color-accent-subtle);
+}
+
+/* ---- Lock ---- */
+
+.lock {
+  padding-top: 16px;
+  border-top: 1px solid var(--dbk-color-border);
+}

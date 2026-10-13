@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import type { ReactElement } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ReactFlowProvider } from '@xyflow/react';
@@ -325,13 +325,18 @@ describe('the map view', () => {
     await user.click(items[0]!);
     const dialog = await screen.findByRole('dialog', { name: /Edit system/ });
     expect(within(dialog).getByRole('textbox', { name: 'Custom name' })).toBeTruthy();
-    expect(within(dialog).getByRole('radiogroup', { name: 'Status' })).toBeTruthy();
-    await user.click(within(dialog).getByRole('button', { name: 'Done' }));
+    expect(within(dialog).getByRole('combobox', { name: 'Status' })).toBeTruthy();
+    // The footer's Close (the X in the corner is called Close too).
+    await user.click(
+      within(dialog)
+        .getAllByRole('button', { name: 'Close' })
+        .find((b) => b.textContent === 'Close')!,
+    );
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 
     fireEvent.doubleClick(await node(JITA));
     const again = await screen.findByRole('dialog', { name: /Edit system/ });
-    expect(within(again).getByText('Jita')).toBeTruthy();
+    expect(within(again).getByRole('heading', { name: /Jita/ })).toBeTruthy();
   });
 
   it('shows and hides widgets from the top bar’s menu, and resets the layout', async () => {
@@ -896,39 +901,80 @@ describe('window geometry', () => {
 });
 
 describe('Edit system', () => {
-  function Dialog({ system }: { system?: Partial<MapSystemDto> }) {
+  beforeAll(() => {
+    // Radix Select reads pointer capture and scrolls the chosen option into view; jsdom has neither.
+    Object.assign(Element.prototype, {
+      hasPointerCapture: () => false,
+      releasePointerCapture: () => {},
+      scrollIntoView: () => {},
+    });
+  });
+
+  function Dialog({
+    system,
+    info = universe[WH],
+    role = 'member',
+    bookmark = null,
+    onManageTags,
+    onClose = () => {},
+  }: {
+    system?: Partial<MapSystemDto>;
+    info?: UniverseSystemDto;
+    role?: 'member' | 'manager';
+    bookmark?: string | null;
+    onManageTags?(): void;
+    onClose?(): void;
+  }) {
     const store = useMapStore(MAP_ID);
     return (
       <EditSystemDialog
-        system={systemFixture(WH, system)}
-        info={universe[WH]}
+        system={systemFixture(info?.id ?? WH, system)}
+        info={info}
         labels={mapDto.labels}
         systemLabels={mapDto.systemLabels ?? []}
-        can={mapPermissions('member')}
+        bookmark={bookmark}
+        can={mapPermissions(role)}
         store={store}
-        onClose={() => {}}
+        onManageLabels={() => {}}
+        onManageTags={onManageTags}
+        onClose={onClose}
       />
     );
   }
 
-  it('edits the names, status, labels, custom label, tags and notes, each saved as it is made', async () => {
+  function recordPatches(solarSystemId = WH) {
     const patches: unknown[] = [];
     server.use(
       http.patch(
-        buildPath(routes.systems.update.path, { mapId: MAP_ID, solarSystemId: WH }),
+        buildPath(routes.systems.update.path, { mapId: MAP_ID, solarSystemId }),
         async ({ request }) => {
           patches.push(await request.json());
-          return HttpResponse.json(systemFixture(WH));
+          return HttpResponse.json(systemFixture(solarSystemId));
         },
       ),
     );
+    return patches;
+  }
+
+  it('edits the names, status, labels, custom label, tags and notes, each saved as it is made', async () => {
+    const patches = recordPatches();
     const user = userEvent.setup();
     wrap(<Dialog system={{ status: 'hostile' }} />);
     const dialog = screen.getByRole('dialog', { name: /Edit system/ });
     // No free-text tag.
     expect(within(dialog).queryByRole('textbox', { name: 'Tag' })).toBeNull();
     await user.type(within(dialog).getByRole('textbox', { name: 'Temporary name' }), 'C3a{Enter}');
-    await user.click(within(dialog).getByRole('radio', { name: 'Friendly' }));
+    // Enter saves the field and leaves the dialog open.
+    expect(screen.getByRole('dialog')).toBeTruthy();
+
+    // Status is one select: the current one with its name, the list with a line on each.
+    const status = within(dialog).getByRole('combobox', { name: 'Status' });
+    expect(status.textContent).toBe('Hostile');
+    await user.click(status);
+    const friendly = await screen.findByRole('option', { name: /^Friendly/ });
+    expect(friendly.textContent).toContain('Friends live here.');
+    await user.click(friendly);
+
     const labels = within(dialog).getByRole('group', { name: 'Labels' });
     expect(
       within(labels)
@@ -951,5 +997,95 @@ describe('Edit system', () => {
     expect(patches.slice(4)).toEqual(
       expect.arrayContaining([{ description: 'Loki fleet in C3' }, { labelIds: ['l1'] }]),
     );
+    // The header says the changes are in.
+    await waitFor(() => expect(within(dialog).getByRole('status').textContent).toBe('Saved'));
+  });
+
+  it('marks what is on unmistakably and previews the chips above the node in map order', () => {
+    wrap(
+      <Dialog
+        system={{ systemLabelIds: ['wh2'], customLabel: 'bait', labelIds: ['l1'] }}
+        bookmark="ABC-123"
+      />,
+    );
+    const dialog = screen.getByRole('dialog', { name: /Edit system/ });
+    const labels = within(dialog).getByRole('group', { name: 'Labels' });
+    const wh1 = within(labels).getByRole('button', { name: 'WH1' });
+    const wh2 = within(labels).getByRole('button', { name: 'WH2' });
+    expect(wh1.getAttribute('aria-pressed')).toBe('false');
+    expect(wh2.getAttribute('aria-pressed')).toBe('true');
+    // On carries a check; off does not.
+    expect(wh2.querySelector('svg')).not.toBeNull();
+    expect(wh1.querySelector('svg')).toBeNull();
+    const staging = within(within(dialog).getByRole('group', { name: 'Tags' })).getByRole('button', {
+      name: 'Staging',
+    });
+    expect(staging.getAttribute('aria-pressed')).toBe('true');
+    expect(staging.querySelector('svg')).not.toBeNull();
+
+    const above = within(dialog).getByRole('list', { name: 'Above the system' });
+    expect(
+      within(above)
+        .getAllByRole('listitem')
+        .map((li) => li.textContent),
+    ).toEqual(['WH2', 'bait', 'ABC-123', 'Staging']);
+    expect(
+      (within(dialog).getByRole('textbox', { name: 'Custom label' }) as HTMLInputElement).maxLength,
+    ).toBe(16);
+  });
+
+  it('heads a wormhole with its class, never its region code, and known space with region › constellation', () => {
+    const { unmount } = wrap(<Dialog />);
+    let dialog = screen.getByRole('dialog', { name: /Edit system/ });
+    expect(within(dialog).getByRole('heading', { name: /J100001/ })).toBeTruthy();
+    const described = () => document.getElementById(dialog.getAttribute('aria-describedby')!)!.textContent;
+    expect(described()).toContain('Class 3 wormhole');
+    expect(described()).not.toContain('A-R00001');
+    // The real name is the custom name's placeholder.
+    expect(
+      (within(dialog).getByRole('textbox', { name: 'Custom name' }) as HTMLInputElement).placeholder,
+    ).toBe('J100001');
+    unmount();
+
+    wrap(<Dialog info={universe[JITA]} />);
+    dialog = screen.getByRole('dialog', { name: /Edit system/ });
+    expect(described()).toContain('The Forge › Kimotoro');
+  });
+
+  it('clears a name with its button; Escape puts unsaved typing back first, then closes', async () => {
+    const patches = recordPatches();
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    wrap(<Dialog system={{ customName: 'Home' }} onClose={onClose} />);
+    const dialog = screen.getByRole('dialog', { name: /Edit system/ });
+    await user.click(within(dialog).getByRole('button', { name: 'Clear custom name' }));
+    await waitFor(() => expect(patches).toEqual([{ customName: null }]));
+
+    const temp = within(dialog).getByRole('textbox', { name: 'Temporary name' }) as HTMLInputElement;
+    await user.type(temp, 'C3b');
+    await user.keyboard('{Escape}');
+    expect(temp.value).toBe('');
+    expect(onClose).not.toHaveBeenCalled();
+    await user.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalled();
+    expect(patches).toHaveLength(1);
+  });
+
+  it('shows the lock and Manage tags to managers only', async () => {
+    const patches = recordPatches();
+    const onManageTags = vi.fn();
+    const user = userEvent.setup();
+    const { unmount } = wrap(<Dialog onManageTags={onManageTags} />);
+    let dialog = screen.getByRole('dialog', { name: /Edit system/ });
+    expect(within(dialog).queryByRole('switch', { name: /Lock position/ })).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: 'Manage tags' })).toBeNull();
+    unmount();
+
+    wrap(<Dialog role="manager" onManageTags={onManageTags} />);
+    dialog = screen.getByRole('dialog', { name: /Edit system/ });
+    await user.click(within(dialog).getByRole('switch', { name: /Lock position/ }));
+    await waitFor(() => expect(patches).toEqual([{ locked: true }]));
+    await user.click(within(dialog).getByRole('button', { name: 'Manage tags' }));
+    expect(onManageTags).toHaveBeenCalled();
   });
 });
