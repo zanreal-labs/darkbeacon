@@ -1,24 +1,11 @@
-import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import pg from 'pg';
 import { translate, type WandererDbRequest } from '@darkbeacon/importing';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { createWandererDatabase } from '../../test-support/wanderer-db.js';
 import { WandererDatabaseSource } from './wanderer-db.js';
 
 const url = process.env.TEST_DATABASE_URL;
-const testdata = (name: string) => readFileSync(resolve(import.meta.dirname, 'testdata', name), 'utf8');
-
-/** A connection string reading the throwaway schema the Wanderer tables are created in. */
-function inSchema(base: string, schema: string): string {
-  const u = new URL(base);
-  u.searchParams.set('options', `-c search_path=${schema}`);
-  return u.toString();
-}
 
 describe.skipIf(!url)("WandererDatabaseSource on a Wanderer database (our fork's tables)", () => {
-  // `t_` schemas are dropped after the run with the other test schemas.
-  const schema = `t_wanderer_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
   let connectionString = '';
   const source = new WandererDatabaseSource({ now: () => Date.parse('2026-10-13T12:00:00Z') });
   const request = (slug: string): WandererDbRequest => ({
@@ -29,23 +16,7 @@ describe.skipIf(!url)("WandererDatabaseSource on a Wanderer database (our fork's
   });
 
   beforeAll(async () => {
-    const client = new pg.Client({ connectionString: url });
-    await client.connect();
-    try {
-      await client.query(`create schema "${schema}"`);
-      await client.query(`set search_path to "${schema}"`);
-      await client.query(testdata('wanderer-schema.sql'));
-      await client.query(testdata('wanderer-map.sql'));
-    } finally {
-      await client.end();
-    }
-    connectionString = inSchema(url!, schema);
-  });
-
-  afterAll(async () => {
-    const client = new pg.Client({ connectionString: url });
-    await client.connect();
-    await client.query(`drop schema if exists "${schema}" cascade`).finally(() => client.end());
+    connectionString = await createWandererDatabase(url!);
   });
 
   it('lists the maps with their shown and hidden systems, deleted maps left out', async () => {
@@ -60,7 +31,12 @@ describe.skipIf(!url)("WandererDatabaseSource on a Wanderer database (our fork's
   it('reads the whole map: hidden systems with their intel, label names, every part', async () => {
     const steps: string[] = [];
     const dump = await source.read(request('shck'), (s) => steps.push(s));
-    expect(dump.source).toEqual({ kind: 'wanderer-db', host: 'wanderer.example.org', slug: 'shck', name: 'SHCK-WH' });
+    expect(dump.source).toEqual({
+      kind: 'wanderer-db',
+      host: 'wanderer.example.org',
+      slug: 'shck',
+      name: 'SHCK-WH',
+    });
     expect(dump.map).toEqual({
       name: 'SHCK-WH',
       slug: 'shck',
@@ -149,11 +125,27 @@ describe.skipIf(!url)("WandererDatabaseSource on a Wanderer database (our fork's
     // The map's own hubs first, then the ones its users set, most used first.
     expect(dump.hubs).toEqual([30000142, 30002187, 30002659]);
     expect(dump.webhooks).toEqual([
-      { id: expect.any(String), url: 'https://hooks.example.com/wanderer', events: ['add_system', 'map_kill'], active: false },
+      {
+        id: expect.any(String),
+        url: 'https://hooks.example.com/wanderer',
+        events: ['add_system', 'map_kill'],
+        active: false,
+      },
     ]);
     expect(dump.trackedCharacters).toBe(1);
     expect(dump.warnings).toEqual([]);
-    expect(steps).toEqual(['map', 'systems', 'connections', 'signatures', 'structures', 'comments', 'passages', 'access', 'hubs', 'webhooks']);
+    expect(steps).toEqual([
+      'map',
+      'systems',
+      'connections',
+      'signatures',
+      'structures',
+      'comments',
+      'passages',
+      'access',
+      'hubs',
+      'webhooks',
+    ]);
     // Tokens and keys are never read.
     const text = JSON.stringify(dump);
     for (const secret of ['secret-token', 'never-read-key', 'acl-key-never-read', '736563726574'])
@@ -174,10 +166,31 @@ describe.skipIf(!url)("WandererDatabaseSource on a Wanderer database (our fork's
       31000220: 'J121158',
     };
     const { plan, counts, report } = translate(dump, { systemName: (id) => names[id] ?? null });
-    expect(counts).toMatchObject({ systems: 6, hiddenSystems: 3, signatures: 5, structures: 3, comments: 2, passages: 2 });
-    expect(plan.systemLabels.map((l) => l.name)).toEqual(['WH-ST', 'WH1', 'WH2', 'WH3', 'WH4', 'WH5', 'WH6', 'WH-HS']);
+    expect(counts).toMatchObject({
+      systems: 6,
+      hiddenSystems: 3,
+      signatures: 5,
+      structures: 3,
+      comments: 2,
+      passages: 2,
+    });
+    expect(plan.systemLabels.map((l) => l.name)).toEqual([
+      'WH-ST',
+      'WH1',
+      'WH2',
+      'WH3',
+      'WH4',
+      'WH5',
+      'WH6',
+      'WH-HS',
+    ]);
     const system = (id: number) => plan.systems.find((s) => s.solarSystemId === id)!.fields;
-    expect(system(31002531)).toMatchObject({ status: 'home', customName: 'Home sweet home', customLabel: 'HOME', systemLabelIds: ['b'] });
+    expect(system(31002531)).toMatchObject({
+      status: 'home',
+      customName: 'Home sweet home',
+      customLabel: 'HOME',
+      systemLabelIds: ['b'],
+    });
     expect(system(31000399)).toMatchObject({ status: 'warning', systemLabelIds: ['a', '1'], labelKeys: [] });
     expect(system(31001924)).toMatchObject({ status: 'hostile', customName: 'Farm', systemLabelIds: [] });
     expect(system(30000142)).toMatchObject({ status: 'friendly', customName: null });
@@ -192,7 +205,12 @@ describe.skipIf(!url)("WandererDatabaseSource on a Wanderer database (our fork's
       customLabel: 'OLD',
       systemLabelIds: ['d'],
     });
-    expect(system(31002404)).toMatchObject({ visible: false, customName: 'Gas', systemLabelIds: ['g'], status: 'friendly' });
+    expect(system(31002404)).toMatchObject({
+      visible: false,
+      customName: 'Gas',
+      systemLabelIds: ['g'],
+      status: 'friendly',
+    });
     expect(report.some((l) => /Secondary/.test(l.what))).toBe(false);
     expect(plan.signatures.some((s) => s.solarSystemId === 31002385)).toBe(true);
   });

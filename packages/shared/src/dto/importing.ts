@@ -108,7 +108,7 @@ export type WandererTestResultDto = z.infer<typeof WandererTestResultDto>;
 export const ImportReportBucket = z.enum(['mapped', 'approximated', 'dropped']);
 export type ImportReportBucket = z.infer<typeof ImportReportBucket>;
 
-/** One line of a mapping report: "12 systems: status Target (secondary) became Target". */
+/** One line of a mapping report: "12 systems: Looking for became a Tag". */
 export const ImportReportLineDto = z.object({
   bucket: ImportReportBucket,
   /** system, connection, signature, structure, comment, label, access, setting, character... */

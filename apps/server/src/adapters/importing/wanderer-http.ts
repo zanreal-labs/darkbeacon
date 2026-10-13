@@ -111,7 +111,8 @@ export class WandererHttpSource implements MapImportSource {
           .filter((id) => !shownIds.has(id)),
       ).size;
     const listed = await this.jsonApi(api, '/api/v1/map_systems', PAGE.systems, quiet, 'Systems');
-    if (listed) return { systems: shownIds.size, hiddenSystems: hidden(listed.data.map(flatten)), name: null };
+    if (listed)
+      return { systems: shownIds.size, hiddenSystems: hidden(listed.data.map(flatten)), name: null };
     const document = await this.exportDocument(api, quiet, false);
     return {
       systems: shownIds.size,
@@ -222,8 +223,7 @@ export class WandererHttpSource implements MapImportSource {
     onStep?.('structures');
     const structures = new Rows(
       (row) =>
-        text(row.id) ??
-        `${String(row.solar_system_id)}:${String(row.structure_type_id)}:${String(row.name)}`,
+        text(row.id) ?? `${String(row.solar_system_id)}:${String(row.structure_type_id)}:${String(row.name)}`,
     );
     const shownStructures = await this.optional(api, `/api/maps/${slug}/structures`, quiet, 'Structures');
     structures.add(dataList(shownStructures));
@@ -278,8 +278,7 @@ export class WandererHttpSource implements MapImportSource {
 
     onStep?.('map');
     const map = await this.optional(api, `/api/v1/maps/${slug}`, quiet, 'Map');
-    const attributes =
-      isRow(map) && isRow(map.data) && isRow(map.data.attributes) ? map.data.attributes : {};
+    const attributes = isRow(map) && isRow(map.data) && isRow(map.data.attributes) ? map.data.attributes : {};
     const mapId = isRow(map) && isRow(map.data) ? text(map.data.id) : null;
     const exported = isRow(document?.map) ? document.map : {};
     dump.map.name = text(attributes.name) ?? text(exported.name);
@@ -377,7 +376,14 @@ export class WandererHttpSource implements MapImportSource {
       quiet,
       'Access lists',
     );
-    const collection = await this.jsonApi(api, '/api/v1/access_lists', PAGE.settings, quiet, 'ACLs', 'members');
+    const collection = await this.jsonApi(
+      api,
+      '/api/v1/access_lists',
+      PAGE.settings,
+      quiet,
+      'ACLs',
+      'members',
+    );
     const membersOf = new Map<string, unknown[]>();
     const viaJsonApi: Row[] = [];
     if (collection) {
@@ -674,7 +680,9 @@ export class WandererFileSource implements MapImportSource {
 
   constructor(private readonly read_: (document: unknown, fileName: string | null) => WandererMapDump) {}
 
-  test(request: SourceRequest): Promise<{ systems: number; hiddenSystems: number | null; name: string | null }> {
+  test(
+    request: SourceRequest,
+  ): Promise<{ systems: number; hiddenSystems: number | null; name: string | null }> {
     return this.read(request).then((dump) => ({
       systems: dump.systems.filter((s) => s.visible).length,
       hiddenSystems: dump.systems.filter((s) => !s.visible).length,

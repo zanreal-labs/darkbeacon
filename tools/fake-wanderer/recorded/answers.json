@@ -920,10 +920,7 @@
           "name": "Import probe",
           "scope": "all",
           "description": "Chain for the importer test",
-          "scopes": [
-            "wormholes",
-            "low"
-          ],
+          "scopes": ["wormholes", "low"],
           "webhooks_enabled": true,
           "slug": "import-probe",
           "owner_id": "5ceab9b8-3774-477a-969a-2ad4ca18654c",
@@ -1816,9 +1813,7 @@
         {
           "attributes": {
             "settings": "{}",
-            "hubs": [
-              "30000142"
-            ],
+            "hubs": ["30000142"],
             "main_character_eve_id": null,
             "following_character_eve_id": null
           },
@@ -1840,10 +1835,7 @@
         {
           "attributes": {
             "settings": "{}",
-            "hubs": [
-              "30000142",
-              "30002187"
-            ],
+            "hubs": ["30000142", "30002187"],
             "main_character_eve_id": "2112000001",
             "following_character_eve_id": null
           },

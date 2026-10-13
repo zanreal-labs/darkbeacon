@@ -32,6 +32,16 @@ describe('reading Wanderer answers', () => {
   it('takes the custom name from the shown name when it differs from the real one', () => {
     const read = readSystem({ solar_system_id: SYS.c5, name: 'Farm', original_name: 'J130026' })!;
     expect(read.customName).toBe('Farm');
+    // The REST API shows the temporary name first: that is not a custom name.
+    expect(
+      readSystem({ solar_system_id: SYS.c5, name: 'C5a', temporary_name: 'C5a', original_name: 'J130026' })!
+        .customName,
+    ).toBeNull();
+    // Without the real name (export, JSON:API, database) the raw name is compared when translating.
+    expect(readSystem({ solar_system_id: SYS.c5, name: 'Farm', custom_name: null })).toMatchObject({
+      customName: null,
+      rawName: 'Farm',
+    });
     expect(readSystem({ id: String(SYS.c5), position: { x: 1, y: 2 } })).toMatchObject({
       solarSystemId: SYS.c5,
       uuid: null,
@@ -42,7 +52,7 @@ describe('reading Wanderer answers', () => {
 
 describe('translating a Wanderer map', () => {
   it('maps systems with their names, notes, statuses, labels, locks and visibility', () => {
-    const { plan, counts } = run();
+    const { plan, counts, report } = run();
     expect(counts).toMatchObject({ systems: 6, hiddenSystems: 1, structures: 2, comments: 1 });
     const home = system(plan, SYS.home);
     expect(home.fields).toMatchObject({
@@ -55,14 +65,11 @@ describe('translating a Wanderer map', () => {
       customLabel: 'Staging',
     });
     expect(home.fields).not.toHaveProperty('tag');
-    // Without a list of its own a Wanderer map has the labels A, B, C, 1, 2, 3.
-    expect(plan.systemLabels.map((l) => `${l.id}:${l.name}`)).toEqual([
-      'a:A',
-      'b:B',
-      'c:C',
-      '1:1',
-      '2:2',
-      '3:3',
+    // Without the map's list its names are unknown: the labels the systems use are named after their
+    // ids (not guessed as Wanderer's defaults), and the report says so.
+    expect(plan.systemLabels.map((l) => `${l.id}:${l.name}`)).toEqual(['a:a', '1:1', 'b:b']);
+    expect(line(report, 'approximated', /Labels named after their Wanderer ids/)?.examples).toEqual([
+      'a, 1, b',
     ]);
     expect(home.createdAt).toBe(Date.parse('2026-10-10T12:00:00Z'));
     expect(home.remoteUpdatedAt).toBe(Date.parse('2026-10-12T08:30:15.123Z'));
@@ -101,6 +108,62 @@ describe('translating a Wanderer map', () => {
       'FARMTAGISWAYTOOLONGFORDB',
       'Looking for',
     ]);
+  });
+
+  it('reads statuses in the numbers Wanderer stores, and their names', () => {
+    const dump = apiDump();
+    const codes = [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      'clear',
+      'home',
+      'friendly',
+      'lookingFor',
+      'warning',
+      'target',
+      'dangerous',
+    ];
+    dump.systems = codes.map((status, i) => ({ ...dump.systems[0]!, solarSystemId: 31000001 + i, status }));
+    const names = (id: number) => (id > 31000000 && id < 31000100 ? `J${id}` : null);
+    const { plan, report } = translate(dump, { systemName: names });
+    expect(plan.systems.map((s) => s.fields.status)).toEqual([
+      'unknown',
+      'home',
+      'friendly',
+      'unknown',
+      'warning',
+      'target',
+      'hostile',
+      'unknown',
+      'home',
+      'friendly',
+      'unknown',
+      'warning',
+      'target',
+      'hostile',
+    ]);
+    // Looking for becomes a Tag; nothing becomes "Secondary".
+    expect(plan.labels.map((l) => l.name).sort()).toEqual(['HQ', 'Looking for']);
+    expect(report.some((l) => /Secondary/.test(l.what))).toBe(false);
+    // An unknown number is left out, not guessed.
+    dump.systems = [{ ...dump.systems[0]!, status: 8 }];
+    expect(line(translate(dump, { systemName: names }).report, 'dropped', /Status "8"/)).toBeDefined();
+  });
+
+  it('takes the name someone gave a system from Wanderer’s own name where the source gives it raw', () => {
+    const dump = apiDump();
+    dump.systems = [
+      { ...dump.systems[0]!, customName: null, rawName: 'Home Hole' },
+      { ...dump.systems[1]!, customName: 'Kept', rawName: 'J130256' },
+      { ...dump.systems[2]!, customName: null, rawName: String(SYS.c5) },
+    ];
+    const { plan } = translate(dump, { systemName });
+    expect(plan.systems.map((s) => s.fields.customName)).toEqual(['Home Hole', 'Kept', null]);
   });
 
   it('takes the map’s own Labels in order: ids kept, names cut, colours dropped, duplicates merged', () => {

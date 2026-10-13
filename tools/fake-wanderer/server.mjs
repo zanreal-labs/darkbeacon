@@ -257,20 +257,31 @@ export function createFakeWanderer(map, options = {}) {
   const shown = () => map.systems.filter((s) => s.visible);
   const shownIds = () => new Set(shown().map((s) => s.id));
   const systemById = new Map(map.systems.map((s) => [s.id, s]));
-  const characterById = new Map((map.characters ?? []).map((c) => [c.id, c]));
 
   /** A JSON:API collection; `paged` ones answer `page[limit]`/`page[offset]` with links. */
-  const collection = (req, url, rows, { paged = true, defaultLimit = 100, maxLimit = 500, included } = {}) => {
+  const collection = (
+    req,
+    url,
+    rows,
+    { paged = true, defaultLimit = 100, maxLimit = 500, included } = {},
+  ) => {
     const origin = `http://${req.headers.host}`;
     const base = `${origin}${url.pathname}`;
     const include = url.searchParams.get('include');
     const keep = include ? `include=${encodeURIComponent(include)}&` : '';
     if (!paged)
-      return { data: rows, included, links: { self: `${origin}${url.pathname}${url.search}` }, meta: {}, jsonapi: { version: '1.0' } };
+      return {
+        data: rows,
+        included,
+        links: { self: `${origin}${url.pathname}${url.search}` },
+        meta: {},
+        jsonapi: { version: '1.0' },
+      };
     const limit = Math.min(Number(url.searchParams.get('page[limit]') ?? defaultLimit), maxLimit);
     const offset = Number(url.searchParams.get('page[offset]') ?? 0);
     const data = rows.slice(offset, offset + limit);
-    const at = (o) => (o > 0 ? `${base}?${keep}page[offset]=${o}&page[limit]=${limit}` : `${base}?${keep}page[limit]=${limit}`);
+    const at = (o) =>
+      o > 0 ? `${base}?${keep}page[offset]=${o}&page[limit]=${limit}` : `${base}?${keep}page[limit]=${limit}`;
     return {
       data,
       ...(included ? { included: included(data) } : {}),
@@ -455,24 +466,30 @@ export function createFakeWanderer(map, options = {}) {
                 'map_system_comments',
                 c.id,
                 { text: c.text },
-                { system: rel('system', c.system_id, 'map_systems'), character: rel('character', c.character_id, null) },
+                {
+                  system: rel('system', c.system_id, 'map_systems'),
+                  character: rel('character', c.character_id, null),
+                },
               ),
             ),
             {
               included: include.length
-                ? (page) => [
-                    ...(include.includes('character')
-                      ? [...new Set(page.map((r) => r.relationships.character.data?.id))].map((id) =>
-                          resource(null, id, {}),
-                        )
-                      : []),
-                    ...(include.includes('system')
-                      ? [...new Set(page.map((r) => r.relationships.system.data?.id))]
-                          .map((id) => systemById.get(id))
-                          .filter(Boolean)
-                          .map((s) => resource('map_systems', s.id, systemAttributes(s), { map: EMPTY_REL }))
-                      : []),
-                  ].map((r) => ({ ...r, relationships: r.type ? r.relationships : {} }))
+                ? (page) =>
+                    [
+                      ...(include.includes('character')
+                        ? [...new Set(page.map((r) => r.relationships.character.data?.id))].map((id) =>
+                            resource(null, id, {}),
+                          )
+                        : []),
+                      ...(include.includes('system')
+                        ? [...new Set(page.map((r) => r.relationships.system.data?.id))]
+                            .map((id) => systemById.get(id))
+                            .filter(Boolean)
+                            .map((s) =>
+                              resource('map_systems', s.id, systemAttributes(s), { map: EMPTY_REL }),
+                            )
+                        : []),
+                    ].map((r) => ({ ...r, relationships: r.type ? r.relationships : {} }))
                 : undefined,
             },
           ),
@@ -518,7 +535,11 @@ export function createFakeWanderer(map, options = {}) {
                 {
                   owner: EMPTY_REL,
                   members: withMembers
-                    ? { data: a.members.map((m) => ({ id: m.id, type: 'access_list_members' })), links: {}, meta: {} }
+                    ? {
+                        data: a.members.map((m) => ({ id: m.id, type: 'access_list_members' })),
+                        links: {},
+                        meta: {},
+                      }
                     : EMPTY_REL,
                 },
               ),
@@ -552,7 +573,14 @@ export function createFakeWanderer(map, options = {}) {
       default:
         return json(res, 404, {
           errors: [
-            { code: 'no_route_found', id: 'f0000000-0000-4000-8000-000000000000', meta: {}, status: '404', title: 'NoRouteFound', detail: 'no route found' },
+            {
+              code: 'no_route_found',
+              id: 'f0000000-0000-4000-8000-000000000000',
+              meta: {},
+              status: '404',
+              title: 'NoRouteFound',
+              detail: 'no route found',
+            },
           ],
           jsonapi: { version: '1.0' },
         });
@@ -564,7 +592,8 @@ export function createFakeWanderer(map, options = {}) {
       return json(res, 400, {
         error: 'Map identifier required. Provide `map_identifier` in the path or `map_id`/`slug` in query.',
       });
-    if (!isMap(mapIdentifier)) return json(res, 404, { error: `Map not found for identifier: ${mapIdentifier}` });
+    if (!isMap(mapIdentifier))
+      return json(res, 404, { error: `Map not found for identifier: ${mapIdentifier}` });
     const visible = shownIds();
     switch (rest) {
       case 'systems':
@@ -580,7 +609,9 @@ export function createFakeWanderer(map, options = {}) {
             .map((g) => signatureJson(g, systemById.get(g.system_id).solar_system_id)),
         });
       case 'structures':
-        return json(res, 200, { data: map.structures.filter((t) => visible.has(t.system_id)).map(structureJson) });
+        return json(res, 200, {
+          data: map.structures.filter((t) => visible.has(t.system_id)).map(structureJson),
+        });
       case 'export':
         if (options.export === false) return json(res, 404, { errors: { detail: 'Not Found' } });
         return json(res, 200, { data: exportDocument(map, Date.now()) });

@@ -147,7 +147,7 @@ describe('import decisions', () => {
       status: 'home',
       customName: 'Home sweet home',
       labelIds: ['id-HQ'],
-      systemLabelIds: ['sl-A', 'sl-1'],
+      systemLabelIds: ['sl-a', 'sl-1'],
       customLabel: 'Staging',
     });
     expect(decision.write).not.toHaveProperty('tag');
@@ -161,7 +161,7 @@ describe('import decisions', () => {
     expect(decision.write.position).toBeUndefined();
     expect(decision.write).not.toHaveProperty('tag'); // never written
     expect(decision.write.customLabel).toBe('Staging'); // a blank here is filled
-    expect(decision.write.systemLabelIds).toEqual(['sl-B', 'sl-A', 'sl-1']);
+    expect(decision.write.systemLabelIds).toEqual(['sl-B', 'sl-a', 'sl-1']);
     expect(decision.write.description?.startsWith('Our notes\n\nOur home.')).toBe(true);
     expect(decision.write.labelIds).toEqual(['id-Other', 'id-HQ']);
     expect(decision.conflicts.find((c) => c.field === 'position')?.why).toBe('The system is locked here');

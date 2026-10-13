@@ -40,7 +40,11 @@ const MAP_UUID = '7a6b5c4d-1111-4222-8333-944455556666';
 const T0 = '2026-10-10T12:00:00.000000Z';
 const T1 = '2026-10-12T08:30:15.123456Z';
 
-/** `GET /api/map/systems?slug=...&all=true` */
+/**
+ * Systems as the REST API lists them (`name` shown, `custom_name` resolved), hidden ones included
+ * as the export gives them. Statuses in Wanderer's stored numbering (1 home, 2 friendly, 3 looking
+ * for, 4 warning, 5 target, 6 dangerous).
+ */
 export function systemsAnswer() {
   return {
     data: [
@@ -55,7 +59,7 @@ export function systemsAnswer() {
         description: 'Our home. Rolling on Tuesdays.',
         tag: 'HQ',
         labels: '{"customLabel":"Staging","labels":["a","1"]}',
-        status: 8,
+        status: 1,
         visible: true,
         locked: true,
         position_x: 0,
@@ -74,7 +78,7 @@ export function systemsAnswer() {
         description: null,
         tag: null,
         labels: 'b',
-        status: 4,
+        status: 5,
         visible: true,
         locked: false,
         position_x: 150,
@@ -92,7 +96,7 @@ export function systemsAnswer() {
         description: 'Hostile residents',
         tag: 'FARMTAGISWAYTOOLONGFORDB',
         labels: '',
-        status: 7,
+        status: 3,
         visible: true,
         locked: false,
         position_x: 150,
@@ -123,7 +127,7 @@ export function systemsAnswer() {
         map_id: MAP_UUID,
         solar_system_id: SYS.hs,
         name: 'Nourvukaiken',
-        status: 1,
+        status: 2,
         visible: true,
         locked: false,
         position_x: 0,
@@ -465,7 +469,7 @@ export function exportFileV2() {
         custom_name: null,
         description: 'From file',
         labels: '{"customLabel":"","labels":["x1"]}',
-        status: 8,
+        status: 1,
         tag: 'H',
         temporary_name: null,
         locked: false,
@@ -523,7 +527,7 @@ export function settingsExport() {
         name: 'J014348',
         labels: '',
         locked: true,
-        status: 8,
+        status: 1,
         tag: null,
         visible: true,
       },
@@ -534,7 +538,7 @@ export function settingsExport() {
         name: 'Nourvukaiken',
         labels: 'a',
         locked: false,
-        status: 1,
+        status: 2,
         tag: null,
         visible: true,
       },

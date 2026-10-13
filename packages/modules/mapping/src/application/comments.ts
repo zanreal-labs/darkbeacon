@@ -89,7 +89,8 @@ export class CommentUseCases extends MappingUseCases {
     return this.write(who, mapId, async (events) => {
       const existing = existingId ? await this.ports.comments.findById(mapId, existingId) : null;
       if (existing) return { comment: existing, outcome: 'unchanged' as const };
-      await this.visibleSystem(mapId, comment.solarSystemId);
+      // Hidden systems keep their comments: they are intel for when the system shows up again.
+      await this.knownSystem(mapId, comment.solarSystemId);
       const created: Comment = {
         id: newId(),
         mapId,

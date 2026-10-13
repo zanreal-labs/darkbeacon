@@ -140,12 +140,7 @@ type Table = keyof typeof COLUMNS;
 type Columns = Map<Table, Set<string>>;
 
 /** Timestamps as ISO text in UTC (Wanderer stores them without a zone, in UTC). */
-const TIME_COLUMNS = new Set([
-  'inserted_at',
-  'updated_at',
-  'end_time',
-  'mass_status_updated_at',
-]);
+const TIME_COLUMNS = new Set(['inserted_at', 'updated_at', 'end_time', 'mass_status_updated_at']);
 
 /**
  * Reads a map straight from a Wanderer's Postgres database: every system, hidden ones included,
@@ -199,7 +194,9 @@ export class WandererDatabaseSource implements WandererDbSource {
       const dump = emptyDump({ kind: 'wanderer-db', host: db.host, slug: db.slug, name: null }, now);
 
       onStep?.('map');
-      const [map] = await query(`select ${select('maps_v1', 'm')} from maps_v1 m where m.slug = $1`, [db.slug]);
+      const [map] = await query(`select ${select('maps_v1', 'm')} from maps_v1 m where m.slug = $1`, [
+        db.slug,
+      ]);
       if (!map || map.deleted === true) throw notFound(db);
       const mapId = String(map.id);
       dump.map = {
@@ -207,7 +204,9 @@ export class WandererDatabaseSource implements WandererDbSource {
         slug: db.slug,
         description: text(map.description),
         scope: text(map.scope),
-        scopes: Array.isArray(map.scopes) ? map.scopes.map(text).filter((s): s is string => s !== null) : null,
+        scopes: Array.isArray(map.scopes)
+          ? map.scopes.map(text).filter((s): s is string => s !== null)
+          : null,
       };
       dump.source.name = dump.map.name;
       dump.systemLabels = readSystemLabels(map.system_labels);
@@ -300,12 +299,15 @@ export class WandererDatabaseSource implements WandererDbSource {
 
       onStep?.('hubs');
       // The map's own hubs first, then the ones its users set, most used first.
-      const own = Array.isArray(map.hubs) ? map.hubs.map(Number).filter((id) => Number.isSafeInteger(id) && id > 0) : [];
+      const own = Array.isArray(map.hubs)
+        ? map.hubs.map(Number).filter((id) => Number.isSafeInteger(id) && id > 0)
+        : [];
       const users = columns.has('map_user_settings_v1')
         ? readUserHubs(
-            await query(`select ${select('map_user_settings_v1', 'u')} from map_user_settings_v1 u where u.map_id = $1`, [
-              mapId,
-            ]),
+            await query(
+              `select ${select('map_user_settings_v1', 'u')} from map_user_settings_v1 u where u.map_id = $1`,
+              [mapId],
+            ),
             mapId,
           )
         : [];
@@ -337,7 +339,11 @@ export class WandererDatabaseSource implements WandererDbSource {
     });
   }
 
-  private async acls(query: Query, select: (table: Table, alias: string) => string, mapId: string): Promise<WandererAcl[]> {
+  private async acls(
+    query: Query,
+    select: (table: Table, alias: string) => string,
+    mapId: string,
+  ): Promise<WandererAcl[]> {
     const lists = await query(
       `select ${select('access_lists_v1', 'a')} from access_lists_v1 a
          join map_access_lists_v1 ma on ma.access_list_id = a.id
@@ -367,7 +373,10 @@ export class WandererDatabaseSource implements WandererDbSource {
    * One connection, one READ ONLY transaction with a statement timeout, rolled back at the end;
    * `work` gets a query function and the columns each of Wanderer's tables has.
    */
-  private async session<T>(connectionString: string, work: (query: Query, columns: Columns) => Promise<T>): Promise<T> {
+  private async session<T>(
+    connectionString: string,
+    work: (query: Query, columns: Columns) => Promise<T>,
+  ): Promise<T> {
     const client = new pg.Client({
       connectionString,
       connectionTimeoutMillis: this.options.connectTimeoutMs ?? 10_000,
@@ -380,7 +389,9 @@ export class WandererDatabaseSource implements WandererDbSource {
     }
     try {
       await client.query('begin transaction read only');
-      await client.query(`set local statement_timeout = ${Math.round(this.options.statementTimeoutMs ?? 60_000)}`);
+      await client.query(
+        `set local statement_timeout = ${Math.round(this.options.statementTimeoutMs ?? 60_000)}`,
+      );
       const query: Query = async (sql, values = []) => {
         try {
           return (await client.query(sql, values as unknown[])).rows as Row[];
@@ -390,7 +401,10 @@ export class WandererDatabaseSource implements WandererDbSource {
       };
       const columns = await tableColumns(query);
       if (!columns.has('maps_v1') || !columns.has('map_system_v1'))
-        throw new SourceError('invalid', 'This database has no Wanderer maps (no maps_v1 and map_system_v1 tables)');
+        throw new SourceError(
+          'invalid',
+          'This database has no Wanderer maps (no maps_v1 and map_system_v1 tables)',
+        );
       return await work(query, columns);
     } finally {
       await client.query('rollback').catch(() => undefined);
@@ -448,7 +462,8 @@ function connectFailure(error: unknown): SourceError {
   const e = error as { code?: string; message?: string };
   if (e.code === '28P01' || e.code === '28000')
     return new SourceError('auth', 'The database refused the user or password in the connection string');
-  if (e.code === '3D000') return new SourceError('not_found', 'The database named in the connection string does not exist');
+  if (e.code === '3D000')
+    return new SourceError('not_found', 'The database named in the connection string does not exist');
   if (e.code === 'ENOTFOUND' || e.code === 'EAI_AGAIN')
     return new SourceError('unavailable', 'The database host in the connection string is not known here');
   return new SourceError('unavailable', `The database did not answer (${e.code ?? 'no connection'})`);
@@ -456,7 +471,8 @@ function connectFailure(error: unknown): SourceError {
 
 function queryFailure(error: unknown): SourceError {
   const e = error as { code?: string; message?: string };
-  if (e.code === '57014') return new SourceError('unavailable', 'Reading the database took too long; try again');
+  if (e.code === '57014')
+    return new SourceError('unavailable', 'Reading the database took too long; try again');
   if (e.code === '42501') return new SourceError('auth', 'The database user may not read Wanderer’s tables');
   return new SourceError('invalid', `The database did not answer like Wanderer’s (${e.code ?? 'error'})`);
 }

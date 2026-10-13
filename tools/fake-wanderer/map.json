@@ -2393,27 +2393,19 @@
     {
       "id": "us-1",
       "map_id": "5f8c2a10-7d3e-4b8e-9c1a-2b3c4d5e6f70",
-      "hubs": [
-        "30000142",
-        "30002187"
-      ],
+      "hubs": ["30000142", "30002187"],
       "main_character_eve_id": "2112625428"
     },
     {
       "id": "us-2",
       "map_id": "5f8c2a10-7d3e-4b8e-9c1a-2b3c4d5e6f70",
-      "hubs": [
-        "30000142",
-        "30002659"
-      ],
+      "hubs": ["30000142", "30002659"],
       "main_character_eve_id": "2112625429"
     },
     {
       "id": "us-3",
       "map_id": "00000000-0000-4000-8000-000000000000",
-      "hubs": [
-        "30002510"
-      ],
+      "hubs": ["30002510"],
       "main_character_eve_id": "2112625430"
     }
   ],
@@ -2435,18 +2427,14 @@
     {
       "id": "wh-kills",
       "url": "https://hooks.example.com/wanderer/kills",
-      "events": [
-        "map_kill"
-      ],
+      "events": ["map_kill"],
       "active": true,
       "secret": "wanderer-secret-never-read"
     },
     {
       "id": "wh-all",
       "url": "https://bots.example.org/darkbeacon",
-      "events": [
-        "*"
-      ],
+      "events": ["*"],
       "active": false,
       "secret": "wanderer-secret-never-read"
     }

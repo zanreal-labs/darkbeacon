@@ -112,7 +112,11 @@ describe('WandererHttpSource against a fake Wanderer (real answer shapes)', () =
     ]);
     // The map's label list comes with the export.
     expect(dump.systemLabels!.map((l) => l.name)).toEqual(['A', 'B', '1', 'Exit']);
-    expect(dump.map).toMatchObject({ scope: 'wormholes', scopes: ['wormholes'], description: 'Our main chain' });
+    expect(dump.map).toMatchObject({
+      scope: 'wormholes',
+      scopes: ['wormholes'],
+      description: 'Our main chain',
+    });
     expect(dump.trackedCharacters).toBe(3);
     expect(dump.hubs).toEqual([30000142, 30002187, 30002659]);
     expect(dump.webhooks!.map((w) => [w.id, w.events.length, w.active])).toEqual([
@@ -173,13 +177,19 @@ describe('WandererHttpSource against a fake Wanderer (real answer shapes)', () =
     const rows = Array.from({ length: 450 }, (_, i) => ({
       id: `s${i}`,
       type: 'map_system_signatures',
-      attributes: { eve_id: `ABC-${String(100 + i).padStart(3, '0')}`, kind: 'Cosmic Signature', deleted: false },
+      attributes: {
+        eve_id: `ABC-${String(100 + i).padStart(3, '0')}`,
+        kind: 'Cosmic Signature',
+        deleted: false,
+      },
       relationships: { system: { data: { id: 'sys-1', type: 'map_systems' }, links: {}, meta: {} } },
     }));
     const { url, seen } = await scripted((req, res) => {
       const u = new URL(req.url!, 'http://x');
       if (u.pathname === '/api/maps/home-chain/systems')
-        return send(res, 200, { data: { systems: [{ id: 'sys-1', solar_system_id: 31002531 }], connections: [] } });
+        return send(res, 200, {
+          data: { systems: [{ id: 'sys-1', solar_system_id: 31002531 }], connections: [] },
+        });
       if (u.pathname === '/api/v1/map_system_signatures') {
         const offset = Number(u.searchParams.get('page[offset]'));
         const limit = Number(u.searchParams.get('page[limit]'));
@@ -211,7 +221,9 @@ describe('WandererHttpSource against a fake Wanderer (real answer shapes)', () =
     const { url, seen } = await scripted((req, res) => {
       const u = new URL(req.url!, 'http://x');
       if (u.pathname === '/api/maps/home-chain/systems')
-        return send(res, 200, { data: { systems: [{ id: 'sys-1', solar_system_id: 31002531 }], connections: [] } });
+        return send(res, 200, {
+          data: { systems: [{ id: 'sys-1', solar_system_id: 31002531 }], connections: [] },
+        });
       if (u.pathname === '/api/v1/map_system_comments')
         return send(res, 200, {
           data: [{ id: 'c1', type: 'map_system_comments', attributes: { text: 'hi' }, relationships: {} }],
@@ -228,7 +240,9 @@ describe('WandererHttpSource against a fake Wanderer (real answer shapes)', () =
     const { url } = await scripted((req, res) => {
       const u = new URL(req.url!, 'http://x');
       if (u.pathname === '/api/map/systems')
-        return send(res, 200, { data: [{ solar_system_id: 31002531, name: 'J014348', original_name: 'J014348' }] });
+        return send(res, 200, {
+          data: [{ solar_system_id: 31002531, name: 'J014348', original_name: 'J014348' }],
+        });
       if (u.pathname === '/api/map/connections')
         return send(res, 200, { data: [{ solar_system_source: 31002531, solar_system_target: 30002187 }] });
       if (u.pathname === '/api/map/acls') return send(res, 200, { data: [] });
@@ -257,7 +271,9 @@ describe('WandererHttpSource against a fake Wanderer (real answer shapes)', () =
         });
       if (u.pathname === '/api/acls/acl-1')
         return req.headers.authorization === 'Bearer corp-key'
-          ? send(res, 200, { data: { members: [{ name: 'Pilot', role: 'admin', eve_character_id: '2112625428' }] } })
+          ? send(res, 200, {
+              data: { members: [{ name: 'Pilot', role: 'admin', eve_character_id: '2112625428' }] },
+            })
           : plain(res, 401, 'Unauthorized (invalid API key for ACL)');
       if (u.pathname === '/api/acls/acl-3') return plain(res, 401, 'Unauthorized (no API key set for ACL)');
       send(res, 404, { errors: { detail: 'Not Found' } });
@@ -280,19 +296,30 @@ describe('WandererHttpSource against a fake Wanderer (real answer shapes)', () =
   it('says so when the key is refused (401)', async () => {
     const fake = await startFakeWanderer();
     closers.push(fake.close);
-    const error = await new WandererHttpSource(instant).read(request(fake.url, 'wrong')).catch((e: unknown) => e);
+    const error = await new WandererHttpSource(instant)
+      .read(request(fake.url, 'wrong'))
+      .catch((e: unknown) => e);
     expect(error).toBeInstanceOf(SourceError);
-    expect(error).toMatchObject({ failure: 'auth', message: expect.stringMatching(/refused the API key \(401\)/) });
+    expect(error).toMatchObject({
+      failure: 'auth',
+      message: expect.stringMatching(/refused the API key \(401\)/),
+    });
   });
 
-  it("tells an inactive subscription and a switched-off API apart from a wrong key", async () => {
-    const lapsed = await scripted((_req, res) => plain(res, 401, 'Unauthorized (map subscription not active)'));
-    expect(await new WandererHttpSource(instant).test(request(lapsed.url, 'k')).catch((e: unknown) => e)).toMatchObject({
+  it('tells an inactive subscription and a switched-off API apart from a wrong key', async () => {
+    const lapsed = await scripted((_req, res) =>
+      plain(res, 401, 'Unauthorized (map subscription not active)'),
+    );
+    expect(
+      await new WandererHttpSource(instant).test(request(lapsed.url, 'k')).catch((e: unknown) => e),
+    ).toMatchObject({
       failure: 'auth',
       message: expect.stringMatching(/subscription is not active/),
     });
     const off = await scripted((_req, res) => plain(res, 403, 'Public API is disabled'));
-    expect(await new WandererHttpSource(instant).test(request(off.url, 'k')).catch((e: unknown) => e)).toMatchObject({
+    expect(
+      await new WandererHttpSource(instant).test(request(off.url, 'k')).catch((e: unknown) => e),
+    ).toMatchObject({
       failure: 'refused',
       message: expect.stringMatching(/WANDERER_PUBLIC_API_DISABLED/),
     });
@@ -327,7 +354,9 @@ describe('WandererHttpSource against a fake Wanderer (real answer shapes)', () =
     const { url, seen } = await scripted((req, res, n) => {
       if (n <= 2) return send(res, 502, {});
       if (req.url === '/api/maps/home-chain/systems')
-        return send(res, 200, { data: { systems: [{ solar_system_id: 31002531 }, { solar_system_id: 30000142 }] } });
+        return send(res, 200, {
+          data: { systems: [{ solar_system_id: 31002531 }, { solar_system_id: 30000142 }] },
+        });
       send(res, 404, {});
     });
     expect(await new WandererHttpSource(instant).test(request(url, 'k'))).toEqual({
@@ -349,7 +378,10 @@ describe('WandererHttpSource against a fake Wanderer (real answer shapes)', () =
     const nobody = await new WandererHttpSource(instant)
       .test(request('http://127.0.0.1:9', 'k'))
       .catch((e: unknown) => e);
-    expect(nobody).toMatchObject({ failure: 'unavailable', message: expect.stringMatching(/did not answer/) });
+    expect(nobody).toMatchObject({
+      failure: 'unavailable',
+      message: expect.stringMatching(/did not answer/),
+    });
   });
 
   it('refuses private addresses unless allowed, and never follows redirects', async () => {
@@ -358,7 +390,10 @@ describe('WandererHttpSource against a fake Wanderer (real answer shapes)', () =
     const refused = await new WandererHttpSource(instant)
       .test(request(fake.url, fake.map.apiKey, { allowPrivate: false }))
       .catch((e: unknown) => e);
-    expect(refused).toMatchObject({ failure: 'refused', message: expect.stringMatching(/private or local address/) });
+    expect(refused).toMatchObject({
+      failure: 'refused',
+      message: expect.stringMatching(/private or local address/),
+    });
 
     const named = await new WandererHttpSource(instant)
       .test(request(fake.url.replace('127.0.0.1', 'localhost'), fake.map.apiKey, { allowPrivate: false }))
@@ -370,7 +405,10 @@ describe('WandererHttpSource against a fake Wanderer (real answer shapes)', () =
       res.end();
     });
     const redirect = await new WandererHttpSource(instant).test(request(url, 'k')).catch((e: unknown) => e);
-    expect(redirect).toMatchObject({ failure: 'refused', message: expect.stringMatching(/redirects to https:\/\/elsewhere/) });
+    expect(redirect).toMatchObject({
+      failure: 'refused',
+      message: expect.stringMatching(/redirects to https:\/\/elsewhere/),
+    });
   });
 
   it('refuses answers that are not JSON or too large', async () => {
@@ -378,12 +416,16 @@ describe('WandererHttpSource against a fake Wanderer (real answer shapes)', () =
       res.writeHead(200, { 'content-type': 'text/html' });
       res.end('<html>hello</html>');
     });
-    expect(await new WandererHttpSource(instant).test(request(html.url, 'k')).catch((e: unknown) => e)).toMatchObject({
+    expect(
+      await new WandererHttpSource(instant).test(request(html.url, 'k')).catch((e: unknown) => e),
+    ).toMatchObject({
       failure: 'invalid',
     });
     const big = await scripted((_req, res) => send(res, 200, { data: 'x'.repeat(5000) }));
     expect(
-      await new WandererHttpSource({ ...instant, maxBytes: 1000 }).test(request(big.url, 'k')).catch((e: unknown) => e),
+      await new WandererHttpSource({ ...instant, maxBytes: 1000 })
+        .test(request(big.url, 'k'))
+        .catch((e: unknown) => e),
     ).toMatchObject({ failure: 'invalid' });
   });
 

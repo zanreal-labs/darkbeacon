@@ -16,11 +16,18 @@ interface Recorded {
 }
 
 const recorded = JSON.parse(
-  readFileSync(resolve(import.meta.dirname, '../../../../../tools/fake-wanderer/recorded/answers.json'), 'utf8'),
+  readFileSync(
+    resolve(import.meta.dirname, '../../../../../tools/fake-wanderer/recorded/answers.json'),
+    'utf8',
+  ),
 ) as Record<string, Recorded>;
 
 /** Fields present on some rows only, by what the row holds (an ACL member has one kind of id). */
-const CONDITIONAL = new Set(['data.members[].eve_character_id', 'data.members[].eve_corporation_id', 'data.members[].eve_alliance_id']);
+const CONDITIONAL = new Set([
+  'data.members[].eve_character_id',
+  'data.members[].eve_corporation_id',
+  'data.members[].eve_alliance_id',
+]);
 
 /** `path` -> the kinds of value seen there (`object`, `array`, `string`, `number`, `boolean`, `null`). */
 function shape(value: unknown, path = '', out = new Map<string, Set<string>>()): Map<string, Set<string>> {
@@ -87,15 +94,16 @@ describe('the fake Wanderer answers like the recorded one', () => {
       // ... and nothing it has missing, unless our data has no row there (an empty list).
       const emptyHere = (p: string) =>
         [...ours.keys()].some((o) => p.startsWith(`${o}[]`) && !ours.has(`${o}[]`));
-      expect([...real.keys()].filter((p) => !ours.has(p) && !CONDITIONAL.has(p) && !emptyHere(p)).sort()).toEqual(
-        [],
-      );
+      expect(
+        [...real.keys()].filter((p) => !ours.has(p) && !CONDITIONAL.has(p) && !emptyHere(p)).sort(),
+      ).toEqual([]);
       // The same kinds of values where both have one (null stands for any).
       const mismatched: string[] = [];
       for (const [path, kinds] of ours) {
         const theirs = [...(real.get(path) ?? [])].filter((k) => k !== 'null');
         const mine = [...kinds].filter((k) => k !== 'null');
-        if (theirs.length > 0 && mine.some((k) => !theirs.includes(k))) mismatched.push(`${path}: ${mine} vs ${theirs}`);
+        if (theirs.length > 0 && mine.some((k) => !theirs.includes(k)))
+          mismatched.push(`${path}: ${mine} vs ${theirs}`);
       }
       expect(mismatched).toEqual([]);
     });
