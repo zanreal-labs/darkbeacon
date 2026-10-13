@@ -20,6 +20,9 @@ import type {
   ImportSyncDto,
   StartImportRequest,
   WandererApiSourceRequest,
+  WandererDbConnectRequest,
+  WandererDbMapsDto,
+  WandererDbSourceRequest,
   WandererTestResultDto,
 } from '@darkbeacon/shared';
 import { SourceError } from '../domain/errors.js';
@@ -27,7 +30,7 @@ import { parseWandererBase, parseWandererSlug } from '../domain/source-url.js';
 import { translate } from '../domain/translate.js';
 import type { WandererMapDump } from '../domain/wanderer.js';
 import type { ImportJobRecord } from '../ports/repositories.js';
-import type { WandererApiRequest } from '../ports/source.js';
+import type { WandererApiRequest, WandererDbRequest } from '../ports/source.js';
 import type { ImportingDeps } from './deps.js';
 import { assess, characterNames, emptyOutcomes, LinkIndex, type TargetState } from './planner.js';
 import type { ImportRunner } from './runner.js';
@@ -59,11 +62,17 @@ export class ImportService {
     const source = await this.apiRequest(account, request);
     return this.limited(account, async () => {
       try {
-        const { systems } = await this.deps.sources.api.test(source);
-        return { ok: true, host: source.base.host, systems, message: null };
+        const { systems, hiddenSystems } = await this.deps.sources.api.test(source);
+        return { ok: true, host: source.base.host, systems, hiddenSystems, message: null };
       } catch (error) {
         if (error instanceof SourceError)
-          return { ok: false, host: source.base.host, systems: 0, message: error.message };
+          return {
+            ok: false,
+            host: source.base.host,
+            systems: 0,
+            hiddenSystems: null,
+            message: error.message,
+          };
         throw error;
       }
     });
@@ -81,6 +90,25 @@ export class ImportService {
         slug: source.slug,
       } satisfies WandererApiSourceRequest),
     );
+    return this.stage(account, dump, sealed);
+  }
+
+  /** The maps a Wanderer database holds, to choose one (instance admins). */
+  async dbMaps(actor: Actor | null, request: WandererDbConnectRequest): Promise<WandererDbMapsDto> {
+    const account = requireAccount(actor);
+    requireInstanceAdmin(account);
+    const host = databaseHost(request.connectionString);
+    const maps = await this.limited(account, () => this.deps.sources.db.maps(request.connectionString));
+    return { host, maps };
+  }
+
+  /** Reads the whole map from a Wanderer database and stages it as a preview (instance admins). */
+  async previewDb(actor: Actor | null, request: WandererDbSourceRequest): Promise<ImportJobDto> {
+    const account = requireAccount(actor);
+    requireInstanceAdmin(account);
+    const source = dbRequest(request);
+    const dump = await this.limited(account, () => this.deps.sources.db.read(source));
+    const sealed = this.deps.secrets.seal(JSON.stringify({ ...request, slug: source.slug }));
     return this.stage(account, dump, sealed);
   }
 
@@ -165,7 +193,9 @@ export class ImportService {
     if (job.status !== 'preview')
       throw new ConflictError('This import has started already; read the map again to import it again');
     if (request.keepSyncing && !job.sealedSource)
-      throw new ValidationError('Only an import over the API can keep syncing; a file is read once');
+      throw new ValidationError(
+        'Only an import over the API or from the database can keep syncing; a file is read once',
+      );
     if (request.mode === 'merge') {
       await this.requireMergeRole(job.actor, request.mapId!);
       job.mapId = request.mapId!;
@@ -341,7 +371,10 @@ export class ImportService {
     };
   }
 
-  /** One read of another server at a time per account, and at most READ_LIMIT.count per window. */
+  /**
+   * One read of another server (a Wanderer's API or database) at a time per account, and at most
+   * READ_LIMIT.count per window.
+   */
   private async limited<T>(account: AccountActor, work: () => Promise<T>): Promise<T> {
     const now = this.deps.clock.now();
     const recent = (this.reads.get(account.id) ?? []).filter((at) => at > now - READ_LIMIT.windowMs);
@@ -357,4 +390,36 @@ export class ImportService {
       this.reading.delete(account.id);
     }
   }
+}
+
+function requireInstanceAdmin(account: AccountActor): void {
+  if (!isInstanceAdmin(account))
+    throw new ForbiddenError("Reading Wanderer's database needs an instance admin");
+}
+
+/** `host:port` of a Postgres connection string (never the credentials). */
+export function databaseHost(connectionString: string): string {
+  try {
+    const url = new URL(connectionString);
+    if (!/^postgres(ql)?:$/.test(url.protocol) || !url.hostname) throw new Error('not postgres');
+    return url.port ? `${url.hostname}:${url.port}` : url.hostname;
+  } catch {
+    throw new ValidationError(
+      'The connection string is not one Darkbeacon can read: postgres://user:password@host:5432/database',
+    );
+  }
+}
+
+/** The database source of a request: the map's slug and where its imports are filed. */
+export function dbRequest(request: WandererDbSourceRequest): WandererDbRequest {
+  const dbHost = databaseHost(request.connectionString);
+  const host = request.wandererUrl
+    ? parseWandererBase(request.wandererUrl, { allowPlainHttp: true }).host
+    : `db:${dbHost}`;
+  return {
+    kind: 'wanderer-db',
+    connectionString: request.connectionString,
+    slug: parseWandererSlug(request.slug),
+    host,
+  };
 }

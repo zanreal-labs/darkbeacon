@@ -1,11 +1,12 @@
 import { actorRef, hasMapRole, mapStream, newEvent, newId } from '@darkbeacon/core';
-import { WandererApiSourceRequest } from '@darkbeacon/shared';
+import { WandererApiSourceRequest, WandererDbSourceRequest } from '@darkbeacon/shared';
 import { SourceError } from '../domain/errors.js';
 import { parseWandererBase, parseWandererSlug } from '../domain/source-url.js';
 import { translate } from '../domain/translate.js';
 import type { ImportJobRecord, ImportSyncRecord } from '../ports/repositories.js';
 import type { ImportingDeps } from './deps.js';
 import { emptyOutcomes } from './planner.js';
+import { dbRequest } from './service.js';
 
 /** A sync stops after this many failed pulls in a row (and on a refused key at once). */
 const MAX_FAILURES = 5;
@@ -55,17 +56,11 @@ export class SyncScheduler {
       return false;
     }
     try {
-      const request = WandererApiSourceRequest.parse(JSON.parse(deps.secrets.open(sync.sealedSource)));
-      const allowPrivate = await deps.policy.allowPrivateNetworks();
-      const dump = await deps.sources.api.read({
-        kind: 'wanderer-api',
-        base: parseWandererBase(request.baseUrl, { allowPlainHttp: allowPrivate }),
-        slug: parseWandererSlug(request.slug),
-        apiKey: request.apiKey,
-        aclKeys: request.aclKeys ?? [],
-        insecureTls: request.insecureTls ?? false,
-        allowPrivate,
-      });
+      const sealed: unknown = JSON.parse(deps.secrets.open(sync.sealedSource));
+      const fromDatabase = WandererDbSourceRequest.safeParse(sealed);
+      const dump = fromDatabase.success
+        ? await deps.sources.db.read(dbRequest(fromDatabase.data))
+        : await this.readApi(WandererApiSourceRequest.parse(sealed));
       const { report, counts, plan } = translate(dump, { systemName: (id) => deps.universe.systemName(id) });
       const job: ImportJobRecord = {
         id: newId(),
@@ -113,6 +108,19 @@ export class SyncScheduler {
       else await deps.syncs.update(sync);
       return false;
     }
+  }
+
+  private async readApi(request: WandererApiSourceRequest) {
+    const allowPrivate = await this.deps.policy.allowPrivateNetworks();
+    return this.deps.sources.api.read({
+      kind: 'wanderer-api',
+      base: parseWandererBase(request.baseUrl, { allowPlainHttp: allowPrivate }),
+      slug: parseWandererSlug(request.slug),
+      apiKey: request.apiKey,
+      aclKeys: request.aclKeys ?? [],
+      insecureTls: request.insecureTls ?? false,
+      allowPrivate,
+    });
   }
 
   private async stop(sync: ImportSyncRecord, reason: string): Promise<void> {

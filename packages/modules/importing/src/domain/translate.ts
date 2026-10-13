@@ -217,54 +217,28 @@ export interface Translation {
 
 // ---- value maps ---------------------------------------------------------------------------------
 
-/** Wanderer system status codes (API docs: 0 unknown ... 8 home). */
-const STATUS_NAMES = [
-  'unknown',
-  'friendly',
-  'warning',
-  'targetPrimary',
-  'targetSecondary',
-  'dangerousPrimary',
-  'dangerousSecondary',
-  'lookingFor',
-  'home',
-] as const;
+/**
+ * Wanderer system status codes as its map stores them (the frontend's `STATUSES`, which is what
+ * people set): 0 unknown ("Clear"), 1 home, 2 friendly, 3 looking for, 4 warning, 5 target,
+ * 6 dangerous. Wanderer's API docs and a comment in its resource list another numbering
+ * (targetPrimary, targetSecondary...) that the app never writes.
+ */
+const STATUS_NAMES = ['unknown', 'home', 'friendly', 'lookingFor', 'warning', 'target', 'dangerous'] as const;
 
 const STATUS: Record<string, { status: SystemStatus; label?: string; approx?: string }> = {
   unknown: { status: 'unknown' },
-  friendly: { status: 'friendly' },
-  warning: { status: 'warning' },
-  targetprimary: { status: 'target' },
-  targetsecondary: {
-    status: 'target',
-    label: 'Secondary',
-    approx: 'Target (secondary) became Target with a "Secondary" label',
-  },
-  dangerousprimary: { status: 'hostile' },
-  dangeroussecondary: {
-    status: 'hostile',
-    label: 'Secondary',
-    approx: 'Dangerous (secondary) became Hostile with a "Secondary" label',
-  },
-  lookingfor: { status: 'unknown', label: 'Looking for', approx: 'Looking for became a label' },
+  clear: { status: 'unknown' },
   home: { status: 'home' },
-  // Older API answers and examples use plain words.
-  clear: { status: 'empty', approx: 'Clear became Empty' },
-  hostile: { status: 'hostile' },
+  friendly: { status: 'friendly' },
+  lookingfor: { status: 'unknown', label: 'Looking for', approx: 'Looking for became a Tag' },
+  warning: { status: 'warning' },
   target: { status: 'target' },
-  empty: { status: 'empty' },
-  occupied: { status: 'occupied' },
+  dangerous: { status: 'hostile' },
+  hostile: { status: 'hostile' },
 };
 
-/** Wanderer's default labels, used when a map has none of its own. */
-const DEFAULT_LABELS: readonly PlannedSystemLabel[] = ['A', 'B', 'C', '1', '2', '3'].map((name) => ({
-  id: name.toLowerCase(),
-  name,
-  description: '',
-}));
-
 /** Tag colours for the statuses Darkbeacon has no value for. */
-const STATUS_TAG_COLORS: Record<string, string> = { Secondary: '#f59e0b', 'Looking for': '#3b82f6' };
+const STATUS_TAG_COLORS: Record<string, string> = { 'Looking for': '#3b82f6' };
 /** Wanderer's tag becomes a neutral grey Tag. */
 const NEUTRAL_TAG = '#6b7280';
 
@@ -312,6 +286,35 @@ const SCOPES: Record<string, MapScope[]> = {
   all: ['wormhole', 'high', 'low', 'null', 'pochven'],
   none: [],
 };
+
+/** One of the scopes of a Wanderer that keeps several. */
+const SCOPE_ITEMS: Record<string, MapScope> = {
+  wormholes: 'wormhole',
+  hi: 'high',
+  high: 'high',
+  low: 'low',
+  null: 'null',
+  pochven: 'pochven',
+};
+
+/** Auto-mapping scopes from Wanderer's `scopes` (when it has them) or its single `scope`. */
+function mapScopes(map: WandererMapDump['map'], report: ReportBuilder): MapScope[] | null {
+  if (map.scopes && map.scopes.length > 0) {
+    const out: MapScope[] = [];
+    for (const item of map.scopes) {
+      const scope = SCOPE_ITEMS[item.toLowerCase()];
+      if (scope) out.push(scope);
+      else report.dropped('setting', `Map scope "${item}"`, 'Darkbeacon has no equivalent');
+    }
+    report.mapped('setting', 'Auto-mapping scopes');
+    return [...new Set(out)];
+  }
+  const scopes = map.scope ? (SCOPES[map.scope.toLowerCase()] ?? null) : null;
+  if (map.scope && !scopes)
+    report.dropped('setting', `Map scope "${map.scope}"`, 'Darkbeacon has no equivalent');
+  else if (scopes) report.mapped('setting', 'Auto-mapping scope');
+  return scopes;
+}
 
 const LIMITS = {
   connectionNote: 2000,
@@ -409,9 +412,15 @@ export function translate(dump: WandererMapDump, context: TranslateContext): Tra
       report.approximated('system', 'No position', 'Placed below the chain', name);
     }
     const description = cut(system.description, LIMITS.description, 'system', 'Notes', report, name) ?? '';
+    // Wanderer's own name of the system, where the source gives it raw: another name than the
+    // real one is the name someone gave it, and wins over `custom_name` as in Wanderer.
+    const renamed =
+      system.rawName && system.rawName !== name && system.rawName !== String(system.solarSystemId)
+        ? system.rawName
+        : null;
     const fields: SystemFields = {
       position,
-      customName: cut(system.customName, LIMITS.customName, 'system', 'Name', report, name),
+      customName: cut(renamed ?? system.customName, LIMITS.customName, 'system', 'Name', report, name),
       temporaryName: cut(
         system.temporaryName,
         LIMITS.temporaryName,
@@ -654,10 +663,7 @@ export function translate(dump: WandererMapDump, context: TranslateContext): Tra
     hubs.length = 20;
   }
   if (hubs.length > 0) report.mapped('setting', `Map hubs (${hubs.length})`);
-  const scopes = dump.map.scope ? (SCOPES[dump.map.scope.toLowerCase()] ?? null) : null;
-  if (dump.map.scope && !scopes)
-    report.dropped('setting', `Map scope "${dump.map.scope}"`, 'Darkbeacon has no equivalent');
-  else if (scopes) report.mapped('setting', 'Auto-mapping scope');
+  const scopes = mapScopes(dump.map, report);
   let description = dump.map.description?.trim() || null;
   if (description && description.length > MAP_DESCRIPTION_MAX) {
     report.approximated('setting', 'Map description', `Shortened to ${MAP_DESCRIPTION_MAX} characters`);
@@ -813,7 +819,7 @@ function translateConnection(
       dangerous,
       bubbled,
       eolAt,
-      massStatusAt: (mass ?? 'fresh') !== 'fresh' ? (updatedAt ?? readAt) : null,
+      massStatusAt: (mass ?? 'fresh') !== 'fresh' ? (c.massStatusAt ?? updatedAt ?? readAt) : null,
       locked: c.locked,
       note,
       lifetime,
@@ -991,7 +997,18 @@ class SystemLabelSet {
       dump.systemLabels && dump.systemLabels.length > 0
         ? dump.systemLabels
         : Object.entries(dump.labelNames ?? {}).map(([id, name]) => ({ id, name, description: null }));
-    const source = own.length > 0 ? own : DEFAULT_LABELS;
+    // Without the map's own list its names are unknown: rather than guessing Wanderer's defaults
+    // (a map may have renamed every one), each label the systems use is named after its id.
+    const used = [...new Set(dump.systems.flatMap((s) => s.labels.ids.map(normalLabelId)))].filter(Boolean);
+    const source =
+      own.length > 0 ? own : used.map((id) => ({ id, name: id, description: null as string | null }));
+    if (own.length === 0 && used.length > 0)
+      report.approximated(
+        'label',
+        'Labels named after their Wanderer ids',
+        'This source did not give the map’s label names; the map export or Wanderer’s database has them',
+        used.join(', '),
+      );
     for (const label of source) {
       const id = normalLabelId(label.id);
       const name = label.name.trim().slice(0, LIMITS.systemLabel);
@@ -1011,7 +1028,7 @@ class SystemLabelSet {
         name,
         description: (label.description ?? '').trim().slice(0, LIMITS.systemLabelDescription),
       });
-      report.mapped('label', own.length > 0 ? 'Label' : 'Default label', name);
+      if (own.length > 0) report.mapped('label', 'Label', name);
     }
   }
 

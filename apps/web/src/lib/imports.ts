@@ -13,6 +13,9 @@ import {
   type ImportSyncDto,
   type StartImportRequest,
   type WandererApiSourceRequest,
+  type WandererDbConnectRequest,
+  type WandererDbMapsDto,
+  type WandererDbSourceRequest,
   type WandererTestResultDto,
 } from '@darkbeacon/shared';
 import { api, ApiError } from './api';
@@ -67,6 +70,24 @@ export function useReadWanderer() {
   return useMutation({
     mutationFn: (source: WandererApiSourceRequest) =>
       api<ImportJobDto>(r.previewApi.path, { method: 'POST', json: source }),
+    onSuccess: (job) => queryClient.setQueryData(importJobKey(job.id), job),
+  });
+}
+
+/** The maps a Wanderer database holds (instance admins). */
+export function useWandererDbMaps() {
+  return useMutation({
+    mutationFn: (request: WandererDbConnectRequest) =>
+      api<WandererDbMapsDto>(r.dbMaps.path, { method: 'POST', json: request }),
+  });
+}
+
+/** Reads one map from a Wanderer database into a preview (instance admins). */
+export function useReadWandererDb() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (source: WandererDbSourceRequest) =>
+      api<ImportJobDto>(r.previewDb.path, { method: 'POST', json: source }),
     onSuccess: (job) => queryClient.setQueryData(importJobKey(job.id), job),
   });
 }

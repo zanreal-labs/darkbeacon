@@ -44,9 +44,13 @@ const send = (res: ServerResponse, status: number, body: unknown, headers: Recor
   res.writeHead(status, { 'content-type': 'application/json', ...headers });
   res.end(JSON.stringify(body));
 };
+const plain = (res: ServerResponse, status: number, body: string) => {
+  res.writeHead(status, { 'content-type': 'text/plain' });
+  res.end(body);
+};
 
-describe('WandererHttpSource against a fake Wanderer', () => {
-  it('reads a whole map: systems with hidden ones, connections, signatures, structures, comments, ACLs', async () => {
+describe('WandererHttpSource against a fake Wanderer (real answer shapes)', () => {
+  it('reads a whole map: hidden systems with their intel, connection details, every part', async () => {
     const fake = await startFakeWanderer();
     closers.push(fake.close);
     const source = new WandererHttpSource(instant);
@@ -55,34 +59,61 @@ describe('WandererHttpSource against a fake Wanderer', () => {
 
     expect(dump.source).toMatchObject({ kind: 'wanderer-api', slug: 'home-chain', name: 'Home Chain' });
     expect(dump.systems).toHaveLength(30);
-    expect(dump.systems.filter((s) => !s.visible)).toHaveLength(2);
+    // Hidden systems come from the map export, with their place, notes, labels and Wanderer ids.
+    const hidden = dump.systems.filter((s) => !s.visible);
+    expect(hidden.map((s) => s.solarSystemId).sort()).toEqual([31002385, 31002404]);
+    expect(hidden.find((s) => s.solarSystemId === 31002385)).toMatchObject({
+      uuid: expect.any(String),
+      rawName: 'Dead end',
+      description: 'Old static, Sansha fleet lives here',
+      tag: 'OLD',
+      status: 6,
+      position: { x: 720, y: 300 },
+      labels: { ids: ['b'], custom: 'OLD' },
+    });
+    // The REST answer names systems as shown (temporary name first) and resolves the custom name.
+    expect(dump.systems.find((s) => s.solarSystemId === 31001924)).toMatchObject({
+      customName: 'Farm',
+      temporaryName: '2b',
+      rawName: null,
+      status: 6,
+    });
+    expect(dump.systems.find((s) => s.solarSystemId === 31000399)).toMatchObject({
+      customName: null,
+      temporaryName: '1a',
+    });
+    // Notes, marks and passage counts only JSON:API gives.
     expect(dump.connections).toHaveLength(fake.map.connections.length);
-    expect(dump.signatures).toHaveLength(fake.map.signatures.length);
-    expect(dump.structures).toHaveLength(4);
-    expect(dump.comments).toHaveLength(3);
-    expect(dump.comments[0]!.systemUuid).toBeTruthy();
-    expect(dump.map.scope).toBe('wormholes');
+    const noted = dump.connections.find((c) => c.customInfo === 'Rolled once, second roll pending');
+    expect(noted).toBeTruthy();
+    expect(dump.connections.find((c) => c.countOfPassage === 7)).toBeTruthy();
+    expect(dump.connections.some((c) => c.dangerous && c.bubbled === 2)).toBe(true);
+    // Every signature that is not deleted, the hidden system's too.
+    expect(dump.signatures).toHaveLength(fake.map.signatures.filter((s) => !s.deleted).length);
+    expect(dump.signatures.find((s) => s.eveId === 'HID-001')).toMatchObject({ solarSystemId: 31002385 });
+    expect(dump.signatures.some((s) => s.eveId === 'DEL-404')).toBe(false);
+    expect(dump.signatures.find((s) => s.eveId === 'DKM-763')!.insertedAt).toBeGreaterThan(0);
+    expect(dump.structures).toHaveLength(5);
+    expect(dump.structures.find((s) => s.name === 'Sansha Tower')).toMatchObject({ solarSystemId: 31002385 });
+    // Comments with their authors, from the tracked characters (JSON:API gives Wanderer's ids only).
+    expect(dump.comments).toHaveLength(4);
+    expect(dump.comments.find((c) => c.text.startsWith('Neut Loki'))).toMatchObject({
+      authorName: 'Scout Alt',
+      authorEveId: '2116161001',
+    });
+    expect(dump.comments.find((c) => c.text === 'Do not jump in solo')!.systemUuid).toBe(
+      fake.map.systems.find((s) => s.solar_system_id === 31002385)!.id,
+    );
+    // Every ACL's members over JSON:API with the map key alone.
+    expect(dump.acls.map((a) => [a.name, a.members?.length ?? null, a.error])).toEqual([
+      ['Corp', 4, null],
+      ['Allies', 4, null],
+      ['Officers', 1, null],
+    ]);
+    // The map's label list comes with the export.
+    expect(dump.systemLabels!.map((l) => l.name)).toEqual(['A', 'B', '1', 'Exit']);
+    expect(dump.map).toMatchObject({ scope: 'wormholes', scopes: ['wormholes'], description: 'Our main chain' });
     expect(dump.trackedCharacters).toBe(3);
-    // Two ACLs readable with the map key; the third needs its own key.
-    expect(dump.acls.map((a) => [a.name, a.members?.length ?? null])).toEqual([
-      ['Corp', 4],
-      ['Allies', 4],
-      ['Officers', null],
-    ]);
-    expect(dump.acls[2]!.error).toMatch(/ACL API key/);
-    expect(steps).toEqual([
-      'systems',
-      'connections',
-      'signatures',
-      'structures',
-      'comments',
-      'passages',
-      'access',
-      'map',
-      'hubs',
-      'webhooks',
-    ]);
-    // Hubs from the map's user settings, most used first; webhooks without their secrets.
     expect(dump.hubs).toEqual([30000142, 30002187, 30002659]);
     expect(dump.webhooks!.map((w) => [w.id, w.events.length, w.active])).toEqual([
       ['wh-chain', 6, true],
@@ -90,91 +121,180 @@ describe('WandererHttpSource against a fake Wanderer', () => {
       ['wh-all', 1, false],
     ]);
     expect(JSON.stringify(dump)).not.toContain('wanderer-secret-never-read');
-    // Comment authors come with the comments (JSON:API include), passages one by one.
-    expect(dump.comments[0]).toMatchObject({ authorName: 'CCP Bartender', authorEveId: '2112625428' });
-    expect(dump.passages).toHaveLength(5);
-    expect(dump.passages![0]).toMatchObject({ characterEveId: 2112625428, shipTypeId: 605 });
-    expect(fake.log.some((l) => l.startsWith('GET /api/map/systems?slug=home-chain&all=true'))).toBe(true);
-
-    const withKey = await source.read(
-      request(fake.url, fake.map.apiKey, {
-        aclKeys: [{ aclId: fake.map.acls[2]!.id, key: 'acl-officers-key' }],
-      }),
-    );
-    expect(withKey.acls[2]!.members).toEqual([
-      { kind: 'character', eveId: '2116161003', name: 'Fleet Boss', role: 'admin' },
+    // Wanderer's API has no passages one by one.
+    expect(dump.passages).toEqual([]);
+    expect(dump.warnings).toEqual([]);
+    expect(steps).toEqual([
+      'systems',
+      'connections',
+      'signatures',
+      'structures',
+      'comments',
+      'access',
+      'map',
+      'hubs',
+      'webhooks',
     ]);
+    expect(fake.log.some((l) => l.startsWith('GET /api/v1/map_chain_passages'))).toBe(false);
   });
 
-  it('pages through JSON:API collections when the older signature route is missing', async () => {
-    const fake = await startFakeWanderer({ legacySignatures: false });
+  it('counts shown and hidden systems when testing the connection', async () => {
+    const fake = await startFakeWanderer();
+    closers.push(fake.close);
+    expect(await new WandererHttpSource(instant).test(request(fake.url, fake.map.apiKey))).toEqual({
+      systems: 28,
+      hiddenSystems: 2,
+      name: null,
+    });
+  });
+
+  it('reads hidden systems over JSON:API where the instance has no map export, and says what is missing', async () => {
+    const fake = await startFakeWanderer({ export: false });
     closers.push(fake.close);
     const dump = await new WandererHttpSource(instant).read(request(fake.url, fake.map.apiKey));
-    expect(dump.signatures).toHaveLength(fake.map.signatures.length);
-    const pages = fake.log.filter((l) => l.startsWith('GET /api/v1/map_system_signatures'));
-    expect(pages.length).toBe(1);
-    // Every signature knows its system through the relationship.
-    expect(dump.signatures.every((s) => s.systemUuid)).toBe(true);
+    expect(dump.systems.filter((s) => !s.visible)).toHaveLength(2);
+    expect(dump.systems.find((s) => s.solarSystemId === 31002385)).toMatchObject({
+      visible: false,
+      position: null,
+      description: 'Old static, Sansha fleet lives here',
+      rawName: 'Dead end',
+    });
+    expect(dump.systemLabels).toEqual([]);
+    expect(dump.warnings).toEqual([
+      expect.stringMatching(/label names cannot be read over its API.*database/),
+      expect.stringMatching(/without their place on the map or lock.*database/),
+    ]);
+    // The hidden system's intel still comes (JSON:API lists every row of the map).
+    expect(dump.signatures.some((s) => s.eveId === 'HID-001')).toBe(true);
+    expect(dump.comments).toHaveLength(4);
   });
 
-  it('follows offset pages when Wanderer gives no next link', async () => {
+  it('follows JSON:API next links by their path, whatever address Wanderer writes into them', async () => {
     const rows = Array.from({ length: 450 }, (_, i) => ({
       id: `s${i}`,
       type: 'map_system_signatures',
-      attributes: {
-        eve_id: `ABC-${String(100 + (i % 900)).padStart(3, '0')}`,
-        solar_system_id: 31002531,
-        kind: 'Cosmic Signature',
-      },
+      attributes: { eve_id: `ABC-${String(100 + i).padStart(3, '0')}`, kind: 'Cosmic Signature', deleted: false },
+      relationships: { system: { data: { id: 'sys-1', type: 'map_systems' }, links: {}, meta: {} } },
     }));
     const { url, seen } = await scripted((req, res) => {
       const u = new URL(req.url!, 'http://x');
-      if (u.pathname === '/api/map/systems') return send(res, 200, { data: [{ solar_system_id: 31002531 }] });
+      if (u.pathname === '/api/maps/home-chain/systems')
+        return send(res, 200, { data: { systems: [{ id: 'sys-1', solar_system_id: 31002531 }], connections: [] } });
       if (u.pathname === '/api/v1/map_system_signatures') {
         const offset = Number(u.searchParams.get('page[offset]'));
         const limit = Number(u.searchParams.get('page[limit]'));
-        return send(res, 200, { data: rows.slice(offset, offset + limit) });
+        const next = offset + limit < rows.length;
+        return send(res, 200, {
+          data: rows.slice(offset, offset + limit),
+          // Behind a proxy Wanderer writes its own idea of its address.
+          links: {
+            next: next
+              ? `http://internal:4000/api/v1/map_system_signatures?include=system&page[offset]=${offset + limit}&page[limit]=${limit}`
+              : null,
+          },
+          meta: { page: {} },
+        });
       }
-      if (u.pathname === '/api/map/acls') return send(res, 200, { data: [] });
-      send(res, 404, { error: 'Not found' });
+      send(res, 404, { errors: { detail: 'Not Found' } });
     });
     const dump = await new WandererHttpSource(instant).read(request(url, 'k'));
     expect(dump.signatures).toHaveLength(450);
+    expect(dump.signatures.every((s) => s.solarSystemId === 31002531)).toBe(true);
     expect(seen.filter((s) => s.startsWith('/api/v1/map_system_signatures'))).toEqual([
-      '/api/v1/map_system_signatures?page[limit]=200&page[offset]=0',
-      '/api/v1/map_system_signatures?page[limit]=200&page[offset]=200',
-      '/api/v1/map_system_signatures?page[limit]=200&page[offset]=400',
+      '/api/v1/map_system_signatures?include=system&page[limit]=200&page[offset]=0',
+      '/api/v1/map_system_signatures?include=system&page[offset]=200&page[limit]=200',
+      '/api/v1/map_system_signatures?include=system&page[offset]=400&page[limit]=200',
     ]);
-    expect(dump.warnings).toContain('Structures: this Wanderer does not offer them over the API');
   });
 
-  it('reads systems from the old route when it answers like the new one (Wanderer 1.100+)', async () => {
+  it('stops paging when an instance answers the same rows again', async () => {
+    const { url, seen } = await scripted((req, res) => {
+      const u = new URL(req.url!, 'http://x');
+      if (u.pathname === '/api/maps/home-chain/systems')
+        return send(res, 200, { data: { systems: [{ id: 'sys-1', solar_system_id: 31002531 }], connections: [] } });
+      if (u.pathname === '/api/v1/map_system_comments')
+        return send(res, 200, {
+          data: [{ id: 'c1', type: 'map_system_comments', attributes: { text: 'hi' }, relationships: {} }],
+          links: { next: '/api/v1/map_system_comments?page[offset]=100' },
+        });
+      send(res, 404, {});
+    });
+    const dump = await new WandererHttpSource(instant).read(request(url, 'k'));
+    expect(dump.comments).toHaveLength(1);
+    expect(seen.filter((s) => s.startsWith('/api/v1/map_system_comments'))).toHaveLength(2);
+  });
+
+  it('reads the old routes of a Wanderer without /api/maps (systems as a list)', async () => {
     const { url } = await scripted((req, res) => {
       const u = new URL(req.url!, 'http://x');
       if (u.pathname === '/api/map/systems')
-        return send(res, 200, {
-          data: {
-            systems: [{ solar_system_id: 31002531 }],
-            connections: [{ solar_system_source: 31002531, solar_system_target: 30002187 }],
-          },
-        });
+        return send(res, 200, { data: [{ solar_system_id: 31002531, name: 'J014348', original_name: 'J014348' }] });
+      if (u.pathname === '/api/map/connections')
+        return send(res, 200, { data: [{ solar_system_source: 31002531, solar_system_target: 30002187 }] });
       if (u.pathname === '/api/map/acls') return send(res, 200, { data: [] });
-      send(res, 404, { error: 'Not found' });
+      send(res, 404, { errors: { detail: 'Not Found' } });
     });
     const dump = await new WandererHttpSource(instant).read(request(url, 'k'));
     expect(dump.systems).toHaveLength(1);
-    expect(dump.warnings).toContain('This Wanderer lists shown systems only; hidden systems were not read');
+    expect(dump.connections).toHaveLength(1);
+    expect(dump.warnings).toContain(
+      "Hidden systems cannot be read over this Wanderer's API; only the shown ones were read. Import from Wanderer's database to get them.",
+    );
+  });
+
+  it('reads members with an ACL key where JSON:API is missing, and says which ACLs need one', async () => {
+    const { url } = await scripted((req, res) => {
+      const u = new URL(req.url!, 'http://x');
+      if (u.pathname === '/api/maps/home-chain/systems')
+        return send(res, 200, { data: { systems: [{ solar_system_id: 31002531 }], connections: [] } });
+      if (u.pathname === '/api/map/acls')
+        return send(res, 200, {
+          data: [
+            { id: 'acl-1', name: 'Corp' },
+            { id: 'acl-2', name: 'Blues' },
+            { id: 'acl-3', name: 'Keyless' },
+          ],
+        });
+      if (u.pathname === '/api/acls/acl-1')
+        return req.headers.authorization === 'Bearer corp-key'
+          ? send(res, 200, { data: { members: [{ name: 'Pilot', role: 'admin', eve_character_id: '2112625428' }] } })
+          : plain(res, 401, 'Unauthorized (invalid API key for ACL)');
+      if (u.pathname === '/api/acls/acl-3') return plain(res, 401, 'Unauthorized (no API key set for ACL)');
+      send(res, 404, { errors: { detail: 'Not Found' } });
+    });
+    const dump = await new WandererHttpSource(instant).read(
+      request(url, 'k', {
+        aclKeys: [
+          { aclId: 'acl-1', key: 'corp-key' },
+          { aclId: 'acl-3', key: 'any' },
+        ],
+      }),
+    );
+    expect(dump.acls.map((a) => [a.name, a.members?.length ?? null, a.error])).toEqual([
+      ['Corp', 1, null],
+      ['Blues', null, expect.stringMatching(/needs the ACL API key/)],
+      ['Keyless', null, expect.stringMatching(/has no API key in Wanderer/)],
+    ]);
   });
 
   it('says so when the key is refused (401)', async () => {
     const fake = await startFakeWanderer();
     closers.push(fake.close);
-    const source = new WandererHttpSource(instant);
-    const error = await source.read(request(fake.url, 'wrong')).catch((e: unknown) => e);
+    const error = await new WandererHttpSource(instant).read(request(fake.url, 'wrong')).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(SourceError);
-    expect(error).toMatchObject({
+    expect(error).toMatchObject({ failure: 'auth', message: expect.stringMatching(/refused the API key \(401\)/) });
+  });
+
+  it("tells an inactive subscription and a switched-off API apart from a wrong key", async () => {
+    const lapsed = await scripted((_req, res) => plain(res, 401, 'Unauthorized (map subscription not active)'));
+    expect(await new WandererHttpSource(instant).test(request(lapsed.url, 'k')).catch((e: unknown) => e)).toMatchObject({
       failure: 'auth',
-      message: expect.stringMatching(/refused the API key \(401\)/),
+      message: expect.stringMatching(/subscription is not active/),
+    });
+    const off = await scripted((_req, res) => plain(res, 403, 'Public API is disabled'));
+    expect(await new WandererHttpSource(instant).test(request(off.url, 'k')).catch((e: unknown) => e)).toMatchObject({
+      failure: 'refused',
+      message: expect.stringMatching(/WANDERER_PUBLIC_API_DISABLED/),
     });
   });
 
@@ -206,10 +326,20 @@ describe('WandererHttpSource against a fake Wanderer', () => {
   it('retries 5xx answers and network errors, then reports the instance as unavailable', async () => {
     const { url, seen } = await scripted((req, res, n) => {
       if (n <= 2) return send(res, 502, {});
-      send(res, 200, { data: [{ solar_system_id: 31002531 }, { solar_system_id: 30000142 }] });
+      if (req.url === '/api/maps/home-chain/systems')
+        return send(res, 200, { data: { systems: [{ solar_system_id: 31002531 }, { solar_system_id: 30000142 }] } });
+      send(res, 404, {});
     });
-    expect(await new WandererHttpSource(instant).test(request(url, 'k'))).toEqual({ systems: 2, name: null });
-    expect(seen).toHaveLength(3);
+    expect(await new WandererHttpSource(instant).test(request(url, 'k'))).toEqual({
+      systems: 2,
+      hiddenSystems: null,
+      name: null,
+    });
+    expect(seen.slice(0, 3)).toEqual([
+      '/api/maps/home-chain/systems',
+      '/api/maps/home-chain/systems',
+      '/api/maps/home-chain/systems',
+    ]);
 
     const down = await scripted((_req, res) => send(res, 503, {}));
     const error = await new WandererHttpSource(instant).test(request(down.url, 'k')).catch((e: unknown) => e);
@@ -219,10 +349,7 @@ describe('WandererHttpSource against a fake Wanderer', () => {
     const nobody = await new WandererHttpSource(instant)
       .test(request('http://127.0.0.1:9', 'k'))
       .catch((e: unknown) => e);
-    expect(nobody).toMatchObject({
-      failure: 'unavailable',
-      message: expect.stringMatching(/did not answer/),
-    });
+    expect(nobody).toMatchObject({ failure: 'unavailable', message: expect.stringMatching(/did not answer/) });
   });
 
   it('refuses private addresses unless allowed, and never follows redirects', async () => {
@@ -231,10 +358,7 @@ describe('WandererHttpSource against a fake Wanderer', () => {
     const refused = await new WandererHttpSource(instant)
       .test(request(fake.url, fake.map.apiKey, { allowPrivate: false }))
       .catch((e: unknown) => e);
-    expect(refused).toMatchObject({
-      failure: 'refused',
-      message: expect.stringMatching(/private or local address/),
-    });
+    expect(refused).toMatchObject({ failure: 'refused', message: expect.stringMatching(/private or local address/) });
 
     const named = await new WandererHttpSource(instant)
       .test(request(fake.url.replace('127.0.0.1', 'localhost'), fake.map.apiKey, { allowPrivate: false }))
@@ -246,10 +370,7 @@ describe('WandererHttpSource against a fake Wanderer', () => {
       res.end();
     });
     const redirect = await new WandererHttpSource(instant).test(request(url, 'k')).catch((e: unknown) => e);
-    expect(redirect).toMatchObject({
-      failure: 'refused',
-      message: expect.stringMatching(/redirects to https:\/\/elsewhere/),
-    });
+    expect(redirect).toMatchObject({ failure: 'refused', message: expect.stringMatching(/redirects to https:\/\/elsewhere/) });
   });
 
   it('refuses answers that are not JSON or too large', async () => {
@@ -257,16 +378,12 @@ describe('WandererHttpSource against a fake Wanderer', () => {
       res.writeHead(200, { 'content-type': 'text/html' });
       res.end('<html>hello</html>');
     });
-    expect(
-      await new WandererHttpSource(instant).test(request(html.url, 'k')).catch((e: unknown) => e),
-    ).toMatchObject({
+    expect(await new WandererHttpSource(instant).test(request(html.url, 'k')).catch((e: unknown) => e)).toMatchObject({
       failure: 'invalid',
     });
     const big = await scripted((_req, res) => send(res, 200, { data: 'x'.repeat(5000) }));
     expect(
-      await new WandererHttpSource({ ...instant, maxBytes: 1000 })
-        .test(request(big.url, 'k'))
-        .catch((e: unknown) => e),
+      await new WandererHttpSource({ ...instant, maxBytes: 1000 }).test(request(big.url, 'k')).catch((e: unknown) => e),
     ).toMatchObject({ failure: 'invalid' });
   });
 

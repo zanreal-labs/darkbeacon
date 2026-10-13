@@ -6,6 +6,7 @@ import {
   ArrowUpRight,
   CircleCheck,
   CircleX,
+  Database,
   Download,
   FileJson,
   Globe,
@@ -22,6 +23,7 @@ import type {
   ImportReportLineDto,
   MapRole,
   WandererApiSourceRequest,
+  WandererTestResultDto,
 } from '@darkbeacon/shared';
 import { ApiError } from '../lib/api';
 import {
@@ -30,9 +32,11 @@ import {
   useImportJob,
   useImportPlan,
   useReadWanderer,
+  useReadWandererDb,
   useStartImport,
   useTestWanderer,
   useUploadExport,
+  useWandererDbMaps,
 } from '../lib/imports';
 import { useMaps } from '../lib/maps';
 import { atLeast } from '../lib/roles';
@@ -105,19 +109,23 @@ export function ImportPage({ into }: { into: string | null }) {
 
 // ---- 1. Source ----------------------------------------------------------------------------------
 
+type SourceKind = 'api' | 'file' | 'db';
+
 function SourceCard({ onRead, reading }: { onRead(jobId: string): void; reading: boolean }) {
-  const [kind, setKind] = useState<'api' | 'file'>('api');
+  const me = useMe();
+  const admin = me.data?.account.instanceRole === 'owner' || me.data?.account.instanceRole === 'admin';
+  const [kind, setKind] = useState<SourceKind>('api');
   return (
     <Card aria-label="Source">
       <CardHeader
         title="Where is the map?"
-        description="Over Wanderer's API brings everything and can keep syncing; an export file is read once."
+        description="Wanderer's API and its database can keep syncing; an export file is read once."
       />
       <CardBody>
         <ChoiceGroup
           aria-label="Source"
           value={kind}
-          onValueChange={(v) => setKind(v as 'api' | 'file')}
+          onValueChange={(v) => setKind(v as SourceKind)}
           options={[
             {
               value: 'api',
@@ -131,13 +139,37 @@ function SourceCard({ onRead, reading }: { onRead(jobId: string): void; reading:
               description: 'The .json file Wanderer exports',
               icon: <FileJson />,
             },
+            ...(admin
+              ? [
+                  {
+                    value: 'db',
+                    label: "From Wanderer's database",
+                    description: 'Your own Wanderer’s Postgres, read-only; instance admins only',
+                    icon: <Database />,
+                  },
+                ]
+              : []),
           ]}
         />
       </CardBody>
-      {kind === 'api' ? <ApiSourceForm onRead={onRead} /> : <FileSourceForm onRead={onRead} />}
+      {kind === 'api' ? (
+        <ApiSourceForm onRead={onRead} />
+      ) : kind === 'db' && admin ? (
+        <DbSourceForm onRead={onRead} />
+      ) : (
+        <FileSourceForm onRead={onRead} />
+      )}
       {reading && <CardBody className="muted">Reading the map…</CardBody>}
     </Card>
   );
+}
+
+/** What a working connection found: shown systems and the hidden ones that come over too. */
+function connectedText(result: WandererTestResultDto): string {
+  const shown = `${result.systems} shown`;
+  if (result.hiddenSystems === null)
+    return `Connected: ${shown} systems on ${result.host}. This Wanderer does not list hidden systems, so only the shown ones come over.`;
+  return `Connected: ${shown} and ${result.hiddenSystems} hidden systems on ${result.host}; hidden ones come over hidden, with their notes, signatures, structures and comments.`;
 }
 
 function ApiSourceForm({ onRead }: { onRead(jobId: string): void }) {
@@ -164,7 +196,7 @@ function ApiSourceForm({ onRead }: { onRead(jobId: string): void }) {
     ? 'Testing…'
     : test.data
       ? test.data.ok
-        ? `Connected: ${test.data.systems} systems on ${test.data.host}`
+        ? connectedText(test.data)
         : test.data.message
       : test.error
         ? message(test.error)
@@ -235,6 +267,99 @@ function ApiSourceForm({ onRead }: { onRead(jobId: string): void }) {
   );
 }
 
+function DbSourceForm({ onRead }: { onRead(jobId: string): void }) {
+  const [connectionString, setConnectionString] = useState('');
+  const [wandererUrl, setWandererUrl] = useState('');
+  const [slug, setSlug] = useState('');
+  const maps = useWandererDbMaps();
+  const read = useReadWandererDb();
+  const listed = maps.data?.maps ?? [];
+  const chosen = listed.find((m) => m.slug === slug);
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    read.mutate(
+      {
+        connectionString: connectionString.trim(),
+        slug,
+        ...(wandererUrl.trim() ? { wandererUrl: wandererUrl.trim() } : {}),
+      },
+      { onSuccess: (job) => onRead(job.id) },
+    );
+  };
+  return (
+    <form onSubmit={submit} aria-label="Wanderer database">
+      <CardBody>
+        <div className={styles.fields}>
+          <Field
+            label="Connection string"
+            hint="postgres://user:password@host:5432/database. Read inside one read-only transaction; kept encrypted here, never shown again."
+            error={maps.error ? message(maps.error) : undefined}
+          >
+            <Input
+              type="password"
+              autoComplete="off"
+              mono
+              value={connectionString}
+              onChange={(e) => {
+                setConnectionString(e.target.value);
+                setSlug('');
+              }}
+              placeholder="postgres://…"
+            />
+          </Field>
+          <Field
+            label="Wanderer address (optional)"
+            hint="The Wanderer this database belongs to: imports from its API and its database then update the same things."
+          >
+            <Input
+              value={wandererUrl}
+              onChange={(e) => setWandererUrl(e.target.value)}
+              placeholder="https://wanderer.example.org"
+            />
+          </Field>
+          {maps.data && (
+            <Field
+              label="Map"
+              hint={
+                chosen
+                  ? `${chosen.systems} shown and ${chosen.hiddenSystems} hidden systems; hidden ones come over hidden, with their intel.`
+                  : listed.length === 0
+                    ? 'This database holds no maps.'
+                    : 'The maps this database holds.'
+              }
+              error={read.error ? message(read.error) : undefined}
+            >
+              <Select
+                value={slug}
+                onValueChange={setSlug}
+                placeholder="Choose a map"
+                options={listed.map((m) => ({
+                  value: m.slug,
+                  label: m.name ? `${m.name} (${m.slug})` : m.slug,
+                  icon: <MapIcon />,
+                }))}
+              />
+            </Field>
+          )}
+        </div>
+      </CardBody>
+      <CardFooter>
+        <Button
+          type="button"
+          disabled={!connectionString.trim() || read.isPending}
+          loading={maps.isPending}
+          onClick={() => maps.mutate({ connectionString: connectionString.trim() })}
+        >
+          List maps
+        </Button>
+        <Button type="submit" variant="primary" disabled={!chosen} loading={read.isPending}>
+          Read map
+        </Button>
+      </CardFooter>
+    </form>
+  );
+}
+
 function FileSourceForm({ onRead }: { onRead(jobId: string): void }) {
   const upload = useUploadExport();
   const input = useRef<HTMLInputElement>(null);
@@ -274,13 +399,11 @@ function FileSourceForm({ onRead }: { onRead(jobId: string): void }) {
 // ---- 2. Preview ---------------------------------------------------------------------------------
 
 const COUNT_LABELS: Array<[keyof ImportCountsDto, string]> = [
-  ['systems', 'Systems'],
+  ['systems', 'Shown systems'],
   ['hiddenSystems', 'Hidden systems'],
   ['connections', 'Connections'],
   ['signatures', 'Signatures'],
   ['passages', 'Passages'],
-  ['structures', 'Structures'],
-  ['comments', 'Comments'],
   ['structures', 'Structures'],
   ['comments', 'Comments'],
   ['labels', 'Labels'],
@@ -302,7 +425,7 @@ function PreviewCard({ job }: { job: ImportJobDto }) {
       <CardHeader
         title={job.source.name ?? job.source.slug}
         description={
-          job.source.kind === 'wanderer-api'
+          job.source.kind !== 'wanderer-file'
             ? `Read from ${job.source.host} just now. Nothing is written until you import.`
             : 'Read from the export file. Nothing is written until you import.'
         }
@@ -449,7 +572,7 @@ function TargetCard({ job, into }: { job: ImportJobDto; into: string | null }) {
   const plan = useImportPlan(job.id, mode === 'new' ? { mode } : mapId ? { mode, mapId } : null);
   const start = useStartImport(job.id);
   const cancel = useCancelImport(job.id);
-  const api = job.source.kind === 'wanderer-api';
+  const api = job.source.kind !== 'wanderer-file';
   const shownSlug = slug ?? slugify(name);
   const target = managed.find((m) => m.id === mapId);
   const canAccess = mode === 'new' || atLeast(target?.role, 'admin');
@@ -711,7 +834,7 @@ function ProgressCard({ job, onAgain }: { job: ImportJobDto; onAgain(): void }) 
     <Card aria-label="Import progress">
       <CardHeader
         title={job.mapName ?? 'Import'}
-        description={`From ${job.source.kind === 'wanderer-api' ? `${job.source.host}/${job.source.slug}` : 'an export file'}`}
+        description={`From ${job.source.kind !== 'wanderer-file' ? `${job.source.host}/${job.source.slug}` : 'an export file'}`}
         actions={<Badge tone={status.tone}>{status.label}</Badge>}
       />
       <CardBody>
