@@ -14,15 +14,16 @@
 }
 
 /* Under the top bar (search, filters), beside the view controls, left of the panel. */
-.minimap[data-corner^='top'] {
+.minimap:is(.top-left, .top-right) {
   top: 52px;
 }
 
-.minimap[data-corner='bottom-left'] {
-  left: 52px;
+/* Right of the view controls (their bar is 46 px from the canvas edge with its margin). */
+.minimap.minimap.bottom-left {
+  left: 46px;
 }
 
-.minimap[data-corner$='right'] {
+.minimap.minimap:is(.top-right, .bottom-right) {
   right: var(--covered-right, 0px);
 }
 

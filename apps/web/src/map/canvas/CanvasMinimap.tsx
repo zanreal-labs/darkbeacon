@@ -12,8 +12,8 @@ export function CanvasMinimap({ corner }: { corner: Corner }) {
   return (
     <MiniMap
       position={corner}
-      className={styles.minimap}
-      data-corner={corner}
+      // React Flow does not pass data attributes on, so the corner is a class.
+      className={`${styles.minimap} ${styles[corner]}`}
       pannable
       zoomable
       ariaLabel="Minimap"
