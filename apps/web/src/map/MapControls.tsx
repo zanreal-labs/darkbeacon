@@ -4,13 +4,23 @@ import { useEffect, useId, useState } from 'react';
 import { Panel, useReactFlow } from '@xyflow/react';
 import { useQuery } from '@tanstack/react-query';
 import { buildPath, routes, type MapDto } from '@darkbeacon/shared';
-import { Bookmark, History, Info, LocateFixed, Maximize, Minus, Plus } from 'lucide-react';
+import {
+  Bookmark,
+  History,
+  Info,
+  LocateFixed,
+  Map as MinimapIcon,
+  Maximize,
+  Minus,
+  Plus,
+} from 'lucide-react';
 import { api } from '../lib/api';
 import { useMapSettings } from '../lib/useMapSettings';
 import type { MapPermissions } from '../lib/roles';
 import { Dialog, DialogContent, IconButton } from '../ui';
 import { BookmarkLabelSettings } from './BookmarkSettings';
 import { MapLegend } from './MapLegend';
+import { DEFAULT_CANVAS_PREFS, setCanvasPrefs, useCanvasPrefs } from './canvas/prefs';
 import styles from './MapControls.module.css';
 
 interface Props {
@@ -124,6 +134,7 @@ export function MapControls({
             onClick={() => settings.show('history')}
           />
         )}
+        {!readOnly && <MinimapToggle />}
         <IconButton
           tooltipSide="right"
           size="sm"
@@ -137,5 +148,22 @@ export function MapControls({
       </div>
       {legend && <MapLegend id={legendId} />}
     </Panel>
+  );
+}
+
+/** Shows or hides the minimap (in its default corner; the corner is chosen in the canvas settings). */
+function MinimapToggle() {
+  const { minimap } = useCanvasPrefs();
+  const on = minimap !== 'off';
+  return (
+    <IconButton
+      tooltipSide="right"
+      size="sm"
+      label={on ? 'Hide the minimap' : 'Show the minimap'}
+      icon={<MinimapIcon />}
+      aria-pressed={on}
+      data-active={on || undefined}
+      onClick={() => setCanvasPrefs({ minimap: on ? 'off' : DEFAULT_CANVAS_PREFS.minimap })}
+    />
   );
 }
