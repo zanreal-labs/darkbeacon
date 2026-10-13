@@ -63,6 +63,14 @@ docker run --rm -it -v dbk-data:/data darkbeacon darkbeacon backup restore <file
 `BACKUP_SCHEDULE`, `BACKUP_RETENTION`, `BACKUP_DIR` and friends set the defaults. On PostgreSQL use
 `pg_dump`. Everything else, including how a restore works, is in [`docs/backups.md`](docs/backups.md).
 
+### Your own instance on this machine
+
+`tools/local.sh up` builds the image and runs it with Postgres (`docker-compose.local.yml`), with
+settings from `.env.local` (start from `.env.example`; set `PUBLIC_URL` and your EVE application,
+whose callback is `<PUBLIC_URL>/api/auth/eve/callback`). The first account that signs in owns the
+instance. `tools/local.sh logs` follows the log, `tools/local.sh down` stops it; data stays in
+the `darkbeacon-local` volumes.
+
 ### Demo mode: a preview without Discord or EVE
 
 ```sh

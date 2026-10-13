@@ -1,0 +1,42 @@
+# Your own Darkbeacon on this machine, as it would run for an alliance: the production image,
+# Postgres, sign-in with EVE, data kept in named volumes. Settings come from `.env.local` (not in
+# git; start from `.env.example`). Run it with `tools/local.sh up`; the app answers on a random
+# loopback port, which the script gives a portless name (https://darkbeacon.localhost).
+name: darkbeacon-local
+
+services:
+  app:
+    build: .
+    image: darkbeacon:local
+    restart: unless-stopped
+    env_file: .env.local
+    environment:
+      DATABASE_URL: postgres://darkbeacon:darkbeacon@postgres:5432/darkbeacon
+      DATA_DIR: /data
+    ports:
+      - '127.0.0.1::3000'
+    volumes:
+      - data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 1536m
+
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: darkbeacon
+      POSTGRES_PASSWORD: darkbeacon
+      POSTGRES_DB: darkbeacon
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U darkbeacon']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  data:
+  postgres:
