@@ -120,9 +120,9 @@
 .beam {
   position: absolute;
   z-index: -1;
-  /* The core of a 56 px mark (at 11/24, 13/24 of it), centred in the 88 px tile. */
-  top: calc(16px + 56px * 13 / 24);
-  left: calc(16px + 56px * 11 / 24);
+  /* The animated mark has its core in the middle, which is the middle of the tile. */
+  top: 50%;
+  left: 50%;
   width: min(1100px, 220vmax);
   aspect-ratio: 1;
   border-radius: 50%;

@@ -24,6 +24,11 @@ export const MARK = {
 /** The core sits a little low and left, so the mark with its beam is centred in the square. */
 const CX = 11;
 const CY = 13;
+/**
+ * The animated mark's beam turns all the way round, so there the core itself is the centre: the
+ * view box moves to put (CX, CY) in the middle of the square.
+ */
+const SPINNING_VIEW_BOX = `${CX - 12} ${CY - 12} 24 24`;
 const rad = (deg: number) => (deg * Math.PI) / 180;
 const at = (r: number, deg: number) =>
   `${(CX + r * Math.cos(rad(deg))).toFixed(3)} ${(CY + r * Math.sin(rad(deg))).toFixed(3)}`;
@@ -66,7 +71,7 @@ export function LogoMark({ size = 24, tone = 'brand', animated = false, classNam
     <svg
       width={size}
       height={size}
-      viewBox="0 0 24 24"
+      viewBox={animated ? SPINNING_VIEW_BOX : '0 0 24 24'}
       fill="none"
       aria-hidden
       className={[styles.mark, className].filter(Boolean).join(' ')}
