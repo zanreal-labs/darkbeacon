@@ -213,9 +213,19 @@ export class WandererHttpSource implements MapImportSource {
     const slug = encodeURIComponent(api.slug);
     const all = await this.get(api, `/api/map/systems?slug=${slug}&all=true`);
     if (all.status === 200) {
-      const rows = dataList(all.body);
-      if (!Array.isArray(isRow(all.body) ? all.body.data : null)) throw invalid(api, 'systems');
-      return { rows, connections: null, length: rows.length };
+      const data = isRow(all.body) ? all.body.data : null;
+      if (Array.isArray(data)) return { rows: data, connections: null, length: data.length };
+      // Wanderer v1.100+ answers the old route like the new one: `{ data: { systems, connections } }`,
+      // shown systems only.
+      if (isRow(data) && Array.isArray(data.systems)) {
+        warnings.push('This Wanderer lists shown systems only; hidden systems were not read');
+        return {
+          rows: data.systems,
+          connections: Array.isArray(data.connections) ? data.connections : null,
+          length: data.systems.length,
+        };
+      }
+      throw invalid(api, 'systems');
     }
     if (all.status !== 404) throw this.failure(api, all, 'systems');
     const newer = await this.get(api, `/api/maps/${slug}/systems`);

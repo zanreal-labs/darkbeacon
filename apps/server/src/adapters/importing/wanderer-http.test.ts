@@ -148,6 +148,24 @@ describe('WandererHttpSource against a fake Wanderer', () => {
     expect(dump.warnings).toContain('Structures: this Wanderer does not offer them over the API');
   });
 
+  it('reads systems from the old route when it answers like the new one (Wanderer 1.100+)', async () => {
+    const { url } = await scripted((req, res) => {
+      const u = new URL(req.url!, 'http://x');
+      if (u.pathname === '/api/map/systems')
+        return send(res, 200, {
+          data: {
+            systems: [{ solar_system_id: 31002531 }],
+            connections: [{ solar_system_source: 31002531, solar_system_target: 30002187 }],
+          },
+        });
+      if (u.pathname === '/api/map/acls') return send(res, 200, { data: [] });
+      send(res, 404, { error: 'Not found' });
+    });
+    const dump = await new WandererHttpSource(instant).read(request(url, 'k'));
+    expect(dump.systems).toHaveLength(1);
+    expect(dump.warnings).toContain('This Wanderer lists shown systems only; hidden systems were not read');
+  });
+
   it('says so when the key is refused (401)', async () => {
     const fake = await startFakeWanderer();
     closers.push(fake.close);
