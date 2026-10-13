@@ -1,6 +1,6 @@
 'use client';
 
-import { LayoutGrid, RotateCcw } from 'lucide-react';
+import { FoldVertical, LayoutGrid, RotateCcw } from 'lucide-react';
 import type { SlotEntry } from '../../plugins/registry';
 import {
   IconButton,
@@ -17,7 +17,8 @@ import type { WidgetsController } from './useWidgetsLayout';
 
 /**
  * The top bar's widgets menu (Wanderer's Widgets settings): a switch per widget, plugin widgets
- * after the core ones, all of them hidden for a moment, and Reset layout.
+ * after the core ones, all of them hidden for a moment, windows sized by hand back to their
+ * content, and Reset layout.
  */
 export function WidgetsMenu({
   controller,
@@ -71,6 +72,9 @@ export function WidgetsMenu({
           </MenuCheckboxItem>
         ))}
         <MenuSeparator />
+        <MenuItem icon={<FoldVertical />} onSelect={() => controller.fit()}>
+          Fit heights to content
+        </MenuItem>
         <MenuItem
           icon={<RotateCcw />}
           onSelect={() => {

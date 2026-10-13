@@ -15,6 +15,7 @@ import type {
   MapSystemDto,
   SignatureDto,
   SystemLabelDto,
+  MapViewDto,
   UpdateConnectionRequest,
   UpdateSignatureRequest,
   UpdateSystemRequest,
@@ -87,6 +88,7 @@ export class MappingReverter implements ChangeReverter {
     'signature.removed',
     'labels.changed',
     'system_labels.changed',
+    'views.changed',
     'map.settings_changed',
   ] as const;
 
@@ -244,6 +246,14 @@ export class MappingReverter implements ChangeReverter {
         if (!current || !change) throw new ConflictError('Nothing to revert');
         if (!sameValue(current.systemLabels, change.after)) throw new ConflictError(CHANGED_SINCE);
         await this.uc.maps.setSystemLabels(actor, mapId, (change.before ?? []) as SystemLabelDto[]);
+        return;
+      }
+      case 'views.changed': {
+        const current = await this.ports.maps.findById(mapId);
+        const change = diff.views;
+        if (!current || !change) throw new ConflictError('Nothing to revert');
+        if (!sameValue(current.views ?? [], change.after ?? [])) throw new ConflictError(CHANGED_SINCE);
+        await this.uc.maps.setViews(actor, mapId, (change.before ?? []) as MapViewDto[]);
         return;
       }
       case 'map.settings_changed': {

@@ -183,19 +183,24 @@ describe('map settings dialog', () => {
       'Bridges',
       'Import',
       'Copy and hand over',
+      'Tracking',
       'Your view',
       'History',
     ]);
     expect(screen.getByRole('tab', { name: 'Access', selected: true })).toBeTruthy();
   });
 
-  it('gives members and viewers their own view and the history, and nothing off a map', async () => {
+  it('gives members and viewers tracking, their own view and the history, and nothing off a map', async () => {
     const user = userEvent.setup();
     const view = open('/m/home-chain', 'viewer');
     await user.click(screen.getByRole('button', { name: 'Map settings' }));
     await screen.findByRole('dialog', { name: 'Map settings' });
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Your view', 'History']);
-    expect(screen.getByRole('tab', { name: 'Your view', selected: true })).toBeTruthy();
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
+      'Tracking',
+      'Your view',
+      'History',
+    ]);
+    expect(screen.getByRole('tab', { name: 'Tracking', selected: true })).toBeTruthy();
     view.unmount();
     window.history.replaceState(null, '', '/account');
     open('/account', 'admin');

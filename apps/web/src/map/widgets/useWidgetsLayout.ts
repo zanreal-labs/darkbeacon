@@ -4,13 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePreferences, useSavePreferences } from '../../lib/preferences';
 import {
   EMPTY_LAYOUT,
+  fitToContent,
   LAYOUT_KEY,
   migrateSidebarLayout,
   parseLayout,
+  placeFloating,
   raise,
   resizeDocked,
   setVisible,
-  toStored,
   visibleIds,
   type Area,
   type Box,
@@ -33,10 +34,15 @@ export interface WidgetsController {
   isVisible(id: string): boolean;
   /** Shows or hides one; a window turned on joins the column. */
   setShown(id: string, on: boolean): void;
-  /** Keeps where a window was dragged or resized to: out of the column, it floats there. */
-  place(id: string, box: Box, area: Area): void;
-  /** A docked window resized: the most it grows to, and the column's width. */
+  /**
+   * Keeps where a window was dragged or resized to: out of the column, it floats there. A resize
+   * by hand fixes its height; `below` is the floating window it was dropped right under.
+   */
+  place(id: string, box: Box, area: Area, how?: { resized?: boolean; below?: string | undefined }): void;
+  /** A docked window resized by hand: the height it keeps, and the column's width. */
   resizeDocked(id: string, box: Box, area: Area): void;
+  /** Back to the content's height: one window, or every window without an id. */
+  fit(id?: string): void;
   /** Brings a window to the front. */
   raise(id: string): void;
   /** Wanderer's "Reset widgets": the default set, every window back in the column. */
@@ -79,18 +85,18 @@ export function useWidgetsLayout(): WidgetsController {
       visible,
       isVisible: (id) => visible.includes(id),
       setShown: (id, on) => update((current) => setVisible(current, id, on)),
-      place: (id, box, size) =>
-        update((current) => ({
-          ...current,
-          boxes: { ...current.boxes, [id]: toStored(box, size) },
-          order: raise(current.order, id),
-        })),
+      place: (id, box, size, how) => update((current) => placeFloating(current, id, box, size, how)),
       resizeDocked: (id, box, size) =>
         update((current) => ({ ...resizeDocked(current, id, box, size), order: raise(current.order, id) })),
       raise: (id) =>
         update((current) => {
           const order = raise(current.order, id);
           return order === current.order ? current : { ...current, order };
+        }),
+      fit: (id) =>
+        update((current) => {
+          const next = fitToContent(current, id);
+          return JSON.stringify(next) === JSON.stringify(current) ? current : next;
         }),
       reset: () => update(() => EMPTY_LAYOUT),
       replace: (next) => update(() => parseLayout(next) ?? EMPTY_LAYOUT),

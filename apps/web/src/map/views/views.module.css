@@ -1,0 +1,164 @@
+/* The top bar's quick views: slots 1, 2, 3 and the Views menu, one pill like the other controls. */
+.bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: var(--dbk-control-height);
+  padding: 0 3px;
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+  background: var(--dbk-color-surface);
+  box-shadow: var(--dbk-shadow-small);
+}
+
+.slots {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 3px;
+  margin-right: 1px;
+  border-right: 1px solid var(--dbk-color-border);
+}
+
+.slot {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: calc(var(--dbk-radius) - 2px);
+  background: none;
+  color: var(--dbk-color-text-muted);
+  font: inherit;
+  font-size: var(--dbk-font-size-small);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.slot:hover {
+  background: var(--dbk-color-surface-hover);
+  color: var(--dbk-color-text);
+}
+
+.slot[aria-pressed='true'] {
+  background: var(--dbk-color-accent);
+  color: var(--dbk-color-accent-contrast);
+}
+
+.slot:focus-visible,
+.menuButton:focus-visible {
+  outline: 2px solid var(--dbk-color-focus);
+  outline-offset: 1px;
+}
+
+.menuButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: calc(var(--dbk-radius) - 2px);
+  background: none;
+  color: var(--dbk-color-text-muted);
+  font: inherit;
+  font-size: var(--dbk-font-size-small);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.menuButton:hover,
+.menuButton[data-state='open'] {
+  background: var(--dbk-color-surface-hover);
+  color: var(--dbk-color-text);
+}
+
+.menuButton svg {
+  width: 16px;
+  height: 16px;
+}
+
+.menuButton .chevron {
+  width: 14px;
+  height: 14px;
+  margin-left: -2px;
+}
+
+.compactSlot {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: var(--dbk-color-accent);
+  color: var(--dbk-color-accent-contrast);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.bar[data-compact] {
+  padding: 0 2px;
+}
+
+/* ---- The menu ---- */
+.menu {
+  min-width: 260px;
+}
+
+.sub {
+  min-width: 220px;
+}
+
+.menuSlot,
+.menuSlotEmpty {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.menuSlot {
+  border: 1px solid var(--dbk-color-border-strong);
+  color: var(--dbk-color-text-muted);
+}
+
+.menuSlot[data-active] {
+  border-color: var(--dbk-color-accent);
+  background: var(--dbk-color-accent);
+  color: var(--dbk-color-accent-contrast);
+}
+
+.menuName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slotSource {
+  margin-left: var(--dbk-space-2);
+  color: var(--dbk-color-text-subtle);
+  font-size: 11px;
+}
+
+.mapMark {
+  margin-left: var(--dbk-space-2);
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--dbk-color-accent-subtle);
+  color: var(--dbk-color-accent-text);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.form {
+  display: grid;
+  gap: var(--dbk-space-3);
+}

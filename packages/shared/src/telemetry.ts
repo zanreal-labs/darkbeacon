@@ -128,6 +128,8 @@ export const TelemetrySection = z.enum([
   'automap',
   /** Admin, Support (the inbox of a support hub with its own store). */
   'support',
+  /** Map settings, Tracking (my characters on the map). */
+  'tracking',
 ]);
 /** Map panels (the widget dock); `plugin` for any plugin widget. */
 export const TelemetryPanel = z.enum([
@@ -168,6 +170,7 @@ export const KeyboardShortcut = z.enum([
   'delete_selection',
   'copy_selection',
   'paste_systems',
+  'view_slot',
 ]);
 
 /**

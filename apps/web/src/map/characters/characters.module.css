@@ -8,7 +8,7 @@
   margin-left: auto;
 }
 
-/* One pill like the other top-bar controls: portraits, then the tracking button. */
+/* One pill like the other top-bar controls: my portraits, and a mark when tracking needs a look. */
 .group {
   display: inline-flex;
   align-items: center;
@@ -95,7 +95,6 @@
   font-size: var(--dbk-font-size-small);
 }
 
-.trackButton,
 .onMapButton {
   display: inline-flex;
   align-items: center;
@@ -112,19 +111,13 @@
   cursor: pointer;
 }
 
-.trackButton svg,
 .onMapButton svg {
   width: 16px;
   height: 16px;
 }
 
-.trackButton:hover,
 .onMapButton:hover {
   background: var(--dbk-color-surface-hover);
-  color: var(--dbk-color-text);
-}
-
-.trackButton[data-alone] {
   color: var(--dbk-color-text);
 }
 
@@ -417,4 +410,41 @@
   .group > .portrait ~ .portrait {
     display: none;
   }
+}
+
+/* ---- Tracking, in the map's settings ---- */
+.trackPanel {
+  display: grid;
+  gap: var(--dbk-space-2);
+}
+
+.trackFooter {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--dbk-space-2);
+}
+
+/* The top bar's one mark while tracking needs a look (a sign-in expired). */
+.attention {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: calc(var(--dbk-radius) - 2px);
+  background: color-mix(in oklab, var(--dbk-color-danger) 12%, transparent);
+  color: var(--dbk-color-danger);
+  font: inherit;
+  font-size: var(--dbk-font-size-small);
+  cursor: pointer;
+}
+
+.attention svg {
+  width: 16px;
+  height: 16px;
+}
+
+.attention:hover {
+  background: color-mix(in oklab, var(--dbk-color-danger) 20%, transparent);
 }

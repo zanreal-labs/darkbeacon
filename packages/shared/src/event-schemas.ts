@@ -14,6 +14,7 @@ import {
 } from './dto/mapping.js';
 import { MassMode, PassageSource } from './dto/passages.js';
 import { MapPingDto } from './dto/pings.js';
+import { MapViewDto } from './dto/views.js';
 import { PluginDto } from './dto/plugins.js';
 import { HubDto, MapExitDto } from './dto/routing.js';
 import { BridgeDto } from './dto/bridges.js';
@@ -77,6 +78,7 @@ export const EVENT_DATA_SCHEMAS: Record<EventType, z.ZodType> = {
   'map.removed': z.object({ id: Id }),
   'labels.changed': z.object({ labels: z.array(LabelDto) }),
   'system_labels.changed': z.object({ systemLabels: z.array(SystemLabelDto) }),
+  'views.changed': z.object({ views: z.array(MapViewDto) }),
   'map.share.offered': MapShareDto,
   'map.share.accepted': MapShareDto,
   'map.share.changed': MapShareDto,

@@ -79,6 +79,7 @@ const FIELD_LABELS: Record<string, string> = {
   labels: 'Tags',
   systemLabelIds: 'Labels',
   systemLabels: 'Labels',
+  views: 'Views',
   customLabel: 'Custom label',
   locked: 'Locked',
   position: 'Position',
@@ -273,7 +274,7 @@ function value(field: string, v: unknown, names: AuditNames, mapId: string | nul
     const scopes = (v as { scopes?: string[] }).scopes;
     return scopes?.length ? scopes.map(titleCase).join(', ') : '—';
   }
-  if ((field === 'labels' || field === 'systemLabels') && Array.isArray(v))
+  if ((field === 'labels' || field === 'systemLabels' || field === 'views') && Array.isArray(v))
     return v.length ? v.map((l) => (l as { name?: string }).name ?? '').join(', ') : 'none';
   if (field === 'systemLabelIds' && Array.isArray(v))
     return v.length ? labelNames(v, mapId, names).join(', ') : 'none';
@@ -554,6 +555,8 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
       return read(`changed the tags of ${mapName}`, 'map');
     case 'system_labels.changed':
       return read(`changed the labels of ${mapName}`, 'map');
+    case 'views.changed':
+      return read(`changed the views of ${mapName}`, 'map');
     case 'routes.exits_changed':
       return read("updated the chain's exits", 'map');
     case 'routes.hubs_changed':

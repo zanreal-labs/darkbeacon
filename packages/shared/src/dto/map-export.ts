@@ -13,6 +13,7 @@ import {
   SystemLabelDto,
 } from './mapping.js';
 import { StructureDto } from './structures.js';
+import { MapViewDto, MAP_VIEWS_MAX } from './views.js';
 
 /**
  * Darkbeacon's own map file: everything on a map (hidden systems with the intel they keep, every
@@ -63,6 +64,8 @@ export const MapExportDocument = z.object({
     labels: z.array(LabelDto).max(64),
     /** The map's Labels (WH1, A, B...); Tags are `labels`. */
     systemLabels: z.array(SystemLabelDto).max(32).default([]),
+    /** The map's published views; absent in files written before maps had them. */
+    views: z.array(MapViewDto).max(MAP_VIEWS_MAX).optional(),
   }),
   systems: z.array(ExportedSystem).max(10_000),
   connections: z.array(ExportedConnection).max(20_000),
@@ -118,6 +121,8 @@ export const MapSettingsExportDocument = z.object({
   settings: MapSettings,
   labels: z.array(LabelDto).max(64),
   systemLabels: z.array(SystemLabelDto).max(32).default([]),
+  /** The map's published views; absent in files written before maps had them. */
+  views: z.array(MapViewDto).max(MAP_VIEWS_MAX).optional(),
 });
 export type MapSettingsExportDocument = z.infer<typeof MapSettingsExportDocument>;
 

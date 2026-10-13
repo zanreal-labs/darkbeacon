@@ -598,6 +598,20 @@ export const routes = {
       body: dto.SetSystemLabelsRequest,
       response: z.array(dto.SystemLabelDto),
     }),
+    /**
+     * The map's published views (manager+), replacing the list: saved layouts of the map screen
+     * every member gets, pinned to the quick slots by `slot`; published as `views.changed`.
+     */
+    setViews: route({
+      method: 'PUT',
+      path: '/api/maps/:mapId/views',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'write' },
+      mapRole: 'manager',
+      summary: "Replace the map's published views",
+      body: dto.SetMapViewsRequest,
+      response: z.array(dto.MapViewDto),
+    }),
     /** The map's default bookmark label template (manager+); published as `map.settings_changed`. */
     setBookmarkTemplate: route({
       method: 'PUT',

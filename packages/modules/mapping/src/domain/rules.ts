@@ -2,6 +2,7 @@ import {
   SYSTEM_PLACEMENT,
   type ConnectionType,
   type LabelDto,
+  type MapViewDto,
   type Position,
   type ShipSize,
   type SystemLabelDto,
@@ -73,6 +74,20 @@ export function validateLabels(labels: readonly LabelDto[]): void {
 /** Label ids and names must be unique within a map: other maps match Labels by name. */
 export function validateSystemLabels(labels: readonly SystemLabelDto[]): void {
   validateUnique(labels, 'label');
+}
+
+/**
+ * The map's views: ids and names unique, at most one view on each quick slot (a slot is what
+ * every member gets on 1, 2 or 3).
+ */
+export function validateMapViews(views: readonly MapViewDto[]): void {
+  validateUnique(views, 'view');
+  const slots = new Set<number>();
+  for (const view of views) {
+    if (view.slot === undefined) continue;
+    if (slots.has(view.slot)) throw new ValidationError(`Two views on slot ${view.slot}`);
+    slots.add(view.slot);
+  }
 }
 
 /** True when `patch` would change any field of `current`. */
