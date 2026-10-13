@@ -43,7 +43,7 @@ export const EOL_WINDOW_MS = 4 * 60 * 60_000;
 /** Under this much life left, the outer layer turns from EOL purple to critical pink. */
 export const TIME_CRITICAL_MS = 60 * 60_000;
 /** The core's share of the line's width. */
-export const INNER_SHARE = 0.42;
+export const INNER_SHARE = 0.34;
 
 export const SHIP_SIZE_LETTER: Record<ShipSize, string | null> = {
   small: 'S',

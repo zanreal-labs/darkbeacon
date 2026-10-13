@@ -124,7 +124,7 @@ and danger, `status-warning` amber for pings and stars, `status-friendly` green 
 ### System node
 
 - A node is as wide as its own content, as in Wanderer: never narrower than the theme's
-  `node-min-width` (168 px) and never wider than 1.6 times it (269 px), where a long custom name is
+  `node-min-width` (200 px) and never wider than 1.6 times it (320 px), where a long custom name is
   cut with an ellipsis and statics that do not fit are left out whole (all are in the tooltip). The
   region never widens a node. Both rows have a fixed height, so every node is 70 px tall.
 - Surface: the neutral node background, never tinted. A 3 px border carries the status: grey by

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { NODE_ROOM, spreadLayout } from '../domain/layout.js';
 
 /** The widest a node gets in the default theme (`--dbk-node-min-width` x 1.6), and its height with chips. */
-const WIDEST_NODE = 269;
+const WIDEST_NODE = 320;
 const NODE_WITH_CHIPS = 70 + 30;
 
 describe('spreading a Wanderer layout', () => {
