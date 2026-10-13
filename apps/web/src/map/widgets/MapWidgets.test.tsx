@@ -26,20 +26,25 @@ import { useMapStore } from '../useMapStore';
 import {
   clampBox,
   DEFAULT_VISIBLE,
-  defaultBoxes,
+  DOCK_GAP,
+  dockColumn,
+  dockWidth,
   EMPTY_LAYOUT,
   fromStored,
   GUTTER,
   LAYOUT_KEY,
+  LAYOUT_VERSION,
   migrateSidebarLayout,
   MIN_SIZE,
   moveBox,
-  placeNew,
+  parseLayout,
   resizeBox,
+  resizeDocked,
+  resolveBoxes,
   toStored,
-  type Box,
   type WidgetsLayout,
 } from './layout';
+import { EditSystemDialog } from './EditSystemDialog';
 import { MapWidgets } from './MapWidgets';
 import { useWidgetsLayout } from './useWidgetsLayout';
 
@@ -99,6 +104,9 @@ const server = setupMockServer(
   http.get(routes.intel.map.path, () => HttpResponse.json({ systems: [], live: true })),
   http.get(routes.intel.standings.path, () =>
     HttpResponse.json({ standings: [], missingScopes: false, overrides: [] }),
+  ),
+  http.get(routes.characters.mapSettings.path, () =>
+    HttpResponse.json({ mainCharacterId: null, followCharacterId: null }),
   ),
   http.get(routes.routing.hubs.path, () => HttpResponse.json({ trade: [], map: [], personal: [] })),
   http.get(routes.intel.system.path, () => HttpResponse.json(activityFixture())),
@@ -180,7 +188,20 @@ function activityFixture(): SystemActivityDto {
           losses: 3,
         },
       ],
-      '7d': [],
+      '7d': [
+        {
+          kind: 'alliance',
+          entity: { id: 99000002, name: 'Hunting Party', ticker: 'HPTY' },
+          kills: 9,
+          losses: 1,
+        },
+        {
+          kind: 'corporation',
+          entity: { id: 98000001, name: 'Victim Corp', ticker: 'VIC' },
+          kills: 0,
+          losses: 3,
+        },
+      ],
     },
     coveredSince: 0,
   };
@@ -224,9 +245,20 @@ const layerSize = (key: 'width' | 'height') =>
   function (this: HTMLElement) {
     return this.dataset?.widgetsLayer !== undefined ? AREA[key] : 0;
   };
+/** jsdom lays nothing out either: every title bar is 26 px, every window's content 120 px. */
+const CONTENT = 120;
+const TITLE = 26;
 Object.defineProperties(HTMLElement.prototype, {
   clientWidth: { configurable: true, get: layerSize('width') },
   clientHeight: { configurable: true, get: layerSize('height') },
+  offsetHeight: {
+    configurable: true,
+    get(this: HTMLElement) {
+      if (this.dataset?.widgetContent !== undefined) return CONTENT;
+      if (this.tagName === 'HEADER') return TITLE;
+      return 0;
+    },
+  },
 });
 
 beforeEach(() => {
@@ -267,39 +299,57 @@ describe('the map view', () => {
     return document.querySelector<HTMLElement>(`.react-flow__node[data-id="${id}"]`)!;
   };
 
-  it('shows Wanderer’s widgets over the map, empty until a system is selected', async () => {
+  it('shows no widget while nothing is selected, and the selected system’s once one is', async () => {
     view();
     await node(WH);
-    // The default set, each a window of its own, saying nothing is selected.
-    for (const name of ['System info', 'Signatures', 'Local', 'Routes', 'Kills']) {
-      expect(within(region(name)).getByText('No system selected')).toBeTruthy();
-    }
-    expect(screen.queryByRole('region', { name: 'Structures' })).toBeNull();
-    expect(screen.queryByRole('region', { name: 'History' })).toBeNull();
-    expect(screen.queryByRole('tablist')).toBeNull();
+    // The map has the whole canvas: no windows, no empty boxes.
+    for (const name of ['System info', 'Signatures', 'Local', 'Routes', 'Kills'])
+      expect(screen.queryByRole('region', { name })).toBeNull();
+    expect(screen.queryByText('No system selected')).toBeNull();
 
     // A plain click: d3-drag reads `event.view` on mousedown, which jsdom leaves empty.
     fireEvent.click(await node(WH));
     expect(await within(region('System info')).findByRole('heading', { name: 'J100001' })).toBeTruthy();
     expect(within(region('Signatures')).getByText('ABC-123')).toBeTruthy();
     expect(await within(region('Local')).findByText('Hostile Guy')).toBeTruthy();
-    expect(screen.queryByText('No system selected')).toBeNull();
+    expect(screen.queryByRole('tablist')).toBeNull();
+  });
+
+  it('opens Edit system from the context menu’s Edit… and from a double-click on the system', async () => {
+    const user = userEvent.setup();
+    view();
+    fireEvent.contextMenu(await node(WH));
+    const items = await screen.findAllByRole('menuitem');
+    // Edit… comes first.
+    expect(items[0]!.textContent).toContain('Edit…');
+    await user.click(items[0]!);
+    const dialog = await screen.findByRole('dialog', { name: /Edit system/ });
+    expect(within(dialog).getByRole('textbox', { name: 'Custom name' })).toBeTruthy();
+    expect(within(dialog).getByRole('radiogroup', { name: 'Status' })).toBeTruthy();
+    await user.click(within(dialog).getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    fireEvent.doubleClick(await node(JITA));
+    const again = await screen.findByRole('dialog', { name: /Edit system/ });
+    expect(within(again).getByText('Jita')).toBeTruthy();
   });
 
   it('shows and hides widgets from the top bar’s menu, and resets the layout', async () => {
     const user = userEvent.setup();
     view();
-    await node(WH);
+    fireEvent.click(await node(WH));
+    await screen.findByRole('region', { name: 'System info' });
     await user.click(screen.getByRole('button', { name: 'Widgets' }));
     await user.click(await screen.findByRole('menuitemcheckbox', { name: 'Structures' }));
     await user.click(screen.getByRole('menuitemcheckbox', { name: 'Kills' }));
     await user.keyboard('{Escape}');
     expect(region('Structures')).toBeTruthy();
     expect(screen.queryByRole('region', { name: 'Kills' })).toBeNull();
-    // Turned on, it got a free spot and keeps it.
+    // Turned on, it joins the column.
     const layout = storedLayout()!;
     expect(layout.visible).toEqual(['info', 'signatures', 'local', 'routes', 'structures']);
-    expect(layout.boxes.structures).toBeTruthy();
+    expect(layout.boxes).toEqual({});
+    expect(region('Structures').dataset.docked).toBe('true');
 
     // All of them away for a moment, and back.
     await user.click(screen.getByRole('button', { name: 'Widgets' }));
@@ -346,7 +396,6 @@ function Widgets({
         plugins={[]}
         controller={controller}
         shown
-        focusToken={0}
         onSelectSystem={() => {}}
         onCover={() => {}}
       />
@@ -365,49 +414,61 @@ const windowBox = (name: string) => {
 };
 
 describe('widget windows', () => {
-  it('lays the default set out side by side against the right edge, none over another', () => {
+  const NAMES = ['System info', 'Signatures', 'Local', 'Routes', 'Kills'];
+
+  it('stand in one narrow column against the right edge, as tall as their content, 8 px apart', () => {
     wrap(<Widgets state={{}} />);
-    const boxes = ['System info', 'Signatures', 'Local', 'Routes', 'Kills'].map(windowBox);
-    for (const [i, a] of boxes.entries()) {
-      expect(a.x).toBeGreaterThanOrEqual(GUTTER);
-      expect(a.y).toBeGreaterThanOrEqual(GUTTER);
-      expect(a.x + a.w).toBeLessThanOrEqual(AREA.width - GUTTER);
-      expect(a.y + a.h).toBeLessThanOrEqual(AREA.height - GUTTER);
-      for (const b of boxes.slice(i + 1))
-        expect(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y).toBe(true);
+    const boxes = NAMES.map(windowBox);
+    const width = dockWidth(AREA);
+    expect(width).toBe(360);
+    let y = GUTTER;
+    for (const [i, box] of boxes.entries()) {
+      expect(box.x + box.w).toBe(AREA.width - GUTTER);
+      expect(box.w).toBe(width);
+      expect(box.y).toBe(y);
+      // The title bar and the content, nothing more.
+      expect(box.h).toBe(TITLE + CONTENT);
+      expect(region(NAMES[i]!).dataset.docked).toBe('true');
+      y += box.h + DOCK_GAP;
     }
-    // Signatures right under System info, Local beside them as tall as both.
-    const [info, sigs, local] = boxes as [Box, Box, Box];
-    expect(sigs.x).toBe(info.x);
-    expect(sigs.y).toBe(info.y + info.h + GUTTER);
-    expect(local.x + local.w + GUTTER).toBe(info.x);
-    expect(local.h).toBe(info.h + GUTTER + sigs.h);
-    expect(info.x + info.w).toBe(AREA.width - GUTTER);
   });
 
-  it('is dragged by its title bar, resized from a corner, and stays where it was left', () => {
+  it('floats where its title bar is dragged and stays there; the column closes up', () => {
     const first = wrap(<Widgets state={{}} />);
     const sigs = windowBox('Signatures');
+    const local = windowBox('Local');
     const title = region('Signatures').querySelector('header')!;
     fireEvent.pointerDown(title, { button: 0, clientX: 500, clientY: 300, pointerId: 1 });
     fireEvent.pointerMove(title, { clientX: 300, clientY: 340, pointerId: 1 });
     fireEvent.pointerUp(title, { pointerId: 1 });
-    expect(windowBox('Signatures')).toMatchObject({ x: sigs.x - 200, y: sigs.y + 40 });
-
-    const corner = region('Signatures').querySelector<HTMLElement>('[data-corner="se"]')!;
-    fireEvent.pointerDown(corner, { button: 0, clientX: 0, clientY: 0, pointerId: 2 });
-    fireEvent.pointerMove(corner, { clientX: 60, clientY: -100, pointerId: 2 });
-    fireEvent.pointerUp(corner, { pointerId: 2 });
     const moved = windowBox('Signatures');
-    expect(moved).toEqual({ x: sigs.x - 200, y: sigs.y + 40, w: sigs.w + 60, h: sigs.h - 100 });
+    expect(moved).toMatchObject({ x: sigs.x - 200, y: sigs.y + 40, h: sigs.h });
+    expect(region('Signatures').dataset.docked).toBeUndefined();
     expect(storedLayout()!.boxes.signatures).toBeTruthy();
+    // Local moves up into the place Signatures left.
+    expect(windowBox('Local').y).toBe(sigs.y);
+    expect(local.y).toBeGreaterThan(sigs.y);
     first.unmount();
 
     wrap(<Widgets state={{}} />);
     expect(windowBox('Signatures')).toEqual(moved);
   });
 
-  it('is a focusable, labelled region the arrow keys move and, with Shift, resize', () => {
+  it('keeps a docked window in the column when resized: the height becomes its cap', () => {
+    wrap(<Widgets state={{}} />);
+    const local = windowBox('Local');
+    const corner = region('Local').querySelector<HTMLElement>('[data-corner="se"]')!;
+    fireEvent.pointerDown(corner, { button: 0, clientX: 0, clientY: 0, pointerId: 2 });
+    fireEvent.pointerMove(corner, { clientX: 0, clientY: -60, pointerId: 2 });
+    fireEvent.pointerUp(corner, { pointerId: 2 });
+    expect(storedLayout()!.caps).toEqual({ local: local.h - 60 });
+    expect(windowBox('Local')).toEqual({ ...local, h: local.h - 60 });
+    expect(region('Local').dataset.docked).toBe('true');
+    // The windows under it close up.
+    expect(windowBox('Routes').y).toBe(local.y + local.h - 60 + DOCK_GAP);
+  });
+
+  it('is a focusable, labelled region the arrow keys move out of the column and, with Shift, resize', () => {
     wrap(<Widgets state={{}} />);
     const local = region('Local');
     const before = windowBox('Local');
@@ -415,8 +476,9 @@ describe('widget windows', () => {
     expect(document.activeElement).toBe(local);
     expect(local.getAttribute('aria-describedby')).toBeTruthy();
     fireEvent.keyDown(local, { key: 'ArrowLeft' });
-    fireEvent.keyDown(local, { key: 'ArrowDown', shiftKey: true });
-    expect(windowBox('Local')).toEqual({ ...before, x: before.x - 10, h: before.h + 10 });
+    expect(windowBox('Local')).toEqual({ ...before, x: before.x - 10 });
+    fireEvent.keyDown(local, { key: 'ArrowUp', shiftKey: true });
+    expect(windowBox('Local')).toEqual({ ...before, x: before.x - 10, h: before.h - 10 });
   });
 
   it('comes to the front when touched', () => {
@@ -428,14 +490,24 @@ describe('widget windows', () => {
     expect(z('Signatures')).toBeGreaterThan(z('Routes'));
   });
 
-  it('says no system is selected in every window while none is', () => {
+  it('shows nothing at all while no system is selected', () => {
     wrap(<Widgets state={{}} selected={false} />);
-    expect(screen.getAllByText('No system selected')).toHaveLength(5);
+    for (const name of NAMES) expect(screen.queryByRole('region', { name })).toBeNull();
+    expect(screen.queryByText('No system selected')).toBeNull();
   });
 
-  it('is a dock with one sheet at a time on phones, as in Wanderer', async () => {
+  it('says an empty list in one line', () => {
+    wrap(<Widgets state={{}} />);
+    expect(within(region('Local')).getByText('No pilots')).toBeTruthy();
+    expect(within(region('Signatures')).getByText(/No signatures/)).toBeTruthy();
+  });
+
+  it('is a dock with one sheet at a time on phones, as in Wanderer, and nothing without a system', async () => {
     screenWidth(true);
     const user = userEvent.setup();
+    const none = wrap(<Widgets state={{}} selected={false} />);
+    expect(screen.queryByRole('list', { name: 'Widgets' })).toBeNull();
+    none.unmount();
     wrap(
       <Widgets
         state={{
@@ -525,28 +597,55 @@ describe('the widgets', () => {
     expect(title('Local')).toBe('Local21 offline');
     expect(title('Connections')).toBe('Connections11 EOL · 1 crit');
     await waitFor(() => expect(title('Kills')).toBe('Kills14h'));
-    // The holder, the activity and the statics each live in one widget.
+    // The holder, the kill intel and the statics each live in one widget.
     expect(screen.getAllByRole('list', { name: 'Statics' })).toHaveLength(1);
-    expect(within(region('Kills')).getByText('Kills 1h')).toBeTruthy();
-    expect(within(region('System info')).queryByText('Kills 1h')).toBeNull();
+    expect(screen.getAllByRole('group', { name: 'Kill intel' })).toHaveLength(1);
+    expect(within(region('Kills')).queryByRole('group', { name: 'Kill intel' })).toBeNull();
   });
 
-  it('System info changes the status from its chip', async () => {
-    const patches: unknown[] = [];
-    server.use(
-      http.patch(
-        buildPath(routes.systems.update.path, { mapId: MAP_ID, solarSystemId: WH }),
-        async ({ request }) => {
-          patches.push(await request.json());
-          return HttpResponse.json(systemFixture(WH));
-        },
-      ),
+  it('System info shows the system’s status, Labels, Tags and notes, with nothing to edit', () => {
+    wrap(
+      <Widgets
+        state={{}}
+        system={{
+          status: 'hostile',
+          systemLabelIds: ['wh2'],
+          labelIds: ['l1'],
+          customLabel: 'bait',
+          temporaryName: 'C3a',
+          description: 'Loki fleet lives here.\n\nThey log in at 19:00.',
+        }}
+      />,
     );
-    const user = userEvent.setup();
-    wrap(<Widgets state={{}} system={{ status: 'hostile' }} />);
-    await user.click(within(region('System info')).getByRole('button', { name: 'Status: Hostile' }));
-    await user.click(await screen.findByRole('menuitemradio', { name: 'Friendly' }));
-    await waitFor(() => expect(patches).toEqual([{ status: 'friendly' }]));
+    const info = region('System info');
+    expect(within(info).getByRole('img', { name: 'Status: Hostile' })).toBeTruthy();
+    // Only the system's own Labels and Tags, as the map draws them.
+    expect(
+      within(within(info).getByRole('list', { name: 'Labels' }))
+        .getAllByRole('listitem')
+        .map((l) => l.textContent),
+    ).toEqual(['WH2', 'bait']);
+    expect(within(within(info).getByRole('list', { name: 'Tags' })).getByText('Staging')).toBeTruthy();
+    expect(info.textContent).toContain('C3a');
+    expect(within(info).getByLabelText('Notes').textContent).toContain('Loki fleet lives here.');
+    // Nothing to type into or toggle.
+    expect(within(info).queryAllByRole('textbox')).toEqual([]);
+    expect(within(info).queryByRole('button', { name: 'WH1' })).toBeNull();
+    expect(within(info).queryByRole('button', { name: /Status/ })).toBeNull();
+  });
+
+  it('System info sums up the kill intel: kills, the last kill, the busiest hours and who kills here', async () => {
+    wrap(<Widgets state={{}} />);
+    const intel = await within(region('System info')).findByRole('group', { name: 'Kill intel' });
+    await waitFor(() => expect(intel.textContent).toContain('Kills61h624h'));
+    expect(within(intel).getByRole('img', { name: 'Kills per hour, last 24 hours' })).toBeTruthy();
+    expect(intel.textContent).toContain('Last kill');
+    expect(intel.textContent).toContain('Guardian');
+    const killers = within(intel).getByRole('list', { name: 'Most kills here, last 7 days' });
+    expect(killers.textContent).toBe('[HPTY]9');
+    expect(within(killers).getByRole('link', { name: '[HPTY]' }).getAttribute('href')).toBe(
+      'https://zkillboard.com/alliance/99000002/',
+    );
   });
 
   it('pastes probe scanner text with Ctrl+V anywhere outside a text field', async () => {
@@ -570,7 +669,10 @@ describe('the widgets', () => {
       act(() => void target.dispatchEvent(event));
     };
     // Into a field it is the field's text; random text is not a scan.
-    paste(screen.getByRole('textbox', { name: 'Custom name' }), 'ABC-123\tCosmic Signature');
+    const field = document.createElement('input');
+    document.body.append(field);
+    paste(field, 'ABC-123\tCosmic Signature');
+    field.remove();
     paste(document.body, 'hello there');
     expect(bodies).toEqual([]);
 
@@ -594,51 +696,28 @@ describe('the widgets', () => {
     expect(within(local.querySelector('header')!).getByText('2')).toBeTruthy();
   });
 
-  it('System info edits labels, the custom label, tags and notes in place; no free-text tag', async () => {
-    const patches: unknown[] = [];
+  it('Local counts the hostile pilots in its title bar and colours them by standing', async () => {
     server.use(
-      http.patch(
-        buildPath(routes.systems.update.path, { mapId: MAP_ID, solarSystemId: WH }),
-        async ({ request }) => {
-          patches.push(await request.json());
-          return HttpResponse.json(systemFixture(WH));
-        },
+      http.get(routes.intel.standings.path, () =>
+        HttpResponse.json({
+          standings: [{ id: 95_000_001, standing: -10, kind: 'character' }],
+          missingScopes: false,
+          overrides: [],
+        }),
       ),
     );
-    const user = userEvent.setup();
-    wrap(<Widgets state={{}} />);
-    expect(screen.queryByRole('textbox', { name: 'Tag' })).toBeNull();
-    // Labels come before Tags, each a row of its own.
-    const terms = [...document.querySelectorAll('dt')].map((d) => d.textContent);
-    expect(terms.indexOf('Labels')).toBeLessThan(terms.indexOf('Tags'));
-    const labels = screen.getByRole('group', { name: 'Labels' });
-    expect(
-      within(labels)
-        .getAllByRole('button')
-        .map((b) => b.textContent),
-    ).toEqual(['WH1', 'WH2']);
-    await user.click(within(labels).getByRole('button', { name: 'WH2' }));
-    await user.type(screen.getByRole('textbox', { name: 'Custom label' }), 'bait{Enter}');
-    await user.type(screen.getByRole('textbox', { name: 'Notes' }), 'Loki fleet in C3');
-    await user.click(
-      within(screen.getByRole('group', { name: 'Tags' })).getByRole('button', { name: 'Staging' }),
-    );
-    // The notes are saved as the field is left, while the tag's own save is on its way.
-    await waitFor(() => expect(patches).toHaveLength(4));
-    expect(patches.slice(0, 2)).toEqual([{ systemLabelIds: ['wh2'] }, { customLabel: 'bait' }]);
-    expect(patches.slice(2)).toEqual(
-      expect.arrayContaining([{ description: 'Loki fleet in C3' }, { labelIds: ['l1'] }]),
+    wrap(<Widgets state={{ characters: new Map(pilots.map((p) => [p.characterId, p])) }} />);
+    const title = () => region('Local').querySelector('header')!.firstElementChild!.textContent;
+    await waitFor(() => expect(title()).toBe('Local21 hostile'));
+    expect(within(region('Local')).getByText('Hostile Guy').getAttribute('style')).toContain(
+      'standing-terrible',
     );
   });
 
-  it('Kills shows the last hour, the killmails with choices for the list, and who flies here', async () => {
+  it('Kills lists the killmails only, with choices for the list', async () => {
     const user = userEvent.setup();
     wrap(<Widgets state={{}} />);
     const kills = region('Kills');
-    // Kills of the last hour, busy from five on.
-    const stat = await within(kills).findByText('Kills 1h');
-    expect(stat.parentElement!.dataset.tone).toBe('hot');
-    expect(within(kills).getByRole('img', { name: 'Kills 1h per hour, last 24 hours' })).toBeTruthy();
     expect(await within(kills).findByText('Guardian')).toBeTruthy();
     expect(within(kills).getByText('1.3b')).toBeTruthy();
     expect(within(kills).getByText('by [HPTY] +3')).toBeTruthy();
@@ -647,17 +726,9 @@ describe('the widgets', () => {
         .getByRole('link', { name: /Killmail Guardian on zKillboard/ })
         .getAttribute('href'),
     ).toBe('https://zkillboard.com/kill/1/');
-    // Who flies here: the last day by default, with links out.
-    expect(within(kills).getByText('Hunting Party')).toBeTruthy();
-    expect(within(kills).getByText('4 kills · 1 loss')).toBeTruthy();
-    expect(
-      within(kills).getByRole('link', { name: 'Hunting Party on zKillboard' }).getAttribute('href'),
-    ).toBe('https://zkillboard.com/alliance/99000002/');
-    expect(within(kills).getByRole('link', { name: 'Victim Corp on EVE Who' }).getAttribute('href')).toBe(
-      'https://evewho.com/corporation/98000001',
-    );
-    await user.click(within(kills).getByRole('radio', { name: '7d' }));
-    expect(within(kills).getByText('No killmails here in the last week.')).toBeTruthy();
+    // The system's numbers are System info's.
+    expect(within(kills).queryByRole('group', { name: 'Kill intel' })).toBeNull();
+    expect(within(kills).queryByText('Who flies here')).toBeNull();
 
     // Every system on the map: the system's name leads each row.
     await user.click(within(kills).getByRole('button', { name: 'Kill list settings' }));
@@ -725,22 +796,91 @@ describe('window geometry', () => {
     expect(toStored({ x: 10, y: 10, w: 300, h: 200 }, area)).toEqual({ x: 10, y: 10, w: 300, h: 200 });
   });
 
-  it('lays the defaults out without overlap on common screens', () => {
-    for (const size of [area, { width: 1920, height: 1028 }, { width: 1024, height: 700 }]) {
-      const boxes = DEFAULT_VISIBLE.map((id) => clampBox(defaultBoxes(size)[id]!, size));
-      for (const [i, a] of boxes.entries())
-        for (const b of boxes.slice(i + 1))
-          expect(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y).toBe(true);
-    }
+  it('docks a narrow column: about 360 px, 320-400, never more than 30% of the map', () => {
+    expect(dockWidth({ width: 1440, height: 848 })).toBe(360);
+    expect(dockWidth({ width: 1920, height: 1028 })).toBe(400);
+    expect(dockWidth({ width: 1000, height: 600 })).toBe(300);
+    expect(dockWidth({ width: 1440, height: 848 }, 333)).toBe(333);
   });
 
-  it('puts a widget turned on in a free spot', () => {
-    const taken = Object.values(defaultBoxes(area)).slice(0, 5);
-    const spot = placeNew('history', area, taken);
-    for (const t of taken)
-      expect(
-        spot.x + spot.w <= t.x || t.x + t.w <= spot.x || spot.y + spot.h <= t.y || t.y + t.h <= spot.y,
-      ).toBe(true);
+  it('sizes docked windows to their content, up to their share of the map', () => {
+    const column = dockColumn(['kills', 'info', 'local', 'signatures'], area, {
+      info: 110,
+      signatures: 900,
+      local: 48,
+      kills: 60,
+    });
+    // System info, Signatures, Local, Routes, Kills: top to bottom.
+    expect(Object.keys(column)).toEqual(['info', 'signatures', 'local', 'kills']);
+    expect(column.info).toEqual({ x: 1440 - GUTTER - 360, y: GUTTER, w: 360, h: 110 });
+    // Signatures stops at 45% of the map and scrolls; a pilot list of two is two rows tall.
+    expect(column.signatures!.h).toBe(Math.round(848 * 0.45));
+    expect(column.signatures!.y).toBe(GUTTER + 110 + DOCK_GAP);
+    expect(column.local!.h).toBe(48);
+    expect(column.kills!.y).toBe(column.local!.y + 48 + DOCK_GAP);
+    // A cap someone set wins.
+    expect(dockColumn(['signatures'], area, { signatures: 900 }, { signatures: 200 }).signatures!.h).toBe(
+      200,
+    );
+  });
+
+  it('shrinks the lowest windows first when the column runs past the bottom', () => {
+    const small = { width: 1000, height: 600 };
+    const column = dockColumn(['info', 'signatures', 'local', 'routes', 'kills'], small, {
+      info: 150,
+      signatures: 400,
+      local: 200,
+      routes: 120,
+      kills: 200,
+    });
+    const last = column.kills!;
+    expect(last.y + last.h).toBeLessThanOrEqual(small.height - GUTTER);
+    expect(column.info!.h).toBe(150);
+    // Kills and Routes give way first, then Signatures down to five rows, then Local; System info
+    // keeps its content.
+    expect(column.kills!.h).toBe(52);
+    expect(column.routes!.h).toBe(52);
+    expect(column.signatures!.h).toBe(160);
+    expect(column.local!.h).toBe(600 - 2 * GUTTER - 4 * DOCK_GAP - 150 - 160 - 2 * 52);
+  });
+
+  it('floats a window someone moved, as tall as its content up to the height it was given', () => {
+    const layout: WidgetsLayout = {
+      ...EMPTY_LAYOUT,
+      boxes: { signatures: { x: 20, y: 30, w: 400, h: 300 } },
+    };
+    const resolved = resolveBoxes(layout, area, DEFAULT_VISIBLE, { signatures: 120, info: 100 });
+    expect(resolved.boxes.signatures).toEqual({ x: 20, y: 30, w: 400, h: 120 });
+    expect([...resolved.docked]).toEqual(['info', 'local', 'routes', 'kills']);
+    expect(resolved.column!.width).toBe(360 + 2 * GUTTER);
+    const kills = resolved.boxes.kills!;
+    expect(resolved.column!.bottom).toBe(kills.y + kills.h + GUTTER);
+    expect(resolveBoxes(EMPTY_LAYOUT, area, []).column).toBeNull();
+  });
+
+  it('keeps a resized docked window’s height and the column’s width', () => {
+    const resized = resizeDocked(EMPTY_LAYOUT, 'local', { x: 1000, y: 200, w: 380, h: 150 }, area);
+    expect(resized.caps).toEqual({ local: 150 });
+    expect(resized.dockWidth).toBe(380);
+    expect(resizeDocked(resized, 'local', { x: 0, y: 0, w: 380, h: 90 }, area).dockWidth).toBe(380);
+  });
+
+  it('reads layouts kept before the column: the widgets stay, the windows go back to it', () => {
+    const v1 = {
+      visible: ['info', 'local'],
+      boxes: { local: { x: 1, y: 2, w: 300, h: 600 } },
+      order: ['local'],
+    };
+    expect(parseLayout(v1)).toEqual({
+      version: LAYOUT_VERSION,
+      visible: ['info', 'local'],
+      boxes: {},
+      order: ['local'],
+    });
+    const v2 = { ...v1, version: LAYOUT_VERSION, caps: { local: 200 } };
+    expect(parseLayout(v2)).toEqual(v2);
+    expect(parseLayout({ visible: 3 })).toBeNull();
+    expect(parseLayout(null)).toBeNull();
   });
 
   it('carries the old sidebar’s hidden sections over as hidden widgets', () => {
@@ -751,5 +891,64 @@ describe('window geometry', () => {
     ]);
     expect(migrateSidebarLayout({ hidden: ['history'], order: ['local'] })).toBeNull();
     expect(migrateSidebarLayout('nonsense')).toBeNull();
+  });
+});
+
+describe('Edit system', () => {
+  function Dialog({ system }: { system?: Partial<MapSystemDto> }) {
+    const store = useMapStore(MAP_ID);
+    return (
+      <EditSystemDialog
+        system={systemFixture(WH, system)}
+        info={universe[WH]}
+        labels={mapDto.labels}
+        systemLabels={mapDto.systemLabels ?? []}
+        can={mapPermissions('member')}
+        store={store}
+        onClose={() => {}}
+      />
+    );
+  }
+
+  it('edits the names, status, labels, custom label, tags and notes, each saved as it is made', async () => {
+    const patches: unknown[] = [];
+    server.use(
+      http.patch(
+        buildPath(routes.systems.update.path, { mapId: MAP_ID, solarSystemId: WH }),
+        async ({ request }) => {
+          patches.push(await request.json());
+          return HttpResponse.json(systemFixture(WH));
+        },
+      ),
+    );
+    const user = userEvent.setup();
+    wrap(<Dialog system={{ status: 'hostile' }} />);
+    const dialog = screen.getByRole('dialog', { name: /Edit system/ });
+    // No free-text tag.
+    expect(within(dialog).queryByRole('textbox', { name: 'Tag' })).toBeNull();
+    await user.type(within(dialog).getByRole('textbox', { name: 'Temporary name' }), 'C3a{Enter}');
+    await user.click(within(dialog).getByRole('radio', { name: 'Friendly' }));
+    const labels = within(dialog).getByRole('group', { name: 'Labels' });
+    expect(
+      within(labels)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['WH1', 'WH2']);
+    await user.click(within(labels).getByRole('button', { name: 'WH2' }));
+    await user.type(within(dialog).getByRole('textbox', { name: 'Custom label' }), 'bait{Enter}');
+    await user.type(within(dialog).getByRole('textbox', { name: 'Notes' }), 'Loki fleet in C3');
+    await user.click(
+      within(within(dialog).getByRole('group', { name: 'Tags' })).getByRole('button', { name: 'Staging' }),
+    );
+    await waitFor(() => expect(patches).toHaveLength(6));
+    expect(patches.slice(0, 4)).toEqual([
+      { temporaryName: 'C3a' },
+      { status: 'friendly' },
+      { systemLabelIds: ['wh2'] },
+      { customLabel: 'bait' },
+    ]);
+    expect(patches.slice(4)).toEqual(
+      expect.arrayContaining([{ description: 'Loki fleet in C3' }, { labelIds: ['l1'] }]),
+    );
   });
 });

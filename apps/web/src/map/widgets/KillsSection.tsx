@@ -233,8 +233,8 @@ export function KillsSection({
   if (list.length === 0)
     return (
       <p className={styles.empty}>
-        No kills {all ? 'on the map' : 'here'} in the last {settings.hours} hours
-        {settings.wormholes ? ' in wormhole space' : ''}.
+        No kills {all ? 'on the map' : 'here'}, last {settings.hours}h
+        {settings.wormholes ? ' in wormhole space' : ''}
       </p>
     );
   return (

@@ -1,4 +1,4 @@
-/* The Kills widget (activity, killmails, who flies here) and the holder line in System info. */
+/* The Kills widget (killmails) and System info's kill intel and holder line. */
 
 .empty {
   margin: 0;
@@ -56,96 +56,92 @@
   color: var(--dbk-color-accent-text);
 }
 
-/* ---- Activity ---- */
+/* ---- Kill intel in System info: a few lines of numbers ---- */
 
-.activity {
+.intel {
   display: grid;
-  gap: 8px;
+  gap: 0;
+  margin-top: 2px;
 }
 
-/* Three cells in a row: what, the last hour big, the day small, 24 bars under them. */
-.stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  margin: 0 0 6px;
-}
-
-.stat {
-  display: grid;
-  gap: 1px;
+.intelLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 12px;
   min-width: 0;
-}
-
-.stat dt {
-  color: var(--dbk-color-text-muted);
-  font-size: var(--dbk-font-size-xs);
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-
-.stat dd {
-  margin: 0;
-}
-
-.statHour {
-  overflow: hidden;
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 18px;
+  font-size: 12px;
+  line-height: 20px;
   font-variant-numeric: tabular-nums;
-  text-overflow: ellipsis;
+}
+
+.figure {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
   white-space: nowrap;
 }
 
-.statHour .statDay {
-  font-weight: 500;
+.figure b,
+.killers b {
+  font-weight: 700;
 }
 
-.stat[data-tone='hot'] .statHour {
+.what {
+  color: var(--dbk-color-text-muted);
+}
+
+.unit {
+  margin-left: -2px;
+  color: var(--dbk-color-text-subtle);
+  font-size: 11px;
+}
+
+.figure[data-heat='hot'] b,
+.figure[data-heat='very-hot'] b {
   color: var(--dbk-status-warning);
 }
 
-.statDay {
-  color: var(--dbk-color-text-muted);
-  font-size: var(--dbk-font-size-small);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+.figure .ship {
+  overflow: hidden;
+  color: var(--dbk-color-text);
+  text-overflow: ellipsis;
 }
 
 .spark {
   display: block;
+  margin-left: auto;
   fill: var(--dbk-color-text-subtle);
 }
 
-.stat[data-tone='hot'] .spark {
-  fill: var(--dbk-status-warning);
-}
-
-.groupsHeader {
+.killers {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.groupsHeader h3 {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 0 10px;
+  min-width: 0;
   margin: 0;
-  font-size: var(--dbk-font-size-small);
-  font-weight: 700;
+  padding: 0;
+  list-style: none;
 }
 
-.groupsHeader h3 svg {
-  width: 14px;
-  height: 14px;
-  color: var(--dbk-color-text-muted);
+.killers li {
+  display: inline-flex;
+  gap: 4px;
+  white-space: nowrap;
 }
 
-.groups,
+.killers a {
+  color: var(--dbk-color-text);
+  font-family: var(--dbk-font-family-mono);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.killers a:hover {
+  text-decoration: underline;
+}
+
 .kills {
   display: grid;
   gap: 1px;
@@ -154,38 +150,10 @@
   list-style: none;
 }
 
-.group {
-  display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-  min-height: 28px;
-  padding: 2px 8px;
-  border-radius: var(--dbk-radius);
-}
-
-.group:hover,
 .kill:hover {
   background: var(--dbk-color-surface-hover);
 }
 
-.groupName {
-  display: grid;
-  min-width: 0;
-}
-
-.groupTitle {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.links {
-  display: inline-flex;
-  gap: 8px;
-}
-
-.links a,
 .killLink {
   display: inline-flex;
   align-items: center;
@@ -195,15 +163,8 @@
   text-decoration: none;
 }
 
-.links a:hover,
 .killLink:hover {
   color: var(--dbk-color-accent-text);
-}
-
-.links svg,
-.killLink svg {
-  width: 12px;
-  height: 12px;
 }
 
 .killLink svg {

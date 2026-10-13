@@ -1,5 +1,5 @@
 /*
- * The widget windows: a 28 px title bar over content that scrolls on its own; on phones a dock of
+ * The widget windows: a 26 px title bar over content that scrolls on its own; on phones a dock of
  * the shown widgets and one sheet above it (Wanderer's mobile widgets).
  */
 
@@ -50,8 +50,8 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  height: 28px;
-  padding: 0 4px 0 10px;
+  height: 26px;
+  padding: 0 2px 0 8px;
   border-bottom: 1px solid var(--dbk-color-border);
   background: var(--dbk-color-surface-raised, var(--dbk-color-surface));
   cursor: move;
@@ -132,14 +132,15 @@
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  --widget-pad: 10px;
-  padding: 6px var(--widget-pad) 8px;
+  --widget-pad: 8px;
+  padding: 4px var(--widget-pad) 6px;
+  font-size: 12px;
+  line-height: 18px;
 }
 
-.none {
-  margin: 0;
-  color: var(--dbk-color-text-subtle);
-  font-size: var(--dbk-font-size-small);
+/* What the window measures: its own margins kept inside. */
+.content {
+  display: flow-root;
 }
 
 /* Wanderer's corner marks: 15 px handles, a 5 px L drawn on hover. */

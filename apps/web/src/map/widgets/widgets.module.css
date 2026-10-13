@@ -120,9 +120,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0 12px;
-  padding-right: 8px;
-  font-size: var(--dbk-font-size-small);
+  gap: 0 10px;
+  font-size: 12px;
   line-height: 20px;
 }
 
@@ -154,6 +153,7 @@
 
 .statusChip {
   display: inline-flex;
+  flex: none;
   align-items: center;
   gap: 5px;
   height: 20px;
@@ -186,12 +186,25 @@
 
 .heading .pill {
   font-size: 12px;
-  line-height: 18px;
+  line-height: 17px;
 }
 
 .heading .systemName {
   font-size: 14px;
+  font-weight: 700;
   line-height: 20px;
+}
+
+.heading .statusChip {
+  height: 18px;
+  padding: 0 6px;
+  font-size: 11px;
+}
+
+.heading .lockIcon {
+  width: 12px;
+  height: 12px;
+  margin: 0;
 }
 
 /* Where it is, who holds it: the first lines of System info. */
@@ -379,7 +392,8 @@
   color: var(--dbk-color-text);
 }
 
-.labelChip[aria-pressed='true'] {
+.labelChip[aria-pressed='true'],
+.labelChip[aria-checked='true'] {
   border-color: color-mix(in oklab, var(--label-color) 60%, transparent);
   background: color-mix(in oklab, var(--label-color) 16%, transparent);
   color: var(--dbk-color-text);
@@ -505,6 +519,13 @@
   color: var(--dbk-color-text-muted);
 }
 
+/* A narrow System info keeps the system's name whole: the links out are in its context menu. */
+@container (max-width: 330px) {
+  .links {
+    display: none;
+  }
+}
+
 /* ---- Signatures ---- */
 
 .signatures {
@@ -513,14 +534,14 @@
 
 .signatures .empty,
 .padded {
-  padding: 2px 16px 0;
+  padding: 1px var(--widget-pad, 16px) 0;
 }
 
 .pasteRow {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 16px 6px;
+  padding: 0 var(--widget-pad, 16px) 4px;
 }
 
 .pasteZone {
@@ -615,8 +636,8 @@
 .table th {
   position: sticky;
   z-index: 1;
-  top: -6px;
-  height: 22px;
+  top: -4px;
+  height: 20px;
   padding: 0 4px;
   border-bottom: 1px solid var(--dbk-color-border);
   background: var(--dbk-color-surface);
@@ -631,16 +652,16 @@
 
 .table th:first-child,
 .table td:first-child {
-  padding-left: 16px;
+  padding-left: var(--widget-pad, 16px);
 }
 
 .table th:last-child,
 .table td:last-child {
-  padding-right: 10px;
+  padding-right: var(--widget-pad, 10px);
 }
 
 .table td {
-  height: 26px;
+  height: 23px;
   padding: 0 4px;
   border-bottom: 1px solid var(--dbk-color-border);
   vertical-align: middle;
@@ -661,7 +682,8 @@
 
 .sigId {
   font-family: var(--dbk-font-family-mono);
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
   white-space: nowrap;
 }
 
@@ -795,11 +817,11 @@
 
 .pilot {
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) auto 22px;
-  gap: 8px;
+  grid-template-columns: 18px minmax(0, 1fr) auto 20px;
+  gap: 6px;
   align-items: center;
-  min-height: 26px;
-  padding: 1px 8px;
+  min-height: 22px;
+  padding: 0 8px;
   border-radius: var(--dbk-radius);
 }
 
@@ -1042,13 +1064,142 @@
 }
 
 .pilots[data-compact] .pilot {
-  grid-template-columns: 18px minmax(0, 1fr) auto 22px;
-  min-height: 22px;
+  grid-template-columns: 16px minmax(0, 1fr) auto 20px;
+  min-height: 20px;
   padding-block: 0;
+}
+
+.pilotMore {
+  width: 20px;
+  height: 20px;
 }
 
 .pilotsHidden {
   margin: var(--dbk-space-1) 0 0;
   color: var(--dbk-color-text-subtle);
   font-size: var(--dbk-font-size-small);
+}
+
+/* ---- System info: the system's chips and notes, read only ---- */
+
+/* The map's own Label and Tag chips, at the widget's size. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin: 2px 0;
+}
+
+.chipList {
+  display: contents;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chips .chip {
+  height: 18px;
+  padding: 0 6px;
+  border-width: 1.5px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: default;
+}
+
+.tempName {
+  color: var(--dbk-color-text-muted);
+  font-size: 11px;
+}
+
+.tempName strong {
+  color: var(--dbk-color-text);
+  font-family: var(--dbk-font-family-mono);
+}
+
+/* Two lines of notes; a click shows the rest. */
+.notesExcerpt {
+  display: -webkit-box;
+  margin: 2px 0;
+  overflow: hidden;
+  color: var(--dbk-color-text-muted);
+  font-size: 12px;
+  line-height: 17px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.notesExcerpt :is(p, ul, ol) {
+  display: inline;
+  margin: 0;
+  padding: 0;
+}
+
+.notesExcerpt :is(p, li) + :is(p, li)::before {
+  content: ' · ';
+}
+
+.notesExcerpt li {
+  display: inline;
+}
+
+.notesExcerpt[data-long] {
+  cursor: pointer;
+}
+
+.notesExcerpt[data-open] {
+  display: block;
+  -webkit-line-clamp: unset;
+  line-clamp: none;
+}
+
+.notesExcerpt[data-open] :is(p, ul, ol) {
+  display: block;
+  margin: 0 0 4px;
+}
+
+.notesExcerpt[data-open] ul,
+.notesExcerpt[data-open] ol {
+  padding-left: 16px;
+}
+
+.notesExcerpt[data-open] li {
+  display: list-item;
+}
+
+.notesExcerpt[data-open] :is(p, li) + :is(p, li)::before {
+  content: none;
+}
+
+.notesExcerpt:focus-visible {
+  outline: 2px solid var(--dbk-color-focus);
+  outline-offset: 1px;
+}
+
+/* ---- Edit system ---- */
+
+.editTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.editForm {
+  display: grid;
+  gap: 10px;
+}
+
+.editForm .props {
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 6px 10px;
+}
+
+.editForm .notesTerm {
+  align-self: start;
+  padding-top: 4px;
+}
+
+.editForm .notesValue {
+  display: block;
 }

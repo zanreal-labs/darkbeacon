@@ -81,6 +81,51 @@ describe('follow mode', () => {
     rerender({ at: 3, follow: null });
     expect(arrived).toEqual([2]);
   });
+
+  it('selects the followed character’s system on opening, once it is on the map', () => {
+    const arrived: number[] = [];
+    const onMap = new Set([2, 3]);
+    const { rerender } = renderHook(
+      ({ at, follow, loaded }: { at: number; follow: number | null; loaded: boolean }) =>
+        useFollowCharacter(
+          new Map([[7, presence(7, { solarSystemId: at })]]),
+          follow,
+          (id) => arrived.push(id),
+          {
+            loaded,
+            onMap: (id) => onMap.has(id),
+          },
+        ),
+      { initialProps: { at: 1, follow: null as number | null, loaded: false } },
+    );
+    // The setting arrives with follow on; the character's system is not on the map yet.
+    rerender({ at: 1, follow: 7, loaded: true });
+    expect(arrived).toEqual([]);
+    rerender({ at: 2, follow: 7, loaded: true });
+    expect(arrived).toEqual([2]);
+    rerender({ at: 2, follow: 7, loaded: true });
+    rerender({ at: 3, follow: 7, loaded: true });
+    expect(arrived).toEqual([2, 3]);
+  });
+
+  it('does not move when follow is turned on after opening', () => {
+    const arrived: number[] = [];
+    const { rerender } = renderHook(
+      ({ follow }: { follow: number | null }) =>
+        useFollowCharacter(
+          new Map([[7, presence(7, { solarSystemId: 2 })]]),
+          follow,
+          (id) => arrived.push(id),
+          {
+            loaded: true,
+            onMap: () => true,
+          },
+        ),
+      { initialProps: { follow: null as number | null } },
+    );
+    rerender({ follow: 7 });
+    expect(arrived).toEqual([]);
+  });
 });
 
 describe('characters needing attention', () => {

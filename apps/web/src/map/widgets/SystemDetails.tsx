@@ -1,57 +1,28 @@
 'use client';
 
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Lock, LockOpen, Map as MapIcon, Navigation, Orbit, Skull, Telescope } from 'lucide-react';
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { Lock, Map as MapIcon, Orbit, Pencil, Skull, Telescope } from 'lucide-react';
 import {
-  buildPath,
-  routes,
-  SystemStatus,
   WORMHOLE_DESTINATION_LABEL,
   WORMHOLE_EFFECTS,
   wormholeDestination,
-  CUSTOM_LABEL_MAX,
   type LabelDto,
-  type SystemLabelDto,
   type MapSystemDto,
+  type SystemLabelDto,
+  type SystemStatus,
   type UniverseSystemDto,
   type WormholeEffect,
 } from '@darkbeacon/shared';
 import { cssVar } from '@darkbeacon/theme-sdk';
-import { api, ApiError } from '../../lib/api';
-import type { MapPermissions } from '../../lib/roles';
-import { useMe } from '../../lib/session';
-import {
-  IconButton,
-  Menu,
-  MenuContent,
-  MenuItem,
-  MenuLabel,
-  MenuRadioGroup,
-  MenuRadioItem,
-  MenuTrigger,
-  Tooltip,
-  useToast,
-} from '../../ui';
+import { Markdown } from '../../components/Markdown';
+import { IconButton, Tooltip } from '../../ui';
 import { classPill, shownSecurity, STATUS_LABEL } from '../nodeFacts';
-import type { MapStore } from '../useMapStore';
+import node from '../SystemNode.module.css';
 import { destinationToken } from '../WormholeFacts';
+import { SystemIntel } from './ActivitySection';
 import { EffectTable } from './EffectTable';
-import { InlineText } from './InlineText';
-import { NotesField } from './NotesField';
 import { WidgetWindow } from './WidgetWindow';
 import styles from './widgets.module.css';
-
-/**
- * Kills and jumps of the last hour and day, when an intel source provides them. Nothing in the
- * core does yet; the details show the row only with data.
- */
-export interface SystemActivity {
-  kills1h?: number;
-  kills24h?: number;
-  jumps1h?: number;
-}
-
-type Store = Pick<MapStore, 'updateSystem'>;
 
 /** Wormhole space as Anoikis lists it: classes 1-6, Thera, the shattered C13s and drifter holes. */
 export function isWormholeSpace(info: Pick<UniverseSystemDto, 'whClass'> | undefined): boolean {
@@ -124,146 +95,22 @@ function Effect({ effect, whClass }: { effect: WormholeEffect; whClass: number |
   );
 }
 
-const statusColor = (s: SystemStatus) =>
+export const statusColor = (s: SystemStatus) =>
   s === 'unknown' ? 'var(--dbk-color-border-strong)' : cssVar(`status-${s}`);
 
-/** The status as a small coloured chip; members pick another from its menu. */
-function StatusChip({ system, can, store }: { system: MapSystemDto; can: MapPermissions; store: Store }) {
-  const status = system.status;
-  const chip = (
-    <span className={styles.statusChip} data-status={status}>
-      <span className={styles.statusDot} style={{ background: statusColor(status) }} />
-      {STATUS_LABEL[status]}
-    </span>
-  );
-  if (!can.edit)
-    return status === 'unknown' ? null : (
-      <span role="img" aria-label={`Status: ${STATUS_LABEL[status]}`}>
-        {chip}
-      </span>
-    );
+/** The status as a small coloured chip, read only (it is changed in Edit system). */
+function StatusBadge({ status }: { status: SystemStatus }) {
+  if (status === 'unknown') return null;
   return (
-    <Menu>
-      <MenuTrigger asChild>
-        <button type="button" className={styles.statusButton} aria-label={`Status: ${STATUS_LABEL[status]}`}>
-          {chip}
-        </button>
-      </MenuTrigger>
-      <MenuContent align="end">
-        <MenuLabel>Status</MenuLabel>
-        <MenuRadioGroup
-          value={status}
-          onValueChange={(next) =>
-            void store.updateSystem(system.solarSystemId, { status: next as SystemStatus })
-          }
-        >
-          {SystemStatus.options.map((s) => (
-            <MenuRadioItem
-              key={s}
-              value={s}
-              icon={<span className={styles.statusDot} style={{ background: statusColor(s) }} />}
-            >
-              {STATUS_LABEL[s]}
-            </MenuRadioItem>
-          ))}
-        </MenuRadioGroup>
-      </MenuContent>
-    </Menu>
-  );
-}
-
-/**
- * The System info widget, read at a glance: the title bar is the system (pill, name, the real name
- * under a custom one) with its status, lock, Set destination and the links out; under it where it
- * is, the effect and the statics on one line, who holds it, then Labels, Tags, names and notes,
- * edited in place.
- */
-export function SystemInfoWidget({
-  system,
-  info,
-  labels,
-  systemLabels,
-  can,
-  store,
-  holder,
-  note,
-  focusToken,
-  focusedRef,
-}: {
-  system: MapSystemDto;
-  info: UniverseSystemDto | undefined;
-  labels: LabelDto[];
-  systemLabels: readonly SystemLabelDto[];
-  can: MapPermissions;
-  store: Store;
-  /** Who holds the system (intel), under where it is. */
-  holder?: ReactNode;
-  /** One quiet line (where a merged system comes from). */
-  note?: ReactNode;
-  focusToken: number;
-  focusedRef: { current: number };
-}) {
-  const realName = info?.name ?? 'Unknown system';
-  const custom = system.customName || system.temporaryName;
-  return (
-    <WidgetWindow
-      id="info"
-      title="System info"
-      heading={
-        <span className={styles.heading} data-identity>
-          <DesignationPill info={info} />
-          <h2 className={styles.systemName} title={custom ? `${custom} (${realName})` : realName}>
-            {custom || realName}
-          </h2>
-          {custom && <span className={styles.realName}>{realName}</span>}
-        </span>
-      }
-      actions={
-        <>
-          <StatusChip system={system} can={can} store={store} />
-          {can.edit ? (
-            <IconButton
-              size="sm"
-              label={system.locked ? 'Unlock position' : 'Lock position'}
-              aria-pressed={system.locked}
-              className={styles.lockButton}
-              data-on={system.locked || undefined}
-              icon={system.locked ? <Lock /> : <LockOpen />}
-              onClick={() => void store.updateSystem(system.solarSystemId, { locked: !system.locked })}
-            />
-          ) : (
-            system.locked && <Lock className={styles.lockIcon} aria-label="Locked" />
-          )}
-          <SetDestination solarSystemId={system.solarSystemId} name={realName} />
-          {info && <SystemLinks info={info} />}
-        </>
-      }
+    <span
+      className={styles.statusChip}
+      data-status={status}
+      role="img"
+      aria-label={`Status: ${STATUS_LABEL[status]}`}
     >
-      <div className={styles.facts}>
-        {info && (
-          <div className={styles.where}>
-            <span className={styles.place}>
-              {info.regionName} › {info.constellationName}
-            </span>
-            {info.effect && <Effect effect={info.effect} whClass={info.whClass} />}
-            <StaticsLine statics={info.statics} />
-          </div>
-        )}
-        {holder}
-        {note}
-      </div>
-      <SystemDetails
-        // A field being edited belongs to its system: another system starts clean.
-        key={system.solarSystemId}
-        system={system}
-        labels={labels}
-        systemLabels={systemLabels}
-        can={can}
-        store={store}
-        focusToken={focusToken}
-        focusedRef={focusedRef}
-      />
-    </WidgetWindow>
+      <span className={styles.statusDot} style={{ background: statusColor(status) }} />
+      <span aria-hidden>{STATUS_LABEL[status]}</span>
+    </span>
   );
 }
 
@@ -291,230 +138,164 @@ export function SystemLinks({ info }: { info: UniverseSystemDto }) {
   );
 }
 
-/**
- * Sets the in-game destination for one of the viewer's characters. A character whose EVE grant
- * does not allow it is listed but cannot be picked.
- */
-export function SetDestination({ solarSystemId, name }: { solarSystemId: number; name: string }) {
-  const me = useMe();
-  const toast = useToast();
-  const [busy, setBusy] = useState(false);
-  const characters = me.data?.characters ?? [];
-  if (characters.length === 0) return null;
-  const able = characters.filter((c) => c.canSetWaypoints);
-
-  const send = async (characterId: number, characterName: string) => {
-    setBusy(true);
-    try {
-      await api(buildPath(routes.routing.waypoint.path, { characterId }), {
-        method: 'POST',
-        json: { solarSystemId, mode: 'destination' },
-      });
-      toast({ title: `Destination set to ${name}`, description: `For ${characterName}.`, tone: 'success' });
-    } catch (e) {
-      toast({
-        title: 'Destination not set',
-        description: e instanceof ApiError ? e.message : 'Network error',
-        tone: 'danger',
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const button = (props: object) => (
-    <IconButton size="sm" label="Set destination" icon={<Navigation />} loading={busy} {...props} />
-  );
-  if (characters.length === 1 && able.length === 1) {
-    return button({ onClick: () => void send(able[0]!.id, able[0]!.name) });
-  }
+/** The system's Labels, custom label and Tags as the map draws them, smaller. */
+export function SystemChips({
+  system,
+  labels,
+  systemLabels,
+}: {
+  system: MapSystemDto;
+  labels: readonly LabelDto[];
+  systemLabels: readonly SystemLabelDto[];
+}) {
+  const own = systemLabels.filter((l) => system.systemLabelIds.includes(l.id));
+  const tags = labels.filter((t) => system.labelIds.includes(t.id));
+  if (own.length === 0 && !system.customLabel && tags.length === 0 && !system.temporaryName) return null;
   return (
-    <Menu>
-      <MenuTrigger asChild>{button({})}</MenuTrigger>
-      <MenuContent>
-        <MenuLabel>Set destination for</MenuLabel>
-        {characters.map((c) => (
-          <MenuItem
-            key={c.id}
-            disabled={!c.canSetWaypoints}
-            shortcut={c.canSetWaypoints ? undefined : 'no grant'}
-            onSelect={() => void send(c.id, c.name)}
-          >
-            {c.name}
-          </MenuItem>
-        ))}
-      </MenuContent>
-    </Menu>
+    <div className={styles.chips}>
+      {(own.length > 0 || system.customLabel) && (
+        <ul className={styles.chipList} aria-label="Labels">
+          {own.map((l) => (
+            <li
+              key={l.id}
+              className={`${node.systemLabel} ${styles.chip}`}
+              title={l.description ? `${l.name}: ${l.description}` : `Label ${l.name}`}
+            >
+              {l.name}
+            </li>
+          ))}
+          {system.customLabel && (
+            <li className={`${node.systemLabel} ${styles.chip}`} data-custom title="Custom label">
+              {system.customLabel}
+            </li>
+          )}
+        </ul>
+      )}
+      {tags.length > 0 && (
+        <ul className={styles.chipList} aria-label="Tags">
+          {tags.map((t) => (
+            <li
+              key={t.id}
+              className={`${node.label} ${styles.chip}`}
+              style={{ '--label-color': t.color } as CSSProperties}
+              title={t.description ? `${t.name}: ${t.description}` : t.name}
+            >
+              {t.name}
+            </li>
+          ))}
+        </ul>
+      )}
+      {system.temporaryName && (
+        <span className={styles.tempName} title="Temporary name">
+          temp <strong>{system.temporaryName}</strong>
+        </span>
+      )}
+    </div>
   );
 }
 
-/** Labels, Tags, names, notes of the selected system: dense, edited in place. */
-export function SystemDetails({
-  system,
-  labels,
-  systemLabels = [],
-  can,
-  store,
-  activity,
-  focusToken,
-  focusedRef,
-}: {
-  system: MapSystemDto;
-  /** The map's Tags (`labels` in the data). */
-  labels: LabelDto[];
-  /** The map's Labels (WH1...), in order. */
-  systemLabels?: readonly SystemLabelDto[];
-  can: MapPermissions;
-  store: Store;
-  activity?: SystemActivity;
-  /** Bumped to move focus to the name field (from the context menu). */
-  focusToken: number;
-  /** The last token acted on, kept by the sidebar: folding and unfolding must not focus again. */
-  focusedRef: { current: number };
-}) {
-  const nameRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (focusToken <= focusedRef.current) return;
-    focusedRef.current = focusToken;
-    nameRef.current?.focus();
-  }, [focusToken, focusedRef]);
-  const id = system.solarSystemId;
-  const update = store.updateSystem;
-  const shownTags = can.edit ? labels : labels.filter((l) => system.labelIds.includes(l.id));
-  const toggleTag = (tagId: string) => {
-    const on = system.labelIds.includes(tagId);
-    void update(id, {
-      labelIds: on ? system.labelIds.filter((x) => x !== tagId) : [...system.labelIds, tagId],
-    });
-  };
-  const onLabels = system.systemLabelIds.filter((l) => systemLabels.some((x) => x.id === l));
-  const shownLabels = can.edit ? systemLabels : systemLabels.filter((l) => onLabels.includes(l.id));
-  const toggleLabel = (labelId: string) => {
-    const on = onLabels.includes(labelId);
-    void update(id, {
-      systemLabelIds: on ? onLabels.filter((x) => x !== labelId) : [...onLabels, labelId],
-    });
-  };
-  const showLabels = can.edit || shownLabels.length > 0 || !!system.customLabel;
-
+/** The notes, two lines of them; a click shows them all (links open). */
+function NotesExcerpt({ text }: { text: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [long, setLong] = useState(false);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el && !open) setLong(el.scrollHeight > el.clientHeight + 1);
+  }, [text, open]);
   return (
-    <div className={styles.details}>
-      <dl className={styles.props}>
-        {showLabels && (
-          <>
-            <dt>Labels</dt>
-            <dd className={styles.labelChips} role="group" aria-label="Labels">
-              {shownLabels.map((l) => (
-                <button
-                  key={l.id}
-                  type="button"
-                  className={styles.systemLabelChip}
-                  aria-pressed={onLabels.includes(l.id)}
-                  disabled={!can.edit}
-                  title={l.description || undefined}
-                  onClick={() => toggleLabel(l.id)}
-                >
-                  {l.name}
-                </button>
-              ))}
-              {can.edit ? (
-                <span className={styles.customLabel}>
-                  <InlineText
-                    label="Custom label"
-                    value={system.customLabel ?? ''}
-                    placeholder="Custom"
-                    maxLength={CUSTOM_LABEL_MAX}
-                    onCommit={(customLabel) => void update(id, { customLabel })}
-                  />
-                </span>
-              ) : (
-                system.customLabel && (
-                  <span className={styles.systemLabelChip} data-custom aria-label="Custom label">
-                    {system.customLabel}
-                  </span>
-                )
-              )}
-            </dd>
-          </>
-        )}
-
-        {shownTags.length > 0 && (
-          <>
-            <dt>Tags</dt>
-            <dd className={styles.labelChips} role="group" aria-label="Tags">
-              {shownTags.map((t) => {
-                const on = system.labelIds.includes(t.id);
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    className={styles.labelChip}
-                    aria-pressed={on}
-                    disabled={!can.edit}
-                    title={t.description || undefined}
-                    style={{ '--label-color': t.color } as CSSProperties}
-                    onClick={() => toggleTag(t.id)}
-                  >
-                    <span className={styles.labelSwatch} />
-                    {t.name}
-                  </button>
-                );
-              })}
-            </dd>
-          </>
-        )}
-
-        {can.edit ? (
-          <>
-            <dt>Name</dt>
-            <dd className={styles.names}>
-              <InlineText
-                label="Custom name"
-                inputRef={nameRef}
-                value={system.customName ?? ''}
-                placeholder="—"
-                maxLength={64}
-                onCommit={(customName) => void update(id, { customName })}
-              />
-              <span className={styles.namesLabel} aria-hidden>
-                Temp.
-              </span>
-              <InlineText
-                label="Temporary name"
-                value={system.temporaryName ?? ''}
-                placeholder="—"
-                maxLength={64}
-                onCommit={(temporaryName) => void update(id, { temporaryName })}
-              />
-            </dd>
-          </>
-        ) : (
-          system.temporaryName && (
-            <>
-              <dt>Temp.</dt>
-              <dd>{system.temporaryName}</dd>
-            </>
-          )
-        )}
-
-        {activity && (
-          <>
-            <dt>Activity</dt>
-            <dd className={styles.activity}>
-              {activity.kills1h !== undefined && <span>{activity.kills1h} kills 1h</span>}
-              {activity.kills24h !== undefined && <span>{activity.kills24h} kills 24h</span>}
-              {activity.jumps1h !== undefined && <span>{activity.jumps1h} jumps 1h</span>}
-            </dd>
-          </>
-        )}
-      </dl>
-
-      <NotesField
-        editable={can.edit}
-        value={system.description}
-        placeholder="Notes (Markdown)"
-        onCommit={(description) => void update(id, { description })}
-      />
+    <div
+      ref={ref}
+      className={styles.notesExcerpt}
+      data-open={open || undefined}
+      data-long={long || undefined}
+      aria-label="Notes"
+      role={long ? 'button' : undefined}
+      tabIndex={long ? 0 : undefined}
+      aria-expanded={long ? open : undefined}
+      title={long && !open ? 'Show all notes' : undefined}
+      onClick={(e) => {
+        if (!long || (e.target as HTMLElement).closest('a')) return;
+        setOpen((o) => !o);
+      }}
+      onKeyDown={(e) => {
+        if (long && e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          setOpen((o) => !o);
+        }
+      }}
+    >
+      <Markdown text={text} />
     </div>
+  );
+}
+
+/**
+ * The System info widget: what a pilot reads at a glance, nothing to edit. The title bar is the
+ * system (pill, name, the real name under a custom one) with its status and the links out; under
+ * it where it is with the effect and the statics, the system's Labels and Tags as the map draws
+ * them, two lines of notes, and its kill intel in numbers. Editing is the Edit system dialog (the
+ * pencil, the context menu, a double-click on the system).
+ */
+export function SystemInfoWidget({
+  mapId,
+  system,
+  info,
+  labels,
+  systemLabels,
+  canEdit,
+  onEdit,
+  note,
+}: {
+  mapId: string;
+  system: MapSystemDto;
+  info: UniverseSystemDto | undefined;
+  labels: readonly LabelDto[];
+  systemLabels: readonly SystemLabelDto[];
+  canEdit: boolean;
+  onEdit?(): void;
+  /** One quiet line (where a merged system comes from). */
+  note?: ReactNode;
+}) {
+  const realName = info?.name ?? 'Unknown system';
+  const custom = system.customName;
+  return (
+    <WidgetWindow
+      id="info"
+      title="System info"
+      heading={
+        <span className={styles.heading} data-identity>
+          <DesignationPill info={info} />
+          <h2 className={styles.systemName} title={custom ? `${custom} (${realName})` : realName}>
+            {custom || realName}
+          </h2>
+          {custom && <span className={styles.realName}>{realName}</span>}
+          <StatusBadge status={system.status} />
+          {system.locked && <Lock className={styles.lockIcon} aria-label="Locked" />}
+        </span>
+      }
+      actions={
+        <>
+          {info && <SystemLinks info={info} />}
+          {canEdit && onEdit && (
+            <IconButton size="sm" label="Edit system" tooltipSide="left" icon={<Pencil />} onClick={onEdit} />
+          )}
+        </>
+      }
+    >
+      {info && (
+        <div className={styles.where}>
+          <span className={styles.place}>
+            {info.regionName} › {info.constellationName}
+          </span>
+          {info.effect && <Effect effect={info.effect} whClass={info.whClass} />}
+          <StaticsLine statics={info.statics} />
+        </div>
+      )}
+      <SystemChips system={system} labels={labels} systemLabels={systemLabels} />
+      {system.description && <NotesExcerpt key={system.solarSystemId} text={system.description} />}
+      <SystemIntel mapId={mapId} solarSystemId={system.solarSystemId} />
+      {note}
+    </WidgetWindow>
   );
 }

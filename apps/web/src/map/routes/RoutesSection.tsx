@@ -201,9 +201,9 @@ function RoutesBody({
             <p className={styles.hint}>
               {tab === 'map'
                 ? can.edit
-                  ? 'No map hubs yet. Add one below, or right-click a system and pick Map hub.'
+                  ? 'No map hubs. Add one, or right-click a system › Map hub.'
                   : 'This map has no hubs yet.'
-                : 'Your own hubs show on every map. Add one below, or right-click a system and pick My hub.'}
+                : 'No hubs of yours (they show on every map). Add one, or right-click a system › My hub.'}
             </p>
           ) : (
             <ul

@@ -5,6 +5,8 @@ import {
   useContext,
   useEffect,
   useId,
+  useLayoutEffect,
+  useRef,
   useState,
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
@@ -12,7 +14,7 @@ import {
 } from 'react';
 import { X } from 'lucide-react';
 import { IconButton } from '../../ui';
-import { moveBox, resizeBox, type Area, type Box, type Corner } from './layout';
+import { clampBox, moveBox, resizeBox, type Area, type Box, type Corner } from './layout';
 import type { WidgetsController } from './useWidgetsLayout';
 import styles from './window.module.css';
 
@@ -27,12 +29,18 @@ export interface WidgetHost {
   mode: 'float' | 'phone';
   area: Area;
   boxes: Readonly<Record<string, Box>>;
+  /** Windows in the column against the right edge; the others float where they were left. */
+  docked: ReadonlySet<string>;
   order: readonly string[];
   controller: WidgetsController;
   /** The widget open in the phone sheet. */
   open: string | null;
   setOpen(id: string | null): void;
   report(id: string, badge: WidgetBadge): void;
+  /** How tall a window's content wants it to be (title bar included). */
+  reportHeight(id: string, height: number): void;
+  /** Changes with the selected system: every window scrolls back to its top. */
+  resetKey: unknown;
 }
 
 export const WidgetHostContext = createContext<WidgetHost | null>(null);
@@ -63,9 +71,19 @@ interface Props {
   children: ReactNode;
 }
 
+/** The window's height its content asks for: title bar, content, the body's padding, the border. */
+function measure(section: HTMLElement, header: HTMLElement, content: HTMLElement): number {
+  const body = content.parentElement!;
+  const style = getComputedStyle(body);
+  const pad = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
+  const frame = section.offsetHeight - section.clientHeight;
+  return Math.ceil(header.offsetHeight + content.offsetHeight + pad + frame);
+}
+
 /**
- * One widget: a window over the map with a 28 px title bar (title, count, a few words, its buttons)
- * and its content scrolling below. On wide screens it is dragged by the title bar, resized from its
+ * One widget: a window over the map with a 26 px title bar (title, count, a few words, its buttons)
+ * and its content below, as tall as the content up to its cap, then scrolling. In the column it
+ * stays docked; dragged by the title bar it floats where it is left. It is resized from its
  * corners, brought to the front when touched, and moved or resized with the arrow keys (Shift)
  * while it has the focus. On phones the same content opens in the bottom sheet.
  */
@@ -73,11 +91,38 @@ export function WidgetWindow({ id, title, count, summary, alert, actions, headin
   const host = useContext(WidgetHostContext);
   const hintId = useId();
   const [live, setLive] = useState<Box | null>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   const report = host?.report;
   useEffect(() => {
     report?.(id, { count, alert });
   }, [report, id, count, alert]);
+
+  // The content's height, before the first paint and whenever it changes.
+  const floating = host?.mode === 'float';
+  const reportHeight = host?.reportHeight;
+  useLayoutEffect(() => {
+    const section = sectionRef.current;
+    const header = headerRef.current;
+    const content = contentRef.current;
+    if (!floating || !reportHeight || !section || !header || !content) return;
+    const update = () => reportHeight(id, measure(section, header, content));
+    update();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(update);
+    observer.observe(content);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, [floating, reportHeight, id]);
+
+  // Another system: back to the top of the list.
+  const resetKey = host?.resetKey;
+  useLayoutEffect(() => {
+    if (bodyRef.current) bodyRef.current.scrollTop = 0;
+  }, [resetKey]);
 
   const titleBar = (extra?: ReactNode) => (
     <>
@@ -103,12 +148,20 @@ export function WidgetWindow({ id, title, count, summary, alert, actions, headin
     </>
   );
 
+  const body = (
+    <div ref={bodyRef} className={styles.body}>
+      <div ref={contentRef} className={styles.content} data-widget-content>
+        {children}
+      </div>
+    </div>
+  );
+
   // Outside a host (tests of one widget): a plain region.
   if (!host)
     return (
       <section className={styles.plain} aria-label={title} data-widget={id}>
         <header className={styles.titleBar}>{titleBar()}</header>
-        <div className={styles.body}>{children}</div>
+        {body}
       </section>
     );
 
@@ -127,7 +180,7 @@ export function WidgetWindow({ id, title, count, summary, alert, actions, headin
             />,
           )}
         </header>
-        <div className={styles.body}>{children}</div>
+        {body}
       </section>
     );
   }
@@ -138,10 +191,14 @@ export function WidgetWindow({ id, title, count, summary, alert, actions, headin
     .filter(([other]) => other !== id)
     .map(([, b]) => b);
   const { controller, area } = host;
+  const docked = host.docked.has(id);
   const z = host.order.indexOf(id) + 1;
+  /** A resize ends: a docked window keeps its column and gets a new cap, a floating one its box. */
+  const resized = (next: Box) =>
+    docked ? controller.resizeDocked(id, next, area) : controller.place(id, next, area);
 
   /** Follows the pointer from a title bar or a corner, and keeps the result when let go. */
-  const follow = (e: ReactPointerEvent, next: (dx: number, dy: number) => Box) => {
+  const follow = (e: ReactPointerEvent, next: (dx: number, dy: number) => Box, done: (b: Box) => void) => {
     e.preventDefault();
     controller.raise(id);
     const target = e.currentTarget as HTMLElement;
@@ -157,7 +214,7 @@ export function WidgetWindow({ id, title, count, summary, alert, actions, headin
       target.removeEventListener('pointermove', move);
       target.removeEventListener('pointerup', up);
       target.removeEventListener('pointercancel', up);
-      if (last) controller.place(id, last, area);
+      if (last) done(last);
       setLive(null);
     };
     target.addEventListener('pointermove', move);
@@ -168,35 +225,39 @@ export function WidgetWindow({ id, title, count, summary, alert, actions, headin
   const startDrag = (e: ReactPointerEvent) => {
     if (e.button !== 0 || (e.target as HTMLElement).closest(INTERACTIVE)) return;
     const start = box;
-    follow(e, (dx, dy) => moveBox(start, dx, dy, area, others));
+    follow(
+      e,
+      (dx, dy) => moveBox(start, dx, dy, area, others),
+      (moved) => controller.place(id, moved, area),
+    );
   };
 
   const startResize = (corner: Corner) => (e: ReactPointerEvent) => {
     if (e.button !== 0) return;
     const start = box;
-    follow(e, (dx, dy) => resizeBox(start, corner, dx, dy, area, others));
+    follow(e, (dx, dy) => resizeBox(start, corner, dx, dy, area, others), resized);
   };
 
-  // The window itself focused: arrows move it, Shift and the arrows resize it (10 px a press).
+  // The window itself focused: arrows move it, Shift and the arrows resize it (10 px a press, no
+  // snapping, or a window by an edge could never leave it).
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.target !== e.currentTarget) return;
     const step = { ArrowLeft: [-10, 0], ArrowRight: [10, 0], ArrowUp: [0, -10], ArrowDown: [0, 10] }[e.key];
     if (!step) return;
     e.preventDefault();
     const [dx, dy] = step as [number, number];
-    controller.place(
-      id,
-      e.shiftKey ? resizeBox(box, { x: 1, y: 1 }, dx, dy, area, []) : moveBox(box, dx, dy, area, []),
-      area,
-    );
+    if (e.shiftKey) resized(clampBox({ ...box, w: box.w + dx, h: box.h + dy }, area));
+    else controller.place(id, clampBox({ ...box, x: box.x + dx, y: box.y + dy }, area), area);
   };
 
   return (
     <section
+      ref={sectionRef}
       className={styles.window}
       aria-label={title}
       aria-describedby={hintId}
       data-widget={id}
+      data-docked={docked || undefined}
       data-moving={live ? true : undefined}
       tabIndex={0}
       style={{ left: box.x, top: box.y, width: box.w, height: box.h, zIndex: z }}
@@ -204,10 +265,10 @@ export function WidgetWindow({ id, title, count, summary, alert, actions, headin
       onFocus={() => controller.raise(id)}
       onKeyDown={onKeyDown}
     >
-      <header className={styles.titleBar} onPointerDown={startDrag}>
+      <header ref={headerRef} className={styles.titleBar} onPointerDown={startDrag}>
         {titleBar()}
       </header>
-      <div className={styles.body}>{children}</div>
+      {body}
       <span id={hintId} className="sr-only">
         Arrow keys move the window, Shift and the arrow keys resize it.
       </span>
@@ -222,9 +283,4 @@ export function WidgetWindow({ id, title, count, summary, alert, actions, headin
       ))}
     </section>
   );
-}
-
-/** The short line a widget shows while no system is selected (as Wanderer's widgets do). */
-export function NoSystem() {
-  return <p className={styles.none}>No system selected</p>;
 }

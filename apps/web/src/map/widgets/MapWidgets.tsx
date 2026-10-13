@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import type {
   CharacterDto,
+  CharacterPresenceDto,
   ConnectionDto,
   LabelDto,
   MapSystemDto,
@@ -32,6 +33,7 @@ import type {
   SystemLabelDto,
   UniverseSystemDto,
 } from '@darkbeacon/shared';
+import { useStandings } from '../../lib/intel';
 import type { MapPermissions } from '../../lib/roles';
 import { SlotItem } from '../../plugins/PluginSlot';
 import type { SlotEntry } from '../../plugins/registry';
@@ -41,13 +43,12 @@ import { RoutesWidget } from '../routes/RoutesSection';
 import { SignatureSettingsMenu } from '../signatures/SignatureSettingsMenu';
 import { systemDisplayName } from '../SystemNode';
 import type { MapStore } from '../useMapStore';
-import { ActivityStrip, SystemHolder, WhoFliesHere } from './ActivitySection';
 import { CommentsSection } from './CommentsSection';
 import { ConnectionsSection } from './ConnectionsSection';
 import { HistorySection } from './HistorySection';
 import { KillsSection, KillsSettingsMenu, useKillList, useKillsSettings } from './KillsSection';
-import { CORE_WIDGETS, coveredRight, pluginWidgetId, resolveBoxes, type Area } from './layout';
-import { LocalMenu, LocalSection, usePresence } from './LocalSection';
+import { CORE_WIDGETS, pluginWidgetId, resolveBoxes, type Area } from './layout';
+import { LocalMenu, LocalSection, pilotStanding, usePresence } from './LocalSection';
 import {
   canReadClipboard,
   looksLikeScanner,
@@ -60,7 +61,7 @@ import { usePhone } from './storage';
 import { StructuresSection } from './StructuresSection';
 import { SystemInfoWidget } from './SystemDetails';
 import type { WidgetsController } from './useWidgetsLayout';
-import { NoSystem, WidgetHostContext, WidgetWindow, type WidgetBadge, type WidgetHost } from './WidgetWindow';
+import { WidgetHostContext, WidgetWindow, type WidgetBadge, type WidgetHost } from './WidgetWindow';
 import styles from './widgets.module.css';
 import win from './window.module.css';
 
@@ -78,6 +79,9 @@ const ICONS: Record<string, ComponentType> = {
 
 /** The dock's short word for a widget. */
 const SHORT: Record<string, string> = { info: 'System', signatures: 'Sigs' };
+
+/** A window whose content got shorter waits this long before it shrinks (it may only be loading). */
+const SHRINK_DELAY = 400;
 
 const editable = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
@@ -99,6 +103,21 @@ export function signaturesSummary(signatures: readonly SignatureDto[]): {
   };
 }
 
+/** "1 hostile · 2 offline": what the Local title bar says about the pilots here. */
+export function localSummary(
+  here: readonly CharacterPresenceDto[],
+  standings: ReadonlyMap<number, number>,
+): { text: string; hostile: number } {
+  const hostile = here.filter((c) => (pilotStanding(c, standings) ?? 0) < 0).length;
+  const offline = here.filter((c) => !c.online).length;
+  return {
+    hostile,
+    text: [hostile > 0 && `${hostile} hostile`, offline > 0 && `${offline} offline`]
+      .filter(Boolean)
+      .join(' · '),
+  };
+}
+
 /** "1 EOL · 1 crit": connections of the system that are going away. */
 export function connectionsSummary(connections: readonly ConnectionDto[]): string {
   const eol = connections.filter((c) => c.timeStatus === 'eol').length;
@@ -109,6 +128,17 @@ export function connectionsSummary(connections: readonly ConnectionDto[]): strin
     .join(' · ');
 }
 
+/**
+ * What the widgets cover for good: the docked column on the right (its width, and how far down
+ * from the top of the map view it reaches) or the dock at the bottom on phones.
+ */
+export interface WidgetCover {
+  right: number;
+  /** Where the column ends, from the top of the map view; 0 without one. */
+  rightBottom: number;
+  bottom: number;
+}
+
 type Store = Pick<
   MapStore,
   'updateSystem' | 'pasteSignatures' | 'updateSignature' | 'removeSignature' | 'seed' | 'updateConnection'
@@ -116,7 +146,7 @@ type Store = Pick<
 
 interface Props {
   mapId: string;
-  /** The selected system; nothing selected, every widget says so. */
+  /** The selected system; nothing selected, no widget shows. */
   system: MapSystemDto | undefined;
   info: UniverseSystemDto | undefined;
   universe: Map<number, UniverseSystemDto>;
@@ -133,27 +163,35 @@ interface Props {
   controller: WidgetsController;
   /** All windows shown, or all hidden for a moment (the widgets menu). */
   shown: boolean;
-  /** Bumped to show System info and focus the name field (the context menu's Edit). */
-  focusToken: number;
   onSelectSystem(solarSystemId: number): void;
-  /** Pixels of the map the widgets cover for good: the phone dock. */
-  onCover(cover: { right: number; bottom: number }): void;
+  /** Opens Edit system for the selected system (System info's pencil). */
+  onEdit?(solarSystemId: number): void;
+  onCover(cover: WidgetCover): void;
   /** One quiet line in System info (where a merged system comes from). */
   note?: ReactNode;
 }
 
 /**
  * The map widgets (Wanderer's): separate windows over the map, each with one job, all showing the
- * selected system. On wide screens they float where they were left; on phones they cannot, so a
- * dock lists them and one opens at a time in a sheet above it, as in Wanderer's mobile layout.
+ * selected system, and nothing at all while none is. On wide screens they stand in a narrow
+ * column against the right edge, each as tall as its content, or float where someone dragged
+ * them; on phones a dock lists them and one opens at a time in a sheet above it, as in Wanderer's
+ * mobile layout.
  */
 export function MapWidgets(props: Props) {
-  const { controller, plugins, shown, focusToken, onCover } = props;
+  const { controller, plugins, shown, onCover, system } = props;
+  // Pilots on the map (Local, the nodes' counts) whether or not a system is selected.
+  const presence = usePresence(props.mapId, props.store);
   const phone = usePhone();
   const layerRef = useRef<HTMLDivElement>(null);
   const [area, setArea] = useState<Area | null>(null);
+  const [layerTop, setLayerTop] = useState(0);
   const [open, setOpen] = useState<string | null>(null);
   const [badges, setBadges] = useState<Record<string, WidgetBadge>>({});
+  const [heights, setHeights] = useState<Record<string, number>>({});
+  const heightsRef = useRef(heights);
+  const shrinking = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const selected = system?.solarSystemId ?? null;
 
   const titles = useMemo(
     () =>
@@ -166,44 +204,52 @@ export function MapWidgets(props: Props) {
   const visible = controller.visible.filter((id) => titles.has(id));
 
   // The map's size: windows are placed and kept inside it.
-  const { setArea: report } = controller;
   useLayoutEffect(() => {
     const layer = layerRef.current;
     if (!layer) return;
     const measure = () => {
       const next = { width: layer.clientWidth, height: layer.clientHeight };
       if (next.width === 0 || next.height === 0) return;
-      report(next);
+      setLayerTop(layer.offsetTop);
       setArea((a) => (a && a.width === next.width && a.height === next.height ? a : next));
     };
     measure();
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
     observer?.observe(layer);
     return () => observer?.disconnect();
-  }, [phone, shown, report]);
+  }, [phone, shown]);
 
-  const boxes = area ? resolveBoxes(controller.layout, area, visible) : {};
+  // How tall each window's content is: taller at once, shorter only after a moment, so a list that
+  // empties while the next system loads does not make the column jump twice.
+  const reportHeight = useCallback((id: string, height: number) => {
+    const pending = shrinking.current.get(id);
+    if (pending) clearTimeout(pending);
+    shrinking.current.delete(id);
+    const apply = () => {
+      if (heightsRef.current[id] === height) return;
+      heightsRef.current = { ...heightsRef.current, [id]: height };
+      setHeights(heightsRef.current);
+    };
+    const was = heightsRef.current[id];
+    if (was === undefined || height >= was) apply();
+    else shrinking.current.set(id, setTimeout(apply, SHRINK_DELAY));
+  }, []);
+  useEffect(() => {
+    const timers = shrinking.current;
+    return () => timers.forEach(clearTimeout);
+  }, []);
+
+  const resolved = area ? resolveBoxes(controller.layout, area, visible, heights) : null;
 
   // What the canvas keeps clear: the column of windows on the right, the dock on phones.
-  const right = !phone && shown && area ? coveredRight(Object.values(boxes), area) : 0;
+  const active = shown && selected !== null;
+  const column = !phone && active ? resolved?.column : null;
+  const right = column?.width ?? 0;
+  const rightBottom = column ? column.bottom + layerTop : 0;
+  const bottom = phone && active && visible.length > 0 ? 54 : 0;
   useEffect(() => {
-    onCover({ right, bottom: phone && shown && visible.length > 0 ? 54 : 0 });
-  }, [phone, shown, visible.length, right, onCover]);
-
-  // The context menu's Edit: System info shows, in front (on phones, in the sheet).
-  const [seenFocus, setSeenFocus] = useState(focusToken);
-  if (seenFocus !== focusToken) {
-    setSeenFocus(focusToken);
-    if (phone) setOpen('info');
-  }
-  const handledFocus = useRef(focusToken);
-  const { setShown, raise } = controller;
-  useEffect(() => {
-    if (focusToken === handledFocus.current) return;
-    handledFocus.current = focusToken;
-    setShown('info', true);
-    raise('info');
-  }, [focusToken, setShown, raise]);
+    onCover({ right, rightBottom, bottom });
+  }, [right, rightBottom, bottom, onCover]);
 
   // A widget hidden while open in the sheet closes it.
   if (open && !visible.includes(open)) setOpen(null);
@@ -220,91 +266,81 @@ export function MapWidgets(props: Props) {
   const host: WidgetHost = {
     mode: phone ? 'phone' : 'float',
     area: area ?? { width: 0, height: 0 },
-    boxes,
+    boxes: resolved?.boxes ?? {},
+    docked: resolved?.docked ?? new Set(),
     order: controller.layout.order,
     controller,
     open,
     setOpen,
     report: reportBadge,
+    reportHeight,
+    resetKey: selected,
   };
 
   if (!shown) return null;
 
-  const content = <Widgets {...props} visible={visible} titles={titles} phone={phone} />;
+  const content = system ? (
+    <SystemWidgets
+      {...props}
+      system={system}
+      visible={visible}
+      phone={phone}
+      refetchPresence={() => presence.refetch()}
+    />
+  ) : null;
 
   return (
     <WidgetHostContext.Provider value={host}>
       {phone ? (
-        <>
-          {open && (
-            <button
-              type="button"
-              className={win.backdrop}
-              aria-label="Close the widget"
-              tabIndex={-1}
-              onClick={() => setOpen(null)}
-            />
-          )}
-          {content}
-          {visible.length > 0 && (
-            <ul className={win.dock} aria-label="Widgets">
-              {visible.map((id) => {
-                const Icon = ICONS[id] ?? Puzzle;
-                const badge = badges[id];
-                const title = titles.get(id) ?? id;
-                return (
-                  <li key={id}>
-                    <button
-                      type="button"
-                      className={win.dockButton}
-                      aria-pressed={open === id}
-                      aria-label={badge?.count !== undefined ? `${title} ${badge.count}` : title}
-                      onClick={() => setOpen((o) => (o === id ? null : id))}
-                    >
-                      <Icon aria-hidden />
-                      <span aria-hidden>{SHORT[id] ?? title}</span>
-                      {badge?.count ? (
-                        <span className={win.dockCount} data-alert={badge.alert || undefined} aria-hidden>
-                          {badge.count}
-                        </span>
-                      ) : null}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </>
+        system && (
+          <>
+            {open && (
+              <button
+                type="button"
+                className={win.backdrop}
+                aria-label="Close the widget"
+                tabIndex={-1}
+                onClick={() => setOpen(null)}
+              />
+            )}
+            {content}
+            {visible.length > 0 && (
+              <ul className={win.dock} aria-label="Widgets">
+                {visible.map((id) => {
+                  const Icon = ICONS[id] ?? Puzzle;
+                  const badge = badges[id];
+                  const title = titles.get(id) ?? id;
+                  return (
+                    <li key={id}>
+                      <button
+                        type="button"
+                        className={win.dockButton}
+                        aria-pressed={open === id}
+                        aria-label={badge?.count !== undefined ? `${title} ${badge.count}` : title}
+                        onClick={() => setOpen((o) => (o === id ? null : id))}
+                      >
+                        <Icon aria-hidden />
+                        <span aria-hidden>{SHORT[id] ?? title}</span>
+                        {badge?.count ? (
+                          <span className={win.dockCount} data-alert={badge.alert || undefined} aria-hidden>
+                            {badge.count}
+                          </span>
+                        ) : null}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </>
+        )
       ) : (
+        // The layer stays while nothing is selected: it knows the map's size before a window shows.
         <div ref={layerRef} className={win.layer} data-widgets-layer>
           {area && content}
         </div>
       )}
     </WidgetHostContext.Provider>
-  );
-}
-
-function Widgets({
-  visible,
-  titles,
-  phone,
-  ...props
-}: Props & { visible: readonly string[]; titles: ReadonlyMap<string, string>; phone: boolean }) {
-  const presence = usePresence(props.mapId, props.store);
-  if (!props.system)
-    return visible.map((id) => (
-      <WidgetWindow key={id} id={id} title={titles.get(id) ?? id}>
-        <NoSystem />
-      </WidgetWindow>
-    ));
-  return (
-    <SystemWidgets
-      {...props}
-      system={props.system}
-      visible={visible}
-      phone={phone}
-      refetchPresence={() => presence.refetch()}
-    />
   );
 }
 
@@ -321,8 +357,8 @@ function SystemWidgets({
   store,
   myCharacters,
   plugins,
-  focusToken,
   onSelectSystem,
+  onEdit,
   note,
   visible,
   phone,
@@ -336,7 +372,7 @@ function SystemWidgets({
   const id = system.solarSystemId;
   const show = (widget: string) => visible.includes(widget);
   const paste = useSignaturePaste(mapId, id, store);
-  const focusedRef = useRef(0);
+  const standings = useStandings();
 
   // Ctrl+V on the map or in a widget pastes the scan, never into a field someone is typing in.
   useEffect(() => {
@@ -355,7 +391,7 @@ function SystemWidgets({
   const signatures = [...state.signatures.values()].filter((s) => s.solarSystemId === id);
   const sigs = signaturesSummary(signatures);
   const here = [...state.characters.values()].filter((c) => c.solarSystemId === id);
-  const offline = here.filter((c) => !c.online).length;
+  const local = localSummary(here, standings);
   const links = [...state.connections.values()].filter((c) => c.source === id || c.target === id);
   const linksText = connectionsSummary(links);
   const mine = new Set(myCharacters.map((c) => c.id));
@@ -370,16 +406,14 @@ function SystemWidgets({
     <>
       {show('info') && (
         <SystemInfoWidget
+          mapId={mapId}
           system={system}
           info={info}
           labels={labels}
           systemLabels={systemLabels}
-          can={can}
-          store={store}
-          holder={<SystemHolder mapId={mapId} solarSystemId={id} />}
+          canEdit={can.edit}
+          onEdit={onEdit && (() => onEdit(id))}
           note={note}
-          focusToken={focusToken}
-          focusedRef={focusedRef}
         />
       )}
       {show('signatures') && (
@@ -428,7 +462,8 @@ function SystemWidgets({
           id="local"
           title="Local"
           count={here.length}
-          summary={offline > 0 ? `${offline} offline` : undefined}
+          summary={local.text || undefined}
+          alert={local.hostile > 0}
           actions={
             <LocalMenu
               mapId={mapId}
@@ -442,6 +477,7 @@ function SystemWidgets({
           <LocalSection
             here={here}
             mine={mine}
+            standings={standings}
             expired={new Set(myCharacters.filter((c) => !c.tokenValid).map((c) => c.id))}
           />
         </WidgetWindow>
@@ -504,8 +540,8 @@ function SystemWidgets({
 }
 
 /**
- * Kills: the last hour in one row (kills, NPC kills, jumps, the day as bars), the killmails with
- * the viewer's choices (this system or the whole map, holes only, 4/12/24 h), then who flies here.
+ * Kills: the killmails, with the viewer's choices (this system or the whole map, holes only,
+ * 4/12/24 h). The system's numbers (kills per hour and day, who kills here) are in System info.
  */
 function KillsWidget({
   mapId,
@@ -536,9 +572,7 @@ function KillsWidget({
         />
       }
     >
-      <ActivityStrip mapId={mapId} solarSystemId={solarSystemId} />
       <KillsSection mapId={mapId} solarSystemId={solarSystemId} settings={settings} universe={universe} />
-      <WhoFliesHere mapId={mapId} solarSystemId={solarSystemId} />
     </WidgetWindow>
   );
 }

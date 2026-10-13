@@ -24,13 +24,13 @@ export function useMapCharacters({
 }: {
   map: MapDto;
   can: MapPermissions;
-  state: Pick<MapState, 'characters'>;
+  state: Pick<MapState, 'characters'> & Partial<Pick<MapState, 'systems'>>;
   select(solarSystemId: number): void;
 }): { bar: ReactNode; dialog: ReactNode; openTracking(): void } {
   const me = useMe();
   const [open, setOpen] = useState(false);
   const signedIn = !!me.data;
-  const { settings } = useMapTrackingSettings(map.id, { enabled: signedIn });
+  const { settings, loaded: settingsLoaded } = useMapTrackingSettings(map.id, { enabled: signedIn });
   const myCharacters = useMemo(() => me.data?.characters ?? [], [me.data]);
   const accountMain = me.data?.account.mainCharacterId ?? null;
   const main = settings.mainCharacterId ?? accountMain;
@@ -46,7 +46,11 @@ export function useMapCharacters({
   const ships = useShipTypes([...presence.values()].map((c) => c.shipTypeId));
   const shipName = (typeId: number) => ships.get(typeId)?.name;
 
-  useFollowCharacter(presence, settings.followCharacterId, select);
+  const systems = state.systems;
+  useFollowCharacter(presence, settings.followCharacterId, select, {
+    loaded: settingsLoaded,
+    onMap: (id) => systems?.has(id) ?? false,
+  });
 
   if (!signedIn) return { bar: null, dialog: null, openTracking: () => undefined };
   const own = ownOnMap(myCharacters, presence, main, settings.followCharacterId);

@@ -22,6 +22,7 @@ import {
 } from '../../ui';
 import { seedCharacters } from '../mapState';
 import type { MapStore } from '../useMapStore';
+import { standingStyle } from './ActivitySection';
 import styles from './widgets.module.css';
 
 /**
@@ -148,6 +149,16 @@ export function LocalMenu({
   );
 }
 
+/** The viewer's standing towards a pilot: the character's own, else its corporation's, else its alliance's. */
+export function pilotStanding(
+  pilot: Pick<CharacterPresenceDto, 'characterId' | 'corporationId' | 'allianceId'>,
+  standings: ReadonlyMap<number, number>,
+): number | undefined {
+  for (const id of [pilot.characterId, pilot.corporationId, pilot.allianceId])
+    if (id != null && standings.has(id)) return standings.get(id);
+  return undefined;
+}
+
 const openOutside = (url: string) => window.open(url, '_blank', 'noopener,noreferrer');
 
 /** Corporation and alliance tickers, `[CORP] <ALLY>`. */
@@ -164,10 +175,13 @@ function tickers(corp: string | null | undefined, alliance: string | null | unde
 export function LocalSection({
   here,
   mine,
+  standings = new Map(),
   expired = new Set(),
 }: {
   here: CharacterPresenceDto[];
   mine: ReadonlySet<number>;
+  /** The viewer's standings: names are drawn in their colour. */
+  standings?: ReadonlyMap<number, number>;
   /** My characters whose sign-in expired: their place here is stale. */
   expired?: ReadonlySet<number>;
 }) {
@@ -176,7 +190,7 @@ export function LocalSection({
   const ships = useShipTypes(here.map((c) => c.shipTypeId));
   const shown = options.showOffline ? here : here.filter((c) => c.online || mine.has(c.characterId));
   const hidden = here.length - shown.length;
-  if (here.length === 0) return <p className={styles.empty}>Nobody tracked is in this system.</p>;
+  if (here.length === 0) return <p className={styles.empty}>No pilots</p>;
   const sorted = [...shown].sort(
     (a, b) =>
       Number(mine.has(b.characterId)) - Number(mine.has(a.characterId)) ||
@@ -204,7 +218,7 @@ export function LocalSection({
             >
               <CharacterAvatar id={c.characterId} name={c.name} size={options.compact ? 18 : 20} />
               <span className={styles.pilotText}>
-                <span className={styles.pilotName}>
+                <span className={styles.pilotName} style={standingStyle(pilotStanding(c, standings))}>
                   {c.name}
                   {mine.has(c.characterId) && <span className="sr-only"> (you)</span>}
                 </span>

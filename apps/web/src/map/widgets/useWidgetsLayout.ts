@@ -4,12 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePreferences, useSavePreferences } from '../../lib/preferences';
 import {
   EMPTY_LAYOUT,
-  isLayout,
   LAYOUT_KEY,
   migrateSidebarLayout,
-  placeNew,
+  parseLayout,
   raise,
-  resolveBoxes,
+  resizeDocked,
   setVisible,
   toStored,
   visibleIds,
@@ -19,24 +18,31 @@ import {
 } from './layout';
 import { readStored, writeStored } from './storage';
 
-const read = (): WidgetsLayout =>
-  (typeof window === 'undefined' ? null : readStored(LAYOUT_KEY, isLayout)) ?? EMPTY_LAYOUT;
+const anything = (v: unknown): v is unknown => v !== null;
+
+/** The layout this browser keeps, in this version's terms (null: none kept). */
+const readKept = (): WidgetsLayout | null =>
+  typeof window === 'undefined' ? null : parseLayout(readStored(LAYOUT_KEY, anything));
+
+const read = (): WidgetsLayout => readKept() ?? EMPTY_LAYOUT;
 
 export interface WidgetsController {
   layout: WidgetsLayout;
   /** Ids of the widgets shown, in the menu's sense (the windows may all be hidden for a moment). */
   visible: readonly string[];
   isVisible(id: string): boolean;
-  /** Shows or hides one; a window turned on gets a free spot on the map. */
+  /** Shows or hides one; a window turned on joins the column. */
   setShown(id: string, on: boolean): void;
-  /** Keeps where a window was dragged or resized to. */
+  /** Keeps where a window was dragged or resized to: out of the column, it floats there. */
   place(id: string, box: Box, area: Area): void;
+  /** A docked window resized: the most it grows to, and the column's width. */
+  resizeDocked(id: string, box: Box, area: Area): void;
   /** Brings a window to the front. */
   raise(id: string): void;
-  /** Wanderer's "Reset widgets": the default set in the default layout. */
+  /** Wanderer's "Reset widgets": the default set, every window back in the column. */
   reset(): void;
-  /** The map's size, reported by the windows' layer: new windows are placed against it. */
-  setArea(area: Area): void;
+  /** Puts a whole layout in place at once (a saved view of the map). */
+  replace(layout: WidgetsLayout): void;
 }
 
 /**
@@ -46,7 +52,6 @@ export interface WidgetsController {
  */
 export function useWidgetsLayout(): WidgetsController {
   const [layout, setLayout] = useState<WidgetsLayout>(read);
-  const area = useRef<Area | null>(null);
 
   const update = useCallback((change: (current: WidgetsLayout) => WidgetsLayout) => {
     setLayout((current) => {
@@ -73,28 +78,22 @@ export function useWidgetsLayout(): WidgetsController {
       layout,
       visible,
       isVisible: (id) => visible.includes(id),
-      setShown: (id, on) =>
-        update((current) => {
-          const size = area.current;
-          if (!on || !size || current.boxes[id]) return setVisible(current, id, on);
-          const others = Object.values(resolveBoxes(current, size, visibleIds(current)));
-          return setVisible(current, id, true, toStored(placeNew(id, size, others), size));
-        }),
+      setShown: (id, on) => update((current) => setVisible(current, id, on)),
       place: (id, box, size) =>
         update((current) => ({
           ...current,
           boxes: { ...current.boxes, [id]: toStored(box, size) },
           order: raise(current.order, id),
         })),
+      resizeDocked: (id, box, size) =>
+        update((current) => ({ ...resizeDocked(current, id, box, size), order: raise(current.order, id) })),
       raise: (id) =>
         update((current) => {
           const order = raise(current.order, id);
           return order === current.order ? current : { ...current, order };
         }),
       reset: () => update(() => EMPTY_LAYOUT),
-      setArea: (next) => {
-        area.current = next;
-      },
+      replace: (next) => update(() => parseLayout(next) ?? EMPTY_LAYOUT),
     };
   }, [layout, update]);
 }
@@ -119,7 +118,7 @@ function useSidebarMigration(update: (change: (current: WidgetsLayout) => Widget
     }
     if (old === undefined) return;
     const hidden = migrateSidebarLayout(old);
-    if (hidden && !readStored(LAYOUT_KEY, isLayout))
+    if (hidden && !readKept())
       update((current) => (current.visible === null ? { ...current, visible: hidden } : current));
     void save({ sidebar: null }).catch(() => undefined);
   }, [loaded, old, save, update]);

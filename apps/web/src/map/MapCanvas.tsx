@@ -137,6 +137,10 @@ interface Props {
   onMenu(target: MenuTarget, x: number, y: number): void;
   /** Pixels on the right covered by the widget panel; views keep systems out from under it. */
   coveredRight?: number;
+  /** How far down from the top the right-hand cover reaches (the widgets' column); all the way by default. */
+  coveredRightBottom?: number;
+  /** A double-click on a system: Edit system. */
+  onEditSystem?(solarSystemId: number): void;
   /** Pixels at the bottom covered by the widget sheet (phones). */
   coveredBottom?: number;
   /**
@@ -192,6 +196,8 @@ export function MapCanvas({
   focus,
   onMenu,
   coveredRight = 0,
+  coveredRightBottom = Infinity,
+  onEditSystem,
   coveredBottom = 0,
   readOnly = false,
   publicToken,
@@ -550,11 +556,14 @@ export function MapCanvas({
     if (!box || !node || node.dragging || (coveredRight === 0 && coveredBottom === 0)) return;
     const { x, y, zoom } = rf.getViewport();
     const right = x + (node.position.x + (node.measured?.width ?? 230)) * zoom;
+    const top = y + node.position.y * zoom;
     const bottom = y + (node.position.y + (node.measured?.height ?? 90)) * zoom;
-    const dx = Math.max(0, right - (box.width - coveredRight - 24));
+    // The column on the right covers the system only if the system is beside it, not below it.
+    const beside = top < coveredRightBottom + 8;
+    const dx = beside ? Math.max(0, right - (box.width - coveredRight - 24)) : 0;
     const dy = Math.max(0, bottom - (box.height - coveredBottom - 24));
     if (dx > 0 || dy > 0) void rf.setViewport({ x: x - dx, y: y - dy, zoom }, { duration: 250 });
-  }, [coveredRight, coveredBottom, selectedId, rf]);
+  }, [coveredRight, coveredRightBottom, coveredBottom, selectedId, rf]);
 
   // The same for a selected connection: its middle stays out from under the panel.
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
@@ -801,6 +810,7 @@ export function MapCanvas({
         onConnect={({ source, target }) => {
           if (source !== target) void store.addConnection(Number(source), Number(target));
         }}
+        onNodeDoubleClick={readOnly || !onEditSystem ? undefined : (_, node) => onEditSystem(Number(node.id))}
         onNodeContextMenu={
           readOnly
             ? undefined

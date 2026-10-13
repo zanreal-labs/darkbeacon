@@ -83,6 +83,15 @@
   text-decoration: line-through;
 }
 
+/* Not scanned yet: a red bar and a faint tint, so what is left to scan stands out at a glance. */
+.table tbody tr[data-group='unknown'] td {
+  background: color-mix(in srgb, var(--dbk-color-danger) 7%, transparent);
+}
+
+.table tbody tr[data-group='unknown'] td:first-child {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--dbk-color-danger) 80%, transparent);
+}
+
 /* Colour by group: wormholes, sites and the not yet scanned. */
 [data-color] .table tr[data-group='wormhole'] td:first-child {
   color: var(--dbk-security-wormhole);

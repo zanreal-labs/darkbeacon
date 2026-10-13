@@ -28,6 +28,7 @@ import {
   Lock,
   LockOpen,
   Maximize,
+  Pencil,
   PencilLine,
   PiggyBank,
   Plus,
@@ -124,6 +125,8 @@ export interface SystemMenuContext {
   info?: UniverseSystemDto;
   /** Where the Dotlan link goes (the viewer's setting). */
   dotlan?: DotlanTarget;
+  /** Opens Edit system: everything about the system set by hand, in one dialog. */
+  onEdit?(): void;
   /** The map's rally: call one here, move it here, or cancel it here. */
   rally?: Omit<PingMenuContext, 'solarSystemId' | 'canEdit'>;
   /** Other maps the system is on, each opened read only. */
@@ -211,6 +214,14 @@ export function systemMenu(ctx: SystemMenuContext): MenuItem[] {
   const update = (patch: Parameters<Commands['updateSystem']>[1]) => void store.updateSystem(id, patch);
 
   const edit: MenuItem[] = [];
+  if (can.edit && ctx.onEdit)
+    edit.push({
+      kind: 'action',
+      label: 'Edit…',
+      icon: <Pencil />,
+      shortcut: 'Double-click',
+      onSelect: ctx.onEdit,
+    });
   if (can.edit) {
     const status = statusOptions.find((o) => o.value === system.status);
     edit.push({

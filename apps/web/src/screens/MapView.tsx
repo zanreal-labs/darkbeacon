@@ -49,7 +49,8 @@ import { useLinkedMaps } from '../map/linked/api';
 import { LinkedMapPreview } from '../map/linked/LinkedMapPreview';
 import { usePingCommands, usePings } from '../map/pings/api';
 import { isWormholeSpace } from '../map/widgets/SystemDetails';
-import { MapWidgets } from '../map/widgets/MapWidgets';
+import { EditSystemDialog } from '../map/widgets/EditSystemDialog';
+import { MapWidgets, type WidgetCover } from '../map/widgets/MapWidgets';
 import { usePhone } from '../map/widgets/storage';
 import { useWidgetsLayout } from '../map/widgets/useWidgetsLayout';
 import { WidgetsMenu } from '../map/widgets/WidgetsMenu';
@@ -183,12 +184,16 @@ export function MapView({
   // The widgets: always over the map, showing the selected system (Wanderer's windows).
   const widgets = useWidgetsLayout();
   const [widgetsShown, setWidgetsShown] = useState(true);
-  const [widgetCover, setWidgetCover] = useState({ right: 0, bottom: 0 });
+  const [widgetCover, setWidgetCover] = useState<WidgetCover>({ right: 0, rightBottom: 0, bottom: 0 });
   const onWidgetCover = useCallback(
-    (next: { right: number; bottom: number }) =>
-      setWidgetCover((c) => (c.right === next.right && c.bottom === next.bottom ? c : next)),
+    (next: WidgetCover) =>
+      setWidgetCover((c) =>
+        c.right === next.right && c.rightBottom === next.rightBottom && c.bottom === next.bottom ? c : next,
+      ),
     [],
   );
+  // Edit system: the context menu's Edit…, a double-click on a system, System info's pencil.
+  const [editing, setEditing] = useState<number | null>(null);
   const phone = usePhone();
   usePageView('map');
   useEffect(() => {
@@ -199,7 +204,7 @@ export function MapView({
   }, [panel, selectedConnection]);
   const [menu, setMenu] = useState<OpenMenu | null>(null);
   const [addAt, setAddAt] = useState<{ x: number; y: number } | null>(null);
-  const [focus, setFocus] = useState({ search: 0, name: 0 });
+  const [focus, setFocus] = useState({ search: 0 });
   const [focusNode, setFocusNode] = useState<FocusRequest | null>(null);
   const systemPlugins = useSlot('systemContextMenu', map.id);
   const connectionPlugins = useSlot('connectionContextMenu', map.id);
@@ -264,6 +269,8 @@ export function MapView({
   // The canvas also keeps the chain clear of the column of widget windows on the right.
   const canvasCover = {
     right: Math.max(covered.right, widgetsOn ? widgetCover.right : 0),
+    // The column reaches this far down; a panel on the right covers the whole height.
+    rightBottom: covered.right > 0 || !widgetsOn ? Infinity : widgetCover.rightBottom,
     bottom: covered.bottom,
   };
 
@@ -446,6 +453,7 @@ export function MapView({
           systemLabels,
           can: permissionsFor(can, sys.provenance, map.kind === 'composite'),
           store,
+          onEdit: () => setEditing(sys.solarSystemId),
           plugins: systemPlugins,
           characters: me.data?.characters,
           notify: toast,
@@ -636,6 +644,11 @@ export function MapView({
         rallies={pinged}
         presence={presence}
         coveredRight={canvasCover.right}
+        coveredRightBottom={canvasCover.rightBottom}
+        onEditSystem={(id) => {
+          const sys = state.systems.get(id);
+          if (sys && permissionsFor(can, sys.provenance, map.kind === 'composite').edit) setEditing(id);
+        }}
         coveredBottom={covered.bottom}
       />
 
@@ -749,10 +762,23 @@ export function MapView({
         plugins={widgetPlugins}
         controller={widgets}
         shown={widgetsOn}
-        focusToken={focus.name}
+        onEdit={setEditing}
         onSelectSystem={(id) => select(id, true)}
         onCover={onWidgetCover}
         note={system && <ProvenanceLine provenance={system.provenance} sources={state.sources} />}
+      />
+
+      <EditSystemDialog
+        system={editing !== null ? state.systems.get(editing) : undefined}
+        info={editing !== null ? universe.get(editing) : undefined}
+        labels={labels}
+        systemLabels={systemLabels}
+        can={(() => {
+          const sys = editing !== null ? state.systems.get(editing) : undefined;
+          return sys ? permissionsFor(can, sys.provenance, map.kind === 'composite') : can;
+        })()}
+        store={store}
+        onClose={() => setEditing(null)}
       />
 
       <SignatureLayer mapId={map.id} state={state} universe={universe} store={store} canEdit={can.edit} />

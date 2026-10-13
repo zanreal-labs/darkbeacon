@@ -135,7 +135,7 @@ describe('routes section', () => {
     section();
     await screen.findByRole('list', { name: 'Routes to map hubs' });
     await userEvent.click(screen.getByRole('radio', { name: 'My hubs' }));
-    expect(await screen.findByText(/Your own hubs show on every map/)).toBeTruthy();
+    expect(await screen.findByText(/No hubs of yours/)).toBeTruthy();
     expect(window.localStorage.getItem('dbk-routes-tab')).toBe('"personal"');
   });
 

@@ -1,8 +1,9 @@
 /*
- * The map widgets' windows, as Wanderer's window manager places them: separate windows over the
- * map, each with one job, dragged by their title bar, resized from their corners, kept 10 px inside
- * the map and snapped to its edges and to each other within 10 px. Pure geometry here; the windows
- * themselves are in `WidgetWindow.tsx`.
+ * The map widgets' windows. The map is the product: while a system is selected its windows stand
+ * in one narrow column against the right edge, each as tall as its content, stacked 8 px apart.
+ * A window someone drags out of the column floats where it was left (kept 10 px inside the map,
+ * snapped to its edges and to other windows within 10 px, as Wanderer's). Pure geometry here; the
+ * windows themselves are in `WidgetWindow.tsx`.
  */
 
 /** The core widgets, in the order of the widgets menu. Plugin widgets follow them. */
@@ -30,7 +31,54 @@ export const pluginWidgetId = (entry: { pluginId: string; title: string }) =>
 /** Wanderer's numbers: windows stay 10 px inside the map and snap within 10 px, 10 px apart. */
 export const GUTTER = 10;
 export const SNAP = 10;
-export const MIN_SIZE = { w: 180, h: 100 };
+/** The smallest a window can be resized to (its content may still be shorter). */
+export const MIN_SIZE = { w: 180, h: 60 };
+
+/** Docked windows stand 8 px apart in their column. */
+export const DOCK_GAP = 8;
+
+/** The column's order, top to bottom: what a pilot reads first is on top. Others follow. */
+export const DOCK_ORDER: readonly string[] = ['info', 'signatures', 'local', 'routes', 'kills'];
+
+/**
+ * How much of the map's height a docked window may take before its content scrolls: Signatures
+ * the most, Local a quarter, the rest compact.
+ */
+const DOCK_SHARE: Record<string, number> = {
+  info: 0.4,
+  signatures: 0.45,
+  local: 0.25,
+  routes: 0.2,
+  kills: 0.22,
+};
+const OTHER_SHARE = 0.25;
+
+/** A docked window the column runs out of room for keeps its title bar and about two rows. */
+export const DOCK_FLOOR = 76;
+
+/** Kills, Routes and the extra widgets keep their title bar and one line. */
+const SMALL_FLOOR = 52;
+
+/** Signatures keeps about five rows before the windows above it give way. */
+const SIGNATURES_FLOOR = 160;
+
+/**
+ * Who gives way first when the column runs past the bottom: the extra widgets, Kills and Routes,
+ * then Signatures (it scrolls anyway, down to five rows), then Local, then System info.
+ */
+function giveWayOrder(order: readonly string[]): number[] {
+  const rank = (id: string) => {
+    const i = ['kills', 'routes', 'signatures', 'local', 'info'].indexOf(id);
+    return i === -1 ? -1 : i;
+  };
+  return order
+    .map((id, i) => ({ i, rank: rank(id) }))
+    .sort((a, b) => a.rank - b.rank || b.i - a.i)
+    .map((x) => x.i);
+}
+
+/** Before a window was measured: about a title bar and two rows. */
+const UNMEASURED = 76;
 
 export interface Box {
   x: number;
@@ -47,23 +95,37 @@ export interface Area {
 /**
  * A window as kept: its distance from the nearer edges, so a window by the right or bottom edge
  * stays there on a larger or smaller screen (Wanderer moves windows whose middle is in the right or
- * bottom half with those edges).
+ * bottom half with those edges). Its height is the most it grows to; its content may be shorter.
  */
 export interface StoredBox extends Box {
   right?: true;
   bottom?: true;
 }
 
+/**
+ * The whole arrangement of the widgets, one serializable value: what shows, which windows float
+ * and where, their order, the docked windows' heights and the column's width. It is saved and
+ * replaced as one (`parseLayout` reads any version kept before), so a named view of the map can
+ * hold it.
+ */
 export interface WidgetsLayout {
+  version: typeof LAYOUT_VERSION;
   /** Widget ids shown; null until someone shows or hides one (then the defaults apply). */
   visible: string[] | null;
-  /** Windows someone moved, resized or turned on; the rest take the default layout. */
+  /** Windows someone dragged out of the column: they float there. */
   boxes: Record<string, StoredBox>;
   /** Back to front: the last one is on top. */
   order: string[];
+  /** Docked windows someone resized: the most each grows to before its content scrolls. */
+  caps?: Record<string, number>;
+  /** The column's width, when someone resized it. */
+  dockWidth?: number;
 }
 
-export const EMPTY_LAYOUT: WidgetsLayout = { visible: null, boxes: {}, order: [] };
+/** 2: the docked column (1 placed every window on the map). */
+export const LAYOUT_VERSION = 2;
+
+export const EMPTY_LAYOUT: WidgetsLayout = { version: LAYOUT_VERSION, visible: null, boxes: {}, order: [] };
 
 /** Kept in this browser and mirrored with my preferences like every `dbk-*` option. */
 export const LAYOUT_KEY = 'dbk-map-widgets';
@@ -73,75 +135,108 @@ const isBox = (v: unknown): v is StoredBox =>
   v !== null &&
   ['x', 'y', 'w', 'h'].every((k) => Number.isFinite((v as Record<string, unknown>)[k]));
 
-export function isLayout(v: unknown): v is WidgetsLayout {
+/** A layout of any version kept before (1 had no `version`). */
+type AnyLayout = Omit<WidgetsLayout, 'version'> & { version?: number };
+
+function isAnyLayout(v: unknown): v is AnyLayout {
   if (typeof v !== 'object' || v === null) return false;
-  const l = v as WidgetsLayout;
+  const l = v as AnyLayout;
   return (
+    (l.version === undefined || l.version === LAYOUT_VERSION) &&
     (l.visible === null || (Array.isArray(l.visible) && l.visible.every((id) => typeof id === 'string'))) &&
     typeof l.boxes === 'object' &&
     l.boxes !== null &&
     Object.values(l.boxes).every(isBox) &&
-    Array.isArray(l.order)
+    Array.isArray(l.order) &&
+    (l.caps === undefined ||
+      (typeof l.caps === 'object' && l.caps !== null && Object.values(l.caps).every(Number.isFinite))) &&
+    (l.dockWidth === undefined || Number.isFinite(l.dockWidth))
   );
+}
+
+export const isLayout = (v: unknown): v is WidgetsLayout =>
+  isAnyLayout(v) && (v as AnyLayout).version === LAYOUT_VERSION;
+
+/**
+ * A kept layout as this version reads it, or null when it is not one. Version 1 placed every
+ * window across the map with fixed heights: its choice of widgets and their order stay, and the
+ * windows go back to the column.
+ */
+export function parseLayout(v: unknown): WidgetsLayout | null {
+  if (!isAnyLayout(v)) return null;
+  if (v.version === LAYOUT_VERSION) return v as WidgetsLayout;
+  return { version: LAYOUT_VERSION, visible: v.visible, boxes: {}, order: v.order };
 }
 
 export const visibleIds = (layout: WidgetsLayout): readonly string[] => layout.visible ?? DEFAULT_VISIBLE;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), Math.max(lo, hi));
 
-/**
- * The default layout for a map of this size, Wanderer's arrangement against the right edge (the
- * map's search and its zoom and legend buttons are on the left): System info over Signatures, Local
- * beside them as tall as both, Routes and Kills along the bottom. Nothing overlaps. Structures and
- * Comments get a column of their own further left; the rest find a free spot when turned on.
- */
-export function defaultBoxes(area: Area): Record<string, Box> {
-  const g = GUTTER;
-  const { width: W, height: H } = area;
-  const a = clamp(Math.round(W * 0.3), 400, 560);
-  const b = clamp(Math.round(W * 0.2), 280, 340);
-  const c = clamp(Math.round(W * 0.28), 380, 460);
-  const xA = W - g - a;
-  const xB = xA - g - b;
-  const xC = xB - g - c;
-  const info = 250;
-  const bottomRow = clamp(Math.round(H * 0.22), 160, 240);
-  const bottomY = H - g - bottomRow;
-  const signatures = Math.max(140, bottomY - g - (g + info + g));
-  const half = Math.max(MIN_SIZE.h, Math.floor((H - 3 * g) / 2));
-  return {
-    info: { x: xA, y: g, w: a, h: info },
-    signatures: { x: xA, y: g + info + g, w: a, h: signatures },
-    local: { x: xB, y: g, w: b, h: info + g + signatures },
-    routes: { x: xA, y: bottomY, w: a, h: bottomRow },
-    kills: { x: xB, y: bottomY, w: b, h: bottomRow },
-    structures: { x: xC, y: g, w: c, h: half },
-    comments: { x: xC, y: g + half + g, w: c, h: half },
-  };
+/** The column's width: about 360 px, 320-400, never more than 30% of the map. */
+export function dockWidth(area: Area, chosen?: number): number {
+  const most = Math.round(area.width * 0.3);
+  const width = chosen ?? clamp(Math.round(area.width * 0.25), 320, 400);
+  return Math.round(Math.max(MIN_SIZE.w, Math.min(width, most, area.width - 2 * GUTTER)));
 }
 
-const overlaps = (a: Box, b: Box) =>
-  a.x < b.x + b.w + GUTTER &&
-  b.x < a.x + a.w + GUTTER &&
-  a.y < b.y + b.h + GUTTER &&
-  b.y < a.y + a.h + GUTTER;
+/** The order docked windows stack in. */
+export function dockOrder(ids: readonly string[]): string[] {
+  const rank = (id: string) => {
+    const i = DOCK_ORDER.indexOf(id);
+    return i === -1 ? DOCK_ORDER.length + ids.indexOf(id) : i;
+  };
+  return [...ids].sort((a, b) => rank(a) - rank(b));
+}
+
+/** The most a docked window grows to before its content scrolls. */
+export function dockCap(id: string, area: Area, caps: Readonly<Record<string, number>> = {}): number {
+  return caps[id] ?? Math.round(area.height * (DOCK_SHARE[id] ?? OTHER_SHARE));
+}
 
 /**
- * Where a widget turned on goes: its default spot, else the first free half-height slot from the
- * right, else cascaded from the top left.
+ * The docked column against the right edge: each window as tall as its content (`natural`), up to
+ * its share of the map or the height someone gave it (`caps`), stacked 8 px apart from the top.
+ * When they do not fit, Kills and Routes give way first, then Signatures, Local and System info
+ * last, each down to a title bar and two rows, and their content scrolls.
  */
-export function placeNew(id: string, area: Area, occupied: readonly Box[]): Box {
-  const own = defaultBoxes(area)[id];
-  if (own && !occupied.some((o) => overlaps(o, own))) return clampBox(own, area);
-  const w = clamp(Math.round(area.width * 0.28), 380, 460);
-  const h = Math.max(MIN_SIZE.h, Math.floor((area.height - 3 * GUTTER) / 2));
-  for (let x = area.width - GUTTER - w; x >= GUTTER; x -= w + GUTTER)
-    for (const y of [GUTTER, GUTTER * 2 + h]) {
-      const slot = { x, y, w, h };
-      if (!occupied.some((o) => overlaps(o, slot))) return clampBox(slot, area);
+export function dockColumn(
+  ids: readonly string[],
+  area: Area,
+  natural: Readonly<Record<string, number | undefined>>,
+  caps: Readonly<Record<string, number>> = {},
+  width?: number,
+): Record<string, Box> {
+  const order = dockOrder(ids);
+  const w = dockWidth(area, width);
+  const x = area.width - GUTTER - w;
+  const heights = order.map((id) => Math.round(Math.min(natural[id] ?? UNMEASURED, dockCap(id, area, caps))));
+  const room = area.height - 2 * GUTTER - DOCK_GAP * Math.max(0, order.length - 1);
+  let over = heights.reduce((a, b) => a + b, 0) - room;
+  // Twice: first Signatures keeps five rows, then it too goes down to a title bar and two rows.
+  for (const pass of [0, 1])
+    for (const i of giveWayOrder(order)) {
+      if (over <= 0) break;
+      const id = order[i]!;
+      const least =
+        id === 'signatures'
+          ? pass === 0
+            ? SIGNATURES_FLOOR
+            : DOCK_FLOOR
+          : ['local', 'info'].includes(id)
+            ? DOCK_FLOOR
+            : SMALL_FLOOR;
+      const floor = Math.min(heights[i]!, least);
+      const give = Math.max(0, Math.min(over, heights[i]! - floor));
+      heights[i] = heights[i]! - give;
+      over -= give;
     }
-  const step = 28 * (occupied.length % 8);
-  return clampBox({ x: GUTTER * 4 + step, y: GUTTER + step, w, h }, area);
+  const out: Record<string, Box> = {};
+  let y = GUTTER;
+  order.forEach((id, i) => {
+    out[id] = { x, y, w, h: heights[i]! };
+    y += heights[i]! + DOCK_GAP;
+  });
+  return out;
 }
 
 /** Inside the map, 10 px from its edges, never smaller than the minimum. */
@@ -181,18 +276,43 @@ export function fromStored(s: StoredBox, area: Area): Box {
   );
 }
 
-/** Every shown window's box on a map of this size. */
-export function resolveBoxes(layout: WidgetsLayout, area: Area, ids: readonly string[]): Record<string, Box> {
-  const defaults = defaultBoxes(area);
-  const out: Record<string, Box> = {};
+export interface Resolved {
+  boxes: Record<string, Box>;
+  /** The windows in the column (never dragged out); the rest float where they were left. */
+  docked: ReadonlySet<string>;
+  /** The column's width with its gutters and how far down it reaches; null without one. */
+  column: { width: number; bottom: number } | null;
+}
+
+/**
+ * Every shown window's box on a map of this size: the docked column by the windows' content
+ * heights, and the floating ones where they were left, as tall as their content up to the height
+ * they were given.
+ */
+export function resolveBoxes(
+  layout: WidgetsLayout,
+  area: Area,
+  ids: readonly string[],
+  natural: Readonly<Record<string, number | undefined>> = {},
+): Resolved {
+  const boxes: Record<string, Box> = {};
+  const docked = ids.filter((id) => !layout.boxes[id]);
   for (const id of ids) {
     const stored = layout.boxes[id];
-    if (stored) out[id] = fromStored(stored, area);
-    else if (defaults[id]) out[id] = clampBox(defaults[id], area);
+    if (!stored) continue;
+    const box = fromStored(stored, area);
+    boxes[id] = { ...box, h: Math.round(Math.min(box.h, natural[id] ?? box.h)) };
   }
-  // Ones without a default spot (turned on before the map had a size): the first free place.
-  for (const id of ids) if (!out[id]) out[id] = placeNew(id, area, Object.values(out));
-  return out;
+  const column = dockColumn(docked, area, natural, layout.caps, layout.dockWidth);
+  Object.assign(boxes, column);
+  const last = Object.values(column).at(-1);
+  return {
+    boxes,
+    docked: new Set(docked),
+    column: last
+      ? { width: last.w + 2 * GUTTER, bottom: Math.min(area.height, last.y + last.h + GUTTER) }
+      : null,
+  };
 }
 
 /** The nearest candidate within the snap distance, or null. */
@@ -266,42 +386,31 @@ export function resizeBox(
   return clampBox({ x: left, y: top, w: right - left, h: bottom - top }, area);
 }
 
-/**
- * How much of the map's right side the windows take: those against the right edge and the ones
- * side by side with them. The map fits the chain and keeps the selected system clear of it; a
- * window left elsewhere on the map does not count.
- */
-export function coveredRight(boxes: readonly Box[], area: Area): number {
-  let left = area.width;
-  let rest = boxes.filter((b) => b.x + b.w >= area.width - 2 * GUTTER);
-  if (rest.length === 0) return 0;
-  const others = boxes.filter((b) => !rest.includes(b));
-  while (rest.length > 0) {
-    left = Math.min(left, ...rest.map((b) => b.x));
-    rest = others.filter((b) => b.x < left && b.x + b.w >= left - 2 * GUTTER);
-    for (const b of rest) others.splice(others.indexOf(b), 1);
-  }
-  const cover = area.width - left + GUTTER;
-  // A column of windows, not most of the map.
-  return cover > area.width * 0.75 ? 0 : cover;
-}
-
 /** Brings a window to the front; the same array when it already is. */
 export function raise(order: readonly string[], id: string): string[] {
   if (order.at(-1) === id) return order as string[];
   return [...order.filter((x) => x !== id), id];
 }
 
-export function setVisible(layout: WidgetsLayout, id: string, on: boolean, place?: StoredBox): WidgetsLayout {
+/** Shows or hides a widget; one turned on joins the column. */
+export function setVisible(layout: WidgetsLayout, id: string, on: boolean): WidgetsLayout {
   const current = visibleIds(layout);
   if (current.includes(id) === on) return layout;
   const visible = on ? [...current, id] : current.filter((x) => x !== id);
+  return { ...layout, visible, order: on ? raise(layout.order, id) : layout.order };
+}
+
+/** A docked window resized: its height becomes the most it grows to, its width the column's. */
+export function resizeDocked(layout: WidgetsLayout, id: string, box: Box, area: Area): WidgetsLayout {
+  const width = dockWidth(area);
   return {
     ...layout,
-    visible,
-    order: on ? raise(layout.order, id) : layout.order,
-    // A window turned on keeps the free spot it was given, wherever the others go later.
-    boxes: on && place && !layout.boxes[id] ? { ...layout.boxes, [id]: place } : layout.boxes,
+    caps: { ...layout.caps, [id]: Math.round(box.h) },
+    ...(Math.abs(box.w - dockWidth(area, layout.dockWidth)) >= 1
+      ? box.w === width
+        ? { dockWidth: undefined }
+        : { dockWidth: Math.round(box.w) }
+      : {}),
   };
 }
 

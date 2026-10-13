@@ -1,28 +1,29 @@
 'use client';
 
-import { useState } from 'react';
-import { ArrowUpRight, Users } from 'lucide-react';
-import type {
-  ActiveGroupDto,
-  ActivityHourDto,
-  ActivityWindow,
-  IntelEntityDto,
-  SovereigntyDto,
-  SystemActivityDto,
+import type { CSSProperties } from 'react';
+import {
+  killHeat,
+  standingTone,
+  type ActiveGroupDto,
+  type ActivityHourDto,
+  type KillmailDto,
+  type SovereigntyDto,
+  type SystemActivityDto,
 } from '@darkbeacon/shared';
-import { evewho, images, useStandingsQuery, useSystemActivity, zkill } from '../../lib/intel';
+import { cssVar } from '@darkbeacon/theme-sdk';
+import {
+  ago,
+  groupLabel,
+  images,
+  useStandings,
+  useStandingsQuery,
+  useSystemActivity,
+  zkill,
+} from '../../lib/intel';
 import { hereForReturn } from '../../lib/scope-health';
 import { eveLinkHref } from '../../shell/AccountMenu';
-import { track } from '../../lib/telemetry';
-import { Avatar, Segmented } from '../../ui';
+import { Avatar } from '../../ui';
 import styles from './intel.module.css';
-
-const WINDOWS: ActivityWindow[] = ['1h', '24h', '7d'];
-const WINDOW_TEXT: Record<ActivityWindow, string> = {
-  '1h': 'last hour',
-  '24h': 'last day',
-  '7d': 'last week',
-};
 
 function sum(hours: readonly ActivityHourDto[], pick: (h: ActivityHourDto) => number | null): number | null {
   const known = hours.map(pick).filter((v): v is number => v !== null);
@@ -75,50 +76,33 @@ export function Sparkline({
   );
 }
 
-/** Logo of a group: alliances and corporations from the image server, rounded squares. */
-function GroupLogo({
-  kind,
-  entity,
-  size = 20,
-}: {
-  kind: 'alliance' | 'corporation';
-  entity: IntelEntityDto;
-  size?: number;
-}) {
-  return (
-    <Avatar
-      src={kind === 'alliance' ? images.alliance(entity.id) : images.corporation(entity.id)}
-      name={entity.name ?? entity.ticker ?? '?'}
-      size={size}
-      shape="rounded"
-    />
-  );
+/**
+ * The three EVE hours (UTC) with the most killmails among those known, from three of them on:
+ * "18–21". Null when there are too few to say.
+ */
+export function peakHours(kills: readonly Pick<KillmailDto, 'time'>[]): string | null {
+  if (kills.length < 3) return null;
+  const perHour = Array.from({ length: 24 }, () => 0);
+  for (const k of kills) perHour[new Date(k.time).getUTCHours()]! += 1;
+  let best = 0;
+  let bestCount = -1;
+  for (let h = 0; h < 24; h++) {
+    const count = perHour[h]! + perHour[(h + 1) % 24]! + perHour[(h + 2) % 24]!;
+    if (count > bestCount) [best, bestCount] = [h, count];
+  }
+  const pad = (h: number) => String(h % 24).padStart(2, '0');
+  return `${pad(best)}–${pad(best + 3)}`;
 }
 
-/** The holder line of the system's header, from the Activity data (shared query). */
-export function SystemHolder({ mapId, solarSystemId }: { mapId: string; solarSystemId: number }) {
-  const activity = useSystemActivity(mapId, solarSystemId);
-  const standings = useStandingsQuery();
-  const held = activity.data?.intel.sovereignty?.kind === 'alliance';
-  return (
-    <>
-      <SovereigntyLine intel={activity.data?.intel} />
-      {held && standings.data?.missingScopes && (
-        <p className={styles.relink}>
-          <a
-            href={eveLinkHref(hereForReturn())}
-            title="Contacts were not asked for when your characters were linked"
-          >
-            Link your characters again
-          </a>{' '}
-          for standings
-        </p>
-      )}
-    </>
-  );
+/** Who kills here most: groups with kills in the window, most first. */
+export function topKillers(groups: readonly ActiveGroupDto[], count = 4): ActiveGroupDto[] {
+  return groups
+    .filter((g) => g.kills > 0)
+    .sort((a, b) => b.kills - a.kills || b.losses - a.losses)
+    .slice(0, count);
 }
 
-/** One line under the system's name: who holds it, with the logo; for unclaimed null-sec the region's holder. */
+/** One line under the system's facts: who holds it, with the logo; unclaimed null-sec, the region's holder. */
 export function SovereigntyLine({ intel }: { intel: SystemActivityDto['intel'] | undefined }) {
   const sov: SovereigntyDto | null | undefined = intel?.sovereignty;
   const region = intel?.regionHolder;
@@ -178,150 +162,118 @@ export function SovereigntyLine({ intel }: { intel: SystemActivityDto['intel'] |
   return null;
 }
 
-function Group({ group }: { group: ActiveGroupDto }) {
-  const { kind, entity } = group;
-  const name = entity.name ?? (kind === 'alliance' ? 'An alliance' : 'A corporation');
-  return (
-    <li className={styles.group}>
-      <GroupLogo kind={kind} entity={entity} />
-      <span className={styles.groupName}>
-        <span className={styles.groupTitle}>
-          {name}
-          {entity.ticker && <span className={styles.ticker}> [{entity.ticker}]</span>}
-        </span>
-        <span className={styles.muted}>
-          {group.kills} kill{group.kills === 1 ? '' : 's'}
-          {group.losses > 0 && ` · ${group.losses} loss${group.losses === 1 ? '' : 'es'}`}
-        </span>
-      </span>
-      <span className={styles.links}>
-        <a
-          href={kind === 'alliance' ? zkill.alliance(entity.id) : zkill.corporation(entity.id)}
-          target="_blank"
-          rel="noreferrer"
-          aria-label={`${name} on zKillboard`}
-          title="zKillboard"
-        >
-          zKill
-          <ArrowUpRight aria-hidden />
-        </a>
-        <a
-          href={kind === 'alliance' ? evewho.alliance(entity.id) : evewho.corporation(entity.id)}
-          target="_blank"
-          rel="noreferrer"
-          aria-label={`${name} on EVE Who`}
-          title="EVE Who"
-        >
-          Who
-          <ArrowUpRight aria-hidden />
-        </a>
-      </span>
-    </li>
-  );
-}
-
-function Stat({
-  label,
-  hour,
-  day,
-  hours,
-  pick,
-  tone,
-}: {
-  label: string;
-  hour: number | null;
-  day: number | null;
-  hours: readonly ActivityHourDto[];
-  pick: (h: ActivityHourDto) => number | null;
-  tone?: 'hot';
-}) {
-  return (
-    <div className={styles.stat} data-tone={tone}>
-      <dt>{label}</dt>
-      <dd className={styles.statHour}>
-        {hour ?? '–'}
-        <span className={styles.statDay}>{day === null ? '' : ` · ${day} /24h`}</span>
-      </dd>
-      <dd className={styles.statSpark}>
-        <Sparkline
-          hours={hours}
-          pick={pick}
-          label={`${label} per hour, last 24 hours`}
-          width={84}
-          height={14}
-        />
-      </dd>
-    </div>
-  );
+/** A standing's colour for a name or ticker; nothing for neutral. */
+export function standingStyle(standing: number | undefined): CSSProperties | undefined {
+  const tone = standingTone(standing);
+  return tone === 'neutral' ? undefined : { color: cssVar(`standing-${tone}`) };
 }
 
 /**
- * The selected system's last hour in one row: kills (busy from five on), NPC kills and jumps, each
- * with the day as 24 bars. The top of the Kills widget.
+ * The selected system's kill intel in a few lines of numbers: kills in the last hour and day (ships
+ * and pods) with NPC kills and jumps where ESI gives them and the day as 24 bars; the last kill and
+ * the busiest hours; who kills here most this week, coloured by the viewer's standings; who holds
+ * the system. Lines without data are left out.
  */
-export function ActivityStrip({ mapId, solarSystemId }: { mapId: string; solarSystemId: number }) {
+export function SystemIntel({ mapId, solarSystemId }: { mapId: string; solarSystemId: number }) {
   const activity = useSystemActivity(mapId, solarSystemId);
-  if (activity.isLoading) return <p className={styles.empty}>Loading activity…</p>;
-  if (!activity.data) return <p className={styles.empty}>Activity is not available right now.</p>;
-  const { intel, hours } = activity.data;
-  return (
-    <dl className={styles.stats} aria-label="Last hour">
-      <Stat
-        label="Kills 1h"
-        hour={intel.kills1h}
-        day={sum(hours, shipAndPod)}
-        hours={hours}
-        pick={shipAndPod}
-        {...(intel.kills1h >= 5 ? { tone: 'hot' as const } : {})}
-      />
-      <Stat
-        label="NPC 1h"
-        hour={intel.npcKills1h}
-        day={sum(hours, (h) => h.npcKills)}
-        hours={hours}
-        pick={(h) => h.npcKills}
-      />
-      <Stat
-        label="Jumps 1h"
-        hour={intel.jumps1h}
-        day={sum(hours, (h) => h.jumps)}
-        hours={hours}
-        pick={(h) => h.jumps}
-      />
-    </dl>
-  );
-}
+  const standingsQuery = useStandingsQuery();
+  const standings = useStandings();
+  const data = activity.data;
+  const intel = data?.intel;
+  const hours = data?.hours ?? [];
+  const day = data ? sum(hours, shipAndPod) : null;
+  const heat = intel ? killHeat(intel.kills1h) : 'none';
+  const last = intel?.lastKillAt ?? null;
+  const lastShip = data?.kills[0]?.victim.ship?.name;
+  const peak = data ? peakHours(data.kills) : null;
+  const killers = data ? topKillers(data.groups['7d']) : [];
+  const anyKills = hours.some((h) => (shipAndPod(h) ?? 0) > 0);
+  const held = intel?.sovereignty?.kind === 'alliance';
 
-/** Who flies in the selected system: alliances, or corporations without one, from its killmails. */
-export function WhoFliesHere({ mapId, solarSystemId }: { mapId: string; solarSystemId: number }) {
-  const activity = useSystemActivity(mapId, solarSystemId);
-  const [span, setSpan] = useState<ActivityWindow>('24h');
-  if (!activity.data) return null;
-  const shown = activity.data.groups[span];
   return (
-    <div className={styles.activity}>
-      <div className={styles.groupsHeader}>
-        <h3>
-          <Users aria-hidden /> Who flies here
-        </h3>
-        <Segmented
-          aria-label="Time window"
-          value={span}
-          onValueChange={(v) => {
-            setSpan(v as ActivityWindow);
-            track('activity_viewed', { section: 'activity', window: v as ActivityWindow });
-          }}
-          options={WINDOWS.map((w) => ({ value: w, label: w }))}
-        />
+    <div className={styles.intel} role="group" aria-label="Kill intel">
+      <div className={styles.intelLine}>
+        <span className={styles.figure} data-heat={heat}>
+          <span className={styles.what}>Kills</span>
+          <b aria-label={`${intel?.kills1h ?? 'unknown'} in the last hour`}>{intel?.kills1h ?? '–'}</b>
+          <span className={styles.unit}>1h</span>
+          <b aria-label={`${day ?? 'unknown'} in the last day`}>{day ?? '–'}</b>
+          <span className={styles.unit}>24h</span>
+        </span>
+        {intel?.npcKills1h != null && (
+          <span className={styles.figure}>
+            <span className={styles.what}>NPC</span>
+            <b>{intel.npcKills1h}</b>
+          </span>
+        )}
+        {intel?.jumps1h != null && (
+          <span className={styles.figure}>
+            <span className={styles.what}>Jumps</span>
+            <b>{intel.jumps1h}</b>
+          </span>
+        )}
+        {anyKills && (
+          <Sparkline
+            hours={hours}
+            pick={shipAndPod}
+            label="Kills per hour, last 24 hours"
+            width={72}
+            height={12}
+          />
+        )}
       </div>
-      {shown.length === 0 ? (
-        <p className={styles.empty}>No killmails here in the {WINDOW_TEXT[span]}.</p>
-      ) : (
-        <ul className={styles.groups}>
-          {shown.map((g) => (
-            <Group key={`${g.kind}:${g.entity.id}`} group={g} />
-          ))}
-        </ul>
+      {(last !== null || peak) && (
+        <div className={styles.intelLine}>
+          {last !== null && (
+            <span className={styles.figure}>
+              <span className={styles.what}>Last kill</span>
+              <b>{ago(last)}</b>
+              {lastShip && <span className={styles.ship}>{lastShip}</span>}
+            </span>
+          )}
+          {peak && (
+            <span className={styles.figure} title="The three EVE hours with the most killmails known">
+              <span className={styles.what}>Peak</span>
+              <b>{peak}</b>
+              <span className={styles.unit}>ET</span>
+            </span>
+          )}
+        </div>
+      )}
+      {killers.length > 0 && (
+        <div className={styles.intelLine}>
+          <span className={styles.what} title="Most kills here in the last 7 days">
+            7d
+          </span>
+          <ul className={styles.killers} aria-label="Most kills here, last 7 days">
+            {killers.map((g) => (
+              <li key={`${g.kind}:${g.entity.id}`}>
+                <a
+                  href={g.kind === 'alliance' ? zkill.alliance(g.entity.id) : zkill.corporation(g.entity.id)}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={`${g.entity.name ?? groupLabel(g.entity)}: ${g.kills} kill${g.kills === 1 ? '' : 's'}${g.losses ? `, ${g.losses} loss${g.losses === 1 ? '' : 'es'}` : ''}`}
+                  style={standingStyle(standings.get(g.entity.id))}
+                >
+                  {groupLabel(g.entity)}
+                </a>
+                <b>{g.kills}</b>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <SovereigntyLine intel={intel} />
+      {held && standingsQuery.data?.missingScopes && (
+        <p className={styles.relink}>
+          <a
+            href={eveLinkHref(hereForReturn())}
+            title="Contacts were not asked for when your characters were linked"
+          >
+            Link your characters again
+          </a>{' '}
+          for standings
+        </p>
       )}
     </div>
   );

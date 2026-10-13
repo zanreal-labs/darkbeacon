@@ -558,6 +558,10 @@ export function SignaturesSection({
     </table>
   );
 
+  // Nothing here yet on a wide screen: the paste field says so, in one line.
+  const pasteOnly =
+    can.edit && pasteField === 'empty' && signatures.length === 0 && ghosts.length === 0 && !listed.isLoading;
+
   return (
     <div
       ref={rootRef}
@@ -574,6 +578,10 @@ export function SignaturesSection({
             <span>
               {phone ? (
                 'Long-press here to paste the scan'
+              ) : pasteOnly ? (
+                <>
+                  No signatures — <Kbd>{MOD}</Kbd> <Kbd>V</Kbd> to paste a scan
+                </>
               ) : (
                 <>
                   <Kbd>{MOD}</Kbd> <Kbd>V</Kbd> pastes the scan
@@ -619,7 +627,7 @@ export function SignaturesSection({
         </div>
       )}
 
-      {probed.length === 0 && ghosts.length === 0 ? (
+      {pasteOnly ? null : probed.length === 0 && ghosts.length === 0 ? (
         listed.isLoading ? (
           <div className={styles.padded} aria-busy="true">
             {[0, 1, 2].map((i) => (
