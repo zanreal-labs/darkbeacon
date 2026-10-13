@@ -64,6 +64,9 @@
       "path": "../../packages/modules/telemetry"
     },
     {
+      "path": "../../packages/modules/support"
+    },
+    {
       "path": "../../packages/modules/observability"
     },
     {

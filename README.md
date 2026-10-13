@@ -131,6 +131,18 @@ Turn it off with `TELEMETRY=off` or `DO_NOT_TRACK=1`, or with the switch in Admi
 also see every payload that was sent. Development and test servers never send. The exact field list, the
 reasoning and the PostHog setup are in [docs/telemetry.md](docs/telemetry.md).
 
+### Support and feedback
+
+The help menu (the question mark at the bottom of the left rail) has **Report a problem**, **Send
+feedback** and **My tickets**. They open the maintainers' support hub in a small window, where pilots sign
+in with an EVE character (no scopes, no token kept) and follow the answers from any instance; the help icon
+shows unread answers. Nothing is sent until someone presses Send, and the form lists every detail that goes
+with a ticket (version, database, page kind, browser family, the last scrubbed errors), each removable; your
+instance's address and the map's size only when ticked. Never map contents, system names, map addresses,
+notes, IPs or emails. Tickets are personal data and never go through telemetry. Hide the entries with
+`SUPPORT_HUB_URL=off`, or point them at another hub. Details, and how to run a hub:
+[docs/support.md](docs/support.md).
+
 ### Observability: Grafana, OpenTelemetry, Prometheus
 
 Traces, metrics and logs go out over OpenTelemetry as soon as an OTLP endpoint is set; nothing else to
@@ -206,7 +218,8 @@ packages/core          ids, Result, Clock, DomainEvent envelope, authorization, 
 packages/db            Kysely factory (SQLite/Postgres), Database = UnitOfWork, migrations/<module>/
 packages/shared        zod DTOs, REST routes (routes.ts), WebSocket protocol, event catalogue
 packages/modules/*     identity, access, mapping, tracking, notifications, plugins, routing, audit,
-                       telemetry, observability, backups, sharing, publishing, api-keys, oauth, importing
+                       telemetry, observability, backups, sharing, publishing, api-keys, oauth, importing,
+                       support
                        (domain/application/ports)
 packages/plugin-sdk    plugin manifest, PluginContext, web slots
 packages/theme-sdk     theme tokens, built-in themes, CSS generator

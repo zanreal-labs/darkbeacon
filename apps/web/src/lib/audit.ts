@@ -457,6 +457,12 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
       return read('revoked an invite link', 'access');
     case 'invite.used':
       return read('signed up with an invite link', 'access');
+    case 'support.ticket_created':
+      return { ...read('opened a support ticket', 'instance'), who: 'A pilot' };
+    case 'support.replied':
+      return read('answered a support ticket', 'instance');
+    case 'support.ticket_updated':
+      return read('changed a support ticket', 'instance');
     case 'account.discord_changed':
       return read(entry.diff.discord?.after ? 'connected Discord' : 'disconnected Discord', 'access');
     case 'discord_bot.changed':

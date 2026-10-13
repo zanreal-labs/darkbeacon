@@ -444,6 +444,11 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
   'invite.created': { data: { id: 'i1', note: 'new corp', expiresAt: null, maxUses: 5 } },
   'invite.revoked': { data: { id: 'i1' }, before: { id: 'i1', note: null, expiresAt: null, maxUses: 5 } },
   'invite.used': { data: { id: 'i1', accountId: 'b' } },
+  'support.ticket_created': {
+    data: { ticketId: 't1', category: 'bug', backend: 'local', characterId: 2112000001 },
+  },
+  'support.replied': { data: { ticketId: 't1' } },
+  'support.ticket_updated': { data: { ticketId: 't1', status: 'resolved', priority: 'high' } },
 };
 
 const facts = { accountId: 'a', accountName: 'Alice', characterId: 9, characterName: 'Alice Main' };

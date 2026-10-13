@@ -97,6 +97,20 @@ export interface AuditEventPayloads {
   'invite.revoked': { id: string };
   /** Someone signed up with an invite. */
   'invite.used': { id: string; accountId: string };
+  /**
+   * Support hub: a pilot opened a ticket (docs/support.md). Never the message or the context;
+   * the character is there so abuse can be traced.
+   */
+  'support.ticket_created': {
+    ticketId: string;
+    category: 'bug' | 'support' | 'question';
+    backend: 'posthog' | 'local';
+    characterId: number;
+  };
+  /** Support hub with its own store: an admin answered a ticket (the text is not recorded). */
+  'support.replied': { ticketId: string };
+  /** Support hub with its own store: an admin changed a ticket's status or priority. */
+  'support.ticket_updated': { ticketId: string; status: string; priority: string };
 }
 
 export interface OAuthGrantAuditDto {
@@ -143,4 +157,7 @@ export const AUDIT_EVENT_TYPES = [
   'invite.created',
   'invite.revoked',
   'invite.used',
+  'support.ticket_created',
+  'support.replied',
+  'support.ticket_updated',
 ] as const satisfies readonly AuditEventType[];

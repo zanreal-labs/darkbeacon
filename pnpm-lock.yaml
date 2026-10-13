@@ -104,6 +104,9 @@ importers:
       '@darkbeacon/sharing':
         specifier: workspace:*
         version: link:../../packages/modules/sharing
+      '@darkbeacon/support':
+        specifier: workspace:*
+        version: link:../../packages/modules/support
       '@darkbeacon/telemetry':
         specifier: workspace:*
         version: link:../../packages/modules/telemetry
@@ -511,6 +514,18 @@ importers:
       '@darkbeacon/shared':
         specifier: workspace:*
         version: link:../../shared
+
+  packages/modules/support:
+    dependencies:
+      '@darkbeacon/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@darkbeacon/shared':
+        specifier: workspace:*
+        version: link:../../shared
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
 
   packages/modules/telemetry:
     dependencies:

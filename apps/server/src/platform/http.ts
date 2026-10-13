@@ -26,6 +26,7 @@ const domainStatus: Record<ErrorCode, number> = {
   forbidden: 403,
   not_found: 404,
   conflict: 409,
+  rate_limited: 429,
 };
 
 const httpCode: Record<number, ApiErrorCode> = {

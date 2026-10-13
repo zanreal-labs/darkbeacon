@@ -7,6 +7,7 @@ import { Breadcrumbs } from './Trail';
 import { BreadcrumbProvider } from './breadcrumbs';
 import { ConnectionIndicator } from './ConnectionIndicator';
 import { EveStatus } from './EveStatus';
+import { HelpMenu } from './HelpMenu';
 import { LogoMark } from './Logo';
 import { MapSettingsRailButton } from './MapSettingsButton';
 import { NavLink } from './NavLink';
@@ -126,6 +127,7 @@ export function AppShell({
             <RailLink item={JUMP_NAV} />
             <RailLink item={CHARACTERS_NAV} />
             {adminRail}
+            <HelpMenu placement="rail" />
           </nav>
           <header className={styles.topbar}>
             <Link href="/" className={styles.mobileLogo} aria-label="Darkbeacon home">
@@ -138,6 +140,7 @@ export function AppShell({
             {demoBadge}
             <EveStatus />
             <ConnectionIndicator />
+            <HelpMenu placement="topbar" />
             <ThemeMenu />
             {account}
           </header>

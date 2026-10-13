@@ -126,6 +126,8 @@ export const TelemetrySection = z.enum([
   'history',
   /** Map settings, Auto-mapping. */
   'automap',
+  /** Admin, Support (the inbox of a support hub with its own store). */
+  'support',
 ]);
 /** Map panels (the widget dock); `plugin` for any plugin widget. */
 export const TelemetryPanel = z.enum([
@@ -185,6 +187,11 @@ export const TELEMETRY_WEB_EVENTS = {
     section: z.enum(['activity', 'kills']),
     window: z.enum(['1h', '4h', '12h', '24h', '7d']),
   }),
+  /**
+   * Thumbs up or down from the help menu, on the page it was given on. No text: anything a person
+   * writes goes to the support hub instead (docs/support.md), never through telemetry.
+   */
+  feedback_rated: z.strictObject({ rating: z.enum(['up', 'down']), area: TelemetryPage }),
 } as const;
 
 export type TelemetryWebEventName = keyof typeof TELEMETRY_WEB_EVENTS;

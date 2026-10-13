@@ -156,6 +156,15 @@ made while seeding the demo map or by cleanups count as nothing; a history rever
 | `context_menu_used` | `menu`: `system` or `connection`; `action`: `status`, `labels`, `tags`, `edit`, `hidden`, `locked`, `copy_name`, `remove`, `time`, `mass`, `size`, `type`, `bubble`, `dangerous`, `mass_saved`, `plugin` |
 | `shortcut_used`     | `shortcut`: `fit_chain`, `center_on_me`, `legend`, `undo`, `delete_selection`, `copy_selection`, `paste_systems`                                                                                         |
 | `activity_viewed`   | `section`: `activity` or `kills`; `window`: `1h`, `4h`, `12h`, `24h`, `7d` (its time window was changed)                                                                                                 |
+| `feedback_rated`    | `rating`: `up` or `down`; `area`: the page, as for `page_viewed` (the thumbs in the help menu)                                                                                                           |
+
+## Support tickets and feedback are not telemetry
+
+The help menu's "Report a problem" and "Send feedback" carry what a person writes and are tied to the EVE
+character they sign in with, so they never go through telemetry: they go to the support hub, a separate
+PostHog project, only when someone sends them (see [docs/support.md](support.md)). The only help-menu
+signal that is telemetry is the thumbs up or down (`feedback_rated`): an enum and the kind of page, nothing
+typed.
 
 ## Delivery
 

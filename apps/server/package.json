@@ -32,6 +32,7 @@
     "@darkbeacon/sde": "workspace:*",
     "@darkbeacon/shared": "workspace:*",
     "@darkbeacon/sharing": "workspace:*",
+    "@darkbeacon/support": "workspace:*",
     "@darkbeacon/telemetry": "workspace:*",
     "@darkbeacon/theme-sdk": "workspace:*",
     "@darkbeacon/tracking": "workspace:*",

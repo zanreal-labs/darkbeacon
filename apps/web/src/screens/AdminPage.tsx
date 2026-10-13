@@ -8,6 +8,7 @@ import {
   Crown,
   DatabaseBackup,
   KeyRound,
+  LifeBuoy,
   Map as MapIcon,
   MessageSquare,
   MoreHorizontal,
@@ -93,6 +94,8 @@ import { AdminApiAccess } from './AdminApiAccess';
 import { AdminCharactersCard } from './AdminCharacters';
 import { AdminMapsTab } from './AdminMaps';
 import { AuditTab } from './AuditTab';
+import { SupportInboxTab } from './SupportInbox';
+import { useSupportClient } from '../shell/HelpMenu';
 import { TelemetryCard } from './TelemetryCard';
 import { ChainCleanupCard } from './ChainCleanupCard';
 import { BackupsTab, useBackupStatus } from './BackupsTab';
@@ -107,6 +110,8 @@ const TABS = [
   { id: 'backups', title: 'Backups', icon: <DatabaseBackup /> },
   { id: 'api', title: 'API access', icon: <KeyRound /> },
   { id: 'audit', title: 'Audit', icon: <ScrollText /> },
+  /** Only on a support hub that keeps tickets itself. */
+  { id: 'support', title: 'Support', icon: <LifeBuoy /> },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
 
@@ -137,8 +142,10 @@ export function AdminPageSkeleton() {
 
 export function AdminPage() {
   useBreadcrumbs([{ label: 'Admin' }]);
+  const support = useSupportClient().data;
+  const tabs = TABS.filter((t) => t.id !== 'support' || support?.localInbox);
   const [tab, setTab] = useTabParam<TabId>(
-    TABS.map((t) => t.id),
+    tabs.map((t) => t.id),
     'instance',
   );
   usePageView('admin', tab);
@@ -163,7 +170,7 @@ export function AdminPage() {
       )}
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className={styles.tabs} aria-label="Admin sections">
-          {TABS.map((t) => (
+          {tabs.map((t) => (
             <TabsTrigger key={t.id} value={t.id} icon={t.icon}>
               {t.title}
               {t.id === 'backups' && failing && (
@@ -199,6 +206,11 @@ export function AdminPage() {
         <TabsContent value="audit">
           <AuditTab settingsKey={adminKeys.settings} />
         </TabsContent>
+        {support?.localInbox && (
+          <TabsContent value="support">
+            <SupportInboxTab />
+          </TabsContent>
+        )}
       </Tabs>
     </Page>
   );

@@ -267,6 +267,60 @@ button.railLink {
   width: 280px;
 }
 
+/* ---- Help menu: at the bottom of the rail (the top bar on phones); the unread badge sits on the icon ---- */
+.railHelp {
+  position: relative;
+  display: inline-flex;
+  margin-top: auto;
+}
+
+.topbarHelp {
+  position: relative;
+  display: none;
+}
+
+.helpBadge {
+  position: absolute;
+  top: 2px;
+  right: 1px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--dbk-color-accent);
+  color: var(--dbk-color-accent-contrast);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+  pointer-events: none;
+  box-shadow: 0 0 0 2px var(--dbk-color-surface);
+}
+
+.helpMenu {
+  width: 260px;
+}
+
+.helpItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dbk-space-2);
+}
+
+.helpCount {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--dbk-color-accent-subtle);
+  color: var(--dbk-color-accent-text);
+  font-size: var(--dbk-font-size-xs);
+  font-weight: 600;
+}
+
+.helpRate {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
 .accountHeader {
   display: flex;
   align-items: center;
@@ -329,6 +383,10 @@ button.railLink {
 
   .rail {
     display: none;
+  }
+
+  .topbarHelp {
+    display: inline-flex;
   }
 
   .mobileLogo {
