@@ -11,7 +11,8 @@ import { SignatureGroup, type SignatureKind } from '@darkbeacon/shared';
 
 export const SIGNATURE_PREFS_KEY = 'dbk-signature-prefs';
 
-export type SignatureColumn = 'group' | 'description' | 'added' | 'updated' | 'author';
+/** Optional columns; the id, the group (what kind of site it is) and the info are always shown. */
+export type SignatureColumn = 'description' | 'added' | 'updated' | 'author';
 export type SignatureSortField = 'eveId' | 'group' | 'info' | 'description' | 'added' | 'updated' | 'author';
 
 export interface SignaturePrefs {
@@ -44,8 +45,7 @@ export interface SignaturePrefs {
 }
 
 export const DEFAULT_SIGNATURE_PREFS: SignaturePrefs = {
-  // The sidebar is narrow: the group shows as the row's colour and the site's name.
-  columns: { group: false, description: false, added: true, updated: false, author: false },
+  columns: { description: false, added: true, updated: false, author: false },
   groups: {},
   kinds: {},
   sort: { field: 'added', dir: 'desc' },
@@ -59,6 +59,12 @@ export const DEFAULT_SIGNATURE_PREFS: SignaturePrefs = {
   onLink: { copyLabel: true, tempName: '', customLabel: '', label: '' },
 };
 
+/** Older preferences could hide the group column, which is now always shown. */
+function withoutGroup(columns: SignaturePrefs['columns'] & { group?: boolean }): SignaturePrefs['columns'] {
+  const { group: _group, ...rest } = columns;
+  return rest;
+}
+
 let cache: SignaturePrefs | null = null;
 const listeners = new Set<() => void>();
 
@@ -69,7 +75,7 @@ function read(): SignaturePrefs {
     return {
       ...DEFAULT_SIGNATURE_PREFS,
       ...stored,
-      columns: { ...DEFAULT_SIGNATURE_PREFS.columns, ...stored.columns },
+      columns: withoutGroup({ ...DEFAULT_SIGNATURE_PREFS.columns, ...stored.columns }),
       groups: { ...stored.groups },
       kinds: { ...stored.kinds },
       sort: { ...DEFAULT_SIGNATURE_PREFS.sort, ...stored.sort },

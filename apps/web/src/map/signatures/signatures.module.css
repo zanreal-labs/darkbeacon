@@ -114,6 +114,10 @@
   color: var(--dbk-color-success);
 }
 
+td.group[data-group='unknown'] {
+  color: var(--dbk-color-text-muted);
+}
+
 /* Added cell of new rows: bright under a minute, strong under ten. */
 .table td[data-fresh='fresh'] {
   color: var(--dbk-color-warning) !important;
@@ -125,9 +129,10 @@
   font-weight: 600;
 }
 
+/* What kind of site it is, always shown: plain text, an unknown one muted. */
 .group {
   overflow: hidden;
-  color: var(--dbk-color-text-muted);
+  color: var(--dbk-color-text);
   font-size: var(--dbk-font-size-small);
   text-overflow: ellipsis;
   white-space: nowrap;

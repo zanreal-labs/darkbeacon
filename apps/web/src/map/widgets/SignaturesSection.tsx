@@ -351,7 +351,7 @@ export function SignaturesSection({
   };
 
   const { columns } = prefs;
-  const columnCount = 2 + Object.values(columns).filter(Boolean).length + (can.edit ? 1 : 0);
+  const columnCount = 3 + Object.values(columns).filter(Boolean).length + (can.edit ? 1 : 0);
   // A link saved here also does what the preferences ask on link (see `useOnLink`).
   const update = async (id: string, patch: UpdateSignatureRequest) => {
     const ok = await store.updateSignature(id, patch);
@@ -370,7 +370,7 @@ export function SignaturesSection({
       <thead>
         <tr>
           {header('eveId', 'ID', sig.colId)}
-          {columns.group && header('group', 'Group', sig.colGroup)}
+          {header('group', 'Group', sig.colGroup)}
           {header('info', 'Info')}
           {columns.description && header('description', 'Notes')}
           {columns.added && header('added', 'Added', `${styles.num} ${sig.colAge}`)}
@@ -415,7 +415,9 @@ export function SignaturesSection({
               <td className={`${styles.sigId} ${sig.id}`} title={s.eveId}>
                 {s.eveId}
               </td>
-              {columns.group && <td className={sig.group}>{GROUP_LABEL[s.group]}</td>}
+              <td className={sig.group} data-group={s.group}>
+                {GROUP_LABEL[s.group]}
+              </td>
               <td>
                 <span className={sig.info}>
                   {/* A custom entry: its id is free text someone wrote, not the scanner's. */}

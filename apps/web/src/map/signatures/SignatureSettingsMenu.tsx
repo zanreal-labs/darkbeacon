@@ -30,7 +30,6 @@ import {
 } from './prefs';
 
 const COLUMN_LABEL: Record<SignatureColumn, string> = {
-  group: 'Group',
   description: 'Description',
   added: 'Added',
   updated: 'Updated',
