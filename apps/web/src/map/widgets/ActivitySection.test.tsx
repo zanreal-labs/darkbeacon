@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { peakHours } from './ActivitySection';
 
-const at = (iso: string) => ({ time: iso });
+const at = (iso: string) => ({ time: Date.parse(iso) });
 const KILLS = [at('2026-10-10T18:05:00Z'), at('2026-10-11T19:40:00Z'), at('2026-10-12T20:10:00Z')];
 const NOW = new Date('2026-10-13T12:00:00Z');
 
