@@ -18,23 +18,8 @@ export function routeFor(method: string, pattern: string | undefined): RouteDef 
   return pattern ? ROUTES.get(`${method.toUpperCase()} ${pattern}`) : undefined;
 }
 
-/**
- * The support hub's sign-in lives at `/support/login` and `/support/callback` (the address
- * registered with EVE SSO), next to its page; the API serves them.
- */
-const SUPPORT_ALIASES: Record<string, string> = {
-  '/support/login': '/api/support/auth/login',
-  '/support/callback': '/api/support/auth/callback',
-};
-
-/**
- * `/api/v1/...` is the stable alias of `/api/...` (see the versioning policy in docs/api.md), and
- * the support hub's sign-in paths are served by the API.
- */
+/** `/api/v1/...` is the stable alias of `/api/...` (see the versioning policy in docs/api.md). */
 export function rewriteVersionedUrl(url: string): string {
-  const query = url.indexOf('?');
-  const alias = SUPPORT_ALIASES[query === -1 ? url : url.slice(0, query)];
-  if (alias) return query === -1 ? alias : `${alias}${url.slice(query)}`;
   if (url === API_V1_PREFIX || url.startsWith(`${API_V1_PREFIX}/`) || url.startsWith(`${API_V1_PREFIX}?`))
     return `/api${url.slice(API_V1_PREFIX.length)}`;
   return url;

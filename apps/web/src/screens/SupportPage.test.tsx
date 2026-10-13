@@ -1,31 +1,68 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw/http';
-import { routes, SUPPORT_MESSAGE_SOURCE, type SupportSessionDto } from '@darkbeacon/shared';
+import {
+  routes,
+  SUPPORT_MESSAGE_SOURCE,
+  type SupportSessionDto,
+  type SupportTicketGroupDto,
+} from '@darkbeacon/shared';
 import { renderWithProviders, setupMockServer } from '../test/setup';
 import { ToastProvider, TooltipProvider } from '../ui';
 import { SupportScreen } from './SupportPage';
 
+// Radix measures, scrolls and captures the pointer in selects, which jsdom cannot.
+Element.prototype.scrollIntoView ??= () => {};
+Element.prototype.hasPointerCapture ??= () => false;
+Element.prototype.releasePointerCapture ??= () => {};
+
 const OPENER = 'https://map.example.com';
-const CSRF = 'csrf-token-123';
+const MAIN = { id: 2112000001, name: 'Pilot One', main: true };
+const ALT = { id: 2112000003, name: 'Pilot Alt', main: false };
 const session: SupportSessionDto = {
   available: true,
   backend: 'local',
   feedback: true,
-  character: { id: 2112000001, name: 'Pilot One' },
-  csrf: CSRF,
+  signedIn: true,
+  characters: [MAIN, ALT],
+};
+const TICKET = {
+  id: '0190a6f2-7f6e-7c2a-9a51-5d6a0b9e1c11',
+  number: 7,
+  category: 'bug' as const,
+  status: 'pending' as const,
+  unread: 1,
+  preview: 'Fixed in 0.1.1',
+  lastMessageAt: 2,
+  createdAt: 1,
+  messageCount: 2,
 };
 
+/** Requests the page made: path with query, body, and any header beyond the app's own. */
 const created: Array<{ body: unknown; csrf: string | null }> = [];
 const handles: Array<{ body: unknown; csrf: string | null }> = [];
+const threads: string[] = [];
 const server = setupMockServer(
   http.get(routes.support.session.path, () => HttpResponse.json(session)),
-  http.get(routes.support.tickets.path, () => HttpResponse.json([])),
+  http.get(routes.support.tickets.path, () =>
+    HttpResponse.json([
+      { character: { id: MAIN.id, name: MAIN.name }, tickets: [] },
+      { character: { id: ALT.id, name: ALT.name }, tickets: [TICKET] },
+    ] satisfies SupportTicketGroupDto[]),
+  ),
   http.get(routes.support.handles.path, () => HttpResponse.json([])),
+  http.get('/api/support/tickets/:ticketId/messages', ({ request }) => {
+    threads.push(new URL(request.url).search);
+    return HttpResponse.json({
+      ticket: { ...TICKET, unread: 0 },
+      messages: [{ id: 'm1', body: 'Fixed in 0.1.1', author: 'support', authorName: 'Zan', createdAt: 2 }],
+    });
+  }),
   http.post(routes.support.createTicket.path, async ({ request }) => {
     created.push({ body: await request.json(), csrf: request.headers.get('x-support-csrf') });
-    return HttpResponse.json({ id: '0190a6f2-7f6e-7c2a-9a51-5d6a0b9e1c11' }, { status: 201 });
+    return HttpResponse.json({ id: TICKET.id }, { status: 201 });
   }),
   http.post(routes.support.createHandle.path, async ({ request }) => {
     handles.push({ body: await request.json(), csrf: request.headers.get('x-support-csrf') });
@@ -57,6 +94,7 @@ describe('support hub page', () => {
     posted = [];
     created.length = 0;
     handles.length = 0;
+    threads.length = 0;
     sessionStorage.clear();
     window.history.replaceState(null, '', `/support?kind=ticket&origin=${encodeURIComponent(OPENER)}`);
     // The opener is this window in jsdom; what the page posts to it is recorded, not delivered.
@@ -108,9 +146,11 @@ describe('support hub page', () => {
     fireEvent.change(screen.getByLabelText('What happened?'), { target: { value: 'Signatures vanish' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send ticket' }));
     await waitFor(() => expect(created).toHaveLength(1));
+    // The app session is the credential: no token of the hub's own.
     expect(created[0]).toEqual({
-      csrf: CSRF,
+      csrf: null,
       body: {
+        characterId: MAIN.id,
         category: 'bug',
         message: 'Signatures vanish',
         context: {
@@ -122,13 +162,39 @@ describe('support hub page', () => {
     });
   });
 
+  it('opens a ticket for the main character unless another one of the account is picked', async () => {
+    const user = userEvent.setup();
+    renderHub();
+    const picker = await screen.findByRole('combobox', { name: 'Character' });
+    expect(picker.textContent).toContain('Pilot One (main)');
+    await user.click(picker);
+    await user.click(await screen.findByRole('option', { name: /Pilot Alt/ }));
+    fireEvent.change(screen.getByLabelText('What happened?'), { target: { value: 'On my alt' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send ticket' }));
+    await waitFor(() => expect(created).toHaveLength(1));
+    expect(created[0]!.body).toMatchObject({ characterId: ALT.id, message: 'On my alt' });
+  });
+
+  it('lists my tickets per character and opens a thread as its character', async () => {
+    window.history.replaceState(null, '', '/support?kind=tickets');
+    renderHub();
+    // One card per character, main first: the main one has none, the alt one has an answer.
+    await screen.findByText('Pilot Alt');
+    const counts = screen.getAllByText(/^(No tickets|1 ticket)$/).map((n) => n.textContent);
+    expect(counts).toEqual(['No tickets', '1 ticket']);
+    expect(screen.getByText('1 new answer')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /#7/ }));
+    await waitFor(() => expect(threads).toEqual([`?character=${ALT.id}`]));
+    expect(await screen.findByText('Zan', { exact: false })).toBeTruthy();
+  });
+
   it('hands the opener an unread handle only after the pilot allows it, and only to its origin', async () => {
     renderHub();
     await screen.findByText('Report a problem or ask for help');
     deliver({ source: SUPPORT_MESSAGE_SOURCE, type: 'context', context: {}, hasHandle: false }, OPENER);
     fireEvent.click(await screen.findByRole('button', { name: 'Allow' }));
     await waitFor(() => expect(handles).toHaveLength(1));
-    expect(handles[0]).toEqual({ csrf: CSRF, body: { origin: OPENER } });
+    expect(handles[0]).toEqual({ csrf: null, body: { origin: OPENER } });
     await waitFor(() =>
       expect(posted).toContainEqual({
         message: { source: SUPPORT_MESSAGE_SOURCE, type: 'handle', handle: `dbsh_${'a'.repeat(43)}` },
@@ -144,16 +210,33 @@ describe('support hub page', () => {
     expect(posted).toEqual([]);
   });
 
-  it('asks to sign in before a ticket', async () => {
+  it('sends a signed-out pilot to the app’s sign-in page, and back to this page', async () => {
     server.use(
       http.get(routes.support.session.path, () =>
-        HttpResponse.json({ ...session, character: null, csrf: null }),
+        HttpResponse.json({ ...session, signedIn: false, characters: [] }),
       ),
     );
     renderHub();
-    const link = await screen.findByRole('link', { name: 'Sign in with EVE Online' });
-    expect(link.getAttribute('href')).toBe(
-      `/support/login?returnTo=${encodeURIComponent(`/support?kind=ticket&origin=${encodeURIComponent(OPENER)}`)}`,
+    const link = await screen.findByRole('link', { name: 'Sign in' });
+    // A stale session cookie is dropped first (`reset`), so the sign-in page shows instead of
+    // bouncing back here; it then returns to this page with the popup's query.
+    const href = new URL(link.getAttribute('href')!, 'http://hub.test');
+    expect(href.pathname).toBe('/login');
+    expect(href.searchParams.get('reset')).toBe('1');
+    const login = new URL(href.searchParams.get('next')!, 'http://hub.test');
+    expect(login.pathname).toBe('/login');
+    expect(login.searchParams.get('next')).toBe(`/support?kind=ticket&origin=${encodeURIComponent(OPENER)}`);
+  });
+
+  it('asks an account without an EVE character to link one first', async () => {
+    server.use(
+      http.get(routes.support.session.path, () => HttpResponse.json({ ...session, characters: [] })),
     );
+    renderHub();
+    const link = await screen.findByRole('link', { name: 'Link an EVE character' });
+    expect(link.getAttribute('href')).toBe(
+      `/api/auth/eve/login?${new URLSearchParams({ returnTo: `/support?kind=ticket&origin=${encodeURIComponent(OPENER)}` })}`,
+    );
+    expect(screen.queryByRole('button', { name: 'Send ticket' })).toBeNull();
   });
 });

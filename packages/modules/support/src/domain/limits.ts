@@ -10,7 +10,7 @@ export const SUPPORT_LIMITS = {
   replies: { limit: 30, perMinutes: 60 },
   /** Feedback per character, or per address when anonymous. */
   feedback: { limit: 10, perMinutes: 60 },
-  /** New unread handles per character. */
+  /** New unread handles per account. */
   handles: { limit: 10, perMinutes: 60 },
   /** Unread polls per handle (instances poll every two minutes). */
   unread: { limit: 6, perMinutes: 1 },
@@ -20,7 +20,7 @@ export type SupportLimitName = keyof typeof SUPPORT_LIMITS;
 
 /** How long ticket lists and threads are reused before asking the desk again. */
 export const SUPPORT_CACHE_MS = 45_000;
-/** Active unread handles per identity; the oldest goes when a new one is made. */
+/** Active unread handles per account; the oldest goes when a new one is made. */
 export const SUPPORT_HANDLES_MAX = 10;
 
 /** Ticket ids are UUIDs on both desks; anything else is refused before it reaches one. */

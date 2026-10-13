@@ -142,6 +142,26 @@ describe('proxy', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it('lets the support page take its own signed-out visits, and comes back to it after sign-in', async () => {
+    const fetch = fakeApi(() => new Response(null, { status: 500 }));
+    const page = await proxy(request('/support?kind=ticket&origin=https%3A%2F%2Fmap.example.com'));
+    expect(page.headers.get('x-middleware-next')).toBe('1');
+    expect(page.headers.get('referrer-policy')).toBe('no-referrer');
+    // No demo sign-in there: the page takes the opener's context first, then offers the sign-in.
+    expect(fetch).not.toHaveBeenCalled();
+    const next = '/support?kind=ticket&origin=https%3A%2F%2Fmap.example.com';
+    const back = await proxy(request(`/login?next=${encodeURIComponent(next)}`, 'dbk_session=x'));
+    expect(back.headers.get('location')).toBe(`http://darkbeacon.test${next}`);
+    // The page's sign-in link drops a stale cookie first, then shows the sign-in page.
+    const login = `/login?${new URLSearchParams({ next })}`;
+    const reset = await proxy(
+      request(`/login?${new URLSearchParams({ reset: '1', next: login })}`, 'dbk_session=stale'),
+    );
+    expect(reset.headers.get('location')).toBe(`http://darkbeacon.test${login}`);
+    expect(reset.headers.getSetCookie().join('\n')).toMatch(/dbk_session=;/);
+    expect((await proxy(request(login))).headers.get('x-middleware-next')).toBe('1');
+  });
+
   it('only follows same-site paths after sign-in', () => {
     expect(safeNext('/m/x')).toBe('/m/x');
     expect(safeNext('/m/x?tab=labels#a')).toBe('/m/x?tab=labels#a');

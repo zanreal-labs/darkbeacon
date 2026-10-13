@@ -11,6 +11,7 @@ import {
   SUPPORT_MESSAGE_SOURCE,
   SupportFeedbackRequest,
   supportContextLines,
+  supportReturnTo,
   withoutContextLine,
   type SupportContext,
 } from './support.js';
@@ -183,5 +184,27 @@ describe('support windows', () => {
         'https://hub.example',
       ),
     ).toBeNull();
+  });
+
+  it('sends a sign-in back to the support page only, with its query', () => {
+    const back = `/support?kind=ticket&origin=${encodeURIComponent('https://map.example.com')}`;
+    expect(supportReturnTo(back)).toBe(back);
+    expect(supportReturnTo('/support/')).toBe('/support');
+    expect(supportReturnTo('/support?kind=tickets#x')).toBe('/support?kind=tickets');
+    for (const bad of [
+      '/m/home',
+      '/support/../admin',
+      '/supportx',
+      '//evil.example/support',
+      'https://evil.example/support',
+      '/\\evil.example/support',
+      '/\t/evil.example/support',
+      'javascript:alert(1)',
+      '',
+      null,
+      42,
+      `/support?${'x'.repeat(600)}`,
+    ])
+      expect(supportReturnTo(bad), String(bad)).toBe('/support');
   });
 });

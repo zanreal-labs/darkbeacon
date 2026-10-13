@@ -134,6 +134,10 @@ describe('rules', () => {
     expect(safeReturnTo('/ /evil.test')).toBe('/');
     expect(safeReturnTo('/a/../b#top')).toBe('/b#top');
     expect(safeReturnTo(undefined)).toBe('/');
+    // The support hub's page, back from the sign-in with the popup's query.
+    const support = `/support?kind=ticket&origin=${encodeURIComponent('https://map.example.com')}`;
+    expect(safeReturnTo(support)).toBe(support);
+    expect(safeReturnTo('//evil.test/support')).toBe('/');
   });
 });
 

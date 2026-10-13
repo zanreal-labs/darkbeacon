@@ -1,9 +1,10 @@
 /**
- * Who a ticket belongs to: an EVE character, as long as the same EVE account owns it. EVE SSO
- * says who owns a character with the `owner` hash of its token; it changes when the character is
- * sold or moved to another account. Each owner of a character gets its own support identity, so a
- * buyer never sees the seller's tickets, and a character that comes back to an earlier owner finds
- * that owner's tickets again.
+ * Who a ticket belongs to: an EVE character, as long as the same EVE account owns it. Pilots sign
+ * in to the hub as to any instance and pick one of their account's linked characters. EVE SSO says
+ * who owns a character with the `owner` hash of its token, which the app keeps for every linked
+ * character; it changes when the character is sold or moved to another EVE account. Each owner of
+ * a character gets its own support identity, so a buyer never sees the seller's tickets, and a
+ * character that comes back to an earlier owner finds that owner's tickets again.
  */
 
 /** One owner of one character, as the hub remembers it. */
@@ -24,10 +25,11 @@ export interface SupportIdentity {
   characterName: string;
 }
 
-/** The verified EVE SSO sign-in the identity is resolved from. */
-export interface EveSignIn {
+/** A character as the app holds it (linked with EVE SSO), which the identity is resolved from. */
+export interface CharacterOwner {
   characterId: number;
   characterName: string;
+  /** The `owner` claim of the character's last EVE SSO token. */
   ownerHash: string;
 }
 
@@ -46,12 +48,12 @@ export function characterOfDistinctId(distinctId: string): number | null {
 }
 
 /**
- * The identity a sign-in gets, given every owner the hub has seen for the character: the record of
- * the same owner when there is one, else a new generation after the highest.
+ * The identity of a character's current owner, given every owner the hub has seen for it: the
+ * record of the same owner when there is one, else a new generation after the highest.
  */
 export function resolveIdentity(
   known: readonly SupportIdentityRecord[],
-  signIn: EveSignIn,
+  signIn: CharacterOwner,
 ): { record: SupportIdentityRecord; isNew: boolean } {
   const mine = known.filter((r) => r.characterId === signIn.characterId);
   const same = mine.find((r) => r.ownerHash === signIn.ownerHash);

@@ -2,12 +2,14 @@ import { ManualClock, type DomainEvent, type EventLog, type NewEvent } from '@da
 import type { SupportCategory, SupportContext } from '@darkbeacon/shared';
 import type { SupportIdentity, SupportIdentityRecord } from '../domain/identity.js';
 import type {
+  AccountCharacter,
   DeskThread,
   DeskTicket,
   FeedbackSink,
   FeedbackSubmission,
   StoredHandle,
   SupportCrypto,
+  SupportAccounts,
   SupportDesk,
   SupportHandleStore,
   SupportIdentityStore,
@@ -86,6 +88,35 @@ export class MemoryDesk implements SupportDesk {
   }
 }
 
+/** The app's accounts as the hub sees them: linked characters with the owner hash the app keeps. */
+export class MemoryAccounts implements SupportAccounts {
+  readonly linked = new Map<string, Array<Omit<AccountCharacter, 'main'>>>();
+  readonly mains = new Map<string, number>();
+
+  link(accountId: string, character: Omit<AccountCharacter, 'main'>, main = false): void {
+    // A character belongs to one account: linking it elsewhere takes it away (a sale).
+    for (const [id, list] of this.linked)
+      this.linked.set(
+        id,
+        list.filter((c) => c.characterId !== character.characterId),
+      );
+    this.linked.set(accountId, [...(this.linked.get(accountId) ?? []), character]);
+    if (main) this.mains.set(accountId, character.characterId);
+  }
+
+  characters(accountId: string) {
+    const list = this.linked.get(accountId) ?? [];
+    const main = list.some((c) => c.characterId === this.mains.get(accountId))
+      ? this.mains.get(accountId)
+      : list[0]?.characterId;
+    return Promise.resolve(
+      list
+        .map((c) => ({ ...c, main: c.characterId === main }))
+        .sort((a, b) => Number(b.main) - Number(a.main)),
+    );
+  }
+}
+
 export class MemoryIdentities implements SupportIdentityStore {
   readonly records: SupportIdentityRecord[] = [];
   ofCharacter(characterId: number) {
@@ -110,11 +141,11 @@ export class MemoryHandles implements SupportHandleStore {
   byTokenHash(tokenHash: string) {
     return Promise.resolve(this.rows.find((r) => r.tokenHash === tokenHash) ?? null);
   }
-  ofIdentity(distinctId: string) {
-    return Promise.resolve(this.rows.filter((r) => r.distinctId === distinctId));
+  ofAccount(accountId: string) {
+    return Promise.resolve(this.rows.filter((r) => r.accountId === accountId));
   }
-  revoke(distinctId: string, id: string) {
-    const i = this.rows.findIndex((r) => r.id === id && r.distinctId === distinctId);
+  revoke(accountId: string, id: string) {
+    const i = this.rows.findIndex((r) => r.id === id && r.accountId === accountId);
     if (i < 0) return Promise.resolve(false);
     this.rows.splice(i, 1);
     return Promise.resolve(true);
@@ -185,6 +216,7 @@ export const testCrypto: SupportCrypto = {
 
 export function hubFixture(over: { feedback?: FeedbackSink | null } = {}) {
   const desk = new MemoryDesk();
+  const accounts = new MemoryAccounts();
   const identities = new MemoryIdentities();
   const handles = new MemoryHandles();
   const notes = new MemoryNotes();
@@ -195,6 +227,7 @@ export function hubFixture(over: { feedback?: FeedbackSink | null } = {}) {
   const hub = new SupportHub({
     desk,
     feedback: over.feedback === undefined ? feedback : over.feedback,
+    accounts,
     identities,
     handles,
     notes,
@@ -203,5 +236,5 @@ export function hubFixture(over: { feedback?: FeedbackSink | null } = {}) {
     events,
     clock,
   });
-  return { hub, desk, identities, handles, notes, feedback, events, limiter, clock };
+  return { hub, desk, accounts, identities, handles, notes, feedback, events, limiter, clock };
 }

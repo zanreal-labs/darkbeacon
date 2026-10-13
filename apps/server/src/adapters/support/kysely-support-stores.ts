@@ -23,7 +23,7 @@ export interface SupportStoreTables {
   support_handles: {
     id: string;
     token_hash: string;
-    distinct_id: string;
+    account_id: string;
     origin: string;
     created_at: number;
     last_used_at: number | null;
@@ -111,7 +111,7 @@ export class KyselyTicketNotes implements TicketNotes {
   }
 }
 
-/** Unread handles, by the SHA-256 of the token. Revoking deletes the row. */
+/** Unread handles of hub accounts, by the SHA-256 of the token. Revoking deletes the row. */
 export class KyselySupportHandles implements SupportHandleStore {
   constructor(private readonly database: Database) {}
 
@@ -125,7 +125,7 @@ export class KyselySupportHandles implements SupportHandleStore {
       .values({
         id: handle.id,
         token_hash: handle.tokenHash,
-        distinct_id: handle.distinctId,
+        account_id: handle.accountId,
         origin: handle.origin,
         created_at: handle.createdAt,
         last_used_at: handle.lastUsedAt,
@@ -142,20 +142,20 @@ export class KyselySupportHandles implements SupportHandleStore {
     return row ? toHandle(row) : null;
   }
 
-  async ofIdentity(distinctId: string): Promise<StoredHandle[]> {
+  async ofAccount(accountId: string): Promise<StoredHandle[]> {
     const rows = await this.db
       .selectFrom('support_handles')
       .selectAll()
-      .where('distinct_id', '=', distinctId)
+      .where('account_id', '=', accountId)
       .execute();
     return rows.map(toHandle);
   }
 
-  async revoke(distinctId: string, id: string): Promise<boolean> {
+  async revoke(accountId: string, id: string): Promise<boolean> {
     const result = await this.db
       .deleteFrom('support_handles')
       .where('id', '=', id)
-      .where('distinct_id', '=', distinctId)
+      .where('account_id', '=', accountId)
       .executeTakeFirst();
     return Number(result.numDeletedRows) > 0;
   }
@@ -168,7 +168,7 @@ export class KyselySupportHandles implements SupportHandleStore {
 function toHandle(row: SupportStoreTables['support_handles']): StoredHandle {
   return {
     id: row.id,
-    distinctId: row.distinct_id,
+    accountId: row.account_id,
     origin: row.origin,
     createdAt: Number(row.created_at),
     lastUsedAt: row.last_used_at === null ? null : Number(row.last_used_at),

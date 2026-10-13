@@ -3,9 +3,10 @@ import { TelemetryPage, TelemetrySection, TelemetryThemeId, ViewportBucket } fro
 
 /**
  * Support tickets and feedback (see docs/support.md). Every instance can open the support hub
- * (by default the maintainers' instance) in a popup; the hub keeps tickets per EVE character in
- * PostHog Support or in its own database. None of this goes through anonymous telemetry: tickets
- * carry what a person typed and are tied to the character they signed in with.
+ * (by default the maintainers' instance) in a popup; pilots sign in to the hub as to any
+ * Darkbeacon instance, and the hub keeps tickets per EVE character of their account in PostHog
+ * Support or in its own database. None of this goes through anonymous telemetry: tickets carry
+ * what a person typed and are tied to one of their characters.
  */
 
 /** The maintainers' hub. `SUPPORT_HUB_URL=off` turns the entries off, another URL picks another hub. */
@@ -258,6 +259,29 @@ export function isSupportOrigin(value: unknown): value is string {
   }
 }
 
+/** The hub's page. */
+export const SUPPORT_PATH = '/support';
+
+/**
+ * Where the hub's page sends a signed-out pilot back to after the app's sign-in: the support page
+ * itself (with its query: the tab and the opener's origin), never anywhere else. Anything that is
+ * not a `/support` path on this site becomes `/support`.
+ */
+export function supportReturnTo(value: unknown): string {
+  if (typeof value !== 'string' || value.length > 512) return SUPPORT_PATH;
+  // eslint-disable-next-line no-control-regex
+  if (!value.startsWith('/') || /[\x00-\x20\x7f\\]/.test(value)) return SUPPORT_PATH;
+  try {
+    const base = 'http://hub.invalid';
+    const url = new URL(value, base);
+    if (url.origin !== base) return SUPPORT_PATH;
+    if (url.pathname !== SUPPORT_PATH && url.pathname !== `${SUPPORT_PATH}/`) return SUPPORT_PATH;
+    return `${SUPPORT_PATH}${url.search}`;
+  } catch {
+    return SUPPORT_PATH;
+  }
+}
+
 /** `postMessage` between an instance and the hub popup; both sides check the origin and the source. */
 export const SUPPORT_MESSAGE_SOURCE = 'darkbeacon-support';
 export const SupportWindowMessage = z.discriminatedUnion('type', [
@@ -302,7 +326,7 @@ export const SUPPORT_HANDLE = /^dbsh_[A-Za-z0-9_-]{43}$/;
 // ---- Consent copy, shown next to the forms (and in docs/support.md) ----
 
 export const SUPPORT_TICKET_CONSENT =
-  "This sends your message and the details listed below to the Darkbeacon maintainers (ZanReal), stored in PostHog (EU). Your ticket is linked to the EVE character you sign in with, so you can follow it from any Darkbeacon instance. We don't send map contents, system names or your instance's address unless you tick them. You can ask us to delete your tickets.";
+  "This sends your message and the details listed below to the Darkbeacon maintainers (ZanReal), stored in PostHog (EU). Your ticket is linked to the EVE character you pick, so you can follow it from any Darkbeacon instance. We don't send map contents, system names or your instance's address unless you tick them. You can ask us to delete your tickets.";
 export const SUPPORT_FEEDBACK_CONSENT =
   'Anonymous unless you sign in. No reply is sent; open a ticket if you need one.';
 
@@ -310,7 +334,11 @@ export const SUPPORT_FEEDBACK_CONSENT =
 
 const message = (max: number) => z.string().trim().min(1, 'Write a message first').max(max);
 
+/** One of the signed-in account's linked characters; the main character when left out. */
+const CharacterChoice = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+
 export const CreateSupportTicketRequest = z.strictObject({
+  characterId: CharacterChoice.optional(),
   category: SupportCategory,
   message: message(SUPPORT_MESSAGE_MAX),
   context: SupportContext.default({}),
@@ -341,6 +369,12 @@ export const CreateSupportHandleRequest = z.strictObject({
 });
 export type CreateSupportHandleRequest = z.infer<typeof CreateSupportHandleRequest>;
 
+/** `?character=`: which of the account's characters a ticket belongs to (default: the main one). */
+export const SupportCharacterQuery = z.object({
+  character: z.coerce.number().pipe(CharacterChoice).optional(),
+});
+export type SupportCharacterQuery = z.infer<typeof SupportCharacterQuery>;
+
 export const SupportUnreadQuery = z.object({ h: z.string().regex(SUPPORT_HANDLE).optional() });
 export type SupportUnreadQuery = z.infer<typeof SupportUnreadQuery>;
 
@@ -370,15 +404,22 @@ export type AdminSupportTicketUpdate = z.infer<typeof AdminSupportTicketUpdate>;
 export const SupportCharacterDto = z.object({ id: z.number().int(), name: z.string() });
 export type SupportCharacterDto = z.infer<typeof SupportCharacterDto>;
 
-/** What the hub page needs: whether the hub is on, who is signed in and the CSRF token. */
+/** A character of the signed-in account that tickets can belong to. */
+export const SupportAccountCharacterDto = SupportCharacterDto.extend({ main: z.boolean() });
+export type SupportAccountCharacterDto = z.infer<typeof SupportAccountCharacterDto>;
+
+/**
+ * What the hub page needs: whether the hub is on, whether someone is signed in (the app's own
+ * session) and the EVE characters of their account, main first. Signed in without a character
+ * (a Discord account that linked none): tickets wait until one is linked.
+ */
 export const SupportSessionDto = z.object({
   available: z.boolean(),
   backend: SupportBackend.nullable(),
   /** Feedback can be sent (a surveys project, or the hub's own store). */
   feedback: z.boolean(),
-  character: SupportCharacterDto.nullable(),
-  /** Sent back as `x-support-csrf` on every change. */
-  csrf: z.string().nullable(),
+  signedIn: z.boolean(),
+  characters: z.array(SupportAccountCharacterDto),
 });
 export type SupportSessionDto = z.infer<typeof SupportSessionDto>;
 
@@ -404,6 +445,13 @@ export const SupportMessageDto = z.object({
   createdAt: z.number().int(),
 });
 export type SupportMessageDto = z.infer<typeof SupportMessageDto>;
+
+/** My tickets: those of each character of the account, main first. */
+export const SupportTicketGroupDto = z.object({
+  character: SupportCharacterDto,
+  tickets: z.array(SupportTicketDto),
+});
+export type SupportTicketGroupDto = z.infer<typeof SupportTicketGroupDto>;
 
 export const SupportThreadDto = z.object({ ticket: SupportTicketDto, messages: z.array(SupportMessageDto) });
 export type SupportThreadDto = z.infer<typeof SupportThreadDto>;

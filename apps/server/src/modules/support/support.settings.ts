@@ -6,8 +6,6 @@ export const DEFAULT_SUPPORT_POSTHOG_HOST = 'https://eu.i.posthog.com';
 
 export interface SupportHubSettings {
   backend: SupportBackend;
-  /** EVE SSO client of the hub's sign-in: SUPPORT_EVE_CLIENT_* or the instance's own. */
-  eve: OAuthClient;
   posthog: { host: string; publicToken: string; secretKey: string } | null;
   /** PostHog surveys for feedback (PostHog desk only; the local desk keeps feedback itself). */
   surveys: { host: string; projectKey: string; surveys: SurveysConfig } | null;
@@ -32,14 +30,14 @@ const OFF = new Set(['off', 'false', '0', 'no', 'none']);
  * configuration knowing about it (see docs/support.md):
  *
  * - every instance: SUPPORT_HUB_URL (default the maintainers' hub; `off` hides the entries);
- * - a hub: SUPPORT_HUB=on, SUPPORT_BACKEND (`posthog` or `local`), EVE SSO (the instance's or
- *   SUPPORT_EVE_CLIENT_ID/SECRET) and, for PostHog, SUPPORT_POSTHOG_HOST, SUPPORT_PUBLIC_TOKEN,
- *   SUPPORT_SECRET_KEY, SUPPORT_SURVEYS_KEY, SUPPORT_SURVEY_QUICK, SUPPORT_SURVEY_FEATURE and
- *   optionally SUPPORT_WEBHOOK_SECRET.
+ * - a hub: SUPPORT_HUB=on, SUPPORT_BACKEND (`posthog` or `local`) and, for PostHog,
+ *   SUPPORT_POSTHOG_HOST, SUPPORT_PUBLIC_TOKEN, SUPPORT_SECRET_KEY, SUPPORT_SURVEYS_KEY,
+ *   SUPPORT_SURVEY_QUICK, SUPPORT_SURVEY_FEATURE and optionally SUPPORT_WEBHOOK_SECRET. Pilots
+ *   sign in to a hub as to any instance and link their EVE characters with its EVE SSO app.
  */
 export function supportSettings(
   env: NodeJS.ProcessEnv,
-  instance: { publicUrl: string; eve: OAuthClient | null },
+  instance: { publicUrl: string; eve: OAuthClient | null; demoMode?: boolean },
 ): SupportSettings {
   const problems: string[] = [];
   const read = (name: string) => env[name]?.trim() || undefined;
@@ -63,7 +61,7 @@ export function supportSettings(
 
 function hubSettings(
   read: (name: string) => string | undefined,
-  instance: { eve: OAuthClient | null },
+  instance: { eve: OAuthClient | null; demoMode?: boolean },
   problems: string[],
 ): SupportHubSettings | null {
   const backendRaw = (read('SUPPORT_BACKEND') ?? 'posthog').toLowerCase();
@@ -72,25 +70,21 @@ function hubSettings(
     return null;
   }
   const backend: SupportBackend = backendRaw;
-  const eveId = read('SUPPORT_EVE_CLIENT_ID');
-  const eveSecret = read('SUPPORT_EVE_CLIENT_SECRET');
-  if (!eveId !== !eveSecret) {
-    problems.push('set both SUPPORT_EVE_CLIENT_ID and SUPPORT_EVE_CLIENT_SECRET; the support hub is off');
-    return null;
-  }
-  const eve = eveId && eveSecret ? { clientId: eveId, clientSecret: eveSecret } : instance.eve;
-  if (!eve) {
+  // Tickets belong to EVE characters linked to the hub's accounts; only demo characters exist without it.
+  if (!instance.eve && !instance.demoMode)
     problems.push(
-      'the support hub signs pilots in with EVE SSO: set EVE_CLIENT_ID/SECRET or SUPPORT_EVE_CLIENT_ID/SECRET',
+      'the support hub needs EVE SSO (EVE_CLIENT_ID/SECRET) so pilots can link the characters their tickets belong to',
     );
-    return null;
-  }
+  if (read('SUPPORT_EVE_CLIENT_ID') || read('SUPPORT_EVE_CLIENT_SECRET'))
+    problems.push(
+      'SUPPORT_EVE_CLIENT_ID/SECRET are no longer used: the hub signs pilots in like any instance (EVE_CLIENT_ID/SECRET)',
+    );
   const webhookSecret = read('SUPPORT_WEBHOOK_SECRET') ?? null;
   if (webhookSecret !== null && webhookSecret.length < 24) {
     problems.push('SUPPORT_WEBHOOK_SECRET is shorter than 24 characters; the webhook is off');
   }
   const webhook = webhookSecret !== null && webhookSecret.length >= 24 ? webhookSecret : null;
-  if (backend === 'local') return { backend, eve, posthog: null, surveys: null, webhookSecret: webhook };
+  if (backend === 'local') return { backend, posthog: null, surveys: null, webhookSecret: webhook };
 
   const host = originOf(read('SUPPORT_POSTHOG_HOST') ?? DEFAULT_SUPPORT_POSTHOG_HOST, true);
   const publicToken = read('SUPPORT_PUBLIC_TOKEN');
@@ -118,7 +112,7 @@ function hubSettings(
       `SUPPORT_SURVEY_*: ${error instanceof Error ? error.message : String(error)}; feedback is off`,
     );
   }
-  return { backend, eve, posthog: { host, publicToken, secretKey }, surveys, webhookSecret: webhook };
+  return { backend, posthog: { host, publicToken, secretKey }, surveys, webhookSecret: webhook };
 }
 
 /** The origin of a URL when it is one support may use (https, or loopback for development). */

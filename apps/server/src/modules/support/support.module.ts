@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, Module, type OnApplicationBootstrap } from 
 import { InstanceSettingsService } from '@darkbeacon/access';
 import type { Clock, EventLog } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
+import { AccountService, CharacterService } from '@darkbeacon/identity';
 import {
   SupportClientService,
   SupportHub,
@@ -9,9 +10,9 @@ import {
   type FeedbackSink,
   type SupportDesk,
 } from '@darkbeacon/support';
-import { EveSsoHttp } from '../../adapters/identity/eve-sso-http.js';
 import type { FetchLike } from '../../adapters/identity/oauth-http.js';
 import { SecretBox } from '../../adapters/identity/secret-box.js';
+import { AppSupportAccounts } from '../../adapters/support/app-support-accounts.js';
 import {
   KyselyClientHandles,
   KyselySupportHandles,
@@ -26,20 +27,13 @@ import type { AppConfig } from '../../config/config.js';
 import { RateLimiter } from '../../platform/rate-limiter.js';
 import { APP_CONFIG, CLOCK, EVENT_LOG, HTTP_FETCH } from '../../platform/tokens.js';
 import { APP_VERSION } from '../../platform/version.js';
-import { SupportSessions } from './support-session.js';
 import {
   SupportAdminController,
   SupportClientController,
   SupportHubController,
 } from './support.controller.js';
 import { supportSettings, type SupportSettings } from './support.settings.js';
-import {
-  SUPPORT_EVE_SSO,
-  SUPPORT_HUB,
-  SUPPORT_INBOX,
-  SUPPORT_SESSIONS,
-  SUPPORT_SETTINGS,
-} from './support.tokens.js';
+import { SUPPORT_HUB, SUPPORT_INBOX, SUPPORT_SETTINGS } from './support.tokens.js';
 
 /** The name pilots see on answers from the hub's own inbox. */
 const SUPPORT_AUTHOR = 'Darkbeacon support';
@@ -59,9 +53,10 @@ class SupportStartup implements OnApplicationBootstrap {
 
 /**
  * Support tickets and feedback (docs/support.md). On every instance: the help menu's target and
- * each account's unread handle. On a hub (SUPPORT_HUB=on): its own EVE sign-in, tickets through
- * PostHog Support or its own tables, feedback, unread handles and, with its own tables, an inbox
- * for its admins. Self-contained like telemetry: its own environment, tables and routes.
+ * each account's unread handle. On a hub (SUPPORT_HUB=on): tickets of its accounts' EVE characters
+ * (pilots sign in as to any instance) through PostHog Support or its own tables, feedback, unread
+ * handles and, with its own tables, an inbox for its admins. Self-contained like telemetry: its
+ * own environment, tables and routes; it reads accounts and characters from identity.
  */
 @Module({
   controllers: [SupportClientController, SupportHubController, SupportAdminController],
@@ -74,23 +69,6 @@ class SupportStartup implements OnApplicationBootstrap {
         publicUrl: config.publicUrl,
       }),
       inject: [APP_CONFIG],
-    },
-    {
-      provide: SUPPORT_SESSIONS,
-      useFactory: (config: AppConfig, clock: Clock) =>
-        new SupportSessions(
-          new SecretBox(config.secretKey, 'support-session'),
-          new SecretBox(config.secretKey, 'support-oauth'),
-          new URL(config.publicUrl).origin,
-          () => clock.now(),
-        ),
-      inject: [APP_CONFIG, CLOCK],
-    },
-    {
-      provide: SUPPORT_EVE_SSO,
-      useFactory: (settings: Settings, clock: Clock, fetch: FetchLike) =>
-        settings.hub ? new EveSsoHttp(settings.hub.eve, clock, fetch) : null,
-      inject: [SUPPORT_SETTINGS, CLOCK, HTTP_FETCH],
     },
     {
       provide: LocalSupportDesk,
@@ -107,6 +85,8 @@ class SupportStartup implements OnApplicationBootstrap {
         clock: Clock,
         fetch: FetchLike,
         limiter: RateLimiter,
+        accounts: AccountService,
+        characters: CharacterService,
       ): SupportHub | null => {
         const hub = settings.hub;
         if (!hub) return null;
@@ -121,6 +101,7 @@ class SupportStartup implements OnApplicationBootstrap {
         return new SupportHub({
           desk,
           feedback,
+          accounts: new AppSupportAccounts(accounts, characters),
           identities: new KyselySupportIdentities(database),
           handles: new KyselySupportHandles(database),
           notes: new KyselyTicketNotes(database),
@@ -130,7 +111,17 @@ class SupportStartup implements OnApplicationBootstrap {
           clock,
         });
       },
-      inject: [SUPPORT_SETTINGS, Database, LocalSupportDesk, EVENT_LOG, CLOCK, HTTP_FETCH, RateLimiter],
+      inject: [
+        SUPPORT_SETTINGS,
+        Database,
+        LocalSupportDesk,
+        EVENT_LOG,
+        CLOCK,
+        HTTP_FETCH,
+        RateLimiter,
+        AccountService,
+        CharacterService,
+      ],
     },
     {
       provide: SUPPORT_INBOX,
