@@ -87,7 +87,7 @@ describe('the view format', () => {
 
   it('builds the built-in views from widgets that exist', () => {
     const ids = new Set<string>(CORE_WIDGETS.map((w) => w.id));
-    expect(BUILT_IN_VIEWS.map((v) => v.name)).toEqual(['Scan', 'PvP', 'Nav']);
+    expect(BUILT_IN_VIEWS.map((v) => v.name)).toEqual(['Scan', 'PvP', 'Roll']);
     for (const v of BUILT_IN_VIEWS) {
       expect(
         v.view.layout.visible!.every((id) => ids.has(id)),
@@ -95,9 +95,9 @@ describe('the view format', () => {
       ).toBe(true);
       expect(ViewPresetDto.safeParse(v.view).success, v.name).toBe(true);
     }
-    expect(BUILT_IN_VIEWS[0]!.view.layout.visible).toEqual(['info', 'signatures', 'local']);
+    expect(BUILT_IN_VIEWS[0]!.view.layout.visible).toEqual(['info', 'signatures', 'routes']);
     expect(BUILT_IN_VIEWS[1]!.view.layout.visible).toEqual(['info', 'local', 'kills']);
-    expect(BUILT_IN_VIEWS[2]!.view.layout.visible).toEqual(['info', 'routes', 'connections']);
+    expect(BUILT_IN_VIEWS[2]!.view.layout.visible).toEqual(['info', 'connections', 'local']);
   });
 
   it('keeps the map’s published views it can read, with their slots', () => {
@@ -124,7 +124,7 @@ describe('quick slots', () => {
     expect(names(EMPTY_PERSONAL, [])).toEqual([
       [1, 'Scan', false],
       [2, 'PvP', false],
-      [3, 'Nav', false],
+      [3, 'Roll', false],
     ]);
   });
 
@@ -132,7 +132,7 @@ describe('quick slots', () => {
     expect(names(EMPTY_PERSONAL)).toEqual([
       [1, 'Fleet', false],
       [2, 'PvP', false],
-      [3, 'Nav', false],
+      [3, 'Roll', false],
     ]);
   });
 
@@ -151,15 +151,15 @@ describe('quick slots', () => {
     expect(names(pinned, map, 'm2')).toEqual([
       [1, 'Fleet', false],
       [2, 'PvP', false],
-      [3, 'Nav', false],
+      [3, 'Roll', false],
     ]);
     // My view deleted, the map's view unpublished: the defaults again.
     expect(names({ ...pinned, views: [] }, mapViews([published('fleet', 'Fleet', 1)]))).toEqual([
       [1, 'Fleet', false],
       [2, 'PvP', false],
-      [3, 'Nav', false],
+      [3, 'Roll', false],
     ]);
-    expect(findView({ source: 'builtin', id: 'nav' }, mine, map)?.name).toBe('Nav');
+    expect(findView({ source: 'builtin', id: 'roll' }, mine, map)?.name).toBe('Roll');
     expect(findView({ source: 'personal', id: 'gone' }, mine, map)).toBeNull();
   });
 

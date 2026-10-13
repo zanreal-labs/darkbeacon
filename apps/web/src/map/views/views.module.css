@@ -41,9 +41,25 @@
   color: var(--dbk-color-text);
 }
 
+.slot {
+  position: relative;
+}
+
 .slot[aria-pressed='true'] {
   background: var(--dbk-color-accent);
   color: var(--dbk-color-accent-contrast);
+}
+
+/* The active view was changed since it was switched to (a window moved or grew): a small dot. */
+.slot[data-modified]::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--dbk-color-accent-contrast);
 }
 
 .slot:focus-visible,

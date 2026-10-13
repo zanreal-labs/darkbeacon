@@ -81,20 +81,20 @@ describe('quick view slots', () => {
     render();
     expect(slot(1).getAttribute('aria-label')).toBe('View 1: Scan');
     expect(slot(2).getAttribute('aria-label')).toBe('View 2: PvP');
-    expect(slot(3).getAttribute('aria-label')).toBe('View 3: Nav');
+    expect(slot(3).getAttribute('aria-label')).toBe('View 3: Roll');
     expect(slot(1).getAttribute('aria-pressed')).toBe('false');
 
     fireEvent.click(slot(3));
-    expect(visible()).toBe('info,routes,connections');
+    expect(visible()).toBe('info,connections,local');
     expect(slot(3).getAttribute('aria-pressed')).toBe('true');
     expect((JSON.parse(window.localStorage.getItem(LAYOUT_KEY)!) as WidgetsLayout).visible).toEqual([
       'info',
-      'routes',
       'connections',
+      'local',
     ]);
 
     fireEvent.click(slot(1));
-    expect(visible()).toBe('info,signatures,local');
+    expect(visible()).toBe('info,signatures,routes');
     expect(slot(1).getAttribute('aria-pressed')).toBe('true');
     expect(slot(3).getAttribute('aria-pressed')).toBe('false');
   });
@@ -104,17 +104,17 @@ describe('quick view slots', () => {
     alt('Digit2');
     expect(visible()).toBe('info,local,kills');
     alt('Numpad3');
-    expect(visible()).toBe('info,routes,connections');
+    expect(visible()).toBe('info,connections,local');
     alt('Digit1', { shiftKey: true });
     alt('Digit1', { ctrlKey: true });
-    expect(visible()).toBe('info,routes,connections');
+    expect(visible()).toBe('info,connections,local');
     // In a text field Alt+1 is text.
     const field = screen.getByRole('textbox', { name: 'Notes' });
     field.focus();
     act(() => {
       field.dispatchEvent(new KeyboardEvent('keydown', { code: 'Digit1', altKey: true, bubbles: true }));
     });
-    expect(visible()).toBe('info,routes,connections');
+    expect(visible()).toBe('info,connections,local');
     expect(
       slotKey({ altKey: true, ctrlKey: false, metaKey: false, shiftKey: false, code: 'Digit4' }),
     ).toBeNull();
@@ -168,7 +168,7 @@ describe('quick view slots', () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'Views' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Reset slots to the map’s defaults' }));
-    await waitFor(() => expect(slot(2).getAttribute('aria-label')).toBe('View 2: PvP'));
+    await waitFor(() => expect(slot(2).getAttribute('aria-label')).toMatch(/^View 2: PvP/));
     expect(puts.preferences.at(-1)).toEqual({ [VIEWS_AREA]: expect.objectContaining({ pins: {} }) });
   });
 
@@ -215,7 +215,7 @@ describe('quick view slots', () => {
     await user.click(screen.getByRole('button', { name: 'Publish' }));
     await waitFor(() => expect(puts.views).toHaveLength(1));
     expect(puts.views[0]!.map((v) => [v.name, v.slot, v.view.layout.visible])).toEqual([
-      ['Fleet scan', 2, ['info', 'signatures', 'local']],
+      ['Fleet scan', 2, ['info', 'signatures', 'routes']],
     ]);
     expect(puts.preferences).toEqual([]);
   });

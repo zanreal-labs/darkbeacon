@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { buildPath, routes, type MapViewDto, type ViewSlot } from '@darkbeacon/shared';
 import { api } from '../../lib/api';
@@ -29,8 +29,10 @@ export interface ViewsController {
   published: NamedView[];
   /** What quick slots 1, 2 and 3 show. */
   slots: ReturnType<typeof resolveSlots>;
-  /** The slot whose view the screen shows now, if any. */
+  /** The slot last switched to (or, before any switch, the one the screen matches). */
   active: ViewSlot | null;
+  /** The screen was changed since that slot's view was put on it. */
+  modified: boolean;
   /** I pinned something over the map's defaults here. */
   hasPins: boolean;
   /** The map's managers publish views. */
@@ -81,7 +83,26 @@ export function useViews({
     [mine],
   );
   const slots = useMemo(() => resolveSlots(mapId, mine, published), [mapId, mine, published]);
-  const active = slots.find((s) => showsView(s.view.view, widgets.layout, prefs))?.slot ?? null;
+  // The slot switched to last stays lit even after a window moves or grows: a pilot must always see
+  // which view he is in. Remembered per map in this browser.
+  const activeKey = `dbk-active-view:${mapId}`;
+  const [chosen, setChosen] = useState<ViewSlot | null>(() => readActive(activeKey));
+  const choose = useCallback(
+    (slot: ViewSlot | null) => {
+      setChosen(slot);
+      try {
+        if (slot === null) window.localStorage.removeItem(activeKey);
+        else window.localStorage.setItem(activeKey, String(slot));
+      } catch {
+        // Storage may be blocked; the choice holds until the page is left.
+      }
+    },
+    [activeKey],
+  );
+  const matching = slots.find((s) => showsView(s.view.view, widgets.layout, prefs))?.slot ?? null;
+  const active = chosen ?? matching;
+  const activeView = slots.find((s) => s.slot === active)?.view;
+  const modified = activeView ? !showsView(activeView.view, widgets.layout, prefs) : false;
 
   const putMap = useMutation({
     mutationFn: (list: MapViewDto[]) =>
@@ -97,11 +118,13 @@ export function useViews({
 
   const apply = useCallback(
     (view: NamedView) => {
+      const slot = slots.find((s) => s.view.source === view.source && s.view.id === view.id)?.slot ?? null;
+      choose(slot);
       widgets.replace(view.view.layout);
       if (Object.keys(view.view.canvas).length > 0) setCanvasPrefs(view.view.canvas);
       onApplied?.(view);
     },
-    [widgets, onApplied],
+    [widgets, onApplied, slots, choose],
   );
 
   const current = useCallback(() => captureView(widgets.layout, prefs), [widgets.layout, prefs]);
@@ -115,12 +138,15 @@ export function useViews({
     published,
     slots,
     active,
+    modified,
     hasPins: Object.keys(mine.pins[mapId] ?? {}).length > 0,
     canPublish,
     apply,
     applySlot: (slot) => {
       const found = slots.find((s) => s.slot === slot);
-      if (found) apply(found.view);
+      if (!found) return;
+      apply(found.view);
+      choose(slot);
     },
     current,
     saveAs: async (name) => {
@@ -183,4 +209,13 @@ export function useViews({
 function withoutSlot(view: MapViewDto): MapViewDto {
   const { slot: _slot, ...rest } = view;
   return rest;
+}
+
+function readActive(key: string): ViewSlot | null {
+  try {
+    const raw = typeof window === 'undefined' ? null : window.localStorage.getItem(key);
+    return raw === '1' || raw === '2' || raw === '3' ? (Number(raw) as ViewSlot) : null;
+  } catch {
+    return null;
+  }
 }

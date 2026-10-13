@@ -3,7 +3,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import {
   Check,
-  ChevronDown,
   Globe,
   LayoutTemplate,
   Pencil,
@@ -224,8 +223,6 @@ export function ViewSwitcher({ views, compact = false }: { views: ViewsControlle
             ) : (
               <LayoutTemplate aria-hidden />
             )}
-            {!compact && <span>Views</span>}
-            <ChevronDown aria-hidden className={styles.chevron} />
           </button>
         </MenuTrigger>
       </Tooltip>
@@ -294,8 +291,9 @@ export function ViewSwitcher({ views, compact = false }: { views: ViewsControlle
                 type="button"
                 className={styles.slot}
                 aria-pressed={s.slot === views.active}
-                aria-label={`View ${s.slot}: ${s.view.name}`}
-                onClick={() => views.apply(s.view)}
+                aria-label={`View ${s.slot}: ${s.view.name}${s.slot === views.active && views.modified ? ', changed since' : ''}`}
+                data-modified={(s.slot === views.active && views.modified) || undefined}
+                onClick={() => views.applySlot(s.slot)}
               >
                 {s.slot}
               </button>
