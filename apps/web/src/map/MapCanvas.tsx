@@ -447,10 +447,31 @@ export function MapCanvas({
     if (!nodes.every((n) => n.measured?.width)) return; // runs again once React Flow measured them
     opened.current = true;
     if (isViewport(preferences.viewport)) {
-      // Saved as the point in the middle of the view, so it fits a phone and a desktop alike.
+      // Saved as the point in the middle of the view, so it fits a phone and a desktop alike. A
+      // saved view that shows none of the map's systems (they were hidden, moved or imported since)
+      // is not restored: the map opens as if nothing was saved.
       const { x, y, zoom } = preferences.viewport;
-      centerOn({ x, y }, Math.min(zoom, OPEN_MAX_ZOOM), false);
-      return;
+      const box = visibleBox();
+      const at = Math.min(zoom, OPEN_MAX_ZOOM);
+      const view = box && {
+        x: x - box.width / 2 / at,
+        y: y - box.height / 2 / at,
+        width: box.width / at,
+        height: box.height / at,
+      };
+      const showsSystems =
+        !view ||
+        rectsOf().some(
+          (r) =>
+            r.x < view.x + view.width &&
+            r.x + r.width > view.x &&
+            r.y < view.y + view.height &&
+            r.y + r.height > view.y,
+        );
+      if (showsSystems) {
+        centerOn({ x, y }, at, false);
+        return;
+      }
     }
     // A chain that fits on screen at the readable zoom opens centred as a whole.
     const bounds = boundsOf(rectsOf());
