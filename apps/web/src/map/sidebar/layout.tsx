@@ -3,19 +3,25 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { usePreference } from '../../lib/preferences';
 
-/** The system sidebar's own sections, in their default order. Plugin widgets follow them. */
+/**
+ * The system sidebar's own sections, in their default order: what a pilot reads in a fight first
+ * (signatures, local), the records after. Plugin widgets follow them.
+ */
 export const SIDEBAR_SECTIONS = [
   { id: 'system', title: 'System' },
   { id: 'signatures', title: 'Signatures' },
+  { id: 'local', title: 'Local' },
   { id: 'structures', title: 'Structures' },
   { id: 'comments', title: 'Comments' },
   { id: 'connections', title: 'Connections' },
-  { id: 'activity', title: 'Activity' },
   { id: 'kills', title: 'Kills' },
-  { id: 'local', title: 'Local' },
+  { id: 'activity', title: 'Activity' },
   { id: 'routes', title: 'Routes' },
   { id: 'history', title: 'History' },
 ] as const;
+
+/** Open until someone folds them; every other section starts folded, its title bar summing it up. */
+export const DEFAULT_OPEN_SECTIONS: readonly string[] = ['signatures', 'local'];
 
 /** Sections hidden and the order chosen (ids; absent ones keep their default place after them). */
 export interface SidebarLayout {

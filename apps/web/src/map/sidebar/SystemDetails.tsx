@@ -21,14 +21,14 @@ import { api, ApiError } from '../../lib/api';
 import type { MapPermissions } from '../../lib/roles';
 import { useMe } from '../../lib/session';
 import {
-  Button,
   IconButton,
   Menu,
   MenuContent,
   MenuItem,
   MenuLabel,
+  MenuRadioGroup,
+  MenuRadioItem,
   MenuTrigger,
-  Select,
   Tooltip,
   useToast,
 } from '../../ui';
@@ -71,7 +71,10 @@ export function spaceText(info: UniverseSystemDto): string {
   return `${band} ${info.security.toFixed(2)}`;
 }
 
-/** The node's designation pill: class or security, in its EVE colour. */
+/**
+ * The node's designation pill: class or security, in its EVE colour. The space in words is its
+ * tooltip and what screen readers hear; the pill alone says it to the eye.
+ */
 export function DesignationPill({ info }: { info: UniverseSystemDto | undefined }) {
   const pill = classPill(info);
   const style =
@@ -80,9 +83,11 @@ export function DesignationPill({ info }: { info: UniverseSystemDto | undefined 
       : pill.kind === 'class'
         ? { background: cssVar(pill.token) }
         : undefined;
+  const words = info ? spaceText(info) : undefined;
   return (
-    <span className={styles.pill} data-kind={pill.kind} style={style}>
-      {pill.label}
+    <span className={styles.pill} data-kind={pill.kind} style={style} title={words}>
+      <span aria-hidden={words ? true : undefined}>{pill.label}</span>
+      {words && <span className="sr-only">{words}</span>}
     </span>
   );
 }
@@ -118,9 +123,67 @@ function Effect({ effect, whClass }: { effect: WormholeEffect; whClass: number |
   );
 }
 
+const statusColor = (s: SystemStatus) =>
+  s === 'unknown' ? 'var(--dbk-color-border-strong)' : cssVar(`status-${s}`);
+
+/** Markdown notes as one quiet run of plain text, for the header's preview. */
+export function notesPreview(markdown: string): string {
+  return markdown
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[*_`#>~]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** The status as a small coloured chip; members pick another from its menu. */
+function StatusChip({ system, can, store }: { system: MapSystemDto; can: MapPermissions; store: Store }) {
+  const status = system.status;
+  const chip = (
+    <span className={styles.statusChip} data-status={status}>
+      <span className={styles.statusDot} style={{ background: statusColor(status) }} />
+      {STATUS_LABEL[status]}
+    </span>
+  );
+  if (!can.edit)
+    return status === 'unknown' ? null : (
+      <span role="img" aria-label={`Status: ${STATUS_LABEL[status]}`}>
+        {chip}
+      </span>
+    );
+  return (
+    <Menu>
+      <MenuTrigger asChild>
+        <button type="button" className={styles.statusButton} aria-label={`Status: ${STATUS_LABEL[status]}`}>
+          {chip}
+        </button>
+      </MenuTrigger>
+      <MenuContent align="end">
+        <MenuLabel>Status</MenuLabel>
+        <MenuRadioGroup
+          value={status}
+          onValueChange={(next) =>
+            void store.updateSystem(system.solarSystemId, { status: next as SystemStatus })
+          }
+        >
+          {SystemStatus.options.map((s) => (
+            <MenuRadioItem
+              key={s}
+              value={s}
+              icon={<span className={styles.statusDot} style={{ background: statusColor(s) }} />}
+            >
+              {STATUS_LABEL[s]}
+            </MenuRadioItem>
+          ))}
+        </MenuRadioGroup>
+      </MenuContent>
+    </Menu>
+  );
+}
+
 /**
- * The top of the sidebar, always in view: pill, name, where it is, effect and statics, the lock
- * and the close button (which clears the selection).
+ * The top of the sidebar, always in view and read at a glance: pill, name, status, lock and close
+ * on one line; where it is, the effect and the statics on the next; who holds it; and the notes
+ * in a line or two while the System section is folded (a click opens them there).
  */
 export function SystemIdentity({
   system,
@@ -130,6 +193,8 @@ export function SystemIdentity({
   onClose,
   dragHandle,
   holder,
+  notes,
+  onOpenNotes,
 }: {
   system: MapSystemDto;
   info: UniverseSystemDto | undefined;
@@ -140,9 +205,14 @@ export function SystemIdentity({
   dragHandle?: ReactNode;
   /** Who holds the system (intel), under where it is. */
   holder?: ReactNode;
+  /** The notes to preview; nothing while they are shown in full below. */
+  notes?: string;
+  /** Opens the notes (the System section). */
+  onOpenNotes?(): void;
 }) {
   const realName = info?.name ?? 'Unknown system';
   const custom = system.customName || system.temporaryName;
+  const preview = notes ? notesPreview(notes) : '';
   return (
     <header className={styles.identity} data-identity>
       {dragHandle}
@@ -153,6 +223,7 @@ export function SystemIdentity({
         </h2>
         {custom && <span className={styles.realName}>{realName}</span>}
         <span className={styles.identityActions}>
+          <StatusChip system={system} can={can} store={store} />
           {can.edit ? (
             <IconButton
               size="sm"
@@ -170,37 +241,32 @@ export function SystemIdentity({
         </span>
       </div>
       {info && (
-        <p className={styles.where}>
-          <span>
+        <div className={styles.where}>
+          <span className={styles.place}>
             {info.regionName} › {info.constellationName}
           </span>
-          <span aria-hidden>·</span>
-          <span className={styles.space}>{spaceText(info)}</span>
-        </p>
-      )}
-      {holder}
-      {info && (info.effect || info.statics.length > 0) && (
-        <div className={styles.wormhole}>
           {info.effect && <Effect effect={info.effect} whClass={info.whClass} />}
           <StaticsLine statics={info.statics} />
         </div>
+      )}
+      {holder}
+      {preview && (
+        <button
+          type="button"
+          className={styles.notesPreview}
+          title={notes}
+          aria-label={`Notes: ${preview}`}
+          onClick={onOpenNotes}
+        >
+          {preview}
+        </button>
       )}
     </header>
   );
 }
 
-const STATUS_OPTIONS = SystemStatus.options.map((s) => ({
-  value: s,
-  label: STATUS_LABEL[s],
-  icon: (
-    <span
-      className={styles.statusDot}
-      style={{ background: s === 'unknown' ? 'var(--dbk-color-border-strong)' : cssVar(`status-${s}`) }}
-    />
-  ),
-}));
-
-function Links({ info }: { info: UniverseSystemDto }) {
+/** zKillboard, Dotlan and (in wormhole space) Anoikis: in the System section's title bar. */
+export function SystemLinks({ info }: { info: UniverseSystemDto }) {
   const dotlan = `https://evemaps.dotlan.net/system/${encodeURIComponent(info.name.replace(/ /g, '_'))}`;
   return (
     <span className={styles.links}>
@@ -255,9 +321,7 @@ export function SetDestination({ solarSystemId, name }: { solarSystemId: number;
   };
 
   const button = (props: object) => (
-    <Button size="sm" variant="ghost" icon={<Navigation />} loading={busy} {...props}>
-      Set destination
-    </Button>
+    <IconButton size="sm" label="Set destination" icon={<Navigation />} loading={busy} {...props} />
   );
   if (characters.length === 1 && able.length === 1) {
     return button({ onClick: () => void send(able[0]!.id, able[0]!.name) });
@@ -282,10 +346,24 @@ export function SetDestination({ solarSystemId, name }: { solarSystemId: number;
   );
 }
 
-/** Status, Labels, Tags, names, notes and links of the selected system: dense, edited in place. */
+/** What the System section's title bar says while folded: the Labels, custom label and Tags on. */
+export function marksSummary(
+  system: Pick<MapSystemDto, 'labelIds' | 'systemLabelIds' | 'customLabel'>,
+  labels: readonly LabelDto[],
+  systemLabels: readonly SystemLabelDto[],
+): string {
+  return [
+    ...systemLabels.filter((l) => system.systemLabelIds.includes(l.id)).map((l) => l.name),
+    system.customLabel,
+    ...labels.filter((l) => system.labelIds.includes(l.id)).map((l) => l.name),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/** Labels, Tags, names, notes of the selected system: dense, edited in place. */
 export function SystemDetails({
   system,
-  info,
   labels,
   systemLabels = [],
   can,
@@ -295,7 +373,6 @@ export function SystemDetails({
   focusedRef,
 }: {
   system: MapSystemDto;
-  info: UniverseSystemDto | undefined;
   /** The map's Tags (`labels` in the data). */
   labels: LabelDto[];
   /** The map's Labels (WH1...), in order. */
@@ -336,25 +413,6 @@ export function SystemDetails({
   return (
     <div className={styles.details}>
       <dl className={styles.props}>
-        <dt>Status</dt>
-        <dd>
-          {can.edit ? (
-            <Select
-              size="sm"
-              aria-label="Status"
-              className={styles.statusSelect}
-              value={system.status}
-              options={STATUS_OPTIONS}
-              onValueChange={(status) => void update(id, { status: status as SystemStatus })}
-            />
-          ) : (
-            <span className={styles.statusText}>
-              {STATUS_OPTIONS.find((o) => o.value === system.status)?.icon}
-              {STATUS_LABEL[system.status]}
-            </span>
-          )}
-        </dd>
-
         {showLabels && (
           <>
             <dt>Labels</dt>
@@ -377,7 +435,7 @@ export function SystemDetails({
                   <InlineText
                     label="Custom label"
                     value={system.customLabel ?? ''}
-                    placeholder="Custom label"
+                    placeholder="Custom"
                     maxLength={CUSTOM_LABEL_MAX}
                     onCommit={(customLabel) => void update(id, { customLabel })}
                   />
@@ -427,17 +485,17 @@ export function SystemDetails({
                 label="Custom name"
                 inputRef={nameRef}
                 value={system.customName ?? ''}
-                placeholder="Add a custom name"
+                placeholder="—"
                 maxLength={64}
                 onCommit={(customName) => void update(id, { customName })}
               />
             </dd>
-            <dt>Temp. name</dt>
+            <dt>Temp.</dt>
             <dd>
               <InlineText
                 label="Temporary name"
                 value={system.temporaryName ?? ''}
-                placeholder="Add one for this chain"
+                placeholder="—"
                 maxLength={64}
                 onCommit={(temporaryName) => void update(id, { temporaryName })}
               />
@@ -446,7 +504,7 @@ export function SystemDetails({
         ) : (
           system.temporaryName && (
             <>
-              <dt>Temp. name</dt>
+              <dt>Temp.</dt>
               <dd>{system.temporaryName}</dd>
             </>
           )
@@ -467,14 +525,9 @@ export function SystemDetails({
       <NotesField
         editable={can.edit}
         value={system.description}
+        placeholder="Notes (Markdown)"
         onCommit={(description) => void update(id, { description })}
       />
-
-      {info && (
-        <div className={styles.detailsFooter}>
-          <Links info={info} />
-        </div>
-      )}
     </div>
   );
 }

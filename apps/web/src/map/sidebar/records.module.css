@@ -7,15 +7,21 @@
 
 .composer {
   display: grid;
-  gap: 4px;
-  margin-bottom: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 6px;
+  align-items: start;
+  margin-bottom: 4px;
 }
 
-.composerBar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+/* One line until it holds more; the send button sits beside it. */
+.composerField {
+  min-height: 28px;
+  padding-block: 4px;
+}
+
+.composer > .hint {
+  grid-column: 1 / -1;
+  text-align: right;
 }
 
 .hint {
@@ -34,7 +40,7 @@
 
 .comment,
 .historyItem {
-  padding: 6px 8px;
+  padding: 3px 8px;
   border-radius: var(--dbk-radius);
 }
 
@@ -48,7 +54,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 24px;
+  min-height: 22px;
   font-size: var(--dbk-font-size-small);
 }
 
@@ -107,7 +113,7 @@
 
 .structures {
   display: grid;
-  gap: 8px;
+  gap: 4px;
   margin: 0 -16px;
 }
 

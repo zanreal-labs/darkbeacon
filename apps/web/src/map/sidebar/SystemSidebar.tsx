@@ -4,11 +4,14 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ClipboardPaste, SlidersHorizontal } from 'lucide-react';
 import type {
   CharacterDto,
+  ConnectionDto,
   LabelDto,
   MapSystemDto,
+  SignatureDto,
   SystemLabelDto,
   UniverseSystemDto,
 } from '@darkbeacon/shared';
+import { useSystemActivity } from '../../lib/intel';
 import type { MapPermissions } from '../../lib/roles';
 import { SlotItem } from '../../plugins/PluginSlot';
 import type { SlotEntry } from '../../plugins/registry';
@@ -18,8 +21,8 @@ import type { MapStore } from '../useMapStore';
 import { ActivitySection, SystemHolder } from './ActivitySection';
 import { RoutesSidebarSection } from '../routes/RoutesSection';
 import { ConnectionsSection } from './ConnectionsSection';
-import { KillsSection, KillsSettingsMenu, useKillsSettings } from './KillsSection';
-import { SidebarLayoutProvider } from './layout';
+import { KillsSection, KillsSettingsMenu, useKillList, useKillsSettings } from './KillsSection';
+import { DEFAULT_OPEN_SECTIONS, SidebarLayoutProvider } from './layout';
 import { LocalMenu, LocalSection, usePresence } from './LocalSection';
 import { SectionsDialog } from './SectionsDialog';
 import { SidebarSection } from './SidebarSection';
@@ -31,13 +34,13 @@ import {
   SignaturesSection,
   useSignaturePaste,
 } from './SignaturesSection';
-import { useCollapsedSections } from './storage';
+import { useOpenSections } from './storage';
 import { CommentsSection } from './CommentsSection';
 import { HistorySection } from './HistorySection';
 import { StructuresSection } from './StructuresSection';
 import { SignatureSettingsMenu } from '../signatures/SignatureSettingsMenu';
 import { systemDisplayName } from '../SystemNode';
-import { SetDestination, SystemDetails, SystemIdentity } from './SystemDetails';
+import { marksSummary, SetDestination, SystemDetails, SystemIdentity, SystemLinks } from './SystemDetails';
 import styles from './sidebar.module.css';
 
 export { SIDEBAR_WIDTH, sheetHeight, useSidebarWidth, type SheetStop } from './SidebarShell';
@@ -45,6 +48,32 @@ export { SIDEBAR_WIDTH, sheetHeight, useSidebarWidth, type SheetStop } from './S
 const editable = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+
+/** "3 unscanned · 2 WH": what the Signatures title bar says about the probed ones (anomalies have their own fold). */
+export function signaturesSummary(signatures: readonly SignatureDto[]): {
+  count: number;
+  text: string;
+  unscanned: number;
+} {
+  const probed = signatures.filter((s) => (s.kind ?? 'signature') === 'signature');
+  const unscanned = probed.filter((s) => s.group === 'unknown').length;
+  const holes = probed.filter((s) => s.group === 'wormhole').length;
+  return {
+    count: probed.length,
+    unscanned,
+    text: [unscanned > 0 && `${unscanned} unscanned`, holes > 0 && `${holes} WH`].filter(Boolean).join(' · '),
+  };
+}
+
+/** "1 EOL · 1 crit": connections of the system that are going away. */
+export function connectionsSummary(connections: readonly ConnectionDto[]): string {
+  const eol = connections.filter((c) => c.timeStatus === 'eol').length;
+  const critical = connections.filter((c) => c.massStatus === 'critical').length;
+  const reduced = connections.filter((c) => c.massStatus === 'reduced').length;
+  return [eol > 0 && `${eol} EOL`, critical > 0 && `${critical} crit`, reduced > 0 && `${reduced} reduced`]
+    .filter(Boolean)
+    .join(' · ');
+}
 
 interface Props {
   mapId: string;
@@ -78,10 +107,12 @@ interface Props {
 }
 
 /**
- * Everything about the selected system at once: header, signatures, local and plugin widgets,
- * each section folding on its own. Docked to the right on wide screens (resizable), a bottom
- * sheet with peek, half and full stops on phones. Ctrl+V anywhere outside a text field pastes
- * probe scanner results into the selected system.
+ * Everything about the selected system, read in a second: a fixed header (pill, name, status,
+ * where, effect, statics, notes), then compact sections that each fold on their own and sum
+ * themselves up in their title bar ("Signatures 12 · 3 unscanned", "Local 4"). Signatures and
+ * Local start open, the rest folded; what someone opens or folds is remembered. Docked to the
+ * right on wide screens (resizable), a bottom sheet with peek, half and full stops on phones.
+ * Ctrl+V anywhere outside a text field pastes probe scanner results into the selected system.
  */
 export function SystemSidebar({
   mapId,
@@ -102,12 +133,15 @@ export function SystemSidebar({
   onCover,
   note,
 }: Props) {
-  const { collapsed, toggle, expand } = useCollapsedSections();
+  const { isOpen, toggle, expand } = useOpenSections(DEFAULT_OPEN_SECTIONS);
+  const folded = (section: string) => !isOpen(section);
   const [customizing, setCustomizing] = useState(false);
   const id = system.solarSystemId;
 
   const paste = useSignaturePaste(mapId, id, store);
   const [killSettings, setKillSettings] = useKillsSettings(mapId);
+  const kills = useKillList(mapId, id, killSettings);
+  const activity = useSystemActivity(mapId, id);
   const presence = usePresence(mapId, store);
 
   // Ctrl+V on the map or in the sidebar, but never into a field someone is typing in.
@@ -131,10 +165,11 @@ export function SystemSidebar({
   }, [focusToken, expand]);
 
   const signatures = [...state.signatures.values()].filter((s) => s.solarSystemId === id);
+  const sigs = signaturesSummary(signatures);
   const here = [...state.characters.values()].filter((c) => c.solarSystemId === id);
-  const connectionCount = [...state.connections.values()].filter(
-    (c) => c.source === id || c.target === id,
-  ).length;
+  const offline = here.filter((c) => !c.online).length;
+  const links = [...state.connections.values()].filter((c) => c.source === id || c.target === id);
+  const linksText = connectionsSummary(links);
   const mine = new Set(myCharacters.map((c) => c.id));
   const tracked = new Set([...state.characters.values()].map((c) => c.characterId));
   const name = info?.name ?? 'this system';
@@ -142,6 +177,16 @@ export function SystemSidebar({
     const onMap = state.systems?.get(sid);
     return onMap ? systemDisplayName(onMap, universe.get(sid)) : (universe.get(sid)?.name ?? String(sid));
   };
+  const intel = activity.data?.intel;
+  const activityText = intel
+    ? [
+        `${intel.kills1h} ${intel.kills1h === 1 ? 'kill' : 'kills'}`,
+        intel.jumps1h !== null && `${intel.jumps1h} jumps`,
+      ]
+        .filter(Boolean)
+        .join(' · ') + ' /1h'
+    : undefined;
+  const killsScope = `${killSettings.hours}h${killSettings.scope === 'all' ? ', map' : ''}`;
 
   return (
     <SidebarShell
@@ -159,6 +204,8 @@ export function SystemSidebar({
           onClose={onClose}
           dragHandle={handle}
           holder={<SystemHolder mapId={mapId} solarSystemId={id} />}
+          notes={folded('system') ? system.description : undefined}
+          onOpenNotes={() => expand('system')}
         />
       )}
     >
@@ -166,15 +213,20 @@ export function SystemSidebar({
         <SidebarSection
           id="system"
           title="System"
-          collapsed={!!collapsed.system}
+          summary={marksSummary(system, labels, systemLabels)}
+          collapsed={folded('system')}
           onToggle={toggle}
-          action={<SetDestination solarSystemId={id} name={name} />}
+          action={
+            <span className={styles.sectionActions}>
+              <SetDestination solarSystemId={id} name={name} />
+              {info && <SystemLinks info={info} />}
+            </span>
+          }
         >
           <SystemDetails
             // A field being edited belongs to its system: another system starts clean.
             key={id}
             system={system}
-            info={info}
             labels={labels}
             systemLabels={systemLabels}
             can={can}
@@ -186,8 +238,10 @@ export function SystemSidebar({
         <SidebarSection
           id="signatures"
           title="Signatures"
-          count={signatures.length}
-          collapsed={!!collapsed.signatures}
+          count={sigs.count}
+          summary={sigs.text}
+          alert={sigs.unscanned > 0}
+          collapsed={folded('signatures')}
           onToggle={toggle}
           action={
             <span className={styles.sectionActions}>
@@ -220,62 +274,12 @@ export function SystemSidebar({
             systemName={systemName}
           />
         </SidebarSection>
-        <StructuresSection
-          key={`structures:${id}`}
-          mapId={mapId}
-          solarSystemId={id}
-          can={can}
-          collapsed={!!collapsed.structures}
-          onToggle={toggle}
-        />
-        <CommentsSection
-          key={`comments:${id}`}
-          mapId={mapId}
-          solarSystemId={id}
-          can={can}
-          collapsed={!!collapsed.comments}
-          onToggle={toggle}
-        />
-        <SidebarSection
-          id="connections"
-          title="Connections"
-          count={connectionCount}
-          collapsed={!!collapsed.connections}
-          onToggle={toggle}
-        >
-          <ConnectionsSection
-            solarSystemId={id}
-            connections={state.connections}
-            universe={universe}
-            can={can}
-            store={store}
-            onSelectSystem={onSelectSystem}
-          />
-        </SidebarSection>
-        <SidebarSection id="activity" title="Activity" collapsed={!!collapsed.activity} onToggle={toggle}>
-          <ActivitySection key={id} mapId={mapId} solarSystemId={id} />
-        </SidebarSection>
-        <SidebarSection
-          id="kills"
-          title="Kills"
-          collapsed={!!collapsed.kills}
-          onToggle={toggle}
-          action={
-            <KillsSettingsMenu
-              settings={killSettings}
-              update={setKillSettings}
-              solarSystemId={id}
-              systemName={name}
-            />
-          }
-        >
-          <KillsSection mapId={mapId} solarSystemId={id} settings={killSettings} universe={universe} />
-        </SidebarSection>
         <SidebarSection
           id="local"
           title="Local"
           count={here.length}
-          collapsed={!!collapsed.local}
+          summary={offline > 0 ? `${offline} offline` : undefined}
+          collapsed={folded('local')}
           onToggle={toggle}
           action={
             <LocalMenu
@@ -293,6 +297,69 @@ export function SystemSidebar({
             expired={new Set(myCharacters.filter((c) => !c.tokenValid).map((c) => c.id))}
           />
         </SidebarSection>
+        <StructuresSection
+          key={`structures:${id}`}
+          mapId={mapId}
+          solarSystemId={id}
+          can={can}
+          collapsed={folded('structures')}
+          onToggle={toggle}
+        />
+        <CommentsSection
+          key={`comments:${id}`}
+          mapId={mapId}
+          solarSystemId={id}
+          can={can}
+          collapsed={folded('comments')}
+          onToggle={toggle}
+        />
+        <SidebarSection
+          id="connections"
+          title="Connections"
+          count={links.length}
+          summary={linksText}
+          alert={linksText !== ''}
+          collapsed={folded('connections')}
+          onToggle={toggle}
+        >
+          <ConnectionsSection
+            solarSystemId={id}
+            connections={state.connections}
+            universe={universe}
+            can={can}
+            store={store}
+            onSelectSystem={onSelectSystem}
+          />
+        </SidebarSection>
+        <SidebarSection
+          id="kills"
+          title="Kills"
+          count={kills.kills.data ? kills.list.length : undefined}
+          summary={killsScope}
+          alert={kills.list.length > 0}
+          collapsed={folded('kills')}
+          onToggle={toggle}
+          action={
+            <KillsSettingsMenu
+              settings={killSettings}
+              update={setKillSettings}
+              solarSystemId={id}
+              systemName={name}
+            />
+          }
+        >
+          <KillsSection mapId={mapId} solarSystemId={id} settings={killSettings} universe={universe} />
+        </SidebarSection>
+        <SidebarSection
+          id="activity"
+          title="Activity"
+          summary={activityText}
+          alert={(intel?.kills1h ?? 0) >= 5}
+          collapsed={folded('activity')}
+          onToggle={toggle}
+        >
+          <ActivitySection key={id} mapId={mapId} solarSystemId={id} />
+        </SidebarSection>
         <RoutesSidebarSection
           mapId={mapId}
           solarSystemId={id}
@@ -300,7 +367,7 @@ export function SystemSidebar({
           myCharacters={myCharacters}
           onMap={new Set(universe.keys())}
           onSelectSystem={onSelectSystem}
-          collapsed={!!collapsed.routes}
+          collapsed={folded('routes')}
           onToggle={toggle}
         />
         <HistorySection
@@ -309,7 +376,7 @@ export function SystemSidebar({
           solarSystemId={id}
           universe={universe}
           can={can}
-          collapsed={!!collapsed.history}
+          collapsed={folded('history')}
           onToggle={toggle}
         />
         {plugins.map((entry) => (
@@ -317,7 +384,7 @@ export function SystemSidebar({
             key={entry.key}
             id={entry.key}
             title={entry.title}
-            collapsed={!!collapsed[entry.key]}
+            collapsed={folded(entry.key)}
             onToggle={toggle}
           >
             <div className={styles.plugin}>

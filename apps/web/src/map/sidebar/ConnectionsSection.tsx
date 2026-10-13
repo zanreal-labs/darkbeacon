@@ -60,6 +60,15 @@ export function ConnectionsSection({
         const locked = c.locked ?? false;
         const editable = can.edit && (!locked || can.manage);
         const lifetime = lifetimeText(c);
+        const facts: { text: string; tone?: 'warning' | 'danger' }[] = [
+          { text: TYPE_NAME[c.type] },
+          ...(c.timeStatus === 'eol' ? [{ text: 'EOL', tone: 'danger' as const }] : []),
+          ...(c.massStatus === 'critical'
+            ? [{ text: 'crit', tone: 'danger' as const }]
+            : c.massStatus === 'reduced'
+              ? [{ text: 'reduced', tone: 'warning' as const }]
+              : []),
+        ];
         return (
           <li key={c.id} className={styles.connectionRow} data-locked={locked || undefined}>
             <div className={styles.connectionHead}>
@@ -71,6 +80,35 @@ export function ConnectionsSection({
               >
                 {name}
               </button>
+              <span className={styles.connectionFacts}>
+                {facts.map((f) => (
+                  <span key={f.text} data-tone={f.tone}>
+                    {f.text}
+                  </span>
+                ))}
+              </span>
+              {c.type === 'wormhole' && editable ? (
+                <select
+                  className={`${styles.inlineSelect} ${styles.lifetimeSelect}`}
+                  aria-label={`Lifetime left of the connection to ${name}`}
+                  title={lifetime ?? 'Lifetime left: not marked'}
+                  value={c.lifetime?.mark ?? ''}
+                  onChange={(e) =>
+                    void store.updateConnection(c.id, {
+                      lifetime: e.target.value === '' ? null : (e.target.value as LifetimeMark),
+                    })
+                  }
+                >
+                  <option value="">Life: –</option>
+                  {LifetimeMark.options.map((mark) => (
+                    <option key={mark} value={mark}>
+                      &lt;{mark} left
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                lifetime && <span className={styles.connectionFacts}>{lifetime}</span>
+              )}
               {can.manage ? (
                 <IconButton
                   size="sm"
@@ -90,35 +128,11 @@ export function ConnectionsSection({
                 )
               )}
             </div>
-            <span className={styles.connectionFacts}>
-              {[TYPE_NAME[c.type], c.timeStatus === 'eol' ? 'end of life' : null, lifetime]
-                .filter(Boolean)
-                .join(' · ')}
-            </span>
-            {c.type === 'wormhole' && editable && (
-              <select
-                className={styles.inlineSelect}
-                aria-label={`Lifetime left of the connection to ${name}`}
-                value={c.lifetime?.mark ?? ''}
-                onChange={(e) =>
-                  void store.updateConnection(c.id, {
-                    lifetime: e.target.value === '' ? null : (e.target.value as LifetimeMark),
-                  })
-                }
-              >
-                <option value="">Lifetime left: not marked</option>
-                {LifetimeMark.options.map((mark) => (
-                  <option key={mark} value={mark}>
-                    Less than {mark} left
-                  </option>
-                ))}
-              </select>
-            )}
             {editable ? (
               <InlineText
                 label={`Note on the connection to ${name}`}
                 value={c.note ?? ''}
-                placeholder="Add a note"
+                placeholder="Note"
                 maxLength={2000}
                 onCommit={(note) => void store.updateConnection(c.id, { note: note ?? '' })}
               />
