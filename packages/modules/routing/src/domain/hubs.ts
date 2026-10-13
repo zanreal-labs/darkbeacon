@@ -13,6 +13,21 @@ export const TRADE_HUBS: ReadonlyArray<{ solarSystemId: number; name: string }> 
 /** At most this many hubs per map and per account. */
 export const MAX_HUBS = 20;
 
+/**
+ * The hubs every map starts with: the five trade hubs (Wanderer's Routes By "Trade hubs" are the
+ * same five; it has no other default). Members may remove them like any hub.
+ */
+export const DEFAULT_MAP_HUBS: readonly number[] = TRADE_HUBS.map((hub) => hub.solarSystemId);
+
+/**
+ * A map's hubs with the default ones it lacks added after them, up to MAX_HUBS; null when none
+ * is missing (or there is no room).
+ */
+export function withDefaultHubs(current: readonly number[]): number[] | null {
+  const next = [...new Set([...current, ...DEFAULT_MAP_HUBS])].slice(0, Math.max(MAX_HUBS, current.length));
+  return next.length === current.length ? null : next;
+}
+
 /** Low-sec known space: a staging system for pilots who cannot enter high-sec. */
 export function isLowSec(node: RouteNode): boolean {
   return !isWormholeSpace(node) && node.security > 0 && node.security < 0.45;

@@ -13,7 +13,9 @@ import {
   readStructure,
   readSystem,
   readSystemLabels,
+  readHubIds,
   readUserHubs,
+  userHubUnion,
   readWebhook,
   SourceError,
   text,
@@ -295,10 +297,21 @@ export class WandererHttpSource implements MapImportSource {
     dump.labelNames = Object.fromEntries(dump.systemLabels.map((l) => [l.id, l.name]));
     dump.source.name = dump.map.name;
 
-    // Hubs are each user's own in Wanderer; the map takes the ones its users set, most used first.
+    // The map's own hubs (its Routes widget) where the export or JSON:API give them, and each
+    // user's (their User Routes). Without the map's own, the map takes its users', most used first.
     onStep?.('hubs');
     const settings = await this.jsonApi(api, '/api/v1/map_user_settings', PAGE.settings, quiet, 'Hubs');
-    dump.hubs = readUserHubs(settings ? settings.data.map(flatten) : [], mapId);
+    dump.userHubs = readUserHubs(settings ? settings.data.map(flatten) : [], mapId);
+    const ownHubs = exported.hubs ?? attributes.hubs;
+    if (Array.isArray(ownHubs)) dump.hubs = readHubIds(ownHubs);
+    else {
+      dump.hubs = userHubUnion(dump.userHubs);
+      warn(
+        dump.hubs.length > 0
+          ? "This Wanderer's API does not give the map's own hubs (its Routes widget), so the map got the hubs its users set instead. Import from Wanderer's database to get the map's own."
+          : "This Wanderer's API does not give the map's own hubs (its Routes widget). Import from Wanderer's database to get them.",
+      );
+    }
 
     // Webhooks need WANDERER_WEBHOOKS_ENABLED on the instance (403 without); their secrets are
     // never read: Darkbeacon signs with its own.

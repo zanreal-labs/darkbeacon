@@ -13,7 +13,7 @@ import {
   type UnitOfWork,
 } from '@darkbeacon/core';
 import type { HubDto, MapExitDto } from '@darkbeacon/shared';
-import { MAX_HUBS } from '../domain/hubs.js';
+import { MAX_HUBS, withDefaultHubs } from '../domain/hubs.js';
 import type { HubRepository, RoutingUniverse } from '../ports/index.js';
 import type { RouteQueries } from './routes.js';
 
@@ -65,6 +65,49 @@ export class HubAdmin {
     const { id } = requireAccount(actor);
     await this.deps.hubs.setPersonalHubs(id, this.validate(solarSystemIds));
     return this.deps.queries.personalHubs(id);
+  }
+
+  /**
+   * Gives a new map the trade hubs (`DEFAULT_MAP_HUBS`): the ones it lacks are added after the
+   * hubs it has (an import may have set some already), up to the limit, and
+   * `routes.hubs_changed` is published by the routing module itself. Returns the hubs added.
+   */
+  async addDefaultHubs(mapId: string): Promise<number[]> {
+    return this.deps.uow.transaction(async () => {
+      const current = await this.deps.hubs.mapHubs(mapId);
+      const next = withDefaultHubs(current);
+      if (!next) return [];
+      const before = await this.deps.queries.mapHubs(mapId);
+      await this.deps.hubs.setMapHubs(mapId, next);
+      const hubs = await this.deps.queries.mapHubs(mapId);
+      await this.deps.events.append([
+        newEvent({
+          stream: mapStream(mapId),
+          type: 'routes.hubs_changed',
+          actor: actorRef(ROUTING),
+          data: { hubs },
+          before: { hubs: before },
+          occurredAt: this.deps.clock.now(),
+        }),
+      ]);
+      return next.slice(current.length);
+    });
+  }
+
+  /**
+   * Adds hubs to an account's own (an import bringing a Wanderer user's): missing ones after the
+   * ones it has, up to the limit, unknown systems left out. Private to the account, so no event.
+   */
+  async addPersonalHubs(
+    accountId: string,
+    solarSystemIds: readonly number[],
+  ): Promise<'created' | 'updated' | 'unchanged'> {
+    const current = await this.deps.hubs.personalHubs(accountId);
+    const known = solarSystemIds.filter((id) => this.deps.universe.getSystem(id));
+    const next = [...new Set([...current, ...known])].slice(0, MAX_HUBS);
+    if (next.length === current.length) return 'unchanged';
+    await this.deps.hubs.setPersonalHubs(accountId, next);
+    return current.length === 0 ? 'created' : 'updated';
   }
 
   async forgetMap(mapId: string): Promise<void> {

@@ -6,6 +6,7 @@ import {
   readAll,
   readComment,
   readConnection,
+  readHubIds,
   readPassage,
   readSignature,
   readStructure,
@@ -66,9 +67,8 @@ export function readExportFile(document: unknown, fileName: string | null, now: 
   dump.structures = readAll(body.structures, readStructure, 'structures', dump.rejected);
   dump.comments = readAll(body.comments, readComment, 'comments', dump.rejected);
   dump.passages = readAll(body.passages, readPassage, 'passages', dump.rejected);
-  dump.hubs = Array.isArray(body.hubs)
-    ? body.hubs.map(int).filter((id): id is number => id !== null && id > 0)
-    : [];
+  // The settings export's `hubs`, or a map export's `map.hubs` where Wanderer writes them.
+  dump.hubs = readHubIds(body.hubs ?? map.hubs);
   if (format !== 'map-data') {
     dump.warnings.push(
       'This export holds systems and connections only: signatures, structures, comments and access lists come over the API.',

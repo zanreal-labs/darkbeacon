@@ -130,7 +130,14 @@ export class RouteQueries {
         steps: (steps ?? []).map((s) => this.step(s)),
       };
     });
-    routes.sort((a, b) => (a.jumps ?? Infinity) - (b.jumps ?? Infinity) || a.name.localeCompare(b.name));
+    // A rally ping heads the list (the fleet goes there now), then the hubs nearest first.
+    const pinged = (r: HubRouteDto) => (r.kind === 'ping' ? 0 : 1);
+    routes.sort(
+      (a, b) =>
+        pinged(a) - pinged(b) ||
+        (a.jumps ?? Infinity) - (b.jumps ?? Infinity) ||
+        a.name.localeCompare(b.name),
+    );
     return { from: query.from, mode: query.mode, routes, limit: MAX_HUBS };
   }
 

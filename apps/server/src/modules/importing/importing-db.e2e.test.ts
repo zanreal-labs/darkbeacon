@@ -4,6 +4,8 @@ import { describeEachDialect } from '@darkbeacon/db/testing';
 import { ImportRunner, SyncScheduler, type ImportingDeps } from '@darkbeacon/importing';
 import type {
   CommentDto,
+  HubDto,
+  HubsDto,
   ImportJobDto,
   ImportSyncDto,
   MapSnapshot,
@@ -56,6 +58,12 @@ describeEachDialect("imports from Wanderer's database", (t) => {
         json: { connectionString: wanderer.connectionString },
       });
       expect(refused.status).toBe(403);
+      // CCP Bartender kept hubs of his own on the Wanderer map.
+      const bartender = new Browser(base);
+      await bartender.json('/api/auth/dev', {
+        method: 'POST',
+        json: { name: 'bartender', character: { name: 'CCP Bartender', id: 2112625428 } },
+      });
 
       const listed = await owner.json<WandererDbMapsDto>('/api/imports/wanderer-db/maps', {
         method: 'POST',
@@ -103,6 +111,16 @@ describeEachDialect("imports from Wanderer's database", (t) => {
       expect(job.outcome.structures).toMatchObject({ created: 3 });
       expect(job.outcome.comments).toMatchObject({ created: 2 });
       const mapId = job.mapId!;
+      // The map's own hubs (the wormhole home among them) after the trade hubs it starts with,
+      // none twice; a user's own hubs go to the account with their main character.
+      const hubs = await owner.json<HubsDto>(`/api/maps/${mapId}/hubs`);
+      expect(hubs.map.map((h) => h.solarSystemId)).toEqual([
+        30000142, 30002187, 30002659, 30002510, 30002053, 31001269,
+      ]);
+      expect(hubs.personal).toEqual([]);
+      expect((await bartender.json<HubDto[]>('/api/accounts/me/hubs')).map((h) => h.solarSystemId)).toEqual([
+        30002187, 30002659,
+      ]);
       const map = await snapshot(mapId);
       // The map's own label names, in Wanderer's order.
       expect(map.map.systemLabels.map((l) => l.name)).toEqual([
@@ -160,6 +178,11 @@ describeEachDialect("imports from Wanderer's database", (t) => {
       await app.get(ImportRunner).drain();
       const pulled = await owner.json<ImportSyncDto>(`/api/maps/${mapId}/import-sync`);
       expect(pulled.lastError).toBeNull();
+      // Pulled again: no hub twice, on the map or the pilot's own.
+      expect((await owner.json<HubsDto>(`/api/maps/${mapId}/hubs`)).map).toEqual(hubs.map);
+      expect((await bartender.json<HubDto[]>('/api/accounts/me/hubs')).map((h) => h.solarSystemId)).toEqual([
+        30002187, 30002659,
+      ]);
       const again = await owner.json<ImportJobDto>(`/api/imports/${pulled.lastJobId}`).catch(() => null);
       if (again) expect(again.outcome.structures).toMatchObject({ created: 0 });
     },

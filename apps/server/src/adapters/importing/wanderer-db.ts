@@ -10,6 +10,7 @@ import {
   readStructure,
   readSystem,
   readSystemLabels,
+  readHubIds,
   readUserHubs,
   readWebhook,
   SourceError,
@@ -131,7 +132,7 @@ const COLUMNS = {
     'eve_alliance_id',
     'role',
   ],
-  map_user_settings_v1: ['map_id', 'hubs'],
+  map_user_settings_v1: ['map_id', 'hubs', 'main_character_eve_id', 'following_character_eve_id'],
   map_character_settings_v1: ['map_id', 'tracked'],
   map_webhook_subscriptions_v1: ['id', 'map_id', 'url', 'events', 'active?'],
 } as const;
@@ -298,11 +299,9 @@ export class WandererDatabaseSource implements WandererDbSource {
       dump.acls = await this.acls(query, select, mapId);
 
       onStep?.('hubs');
-      // The map's own hubs first, then the ones its users set, most used first.
-      const own = Array.isArray(map.hubs)
-        ? map.hubs.map(Number).filter((id) => Number.isSafeInteger(id) && id > 0)
-        : [];
-      const users = columns.has('map_user_settings_v1')
+      // The map's own hubs (its Routes widget), and each user's (their User Routes).
+      dump.hubs = readHubIds(map.hubs);
+      dump.userHubs = columns.has('map_user_settings_v1')
         ? readUserHubs(
             await query(
               `select ${select('map_user_settings_v1', 'u')} from map_user_settings_v1 u where u.map_id = $1`,
@@ -311,7 +310,6 @@ export class WandererDatabaseSource implements WandererDbSource {
             mapId,
           )
         : [];
-      dump.hubs = [...new Set([...own, ...users])];
 
       onStep?.('webhooks');
       dump.webhooks = columns.has('map_webhook_subscriptions_v1')

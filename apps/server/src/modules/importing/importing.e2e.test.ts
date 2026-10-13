@@ -209,9 +209,13 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
     expect(map.map.description).toBe('Our main chain');
     const listed = await owner.json<Array<{ id: string; description?: string }>>('/api/maps');
     expect(listed.find((m) => m.id === mapId)?.description).toBe('Our main chain');
-    // Hubs the map's users set in Wanderer, most used first (another map's user settings ignored).
+    // The trade hubs every map starts with; the hubs the map's users set in Wanderer (Jita, Amarr,
+    // Dodixie: this Wanderer's API does not give the map's own) are among them, none twice.
     const hubs = await owner.json<HubsDto>(`/api/maps/${mapId}/hubs`);
-    expect(hubs.map.map((h) => h.solarSystemId)).toEqual([30000142, 30002187, 30002659]);
+    expect(hubs.map.map((h) => h.solarSystemId)).toEqual([30000142, 30002187, 30002659, 30002510, 30002053]);
+    expect(job.warnings.some((w) => /does not give the map's own hubs/.test(w))).toBe(true);
+    // Their own hubs wait for accounts with their characters.
+    expect(job.warnings.some((w) => /2 of 2 Wanderer users have no Darkbeacon account/.test(w))).toBe(true);
     // Webhook subscriptions come over switched off, with Darkbeacon's events; kills have no match.
     const hooks = await owner.json<WebhookDto[]>(`/api/maps/${mapId}/webhooks`);
     expect(hooks.map((h) => [h.url, h.enabled]).sort()).toEqual([

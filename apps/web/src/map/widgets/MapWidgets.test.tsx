@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { ReactElement } from 'react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
@@ -47,6 +49,7 @@ import {
 import { EditSystemDialog } from './EditSystemDialog';
 import { MapWidgets } from './MapWidgets';
 import { useWidgetsLayout } from './useWidgetsLayout';
+import win from './window.module.css';
 
 installFlowMocks();
 
@@ -1087,5 +1090,82 @@ describe('Edit system', () => {
     await waitFor(() => expect(patches).toEqual([{ locked: true }]));
     await user.click(within(dialog).getByRole('button', { name: 'Manage tags' }));
     expect(onManageTags).toHaveBeenCalled();
+  });
+});
+
+/**
+ * The windows' own stylesheet in the document, with the class names this build gives them: what
+ * a press can reach depends on its `pointer-events` rules.
+ */
+function installWindowStyles() {
+  const css = readFileSync(join(process.cwd(), 'apps/web/src/map/widgets/window.module.css'), 'utf8')
+    .replace(/:global\(([^)]*)\)/g, '$1')
+    .replace(/\.([a-zA-Z][\w-]*)/g, (all, name: string) => {
+      const generated = (win as Record<string, string | undefined>)[name];
+      return generated ? `.${generated}` : all;
+    });
+  const style = document.createElement('style');
+  style.textContent = css;
+  document.head.append(style);
+  return () => style.remove();
+}
+
+describe('menus in widget windows', () => {
+  it('open one at a time: a press outside the open menu, on another window too, only closes it', async () => {
+    const removeStyles = installWindowStyles();
+    try {
+      const user = userEvent.setup();
+      const signatures = [
+        signatureFixture('s1', WH, 'ABC-123', { group: 'wormhole' }),
+        signatureFixture('s2', WH, 'DEF-456', { group: 'wormhole' }),
+      ];
+      const connections = [connectionFixture('c1', WH, JITA)];
+      wrap(
+        <Widgets
+          state={{
+            signatures: new Map(signatures.map((s) => [s.id, s])),
+            connections: new Map(connections.map((c) => [c.id, c])),
+          }}
+        />,
+      );
+      // An open menu hides the rest from assistive technology (aria-hidden): look past that.
+      const link = (eveId: string) =>
+        screen.getByRole('button', { name: `Link ${eveId} to a connection`, hidden: true });
+      const windowOf = (name: string) => screen.getByRole('region', { name, hidden: true });
+      const menus = () => screen.queryAllByRole('menu');
+
+      await user.click(link('ABC-123'));
+      expect(menus()).toHaveLength(1);
+      expect(link('ABC-123').getAttribute('aria-expanded')).toBe('true');
+
+      // While a menu is open everything outside it is inert, the windows' contents included: the
+      // other row's link button cannot be pressed (it used to open a second menu over the first,
+      // and the first then stayed open whatever was pressed).
+      await expect(user.click(link('DEF-456'))).rejects.toThrow(/pointer-events: none/);
+      expect(menus()).toHaveLength(1);
+      // The press lands on the window, which only closes the menu.
+      await user.click(windowOf('Signatures'));
+      await waitFor(() => expect(menus()).toHaveLength(0));
+      expect(link('ABC-123').getAttribute('aria-expanded')).toBe('false');
+
+      // The next press opens the other one, alone.
+      await user.click(link('DEF-456'));
+      expect(menus()).toHaveLength(1);
+      expect(link('DEF-456').getAttribute('aria-expanded')).toBe('true');
+      // Another window's menu: the same.
+      const routeOptions = within(windowOf('Routes')).getByRole('button', {
+        name: 'Route options',
+        hidden: true,
+      });
+      await expect(user.click(routeOptions)).rejects.toThrow(/pointer-events: none/);
+      await user.click(windowOf('Routes'));
+      await waitFor(() => expect(menus()).toHaveLength(0));
+      await user.click(routeOptions);
+      expect(menus()).toHaveLength(1);
+      await user.keyboard('{Escape}');
+      await waitFor(() => expect(menus()).toHaveLength(0));
+    } finally {
+      removeStyles();
+    }
   });
 });

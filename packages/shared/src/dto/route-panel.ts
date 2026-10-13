@@ -38,7 +38,7 @@ export type HubRouteDto = z.infer<typeof HubRouteDto>;
 export const HubRoutesDto = z.object({
   from: EveId,
   mode: RouteMode,
-  /** Nearest first; hubs without a route last. */
+  /** The pinged system first, then nearest first; hubs without a route last. */
   routes: z.array(HubRouteDto),
   /** The most hubs a list may hold. */
   limit: z.number().int(),

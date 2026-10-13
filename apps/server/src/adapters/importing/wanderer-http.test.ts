@@ -118,7 +118,12 @@ describe('WandererHttpSource against a fake Wanderer (real answer shapes)', () =
       description: 'Our main chain',
     });
     expect(dump.trackedCharacters).toBe(3);
+    // The recorded fork's export has no `map.hubs`: the map takes its users' hubs, and says so.
     expect(dump.hubs).toEqual([30000142, 30002187, 30002659]);
+    expect(dump.userHubs).toEqual([
+      { characterEveId: 2112625428, hubs: [30000142, 30002187] },
+      { characterEveId: 2112625429, hubs: [30000142, 30002659] },
+    ]);
     expect(dump.webhooks!.map((w) => [w.id, w.events.length, w.active])).toEqual([
       ['wh-chain', 6, true],
       ['wh-kills', 1, true],
@@ -127,7 +132,7 @@ describe('WandererHttpSource against a fake Wanderer (real answer shapes)', () =
     expect(JSON.stringify(dump)).not.toContain('wanderer-secret-never-read');
     // Wanderer's API has no passages one by one.
     expect(dump.passages).toEqual([]);
-    expect(dump.warnings).toEqual([]);
+    expect(dump.warnings).toEqual([expect.stringMatching(/does not give the map's own hubs.*users set/)]);
     expect(steps).toEqual([
       'systems',
       'connections',
@@ -140,6 +145,17 @@ describe('WandererHttpSource against a fake Wanderer (real answer shapes)', () =
       'webhooks',
     ]);
     expect(fake.log.some((l) => l.startsWith('GET /api/v1/map_chain_passages'))).toBe(false);
+  });
+
+  it("takes the map's own hubs from an export that has them, wormholes included", async () => {
+    const fake = await startFakeWanderer();
+    closers.push(fake.close);
+    // As `maps_v1.hubs` of a real map: the wormhole home among the trade hubs, as numbers.
+    fake.map.map.hubs = [30004455, 31001269, 30002659, 30000142];
+    const dump = await new WandererHttpSource(instant).read(request(fake.url, fake.map.apiKey));
+    expect(dump.hubs).toEqual([30004455, 31001269, 30002659, 30000142]);
+    expect(dump.userHubs).toHaveLength(2);
+    expect(dump.warnings).toEqual([]);
   });
 
   it('counts shown and hidden systems when testing the connection', async () => {
@@ -167,6 +183,7 @@ describe('WandererHttpSource against a fake Wanderer (real answer shapes)', () =
     expect(dump.warnings).toEqual([
       expect.stringMatching(/label names cannot be read over its API.*database/),
       expect.stringMatching(/without their place on the map or lock.*database/),
+      expect.stringMatching(/does not give the map's own hubs/),
     ]);
     // The hidden system's intel still comes (JSON:API lists every row of the map).
     expect(dump.signatures.some((s) => s.eveId === 'HID-001')).toBe(true);

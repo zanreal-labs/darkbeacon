@@ -12,7 +12,7 @@ insert into character_v1 (id, eve_id, name, encrypted_access_token, encrypted_re
 
 insert into maps_v1 (id, name, slug, description, scope, scopes, hubs, owner_id, public_api_key, system_labels) values
   ('a0000000-0000-4000-8000-000000000001', 'SHCK-WH', 'shck', 'Our chain', 'wormholes', array['wormholes', 'low'],
-   array['30000142'], 'c0000000-0000-4000-8000-000000000001', 'never-read-key',
+   array['31001269', '30000142', '30002187'], 'c0000000-0000-4000-8000-000000000001', 'never-read-key',
    '[{"id":"a","name":"WH-ST","color":"#2d803b"},{"id":"b","name":"WH1","color":"#3d94af"},{"id":"c","name":"WH2","color":"#3d94af"},{"id":"1","name":"WH3","color":"#563daf"},{"id":"2","name":"WH4","color":"#8f3daf"},{"id":"3","name":"WH5","color":"#3d65af"},{"id":"d","name":"WH6","color":"#3d65af"},{"id":"g","name":"WH-HS","color":"#3d65af","description":"exit to high-sec"}]'),
   ('a0000000-0000-4000-8000-000000000002', 'zanreal', 'zanreal', null, 'wormholes', array['wormholes'], array[]::text[],
    'c0000000-0000-4000-8000-000000000001', null, '[{"id":"a","name":"A","color":"#2d803b"}]'),
@@ -79,10 +79,10 @@ insert into map_access_lists_v1 (map_id, access_list_id) values
   ('a0000000-0000-4000-8000-000000000001', '72000000-0000-4000-8000-000000000002'),
   ('a0000000-0000-4000-8000-000000000002', '72000000-0000-4000-8000-000000000003');
 
-insert into map_user_settings_v1 (map_id, user_id, settings, hubs) values
-  ('a0000000-0000-4000-8000-000000000001', '73000000-0000-4000-8000-000000000001', '{}', array['30002187', '30002659']),
-  ('a0000000-0000-4000-8000-000000000001', '73000000-0000-4000-8000-000000000002', '{}', array['30002187']),
-  ('a0000000-0000-4000-8000-000000000002', '73000000-0000-4000-8000-000000000001', '{}', array['30002510']);
+insert into map_user_settings_v1 (map_id, user_id, settings, hubs, main_character_eve_id) values
+  ('a0000000-0000-4000-8000-000000000001', '73000000-0000-4000-8000-000000000001', '{}', array['30002187', '30002659'], '2112625428'),
+  ('a0000000-0000-4000-8000-000000000001', '73000000-0000-4000-8000-000000000002', '{}', array['30002187'], null),
+  ('a0000000-0000-4000-8000-000000000002', '73000000-0000-4000-8000-000000000001', '{}', array['30002510'], '2112625428');
 
 insert into map_character_settings_v1 (map_id, character_id, tracked) values
   ('a0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001', true),

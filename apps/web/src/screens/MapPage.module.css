@@ -27,6 +27,20 @@
   pointer-events: auto;
 }
 
+/*
+ * While a modal overlay is open (Radix: `pointer-events: none` on the body), the bar's buttons are
+ * inert like the rest of the page, or a press on one (the Widgets menu, the map switcher) opened a
+ * second menu over the first, which then stayed open. The bar itself takes the press, so it only
+ * closes what is open and never reaches the map below. The widget windows do the same.
+ */
+:global(body[style*='pointer-events: none']) .topbar {
+  pointer-events: auto;
+}
+
+:global(body[style*='pointer-events: none']) .topbar > * {
+  pointer-events: none;
+}
+
 .saving {
   display: inline-flex;
   align-items: center;

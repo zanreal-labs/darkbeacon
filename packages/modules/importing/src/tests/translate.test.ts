@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { apiDump, SYS, systemName } from '../test-support.js';
 import { translate, type ImportPlan } from '../domain/translate.js';
-import { readLabels, readSystem, time } from '../domain/wanderer.js';
+import { readHubIds, readLabels, readSystem, readUserHubs, time } from '../domain/wanderer.js';
 
 const characterName = (eveId: string) => (eveId === '2112625428' ? 'CCP Bartender' : null);
 const run = () => translate(apiDump(), { systemName, characterName });
@@ -354,6 +354,31 @@ describe('translating a Wanderer map', () => {
     expect(line(report, 'mapped', /Map description/)).toBeDefined();
     // Every line says what and, unless it came over as it was, why.
     for (const l of report) if (l.bucket !== 'mapped') expect(l.why, l.what).toBeTruthy();
+  });
+
+  it("keeps the map's hubs as Wanderer stores them, wormholes included, and each user's own", () => {
+    const dump = apiDump();
+    // `maps_v1.hubs` as the database answers it (text), or as numbers in an export.
+    dump.hubs = readHubIds([String(SYS.home), SYS.hs, SYS.jita, '30000142', 'x', 99999999]);
+    dump.userHubs = readUserHubs(
+      [
+        { hubs: [String(SYS.jita), String(SYS.hs)], main_character_eve_id: '2112625428' },
+        { hubs: [SYS.home], following_character_eve_id: 2112000002 },
+        { hubs: [String(SYS.c5)], main_character_eve_id: '2112625428' },
+        { hubs: [String(SYS.jita)] },
+        { hubs: [], main_character_eve_id: '2112000003' },
+      ],
+      null,
+    );
+    const { plan, report } = translate(dump, { systemName });
+    expect(plan.hubs).toEqual([SYS.home, SYS.hs, SYS.jita]);
+    expect(line(report, 'mapped', /Map hubs \(3\)/)).toBeDefined();
+    // One entry per character, its lists merged; a user without a character is reported.
+    expect(plan.personalHubs).toEqual([
+      { characterId: 2112625428, hubs: [SYS.jita, SYS.hs, SYS.c5] },
+      { characterId: 2112000002, hubs: [SYS.home] },
+    ]);
+    expect(line(report, 'dropped', /without a main character/)).toBeDefined();
   });
 
   it('brings webhooks over switched off, with the Darkbeacon events that match', () => {

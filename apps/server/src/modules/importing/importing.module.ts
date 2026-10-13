@@ -19,7 +19,7 @@ import {
   type UnitOfWork,
 } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
-import { EveDirectoryService } from '@darkbeacon/identity';
+import { CharacterService, EveDirectoryService } from '@darkbeacon/identity';
 import {
   ImportRunner,
   ImportService,
@@ -220,6 +220,7 @@ export class ImportingRuntime implements OnModuleInit, OnApplicationBootstrap, O
         audit: AsyncAuditScope,
         comments: CommentUseCases,
         structures: StructureUseCases,
+        characters: CharacterService,
       ): ImportingDeps => {
         const box = new SecretBox(config.secretKey, 'wanderer-import');
         const deps: ImportingDeps = {
@@ -235,6 +236,7 @@ export class ImportingRuntime implements OnModuleInit, OnApplicationBootstrap, O
             access,
             hubs,
             routes,
+            async (characterId) => (await characters.character(characterId))?.accountId ?? null,
           ),
           access: new AccessRulesTarget(rules),
           webhooks: new MapWebhooksTarget(webhooks),
@@ -278,6 +280,7 @@ export class ImportingRuntime implements OnModuleInit, OnApplicationBootstrap, O
         AsyncAuditScope,
         CommentUseCases,
         StructureUseCases,
+        CharacterService,
       ],
     },
     {

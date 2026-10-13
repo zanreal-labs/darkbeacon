@@ -170,7 +170,11 @@ describeEachDialect('tracking and universe over HTTP', (t) => {
     clock.advance(5_000);
     await poller.tick();
 
-    expect((await log.readSince(`map:${mapId}`, 0)).map((e) => e.type)).toEqual([
+    // Routing's own event (the trade hubs a new map gets) comes when it comes: left out.
+    const types = (await log.readSince(`map:${mapId}`, 0))
+      .map((e) => e.type)
+      .filter((type) => type !== 'routes.hubs_changed');
+    expect(types).toEqual([
       'map.created',
       'access.rule_added',
       'map.settings_changed',

@@ -122,8 +122,13 @@ describe.skipIf(!url)("WandererDatabaseSource on a Wanderer database (our fork's
       ['Blues', 2, null],
       ['Corp', 2, null],
     ]);
-    // The map's own hubs first, then the ones its users set, most used first.
-    expect(dump.hubs).toEqual([30000142, 30002187, 30002659]);
+    // The map's own hubs as `maps_v1.hubs` keeps them (text ids, the wormhole home included), and
+    // each user's own with their main character (another map's user settings ignored).
+    expect(dump.hubs).toEqual([31001269, 30000142, 30002187]);
+    expect(dump.userHubs).toEqual([
+      { characterEveId: 2112625428, hubs: [30002187, 30002659] },
+      { characterEveId: null, hubs: [30002187] },
+    ]);
     expect(dump.webhooks).toEqual([
       {
         id: expect.any(String),

@@ -189,7 +189,13 @@ export interface ImportPlan {
   comments: PlannedComment[];
   structures: PlannedStructure[];
   access: PlannedAccessRule[];
+  /** The map's hubs, wormholes included. */
   hubs: number[];
+  /**
+   * Each Wanderer user's own hubs, for the account that has linked their character (personal
+   * hubs follow an account to every map). Older plans lack it.
+   */
+  personalHubs?: PlannedPersonalHubs[];
   /** Auto-mapping scopes from the Wanderer map scope; null when unknown. */
   scopes: MapScope[] | null;
   /** The map's description; null when Wanderer has none. */
@@ -198,6 +204,11 @@ export interface ImportPlan {
   webhooks: PlannedWebhook[];
   /** The factor positions were spread by (keep it for later pulls, so nothing jumps). */
   layoutScale: number;
+}
+
+export interface PlannedPersonalHubs {
+  characterId: number;
+  hubs: number[];
 }
 
 export interface TranslateContext {
@@ -663,6 +674,27 @@ export function translate(dump: WandererMapDump, context: TranslateContext): Tra
     hubs.length = 20;
   }
   if (hubs.length > 0) report.mapped('setting', `Map hubs (${hubs.length})`);
+  const personalHubs: PlannedPersonalHubs[] = [];
+  for (const user of dump.userHubs ?? []) {
+    const known = user.hubs.filter((id) => context.systemName(id) !== null).slice(0, 20);
+    if (known.length === 0) continue;
+    if (user.characterEveId === null) {
+      report.dropped(
+        'setting',
+        'Hubs of a Wanderer user without a main character',
+        'Nothing tells which Darkbeacon account they belong to',
+      );
+      continue;
+    }
+    const same = personalHubs.find((p) => p.characterId === user.characterEveId);
+    if (same) same.hubs = [...new Set([...same.hubs, ...known])].slice(0, 20);
+    else personalHubs.push({ characterId: user.characterEveId, hubs: known });
+  }
+  if (personalHubs.length > 0)
+    report.mapped(
+      'setting',
+      `Users' own hubs (${personalHubs.length} ${personalHubs.length === 1 ? 'user' : 'users'})`,
+    );
   const scopes = mapScopes(dump.map, report);
   let description = dump.map.description?.trim() || null;
   if (description && description.length > MAP_DESCRIPTION_MAX) {
@@ -691,6 +723,7 @@ export function translate(dump: WandererMapDump, context: TranslateContext): Tra
     structures: plannedStructures,
     access,
     hubs,
+    personalHubs,
     scopes,
     description,
     webhooks,

@@ -140,6 +140,11 @@ export interface ChainTarget {
   removeSignature(actor: Actor, mapId: string, signatureId: string): Promise<void>;
   hubs(actor: Actor, mapId: string): Promise<number[]>;
   setHubs(actor: Actor, mapId: string, solarSystemIds: number[]): Promise<void>;
+  /**
+   * Adds the hubs a Wanderer user kept to the own hubs of the account that has linked their
+   * character (missing ones only, up to the limit); `no-account` when no account has it.
+   */
+  addPersonalHubs(characterId: number, solarSystemIds: number[]): Promise<WriteOutcome | 'no-account'>;
 }
 
 /** The map's access rules, through the access module's use cases (map admins only). */

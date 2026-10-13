@@ -131,6 +131,18 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
     this.registry.registerSnapshot('map', async (mapId) => ({
       exits: await this.queries.sharedExits(mapId),
     }));
+    // Every new map has the trade hubs; added after any an import set first, never twice.
+    this.consumers.register({
+      name: 'routing.new-maps',
+      streams: ['map'],
+      types: ['map.created'],
+      handle: async (event) => {
+        if (!isEventOfType(event, 'map.created')) return;
+        // Removed before this ran: nothing to give hubs to.
+        if (!(await this.router.chain(event.data.id))) return;
+        await this.hubs.addDefaultHubs(event.data.id);
+      },
+    });
     this.consumers.register({
       name: 'routing.removed-maps',
       streams: ['map'],

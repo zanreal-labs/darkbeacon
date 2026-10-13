@@ -535,12 +535,33 @@ export class ImportRunner {
     if (plan.hubs.length > 0) {
       if (!hasMapRole(role, 'manager')) step('settings', 'skipped');
       else {
+        // Hubs the map has stay first (the default trade hubs, earlier imports); missing ones are
+        // added once, never twice.
         const current = await deps.target.hubs(actor, mapId);
-        const next = [...new Set([...current, ...plan.hubs])].slice(0, 20);
+        const wanted = [...new Set([...current, ...plan.hubs])];
+        const next = wanted.slice(0, 20);
         if (next.length !== current.length) {
           await deps.target.setHubs(actor, mapId, next);
           step('settings', current.length === 0 ? 'created' : 'updated');
         } else step('settings', 'unchanged');
+        if (wanted.length > next.length)
+          warn(`Map hubs: a map keeps at most 20, so ${wanted.length - next.length} were left out`);
+      }
+    }
+    const personal = plan.personalHubs ?? [];
+    if (personal.length > 0) {
+      if (!hasMapRole(role, 'manager')) step('settings', 'skipped');
+      else {
+        let unknown = 0;
+        for (const user of personal) {
+          const outcome = await deps.target.addPersonalHubs(user.characterId, user.hubs);
+          if (outcome === 'no-account') unknown++;
+          step('settings', outcome === 'no-account' ? 'skipped' : outcome);
+        }
+        if (unknown > 0)
+          warn(
+            `Users' own hubs: ${unknown} of ${personal.length} Wanderer ${personal.length === 1 ? 'user has' : 'users have'} no Darkbeacon account with their main character linked yet`,
+          );
       }
     }
     if (plan.description) await this.description(actor, mapId, plan.description, links, r, role, step);

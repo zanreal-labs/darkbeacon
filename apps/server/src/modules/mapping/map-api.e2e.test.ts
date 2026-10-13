@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { DomainEvent } from '@darkbeacon/core';
 import { describeEachDialect } from '@darkbeacon/db/testing';
 import type { BatchUpsertResultDto, ConnectionDto, EventsPageDto, MapDto } from '@darkbeacon/shared';
@@ -92,16 +92,25 @@ describeEachDialect('map integration API over HTTP', (t) => {
   it('pages events after a seq and streams them as Server-Sent Events', async () => {
     const map = (await s.call('POST', '/api/maps', 'alice', { name: 'Home' })).body as MapDto;
     const base = `/api/maps/${map.id}`;
+    // Routing gives the new map the trade hubs on its own: `routes.hubs_changed` at seq 2.
+    await vi.waitFor(async () =>
+      expect(
+        ((await s.call('GET', `${base}/events?types=routes.*`, 'alice')).body as EventsPageDto).events,
+      ).toHaveLength(1),
+    );
     await s.call('POST', `${base}/systems`, 'alice', { solarSystemId: SYSTEMS.c2 });
     await s.call('POST', `${base}/systems`, 'alice', { solarSystemId: SYSTEMS.c5 });
 
     const first = (await s.call('GET', `${base}/events?sinceSeq=0&limit=2`, 'alice')).body as EventsPageDto;
-    expect(first.events.map((e) => e.type)).toEqual(['map.created', 'system.added']);
+    expect(first.events.map((e) => e.type)).toEqual(['map.created', 'routes.hubs_changed']);
     expect(first).toMatchObject({ nextSeq: 2, more: true, gap: false });
     const rest = (await s.call('GET', `${base}/events?sinceSeq=${first.nextSeq}&types=system.*`, 'alice'))
       .body as EventsPageDto;
-    expect(rest.events.map((e) => [e.type, e.seq])).toEqual([['system.added', 3]]);
-    expect(rest).toMatchObject({ nextSeq: 3, headSeq: 3, more: false });
+    expect(rest.events.map((e) => [e.type, e.seq])).toEqual([
+      ['system.added', 3],
+      ['system.added', 4],
+    ]);
+    expect(rest).toMatchObject({ nextSeq: 4, headSeq: 4, more: false });
     expect((await s.call('GET', `${base}/events`, 'mallory')).status).toBe(404);
     expect((await s.call('GET', `${base}/events`, null)).status).toBe(401);
 
@@ -127,7 +136,7 @@ describeEachDialect('map integration API over HTTP', (t) => {
       'last-event-id': '1',
     });
     await resumed.waitFor((f) => f.event === 'subscribed');
-    expect(resumed.events('system.added').map((f) => f.id)).toEqual(['2', '3']);
+    expect(resumed.events('system.added').map((f) => f.id)).toEqual(['3', '4']);
     await resumed.close();
 
     // Someone who cannot see the map gets no stream.
