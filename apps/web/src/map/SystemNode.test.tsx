@@ -211,7 +211,11 @@ describe('SystemNode', () => {
     expect(quiet.textContent).toBe('3');
     expect(quiet.dataset.heat).toBe('active');
     // Kills come first, the pilot count stays last on the row.
-    expect(quiet.nextElementSibling?.getAttribute('aria-label')).toBe('2 tracked pilots here');
+    const slot = quiet.closest('[data-slot]')!;
+    expect(slot.nextElementSibling?.firstElementChild?.getAttribute('aria-label')).toBe(
+      '2 tracked pilots here',
+    );
+    expect(slot.nextElementSibling?.nextElementSibling).toBeNull();
     unmount();
     const busy = renderNode({ intel: intel({ kills1h: 7 }) });
     expect(screen.getByRole('button', { name: '7 kills in the last hour' }).dataset.heat).toBe('hot');
@@ -259,18 +263,23 @@ describe('SystemNode', () => {
     expect(screen.queryByText(/^\[/)).toBeNull();
   });
 
-  it('keeps every node as wide as the widest content: the sizer row holds the kills, effect and pilots', () => {
-    const { container } = renderNode({ intel: intel({ kills1h: 12 }), characters: 1 });
-    const rows = [...container.querySelectorAll<HTMLElement>('[data-status] > div > div')];
-    const sizers = rows.find((r) => r.getAttribute('aria-hidden') === 'true')!;
-    const shown = rows.find(
-      (r) => r.getAttribute('aria-hidden') !== 'true' && r.textContent?.includes('12'),
-    )!;
-    // The invisible row reserves room for "99" kills and "99" pilots and the effect square ...
-    expect(sizers.textContent).toContain('9999');
-    expect(sizers.querySelectorAll('svg')).toHaveLength(2);
-    // ... while the visible row takes the node's width without adding to it.
-    expect(shown.className).toMatch(/fill/);
+  it('sizes to its own content and keeps live counts in fixed slots on the second row', () => {
+    const { container, unmount } = renderNode({ intel: intel({ kills1h: 12 }), characters: 1 });
+    const node = box(container);
+    // No invisible sizers: nothing in the node is hidden from assistive technology.
+    expect(node.querySelector('[aria-hidden="true"]:not(svg)')).toBeNull();
+    const head = node.querySelector(':scope > [class*="row"]')!;
+    const line = node.querySelector(':scope > [class*="line"]')!;
+    expect(head.textContent).not.toContain('12');
+    // Kills and pilots sit on the second row, each in a slot of its own.
+    const slots = [...line.querySelectorAll<HTMLElement>('[data-slot]')];
+    expect(slots.map((s) => s.dataset.slot)).toEqual(['kills', 'pilots']);
+    expect(slots[0]!.textContent).toBe('12');
+    expect(slots[1]!.textContent).toBe('1');
+    unmount();
+    // No count, no slot: a quiet empty system takes no room for them.
+    const quiet = renderNode({ intel: intel({ kills1h: 0 }), characters: 0 });
+    expect(box(quiet.container).querySelector('[data-slot]')).toBeNull();
   });
 
   it('draws the effect as a small square in its colour and rings softly when a kill comes in', () => {

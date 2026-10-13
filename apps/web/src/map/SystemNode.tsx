@@ -22,15 +22,13 @@ import { PluginSlot } from '../plugins/PluginSlot';
 import { Tooltip, useToast } from '../ui';
 import {
   classPill,
-  PILL_LABELS,
   ROUTE_SPACE_TEXT,
   ROUTE_SPACE_TOKEN,
   STATUS_BORDER,
   STATUS_LABEL,
   type NearestHub,
 } from './nodeFacts';
-import { builtNodeNameSizers } from './node-sizers';
-import { EffectDot, NodeKills, NodeKillsSizer, NodeSovereignty, ShatteredMark } from './NodeIntel';
+import { EffectDot, NodeKills, NodeSovereignty, ShatteredMark } from './NodeIntel';
 import { destinationToken } from './WormholeFacts';
 import styles from './SystemNode.module.css';
 
@@ -71,8 +69,6 @@ export interface SystemNodeData extends Record<string, unknown> {
 export type SystemNodeType = Node<SystemNodeData, 'system'>;
 
 const SIDES = [Position.Top, Position.Right, Position.Bottom, Position.Left];
-/** Computed at build time from the universe dataset; sizes every node the same. */
-const NAME_SIZERS = builtNodeNameSizers();
 
 /** What the node calls the system: its custom name, else a temporary name, else the real name. */
 export function systemDisplayName(system: MapSystemDto, info: UniverseSystemDto | undefined): string {
@@ -215,8 +211,9 @@ function StaticsList({
 }
 
 /**
- * The one system node, built for a glance: a neutral box whose 3 px border carries the status;
- * the designation pill and the name, the pilot count; the statics. Above it, left to right: its
+ * The one system node, built for a glance: a neutral box whose 3 px border carries the status,
+ * as wide as its own content: the designation pill and the name; the statics (or the region),
+ * the corner marks, the kills and the pilot count. Above it, left to right: its
  * Labels, its custom label, the bookmark code and its Tags; the nearest hub of an exit below it.
  * Everything else is in the tooltip.
  */
@@ -247,6 +244,7 @@ export const SystemNode = memo(function SystemNode({
   // A status someone set wins; an unmarked system takes one from the holder's standing.
   const derived = system.status === 'unknown' ? statusFromStanding(standing) : null;
   const status = derived ?? system.status;
+  const kills = intel?.kills1h ?? 0;
 
   const copyBookmark = (e: MouseEvent) => {
     e.stopPropagation();
@@ -331,57 +329,21 @@ export const SystemNode = memo(function SystemNode({
         </span>
       </div>
 
-      <div className={styles.head}>
-        <div className={styles.row} aria-hidden>
-          {/* Invisible sizers: the widest pill, the longest names and a pilot count set every node's width. */}
-          <span className={styles.stack}>
-            {PILL_LABELS.map((l) => (
-              <span key={l} className={`${styles.pill} ${styles.sizer}`}>
-                {l}
-              </span>
-            ))}
-          </span>
-          <span className={styles.stack}>
-            {NAME_SIZERS.map((n) => (
-              <span key={n} className={`${styles.name} ${styles.sizer}`}>
-                {n}
-              </span>
-            ))}
-          </span>
-          <span className={`${styles.effectSizer} ${styles.sizer}`} />
-          <span className={styles.end}>
-            <NodeKillsSizer className={styles.sizer} />
-            <span className={`${styles.pilots} ${styles.sizer}`}>
-              <Users aria-hidden />
-              99
-            </span>
-          </span>
-        </div>
-        <div className={`${styles.row} ${styles.fill}`}>
-          <PillContent info={info} />
-          <span className={styles.name}>{name}</span>
-          <EffectDot effect={info?.effect} />
-          <ShatteredMark shattered={info?.shattered} />
-          <span className={styles.end}>
-            <NodeKills
-              mapId={mapId}
-              solarSystemId={system.solarSystemId}
-              kills={intel?.kills1h ?? 0}
-              list={withAccount !== false}
-            />
-            {characters > 0 && <NodePilots count={characters} mine={!!mine} pilots={pilots} />}
-          </span>
-        </div>
+      <div className={styles.row}>
+        <PillContent info={info} />
+        <span className={styles.name}>{name}</span>
+        <EffectDot effect={info?.effect} />
+        <ShatteredMark shattered={info?.shattered} />
       </div>
 
-      <div className={`${styles.line} ${styles.fill}`}>
+      <div className={styles.line}>
         <StaticsText statics={info?.statics ?? []} facts={withAccount !== false} />
         {info && !system.customName && isKnownSpace(info) && (
           <span className={styles.region} title={`${info.regionName} › ${info.constellationName}`}>
             {info.whClass === 25 ? info.constellationName : info.regionName}
           </span>
         )}
-        <span className={styles.corner}>
+        <span className={styles.end}>
           {system.description.trim() && (
             <span
               className={styles.lock}
@@ -409,6 +371,22 @@ export const SystemNode = memo(function SystemNode({
             intel={intel}
             {...(standing != null ? { standing: standingTone(standing) } : {})}
           />
+          {/* Live counts sit in fixed slots, so a count going 3 -> 12 never resizes the node. */}
+          {kills > 0 && (
+            <span className={styles.slot} data-slot="kills">
+              <NodeKills
+                mapId={mapId}
+                solarSystemId={system.solarSystemId}
+                kills={kills}
+                list={withAccount !== false}
+              />
+            </span>
+          )}
+          {characters > 0 && (
+            <span className={styles.slot} data-slot="pilots">
+              <NodePilots count={characters} mine={!!mine} pilots={pilots} />
+            </span>
+          )}
         </span>
       </div>
 
