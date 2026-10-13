@@ -6,9 +6,10 @@ import { knownMigrations, type Database } from '@darkbeacon/db';
 import { scratchFile } from './files.js';
 
 /**
- * The running SQLite database. Snapshots are `VACUUM INTO` on a worker thread through a read-only
- * connection: the copy is one WAL snapshot (the database between two transactions), and the
- * server goes on reading and writing while it is made. Restores still hold every connection.
+ * The running SQLite database. Snapshots are an online backup in one step on a worker thread,
+ * through a read-only connection: the copy is one WAL snapshot (the database between two
+ * transactions), and the server goes on reading and writing while it is made. Restores still
+ * hold every connection.
  */
 export class SqliteLiveDatabase implements LiveDatabase {
   readonly dialect: 'sqlite' | 'postgres';

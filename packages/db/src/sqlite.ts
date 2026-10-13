@@ -172,7 +172,7 @@ export class SqliteFile {
 
   /**
    * A consistent copy of the database file into `destination` (a new file), made on a worker
-   * thread through a read-only connection (`VACUUM INTO`), so reads and writes go on meanwhile.
+   * thread through a read-only connection, so reads and writes go on meanwhile.
    */
   async copyTo(destination: string): Promise<void> {
     if (this.inMemory) return this.backupTo(destination);

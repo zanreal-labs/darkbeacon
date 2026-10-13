@@ -80,22 +80,20 @@ const COPY_SCRIPT = `
 const { parentPort, workerData } = require('node:worker_threads');
 const Database = require(workerData.driver);
 const db = new Database(workerData.filename, { readonly: true, fileMustExist: true });
-try {
-  db.pragma('busy_timeout = 5000');
-  db.prepare('VACUUM INTO ?').run(workerData.destination);
-  parentPort.postMessage({ ok: true });
-} catch (error) {
-  parentPort.postMessage({ ok: false, error: String((error && error.message) || error) });
-} finally {
-  db.close();
-}
+db.pragma('busy_timeout = 5000');
+// One step: the copy reads a single snapshot, so writes meanwhile never restart it.
+db.backup(workerData.destination, { progress: () => 0x7fffffff })
+  .then(() => parentPort.postMessage({ ok: true }))
+  .catch((error) => parentPort.postMessage({ ok: false, error: String((error && error.message) || error) }))
+  .finally(() => db.close());
 `;
 
 /**
  * Copies the database into `destination` (a new file) on a thread of its own, through a read-only
- * connection: `VACUUM INTO` reads one WAL snapshot, so the copy is the database between two
- * transactions, while the server goes on reading and writing. (The online backup API had to hold
- * every connection for the whole copy; on a busy server that took minutes.)
+ * connection: SQLite's online backup in one step reads one WAL snapshot, so the copy is the
+ * database between two transactions, while the server goes on reading and writing. (Run on the
+ * server's own connection it had to hold every connection for the whole copy, stepping between
+ * turns of a busy event loop; under load that took minutes.)
  */
 export function copyInWorker(filename: string, destination: string): Promise<void> {
   return new Promise((resolve, reject) => {
