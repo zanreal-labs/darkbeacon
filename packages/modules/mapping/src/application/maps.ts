@@ -14,6 +14,7 @@ import {
   DEFAULT_BOOKMARK_NUMBERING,
   type AdminMapDto,
   DEFAULT_SYSTEM_LABELS,
+  DEFAULT_TAGS,
   type BookmarkNumbering,
   type CreateMapRequest,
   type LabelDto,
@@ -58,7 +59,7 @@ export class MapUseCases extends MappingUseCases {
 
   /**
    * A signed-in account creates a map and becomes its owner; where the instance lets only admins
-   * create maps, only they do.
+   * create maps, only they do. The map starts with the default Tags and Labels.
    */
   async create(actor: Actor | null, request: CreateMapRequest): Promise<ChainMap> {
     const account = requireAccount(actor);
@@ -73,7 +74,7 @@ export class MapUseCases extends MappingUseCases {
       ...(request.kind === 'composite' ? { kind: 'composite' as const } : {}),
       ownerAccountId: account.id,
       settings: { scopes: ['wormhole'] },
-      labels: [],
+      labels: DEFAULT_TAGS.map((l) => ({ ...l })),
       systemLabels: DEFAULT_SYSTEM_LABELS.map((l) => ({ ...l })),
       createdAt: now,
       updatedAt: now,

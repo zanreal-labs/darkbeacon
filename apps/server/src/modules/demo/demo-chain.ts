@@ -1,4 +1,4 @@
-import { newId, type Actor } from '@darkbeacon/core';
+import type { Actor } from '@darkbeacon/core';
 import type {
   CommentUseCases,
   ConnectionUseCases,
@@ -10,7 +10,6 @@ import type {
 } from '@darkbeacon/mapping';
 import type {
   AddSignatureRequest,
-  LabelDto,
   LogPassagesRequest,
   UpdateConnectionRequest,
   UpdateSystemRequest,
@@ -51,24 +50,17 @@ type SignatureSeed = { system: number; connection?: string } & AddSignatureReque
 /**
  * Seeds "Demo chain" as `actor`: a home C3 with both statics open, a few systems in wormhole and
  * known space, and connections in every state the map can show (EOL, reduced and critical mass,
- * frigate-only, dangerous, bubbled, a stargate), plus Tags, Labels on the three holes out of home
- * (WH1 to WH3, the map's default Labels), a custom label and signatures. Goes through the
+ * frigate-only, dangerous, bubbled, a stargate), plus the map's default Tags (Home, Sites, Hostile,
+ * Exit), Labels on the three holes out of home (WH1 to WH3, the map's default Labels), a custom
+ * label and signatures. Goes through the
  * mapping use cases, so it is authorized and evented like any user's edits.
  */
 export async function seedDemoChain(actor: Actor, mapping: DemoMapping): Promise<string> {
   const map = await mapping.maps.create(actor, { name: DEMO_MAP_NAME });
 
-  const label = (name: string, color: string, description: string): LabelDto => ({
-    id: newId(),
-    name,
-    color,
-    description,
-  });
-  const staging = label('Staging', '#38c6d6', 'Our home hole: citadel, fleet hangar and the POCOs.');
-  const ratting = label('Sites', '#3fbf7f', 'Combat, relic or gas sites worth running this cycle.');
-  const hostile = label('Hostile', '#f05252', 'Hostiles seen in the last hour. Scout before you jump.');
-  const exit = label('Exit', '#eba23b', 'Known-space exit for logistics runs.');
-  await mapping.maps.setLabels(actor, map.id, [staging, ratting, hostile, exit]);
+  // The map's default Tags (Home, Sites, Hostile, Exit...), looked up by name so a changed
+  // default still seeds and the demo never adds a second Staging.
+  const tag = (name: string) => map.labels.filter((l) => l.name === name).map((l) => l.id);
   // The map's default Labels; ids are looked up so a changed default still seeds.
   const wh = (name: string) => map.systemLabels.filter((l) => l.name === name).map((l) => l.id);
 
@@ -78,7 +70,7 @@ export async function seedDemoChain(actor: Actor, mapping: DemoMapping): Promise
       x: 676,
       y: 240,
       status: 'home',
-      labelIds: [staging.id],
+      labelIds: tag('Home'),
       locked: true,
       description: 'Home hole: citadel, fleet hangar and the POCOs. Both statics rolled at downtime.',
     },
@@ -87,7 +79,7 @@ export async function seedDemoChain(actor: Actor, mapping: DemoMapping): Promise
       x: 312,
       y: 240,
       status: 'empty',
-      labelIds: [ratting.id],
+      labelIds: tag('Sites'),
       systemLabelIds: wh('WH3'),
       description: 'Two unrun relic sites, nobody home.',
     },
@@ -96,7 +88,7 @@ export async function seedDemoChain(actor: Actor, mapping: DemoMapping): Promise
       x: -52,
       y: 60,
       status: 'hostile',
-      labelIds: [hostile.id],
+      labelIds: tag('Hostile'),
       temporaryName: 'Pulsar C5',
       description: 'Capital-capable group lives here; Rattlesnakes on d-scan.',
     },
@@ -105,13 +97,13 @@ export async function seedDemoChain(actor: Actor, mapping: DemoMapping): Promise
       id: NOURVUKAIKEN,
       x: 1066,
       y: 90,
-      labelIds: [exit.id],
+      labelIds: tag('Exit'),
       systemLabelIds: wh('WH1'),
       customLabel: 'bait',
       description: 'High-sec exit for hauling.',
     },
     { id: TAMA, x: 1430, y: 90, description: 'Faction warfare camp at the gate.' },
-    { id: AMAMAKE, x: 1066, y: 420, labelIds: [exit.id], systemLabelIds: wh('WH2') },
+    { id: AMAMAKE, x: 1066, y: 420, labelIds: tag('Exit'), systemLabelIds: wh('WH2') },
     {
       id: BLACK_HOLE,
       x: 1430,

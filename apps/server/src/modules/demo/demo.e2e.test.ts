@@ -1,13 +1,14 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { describeEachDialect } from '@darkbeacon/db/testing';
-import type {
-  AuthProvidersDto,
-  MapSnapshot,
-  MapSummaryDto,
-  MeDto,
-  PassageDto,
-  SignatureDto,
-  StreamSnapshotDto,
+import {
+  DEFAULT_TAGS,
+  type AuthProvidersDto,
+  type MapSnapshot,
+  type MapSummaryDto,
+  type MeDto,
+  type PassageDto,
+  type SignatureDto,
+  type StreamSnapshotDto,
 } from '@darkbeacon/shared';
 import { afterEach, expect, it } from 'vitest';
 import { createApp } from '../../app.js';
@@ -67,7 +68,21 @@ describeEachDialect('demo mode over HTTP', (t) => {
     const snapshot = {} as Required<MapSnapshot>;
     for (const part of parts) Object.assign(snapshot, await part(demo.id, { kind: 'plugin', id: 't' }));
     expect(snapshot.systems).toHaveLength(8);
-    expect(snapshot.map.labels.map((l) => l.name)).toEqual(['Staging', 'Sites', 'Hostile', 'Exit']);
+    // Tags: the map's defaults, each once, on the systems the demo marks.
+    expect(snapshot.map.labels.map((l) => l.name)).toEqual(DEFAULT_TAGS.map((l) => l.name));
+    const tagged = (name: string) => {
+      const id = snapshot.map.labels.find((l) => l.name === name)!.id;
+      return snapshot.systems
+        .filter((s) => s.labelIds.includes(id))
+        .map((s) => s.solarSystemId)
+        .sort((a, b) => a - b);
+    };
+    expect([tagged('Home'), tagged('Sites'), tagged('Hostile'), tagged('Exit')]).toEqual([
+      [31002531],
+      [31000399],
+      [31001924],
+      [30001376, 30002537],
+    ]);
     // Labels: the default WH1 to WH3 on the three holes out of home, and one custom label.
     expect(snapshot.map.systemLabels.map((l) => l.name)).toEqual(['WH1', 'WH2', 'WH3']);
     const labelled = (name: string) => {
