@@ -77,7 +77,10 @@ describeEachDialect('map preferences and bookmark templates over HTTP', (t) => {
     expect((await call('GET', path, null)).status).toBe(401);
 
     // Private: no events on the map stream.
-    const events = await app.get<EventLog>(EVENT_LOG).readSince(mapStream(map.id), 0);
+    // Routing's own event (the trade hubs a new map gets) comes when it comes: left out.
+    const events = (await app.get<EventLog>(EVENT_LOG).readSince(mapStream(map.id), 0)).filter(
+      (e) => e.type !== 'routes.hubs_changed',
+    );
     expect(events.map((e) => e.type)).toEqual(['map.created']);
   });
 
@@ -100,7 +103,10 @@ describeEachDialect('map preferences and bookmark templates over HTTP', (t) => {
     const reset = await call('PUT', path, 'alice', { template: null });
     expect((reset.body as MapDto).settings).toEqual({ scopes: ['wormhole'] });
 
-    const events = await app.get<EventLog>(EVENT_LOG).readSince(mapStream(map.id), 0);
+    // Routing's own event (the trade hubs a new map gets) comes when it comes: left out.
+    const events = (await app.get<EventLog>(EVENT_LOG).readSince(mapStream(map.id), 0)).filter(
+      (e) => e.type !== 'routes.hubs_changed',
+    );
     expect(events.map((e) => e.type)).toEqual([
       'map.created',
       'map.settings_changed',

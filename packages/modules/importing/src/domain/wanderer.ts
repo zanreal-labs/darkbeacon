@@ -33,10 +33,16 @@ export interface WandererMapDump {
   passages?: WandererPassage[];
   acls: WandererAcl[];
   /**
-   * Wanderer map hubs (solar system ids): the settings export's `hubs`, or the hubs the map's
-   * users set (`map_user_settings`), most used first.
+   * Wanderer map hubs (solar system ids, wormholes included): the map's own (`maps_v1.hubs`, the
+   * export's `map.hubs`, the settings export's `hubs`); where the source cannot give those (an
+   * API without them), the hubs the map's users set, most used first (and a warning says so).
    */
   hubs: number[];
+  /**
+   * Each user's own hubs on the map (`map_user_settings`), with the character that names them.
+   * Older stored dumps lack it.
+   */
+  userHubs?: WandererUserHubs[];
   /** The map's webhook subscriptions (API only; their signing secrets are never read). */
   webhooks?: WandererWebhook[];
   /** Names of the map's own system labels by id (export version 2: `map.system_labels`). */
@@ -517,22 +523,50 @@ export function readWebhook(row: unknown): WandererWebhook | null {
   return { id: text(row.id), url: url.trim(), events, active: bool(row.active) ?? true };
 }
 
+export interface WandererUserHubs {
+  /**
+   * The user's main character on the map (else the one they follow): their account here is the
+   * one that has linked it. Null when they set neither.
+   */
+  characterEveId: number | null;
+  hubs: number[];
+}
+
+/** Hub ids as Wanderer keeps them: solar system ids as text (`maps_v1.hubs`) or as numbers. */
+export function readHubIds(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  const ids: number[] = [];
+  for (const hub of value) {
+    const id = eveIdNumber(hub);
+    if (id && !ids.includes(id)) ids.push(id);
+  }
+  return ids;
+}
+
 /**
- * Hubs of a map's user settings (`map_user_settings`, attribute `hubs`: solar system ids as
- * strings), most used first.
+ * Each user's hubs in a map's user settings (`map_user_settings`, attribute `hubs`: solar system
+ * ids as strings), with their main (else followed) character; users without hubs are left out.
  */
-export function readUserHubs(rows: unknown, mapId: string | null): number[] {
+export function readUserHubs(rows: unknown, mapId: string | null): WandererUserHubs[] {
   if (!Array.isArray(rows)) return [];
-  const uses = new Map<number, number>();
+  const users: WandererUserHubs[] = [];
   for (const row of rows) {
     if (!isRow(row)) continue;
     if (mapId && text(row.map_id) && text(row.map_id) !== mapId) continue;
-    const hubs = Array.isArray(row.hubs) ? row.hubs : [];
-    for (const hub of hubs) {
-      const id = eveIdNumber(hub);
-      if (id) uses.set(id, (uses.get(id) ?? 0) + 1);
-    }
+    const hubs = readHubIds(row.hubs);
+    if (hubs.length === 0) continue;
+    users.push({
+      characterEveId: eveIdNumber(row.main_character_eve_id) ?? eveIdNumber(row.following_character_eve_id),
+      hubs,
+    });
   }
+  return users;
+}
+
+/** Every user's hubs in one list, the most used first (ties in the order they came). */
+export function userHubUnion(users: readonly WandererUserHubs[]): number[] {
+  const uses = new Map<number, number>();
+  for (const user of users) for (const id of user.hubs) uses.set(id, (uses.get(id) ?? 0) + 1);
   return [...uses].sort((a, b) => b[1] - a[1]).map(([id]) => id);
 }
 
@@ -555,6 +589,7 @@ export function emptyDump(source: ImportSourceDto, readAt: number): WandererMapD
     passages: [],
     acls: [],
     hubs: [],
+    userHubs: [],
     webhooks: [],
     labelNames: {},
     systemLabels: [],

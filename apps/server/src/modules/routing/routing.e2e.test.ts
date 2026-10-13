@@ -159,12 +159,24 @@ describeEachDialect('routing and connections over HTTP', (t) => {
   });
 
   it('keeps map hubs for members and personal hubs for everyone', async () => {
+    // A new map starts with the trade hubs, added by routing itself.
+    await vi.waitFor(async () => expect(await events('routes.hubs_changed')).toHaveLength(1));
+    const [seeded] = await events('routes.hubs_changed');
+    expect((seeded!.data as { hubs: HubDto[] }).hubs.map((h) => h.name)).toEqual([
+      'Jita',
+      'Amarr',
+      'Dodixie',
+      'Rens',
+      'Hek',
+    ]);
+    expect(seeded!.actor).toMatchObject({ kind: 'system' });
+
     const put = await request<HubDto[]>('PUT', `/api/maps/${mapId}/hubs`, 'alice', {
       solarSystemIds: [AMAMAKE],
     });
     expect(put.status).toBe(200);
     expect(put.body).toMatchObject([{ name: 'Amamake', kind: 'map' }]);
-    expect((await events('routes.hubs_changed')).map((e) => e.data)).toEqual([{ hubs: put.body }]);
+    expect((await events('routes.hubs_changed')).at(-1)!.data).toEqual({ hubs: put.body });
     expect((await request('PUT', `/api/maps/${mapId}/hubs`, 'bob', { solarSystemIds: [] })).status).toBe(404);
 
     expect((await request('PUT', '/api/accounts/me/hubs', 'alice', { solarSystemIds: [TAMA] })).status).toBe(

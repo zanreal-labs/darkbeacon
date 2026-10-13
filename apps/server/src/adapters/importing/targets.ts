@@ -55,10 +55,17 @@ export class MappingChainTarget implements ChainTarget {
     private readonly access: MapAccess,
     private readonly hubAdmin: HubAdmin,
     private readonly routes: RouteQueries,
+    /** The account that has linked an EVE character; null when none has. */
+    private readonly ownerOf: (characterId: number) => Promise<string | null>,
   ) {}
 
   async createMap(actor: Actor, request: { name: string; slug?: string }): Promise<TargetMap> {
-    return target(await this.mapping.maps.create(actor, request));
+    const map = await this.mapping.maps.create(actor, request);
+    // The trade hubs every new map gets (routing adds them on `map.created` too), here at once,
+    // so the imported hubs come after them in a fixed order and none is doubled.
+    // Losing a race with routing's own consumer only means it added them first.
+    await this.hubAdmin.addDefaultHubs(map.id).catch(() => undefined);
+    return target(map);
   }
 
   async map(actor: Actor, mapId: string): Promise<TargetMap> {
@@ -151,6 +158,15 @@ export class MappingChainTarget implements ChainTarget {
 
   async setHubs(actor: Actor, mapId: string, solarSystemIds: number[]): Promise<void> {
     await this.hubAdmin.setMapHubs(actor, mapId, solarSystemIds);
+  }
+
+  async addPersonalHubs(
+    characterId: number,
+    solarSystemIds: number[],
+  ): Promise<'created' | 'updated' | 'unchanged' | 'no-account'> {
+    const accountId = await this.ownerOf(characterId);
+    if (!accountId) return 'no-account';
+    return this.hubAdmin.addPersonalHubs(accountId, solarSystemIds);
   }
 }
 

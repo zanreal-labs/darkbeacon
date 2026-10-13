@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 
 /** The map the fake serves: tools/fake-wanderer/map.json (Wanderer's rows) with real timestamps. */
 export interface FakeWandererMap {
-  map: { id: string; name: string; slug: string; description: string; scope: string };
+  map: { id: string; name: string; slug: string; description: string; scope: string; hubs?: number[] };
   apiKey: string;
   systems: Array<Record<string, unknown> & { solar_system_id: number; visible: boolean; id: string }>;
   connections: Array<Record<string, unknown> & { solar_system_source: number; solar_system_target: number }>;

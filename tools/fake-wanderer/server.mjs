@@ -177,6 +177,9 @@ function exportDocument(map, now) {
       name: map.map.name,
       slug: map.map.slug,
       system_labels: map.map.system_labels ?? [],
+      // The recorded fork does not export the map's hubs; a map that sets `hubs` stands for one
+      // that does (ids as numbers).
+      ...(map.map.hubs ? { hubs: map.map.hubs } : {}),
     },
     signatures: map.signatures
       .filter((g) => !g.deleted)
