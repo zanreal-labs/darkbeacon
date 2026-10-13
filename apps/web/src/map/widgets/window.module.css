@@ -34,6 +34,18 @@
   pointer-events: auto;
 }
 
+/*
+ * While a modal overlay is open (a dropdown menu, a select, a dialog), Radix makes everything
+ * outside it inert with `pointer-events: none` on the body and closes the overlay on a press
+ * outside. The windows take the pointer back above (their layer lets the map through), so a press
+ * reached another menu's trigger: a second menu opened over the first, and the first, no longer
+ * the topmost layer, stopped closing on presses outside. While the body is inert, so is what is in
+ * a window: a press lands on the window itself and only closes what is open, as anywhere else.
+ */
+:global(body[style*='pointer-events: none']) .window > * {
+  pointer-events: none;
+}
+
 .window:focus-visible {
   outline: 2px solid var(--dbk-color-focus);
   outline-offset: 1px;
