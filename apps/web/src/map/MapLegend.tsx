@@ -128,6 +128,7 @@ export function MapLegend({ id }: { id: string }) {
         <Row sample={<Kbd>F</Kbd>}>Fit the whole chain</Row>
         <Row sample={<Kbd>C</Kbd>}>Center on me</Row>
         <Row sample={<Kbd>L</Kbd>}>Show or hide this legend</Row>
+        <Row sample={<Kbd>W</Kbd>}>Wormhole types: sizes, masses, statics</Row>
       </ul>
     </section>
   );

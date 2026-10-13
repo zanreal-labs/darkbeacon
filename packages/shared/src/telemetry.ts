@@ -171,6 +171,7 @@ export const KeyboardShortcut = z.enum([
   'copy_selection',
   'paste_systems',
   'view_slot',
+  'wormhole_reference',
 ]);
 
 /**

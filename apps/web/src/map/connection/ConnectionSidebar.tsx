@@ -62,6 +62,7 @@ import {
   MASS_WORD,
   MODE_WORD,
 } from './format';
+import { TypeReferenceButton } from '../../reference/WormholeReferenceHost';
 import { shipIcon } from './ShipPicker';
 import sidebarStyles from '../widgets/widgets.module.css';
 import styles from './connection.module.css';
@@ -96,12 +97,19 @@ function useNow(): number {
   return now;
 }
 
-function typeLine(c: ConnectionDto, intel: ConnectionIntelDto | undefined): string {
+/** The connection's kind; a known wormhole type opens the wormhole types reference at it. */
+function typeLine(c: ConnectionDto, intel: ConnectionIntelDto | undefined): ReactNode {
   if (c.type === 'gate') return 'Stargate';
   if (c.type === 'bridge') return 'Ansiblex jump bridge';
   const code = intel?.wormholeType;
   const guess = intel?.wormholeTypeFrom === 'static' ? ' (static, a guess)' : '';
-  return code ? `Wormhole ${code}${guess}` : 'Wormhole, type unknown';
+  if (!code) return 'Wormhole, type unknown';
+  return (
+    <>
+      Wormhole <TypeReferenceButton code={code}>{code}</TypeReferenceButton>
+      {guess}
+    </>
+  );
 }
 
 /** The header: both ends (each selects its system), the type, and the states as words. */

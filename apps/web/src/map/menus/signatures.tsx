@@ -5,7 +5,7 @@ import type { ConnectionDto } from '@darkbeacon/shared';
 import type { MenuItem } from '../../components/ContextMenu';
 import type { MapPermissions } from '../../lib/roles';
 import { openLinkConnection } from '../signatures/SignatureLayer';
-import { openWormholeReference } from '../signatures/SignatureSettingsMenu';
+import { openWormholeReference } from '../../reference/open';
 
 /** Signature items of the connection menu: link the signatures of both ends. */
 export function connectionSignatureItems(connection: ConnectionDto, can: MapPermissions): MenuItem[] {
@@ -22,5 +22,7 @@ export function connectionSignatureItems(connection: ConnectionDto, can: MapPerm
 
 /** Signature items of the canvas menu: the wormhole types reference. */
 export function paneSignatureItems(): MenuItem[] {
-  return [{ kind: 'action', label: 'Wormhole types…', icon: <BookOpen />, onSelect: openWormholeReference }];
+  return [
+    { kind: 'action', label: 'Wormhole types…', icon: <BookOpen />, onSelect: () => openWormholeReference() },
+  ];
 }

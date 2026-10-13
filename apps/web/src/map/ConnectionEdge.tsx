@@ -9,7 +9,7 @@ import {
   type EdgeProps,
   type InternalNode,
 } from '@xyflow/react';
-import type { ConnectionDto, ShipSize } from '@darkbeacon/shared';
+import type { ConnectionDto } from '@darkbeacon/shared';
 import { PluginSlot } from '../plugins/PluginSlot';
 import { edgeInnerStyle, edgeOuterStyle, edgeVisual, SHIP_SIZE_TEXT, type EdgeVisual } from './edgeStyle';
 import { floatingEnds, type Point, type Rect } from './geometry';
@@ -43,14 +43,7 @@ export function trafficLine(traffic: ConnectionTraffic | undefined): string | nu
 
 export type ConnectionEdgeType = Edge<ConnectionEdgeData, 'connection'>;
 
-/** Ship size as the menus and the panel name it. */
-export const SHIP_SIZE_LABEL: Record<ShipSize, string> = {
-  small: 'S',
-  medium: 'M',
-  large: 'L',
-  xlarge: 'XL',
-  capital: 'C',
-};
+export { SHIP_SIZE_LABEL } from './edgeStyle';
 
 function rectOf(node: InternalNode): Rect {
   return {

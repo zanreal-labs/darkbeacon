@@ -292,15 +292,22 @@ export const WormholeCatalogDto = z.object({
 export type WormholeCatalogDto = z.infer<typeof WormholeCatalogDto>;
 
 /**
- * Connection size from a type's max jump mass: up to 5 000 t frigates and destroyers (small), up
- * to 62 000 t cruisers, battlecruisers and industrials (medium), up to 410 000 t battleships and
- * the Orca (large), up to 1 000 000 t freighters (xlarge), above that capitals (capital).
+ * Connection size from a type's max jump mass: the S / M / L / XL / C of the map's connections.
+ * Thresholds checked against EVE University: the "Wormhole Size and Stability Information" table
+ * and the aurora section of https://wiki.eveuniversity.org/Wormhole_attributes (jump masses of
+ * 5 000 t, 20 000 or 62 000 t, 375 000 t, 1 000 000 t and 2 000 000 t; R081 is listed there at
+ * 450 000 t) and "Maximum Ship Size" on https://wiki.eveuniversity.org/Wormholes:
+ * - small, up to 5 000 t: frigates and destroyers ("destroyer-mass ships and below");
+ * - medium, up to 62 000 t: cruisers, battlecruisers and industrials;
+ * - large, under 1 000 000 t (375 000 t, C729 410 000 t): battleships and the Orca;
+ * - xlarge, 1 000 000 t: freighters (and the lightest capitals);
+ * - capital, above that (2 000 000 t): every capital; titans and supercarriers never fit.
  */
 export function shipSizeForJumpMass(maxJumpMass: number | null): WormholeTypeDto['shipSize'] {
   if (maxJumpMass === null || maxJumpMass <= 0) return null;
   if (maxJumpMass <= 5_000_000) return 'small';
   if (maxJumpMass <= 62_000_000) return 'medium';
-  if (maxJumpMass <= 410_000_000) return 'large';
+  if (maxJumpMass < 1_000_000_000) return 'large';
   if (maxJumpMass <= 1_000_000_000) return 'xlarge';
   return 'capital';
 }

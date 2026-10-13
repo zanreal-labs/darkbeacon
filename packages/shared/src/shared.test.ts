@@ -3,6 +3,24 @@ import { ClientMessage, ServerMessage } from './protocol.js';
 import { buildPath, nestPath, routes } from './routes.js';
 import { CreateAccessRuleRequest } from './dto/access.js';
 import { isMergedCopy, isMergeEvent } from './dto/sharing.js';
+import { shipSizeForJumpMass } from './dto/wormholes.js';
+
+describe('ship size of a wormhole type', () => {
+  it('follows the jump masses EVE University lists', () => {
+    expect(shipSizeForJumpMass(null)).toBeNull();
+    expect(shipSizeForJumpMass(0)).toBeNull();
+    expect(shipSizeForJumpMass(5_000_000)).toBe('small');
+    expect(shipSizeForJumpMass(20_000_000)).toBe('medium');
+    expect(shipSizeForJumpMass(62_000_000)).toBe('medium');
+    expect(shipSizeForJumpMass(375_000_000)).toBe('large');
+    expect(shipSizeForJumpMass(410_000_000)).toBe('large');
+    // R081 as the wiki lists it: still too small for a freighter.
+    expect(shipSizeForJumpMass(450_000_000)).toBe('large');
+    expect(shipSizeForJumpMass(1_000_000_000)).toBe('xlarge');
+    expect(shipSizeForJumpMass(1_350_000_000)).toBe('capital');
+    expect(shipSizeForJumpMass(2_000_000_000)).toBe('capital');
+  });
+});
 
 describe('ws protocol', () => {
   it('parses client messages', () => {

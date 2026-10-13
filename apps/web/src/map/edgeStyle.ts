@@ -53,6 +53,15 @@ export const SHIP_SIZE_LETTER: Record<ShipSize, string | null> = {
   capital: 'C',
 };
 
+/** Ship size as the menus, the panel and the wormhole types reference name it. */
+export const SHIP_SIZE_LABEL: Record<ShipSize, string> = {
+  small: 'S',
+  medium: 'M',
+  large: 'L',
+  xlarge: 'XL',
+  capital: 'C',
+};
+
 export const SHIP_SIZE_TEXT: Record<ShipSize, string> = {
   small: 'Frigates and destroyers only',
   medium: 'Up to battlecruisers and industrials',

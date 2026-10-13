@@ -22,8 +22,6 @@ import { linkSignature, useOnLink } from './onLink';
 import { TypeLabel } from './catalog';
 import { GROUP_LABEL, signatureLeadsTo } from './facts';
 import { signaturePrefs } from './prefs';
-import { OPEN_WORMHOLE_REFERENCE } from './SignatureSettingsMenu';
-import { WormholeReference } from './WormholeReference';
 import styles from './signatures.module.css';
 
 /** Asks the map to offer the signatures of both ends of a connection for linking. */
@@ -64,7 +62,7 @@ export function linkCandidates(
 
 /**
  * Signature parts of the map that live outside the sidebar: the bubbled marker on nodes, the
- * wormhole types reference, the "link a signature" prompt for a connection (from its menu) and,
+ * "link a signature" prompt for a connection (from its menu) and,
  * when the preference is on, after one of your jumps made a new connection (Wanderer's link
  * signature on splash).
  */
@@ -89,21 +87,17 @@ export function SignatureLayer({
   useBubbledBadges(mapId, state.signatures);
   useOnLink(mapId, state, universe, store, canEdit);
   const me = useMe();
-  const [reference, setReference] = useState(false);
   const [prompt, setPrompt] = useState<LinkPrompt | null>(null);
   const jumps = useRef<{ from: number; to: number; at: number }[]>([]);
   const added = useRef<{ connectionId: string; source: number; target: number; at: number }[]>([]);
 
   useEffect(() => {
-    const openReference = () => setReference(true);
     const openLink = (e: Event) => {
       const { connectionId } = (e as CustomEvent<{ connectionId: string }>).detail;
       setPrompt({ connectionId });
     };
-    window.addEventListener(OPEN_WORMHOLE_REFERENCE, openReference);
     window.addEventListener(LINK_CONNECTION, openLink);
     return () => {
-      window.removeEventListener(OPEN_WORMHOLE_REFERENCE, openReference);
       window.removeEventListener(LINK_CONNECTION, openLink);
     };
   }, []);
@@ -161,7 +155,6 @@ export function SignatureLayer({
 
   return (
     <>
-      <WormholeReference open={reference} onOpenChange={setReference} />
       {prompt && connection && (
         <LinkDialog
           connection={connection}

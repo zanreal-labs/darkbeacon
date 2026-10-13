@@ -27,6 +27,7 @@ import {
 } from '../../test/setup';
 import { ToastProvider, TooltipProvider } from '../../ui';
 import { jumpsUntil } from './format';
+import { closeWormholeReference, wormholeReferenceState } from '../../reference/open';
 
 installFlowMocks();
 
@@ -301,7 +302,12 @@ describe('the connection sidebar', () => {
     view();
     const sidebar = await openConnection();
     expect(within(sidebar).getByRole('heading', { name: /J014348.*Tama/ })).toBeTruthy();
-    expect(await within(sidebar).findByText('Wormhole U210')).toBeTruthy();
+    // The type opens the wormhole types reference at it.
+    const type = await within(sidebar).findByRole('button', { name: 'U210' });
+    expect(type.closest('span')?.textContent).toBe('Wormhole U210');
+    await userEvent.click(type);
+    expect(wormholeReferenceState()).toMatchObject({ open: true, query: 'U210' });
+    closeWormholeReference();
     expect(within(sidebar).getByText('Reduced')).toBeTruthy();
     expect(within(sidebar).getByText('Mass saved')).toBeTruthy();
     for (const name of ['Connection', 'Mass', 'Passages'])

@@ -17,6 +17,7 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from '../../ui';
+import { openWormholeReference } from '../../reference/open';
 import { GROUP_LABEL } from './facts';
 import { OnLinkSettings } from './OnLinkSettings';
 import {
@@ -41,10 +42,6 @@ const KINDS = [
   ['anomaly', 'Anomalies'],
   ['other', 'Ships, structures and the rest'],
 ] as const;
-
-/** Opens the wormhole types reference wherever the map mounts it (see `SignatureLayer`). */
-export const OPEN_WORMHOLE_REFERENCE = 'dbk:wormhole-reference';
-export const openWormholeReference = () => window.dispatchEvent(new CustomEvent(OPEN_WORMHOLE_REFERENCE));
 
 /**
  * The signatures section's settings, in the section header: groups shown, columns, colours, lazy
@@ -175,7 +172,7 @@ export function SignatureSettingsMenu({ can }: { can: { edit: boolean } }) {
             </MenuItem>
           )}
           <MenuSeparator />
-          <MenuItem icon={<BookOpen />} onSelect={openWormholeReference}>
+          <MenuItem icon={<BookOpen />} onSelect={() => openWormholeReference()}>
             Wormhole types…
           </MenuItem>
         </MenuContent>

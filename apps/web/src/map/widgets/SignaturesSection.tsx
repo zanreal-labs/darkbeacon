@@ -40,6 +40,7 @@ import type { MapPermissions } from '../../lib/roles';
 import { Button, Checkbox, CharacterAvatar, IconButton, Kbd, Skeleton, useToast } from '../../ui';
 import { seedSignatures } from '../mapState';
 import { TypeLabel } from '../signatures/catalog';
+import { TypeReferenceButton } from '../../reference/WormholeReferenceHost';
 import { ageLabel, freshness, GROUP_LABEL, targetOf, visibleSignatures } from '../signatures/facts';
 import { OtherFilters } from '../signatures/FilterChips';
 import { LeadsToMenu } from '../signatures/LeadsToMenu';
@@ -438,7 +439,9 @@ export function SignaturesSection({
                   {s.bubbled && <CircleDot className={sig.iconBubble} aria-label="Hole is inside a bubble" />}
                   {wormhole ? (
                     code ? (
-                      <TypeLabel code={code} destination={target === null ? s.destination : null} />
+                      <TypeReferenceButton code={code}>
+                        <TypeLabel code={code} destination={target === null ? s.destination : null} />
+                      </TypeReferenceButton>
                     ) : (
                       !resolved && <span className="subtle">?</span>
                     )
@@ -448,9 +451,11 @@ export function SignaturesSection({
                     </span>
                   )}
                   {resolved && (
-                    <span className={sig.resolved} title="Type from the other side of the hole">
-                      ({resolved})
-                    </span>
+                    <TypeReferenceButton code={resolved}>
+                      <span className={sig.resolved} title="Type from the other side of the hole">
+                        ({resolved})
+                      </span>
+                    </TypeReferenceButton>
                   )}
                   {info && info.urgency !== 'ok' && (
                     <span

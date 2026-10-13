@@ -154,7 +154,7 @@ made while seeding the demo map or by cleanups count as nothing; a history rever
 | `page_viewed`       | `page`: `map`, `maps`, `account`, `admin`, `map_settings`, `oauth_consent`, `import`, `jump`, `characters`, `changelog`; `section`: the admin or map settings tab                                        |
 | `panel_opened`      | `panel`: `system`, `signatures`, `local`, `routes`, `connections`, `history`, `plugin`                                                                                                                   |
 | `context_menu_used` | `menu`: `system` or `connection`; `action`: `status`, `labels`, `tags`, `edit`, `hidden`, `locked`, `copy_name`, `remove`, `time`, `mass`, `size`, `type`, `bubble`, `dangerous`, `mass_saved`, `plugin` |
-| `shortcut_used`     | `shortcut`: `fit_chain`, `center_on_me`, `legend`, `undo`, `delete_selection`, `copy_selection`, `paste_systems`                                                                                         |
+| `shortcut_used`     | `shortcut`: `fit_chain`, `center_on_me`, `legend`, `undo`, `delete_selection`, `copy_selection`, `paste_systems`, `view_slot`, `wormhole_reference`                                                      |
 | `activity_viewed`   | `section`: `activity` or `kills`; `window`: `1h`, `4h`, `12h`, `24h`, `7d` (its time window was changed)                                                                                                 |
 | `feedback_rated`    | `rating`: `up` or `down`; `area`: the page, as for `page_viewed` (the thumbs in the help menu)                                                                                                           |
 

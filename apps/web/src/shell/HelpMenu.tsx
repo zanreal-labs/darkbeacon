@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowUpRight,
+  BookOpen,
   Bug,
   CircleHelp,
   Inbox,
@@ -26,6 +27,7 @@ import {
   type SupportKind,
 } from '../lib/support';
 import { browserOptedOut, track } from '../lib/telemetry';
+import { openWormholeReference } from '../reference/open';
 import { useTheme } from '../theme/ThemeProvider';
 import {
   IconButton,
@@ -148,8 +150,8 @@ export function SupportMenuItems() {
 /**
  * The help menu, at the bottom of the main rail (in the top bar on phones, where the rail is the
  * tab bar): report a problem, send feedback, my tickets (with the unread badge
- * from the hub), a thumbs up or down for the page (anonymous telemetry, when it is on), what's
- * new and the documentation.
+ * from the hub), a thumbs up or down for the page (anonymous telemetry, when it is on), the
+ * wormhole types reference (the phones' way to it), what's new and the documentation.
  */
 export function HelpMenu({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }) {
   const router = useRouter();
@@ -226,6 +228,9 @@ export function HelpMenu({ placement = 'rail' }: { placement?: 'rail' | 'topbar'
             <MenuSeparator />
           </>
         )}
+        <MenuItem icon={<BookOpen />} onSelect={() => openWormholeReference()}>
+          Wormhole types
+        </MenuItem>
         <MenuItem icon={<Sparkles />} onSelect={() => router.push('/changelog')}>
           What&apos;s new
         </MenuItem>

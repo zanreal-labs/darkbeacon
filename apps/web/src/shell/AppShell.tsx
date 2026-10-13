@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Suspense, type ReactElement, type ReactNode } from 'react';
 import { Map as MapIcon, Orbit, Shield, UserRound, UsersRound } from 'lucide-react';
 import { PluginsProvider } from '../plugins/PluginSlot';
+import { WormholeReferenceHost, WormholeReferenceRailButton } from '../reference/WormholeReferenceHost';
 import { Skeleton, Tooltip } from '../ui';
 import { Breadcrumbs } from './Trail';
 import { BreadcrumbProvider } from './breadcrumbs';
@@ -126,6 +127,7 @@ export function AppShell({
             </Suspense>
             <RailLink item={JUMP_NAV} />
             <RailLink item={CHARACTERS_NAV} />
+            <WormholeReferenceRailButton />
             {adminRail}
             <HelpMenu placement="rail" />
           </nav>
@@ -157,6 +159,7 @@ export function AppShell({
             <TelemetryRoot />
           </Suspense>
           <NewVersion />
+          <WormholeReferenceHost />
         </div>
       </BreadcrumbProvider>
     </PluginsProvider>

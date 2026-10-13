@@ -1,4 +1,10 @@
-import type { MapExitDto, RouteSpace, SystemStatus, UniverseSystemDto } from '@darkbeacon/shared';
+import type {
+  MapExitDto,
+  RouteSpace,
+  SystemStatus,
+  UniverseSystemDto,
+  WormholeDestination,
+} from '@darkbeacon/shared';
 import type { TokenName } from '@darkbeacon/theme-sdk';
 
 export const STATUS_LABEL: Record<SystemStatus, string> = {
@@ -85,6 +91,31 @@ export function classPill(info: Pick<UniverseSystemDto, 'whClass' | 'security'> 
   const step = Math.max(0, Math.min(1, shown)).toFixed(1);
   const background = SECURITY_COLORS[step]!;
   return { kind: 'security', label: shown.toFixed(1), background };
+}
+
+/**
+ * A system of each destination, for pills of a class rather than a system (the wormhole types
+ * reference): the SDE class id, and for known space a security in the middle of its band.
+ */
+const DESTINATION_SYSTEM: Record<WormholeDestination, Pick<UniverseSystemDto, 'whClass' | 'security'>> = {
+  c1: { whClass: 1, security: -1 },
+  c2: { whClass: 2, security: -1 },
+  c3: { whClass: 3, security: -1 },
+  c4: { whClass: 4, security: -1 },
+  c5: { whClass: 5, security: -1 },
+  c6: { whClass: 6, security: -1 },
+  hs: { whClass: 7, security: 0.8 },
+  ls: { whClass: 8, security: 0.3 },
+  ns: { whClass: 9, security: -0.5 },
+  thera: { whClass: 12, security: -1 },
+  c13: { whClass: 13, security: -1 },
+  drifter: { whClass: 14, security: -1 },
+  pochven: { whClass: 25, security: -1 },
+};
+
+/** The pill of a destination class in the colours of the map's nodes; labels stay the caller's. */
+export function destinationPill(destination: WormholeDestination): Exclude<ClassPill, { kind: 'unknown' }> {
+  return classPill(DESTINATION_SYSTEM[destination]) as Exclude<ClassPill, { kind: 'unknown' }>;
 }
 
 /** Nearest hub under an exit, as the routing API answers it: "Jita 4j" and the route's space. */
