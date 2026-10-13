@@ -45,3 +45,4 @@ export * from './pings.js';
 export * from './linked-maps.js';
 export * from './characters.js';
 export * from './auto-map.js';
+export * from './views.js';

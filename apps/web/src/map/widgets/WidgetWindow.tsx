@@ -14,7 +14,16 @@ import {
 } from 'react';
 import { X } from 'lucide-react';
 import { IconButton } from '../../ui';
-import { clampBox, moveBox, resizeBox, type Area, type Box, type Corner } from './layout';
+import {
+  clampBox,
+  minSize,
+  moveBox,
+  resizeBox,
+  snappedUnder,
+  type Area,
+  type Box,
+  type Corner,
+} from './layout';
 import type { WidgetsController } from './useWidgetsLayout';
 import styles from './window.module.css';
 
@@ -193,9 +202,20 @@ export function WidgetWindow({ id, title, count, summary, alert, actions, headin
   const { controller, area } = host;
   const docked = host.docked.has(id);
   const z = host.order.indexOf(id) + 1;
-  /** A resize ends: a docked window keeps its column and gets a new cap, a floating one its box. */
+  const least = minSize(id);
+  /** The other floating windows: one dropped right under one of them stays under it. */
+  const floatingOthers = Object.fromEntries(
+    Object.entries(host.boxes).filter(([other]) => other !== id && !host.docked.has(other)),
+  );
+  const under = (b: Box) => snappedUnder(id, b, floatingOthers, controller.layout);
+  /**
+   * A resize ends: the window keeps that height by hand (its content scrolls); a docked one stays
+   * in the column, a floating one keeps its box.
+   */
   const resized = (next: Box) =>
-    docked ? controller.resizeDocked(id, next, area) : controller.place(id, next, area);
+    docked
+      ? controller.resizeDocked(id, next, area)
+      : controller.place(id, next, area, { resized: true, below: under(next) });
 
   /** Follows the pointer from a title bar or a corner, and keeps the result when let go. */
   const follow = (e: ReactPointerEvent, next: (dx: number, dy: number) => Box, done: (b: Box) => void) => {
@@ -227,15 +247,15 @@ export function WidgetWindow({ id, title, count, summary, alert, actions, headin
     const start = box;
     follow(
       e,
-      (dx, dy) => moveBox(start, dx, dy, area, others),
-      (moved) => controller.place(id, moved, area),
+      (dx, dy) => moveBox(start, dx, dy, area, others, least),
+      (moved) => controller.place(id, moved, area, { below: under(moved) }),
     );
   };
 
   const startResize = (corner: Corner) => (e: ReactPointerEvent) => {
     if (e.button !== 0) return;
     const start = box;
-    follow(e, (dx, dy) => resizeBox(start, corner, dx, dy, area, others), resized);
+    follow(e, (dx, dy) => resizeBox(start, corner, dx, dy, area, others, least), resized);
   };
 
   // The window itself focused: arrows move it, Shift and the arrows resize it (10 px a press, no
@@ -246,8 +266,11 @@ export function WidgetWindow({ id, title, count, summary, alert, actions, headin
     if (!step) return;
     e.preventDefault();
     const [dx, dy] = step as [number, number];
-    if (e.shiftKey) resized(clampBox({ ...box, w: box.w + dx, h: box.h + dy }, area));
-    else controller.place(id, clampBox({ ...box, x: box.x + dx, y: box.y + dy }, area), area);
+    if (e.shiftKey) resized(clampBox({ ...box, w: box.w + dx, h: box.h + dy }, area, least));
+    else {
+      const moved = clampBox({ ...box, x: box.x + dx, y: box.y + dy }, area, least);
+      controller.place(id, moved, area, { below: under(moved) });
+    }
   };
 
   return (
@@ -270,7 +293,8 @@ export function WidgetWindow({ id, title, count, summary, alert, actions, headin
       </header>
       {body}
       <span id={hintId} className="sr-only">
-        Arrow keys move the window, Shift and the arrow keys resize it.
+        Arrow keys move the window, Shift and the arrow keys resize it. Double-click a corner to fit it to its
+        content again.
       </span>
       {CORNERS.map(({ corner, name }) => (
         <span
@@ -279,6 +303,7 @@ export function WidgetWindow({ id, title, count, summary, alert, actions, headin
           data-corner={name}
           aria-hidden
           onPointerDown={startResize(corner)}
+          onDoubleClick={() => controller.fit(id)}
         />
       ))}
     </section>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import type { MapDto } from '@darkbeacon/shared';
 import { useMapTrackingSettings, useShipTypes } from '../../lib/characters';
 import type { MapPermissions } from '../../lib/roles';
@@ -8,27 +8,30 @@ import { useMe } from '../../lib/session';
 import { useUniverseSystems } from '../../lib/universe';
 import type { MapState } from '../mapState';
 import { CharacterBar, ownOnMap } from './CharacterBar';
-import { TrackingDialog } from './TrackingDialog';
 import { useFollowCharacter } from './useFollow';
 
 /**
- * Everything about characters the map view mounts: the top bar's strip with tracking and On the
- * map, the tracking dialog (also opened from an empty map), and follow mode, which selects and
- * centres the followed character's system whenever it jumps.
+ * Everything about characters the map view mounts: the top bar's strip with my characters, the
+ * quick views (`views`, where the tracking button was) and On the map, and follow mode, which
+ * selects and centres the followed character's system whenever it jumps. Tracking itself is in
+ * the map's settings (`openTracking`).
  */
 export function useMapCharacters({
   map,
   can,
   state,
   select,
+  openTracking,
+  views,
 }: {
   map: MapDto;
   can: MapPermissions;
   state: Pick<MapState, 'characters'> & Partial<Pick<MapState, 'systems'>>;
   select(solarSystemId: number): void;
-}): { bar: ReactNode; dialog: ReactNode; openTracking(): void } {
+  openTracking(): void;
+  views?: ReactNode;
+}): { bar: ReactNode } {
   const me = useMe();
-  const [open, setOpen] = useState(false);
   const signedIn = !!me.data;
   const { settings, loaded: settingsLoaded } = useMapTrackingSettings(map.id, { enabled: signedIn });
   const myCharacters = useMemo(() => me.data?.characters ?? [], [me.data]);
@@ -52,7 +55,7 @@ export function useMapCharacters({
     onMap: (id) => systems?.has(id) ?? false,
   });
 
-  if (!signedIn) return { bar: null, dialog: null, openTracking: () => undefined };
+  if (!signedIn) return { bar: views ?? null };
   const own = ownOnMap(myCharacters, presence, main, settings.followCharacterId);
   return {
     bar: (
@@ -65,22 +68,10 @@ export function useMapCharacters({
         shipName={shipName}
         canSeeAll={can.edit}
         onCenter={select}
-        onOpenTracking={() => setOpen(true)}
-      />
+        onOpenTracking={openTracking}
+      >
+        {views}
+      </CharacterBar>
     ),
-    dialog: (
-      <TrackingDialog
-        mapId={map.id}
-        open={open}
-        onOpenChange={setOpen}
-        myCharacters={myCharacters}
-        accountMainId={accountMain}
-        characters={presence}
-        universe={universe}
-        shipName={shipName}
-        canTrack={can.edit}
-      />
-    ),
-    openTracking: () => setOpen(true),
   };
 }

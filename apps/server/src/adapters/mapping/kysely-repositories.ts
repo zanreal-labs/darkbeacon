@@ -33,6 +33,8 @@ export interface MappingTables {
     labels: string;
     /** The map's Labels (WH1, WH2...). */
     system_labels: string;
+    /** The map's published views. */
+    views: string;
     created_at: number;
     updated_at: number;
     /** Set while the map is deleted but restorable. */
@@ -676,10 +678,16 @@ function mapToRow(map: ChainMap): MapRow {
     settings: json.encode(map.settings),
     labels: json.encode(map.labels),
     system_labels: json.encode(map.systemLabels),
+    views: json.encode(map.views ?? []),
     created_at: map.createdAt,
     updated_at: map.updatedAt,
     deleted_at: map.deletedAt ?? null,
   };
+}
+
+function viewsOf(raw: string | null | undefined): Pick<ChainMap, 'views'> {
+  const views = json.decode<NonNullable<ChainMap['views']>>(raw ?? null) ?? [];
+  return views.length > 0 ? { views } : {};
 }
 
 function mapFromRow(row: MapRow): ChainMap {
@@ -693,6 +701,8 @@ function mapFromRow(row: MapRow): ChainMap {
     settings: json.decode<ChainMap['settings']>(row.settings)!,
     labels: json.decode<ChainMap['labels']>(row.labels)!,
     systemLabels: json.decode<ChainMap['systemLabels']>(row.system_labels) ?? [],
+    // Left out while there are none, so maps read the same as before views existed.
+    ...viewsOf(row.views),
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
     // Left out while not deleted, so maps read the same as before it existed.

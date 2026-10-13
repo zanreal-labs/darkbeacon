@@ -281,6 +281,24 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
     data: { systemLabels: [{ id: 'wh1', name: 'WH1', description: '' }] },
     before: { systemLabels: [] },
   },
+  'views.changed': {
+    data: {
+      views: [
+        {
+          id: 'v1',
+          name: 'Scan',
+          slot: 1,
+          view: {
+            version: 1,
+            layout: { version: 2, visible: ['info', 'signatures'], boxes: {}, order: [] },
+            canvas: {},
+          },
+          updatedAt: 1,
+        },
+      ],
+    },
+    before: { views: [] },
+  },
   'map.share.offered': { data: share },
   'map.share.accepted': { data: { ...share, status: 'active', acceptedAt: 2 }, before: share },
   'map.share.changed': { data: { ...share, level: 'read-write' }, before: share },

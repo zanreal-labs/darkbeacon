@@ -21,14 +21,18 @@ export const MAP_SETTINGS_SECTIONS = [
   'webhooks',
   'import',
   'transfer',
+  'tracking',
   'view',
   'history',
   'danger',
 ] as const;
 export type MapSettingsSection = (typeof MAP_SETTINGS_SECTIONS)[number];
 
-/** What everyone on the map has: their own view of the canvas, and the map's history. */
-const FOR_EVERYONE: readonly MapSettingsSection[] = ['view', 'history'];
+/**
+ * What everyone on the map has: tracking their own characters here, their own view of the canvas,
+ * and the map's history.
+ */
+const FOR_EVERYONE: readonly MapSettingsSection[] = ['tracking', 'view', 'history'];
 
 /** What managers may change; every other section is for the map's admins. */
 const FOR_MANAGERS: readonly MapSettingsSection[] = [
@@ -44,7 +48,7 @@ const FOR_MANAGERS: readonly MapSettingsSection[] = [
   ...FOR_EVERYONE,
 ];
 
-/** The sections someone with these rights sees, in order (viewers: their view and the history). */
+/** The sections someone with these rights sees, in order (viewers: tracking, their view, the history). */
 export function mapSettingsSections(can: { manage: boolean; admin: boolean }): MapSettingsSection[] {
   if (can.admin) return [...MAP_SETTINGS_SECTIONS];
   return MAP_SETTINGS_SECTIONS.filter((s) => (can.manage ? FOR_MANAGERS : FOR_EVERYONE).includes(s));

@@ -75,6 +75,7 @@ export class MapTransfer extends MappingUseCases {
       settings: document.map.settings,
       labels: document.map.labels,
       systemLabels: document.map.systemLabels,
+      ...(document.map.views?.length ? { views: document.map.views } : {}),
       createdAt: now,
       updatedAt: now,
     };
@@ -200,6 +201,7 @@ export class MapTransfer extends MappingUseCases {
       settings: map.settings,
       labels: map.labels,
       systemLabels: map.systemLabels,
+      ...(map.views?.length ? { views: map.views } : {}),
     };
   }
 
@@ -217,6 +219,7 @@ export class MapTransfer extends MappingUseCases {
       if (!withLabels) return updated;
       await maps.setLabels(who, mapId, document.labels);
       await maps.setSystemLabels(who, mapId, document.systemLabels);
+      if (document.views) await maps.setViews(who, mapId, document.views);
       return this.load(mapId);
     });
   }
@@ -248,6 +251,7 @@ export class MapTransfer extends MappingUseCases {
         settings: map.settings,
         labels: map.labels,
         systemLabels: map.systemLabels,
+        ...(map.views?.length ? { views: map.views } : {}),
       },
       systems: systems.map(strip),
       connections: connections.map(strip),

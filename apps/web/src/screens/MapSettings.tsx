@@ -25,6 +25,7 @@ import {
   Network,
   Plus,
   Radar,
+  Radio,
   Route,
   Send,
   Settings2,
@@ -43,6 +44,7 @@ import { MapPublicLinkSettings } from './MapPublicLink';
 import { MapSharing } from './MapSharing';
 import { MapAccessSection } from './MapAccess';
 import { MapCharactersSection } from './MapCharacters';
+import { MapTrackingSettings } from '../map/characters/MapTrackingSettings';
 import { MapTransferSection } from './MapTransfer';
 import { MapAutoMapSettings } from './MapAutoMapSettings';
 import {
@@ -264,6 +266,16 @@ const SECTIONS: readonly Section[] = [
       <Pane>
         <MapTransferSection map={map} can={can} />
         <ClipboardRoles map={map} />
+      </Pane>
+    ),
+  },
+  {
+    id: 'tracking',
+    title: 'Tracking',
+    icon: <Radio />,
+    render: (map, can) => (
+      <Pane>
+        <MapTrackingSettings key={map.id} map={map} can={can} />
       </Pane>
     ),
   },

@@ -5,6 +5,7 @@ import { StarterAccessRule } from './access-rules.js';
 import { AutoMapRulesDto } from './auto-map.js';
 import { BookmarkNumbering, BookmarkTemplate } from './bookmarks.js';
 import { EveId, Id, Timestamp } from './common.js';
+import { MapViewDto } from './views.js';
 
 export const MapScope = z.enum(['wormhole', 'high', 'low', 'null', 'pochven']);
 export type MapScope = z.infer<typeof MapScope>;
@@ -137,6 +138,8 @@ export const MapDto = z.object({
   labels: z.array(LabelDto),
   /** The map's Labels (WH1, WH2...). */
   systemLabels: z.array(SystemLabelDto),
+  /** The map's published views (saved layouts of the map screen); absent while it has none. */
+  views: z.array(MapViewDto).optional(),
   createdAt: Timestamp,
   updatedAt: Timestamp,
   /** Set while the map is deleted but can still be restored (instance admins only see it then). */

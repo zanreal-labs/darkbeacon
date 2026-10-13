@@ -54,6 +54,8 @@ import { MapWidgets, type WidgetCover } from '../map/widgets/MapWidgets';
 import { usePhone } from '../map/widgets/storage';
 import { useWidgetsLayout } from '../map/widgets/useWidgetsLayout';
 import { WidgetsMenu } from '../map/widgets/WidgetsMenu';
+import { useViews } from '../map/views/useViews';
+import { ViewSwitcher } from '../map/views/ViewSwitcher';
 import { SignatureLayer } from '../map/signatures/SignatureLayer';
 import { filterableSources, permissionsFor, withoutSources } from '../map/sharing/chain';
 import { ProvenanceLine, provenanceText } from '../map/sharing/ProvenanceLine';
@@ -184,6 +186,7 @@ export function MapView({
   // The widgets: always over the map, showing the selected system (Wanderer's windows).
   const widgets = useWidgetsLayout();
   const [widgetsShown, setWidgetsShown] = useState(true);
+  const showWidgets = useCallback(() => setWidgetsShown(true), []);
   const [widgetCover, setWidgetCover] = useState<WidgetCover>({ right: 0, rightBottom: 0, bottom: 0 });
   const onWidgetCover = useCallback(
     (next: WidgetCover) =>
@@ -210,8 +213,23 @@ export function MapView({
   const connectionPlugins = useSlot('connectionContextMenu', map.id);
   const widgetPlugins = useSlot('widget', map.id);
   const hubMenu = useHubMenu(map.id, can.edit, toast);
-  // My characters on this map: the top bar's strip, tracking, follow mode, On the map.
-  const characters = useMapCharacters({ map, can, state: store.state, select: (id) => select(id, true) });
+  // Saved views: quick slots 1, 2, 3 and the Views menu, where the tracking button was.
+  const views = useViews({
+    mapId: map.id,
+    views: (store.state.map ?? map).views,
+    canPublish: can.manage,
+    widgets,
+    onApplied: showWidgets,
+  });
+  // My characters on this map: the top bar's strip, follow mode, On the map; tracking is in settings.
+  const characters = useMapCharacters({
+    map,
+    can,
+    state: store.state,
+    select: (id) => select(id, true),
+    openTracking: () => settings.show('tracking'),
+    views: <ViewSwitcher views={views} compact={phone} />,
+  });
 
   // Tags (`labels` in the data) and Labels (WH1...) of the map.
   const labels = (state.map ?? map).labels;
@@ -723,7 +741,7 @@ export function MapView({
                       >
                         Add a system
                       </Button>
-                      <Button icon={<Radio />} onClick={characters.openTracking}>
+                      <Button icon={<Radio />} onClick={() => settings.show('tracking')}>
                         Track a character
                       </Button>
                     </>
@@ -868,8 +886,6 @@ export function MapView({
           </li>
         ))}
       </ul>
-
-      {characters.dialog}
 
       {menu && menuContent && menuContent.items.length > 0 && (
         <ContextMenu x={menu.x} y={menu.y} {...menuContent} onClose={closeMenu} />

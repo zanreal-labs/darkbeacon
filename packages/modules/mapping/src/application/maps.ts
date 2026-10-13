@@ -19,11 +19,12 @@ import {
   type CreateMapRequest,
   type LabelDto,
   type MapSummaryDto,
+  type MapViewDto,
   type SystemLabelDto,
   type UpdateMapRequest,
 } from '@darkbeacon/shared';
 import type { ChainMap } from '../domain/map.js';
-import { changes, slugify, validateLabels, validateSystemLabels } from '../domain/rules.js';
+import { changes, slugify, validateLabels, validateMapViews, validateSystemLabels } from '../domain/rules.js';
 import { MappingUseCases, type EventBatch } from './base.js';
 import { renumberBookmarks } from './bookmark-numbers.js';
 
@@ -183,6 +184,33 @@ export class MapUseCases extends MappingUseCases {
         if (next.visible) events.add('system.updated', next, system);
       }
       return systemLabels;
+    });
+  }
+
+  /**
+   * Replaces the map's published views (manager+): saved layouts of the map screen that every
+   * member gets at once, `slot` pinning one to quick slot 1, 2 or 3 for everyone. A view whose
+   * content changed is stamped with the time of the change.
+   */
+  async setViews(actor: Actor | null, mapId: string, views: MapViewDto[]): Promise<MapViewDto[]> {
+    const who = await this.authorize(actor, mapId, 'manager');
+    validateMapViews(views);
+    return this.write(who, mapId, async (events) => {
+      const current = await this.load(mapId);
+      const before = current.views ?? [];
+      const now = this.ports.clock.now();
+      const old = new Map(before.map((v) => [v.id, v]));
+      const next = views.map((v) => {
+        const was = old.get(v.id);
+        const same =
+          was && JSON.stringify({ ...was, updatedAt: 0 }) === JSON.stringify({ ...v, updatedAt: 0 });
+        return { ...v, updatedAt: same ? was.updatedAt : now };
+      });
+      if (JSON.stringify(before) === JSON.stringify(next)) return before;
+      const { views: _views, ...rest } = current;
+      await this.ports.maps.update({ ...rest, ...(next.length > 0 ? { views: next } : {}), updatedAt: now });
+      events.add('views.changed', { views: next }, { views: before });
+      return next;
     });
   }
 

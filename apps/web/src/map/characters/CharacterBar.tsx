@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Eye, Radio, Star, UsersRound } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { Eye, Star, TriangleAlert, UsersRound } from 'lucide-react';
 import type { CharacterDto, CharacterPresenceDto, UniverseSystemDto } from '@darkbeacon/shared';
 import { cx, CharacterAvatar, Popover, PopoverContent, PopoverTrigger, Tooltip } from '../../ui';
 import { ActivityDialog } from './ActivityDialog';
@@ -57,8 +57,9 @@ export function whereabouts(
 
 /**
  * The map's character controls in its top bar: my characters tracked here (portraits with
- * online, expired, main and followed marks; a click centres the map on one), the tracking
- * button, and "On the map" with everyone tracked here.
+ * online, expired, main and followed marks; a click centres the map on one), a mark only while
+ * tracking needs a look (a sign-in expired; it opens Tracking in the map's settings), the quick
+ * views (`children`, where the tracking button was) and "On the map" with everyone tracked here.
  */
 export function CharacterBar({
   mapId,
@@ -70,6 +71,7 @@ export function CharacterBar({
   canSeeAll,
   onCenter,
   onOpenTracking,
+  children,
 }: {
   mapId: string;
   own: OwnCharacter[];
@@ -81,16 +83,20 @@ export function CharacterBar({
   /** Members and up see who is on the map (as in Wanderer). */
   canSeeAll: boolean;
   onCenter(solarSystemId: number): void;
+  /** Tracking in the map's settings. */
   onOpenTracking(): void;
+  /** The quick views, between my characters and On the map. */
+  children?: ReactNode;
 }) {
   const [listOpen, setListOpen] = useState(false);
   const [activity, setActivity] = useState(false);
   const shown = own.slice(0, SHOWN);
+  const expired = own.filter((o) => !o.character.tokenValid).length;
   const online = [...characters.values()].filter((c) => c.online).length;
   const systemName = (id: number) => universe.get(id)?.name;
   return (
     <div className={styles.bar}>
-      {hasCharacters && (
+      {hasCharacters && own.length > 0 && (
         <div className={styles.group} role="group" aria-label="My characters on this map">
           {shown.map((o) => {
             const where = whereabouts(o.presence, systemName, shipName);
@@ -123,20 +129,21 @@ export function CharacterBar({
             );
           })}
           {own.length > SHOWN && <span className={styles.more}>+{own.length - SHOWN}</span>}
-          <Tooltip content="Track my characters on this map">
-            <button
-              type="button"
-              className={styles.trackButton}
-              data-alone={own.length === 0 || undefined}
-              onClick={onOpenTracking}
-              aria-label="Tracking"
-            >
-              <Radio aria-hidden />
-              {own.length === 0 && <span>Track</span>}
-            </button>
-          </Tooltip>
+          {expired > 0 && (
+            <Tooltip content="Tracking needs a look: a sign-in expired">
+              <button
+                type="button"
+                className={styles.attention}
+                onClick={onOpenTracking}
+                aria-label={`Tracking needs a look: ${expired} sign-in${expired === 1 ? '' : 's'} expired`}
+              >
+                <TriangleAlert aria-hidden />
+              </button>
+            </Tooltip>
+          )}
         </div>
       )}
+      {children}
       {canSeeAll && (
         <Popover open={listOpen} onOpenChange={setListOpen}>
           <Tooltip content="Everyone tracked on this map">

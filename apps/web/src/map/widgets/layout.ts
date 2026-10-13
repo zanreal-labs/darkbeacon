@@ -31,8 +31,23 @@ export const pluginWidgetId = (entry: { pluginId: string; title: string }) =>
 /** Wanderer's numbers: windows stay 10 px inside the map and snap within 10 px, 10 px apart. */
 export const GUTTER = 10;
 export const SNAP = 10;
-/** The smallest a window can be resized to (its content may still be shorter). */
-export const MIN_SIZE = { w: 180, h: 60 };
+/** The smallest a window other than the core ones gets. */
+export const MIN_SIZE = { w: 260, h: 140 };
+
+/**
+ * The smallest each window gets, enough to read something: Signatures its title and about five
+ * rows, System info the header and two lines of facts, Local three pilots, Routes and Kills three
+ * rows. A window sized by its content never goes below it, and neither does a resize.
+ */
+const MIN_SIZES: Record<string, { w: number; h: number }> = {
+  signatures: { w: 320, h: 180 },
+  info: { w: 300, h: 110 },
+  local: { w: 240, h: 130 },
+  routes: { w: 280, h: 130 },
+  kills: { w: 280, h: 130 },
+};
+
+export const minSize = (id: string): { w: number; h: number } => MIN_SIZES[id] ?? MIN_SIZE;
 
 /** Docked windows stand 8 px apart in their column. */
 export const DOCK_GAP = 8;
@@ -41,8 +56,8 @@ export const DOCK_GAP = 8;
 export const DOCK_ORDER: readonly string[] = ['info', 'signatures', 'local', 'routes', 'kills'];
 
 /**
- * How much of the map's height a docked window may take before its content scrolls: Signatures
- * the most, Local a quarter, the rest compact.
+ * How much of the map's height a window sized by its content may take before its content
+ * scrolls: Signatures the most, Local a quarter, the rest compact.
  */
 const DOCK_SHARE: Record<string, number> = {
   info: 0.4,
@@ -53,18 +68,9 @@ const DOCK_SHARE: Record<string, number> = {
 };
 const OTHER_SHARE = 0.25;
 
-/** A docked window the column runs out of room for keeps its title bar and about two rows. */
-export const DOCK_FLOOR = 76;
-
-/** Kills, Routes and the extra widgets keep their title bar and one line. */
-const SMALL_FLOOR = 52;
-
-/** Signatures keeps about five rows before the windows above it give way. */
-const SIGNATURES_FLOOR = 160;
-
 /**
  * Who gives way first when the column runs past the bottom: the extra widgets, Kills and Routes,
- * then Signatures (it scrolls anyway, down to five rows), then Local, then System info.
+ * then Signatures (it scrolls anyway), then Local, then System info, each down to its minimum.
  */
 function giveWayOrder(order: readonly string[]): number[] {
   const rank = (id: string) => {
@@ -100,6 +106,10 @@ export interface Area {
 export interface StoredBox extends Box {
   right?: true;
   bottom?: true;
+  /** Resized by hand: it keeps this height and its content scrolls (until fitted to content). */
+  fixed?: true;
+  /** Snapped under this floating window: it stays under it as that one grows, shrinks or moves. */
+  below?: string;
 }
 
 /**
@@ -116,7 +126,7 @@ export interface WidgetsLayout {
   boxes: Record<string, StoredBox>;
   /** Back to front: the last one is on top. */
   order: string[];
-  /** Docked windows someone resized: the most each grows to before its content scrolls. */
+  /** Docked windows someone resized by hand: the height each keeps, its content scrolling. */
   caps?: Record<string, number>;
   /** The column's width, when someone resized it. */
   dockWidth?: number;
@@ -133,7 +143,8 @@ export const LAYOUT_KEY = 'dbk-map-widgets';
 const isBox = (v: unknown): v is StoredBox =>
   typeof v === 'object' &&
   v !== null &&
-  ['x', 'y', 'w', 'h'].every((k) => Number.isFinite((v as Record<string, unknown>)[k]));
+  ['x', 'y', 'w', 'h'].every((k) => Number.isFinite((v as Record<string, unknown>)[k])) &&
+  ((v as StoredBox).below === undefined || typeof (v as StoredBox).below === 'string');
 
 /** A layout of any version kept before (1 had no `version`). */
 type AnyLayout = Omit<WidgetsLayout, 'version'> & { version?: number };
@@ -188,61 +199,107 @@ export function dockOrder(ids: readonly string[]): string[] {
   return [...ids].sort((a, b) => rank(a) - rank(b));
 }
 
-/** The most a docked window grows to before its content scrolls. */
-export function dockCap(id: string, area: Area, caps: Readonly<Record<string, number>> = {}): number {
-  return caps[id] ?? Math.round(area.height * (DOCK_SHARE[id] ?? OTHER_SHARE));
+/** The most a window sized by its content grows to before its content scrolls: its share of the map. */
+export function dockCap(id: string, area: Area): number {
+  return Math.max(minSize(id).h, Math.round(area.height * (DOCK_SHARE[id] ?? OTHER_SHARE)));
+}
+
+/**
+ * A window's height: the one someone gave it by hand (`fixed`), else its content's, up to its
+ * share of the map; never below its minimum.
+ */
+export function windowHeight(id: string, area: Area, natural: number | undefined, fixed?: number): number {
+  const least = minSize(id).h;
+  if (fixed !== undefined) return Math.round(Math.max(least, fixed));
+  return Math.round(Math.max(least, Math.min(natural ?? UNMEASURED, dockCap(id, area))));
+}
+
+/**
+ * The stretches of the column's height free of floating windows that stand over it (8 px clear of
+ * each): the docked windows stack in them and never end up under a floating one.
+ */
+function freeRanges(area: Area, over: readonly Box[]): Array<[number, number]> {
+  const bottom = area.height - GUTTER;
+  const blocked = over
+    .map((b): [number, number] => [b.y - DOCK_GAP, b.y + b.h + DOCK_GAP])
+    .sort((a, b) => a[0] - b[0]);
+  const ranges: Array<[number, number]> = [];
+  let from = GUTTER;
+  for (const [start, end] of blocked) {
+    if (start > from) ranges.push([from, Math.min(start, bottom)]);
+    from = Math.max(from, end);
+  }
+  if (from < bottom) ranges.push([from, bottom]);
+  const usable = ranges.filter(([a, b]) => b - a > 0);
+  return usable.length > 0 ? usable : [[Math.min(from, bottom), bottom]];
 }
 
 /**
  * The docked column against the right edge: each window as tall as its content (`natural`), up to
- * its share of the map or the height someone gave it (`caps`), stacked 8 px apart from the top.
- * When they do not fit, Kills and Routes give way first, then Signatures, Local and System info
- * last, each down to a title bar and two rows, and their content scrolls.
+ * its share of the map, or the height someone gave it by hand (`fixed`), stacked 8 px apart from
+ * the top and around any floating window that stands over the column, so none is ever hidden
+ * under one. When they do not fit, Kills and Routes give way first, then Signatures, Local and
+ * System info last, each down to its minimum, and their content scrolls; windows sized by hand
+ * keep their height.
  */
 export function dockColumn(
   ids: readonly string[],
   area: Area,
   natural: Readonly<Record<string, number | undefined>>,
-  caps: Readonly<Record<string, number>> = {},
+  fixed: Readonly<Record<string, number>> = {},
   width?: number,
+  floating: readonly Box[] = [],
 ): Record<string, Box> {
   const order = dockOrder(ids);
-  const w = dockWidth(area, width);
+  const widest = Math.max(0, ...order.map((id) => minSize(id).w));
+  const w = Math.round(Math.min(Math.max(dockWidth(area, width), widest), area.width - 2 * GUTTER));
   const x = area.width - GUTTER - w;
-  const heights = order.map((id) => Math.round(Math.min(natural[id] ?? UNMEASURED, dockCap(id, area, caps))));
-  const room = area.height - 2 * GUTTER - DOCK_GAP * Math.max(0, order.length - 1);
-  let over = heights.reduce((a, b) => a + b, 0) - room;
-  // Twice: first Signatures keeps five rows, then it too goes down to a title bar and two rows.
-  for (const pass of [0, 1])
+  const over = floating.filter((b) => b.x < x + w && b.x + b.w > x);
+  const ranges = freeRanges(area, over);
+  const heights = order.map((id) => windowHeight(id, area, natural[id], fixed[id]));
+  /** Each window at the next free place, past a floating window when it does not fit above it. */
+  const stack = () => {
+    const out: Record<string, Box> = {};
+    let r = 0;
+    let y = ranges[0]![0];
+    order.forEach((id, i) => {
+      const h = heights[i]!;
+      while (r < ranges.length - 1 && y + h > ranges[r]![1]) {
+        r += 1;
+        y = ranges[r]![0];
+      }
+      out[id] = { x, y, w, h };
+      y += h + DOCK_GAP;
+    });
+    return out;
+  };
+  // Past the bottom: the windows give way by what is missing, and stack again (a shorter window
+  // may now fit above a floating one).
+  let out = stack();
+  for (let pass = 0; pass < order.length + 1; pass++) {
+    const last = order.length > 0 ? out[order.at(-1)!]! : null;
+    let excess = last ? last.y + last.h - (area.height - GUTTER) : 0;
+    if (excess <= 0) break;
+    let gave = 0;
     for (const i of giveWayOrder(order)) {
-      if (over <= 0) break;
+      if (excess <= 0) break;
       const id = order[i]!;
-      const least =
-        id === 'signatures'
-          ? pass === 0
-            ? SIGNATURES_FLOOR
-            : DOCK_FLOOR
-          : ['local', 'info'].includes(id)
-            ? DOCK_FLOOR
-            : SMALL_FLOOR;
-      const floor = Math.min(heights[i]!, least);
-      const give = Math.max(0, Math.min(over, heights[i]! - floor));
+      if (fixed[id] !== undefined) continue;
+      const give = Math.max(0, Math.min(excess, heights[i]! - minSize(id).h));
       heights[i] = heights[i]! - give;
-      over -= give;
+      excess -= give;
+      gave += give;
     }
-  const out: Record<string, Box> = {};
-  let y = GUTTER;
-  order.forEach((id, i) => {
-    out[id] = { x, y, w, h: heights[i]! };
-    y += heights[i]! + DOCK_GAP;
-  });
+    if (gave === 0) break;
+    out = stack();
+  }
   return out;
 }
 
 /** Inside the map, 10 px from its edges, never smaller than the minimum. */
-export function clampBox(box: Box, area: Area): Box {
-  const w = clamp(box.w, MIN_SIZE.w, area.width - 2 * GUTTER);
-  const h = clamp(box.h, MIN_SIZE.h, area.height - 2 * GUTTER);
+export function clampBox(box: Box, area: Area, least: { w: number; h: number } = MIN_SIZE): Box {
+  const w = clamp(box.w, least.w, area.width - 2 * GUTTER);
+  const h = clamp(box.h, least.h, area.height - 2 * GUTTER);
   return {
     x: Math.round(clamp(box.x, GUTTER, area.width - GUTTER - w)),
     y: Math.round(clamp(box.y, GUTTER, area.height - GUTTER - h)),
@@ -264,7 +321,7 @@ export function toStored(box: Box, area: Area): StoredBox {
   };
 }
 
-export function fromStored(s: StoredBox, area: Area): Box {
+export function fromStored(s: StoredBox, area: Area, least: { w: number; h: number } = MIN_SIZE): Box {
   return clampBox(
     {
       x: s.right ? area.width - s.x - s.w : s.x,
@@ -273,6 +330,7 @@ export function fromStored(s: StoredBox, area: Area): Box {
       h: s.h,
     },
     area,
+    least,
   );
 }
 
@@ -285,9 +343,9 @@ export interface Resolved {
 }
 
 /**
- * Every shown window's box on a map of this size: the docked column by the windows' content
- * heights, and the floating ones where they were left, as tall as their content up to the height
- * they were given.
+ * Every shown window's box on a map of this size, from the heights the windows' content measures
+ * now: the floating ones where they were left (one snapped under another stays under it), as tall
+ * as their content or the height they were given by hand, then the docked column around them.
  */
 export function resolveBoxes(
   layout: WidgetsLayout,
@@ -295,24 +353,121 @@ export function resolveBoxes(
   ids: readonly string[],
   natural: Readonly<Record<string, number | undefined>> = {},
 ): Resolved {
-  const boxes: Record<string, Box> = {};
+  const floatingIds = ids.filter((id) => layout.boxes[id]);
   const docked = ids.filter((id) => !layout.boxes[id]);
-  for (const id of ids) {
-    const stored = layout.boxes[id];
-    if (!stored) continue;
-    const box = fromStored(stored, area);
-    boxes[id] = { ...box, h: Math.round(Math.min(box.h, natural[id] ?? box.h)) };
+  const base: Record<string, Box> = {};
+  for (const id of floatingIds) {
+    const stored = layout.boxes[id]!;
+    const least = minSize(id);
+    const h = windowHeight(id, area, natural[id], stored.fixed ? stored.h : undefined);
+    base[id] = fromStored({ ...stored, h }, area, least);
   }
-  const column = dockColumn(docked, area, natural, layout.caps, layout.dockWidth);
+  const boxes: Record<string, Box> = {};
+  const placing = new Set<string>();
+  const place = (id: string): Box => {
+    const done = boxes[id];
+    if (done) return done;
+    let box = base[id]!;
+    const parent = layout.boxes[id]!.below;
+    if (parent && base[parent] && !placing.has(parent)) {
+      placing.add(id);
+      const above = place(parent);
+      placing.delete(id);
+      const least = minSize(id).h;
+      const y = above.y + above.h + GUTTER;
+      // Kept inside the map: near the bottom it gets shorter and its content scrolls.
+      const room = area.height - GUTTER - y;
+      box =
+        room >= least
+          ? { ...box, y, h: Math.min(box.h, room) }
+          : { ...box, y: area.height - GUTTER - least, h: least };
+    }
+    boxes[id] = box;
+    return box;
+  };
+  for (const id of floatingIds) place(id);
+  const column = dockColumn(
+    docked,
+    area,
+    natural,
+    layout.caps,
+    layout.dockWidth,
+    floatingIds.map((id) => boxes[id]!),
+  );
   Object.assign(boxes, column);
-  const last = Object.values(column).at(-1);
+  const lowest = Object.values(column).reduce<Box | null>(
+    (low, b) => (low === null || b.y + b.h > low.y + low.h ? b : low),
+    null,
+  );
   return {
     boxes,
     docked: new Set(docked),
-    column: last
-      ? { width: last.w + 2 * GUTTER, bottom: Math.min(area.height, last.y + last.h + GUTTER) }
+    column: lowest
+      ? { width: lowest.w + 2 * GUTTER, bottom: Math.min(area.height, lowest.y + lowest.h + GUTTER) }
       : null,
   };
+}
+
+/**
+ * The floating window a box was dropped right under (its top 10 px below that window's bottom,
+ * overlapping it sideways), which it then stays under; never one that is itself under this one.
+ */
+export function snappedUnder(
+  id: string,
+  box: Box,
+  floating: Readonly<Record<string, Box>>,
+  layout: WidgetsLayout,
+): string | undefined {
+  const underThis = (other: string) => {
+    const seen = new Set<string>();
+    for (let at: string | undefined = other; at && !seen.has(at); at = layout.boxes[at]?.below) {
+      if (at === id) return true;
+      seen.add(at);
+    }
+    return false;
+  };
+  for (const [other, b] of Object.entries(floating)) {
+    if (other === id || underThis(other)) continue;
+    if (Math.abs(b.y + b.h + GUTTER - box.y) > 1) continue;
+    if (b.x < box.x + box.w && b.x + b.w > box.x) return other;
+  }
+  return undefined;
+}
+
+/**
+ * Keeps a floating window where it was moved or resized to. A resize by hand fixes its height
+ * (its content scrolls from then on); a move keeps whatever it had. `below`: the floating window
+ * it was dropped right under.
+ */
+export function placeFloating(
+  layout: WidgetsLayout,
+  id: string,
+  box: Box,
+  area: Area,
+  how: { resized?: boolean; below?: string | undefined } = {},
+): WidgetsLayout {
+  const fixed = how.resized || layout.boxes[id]?.fixed;
+  const stored: StoredBox = {
+    ...toStored(box, area),
+    ...(fixed ? { fixed: true as const } : {}),
+    ...(how.below ? { below: how.below } : {}),
+  };
+  return { ...layout, boxes: { ...layout.boxes, [id]: stored }, order: raise(layout.order, id) };
+}
+
+/** Back to its content's height (a double-click on a resize corner); every window without an id. */
+export function fitToContent(layout: WidgetsLayout, id?: string): WidgetsLayout {
+  const fits = (key: string) => id === undefined || key === id;
+  const caps = Object.fromEntries(Object.entries(layout.caps ?? {}).filter(([key]) => !fits(key)));
+  const boxes = Object.fromEntries(
+    Object.entries(layout.boxes).map(([key, b]): [string, StoredBox] => {
+      if (!fits(key) || !b.fixed) return [key, b];
+      const { fixed: _fixed, ...rest } = b;
+      return [key, rest];
+    }),
+  );
+  const { caps: _caps, ...rest } = layout;
+  return { ...rest, boxes, ...(Object.keys(caps).length > 0 ? { caps } : {}) };
 }
 
 /** The nearest candidate within the snap distance, or null. */
@@ -335,8 +490,15 @@ function guides(area: Area, others: readonly Box[]) {
 }
 
 /** A window dragged by (dx, dy) from where it started: kept inside, snapped to edges and windows. */
-export function moveBox(start: Box, dx: number, dy: number, area: Area, others: readonly Box[]): Box {
-  const box = clampBox({ ...start, x: start.x + dx, y: start.y + dy }, area);
+export function moveBox(
+  start: Box,
+  dx: number,
+  dy: number,
+  area: Area,
+  others: readonly Box[],
+  least: { w: number; h: number } = MIN_SIZE,
+): Box {
+  const box = clampBox({ ...start, x: start.x + dx, y: start.y + dy }, area, least);
   const g = guides(area, others);
   const left = nearest(box.x, g.left);
   const right = nearest(box.x + box.w, g.right);
@@ -346,7 +508,7 @@ export function moveBox(start: Box, dx: number, dy: number, area: Area, others: 
   const bottom = nearest(box.y + box.h, g.bottom);
   if (top !== null) box.y = top;
   else if (bottom !== null) box.y = bottom - box.h;
-  return clampBox(box, area);
+  return clampBox(box, area, least);
 }
 
 /** Which corner a resize pulls: -1 the left or top edge, 1 the right or bottom one. */
@@ -363,6 +525,7 @@ export function resizeBox(
   dy: number,
   area: Area,
   others: readonly Box[],
+  least: { w: number; h: number } = MIN_SIZE,
 ): Box {
   const g = guides(area, others);
   let left = start.x;
@@ -370,20 +533,20 @@ export function resizeBox(
   let top = start.y;
   let bottom = start.y + start.h;
   if (corner.x === 1) {
-    right = clamp(right + dx, left + MIN_SIZE.w, area.width - GUTTER);
+    right = clamp(right + dx, left + least.w, area.width - GUTTER);
     right = nearest(right, g.right) ?? right;
   } else {
-    left = clamp(left + dx, GUTTER, right - MIN_SIZE.w);
+    left = clamp(left + dx, GUTTER, right - least.w);
     left = nearest(left, g.left) ?? left;
   }
   if (corner.y === 1) {
-    bottom = clamp(bottom + dy, top + MIN_SIZE.h, area.height - GUTTER);
+    bottom = clamp(bottom + dy, top + least.h, area.height - GUTTER);
     bottom = nearest(bottom, g.bottom) ?? bottom;
   } else {
-    top = clamp(top + dy, GUTTER, bottom - MIN_SIZE.h);
+    top = clamp(top + dy, GUTTER, bottom - least.h);
     top = nearest(top, g.top) ?? top;
   }
-  return clampBox({ x: left, y: top, w: right - left, h: bottom - top }, area);
+  return clampBox({ x: left, y: top, w: right - left, h: bottom - top }, area, least);
 }
 
 /** Brings a window to the front; the same array when it already is. */
@@ -400,7 +563,7 @@ export function setVisible(layout: WidgetsLayout, id: string, on: boolean): Widg
   return { ...layout, visible, order: on ? raise(layout.order, id) : layout.order };
 }
 
-/** A docked window resized: its height becomes the most it grows to, its width the column's. */
+/** A docked window resized by hand: it keeps that height (its content scrolls), its width the column's. */
 export function resizeDocked(layout: WidgetsLayout, id: string, box: Box, area: Area): WidgetsLayout {
   const width = dockWidth(area);
   return {

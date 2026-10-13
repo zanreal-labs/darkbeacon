@@ -23,6 +23,7 @@ import type { StructureDto } from './dto/structures.js';
 import type { KillmailDto } from './dto/intel.js';
 import type { McpMode } from './dto/publishing.js';
 import type { ShareScope } from './share-scope.js';
+import type { MapViewDto } from './dto/views.js';
 
 /** A passage as events carry it. */
 export interface PassageEventData {
@@ -103,6 +104,8 @@ export interface EventPayloads {
   'labels.changed': { labels: LabelDto[] };
   /** The map's Labels (WH1, WH2...) were replaced (manager+). */
   'system_labels.changed': { systemLabels: SystemLabelDto[] };
+  /** The map's published views were replaced (manager+). */
+  'views.changed': { views: MapViewDto[] };
   /** On the source's and the target's stream: a source admin offered the map to another map. */
   'map.share.offered': MapShareDto;
   /** On both streams: the target's admin accepted; the target merges the source from now on. */
@@ -228,6 +231,7 @@ export const EVENT_TYPES = [
   'map.removed',
   'labels.changed',
   'system_labels.changed',
+  'views.changed',
   'map.share.offered',
   'map.share.accepted',
   'map.share.changed',
