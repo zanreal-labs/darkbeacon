@@ -77,10 +77,14 @@ export function Sparkline({
 }
 
 /**
- * The three EVE hours (UTC) with the most killmails among those known, from three of them on:
- * "18–21". Null when there are too few to say.
+ * The three hours with the most killmails among those known, from three of them on, in the
+ * viewer's own time zone: "20–23". Counted on EVE (UTC) hours, shown on the local clock (with the
+ * minutes when the zone is not a whole hour off UTC). Null when there are too few to say.
  */
-export function peakHours(kills: readonly Pick<KillmailDto, 'time'>[]): string | null {
+export function peakHours(
+  kills: readonly Pick<KillmailDto, 'time'>[],
+  now: Date = new Date(),
+): string | null {
   if (kills.length < 3) return null;
   const perHour = Array.from({ length: 24 }, () => 0);
   for (const k of kills) perHour[new Date(k.time).getUTCHours()]! += 1;
@@ -90,8 +94,12 @@ export function peakHours(kills: readonly Pick<KillmailDto, 'time'>[]): string |
     const count = perHour[h]! + perHour[(h + 1) % 24]! + perHour[(h + 2) % 24]!;
     if (count > bestCount) [best, bestCount] = [h, count];
   }
-  const pad = (h: number) => String(h % 24).padStart(2, '0');
-  return `${pad(best)}–${pad(best + 3)}`;
+  const local = (utcHour: number) => {
+    const at = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), utcHour % 24));
+    const h = String(at.getHours()).padStart(2, '0');
+    return at.getMinutes() === 0 ? h : `${h}:${String(at.getMinutes()).padStart(2, '0')}`;
+  };
+  return `${local(best)}–${local(best + 3)}`;
 }
 
 /** Who kills here most: groups with kills in the window, most first. */
@@ -232,10 +240,13 @@ export function SystemIntel({ mapId, solarSystemId }: { mapId: string; solarSyst
             </span>
           )}
           {peak && (
-            <span className={styles.figure} title="The three EVE hours with the most killmails known">
+            <span
+              className={styles.figure}
+              title="The three hours with the most killmails known, on your clock"
+            >
               <span className={styles.what}>Peak</span>
               <b>{peak}</b>
-              <span className={styles.unit}>ET</span>
+              <span className={styles.unit}>local</span>
             </span>
           )}
         </div>

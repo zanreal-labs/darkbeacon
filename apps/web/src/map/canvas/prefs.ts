@@ -45,8 +45,8 @@ export interface CanvasPrefs {
 }
 
 export const DEFAULT_CANVAS_PREFS: CanvasPrefs = {
-  // On, bottom right, like Wanderer: big chains are walked from the minimap.
-  minimap: 'bottom-right',
+  // On, beside the view controls at the bottom left (the right side is the widgets' column).
+  minimap: 'bottom-left',
   pings: 'top-right',
   snapToGrid: true,
   background: 'dots',
