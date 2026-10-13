@@ -13,14 +13,15 @@ import {
   type AccountActor,
   type Actor,
 } from '@darkbeacon/core';
-import type {
-  ImportJobDto,
-  ImportPlanDto,
-  ImportPlanRequest,
-  ImportSyncDto,
-  StartImportRequest,
-  WandererApiSourceRequest,
-  WandererTestResultDto,
+import {
+  DEFAULT_TAGS,
+  type ImportJobDto,
+  type ImportPlanDto,
+  type ImportPlanRequest,
+  type ImportSyncDto,
+  type StartImportRequest,
+  type WandererApiSourceRequest,
+  type WandererTestResultDto,
 } from '@darkbeacon/shared';
 import { SourceError } from '../domain/errors.js';
 import { parseWandererBase, parseWandererSlug } from '../domain/source-url.js';
@@ -109,8 +110,9 @@ export class ImportService {
     const account = job.actor;
     const { plan } = translate(job.dump, { systemName: (id) => this.deps.universe.systemName(id) });
     if (request.mode === 'new') {
+      // A new map starts with the default Tags; Wanderer's tags of the same name reuse them.
       const state: TargetState = {
-        labels: [],
+        labels: [...DEFAULT_TAGS],
         systemLabels: [],
         systems: [],
         connections: [],

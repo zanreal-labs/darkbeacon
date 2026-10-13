@@ -1,7 +1,9 @@
 import { beforeEach, expect, it } from 'vitest';
 import { mapStream, type DomainEvent } from '@darkbeacon/core';
 import { describeEachDialect } from '@darkbeacon/db/testing';
+import { DEFAULT_TAGS } from '@darkbeacon/shared';
 import {
+  ChainImportUseCases,
   ConnectionUseCases,
   MapSnapshotQuery,
   MapUseCases,
@@ -110,6 +112,41 @@ describeEachDialect('mapping use cases', (t) => {
       ['system.updated', expect.objectContaining({ solarSystemId: SYSTEMS.c2, labelIds: ['l2'] })],
     ]);
     expect((await maps.get(bob, map.id)).labels).toEqual([labels[1]]);
+  });
+
+  it('starts every map with the default Tags, its own copy, which an import reuses by name', async () => {
+    expect(map.labels).toEqual(DEFAULT_TAGS);
+    expect(map.labels.map((l) => l.name)).toEqual([
+      'Staging',
+      'Sites',
+      'Hostile',
+      'Exit',
+      'Home',
+      'Farm',
+      'Fleet',
+    ]);
+    expect(map.labels.every((l) => l.description.length > 0 && /^#[0-9a-f]{6}$/.test(l.color))).toBe(true);
+    expect((await maps.get(alice, map.id)).labels).toEqual(DEFAULT_TAGS);
+    // Published with the map, so open maps and the history know them.
+    expect(await eventsSince(0)).toEqual([
+      ['map.created', expect.objectContaining({ labels: DEFAULT_TAGS })],
+    ]);
+
+    // Each map edits its own list.
+    const other = await maps.create(alice, { name: 'Other' });
+    await maps.setLabels(alice, map.id, [map.labels[0]!]);
+    expect((await maps.get(alice, other.id)).labels).toEqual(DEFAULT_TAGS);
+    expect(DEFAULT_TAGS).toHaveLength(7);
+
+    // An import adds only the Tags the map lacks by name, in any case.
+    const imports = new ChainImportUseCases(env.ports);
+    const labels = await imports.ensureLabels(alice, other.id, [
+      { name: 'STAGING', color: '#ff0000', description: 'Wanderer' },
+      { name: 'farm', color: '#00ff00', description: '' },
+      { name: 'HQ', color: '#0000ff', description: '' },
+    ]);
+    expect(labels.map((l) => l.name)).toEqual([...DEFAULT_TAGS.map((l) => l.name), 'HQ']);
+    expect(labels.slice(0, DEFAULT_TAGS.length)).toEqual(DEFAULT_TAGS);
   });
 
   it('starts every map with Labels WH1 to WH3; managers keep the list, editors set them on systems', async () => {
