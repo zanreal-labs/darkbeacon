@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import * as dto from './dto/index.js';
 import type { ScopeRequirement } from './scopes.js';
+import * as support from './support.js';
 import * as telemetry from './telemetry.js';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -1586,6 +1587,192 @@ export const routes = {
       path: '/api/admin/telemetry/notice',
       auth: 'admin',
       scope: 'session',
+    }),
+  },
+
+  /**
+   * Support tickets and feedback (docs/support.md). `client` and the handle routes are on every
+   * instance; the rest answer on the support hub only (404 elsewhere). Hub routes use the hub's
+   * own EVE sign-in (a cookie under /api/support), never the app session, and every change needs
+   * the session's CSRF token in `x-support-csrf`.
+   */
+  support: {
+    /** Where this instance's support entries go, and what they may say about it. */
+    client: route({
+      method: 'GET',
+      path: '/api/support/client',
+      auth: 'public',
+      scope: 'none',
+      response: support.SupportClientDto,
+    }),
+    /** Keeps the unread handle the hub gave this account (the browser polls the hub with it). */
+    saveHandle: route({
+      method: 'PUT',
+      path: '/api/support/handle',
+      auth: 'account',
+      scope: 'session',
+      body: support.SaveSupportHandleRequest,
+    }),
+    forgetHandle: route({
+      method: 'DELETE',
+      path: '/api/support/handle',
+      auth: 'account',
+      scope: 'session',
+    }),
+    /** Hub: whether support is on, who is signed in, and the CSRF token. */
+    session: route({
+      method: 'GET',
+      path: '/api/support/session',
+      auth: 'public',
+      scope: 'session',
+      response: support.SupportSessionDto,
+    }),
+    /** Hub: EVE SSO without scopes (PKCE). Also served at `/support/login`. */
+    login: route({
+      method: 'GET',
+      path: '/api/support/auth/login',
+      auth: 'public',
+      scope: 'session',
+      redirect: true,
+    }),
+    /** Hub: where EVE SSO returns; registered as `<hub>/support/callback`. */
+    callback: route({
+      method: 'GET',
+      path: '/api/support/auth/callback',
+      auth: 'public',
+      scope: 'session',
+      redirect: true,
+    }),
+    logout: route({ method: 'POST', path: '/api/support/auth/logout', auth: 'public', scope: 'session' }),
+    /** Hub: my tickets, newest first (cached for up to a minute). */
+    tickets: route({
+      method: 'GET',
+      path: '/api/support/tickets',
+      auth: 'public',
+      scope: 'session',
+      response: z.array(support.SupportTicketDto),
+    }),
+    /** Hub: opens a ticket; recorded on the hub's audit as `support.ticket_created`. */
+    createTicket: route({
+      method: 'POST',
+      path: '/api/support/tickets',
+      auth: 'public',
+      scope: 'session',
+      body: support.CreateSupportTicketRequest,
+      response: support.SupportTicketCreatedDto,
+    }),
+    messages: route({
+      method: 'GET',
+      path: '/api/support/tickets/:ticketId/messages',
+      auth: 'public',
+      scope: 'session',
+      response: support.SupportThreadDto,
+    }),
+    reply: route({
+      method: 'POST',
+      path: '/api/support/tickets/:ticketId/messages',
+      auth: 'public',
+      scope: 'session',
+      body: support.SupportReplyRequest,
+      response: support.SupportThreadDto,
+    }),
+    markRead: route({
+      method: 'POST',
+      path: '/api/support/tickets/:ticketId/read',
+      auth: 'public',
+      scope: 'session',
+    }),
+    /** Hub: a survey answer; anonymous unless signed in. */
+    feedback: route({
+      method: 'POST',
+      path: '/api/support/feedback',
+      auth: 'public',
+      scope: 'session',
+      status: 202,
+      body: support.SupportFeedbackRequest,
+    }),
+    /** Hub: lets an instance show my unread count (returns the opaque handle once). */
+    createHandle: route({
+      method: 'POST',
+      path: '/api/support/handles',
+      auth: 'public',
+      scope: 'session',
+      body: support.CreateSupportHandleRequest,
+      response: support.SupportHandleCreatedDto,
+    }),
+    handles: route({
+      method: 'GET',
+      path: '/api/support/handles',
+      auth: 'public',
+      scope: 'session',
+      response: z.array(support.SupportHandleDto),
+    }),
+    revokeHandle: route({
+      method: 'DELETE',
+      path: '/api/support/handles/:handleId',
+      auth: 'public',
+      scope: 'session',
+    }),
+    /**
+     * Hub: unread replies for a handle (`?h=`), or for the hub session. Any origin may read it
+     * (no credentials); answers nothing but the count, and is rate-limited per handle.
+     */
+    unread: route({
+      method: 'GET',
+      path: '/api/support/unread',
+      auth: 'public',
+      scope: 'none',
+      query: support.SupportUnreadQuery,
+      response: support.SupportUnreadDto,
+    }),
+    /** Hub: a PostHog workflow says a reply was posted (shared secret in `x-support-webhook-secret`). */
+    webhook: route({
+      method: 'POST',
+      path: '/api/support/webhook',
+      auth: 'public',
+      scope: 'none',
+      body: support.SupportWebhookRequest,
+    }),
+    /** Hub with its own store: the inbox of instance admins. */
+    adminTickets: route({
+      method: 'GET',
+      path: '/api/admin/support/tickets',
+      auth: 'admin',
+      scope: 'session',
+      query: support.AdminSupportTicketsQuery,
+      response: support.AdminSupportInboxDto,
+    }),
+    adminTicket: route({
+      method: 'GET',
+      path: '/api/admin/support/tickets/:ticketId',
+      auth: 'admin',
+      scope: 'session',
+      response: support.AdminSupportThreadDto,
+    }),
+    /** Recorded on the audit as `support.replied` (without the text). */
+    adminReply: route({
+      method: 'POST',
+      path: '/api/admin/support/tickets/:ticketId/messages',
+      auth: 'admin',
+      scope: 'session',
+      body: support.SupportReplyRequest,
+      response: support.AdminSupportThreadDto,
+    }),
+    /** Status and priority; recorded as `support.ticket_updated`. */
+    adminUpdate: route({
+      method: 'PATCH',
+      path: '/api/admin/support/tickets/:ticketId',
+      auth: 'admin',
+      scope: 'session',
+      body: support.AdminSupportTicketUpdate,
+      response: support.AdminSupportThreadDto,
+    }),
+    adminFeedback: route({
+      method: 'GET',
+      path: '/api/admin/support/feedback',
+      auth: 'admin',
+      scope: 'session',
+      response: z.array(support.AdminSupportFeedbackDto),
     }),
   },
 

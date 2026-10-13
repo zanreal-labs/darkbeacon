@@ -1,0 +1,22 @@
+{
+  "name": "@darkbeacon/support",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Support tickets and feedback: the hub's identity rules, the desk port (PostHog Support or the hub's own store), limits and unread handles",
+  "type": "module",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@darkbeacon/core": "workspace:*",
+    "@darkbeacon/shared": "workspace:*",
+    "zod": "^4.6.5"
+  }
+}

@@ -21,6 +21,9 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store \
 # server (Next.js standalone, with its own traced node_modules) on a loopback port behind it.
 FROM node:24-bookworm-slim AS runtime
 ENV NODE_ENV=production PORT=3000 DATA_DIR=/data NEXT_TELEMETRY_DISABLED=1
+# The commit the image was built from (optional): a support ticket may name it.
+ARG DBK_COMMIT=
+ENV DBK_COMMIT=$DBK_COMMIT
 WORKDIR /app
 COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules ./node_modules

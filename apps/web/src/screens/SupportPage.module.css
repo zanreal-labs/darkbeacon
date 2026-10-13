@@ -1,0 +1,330 @@
+.screen {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 100dvh;
+  background: var(--dbk-color-bg);
+  color: var(--dbk-color-text);
+}
+
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dbk-space-3);
+  padding: var(--dbk-space-2) var(--dbk-space-4);
+  border-bottom: 1px solid var(--dbk-color-border);
+  background: var(--dbk-color-surface);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--dbk-space-2);
+  min-width: 0;
+}
+
+.brandText {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.topActions {
+  display: flex;
+  align-items: center;
+  gap: var(--dbk-space-2);
+  min-width: 0;
+}
+
+.who {
+  display: flex;
+  align-items: center;
+  gap: var(--dbk-space-2);
+  min-width: 0;
+  font-size: var(--dbk-font-size-small);
+}
+
+.whoName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.main {
+  display: grid;
+  align-content: start;
+  gap: var(--dbk-space-4);
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+  padding: var(--dbk-space-4) var(--dbk-space-4) var(--dbk-space-6);
+}
+
+.tabs {
+  margin-bottom: var(--dbk-space-3);
+}
+
+.tabBadge {
+  margin-left: var(--dbk-space-1);
+}
+
+.form {
+  display: grid;
+  gap: var(--dbk-space-4);
+}
+
+.muted {
+  margin: 0;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+}
+
+.consent {
+  margin: 0;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+  line-height: 1.5;
+}
+
+.calloutText {
+  margin: 0 0 var(--dbk-space-2);
+}
+
+.calloutActions {
+  display: flex;
+  gap: var(--dbk-space-2);
+}
+
+/* ---- What is sent with a ticket ---- */
+.details {
+  display: grid;
+  gap: var(--dbk-space-2);
+  padding: var(--dbk-space-3);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+}
+
+.detailsTitle {
+  margin: 0;
+  font-size: var(--dbk-font-size-small);
+  font-weight: 600;
+}
+
+.lines {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.line {
+  display: grid;
+  grid-template-columns: minmax(110px, 34%) 1fr auto;
+  align-items: center;
+  gap: var(--dbk-space-2);
+  min-height: 30px;
+  font-size: var(--dbk-font-size-small);
+}
+
+.line + .line {
+  border-top: 1px solid var(--dbk-color-border);
+}
+
+.lineLabel {
+  color: var(--dbk-color-text-muted);
+}
+
+.lineValue {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--dbk-font-family-mono);
+  font-size: var(--dbk-font-size-xs);
+}
+
+/* ---- Feedback rating ---- */
+.rating {
+  display: grid;
+  gap: var(--dbk-space-2);
+}
+
+.ratingLabel {
+  font-size: var(--dbk-font-size-small);
+  font-weight: 500;
+}
+
+.ratingScale {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--dbk-space-2);
+}
+
+.ratingButton {
+  height: 40px;
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+  background: var(--dbk-color-surface);
+  color: var(--dbk-color-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ratingButton:hover {
+  background: var(--dbk-color-surface-hover);
+}
+
+.ratingButton:focus-visible {
+  outline: 2px solid var(--dbk-color-focus);
+  outline-offset: 2px;
+}
+
+.ratingButton[data-on] {
+  border-color: var(--dbk-color-accent);
+  background: var(--dbk-color-accent-subtle);
+  color: var(--dbk-color-accent-text);
+}
+
+.ratingEnds {
+  display: flex;
+  justify-content: space-between;
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-xs);
+}
+
+/* ---- Tickets ---- */
+.ticketRow {
+  list-style: none;
+}
+
+.ticketRow + .ticketRow {
+  border-top: 1px solid var(--dbk-color-border);
+}
+
+.ticketButton {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: var(--dbk-space-3) var(--dbk-space-4);
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ticketButton:hover {
+  background: var(--dbk-color-surface-hover);
+}
+
+.ticketButton:focus-visible {
+  outline: 2px solid var(--dbk-color-focus);
+  outline-offset: -2px;
+}
+
+.ticketTitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dbk-space-2);
+}
+
+.ticketNumber {
+  font-weight: 600;
+}
+
+.ticketCategory {
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+}
+
+.ticketPreview {
+  overflow: hidden;
+  color: var(--dbk-color-text);
+  font-size: var(--dbk-font-size-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ticketMeta {
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-xs);
+}
+
+.messages {
+  display: grid;
+  gap: var(--dbk-space-3);
+  margin: 0 0 var(--dbk-space-4);
+  padding: 0;
+  list-style: none;
+}
+
+.message {
+  display: grid;
+  gap: 4px;
+  max-width: 88%;
+}
+
+.message[data-author='you'] {
+  justify-self: end;
+  text-align: right;
+}
+
+.messageMeta {
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-xs);
+}
+
+.messageBody {
+  padding: var(--dbk-space-2) var(--dbk-space-3);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius-large);
+  background: var(--dbk-color-surface);
+  font-size: var(--dbk-font-size-small);
+  line-height: 1.5;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.message[data-author='you'] .messageBody {
+  border-color: color-mix(in oklab, var(--dbk-color-accent) 40%, var(--dbk-color-border));
+  background: var(--dbk-color-accent-subtle);
+}
+
+.replyField {
+  margin-top: var(--dbk-space-2);
+}
+
+.back {
+  margin: 0;
+  text-align: center;
+  font-size: var(--dbk-font-size-small);
+}
+
+.back a {
+  color: var(--dbk-color-text-muted);
+}
+
+@media (max-width: 640px) {
+  .main {
+    padding: var(--dbk-space-3) var(--dbk-space-4) var(--dbk-space-5);
+  }
+
+  .whoName {
+    display: none;
+  }
+}
+
+/* The popup is about 600 px wide: lines stack only on phones. */
+@media (max-width: 480px) {
+  .line {
+    grid-template-columns: 1fr auto;
+  }
+
+  .lineLabel {
+    grid-column: 1 / -1;
+  }
+}

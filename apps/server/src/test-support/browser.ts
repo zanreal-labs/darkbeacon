@@ -14,7 +14,7 @@ export class Browser {
   }
 
   async request(path: string, init: RequestInit & { json?: unknown } = {}): Promise<Response> {
-    const { json, ...rest } = init;
+    const { json, headers, ...rest } = init;
     const response = await fetch(`http://${this.base}${path}`, {
       redirect: 'manual',
       ...rest,
@@ -22,6 +22,7 @@ export class Browser {
         cookie: this.cookieHeader,
         'user-agent': this.userAgent,
         ...(json !== undefined ? { 'content-type': 'application/json' } : {}),
+        ...(headers as Record<string, string> | undefined),
       },
       ...(json !== undefined ? { body: JSON.stringify(json) } : {}),
     });

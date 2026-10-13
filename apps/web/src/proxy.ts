@@ -31,6 +31,12 @@ const PAGE =
 const PUBLIC_PAGE = /^\/p\/[^/]+\/?$/;
 
 /**
+ * The support hub's page: its own EVE sign-in, never the app's session or a demo sign-in, and its
+ * address (the opener and the context) never leaves as a referrer.
+ */
+const SUPPORT_PAGE = /^\/support\/?$/;
+
+/**
  * Where `/` goes for this session (the account's star, the instance default, the last opened
  * map, the only one), or null when it can see no map or the API did not answer. The redirect
  * happens here, before any HTML, so the maps list never flashes.
@@ -127,7 +133,7 @@ async function demoSignIn(request: NextRequest): Promise<string[] | null> {
  */
 export async function proxy(request: NextRequest): Promise<NextResponse> {
   const { pathname, searchParams } = request.nextUrl;
-  if (PUBLIC_PAGE.test(pathname)) {
+  if (PUBLIC_PAGE.test(pathname) || SUPPORT_PAGE.test(pathname)) {
     const response = NextResponse.next();
     response.headers.set('referrer-policy', 'no-referrer');
     return response;

@@ -18,6 +18,7 @@ export const featureModules: Array<Type | DynamicModule> = [
   (await import('./demo/demo.module.js')).DemoModule,
   (await import('./landing/landing.module.js')).LandingModule,
   (await import('./telemetry/telemetry.module.js')).TelemetryModule,
+  (await import('./support/support.module.js')).SupportModule,
   (await import('./observability/observability.module.js')).ObservabilityModule,
   (await import('./importing/importing.module.js')).ImportingModule,
   (await import('./api-keys/api-keys.module.js')).ApiKeysModule,

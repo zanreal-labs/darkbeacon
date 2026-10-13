@@ -16,13 +16,20 @@ const EXPOSE_HEADERS = ['www-authenticate', 'retry-after', 'deprecation', 'conte
  * OAuth discovery, registration and the token endpoint answer any origin: browser-based MCP
  * clients run the flow from their own pages, no cookie is involved and PKCE binds the code.
  */
-const OPEN_PATHS = new Set(['/api/oauth/token', '/api/oauth/register', ...WELL_KNOWN_PATHS]);
+const OPEN_PATHS = new Set([
+  '/api/oauth/token',
+  '/api/oauth/register',
+  ...WELL_KNOWN_PATHS,
+  // The support hub's unread count for a handle: other instances' pages poll it (no cookies).
+  '/api/support/unread',
+]);
 
 /**
  * CORS for the API and `/mcp`: off by default. Origins an admin allows (Admin, Instance, API
  * access) may call it from a browser with an API key; credentials are never allowed, and the
  * actor guard ignores cookies on cross-origin requests anyway, so a session is never usable
- * from another site (Bearer only). The OAuth endpoints are open to every origin (`OPEN_PATHS`).
+ * from another site (Bearer only). The OAuth endpoints and the support hub's unread count are open
+ * to every origin (`OPEN_PATHS`).
  */
 export function installCors(
   app: NestFastifyApplication,

@@ -539,6 +539,22 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
     refs: (d) => ref('account', d.accountId),
     activity: (d) => ({ accountId: change(null, d.accountId) }),
   },
+  'support.ticket_created': {
+    op: 'activity',
+    entity: byId('supportTicket', 'ticketId'),
+    refs: (d) => ref('character', d.characterId),
+    activity: (d) => ({ category: change(null, d.category), backend: change(null, d.backend) }),
+  },
+  'support.replied': {
+    op: 'activity',
+    entity: byId('supportTicket', 'ticketId'),
+    activity: () => ({ replied: change(null, true) }),
+  },
+  'support.ticket_updated': {
+    op: 'activity',
+    entity: byId('supportTicket', 'ticketId'),
+    activity: (d) => ({ status: change(null, d.status), priority: change(null, d.priority) }),
+  },
 };
 
 /** Types the plugins and future modules add are audited as activity with their data as new. */

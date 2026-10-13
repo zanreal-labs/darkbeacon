@@ -18,6 +18,7 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from '../ui';
+import { SupportMenuItems } from './HelpMenu';
 import styles from './AppShell.module.css';
 
 export const ROLE_LABEL = { owner: 'Owner', admin: 'Admin', user: 'Member' } as const;
@@ -86,6 +87,7 @@ export function AccountMenu({ me: rendered }: { me: MeDto }) {
         <MenuItem icon={<Sparkles />} onSelect={() => router.push('/changelog')}>
           What&apos;s new
         </MenuItem>
+        <SupportMenuItems />
         <MenuItem
           icon={<LogOut />}
           onSelect={() => logout.mutate(undefined, { onSuccess: () => router.replace('/login') })}

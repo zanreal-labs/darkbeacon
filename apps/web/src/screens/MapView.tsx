@@ -58,6 +58,7 @@ import { filterableSources, permissionsFor, withoutSources } from '../map/sharin
 import { ProvenanceLine, provenanceText } from '../map/sharing/ProvenanceLine';
 import { SourceFilter, useHiddenSources } from '../map/sharing/SourceFilter';
 import { useSlot } from '../plugins/PluginSlot';
+import { provideMapCounts } from '../lib/support';
 import { Button, EmptyState, IconButton, Spinner, useToast } from '../ui';
 import styles from './MapPage.module.css';
 
@@ -138,6 +139,19 @@ export function MapView({
     () => withoutSources(store.state, sourceFilter.hidden),
     [store.state, sourceFilter.hidden],
   );
+  // A support ticket may include how big this map is (opt-in, counts only).
+  const countsRef = useRef(state);
+  useEffect(() => {
+    countsRef.current = state;
+  }, [state]);
+  useEffect(() => {
+    provideMapCounts(() => ({
+      systems: countsRef.current.systems.size,
+      connections: countsRef.current.connections.size,
+      signatures: countsRef.current.signatures.size,
+    }));
+    return () => provideMapCounts(null);
+  }, []);
   const me = useMe();
   const rf = useReactFlow();
   // Who else is here: cursors on the canvas, "N on this map" in the top bar.

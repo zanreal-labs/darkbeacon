@@ -1,4 +1,5 @@
-export type ErrorCode = 'not_found' | 'forbidden' | 'unauthenticated' | 'conflict' | 'validation';
+export type ErrorCode =
+  'not_found' | 'forbidden' | 'unauthenticated' | 'conflict' | 'validation' | 'rate_limited';
 
 /** Expected failure of a use case. The HTTP edge maps `code` to a status. */
 export class DomainError extends Error {
@@ -39,6 +40,16 @@ export class ConflictError extends DomainError {
 export class ValidationError extends DomainError {
   constructor(message: string, details?: unknown) {
     super('validation', message, details);
+  }
+}
+
+/** Too many of one thing in a while; `retryAfterSeconds` says when to try again. */
+export class RateLimitedError extends DomainError {
+  constructor(
+    message: string,
+    readonly retryAfterSeconds = 60,
+  ) {
+    super('rate_limited', message, { retryAfterSeconds });
   }
 }
 
