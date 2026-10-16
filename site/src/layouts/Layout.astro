@@ -5,6 +5,7 @@ import '../styles/global.css';
 import '../styles/site.css';
 import '../styles/sections.css';
 import sansFont from '@fontsource-variable/geist/files/geist-latin-wght-normal.woff2?url';
+import Analytics from '@vercel/analytics/astro';
 import Footer from '../components/Footer.astro';
 import Nav from '../components/Nav.astro';
 import { SITE_URL } from '../config';
@@ -12,11 +13,28 @@ import { SITE_URL } from '../config';
 interface Props {
   title: string;
   description: string;
+  /** Path of this page's 1200 x 630 Open Graph image, from the site root. */
+  ogImage?: string;
+  ogImageAlt?: string;
+  /** Structured data for this page, emitted as JSON-LD. */
+  jsonLd?: Record<string, unknown>;
 }
 
-const { title, description } = Astro.props;
-const canonical = new URL(Astro.url.pathname, SITE_URL + '/').href;
-const ogImage = `${SITE_URL}/og.png`;
+const {
+  title,
+  description,
+  ogImage: ogPath = '/og.png',
+  ogImageAlt = 'The Darkbeacon mark: a beacon leaving a black hole through its glowing ring',
+  jsonLd,
+} = Astro.props;
+// Built as files (sponsor.html) and served without the extension: /sponsor.
+const path = Astro.url.pathname.replace(/(index)?\.html$/, '').replace(/(.)\/$/, '$1') || '/';
+const canonical = path === '/' ? `${SITE_URL}/` : `${SITE_URL}${path}`;
+const ogImage = new URL(ogPath, SITE_URL + '/').href;
+
+// Web Analytics only reports from Vercel, so it is only on the page in Vercel builds: local dev and
+// local production builds carry no script and make no requests to /_vercel/insights.
+const analytics = process.env.VERCEL === '1';
 ---
 
 <!doctype html>
@@ -28,10 +46,12 @@ const ogImage = `${SITE_URL}/og.png`;
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
     <meta name="robots" content="index, follow" />
+    {/* Black: the brand cyan tints the whole browser bar over a black page, which reads as a stripe. */}
     <meta name="theme-color" content="#000000" />
     <meta name="color-scheme" content="dark" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
     <link rel="sitemap" href="/sitemap-index.xml" />
     <link rel="preload" href={sansFont} as="font" type="font/woff2" crossorigin />
     {/* Before first paint: does this browser get the live scenes or their pre-rendered stills? */}
@@ -45,17 +65,21 @@ const ogImage = `${SITE_URL}/og.png`;
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Darkbeacon" />
+    <meta property="og:locale" content="en_US" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
     <meta property="og:image" content={ogImage} />
+    <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="The Darkbeacon mark: a beacon leaving a black hole through its glowing ring" />
+    <meta property="og:image:alt" content={ogImageAlt} />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:image:alt" content={ogImageAlt} />
+    {jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
@@ -66,5 +90,6 @@ const ogImage = `${SITE_URL}/og.png`;
       import '../gpu/boot';
       import '../scripts/warp';
     </script>
+    {analytics && <Analytics />}
   </body>
 </html>

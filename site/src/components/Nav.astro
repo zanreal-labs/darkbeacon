@@ -11,7 +11,7 @@ const links = [
   { href: '/#roadmap', label: 'Roadmap' },
   { href: '/sponsor', label: 'Sponsor' },
 ];
-const current = Astro.url.pathname.replace(/\/$/, '') || '/';
+const current = Astro.url.pathname.replace(/(index)?\.html$/, '').replace(/(.)\/$/, '$1') || '/';
 ---
 
 <header class="nav">

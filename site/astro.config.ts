@@ -9,9 +9,11 @@ const dev = process.argv.includes('dev');
 export default defineConfig({
   site: SITE_URL,
   output: 'static',
-  trailingSlash: 'ignore',
+  // Pages are files (sponsor.html) served without extension by Vercel's cleanUrls, so canonical,
+  // Open Graph and sitemap URLs are /sponsor, exactly what is served.
+  trailingSlash: 'never',
   integrations: [sitemap()],
-  build: { inlineStylesheets: 'always' },
+  build: { inlineStylesheets: 'always', format: 'file' },
   devToolbar: { enabled: false },
   vite: {
     // `.wgsl` files are modules: they import and export like TypeScript and compile to the shader

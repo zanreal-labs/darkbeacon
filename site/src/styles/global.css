@@ -245,12 +245,55 @@ figure {
   font-size: var(--text-md);
 }
 
-/* Lightspeed on the "Open app" buttons (scripts/warp.ts draws the streaks). On hover the white
-   pill becomes a window into the jump: dark glass, the streaks behind the label, the label
-   blooming and nudging forward. */
+/* Lightspeed on the "Open app" buttons (scripts/warp.ts draws the stars). On hover the white pill
+   becomes a window onto deep space: the fill goes dark, the stars jump into streaks inside the
+   pill (clipped to it), a cool bloom bleeds a few pixels outside, and the label stays the
+   brightest, sharpest thing, lifted slightly forward. Layers: fill, space, stars, label, flash. */
 .btn[data-warp] {
   position: relative;
   isolation: isolate;
+  overflow: hidden;
+  transition:
+    background-color 250ms var(--ease-out),
+    border-color 250ms var(--ease-out),
+    color 250ms var(--ease-out),
+    box-shadow 300ms var(--ease-out),
+    transform var(--dur-short) var(--ease-out);
+}
+
+.btn[data-warp]::before,
+.btn[data-warp]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+}
+
+/* Deep space behind the stars: a faint blue core, black at the rim. */
+.btn[data-warp]::before {
+  z-index: 0;
+  background: radial-gradient(120% 140% at 50% 50%, #0b2236 0%, #04101a 45%, #010409 100%);
+  transition: opacity 250ms var(--ease-out);
+}
+
+/* The click's white flash. */
+.btn[data-warp]::after {
+  z-index: 3;
+  background: radial-gradient(closest-side, #fff, rgb(220 245 255 / 0.85));
+  transition: opacity 120ms ease-in;
+}
+
+.warp-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  border-radius: inherit;
+  pointer-events: none;
 }
 
 .btn[data-warp] > :not(.warp-canvas) {
@@ -258,41 +301,36 @@ figure {
   z-index: 2;
 }
 
-.warp-canvas {
-  position: absolute;
-  left: -28px;
-  top: -16px;
-  z-index: 1;
-  width: calc(100% + 56px);
-  height: calc(100% + 32px);
-  pointer-events: none;
-}
-
 .warp-label {
-  transition: transform 360ms var(--ease-out), text-shadow 360ms var(--ease-out);
+  display: inline-block;
+  transition: transform 350ms var(--ease-out), text-shadow 350ms var(--ease-out);
 }
 
 .btn--primary[data-warping] {
-  background: #02070a;
-  border-color: rgb(95 224 238 / 0.7);
+  border-color: rgb(150 225 255 / 0.65);
   color: #fff;
   box-shadow:
-    0 0 0 1px rgb(95 224 238 / 0.25),
-    0 0 calc(16px + 28px * var(--warp, 0)) rgb(95 224 238 / 0.45);
+    0 0 0 1px rgb(150 225 255 / 0.18),
+    0 0 18px 2px rgb(95 200 255 / 0.45),
+    0 0 46px 4px rgb(95 200 255 / 0.18);
+}
+
+.btn--primary[data-warping]::before {
+  opacity: 1;
 }
 
 .btn--primary[data-warping] .warp-label {
-  transform: translateX(calc(2px * var(--warp, 0)));
-  text-shadow: 0 0 calc(10px * var(--warp, 0)) rgb(170 245 255 / 0.9);
+  transform: scale(1.03);
+  text-shadow: 0 0 10px rgb(170 230 255 / 0.85), 0 0 2px rgb(255 255 255 / 0.9);
 }
 
 .btn--primary[data-warping] .arrow {
-  transform: translateX(calc(3px * var(--warp, 0)));
+  transform: translateX(3px);
 }
 
-.btn--primary[data-burst] {
-  transform: scale(1.04);
-  transition: transform 200ms var(--ease-out);
+.btn--primary[data-burst]::after {
+  opacity: 1;
+  transition-delay: 90ms;
 }
 
 /* Touch: a press, not a jump. */
@@ -303,7 +341,7 @@ figure {
   }
 }
 
-/* Reduced motion: a calm glow and nothing that moves. */
+/* Reduced motion: a calm glow, nothing that moves. */
 @media (prefers-reduced-motion: reduce) {
   .btn--primary[data-warp]:hover,
   .btn--primary[data-warp]:focus-visible {

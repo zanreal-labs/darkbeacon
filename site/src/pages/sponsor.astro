@@ -9,7 +9,7 @@ const description = `Darkbeacon is built and run in its author’s own time. If 
 const portrait = (size: number) => `https://images.evetech.net/characters/${DONATION_CHARACTER_ID}/portrait?size=${size}`;
 ---
 
-<Layout title={title} description={description}>
+<Layout title={title} description={description} ogImage="/og-sponsor.png" ogImageAlt={`Sponsor Darkbeacon: send ISK in game to ${DONATION_CHARACTER}`}>
   <main id="main" class="sponsor">
     <section class="sponsor-hero" aria-labelledby="sponsor-title" data-stage-host>
       <Stage scene="transit" mood="sponsor" still="/media/transit-sponsor" class="sponsor-stage" />

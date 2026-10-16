@@ -5,11 +5,25 @@ import Logo from '../components/Logo.astro';
 import { arrow, github, server } from '../components/icons';
 import Shot from '../components/Shot.astro';
 import Stage from '../components/Stage.astro';
-import { APP_URL, ISSUES_URL, REPO_URL, SELF_HOST_URL } from '../config';
+import { APP_URL, COMPANY_URL, ISSUES_URL, REPO_URL, SELF_HOST_URL, SITE_URL } from '../config';
 
 const title = 'Darkbeacon · the live wormhole mapper for EVE Online';
 const description =
   'A live chain map your whole corp edits at once: signatures in the game’s scan colours, routes to the trade hubs, kill intel, a capital jump planner and an import from Wanderer. Self-hosted in one Docker container.';
+
+// Structured data: the app itself, published by the company that makes it.
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'Darkbeacon',
+  description,
+  url: SITE_URL,
+  applicationCategory: 'GameApplication',
+  operatingSystem: 'Web, Docker',
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  sameAs: [REPO_URL],
+  publisher: { '@type': 'Organization', name: 'ZanReal', url: COMPANY_URL },
+};
 
 const steps = [
   { id: 'scan', n: '01', name: 'Scan' },
@@ -178,7 +192,7 @@ const alliance = [
 
 ---
 
-<Layout title={title} description={description}>
+<Layout title={title} description={description} jsonLd={jsonLd}>
   <main id="main">
     <!-- ───────────── Hero ───────────── -->
     <section class="hero" id="top" aria-labelledby="hero-title" data-stage-host>

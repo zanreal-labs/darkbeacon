@@ -1,21 +1,25 @@
 /**
- * The "Open app" buttons go to lightspeed on hover: stars stretch into streaks rushing out from
- * the centre of the button, past its edges, as the label blooms and nudges forward. Leaving
- * decelerates and settles; a click fires a short full burst before navigating (under 250 ms).
+ * Lightspeed on the "Open app" buttons. On hover (or keyboard focus) the white pill turns into a
+ * window onto deep space and the stars in it jump: still points first, then streaks radiating from
+ * the centre, short and dim near the vanishing point, long, bright and fast toward the edges, as
+ * a perspective starfield does. ~400 ms from rest to full flow, ~250 ms back on leave. A click
+ * maxes the streaks, flashes white and navigates, all inside 250 ms.
  *
- * Plain 2D canvas, written for this site: one small canvas per button, created on first hover and
- * drawn only while the effect is running, so an idle page pays nothing. Keyboard focus triggers it
- * like hover. Touch gets the CSS press effect instead, and reduced motion a calm glow (CSS).
+ * One small 2D canvas per button, clipped to the pill and drawn under the label; it exists only
+ * after the first hover and draws only while the effect runs. Touch gets a CSS press instead, and
+ * reduced motion a calm glow (both in global.css).
  */
 
-const STARS = 80;
-const SPILL_X = 28;
-const SPILL_Y = 16;
-const BURST_MS = 220;
+const ACCELERATE = 0.4;
+const DECELERATE = 0.25;
+const BURST_MS = 230;
+/** The depth a star is born at, and where it has passed the camera. */
+const FAR = 1;
+const NEAR = 0.06;
 
 interface Star {
-  a: number;
-  r: number;
+  x: number;
+  y: number;
   z: number;
 }
 
@@ -23,20 +27,34 @@ interface Warp {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
   stars: Star[];
+  /** 0..1 (3 on a click): how far into the jump. */
   speed: number;
-  target: number;
+  /** 0..1: how much the starfield shows at all. */
+  presence: number;
+  engaged: boolean;
+  burst: boolean;
   raf: number;
   last: number;
+  w: number;
+  h: number;
 }
 
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 const warps = new WeakMap<HTMLElement, Warp>();
 
-const spawn = (s: Star, fresh = false) => {
-  s.a = Math.random() * Math.PI * 2;
-  s.r = fresh ? Math.random() : Math.random() * 0.12;
-  s.z = 0.4 + Math.random() * 0.9;
-};
+/** A star somewhere in the field, at a random depth or at the far plane. */
+function seed(star: Star, w: number, h: number, anywhere: boolean) {
+  // Positions at the far plane cover the pill; a star near the axis would sit still on the label.
+  let x = 0;
+  let y = 0;
+  do {
+    x = (Math.random() - 0.5) * w * 0.9;
+    y = (Math.random() - 0.5) * h * 0.9;
+  } while (Math.abs(x) < w * 0.06 && Math.abs(y) < h * 0.12);
+  star.x = x * NEAR * 4;
+  star.y = y * NEAR * 4;
+  star.z = anywhere ? NEAR + Math.random() * (FAR - NEAR) : FAR;
+}
 
 function setup(button: HTMLElement): Warp | undefined {
   const existing = warps.get(button);
@@ -47,102 +65,143 @@ function setup(button: HTMLElement): Warp | undefined {
   const ctx = canvas.getContext('2d');
   if (!ctx) return undefined;
   button.prepend(canvas);
-  const stars = Array.from({ length: STARS }, () => {
-    const s = { a: 0, r: 0, z: 0 };
-    spawn(s, true);
+  const rect = button.getBoundingClientRect();
+  // Fewer stars on the small nav button, more on the big ones.
+  const count = Math.round(Math.min(110, Math.max(36, (rect.width * rect.height) / 70)));
+  const stars = Array.from({ length: count }, () => {
+    const s = { x: 0, y: 0, z: 1 };
+    seed(s, rect.width, rect.height, true);
     return s;
   });
-  const warp: Warp = { canvas, ctx, stars, speed: 0, target: 0, raf: 0, last: 0 };
+  const warp: Warp = { canvas, ctx, stars, speed: 0, presence: 0, engaged: false, burst: false, raf: 0, last: 0, w: 0, h: 0 };
   warps.set(button, warp);
   return warp;
 }
 
-function frame(button: HTMLElement, warp: Warp, now: number) {
-  const dt = Math.min(0.05, (now - warp.last) / 1000 || 0.016);
+const project = (v: number, z: number) => v / z;
+
+function draw(button: HTMLElement, warp: Warp, now: number) {
+  const dt = Math.min(0.05, Math.max(0.001, (now - warp.last) / 1000));
   warp.last = now;
-  // Accelerate hard, decelerate gently: the jump is sudden, the arrival is not.
-  const rate = warp.target > warp.speed ? 5 : 2.6;
-  warp.speed += (warp.target - warp.speed) * Math.min(1, dt * rate);
+
+  // Ease toward the target at a fixed rate, so the jump takes the same time at any frame rate:
+  // rest to full in ACCELERATE seconds, back in DECELERATE.
+  const target = warp.burst ? 3 : warp.engaged ? 1 : 0;
+  const rate = target > warp.speed ? (warp.burst ? 1 / 0.12 : 1 / ACCELERATE) : 1 / DECELERATE;
+  warp.speed = target > warp.speed ? Math.min(target, warp.speed + dt * rate * Math.max(1, target)) : Math.max(target, warp.speed - dt * rate);
+  warp.presence = warp.engaged || warp.burst ? Math.min(1, warp.presence + dt / 0.18) : Math.max(0, warp.presence - dt / DECELERATE);
+  // An ease-in on the visible speed: stars sit still, then go.
+  const s = warp.speed <= 1 ? warp.speed * warp.speed * (3 - 2 * warp.speed) : warp.speed;
 
   const { canvas, ctx } = warp;
   const rect = button.getBoundingClientRect();
   const dpr = Math.min(2, devicePixelRatio || 1);
-  const w = rect.width + SPILL_X * 2;
-  const h = rect.height + SPILL_Y * 2;
-  if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+  const w = rect.width;
+  const h = rect.height;
+  if (warp.w !== w || warp.h !== h) {
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
+    warp.w = w;
+    warp.h = h;
   }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
+  ctx.globalAlpha = warp.presence;
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round';
 
   const cx = w / 2;
   const cy = h / 2;
-  const reach = Math.hypot(w / 2, h / 2);
-  const speed = warp.speed;
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.lineCap = 'round';
-  for (const s of warp.stars) {
-    s.r += dt * (0.05 + speed * 1.5) * (0.15 + s.r) * s.z;
-    if (s.r > 1.1) spawn(s);
-    const head = s.r * reach;
-    const tail = Math.max(0, head - (2 + speed * speed * 26 * s.z) * (0.3 + s.r));
-    const dx = Math.cos(s.a);
-    const dy = Math.sin(s.a) * 0.62;
-    const alpha = Math.min(1, s.r * 2.2) * (0.25 + 0.75 * Math.min(1, speed));
-    ctx.strokeStyle = s.z > 0.95 ? `rgba(225, 250, 255, ${alpha})` : `rgba(95, 224, 238, ${alpha * 0.9})`;
-    ctx.lineWidth = 0.6 + s.z * 0.9;
+  // Depth travelled per second: a slow drift at rest, a rush at full speed.
+  const dz = (0.06 + s * 1.5) * dt;
+  // The trail is where the star was a moment ago; its length grows with speed.
+  const trail = 0.012 + s * 0.11;
+  for (const star of warp.stars) {
+    star.z -= dz * (0.6 + 0.4 * star.z);
+    const x = cx + project(star.x, star.z);
+    const y = cy + project(star.y, star.z);
+    if (star.z <= NEAR || x < -4 || x > w + 4 || y < -4 || y > h + 4) {
+      seed(star, w, h, false);
+      continue;
+    }
+    const zt = Math.min(FAR, star.z + trail);
+    const tx = cx + project(star.x, zt);
+    const ty = cy + project(star.y, zt);
+    // Near the camera a star is brighter, wider and longer; far away it is a faint point.
+    const near = 1 - (star.z - NEAR) / (FAR - NEAR);
+    const alpha = Math.min(1, 0.15 + near * near * 1.1);
+    const width = 0.4 + near * 0.9;
+    const r = Math.round(190 + 65 * near);
+    const g = Math.round(220 + 35 * near);
+    // Two strokes: a dim tail and a bright head, so a streak tapers into its own motion.
+    const mx = (tx + x) / 2;
+    const my = (ty + y) / 2;
+    ctx.lineWidth = width * 0.8;
+    ctx.strokeStyle = `rgba(${r}, ${g}, 255, ${alpha * 0.35})`;
     ctx.beginPath();
-    ctx.moveTo(cx + dx * tail, cy + dy * tail);
-    ctx.lineTo(cx + dx * head, cy + dy * head);
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(mx + 0.01, my);
+    ctx.stroke();
+    ctx.lineWidth = width;
+    ctx.strokeStyle = `rgba(${r}, ${g}, 255, ${alpha})`;
+    ctx.beginPath();
+    ctx.moveTo(mx, my);
+    ctx.lineTo(x + 0.01, y);
     ctx.stroke();
   }
-  // The core flare at the vanishing point, brighter with speed.
-  const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, rect.height * 0.9);
-  glow.addColorStop(0, `rgba(200, 248, 255, ${0.25 * Math.min(1.5, speed)})`);
-  glow.addColorStop(1, 'rgba(95, 224, 238, 0)');
+
+  // The tunnel's glow at the vanishing point, kept low so the label stays the brightest thing.
+  ctx.globalCompositeOperation = 'source-over';
+  const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, w * 0.55);
+  glow.addColorStop(0, `rgba(120, 200, 255, ${0.1 + 0.12 * Math.min(1, s)})`);
+  glow.addColorStop(1, 'rgba(120, 200, 255, 0)');
+  ctx.globalCompositeOperation = 'lighter';
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, w, h);
-
-  // Fade the streaks out past the pill, so they spill a little and never end in a box.
-  ctx.globalCompositeOperation = 'destination-in';
+  // Keep the label clear: the streaks fade out across an ellipse the size of the label, so they
+  // rush past around it and never across it.
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.globalAlpha = 1;
   ctx.save();
   ctx.translate(cx, cy);
-  ctx.scale(1, h / w);
-  const fade = ctx.createRadialGradient(0, 0, 0, 0, 0, w / 2);
-  fade.addColorStop(0, 'rgba(0,0,0,1)');
-  fade.addColorStop(rect.width / w, 'rgba(0,0,0,0.85)');
-  fade.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = fade;
-  ctx.fillRect(-w / 2, -w / 2, w, w);
+  ctx.scale(1, h / (w * 0.62));
+  const lens = ctx.createRadialGradient(0, 0, 0, 0, 0, w * 0.4);
+  lens.addColorStop(0, 'rgba(0, 0, 0, 0.92)');
+  lens.addColorStop(0.55, 'rgba(0, 0, 0, 0.7)');
+  lens.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = lens;
+  ctx.fillRect(-w / 2, -w, w, w * 2);
   ctx.restore();
   ctx.globalCompositeOperation = 'source-over';
 
-  button.style.setProperty('--warp', speed.toFixed(3));
-  if (warp.target === 0 && speed < 0.01) {
+  if (!warp.engaged && !warp.burst && warp.presence <= 0 && warp.speed <= 0) {
     warp.raf = 0;
-    button.removeAttribute('data-warping');
     ctx.clearRect(0, 0, w, h);
     return;
   }
-  warp.raf = requestAnimationFrame((t) => frame(button, warp, t));
+  warp.raf = requestAnimationFrame((t) => draw(button, warp, t));
 }
 
-function engage(button: HTMLElement, target = 1) {
+function run(button: HTMLElement, warp: Warp) {
+  if (warp.raf) return;
+  warp.last = performance.now();
+  warp.raf = requestAnimationFrame((t) => draw(button, warp, t));
+}
+
+function engage(button: HTMLElement) {
   if (reduced.matches) return;
   const warp = setup(button);
   if (!warp) return;
-  warp.target = target;
+  warp.engaged = true;
   button.setAttribute('data-warping', '');
-  if (!warp.raf) {
-    warp.last = performance.now();
-    warp.raf = requestAnimationFrame((t) => frame(button, warp, t));
-  }
+  run(button, warp);
 }
 
 function release(button: HTMLElement) {
   const warp = warps.get(button);
-  if (warp) warp.target = 0;
+  if (!warp || warp.burst) return;
+  warp.engaged = false;
+  button.removeAttribute('data-warping');
 }
 
 for (const button of document.querySelectorAll<HTMLAnchorElement>('[data-warp]')) {
@@ -153,19 +212,26 @@ for (const button of document.querySelectorAll<HTMLAnchorElement>('[data-warp]')
   button.addEventListener('click', (e) => {
     if (reduced.matches || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     if (!button.href || button.target === '_blank') return;
+    const warp = setup(button);
+    if (!warp) return;
     e.preventDefault();
-    engage(button, 4);
+    warp.engaged = true;
+    warp.burst = true;
+    button.setAttribute('data-warping', '');
     button.setAttribute('data-burst', '');
+    run(button, warp);
     window.setTimeout(() => {
       window.location.href = button.href;
     }, BURST_MS);
   });
 }
 
-// Coming back through the history cache: settle any button left mid-burst.
+// Back through the history cache: settle any button left mid-jump.
 addEventListener('pageshow', () => {
   for (const button of document.querySelectorAll<HTMLElement>('[data-burst]')) {
     button.removeAttribute('data-burst');
+    const warp = warps.get(button);
+    if (warp) warp.burst = false;
     release(button);
   }
 });
