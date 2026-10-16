@@ -81,6 +81,23 @@ describeEachDialect('sweeper', (t) => {
     expect(await env.ports.connections.findById(map.id, gate.id)).not.toBeNull();
   });
 
+  it('dates a hole from its sightings, not from a signature entry older than the hole can be', async () => {
+    const signatures = new SignatureUseCases(env.ports);
+    // The entry is from a day ago (a Wanderer sync keeps its first insert); the hole on it is new.
+    const sig = await signatures.add(alice, map.id, HOME, { eveId: 'UUU-210' });
+    const drawn = env.clock.now() + 25 * HOUR;
+    env.clock.set(drawn);
+    const hole = await connections.add(alice, map.id, { source: HOME, target: TAMA });
+    await signatures.update(alice, map.id, sig.id, { type: 'U210', connectionId: hole.id }); // 24 h
+
+    expect(await sweeper.sweep(map.id, ON)).toMatchObject({ eol: 0, deleted: 0 });
+    expect(await env.ports.connections.findById(map.id, hole.id)).not.toBeNull();
+    env.clock.set(drawn + 20 * HOUR);
+    expect(await sweeper.sweep(map.id, ON)).toMatchObject({ eol: 1, deleted: 0 });
+    env.clock.set(drawn + 24 * HOUR);
+    expect(await sweeper.sweep(map.id, ON)).toMatchObject({ deleted: 1 });
+  });
+
   it('deletes a hole marked EOL 4 hours later, plus the configured delay, and can be switched off', async () => {
     const c = await connections.add(alice, map.id, { source: HOME, target: C2 });
     await connections.update(alice, map.id, c.id, { timeStatus: 'eol' });

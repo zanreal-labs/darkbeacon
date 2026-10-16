@@ -13,7 +13,7 @@ import {
   type WormholeTypeDto,
 } from '@darkbeacon/shared';
 import type { Connection, Passage, Signature } from './map.js';
-import { connectionLifetime, EOL_WINDOW_MS } from './lifetime.js';
+import { connectionLifetime, defaultLifetimeHours, EOL_WINDOW_MS } from './lifetime.js';
 import { countedPassages, countingSince, remainingMassRange } from './mass.js';
 type UniverseSystem = UniverseSystemDto;
 
@@ -119,16 +119,40 @@ export function lifetimeOf(
     lookup: input.wormholeType,
   });
   const type = resolved ? input.wormholeType(resolved.code) : null;
+  const typeLifetimeHours = c.type === 'wormhole' ? (type?.lifetimeHours ?? null) : null;
+  const sourceClass = input.source?.whClass ?? null;
+  const targetClass = input.target?.whClass ?? null;
+  const firstSeenAt = firstSightingOf(
+    c,
+    input.signatures.filter((s) => s.connectionId === c.id),
+    (typeLifetimeHours ?? defaultLifetimeHours(c.shipSize, sourceClass, targetClass)) * HOUR,
+  );
   // The hole is at most `lifetime` old when first seen; EOL leaves at most 4 hours.
-  const firstSeenAt = Math.min(c.createdAt, ...input.signatures.map((s) => s.createdAt));
   const lifetime = connectionLifetime({
     connection: c,
     firstSeenAt,
-    typeLifetimeHours: c.type === 'wormhole' ? (type?.lifetimeHours ?? null) : null,
-    sourceClass: input.source?.whClass ?? null,
-    targetClass: input.target?.whClass ?? null,
+    typeLifetimeHours,
+    sourceClass,
+    targetClass,
   });
   return { sourceSignature, targetSignature, resolved, type, firstSeenAt, lifetime };
+}
+
+/**
+ * When this hole was first seen. Every sighting counts: the connection being drawn, its signatures
+ * being recorded and pasted again (`updatedAt`). A hole lives at most `lifetimeMs`, so a sighting
+ * older than that before the latest one cannot be of the same hole: a signature entry kept from an
+ * earlier hole (a Wanderer sync brings its first `inserted_at`), or an ID the scanner gave again.
+ * Those are left out, so a hole seen alive is never judged gone by an older record.
+ */
+export function firstSightingOf(
+  connection: Pick<Connection, 'createdAt'>,
+  signatures: ReadonlyArray<Pick<Signature, 'createdAt' | 'updatedAt'>>,
+  lifetimeMs: number,
+): number {
+  const sightings = [connection.createdAt, ...signatures.flatMap((s) => [s.createdAt, s.updatedAt])];
+  const latest = Math.max(...sightings);
+  return Math.min(...sightings.filter((at) => at >= latest - lifetimeMs));
 }
 
 /** Everything the connections panel shows about one connection. */
