@@ -46,6 +46,12 @@ export interface ViewsController {
   rename(ref: ViewRef, name: string): Promise<void>;
   remove(ref: ViewRef): Promise<void>;
   pin(slot: ViewSlot, ref: ViewRef): Promise<void>;
+  /**
+   * Keeps what changed on the screen in the active slot's view: my own view is saved over, a map
+   * view too when I publish them; a built-in view (or a map view I cannot change) becomes my own
+   * copy of the same name, pinned to that slot. Resolves to the name it was saved as.
+   */
+  saveActive(): Promise<string | null>;
   resetPins(): Promise<void>;
   /** Publishes a view to the map, optionally as everyone's default on a slot. */
   publish(name: string, view: ViewPreset, slot: ViewSlot | undefined): Promise<void>;
@@ -178,6 +184,34 @@ export function useViews({
       if (ref.source === 'personal')
         await savePersonal({ ...mine, views: mine.views.filter((v) => v.id !== ref.id) });
       else if (ref.source === 'map') await changeMap((list) => list.filter((v) => v.id !== ref.id));
+    },
+    saveActive: async () => {
+      const entry = slots.find((x) => x.slot === active);
+      if (!entry) return null;
+      const v = entry.view;
+      if (v.source === 'personal' || (v.source === 'map' && canPublish)) {
+        if (v.source === 'personal')
+          await savePersonal({
+            ...mine,
+            views: mine.views.map((m) => (m.id === v.id ? { ...m, view: current(), updatedAt: now() } : m)),
+          });
+        else
+          await changeMap((list) =>
+            list.map((m) => (m.id === v.id ? toMapView(m.id, m.name, current(), m.slot, m.updatedAt) : m)),
+          );
+        return v.name;
+      }
+      // One write: the copy and its pin together, so neither overwrites the other.
+      const id = newViewId('p');
+      await savePersonal({
+        ...mine,
+        views: [...mine.views, { id, name: v.name, view: current(), updatedAt: now() }],
+        pins: {
+          ...mine.pins,
+          [mapId]: { ...mine.pins[mapId], [`${entry.slot}`]: { source: 'personal', id } },
+        },
+      });
+      return v.name;
     },
     pin: (slot, ref) =>
       savePersonal({

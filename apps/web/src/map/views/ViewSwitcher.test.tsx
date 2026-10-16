@@ -56,6 +56,9 @@ function Harness({ views, canPublish = false }: { views?: MapViewDto[]; canPubli
       <ViewSwitcher views={controller} />
       <output data-testid="visible">{widgets.visible.join(',')}</output>
       <input aria-label="Notes" />
+      <button type="button" onClick={() => widgets.setShown('history', true)}>
+        Show history
+      </button>
     </>
   );
 }
@@ -102,7 +105,7 @@ describe('quick view slots', () => {
   it('answer Alt+1, Alt+2, Alt+3 by the key’s place, but not while typing or with other modifiers', () => {
     render();
     alt('Digit2');
-    expect(visible()).toBe('info,local,kills');
+    expect(visible()).toBe('info,local,kills,comments');
     alt('Numpad3');
     expect(visible()).toBe('info,connections,local');
     alt('Digit1', { shiftKey: true });
@@ -187,7 +190,7 @@ describe('quick view slots', () => {
       puts.preferences[0] as Record<string, { views: { name: string; view: { layout: WidgetsLayout } }[] }>
     )[VIEWS_AREA]!;
     expect(saved.views.map((v) => [v.name, v.view.layout.visible])).toEqual([
-      ['Hunting', ['info', 'local', 'kills']],
+      ['Hunting', ['info', 'local', 'kills', 'comments']],
     ]);
 
     await user.click(screen.getByRole('button', { name: 'Views' }));
@@ -200,6 +203,29 @@ describe('quick view slots', () => {
     fireEvent.keyDown(pin, { key: 'ArrowRight' });
     fireEvent.click(await screen.findByRole('menuitem', { name: /Slot 3/ }));
     await waitFor(() => expect(slot(3).getAttribute('aria-label')).toBe('View 3: Hunting'));
+  });
+
+  it('keeps a changed built-in view as my own copy on its slot, in one save', async () => {
+    const user = userEvent.setup();
+    render();
+    fireEvent.click(slot(1));
+    expect(slot(1).hasAttribute('data-modified')).toBe(false);
+    // Change the screen after switching: the slot stays lit, with the changed mark.
+    fireEvent.click(screen.getByRole('button', { name: 'Show history' }));
+    await waitFor(() => expect(slot(1).hasAttribute('data-modified')).toBe(true));
+    await user.click(screen.getByRole('button', { name: 'Views' }));
+    await user.click(await screen.findByRole('menuitem', { name: /Save changes to Scan/ }));
+    await waitFor(() => expect(puts.preferences).toHaveLength(1));
+    const saved = (
+      puts.preferences[0] as Record<
+        string,
+        { views: { id: string; name: string }[]; pins: Record<string, Record<string, { id: string }>> }
+      >
+    )[VIEWS_AREA]!;
+    expect(saved.views.map((v) => v.name)).toEqual(['Scan']);
+    expect(saved.pins[MAP_ID]!['1']!.id).toBe(saved.views[0]!.id);
+    await waitFor(() => expect(slot(1).getAttribute('aria-label')).toBe('View 1: Scan'));
+    expect(slot(1).hasAttribute('data-modified')).toBe(false);
   });
 
   it('lets managers publish the screen to the map as everyone’s view on a slot', async () => {

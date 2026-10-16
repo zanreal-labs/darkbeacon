@@ -227,6 +227,18 @@ export function ViewSwitcher({ views, compact = false }: { views: ViewsControlle
         </MenuTrigger>
       </Tooltip>
       <MenuContent align="end" className={styles.menu}>
+        {views.modified && active && (
+          <>
+            <MenuItem
+              icon={<Save />}
+              onSelect={() => run(views.saveActive(), `${active.view.name} saved`, 'The view did not change')}
+            >
+              Save changes to {active.view.name}
+              {active.view.source === 'builtin' && <span className={styles.slotSource}> as your view</span>}
+            </MenuItem>
+            <MenuSeparator />
+          </>
+        )}
         <MenuLabel>Quick slots</MenuLabel>
         {views.slots.map((s) => (
           <MenuItem

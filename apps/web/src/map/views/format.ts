@@ -137,8 +137,8 @@ const builtIn = (id: string, name: string, layout: Omit<WidgetsLayout, 'version'
 
 /**
  * The quick slots' views on a map that has published none of its own, so they work from the first
- * sign-in: 1 for scanning (Signatures large, Routes for where the holes lead), 2 for a fight (System info's kill intel, Local,
- * Kills), 3 for rolling a hole (Connections with their mass and passages, Local).
+ * sign-in: 1 for scanning (Signatures large, Routes for where the holes lead), 2 for a fight (System info's kill intel, a
+ * large Local, Kills, Comments), 3 for rolling a hole (Connections with their mass and passages, Local).
  */
 export const BUILT_IN_VIEWS: readonly NamedView[] = [
   builtIn('scan', 'Scan', {
@@ -146,7 +146,12 @@ export const BUILT_IN_VIEWS: readonly NamedView[] = [
     caps: { signatures: 440 },
     dockWidth: 400,
   }),
-  builtIn('pvp', 'PvP', { visible: ['info', 'local', 'kills'] }),
+  // A fight: Local is the main window, the comments at the bottom with room for a few of them.
+  builtIn('pvp', 'PvP', {
+    visible: ['info', 'local', 'kills', 'comments'],
+    caps: { local: 360, comments: 200 },
+    dockWidth: 400,
+  }),
   builtIn('roll', 'Roll', { visible: ['info', 'connections', 'local'] }),
 ];
 
