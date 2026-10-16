@@ -495,3 +495,20 @@ button.railLink {
   border-radius: 50%;
   background: var(--dbk-color-surface-hover);
 }
+
+/* A small accent dot on a rail icon: something new there (the app install, until used). */
+.railLink:has(.railDot) {
+  position: relative;
+}
+
+.railDot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dbk-color-accent);
+  box-shadow: 0 0 0 2px var(--dbk-color-bg-subtle);
+  pointer-events: none;
+}

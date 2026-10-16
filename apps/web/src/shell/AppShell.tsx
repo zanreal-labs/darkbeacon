@@ -9,6 +9,7 @@ import { BreadcrumbProvider } from './breadcrumbs';
 import { ConnectionIndicator } from './ConnectionIndicator';
 import { EveStatus } from './EveStatus';
 import { HelpMenu } from './HelpMenu';
+import { InstallRailButton } from '../pwa/InstallApp';
 import { JumpIcon } from './JumpIcon';
 import { LogoMark } from './Logo';
 import { MapSettingsRailButton } from './MapSettingsButton';
@@ -128,6 +129,7 @@ export function AppShell({
             {adminRail}
             {/* At the bottom, above Help, on every page: the rail never shifts. */}
             <span className={styles.railBottom}>
+              <InstallRailButton className={styles.railLink} dotClassName={styles.railDot} />
               <Suspense fallback={<span className={styles.railLink} aria-hidden />}>
                 <MapSettingsRailButton />
               </Suspense>

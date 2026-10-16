@@ -71,6 +71,11 @@ export function holdInstallPrompt(prompt: BeforeInstallPromptEvent | null): void
   set({ prompt });
 }
 
+/** Back to a fresh page's state (tests). */
+export function resetInstallState(): void {
+  set({ enabled: false, prompt: null, installed: false });
+}
+
 export function markInstalled(): void {
   set({ prompt: null, installed: true });
 }

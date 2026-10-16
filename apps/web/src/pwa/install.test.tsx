@@ -1,16 +1,18 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   holdInstallPrompt,
   installOption,
   markInstalled,
+  resetInstallState,
   setInstallEnabled,
   type BeforeInstallPromptEvent,
   type InstallEnvironment,
 } from './install';
-import { useInstallApp } from './InstallApp';
+import { InstallRailButton, useInstallApp } from './InstallApp';
+import { ToastProvider, TooltipProvider } from '../ui';
 import { opensInBrowser } from './links';
 
 const UA = {
@@ -157,5 +159,47 @@ describe('opensInBrowser (links in the installed app)', () => {
     expect(opensInBrowser(link('https://github.com/x.zip', '', true), origin)).toBe(false);
     expect(opensInBrowser(link('mailto:pilot@example.com'), origin)).toBe(false);
     expect(opensInBrowser(link('eve://client/'), origin)).toBe(false);
+  });
+});
+
+describe('InstallRailButton', () => {
+  beforeEach(() => act(() => resetInstallState()));
+  afterEach(() => {
+    cleanup();
+    act(() => resetInstallState());
+    window.localStorage.clear();
+    vi.useRealTimers();
+  });
+
+  const shell = () =>
+    render(
+      <TooltipProvider>
+        <ToastProvider>
+          <InstallRailButton />
+        </ToastProvider>
+      </TooltipProvider>,
+    );
+
+  it('sits in the rail and, once per browser, offers the install in a toast', () => {
+    vi.useFakeTimers();
+    act(() => setInstallEnabled(true));
+    shell();
+    expect(screen.getByRole('button', { name: 'Install app' })).toBeTruthy();
+    act(() => vi.advanceTimersByTime(4000));
+    expect(screen.getByText('Install Darkbeacon as an app')).toBeTruthy();
+    expect(window.localStorage.getItem('dbk-install-hint')).not.toBeNull();
+    cleanup();
+    shell();
+    act(() => vi.advanceTimersByTime(4000));
+    expect(screen.queryByText('Install Darkbeacon as an app')).toBeNull();
+  });
+
+  it('is gone inside the installed app', () => {
+    act(() => {
+      setInstallEnabled(true);
+      markInstalled();
+    });
+    shell();
+    expect(screen.queryByRole('button', { name: 'Install app' })).toBeNull();
   });
 });

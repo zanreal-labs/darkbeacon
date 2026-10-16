@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
-import { Share, SquarePlus } from 'lucide-react';
-import { Button, Dialog, DialogClose, DialogContent } from '../ui';
+import { useEffect, useState, type ReactNode } from 'react';
+import { MonitorDown, Share, SquarePlus } from 'lucide-react';
+import { Button, Dialog, DialogClose, DialogContent, Tooltip, useToast } from '../ui';
 import { runInstallPrompt, useInstallOption, type InstallOption } from './install';
 import styles from './pwa.module.css';
 
@@ -88,4 +88,74 @@ export function useInstallApp(): { option: InstallOption; run(): void; dialog: R
     </Dialog>
   );
   return { option, run, dialog };
+}
+
+const HINT_KEY = 'dbk-install-hint';
+
+/**
+ * Where people find the install: an icon in the rail (with a dot until it was used or the hint
+ * dismissed) and, once per browser, a toast a few seconds after the app opens with an Install
+ * button. Nothing in the installed app itself.
+ */
+export function InstallRailButton({
+  className,
+  dotClassName,
+}: {
+  className?: string;
+  dotClassName?: string;
+}) {
+  const install = useInstallApp();
+  const toast = useToast();
+  const [fresh, setFresh] = useState(false);
+  const offered = install.option !== null;
+
+  const remember = () => {
+    try {
+      window.localStorage.setItem(HINT_KEY, String(Date.now()));
+    } catch {
+      // storage blocked: fine
+    }
+  };
+  const use = () => {
+    remember();
+    setFresh(false);
+    install.run();
+  };
+
+  useEffect(() => {
+    if (!offered) return;
+    let told: boolean;
+    try {
+      told = window.localStorage.getItem(HINT_KEY) !== null;
+    } catch {
+      told = true; // storage blocked: no hint, the icon stays
+    }
+    if (told) return;
+    const timer = window.setTimeout(() => {
+      setFresh(true);
+      toast({
+        title: 'Install Darkbeacon as an app',
+        description: 'Its own window next to the game, without the browser around it.',
+        tone: 'info',
+        duration: 20_000,
+        action: { label: 'Install', onClick: use },
+      });
+      remember();
+    }, 4000);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per browser, when it is offered
+  }, [offered]);
+
+  if (!offered) return install.dialog;
+  return (
+    <>
+      <Tooltip content="Install Darkbeacon as an app" side="right">
+        <button type="button" className={className} aria-label="Install app" onClick={use}>
+          <MonitorDown />
+          {fresh && <span className={dotClassName} aria-hidden />}
+        </button>
+      </Tooltip>
+      {install.dialog}
+    </>
+  );
 }
