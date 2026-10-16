@@ -75,6 +75,16 @@ const shared = {
   'node-min-width': '240px',
   'node-padding': '8px 10px',
   'edge-width': '12px',
+  // Standings exactly as the game client colours them, the same in every theme (like the
+  // security colours): +10 dark blue, +5 light blue, neutral grey, -5 orange, -10 red. Sampled
+  // from the client's standing tag backgrounds as the EVE University wiki keeps them
+  // (https://wiki.eveuniversity.org/Color_Tag_Images: ColorTagBG-BlueDark, -BlueLight, -Grey,
+  // -Orange and -Red). White text reads on all but neutral (4.97:1 and up, contrast test).
+  'standing-excellent': '#042274',
+  'standing-good': '#2c66c4',
+  'standing-neutral': '#8c8a8c',
+  'standing-bad': '#c44604',
+  'standing-terrible': '#940604',
   'motion-fast': '120ms',
   'motion-normal': '180ms',
   'motion-easing': 'cubic-bezier(0.2, 0, 0, 1)',
@@ -142,18 +152,16 @@ const paired: Record<PairedToken, readonly [light: string, dark: string]> = {
   'effect-pulsar': ['#1d4ed8', '#60a5fa'],
   'effect-red-giant': ['#b91c1c', '#f87171'],
   'effect-wolf-rayet': ['#b45309', '#fbbf24'],
-  // Standings as the game colours them: blues for friends, orange and red for enemies.
-  'standing-excellent': ['#1d4ed8', '#5b8cff'],
-  'standing-good': ['#0369a1', '#38bdf8'],
-  'standing-neutral': ['#596170', '#9aa3b2'],
-  'standing-bad': ['#c2410c', '#fb923c'],
-  'standing-terrible': ['#b91c1c', '#f87171'],
   'node-bg': ['#ffffff', '#151920'],
   'node-border': ['#b9c0cb', '#3a4252'],
   'node-text': ['#14171f', '#e6e9ef'],
   'node-selected-border': ['#0b7f91', '#38c6d6'],
   // How much of the status colour tints a node (its strongest edge; the rest fades to half).
   'node-tint': ['16%', '22%'],
+  // The same for the holder's standing on an unmarked system: stronger, because the game's
+  // standing colours are dark (+10 navy, -10 maroon) and must stay apart from +5 and -5 as tints;
+  // light stops where secondary text would drop under 4.5:1 (contrast test).
+  'node-tint-standing': ['23%', '40%'],
   // Designation pills: a solid EVE-ish fill with dark bold text, the same in light and dark.
   'node-pill-text': ['#0a0c10', '#0a0c10'],
   'pill-wormhole': ['#7b93ff', '#7b93ff'],
@@ -256,6 +264,7 @@ export const contrastTheme: Theme = {
     'node-selected-border': '#ffd400',
     'node-border-width': '1px',
     'node-tint': '30%',
+    'node-tint-standing': '40%',
     'edge-width': '13px',
     'edge-color': '#ffffff',
     'edge-gate': '#d0d0d0',

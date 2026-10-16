@@ -7,6 +7,7 @@ import {
   exitChips,
   exitHubs,
   nearestHubTitle,
+  nodeTint,
   ROUTE_SPACE_COLOR,
   SECURITY_COLORS,
   shownSecurity,
@@ -131,5 +132,29 @@ describe('node size', () => {
     expect(MAP_TYPE.secondary * DEFAULT_ZOOM).toBeGreaterThanOrEqual(READABLE.secondary);
     expect(MAP_TYPE.bookmark * DEFAULT_ZOOM).toBeGreaterThanOrEqual(READABLE.secondary);
     expect(MAP_TYPE.edge * DEFAULT_ZOOM).toBeGreaterThanOrEqual(READABLE.edge);
+  });
+});
+
+describe('node tint', () => {
+  it("tints an unmarked system with the game colour of the holder's standing, never with a status", () => {
+    expect(nodeTint('unknown', 10)).toMatchObject({ by: 'standing', tone: 'excellent' });
+    expect(nodeTint('unknown', 5)).toMatchObject({ by: 'standing', tone: 'good' });
+    expect(nodeTint('unknown', -5)).toMatchObject({ by: 'standing', tone: 'bad' });
+    expect(nodeTint('unknown', -10)).toMatchObject({ by: 'standing', tone: 'terrible' });
+    expect(nodeTint('unknown', 10).image).toContain(
+      'var(--dbk-standing-excellent) var(--dbk-node-tint-standing)',
+    );
+    expect(nodeTint('unknown', 10).image).not.toContain('status-friendly');
+    for (const neutral of [0, null, undefined]) {
+      expect(nodeTint('unknown', neutral)).toEqual({ image: 'none', by: null });
+    }
+  });
+
+  it('lets every status someone set win, friendly included', () => {
+    for (const status of ['home', 'friendly', 'empty', 'occupied', 'warning', 'hostile', 'target'] as const) {
+      const tint = nodeTint(status, 10);
+      expect(tint.by).toBe('status');
+      expect(tint.image).toContain(`var(--dbk-status-${status})`);
+    }
   });
 });

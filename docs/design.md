@@ -132,8 +132,12 @@ and danger, `status-warning` amber for pings and stars, `status-friendly` green 
   towards the pill (light 16 %, dark 22 %, high contrast 30 %). Home blue, friendly green, empty a
   faint grey, occupied brown, warning amber, hostile red, target purple; unknown keeps the plain
   background. An unmarked system in space held by someone the viewer has a standing towards takes
-  the status it implies (friendly from +5, warning from -5, hostile at -10). Secondary text in the
-  node sits a quarter of the way from muted to the node text, so it reads on every tint (tested).
+  the game's own colour of that standing, never a status: +10 (and one's own alliance or
+  corporation) dark blue, +5 light blue, -5 orange, -10 red; a neutral holder leaves it plain. The
+  standing tint is stronger (`node-tint-standing`: light 23 %, dark and high contrast 40 %) so the
+  dark game colours stay apart as washes (tested). A status someone set, friendly included, wins.
+  Secondary text in the node sits a quarter of the way from muted to the node text, so it reads on
+  every tint (tested).
 - Selection never adds a frame: the selected node (every one of a multi-selection) gets a slightly
   lifted background and a short accent line inside its left edge. Hover lifts the background less
   and adds nothing.
@@ -158,8 +162,9 @@ and danger, `status-warning` amber for pings and stars, `status-friendly` green 
   grey mono, a click copies it) and its Tags (`Staging`, framed in the tag's muted colour). All are
   the same 14 px chips; they never widen the node.
 - Below the node, on the right: who holds the system, a chip like the others: the alliance ticker
-  `[CONDI]` in monospace, in the colour of the viewer's standing towards it (text, frame and a faint
-  fill; plain when neutral), or the faction's short name in NPC null-sec (`Sansha`); never in
+  `[CONDI]` in monospace, the chip filled with the exact game colour of the viewer's standing
+  towards it in white text (plain when neutral), or the faction's short name in NPC null-sec
+  (`Sansha`); never in
   wormholes, high- or low-sec. Full names are in its tooltip.
 - Below an exit system, left-aligned: the nearest hub and its jumps (`Jita 4j`), followed by a small
   square in the colour of the space the whole route runs through (high-sec green, low-sec orange,

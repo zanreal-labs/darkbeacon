@@ -1,6 +1,5 @@
 'use client';
 
-import type { CSSProperties } from 'react';
 import {
   killHeat,
   standingTone,
@@ -10,10 +9,10 @@ import {
   type SovereigntyDto,
   type SystemActivityDto,
 } from '@darkbeacon/shared';
-import { cssVar } from '@darkbeacon/theme-sdk';
 import {
   ago,
   groupLabel,
+  holderStanding,
   images,
   useStandings,
   useStandingsQuery,
@@ -23,6 +22,7 @@ import {
 import { hereForReturn } from '../../lib/scope-health';
 import { eveLinkHref } from '../../shell/AccountMenu';
 import { Avatar } from '../../ui';
+import { StandingTag } from '../NodeIntel';
 import styles from './intel.module.css';
 
 function sum(hours: readonly ActivityHourDto[], pick: (h: ActivityHourDto) => number | null): number | null {
@@ -114,7 +114,14 @@ export function topKillers(groups: readonly ActiveGroupDto[], count = 4): Active
  * One short line under the system's facts: the holder's logo, ticker and name (the claiming
  * corporation only in the tooltip); unclaimed null-sec, the region's main holder.
  */
-export function SovereigntyLine({ intel }: { intel: SystemActivityDto['intel'] | undefined }) {
+export function SovereigntyLine({
+  intel,
+  standing,
+}: {
+  intel: SystemActivityDto['intel'] | undefined;
+  /** The viewer's standing towards the holder: its game tag before the ticker. */
+  standing?: number | null;
+}) {
   const sov: SovereigntyDto | null | undefined = intel?.sovereignty;
   const region = intel?.regionHolder;
   if (sov) {
@@ -136,6 +143,7 @@ export function SovereigntyLine({ intel }: { intel: SystemActivityDto['intel'] |
           target="_blank"
           rel="noreferrer"
         >
+          {!faction && <StandingMark standing={standing} />}
           {!faction && sov.holder.ticker ? (
             <span className={styles.ticker}>[{sov.holder.ticker}]</span>
           ) : null}{' '}
@@ -163,10 +171,13 @@ export function SovereigntyLine({ intel }: { intel: SystemActivityDto['intel'] |
   return null;
 }
 
-/** A standing's colour for a name or ticker; nothing for neutral. */
-export function standingStyle(standing: number | undefined): CSSProperties | undefined {
+/**
+ * The game's standing tag for a name or ticker (a square in the game colour with a sign, see
+ * StandingTag); nothing for neutral or unknown, as the game shows no tag for them by default.
+ */
+export function StandingMark({ standing }: { standing: number | null | undefined }) {
   const tone = standingTone(standing);
-  return tone === 'neutral' ? undefined : { color: cssVar(`standing-${tone}`) };
+  return tone === 'neutral' ? null : <StandingTag standing={tone} />;
 }
 
 /**
@@ -257,8 +268,8 @@ export function SystemIntel({ mapId, solarSystemId }: { mapId: string; solarSyst
                   target="_blank"
                   rel="noreferrer"
                   title={`${g.entity.name ?? groupLabel(g.entity)}: ${g.kills} kill${g.kills === 1 ? '' : 's'}${g.losses ? `, ${g.losses} loss${g.losses === 1 ? '' : 'es'}` : ''}`}
-                  style={standingStyle(standings.get(g.entity.id))}
                 >
+                  <StandingMark standing={standings.get(g.entity.id)} />
                   {groupLabel(g.entity)}
                 </a>
                 <b>{g.kills}</b>
@@ -267,7 +278,7 @@ export function SystemIntel({ mapId, solarSystemId }: { mapId: string; solarSyst
           </ul>
         </div>
       )}
-      <SovereigntyLine intel={intel} />
+      <SovereigntyLine intel={intel} standing={holderStanding(intel, standings)} />
       {held && standingsQuery.data?.missingScopes && (
         <p className={styles.relink}>
           <a

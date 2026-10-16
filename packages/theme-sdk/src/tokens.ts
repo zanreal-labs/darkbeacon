@@ -75,7 +75,10 @@ export const TOKENS = {
   'effect-pulsar': { group: 'status', description: 'Wormhole effect dot: Pulsar' },
   'effect-red-giant': { group: 'status', description: 'Wormhole effect dot: Red Giant' },
   'effect-wolf-rayet': { group: 'status', description: 'Wormhole effect dot: Wolf-Rayet' },
-  'standing-excellent': { group: 'status', description: 'Standing +10 (and your own alliance)' },
+  'standing-excellent': {
+    group: 'status',
+    description: 'Standing +10 and your own alliance or corporation (the game colour)',
+  },
   'standing-good': { group: 'status', description: 'Standing +5' },
   'standing-neutral': { group: 'status', description: 'Neutral or no standing' },
   'standing-bad': { group: 'status', description: 'Standing -5' },
@@ -91,6 +94,11 @@ export const TOKENS = {
   'node-tint': {
     group: 'node',
     description: 'Share of the status colour mixed into the node background (a percentage)',
+  },
+  'node-tint-standing': {
+    group: 'node',
+    description:
+      "Share of the holder's standing colour mixed into an unmarked node's background (a percentage)",
   },
   'node-pill-text': { group: 'node', description: 'Text on a filled designation pill (class or security)' },
   'pill-wormhole': { group: 'node', description: 'Designation pill fill of wormhole classes C1-C6' },

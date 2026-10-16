@@ -6,6 +6,7 @@ import {
   buildPath,
   isEventOfType,
   routes,
+  type CharacterDto,
   type HubsDto,
   type IntelEntityDto,
   type KillmailDto,
@@ -17,6 +18,7 @@ import {
 } from '@darkbeacon/shared';
 import { api } from './api';
 import { useConnectionStatus, useRealtime, useStream } from './RealtimeProvider';
+import { useMe } from './session';
 
 export const intelKey = (mapId: string) => ['intel', mapId] as const;
 export const activityKey = (mapId: string, systemId: number) => ['intel', mapId, 'system', systemId] as const;
@@ -160,10 +162,36 @@ export function useSetStanding() {
   };
 }
 
+/** The game's standing of one's own alliance and corporation. */
+export const OWN_STANDING = 10;
+
+/**
+ * Standings with one's own alliances and corporations at +10, from the account's own characters:
+ * the server says the same once its read is done, but that read asks ESI for every contact list
+ * (seconds, or a failure), and one's own space is blue from the first paint and without contacts.
+ * What the server says wins (a standing set by hand).
+ */
+export function withOwnGroups(
+  standings: readonly { id: number; standing: number }[],
+  characters: readonly Pick<CharacterDto, 'corporationId' | 'allianceId'>[],
+): Map<number, number> {
+  const result = new Map<number, number>();
+  for (const c of characters) {
+    result.set(c.corporationId, OWN_STANDING);
+    if (c.allianceId !== null) result.set(c.allianceId, OWN_STANDING);
+  }
+  for (const s of standings) result.set(s.id, s.standing);
+  return result;
+}
+
 /** The signed-in account's standings (its characters' contacts), id -> -10..+10. */
 export function useStandings(enabled = true): ReadonlyMap<number, number> {
   const query = useStandingsQuery(enabled);
-  return useMemo(() => new Map((query.data?.standings ?? []).map((s) => [s.id, s.standing])), [query.data]);
+  const me = useMe({ enabled });
+  return useMemo(
+    () => withOwnGroups(query.data?.standings ?? [], me.data?.characters ?? []),
+    [query.data, me.data],
+  );
 }
 
 /** The standing towards whoever holds a system (alliance claims only; factions have none). */

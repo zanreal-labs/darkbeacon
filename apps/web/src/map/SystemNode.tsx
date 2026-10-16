@@ -9,7 +9,6 @@ import {
   type LabelDto,
   type MapSystemDto,
   standingTone,
-  statusFromStanding,
   type SystemIntelDto,
   type SystemLabelDto,
   type UniverseSystemDto,
@@ -23,9 +22,10 @@ import { Tooltip, useToast } from '../ui';
 import {
   classPill,
   nearestHubTitle,
+  nodeTint,
   ROUTE_SPACE_COLOR,
+  STANDING_LABEL,
   STATUS_LABEL,
-  statusTint,
   type NearestHub,
 } from './nodeFacts';
 import { EffectDot, NodeKills, NodeSovereignty, ShatteredMark } from './NodeIntel';
@@ -244,9 +244,8 @@ export const SystemNode = memo(function SystemNode({
   } = data;
   const toast = useToast();
   const name = nodeName(system, info);
-  // A status someone set wins; an unmarked system takes one from the holder's standing.
-  const derived = system.status === 'unknown' ? statusFromStanding(standing) : null;
-  const status = derived ?? system.status;
+  // A status someone set wins; an unmarked system takes the game colour of the holder's standing.
+  const tint = nodeTint(system.status, standing);
   const kills = intel?.kills1h ?? 0;
 
   const copyBookmark = (e: MouseEvent) => {
@@ -264,13 +263,13 @@ export const SystemNode = memo(function SystemNode({
       className={styles.node}
       data-selected={selected || undefined}
       data-hidden={!system.visible || undefined}
-      data-status={status}
-      data-derived={derived ? true : undefined}
+      data-status={system.status}
+      data-standing-tint={tint.tone}
       data-pulse={pulse || undefined}
-      style={{ '--node-tint-image': statusTint(status) } as CSSProperties}
+      style={{ '--node-tint-image': tint.image } as CSSProperties}
       title={
         systemTooltip(system, info, intel) +
-        (derived ? `\n${STATUS_LABEL[derived]} from your standing towards the holder` : '')
+        (tint.tone ? `\nTinted by your standing towards the holder: ${STANDING_LABEL[tint.tone]}` : '')
       }
     >
       {SIDES.map((side) => (

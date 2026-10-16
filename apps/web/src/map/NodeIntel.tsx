@@ -6,6 +6,7 @@ import { killHeat, type StandingTone, type SystemIntelDto, type WormholeEffect }
 import { cssVar, type TokenName } from '@darkbeacon/theme-sdk';
 import { ago, formatIsk, groupLabel, groupOf, useMapKills } from '../lib/intel';
 import { Tooltip } from '../ui';
+import { STANDING_COLOR, STANDING_LABEL } from './nodeFacts';
 import styles from './NodeIntel.module.css';
 
 /** The kills of the last hour on the node, with the killmails behind it on hover. */
@@ -89,9 +90,30 @@ function NodeKillList({
 }
 
 /**
- * Who holds the system, as a chip below the node's right edge: the alliance ticker `[TICKER]` in
- * the colour of the viewer's standing towards it (neutral: plain), or a faction's short name.
- * `className` places and frames it like the node's other chips.
+ * A standing as the game tags it: a small square in the game colour with a white plus (+5, +10),
+ * minus (-5, -10) or equals sign (neutral), next to a name. The name keeps its own colour, since
+ * the game's dark blue and red are not readable as text on a dark panel.
+ */
+export function StandingTag({ standing, className }: { standing: StandingTone; className?: string }) {
+  const sign = standing === 'excellent' || standing === 'good' ? '+' : standing === 'neutral' ? '=' : '−';
+  return (
+    <span
+      className={className ? `${styles.standingTag} ${className}` : styles.standingTag}
+      data-standing={standing}
+      style={{ background: cssVar(STANDING_COLOR[standing]) }}
+      role="img"
+      aria-label={`Standing ${STANDING_LABEL[standing]}`}
+      title={`Your standing: ${STANDING_LABEL[standing]}`}
+    >
+      {sign}
+    </span>
+  );
+}
+
+/**
+ * Who holds the system, as a chip below the node's right edge: the alliance ticker `[TICKER]`, the
+ * chip filled with the game colour of the viewer's standing towards it in white text (neutral:
+ * plain), or a faction's short name. `className` places and frames it like the node's other chips.
  */
 export function NodeSovereignty({
   intel,
@@ -114,17 +136,15 @@ export function NodeSovereignty({
   const title = faction
     ? `Faction space: ${sov.holder.name ?? label}`
     : `Sovereignty: ${sov.holder.name ?? 'an alliance'}${sov.holder.ticker ? ` [${sov.holder.ticker}]` : ''}`;
-  const style =
-    standing && standing !== 'neutral'
-      ? ({ '--sov-color': cssVar(`standing-${standing}`) } as CSSProperties)
-      : undefined;
+  const coloured = standing && standing !== 'neutral';
+  const style = coloured ? ({ '--sov-color': cssVar(STANDING_COLOR[standing]) } as CSSProperties) : undefined;
   return (
     <span
       className={className ? `${styles.sov} ${className}` : styles.sov}
       data-kind={sov.kind}
       data-standing={standing}
       style={style}
-      title={title}
+      title={coloured ? `${title}\nYour standing: ${STANDING_LABEL[standing]}` : title}
     >
       {label}
     </span>

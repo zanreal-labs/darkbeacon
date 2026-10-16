@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ManualClock, type Actor } from '@darkbeacon/core';
-import { standingTone, statusFromStanding } from '@darkbeacon/shared';
+import { standingTone } from '@darkbeacon/shared';
 import { mergeStandings } from '../domain/standings.js';
 import type { ContactsSource, StandingPilots } from '../ports/index.js';
 import { CONTACT_SCOPES, Standings } from './standings.js';
@@ -42,8 +42,8 @@ describe('standings', () => {
     expect(merged.get(98000002)).toBe(10);
   });
 
-  it('colours and derives a status the way the game and the old mapper did', () => {
-    expect([10, 6, 5, 0.5, 0, -0.5, -5, -6, -10].map(standingTone)).toEqual([
+  it("sorts standings into the game's five levels", () => {
+    expect([10, 6, 5, 0.5, 0, -0.5, -5, -6, -10, null].map(standingTone)).toEqual([
       'excellent',
       'excellent',
       'good',
@@ -53,17 +53,33 @@ describe('standings', () => {
       'bad',
       'terrible',
       'terrible',
+      'neutral',
     ]);
-    expect([10, 5, 4.9, -4.9, -5, -9.9, -10, null].map(statusFromStanding)).toEqual([
-      'friendly',
-      'friendly',
-      null,
-      null,
-      'warning',
-      'warning',
-      'hostile',
-      null,
-    ]);
+  });
+
+  it('makes its own alliance and corporation +10 with no contacts at all (no scopes, no token)', async () => {
+    let asked = 0;
+    const standings = new Standings({
+      pilots: {
+        // Linked before contacts were asked for, and its token no longer works.
+        characters: async () => [{ id: 1, corporationId: 98000001, allianceId: 1354830081, scopes: [] }],
+        accessToken: async () => null,
+      },
+      contacts: {
+        contacts: async () => {
+          asked += 1;
+          return { ok: true, data: [], nextAt: 0 };
+        },
+      },
+      clock: new ManualClock(),
+    });
+    const result = await standings.forAccount(alice);
+    const of = new Map(result.standings.map((s) => [s.id, s.standing]));
+    expect(asked).toBe(0);
+    expect(of.get(1354830081)).toBe(10);
+    expect(of.get(98000001)).toBe(10);
+    expect(standingTone(of.get(1354830081))).toBe('excellent');
+    expect(result.missingScopes).toBe(true);
   });
 
   it('reads each list once with a character that has the scope, and says when scopes are missing', async () => {
@@ -151,12 +167,12 @@ describe('standings', () => {
     const of = (dto: { standings: Array<{ id: number; standing: number }> }) =>
       new Map(dto.standings.map((s) => [s.id, s.standing]));
 
-    // The read does not fail: own alliances stay blue, which is what an unmarked system in one's
-    // own space takes its status from.
+    // The read does not fail: own alliances stay +10, which tints an unmarked system in one's own
+    // space dark blue.
     const first = of(await standings.forAccount(alice));
     expect(first.get(99000001)).toBe(10);
     expect(first.get(99000002)).toBe(10);
-    expect(statusFromStanding(first.get(99000666))).toBeNull();
+    expect(standingTone(first.get(99000666))).toBe('neutral');
     expect(errors).toEqual([
       'standings: token of character 1: fetch failed',
       'standings: alliance 99000002 contacts: HTTP 502',
@@ -167,6 +183,6 @@ describe('standings', () => {
     clock.advance(61_000);
     const second = of(await standings.forAccount(alice));
     expect(second.get(99000666)).toBe(-10);
-    expect(statusFromStanding(second.get(99000666))).toBe('hostile');
+    expect(standingTone(second.get(99000666))).toBe('terrible');
   });
 });

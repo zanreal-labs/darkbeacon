@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Suspense, type ReactElement, type ReactNode } from 'react';
-import { Map as MapIcon, Orbit, Shield, UserRound, UsersRound } from 'lucide-react';
+import { Map as MapIcon, Shield, UserRound, UsersRound } from 'lucide-react';
 import { PluginsProvider } from '../plugins/PluginSlot';
 import { WormholeReferenceHost, WormholeReferenceRailButton } from '../reference/WormholeReferenceHost';
 import { Skeleton, Tooltip } from '../ui';
@@ -9,6 +9,7 @@ import { BreadcrumbProvider } from './breadcrumbs';
 import { ConnectionIndicator } from './ConnectionIndicator';
 import { EveStatus } from './EveStatus';
 import { HelpMenu } from './HelpMenu';
+import { JumpIcon } from './JumpIcon';
 import { LogoMark } from './Logo';
 import { MapSettingsRailButton } from './MapSettingsButton';
 import { NavLink } from './NavLink';
@@ -84,7 +85,7 @@ export const MAPS_NAV: NavItem = {
   also: ['/m/', '/maps'],
 };
 /** The jump planner: its own map, of all known space. */
-export const JUMP_NAV: NavItem = { href: '/jump', label: 'Jump planner', icon: <Orbit /> };
+export const JUMP_NAV: NavItem = { href: '/jump', label: 'Jump planner', icon: <JumpIcon /> };
 export const ADMIN_NAV: NavItem = { href: '/admin', label: 'Admin', icon: <Shield /> };
 export const ACCOUNT_NAV: NavItem = { href: '/account', label: 'Account', icon: <UserRound /> };
 /** My characters: where they are, their scopes, and which maps track them. */
