@@ -137,6 +137,13 @@
   background: var(--status-tint, none), var(--dbk-node-bg);
 }
 
+/* A standing: the node's tint and the game's tag beside it. */
+.standingSample {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* Phones: pinch zooms, so only fit and the legend; above the system sheet when it is open. */
 @media (max-width: 760px) {
   .panel.panel {

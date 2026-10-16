@@ -191,27 +191,16 @@ export type StandingsDto = z.infer<typeof StandingsDto>;
 
 export type StandingTone = 'excellent' | 'good' | 'neutral' | 'bad' | 'terrible';
 
-/** The game's five standing colours: above +5, above 0, 0, down to -5, below -5. */
+/**
+ * The game's five standing levels: above +5 (+10, dark blue), above 0 (+5, light blue), 0
+ * (neutral, grey), down to -5 (orange), below -5 (-10, red). Unknown counts as neutral.
+ */
 export function standingTone(standing: number | null | undefined): StandingTone {
   if (standing === null || standing === undefined || standing === 0) return 'neutral';
   if (standing > 5) return 'excellent';
   if (standing > 0) return 'good';
   if (standing >= -5) return 'bad';
   return 'terrible';
-}
-
-/**
- * The status an unmarked system takes from its holder's standing (per viewer): friendly from +5,
- * warning from -5, hostile at -10. A status someone set always wins.
- */
-export function statusFromStanding(
-  standing: number | null | undefined,
-): 'friendly' | 'warning' | 'hostile' | null {
-  if (standing === null || standing === undefined) return null;
-  if (standing >= 5) return 'friendly';
-  if (standing <= -10) return 'hostile';
-  if (standing <= -5) return 'warning';
-  return null;
 }
 
 /** `PUT /api/accounts/me/standings/:entityId`: set a standing by hand, or null to go back to contacts. */

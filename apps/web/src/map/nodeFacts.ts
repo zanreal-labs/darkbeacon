@@ -1,9 +1,11 @@
-import type {
-  MapExitDto,
-  RouteSpace,
-  SystemStatus,
-  UniverseSystemDto,
-  WormholeDestination,
+import {
+  standingTone,
+  type MapExitDto,
+  type RouteSpace,
+  type StandingTone,
+  type SystemStatus,
+  type UniverseSystemDto,
+  type WormholeDestination,
 } from '@darkbeacon/shared';
 import { cssVar, type TokenName } from '@darkbeacon/theme-sdk';
 
@@ -47,18 +49,72 @@ export const STATUS_COLOR: Record<SystemStatus, TokenName | null> = {
 };
 
 /**
- * The status as a background layer, as Wanderer draws it: the status colour (`node-tint` of it)
- * at the right edge, fading to half that towards the pill, over the node background. `none` for
- * no tint, so the node keeps its plain surface.
+ * A colour as a background layer, as Wanderer draws it: `strength` of the colour at the right
+ * edge, fading to half that towards the pill, over the node background.
+ */
+function tintLayer(token: TokenName, strength: string): string {
+  const color = cssVar(token);
+  return (
+    `linear-gradient(275deg, color-mix(in oklab, ${color} ${strength}, transparent), ` +
+    `color-mix(in oklab, ${color} calc(${strength} / 2), transparent))`
+  );
+}
+
+/**
+ * The status as a background layer: the status colour (`node-tint` of it). `none` for no tint, so
+ * the node keeps its plain surface.
  */
 export function statusTint(status: SystemStatus): string {
   const token = STATUS_COLOR[status];
-  if (!token) return 'none';
-  const color = cssVar(token);
-  return (
-    `linear-gradient(275deg, color-mix(in oklab, ${color} var(--dbk-node-tint), transparent), ` +
-    `color-mix(in oklab, ${color} calc(var(--dbk-node-tint) / 2), transparent))`
-  );
+  return token ? tintLayer(token, 'var(--dbk-node-tint)') : 'none';
+}
+
+/** The game's colour of each standing level (`standing-*`, the same hex in every theme). */
+export const STANDING_COLOR: Record<StandingTone, TokenName> = {
+  excellent: 'standing-excellent',
+  good: 'standing-good',
+  neutral: 'standing-neutral',
+  bad: 'standing-bad',
+  terrible: 'standing-terrible',
+};
+
+/** Each level as the game names it, with the sign a pilot reads it by. */
+export const STANDING_LABEL: Record<StandingTone, string> = {
+  excellent: '+10 Excellent',
+  good: '+5 Good',
+  neutral: 'Neutral',
+  bad: '−5 Bad',
+  terrible: '−10 Terrible',
+};
+
+/**
+ * A holder's standing as a background layer: the game colour at `node-tint-standing` (stronger
+ * than a status, so +10 stays apart from +5 and -10 from -5 as tints). Neutral is no tint.
+ */
+export function standingTint(tone: StandingTone): string {
+  return tone === 'neutral' ? 'none' : tintLayer(STANDING_COLOR[tone], 'var(--dbk-node-tint-standing)');
+}
+
+export interface NodeTint {
+  /** The background layer (`--node-tint-image`). */
+  image: string;
+  /** What tints it: a status someone set, the holder's standing (unmarked systems), or nothing. */
+  by: 'status' | 'standing' | null;
+  /** The holder's standing level, when the standing tints it. */
+  tone?: StandingTone;
+}
+
+/**
+ * What a node's background shows: a status someone set always wins (friendly included); an
+ * unmarked system takes the game colour of the viewer's standing towards its holder (one's own
+ * alliance or corporation is +10, dark blue). A neutral holder, or none, leaves it plain. A
+ * standing never becomes a status: blue sov is blue, not the green of "friendly".
+ */
+export function nodeTint(status: SystemStatus, standing: number | null | undefined): NodeTint {
+  if (status !== 'unknown') return { image: statusTint(status), by: 'status' };
+  const tone = standingTone(standing);
+  if (tone === 'neutral') return { image: 'none', by: null };
+  return { image: standingTint(tone), by: 'standing', tone };
 }
 
 /**

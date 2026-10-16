@@ -1,8 +1,9 @@
 import type { CSSProperties, ReactNode } from 'react';
-import { SystemStatus, type ConnectionDto } from '@darkbeacon/shared';
+import { SystemStatus, type ConnectionDto, type StandingTone } from '@darkbeacon/shared';
 import { Kbd } from '../ui';
 import { edgeInnerStyle, edgeOuterStyle, edgeVisual, EOL_WINDOW_MS } from './edgeStyle';
-import { STATUS_LABEL, statusTint } from './nodeFacts';
+import { standingTint, STATUS_LABEL, statusTint } from './nodeFacts';
+import { StandingTag } from './NodeIntel';
 import edgeStyles from './ConnectionEdge.module.css';
 import styles from './MapControls.module.css';
 
@@ -63,6 +64,15 @@ export const LEGEND_EDGE_STATES: readonly { key: string; label: string; connecti
   },
 ];
 
+/** The game's five standing levels, as an unmarked system's tint and the holder's tag. */
+export const LEGEND_STANDINGS: readonly { tone: StandingTone; label: string }[] = [
+  { tone: 'excellent', label: 'Blue sov +10: yours or excellent' },
+  { tone: 'good', label: 'Blue sov +5: good' },
+  { tone: 'neutral', label: 'Neutral: no tint' },
+  { tone: 'bad', label: 'Orange −5: bad' },
+  { tone: 'terrible', label: 'Red −10: terrible' },
+];
+
 /** A short piece of connection drawn exactly like the real edge. */
 function EdgeSample({ connection }: { connection: ConnectionDto }) {
   const v = edgeVisual(connection, LEGEND_NOW);
@@ -119,6 +129,30 @@ export function MapLegend({ id }: { id: string }) {
             }
           >
             {STATUS_LABEL[s]}
+          </Row>
+        ))}
+      </ul>
+      <h2 className={styles.legendTitle}>Sovereignty</h2>
+      <p className={styles.legendNote}>
+        A system without a status takes the game colour of your standing towards who holds it; the
+        holder&apos;s chip below the node is filled with it. A status someone set wins.
+      </p>
+      <ul className={styles.legendList}>
+        {LEGEND_STANDINGS.map(({ tone, label }) => (
+          <Row
+            key={tone}
+            sample={
+              <span className={styles.standingSample}>
+                <span
+                  className={styles.statusSample}
+                  data-legend-standing={tone}
+                  style={{ '--status-tint': standingTint(tone) } as CSSProperties}
+                />
+                <StandingTag standing={tone} />
+              </span>
+            }
+          >
+            {label}
           </Row>
         ))}
       </ul>

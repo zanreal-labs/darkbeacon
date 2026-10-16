@@ -87,9 +87,10 @@
 }
 
 /*
- * Sovereignty, as a chip below the node (framed and placed by the node): the ticker in monospace;
- * a holder the viewer has a standing towards takes its colour, in the text, the frame and a faint
- * fill.
+ * Sovereignty, as a chip below the node (framed and placed by the node): the ticker in monospace.
+ * A holder the viewer has a standing towards fills the chip with the game's own standing colour,
+ * exact (the node's tint is only a wash of it), in white like the game's tags; the frame a shade
+ * towards the node text, so the dark +10 navy still has an edge on a dark canvas.
  */
 .sov[data-kind] {
   font-family: var(--dbk-font-family-mono);
@@ -101,10 +102,28 @@
 }
 
 .sov[data-standing]:not([data-standing='neutral']) {
-  border-color: color-mix(in oklab, var(--sov-color) 75%, var(--dbk-node-border));
-  background: color-mix(in oklab, var(--sov-color) 12%, var(--dbk-node-bg));
-  color: var(--sov-color);
+  border-color: color-mix(in oklab, var(--sov-color) 75%, var(--dbk-node-text));
+  background: var(--sov-color);
+  color: #ffffff;
   font-weight: 800;
+}
+
+/* A standing tag next to a name (Local, killers, the holder line): the game's square. */
+.standingTag {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  color: #ffffff;
+  font-family: var(--dbk-font-family-mono);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  vertical-align: -1px;
+  align-self: center;
+  margin-right: 4px;
 }
 
 /* The wormhole effect: a small square after the name. */

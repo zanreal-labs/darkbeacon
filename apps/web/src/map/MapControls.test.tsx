@@ -73,6 +73,18 @@ describe('MapControls', () => {
       );
     });
     expect(legend.querySelectorAll('[data-legend-status]')).toHaveLength(8);
+    // The holder's standing: five game levels, blue sov first; neutral draws no tint.
+    const standings = [...legend.querySelectorAll<HTMLElement>('[data-legend-standing]')];
+    expect(standings.map((s) => s.dataset.legendStanding)).toEqual([
+      'excellent',
+      'good',
+      'neutral',
+      'bad',
+      'terrible',
+    ]);
+    expect(standings[0]!.style.getPropertyValue('--status-tint')).toContain('var(--dbk-standing-excellent)');
+    expect(standings[2]!.style.getPropertyValue('--status-tint')).toBe('none');
+    expect(legend.textContent).toContain('Blue sov +10');
 
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByRole('region', { name: 'Map legend' })).toBeNull();

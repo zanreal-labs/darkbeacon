@@ -326,7 +326,7 @@ describe('SystemNode', () => {
     expect(container.querySelector('[data-pulse]')).toBeTruthy();
   });
 
-  it('colours the holder by my standing and gives an unmarked system the status it implies', () => {
+  describe("the holder's standing, in the game colours", () => {
     const held = intel({
       sovereignty: {
         kind: 'alliance',
@@ -334,24 +334,64 @@ describe('SystemNode', () => {
         corporation: null,
       },
     });
-    const { container, unmount } = renderNode({ info: nullSec, intel: held, standing: -10 });
-    const node = container.querySelector<HTMLElement>('[data-status]')!;
-    expect(screen.getByText('[CONDI]').dataset.standing).toBe('terrible');
-    expect(node.dataset.status).toBe('hostile');
-    expect(node.dataset.derived).toBe('true');
-    expect(node.title).toContain('Hostile from your standing towards the holder');
-    unmount();
-    // A status someone set wins.
-    const marked = renderNode({
-      info: nullSec,
-      system: systemFixture(31000001, { status: 'friendly' }),
-      intel: held,
-      standing: -10,
+    const tintOf = (container: HTMLElement) => box(container).style.getPropertyValue('--node-tint-image');
+    const chip = () => screen.getByText('[CONDI]');
+
+    it('tints an unmarked system in my own alliance dark blue (+10), never the green of friendly', () => {
+      const { container } = renderNode({ info: nullSec, intel: held, standing: 10 });
+      expect(box(container).dataset.status).toBe('unknown');
+      expect(box(container).dataset.standingTint).toBe('excellent');
+      expect(tintOf(container)).toContain(
+        'color-mix(in oklab, var(--dbk-standing-excellent) var(--dbk-node-tint-standing), transparent)',
+      );
+      expect(tintOf(container)).not.toContain('status-friendly');
+      expect(box(container).title).toContain('Tinted by your standing towards the holder: +10 Excellent');
+      // The chip below is filled with the game colour itself.
+      expect(chip().dataset.standing).toBe('excellent');
+      expect(chip().style.getPropertyValue('--sov-color')).toBe('var(--dbk-standing-excellent)');
     });
-    expect(marked.container.querySelector<HTMLElement>('[data-status]')!.dataset.status).toBe('friendly');
-    marked.unmount();
-    renderNode({ info: nullSec, intel: held, standing: 10 });
-    expect(screen.getByText('[CONDI]').dataset.standing).toBe('excellent');
+
+    it('tints +5 light blue, -5 orange and -10 red, each with its chip', () => {
+      for (const [standing, tone] of [
+        [5, 'good'],
+        [-5, 'bad'],
+        [-10, 'terrible'],
+      ] as const) {
+        const { container, unmount } = renderNode({ info: nullSec, intel: held, standing });
+        expect(box(container).dataset.standingTint).toBe(tone);
+        expect(tintOf(container)).toContain(`var(--dbk-standing-${tone})`);
+        expect(chip().dataset.standing).toBe(tone);
+        expect(chip().style.getPropertyValue('--sov-color')).toBe(`var(--dbk-standing-${tone})`);
+        unmount();
+      }
+    });
+
+    it('leaves a neutral holder plain: no tint, a plain chip', () => {
+      for (const standing of [0, null]) {
+        const { container, unmount } = renderNode({ info: nullSec, intel: held, standing });
+        expect(tintOf(container)).toBe('none');
+        expect(box(container).dataset.standingTint).toBeUndefined();
+        expect(chip().style.getPropertyValue('--sov-color')).toBe('');
+        unmount();
+      }
+    });
+
+    it('lets a status someone set win, friendly and hostile alike, while the chip stays blue', () => {
+      for (const status of ['friendly', 'hostile'] as const) {
+        const { container, unmount } = renderNode({
+          info: nullSec,
+          system: systemFixture(31000001, { status }),
+          intel: held,
+          standing: 10,
+        });
+        expect(box(container).dataset.status).toBe(status);
+        expect(box(container).dataset.standingTint).toBeUndefined();
+        expect(tintOf(container)).toContain(`var(--dbk-status-${status})`);
+        expect(tintOf(container)).not.toContain('standing');
+        expect(chip().dataset.standing).toBe('excellent');
+        unmount();
+      }
+    });
   });
 
   it('marks notes and route hubs in the corner and lists the pilots behind the count on hover', async () => {

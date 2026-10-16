@@ -22,7 +22,7 @@ import {
 } from '../../ui';
 import { seedCharacters } from '../mapState';
 import type { MapStore } from '../useMapStore';
-import { standingStyle } from './ActivitySection';
+import { StandingMark } from './ActivitySection';
 import styles from './widgets.module.css';
 
 /**
@@ -218,7 +218,8 @@ export function LocalSection({
             >
               <CharacterAvatar id={c.characterId} name={c.name} size={options.compact ? 18 : 20} />
               <span className={styles.pilotText}>
-                <span className={styles.pilotName} style={standingStyle(pilotStanding(c, standings))}>
+                <StandingMark standing={pilotStanding(c, standings)} />
+                <span className={styles.pilotName}>
                   {c.name}
                   {mine.has(c.characterId) && <span className="sr-only"> (you)</span>}
                 </span>

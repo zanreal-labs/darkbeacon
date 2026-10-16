@@ -811,7 +811,7 @@ describe('the widgets', () => {
     expect(within(local.querySelector('header')!).getByText('2')).toBeTruthy();
   });
 
-  it('Local counts the hostile pilots in its title bar and colours them by standing', async () => {
+  it('Local counts the hostile pilots in its title bar and tags them with the game standing colour', async () => {
     server.use(
       http.get(routes.intel.standings.path, () =>
         HttpResponse.json({
@@ -824,9 +824,11 @@ describe('the widgets', () => {
     wrap(<Widgets state={{ characters: new Map(pilots.map((p) => [p.characterId, p])) }} />);
     const title = () => region('Local').querySelector('header')!.firstElementChild!.textContent;
     await waitFor(() => expect(title()).toBe('Local21 hostile'));
-    expect(within(region('Local')).getByText('Hostile Guy').getAttribute('style')).toContain(
-      'standing-terrible',
-    );
+    // The game's tag before the name (a red square with a minus); the name keeps its colour.
+    const tag = within(region('Local')).getByRole('img', { name: 'Standing −10 Terrible' });
+    expect(tag.textContent).toBe('−');
+    expect(tag.style.background).toBe('var(--dbk-standing-terrible)');
+    expect(within(region('Local')).getByText('Hostile Guy').getAttribute('style')).toBeNull();
   });
 
   it('Kills lists the killmails only, with choices for the list', async () => {
@@ -877,6 +879,31 @@ describe('the widgets', () => {
     expect(holder.closest('p')!.getAttribute('title')).toContain('claimed by KarmaFleet [KARMA]');
     const relink = await within(info).findByRole('link', { name: 'Link your characters again' });
     expect(relink.getAttribute('href')).toContain('/api/auth/eve/login');
+    // A neutral holder has no tag.
+    expect(within(holder).queryByRole('img')).toBeNull();
+  });
+
+  it("System info tags one's own alliance +10 dark blue with no contacts loaded", async () => {
+    const held = activityFixture();
+    held.intel.sovereignty = {
+      kind: 'alliance',
+      holder: { id: 1354830081, name: 'Goonswarm Federation', ticker: 'CONDI' },
+      corporation: null,
+    };
+    const mine = meFixture();
+    mine.characters[0]!.allianceId = 1354830081;
+    server.use(
+      http.get(routes.intel.system.path, () => HttpResponse.json(held)),
+      http.get(routes.accounts.me.path, () => HttpResponse.json(mine)),
+      // The contacts read never answers: one's own alliance comes from one's own characters.
+      http.get(routes.intel.standings.path, () => new Promise<never>(() => {})),
+    );
+    wrap(<Widgets state={{}} />);
+    const info = region('System info');
+    const holder = await within(info).findByRole('link', { name: /Goonswarm Federation/ });
+    const tag = await within(holder).findByRole('img', { name: 'Standing +10 Excellent' });
+    expect(tag.textContent).toBe('+');
+    expect(tag.style.background).toBe('var(--dbk-standing-excellent)');
   });
 });
 

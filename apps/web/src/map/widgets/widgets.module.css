@@ -881,6 +881,11 @@
   min-width: 0;
 }
 
+/* The standing tag before the name: the row's gap spaces it. */
+.pilotText > [data-standing] {
+  margin-right: 0;
+}
+
 .pilotGroup {
   flex: 0 100 auto;
   min-width: 0;
