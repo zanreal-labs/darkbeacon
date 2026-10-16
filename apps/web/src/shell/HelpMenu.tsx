@@ -28,7 +28,7 @@ import {
   type SupportKind,
 } from '../lib/support';
 import { browserOptedOut, track } from '../lib/telemetry';
-import { useInstallApp } from '../pwa/InstallApp';
+import { InstallRailButton, useInstallApp } from '../pwa/InstallApp';
 import { openWormholeReference } from '../reference/open';
 import { useTheme } from '../theme/ThemeProvider';
 import {
@@ -181,6 +181,11 @@ export function HelpMenu({ placement = 'rail' }: { placement?: 'rail' | 'topbar'
   const label = unread > 0 ? `Help, ${unread} unread ${unread === 1 ? 'reply' : 'replies'}` : 'Help';
   return (
     <>
+      {/* The install sits right above Help in the rail (its one-time toast shows on phones too,
+          where the rail is hidden). */}
+      {placement === 'rail' && (
+        <InstallRailButton className={styles.railLink} dotClassName={styles.railDot} />
+      )}
       <Menu>
         <span className={placement === 'rail' ? styles.railHelp : styles.topbarHelp}>
           {placement === 'rail' ? (
