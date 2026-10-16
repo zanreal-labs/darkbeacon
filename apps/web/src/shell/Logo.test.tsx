@@ -31,7 +31,7 @@ describe('LogoMark', () => {
   });
 
   it('matches the static icons built by tools/icons', () => {
-    for (const file of ['favicon.svg', 'icons/mark.svg']) {
+    for (const file of ['favicon.svg', 'icons/mark.svg', 'offline.html']) {
       const svg = publicFile(file);
       expect(svg).toContain(`d="${beamPath()}"`);
       expect(svg).toContain(`d="${beamPath(MARK.gap)}"`);

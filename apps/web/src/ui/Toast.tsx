@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import { Toast as T } from 'radix-ui';
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react';
-import { IconButton } from './Button';
+import { Button, IconButton } from './Button';
 import styles from './overlay.module.css';
 
 export type ToastTone = 'info' | 'success' | 'warning' | 'danger';
@@ -12,8 +12,10 @@ export interface ToastInput {
   title: ReactNode;
   description?: ReactNode;
   tone?: ToastTone;
-  /** Milliseconds; errors stay longer by default. */
+  /** Milliseconds; errors stay longer by default. `Infinity` stays until closed. */
   duration?: number;
+  /** One button under the text (e.g. Reload); pressing it closes the toast. */
+  action?: { label: string; onClick(): void };
 }
 
 interface ToastItem extends ToastInput {
@@ -65,6 +67,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               </T.Close>
               {t.description && (
                 <T.Description className={styles.toastDescription}>{t.description}</T.Description>
+              )}
+              {t.action && (
+                <T.Action className={styles.toastAction} altText={t.action.label} asChild>
+                  <Button size="sm" variant="primary" onClick={t.action.onClick}>
+                    {t.action.label}
+                  </Button>
+                </T.Action>
               )}
             </T.Root>
           );

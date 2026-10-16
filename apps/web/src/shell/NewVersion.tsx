@@ -5,6 +5,7 @@ import { RefreshCw, Sparkles } from 'lucide-react';
 import { routes, type HealthDto } from '@darkbeacon/shared';
 import { api } from '../lib/api';
 import { useConnectionStatus } from '../lib/RealtimeProvider';
+import { reloadForUpdate } from '../pwa/update';
 import { Button } from '../ui';
 import styles from './StatusBits.module.css';
 
@@ -57,7 +58,7 @@ export function NewVersion() {
     const events = ['pointerdown', 'keydown', 'wheel'] as const;
     for (const e of events) window.addEventListener(e, touched, { passive: true });
     const timer = setInterval(() => {
-      if (Date.now() - lastInput.current >= IDLE_RELOAD_MS) window.location.reload();
+      if (Date.now() - lastInput.current >= IDLE_RELOAD_MS) void reloadForUpdate();
     }, 60_000);
     return () => {
       for (const e of events) window.removeEventListener(e, touched);
@@ -77,7 +78,8 @@ export function NewVersion() {
       <Button size="sm" variant="ghost" asChild>
         <a href="/changelog">What&apos;s new</a>
       </Button>
-      <Button size="sm" variant="primary" icon={<RefreshCw />} onClick={() => window.location.reload()}>
+      {/* Through the new service worker too, when one is waiting. */}
+      <Button size="sm" variant="primary" icon={<RefreshCw />} onClick={() => void reloadForUpdate()}>
         Reload
       </Button>
     </div>

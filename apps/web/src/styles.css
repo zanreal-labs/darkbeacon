@@ -33,6 +33,14 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* The installed app (its own window): no pull-to-refresh or rubber band while panning the map. */
+@media (display-mode: standalone) {
+  html,
+  body {
+    overscroll-behavior: none;
+  }
+}
+
 ::selection {
   background: var(--dbk-color-accent-subtle);
 }

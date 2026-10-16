@@ -230,7 +230,7 @@
   gap: var(--dbk-space-2);
   width: min(100vw, 380px);
   margin: 0;
-  padding: var(--dbk-space-4);
+  padding: var(--dbk-space-4) var(--dbk-space-4) calc(var(--dbk-space-4) + env(safe-area-inset-bottom, 0px));
   list-style: none;
   outline: none;
 }
@@ -286,6 +286,12 @@
 .toastDescription {
   grid-column: 2;
   color: var(--dbk-color-text-muted);
+}
+
+.toastAction {
+  grid-column: 2;
+  justify-self: start;
+  margin-top: var(--dbk-space-1);
 }
 
 .selectContent {

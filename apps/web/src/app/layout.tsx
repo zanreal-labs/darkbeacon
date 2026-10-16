@@ -2,7 +2,8 @@ import '@fontsource-variable/inter/wght.css';
 import '@fontsource-variable/jetbrains-mono/wght.css';
 import '../styles.css';
 import type { Metadata, Viewport } from 'next';
-import type { ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
+import { PwaSlot } from '../pwa/PwaSlot';
 import { themeHeadScript, themeStyles } from '../theme/head';
 import { Providers } from './providers';
 
@@ -22,6 +23,9 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  // Edge to edge on phones (notches, the installed app's status bar); the shell keeps clear of
+  // the safe areas.
+  viewportFit: 'cover',
   colorScheme: 'light dark',
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#f7f8fa' },
@@ -42,7 +46,13 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: themeHeadScript }} />
       </head>
       <body>
-        <Providers>{children}</Providers>
+        <Providers>
+          {children}
+          {/* The app install (manifest, service worker); `PWA=off` is read per request. */}
+          <Suspense fallback={null}>
+            <PwaSlot />
+          </Suspense>
+        </Providers>
       </body>
     </html>
   );

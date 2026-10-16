@@ -1,0 +1,20 @@
+/* The install steps dialog (Safari). */
+
+.steps {
+  display: grid;
+  gap: var(--dbk-space-2);
+  margin: 0;
+  padding-left: 1.4em;
+}
+
+.steps li::marker {
+  color: var(--dbk-color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.inlineIcon {
+  width: 15px;
+  height: 15px;
+  vertical-align: -2px;
+  color: var(--dbk-color-accent-text);
+}
