@@ -8,6 +8,7 @@ import {
   lifetimeText,
   nextSort,
   referenceRows,
+  sizeHint,
   sizeLegend,
   sortRows,
   tonnes,
@@ -136,6 +137,25 @@ describe('the size legend', () => {
       { size: 'xlarge', maxJumpMass: 1_000_000_000, adds: ['freighter'] },
       { size: 'capital', maxJumpMass: 2_000_000_000, adds: ['capital'] },
     ]);
+  });
+
+  it('names sizes as the game does, with the hulls only in the hint', () => {
+    const h296 = rows.find((r) => r.code === 'H296')!;
+    expect(sizeHint(h296.size!, h296.maxJumpMass, h296.fits)).toEqual({
+      name: 'Extra large (capital-mass)',
+      mass: '≤ 2 000 000 t per jump',
+      fits: 'Frigates, Destroyers, Cruisers, Battlecruisers, Industrials, Battleships, Orca / Porpoise, Freighters, Capitals',
+    });
+    const e004 = rows.find((r) => r.code === 'E004')!;
+    expect(sizeHint(e004.size!, e004.maxJumpMass, e004.fits)).toEqual({
+      name: 'Small',
+      mass: '≤ 5 000 t per jump',
+      fits: 'Frigates, Destroyers',
+    });
+    // The game's size word finds a type too.
+    const extraLarge = filterRows(rows, { ...DEFAULT_FILTER, query: 'extra large' });
+    expect(extraLarge.length).toBeGreaterThan(0);
+    expect(extraLarge.every((r) => r.size === 'xlarge' || r.size === 'capital')).toBe(true);
   });
 
   it('writes masses as whole tonnes', () => {

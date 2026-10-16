@@ -54,6 +54,54 @@ export const DEFAULT_SORT: ReferenceSort = { key: 'code', dir: 'asc' };
 /** Ship sizes smallest first, as the map's connections letter them. */
 export const SHIP_SIZES: readonly ShipSize[] = ShipSize.options;
 
+/** Hull classes lightest first, as `HULL_CLASS_LABEL` lists them. */
+const HULL_ORDER = Object.keys(HULL_CLASS_LABEL) as HullClass[];
+
+/**
+ * Each size as the game names it: the "Maximum Ship Size" line of a wormhole's Show Info, which has
+ * four values, Small, Medium, Large and Extra large ("Very large" in older clients). The game calls
+ * both the 1 000 000 t (freighter) and the 2 000 000 t (capital) holes Extra large; the map's
+ * letters tell them apart (XL, C).
+ * Sources: EVE University, https://wiki.eveuniversity.org/Wormholes ("Wormhole text", "Maximum Ship
+ * Size", with its Show Info screenshot "Maximum Ship Size: Large"), and Jambe's Wormhole Primer,
+ * https://jambeeno.com/hole (the Maximum Ship Size table: Small 5 000 t, Medium 20 000 / 62 000 t,
+ * Large 375 000 / 410 000 t, Extra large 1 000 000 / 2 000 000 t).
+ */
+export const MAX_SHIP_SIZE_NAME: Record<ShipSize, string> = {
+  small: 'Small',
+  medium: 'Medium',
+  large: 'Large',
+  xlarge: 'Extra large',
+  capital: 'Extra large',
+};
+
+/** What the map's letter adds to the game's name, where two letters share one: "freighters". */
+export const SIZE_NOTE: Partial<Record<ShipSize, string>> = {
+  xlarge: 'freighter-mass',
+  capital: 'capital-mass',
+};
+
+/**
+ * A size's tooltip lines: the game's name, the jump mass and the hulls that fit. "Extra large
+ * (capital-mass)", "≤ 2 000 000 t per jump", "Fits: Frigates, …, Capitals".
+ */
+export function sizeHint(
+  size: ShipSize,
+  maxJumpMass: number | null,
+  fits: readonly HullClass[],
+): { name: string; mass: string | null; fits: string | null } {
+  const note = SIZE_NOTE[size];
+  return {
+    name: `${MAX_SHIP_SIZE_NAME[size]}${note ? ` (${note})` : ''}`,
+    mass: maxJumpMass === null ? null : `≤ ${tonnes(maxJumpMass)} per jump`,
+    fits: fits.length
+      ? HULL_ORDER.filter((h) => fits.includes(h))
+          .map((h) => HULL_CLASS_LABEL[h])
+          .join(', ')
+      : null,
+  };
+}
+
 /** The order classes are listed in: C1-C6, high, low, null, then the special places. */
 const DESTINATIONS: readonly WormholeDestination[] = WormholeDestination.options;
 const AREAS: readonly string[] = [...DESTINATIONS, 'c4-shattered', 'c5-shattered', 'c6-shattered', 'jove'];
@@ -95,6 +143,7 @@ function searchText(row: ReferenceRow): string {
     row.destination ? WORMHOLE_DESTINATION_LABEL[row.destination] : '',
     ...row.spawnsIn.flatMap((a) => [a, areaLabel(a)]),
     ...row.respawn,
+    row.size ? MAX_SHIP_SIZE_NAME[row.size] : '',
     row.lifetimeHours !== null ? `${row.lifetimeHours}h` : '',
     row.totalMass !== null ? String(row.totalMass / 1000) : '',
     row.maxJumpMass !== null ? String(row.maxJumpMass / 1000) : '',
@@ -189,14 +238,13 @@ export interface SizeLegendEntry {
  * classes whose heaviest published hull is under its jump mass). Sizes no type has are left out.
  */
 export function sizeLegend(types: readonly WormholeTypeDto[]): SizeLegendEntry[] {
-  const order = Object.keys(HULL_CLASS_LABEL) as HullClass[];
   const entries: SizeLegendEntry[] = [];
   let before = new Set<HullClass>();
   for (const size of SHIP_SIZES) {
     const ofSize = types.filter((t) => t.shipSize === size && t.maxJumpMass !== null);
     if (ofSize.length === 0) continue;
     const fits = new Set(ofSize.flatMap((t) => t.fits));
-    const sorted = order.filter((h) => fits.has(h));
+    const sorted = HULL_ORDER.filter((h) => fits.has(h));
     entries.push({
       size,
       maxJumpMass: Math.max(...ofSize.map((t) => t.maxJumpMass!)),
