@@ -283,7 +283,7 @@ describe('SystemNode', () => {
     const exit = renderNode({
       info: nullSec,
       system: systemFixture(30004759),
-      hub: { name: 'Dodixie', jumps: 7, space: 'mixed' },
+      hub: { name: 'Dodixie', jumps: 7, space: 'mixed', rules: 'viewer' },
       intel: intel({
         sovereignty: {
           kind: 'alliance',
