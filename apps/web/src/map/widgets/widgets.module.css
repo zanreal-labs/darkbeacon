@@ -380,6 +380,7 @@
 /* ---- Signatures ---- */
 
 .signatures {
+  container: signatures / inline-size;
   margin: 0 calc(-1 * var(--widget-pad, 16px));
 }
 
@@ -536,10 +537,6 @@
   font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
-}
-
-.table tr[data-group='wormhole'] .sigId {
-  color: var(--dbk-color-accent-text);
 }
 
 .age {

@@ -1,0 +1,136 @@
+import type { CSSProperties } from 'react';
+import type { SignatureDto, SignatureGroup } from '@darkbeacon/shared';
+import styles from './signatures.module.css';
+
+/*
+ * Scan results as the game shows them.
+ *
+ * Signal strength. The probe scanner colours a result's scan progress in four bands (CCP, "The
+ * future of probe and directional scanning UI", 2017-02-13, shipped in 119.3):
+ *   0 % to 24.9 % red, 25 % to 74.9 % orange, 75 % to 99.9 % yellow, 100 % and warpable green.
+ *   https://www.eveonline.com/article/the-future-of-probe-and-directional-scanning-ui
+ *   https://www.eveonline.com/article/patch-notes-for-yc119.3-release
+ * The group shows from 25 %, the name from 75 %, the site is warpable at 100 %:
+ *   https://wiki.eveuniversity.org/Cosmic_signature
+ *
+ * Signatures and anomalies. Anomalies are at 100 % from the first sweep and need no probes;
+ * signatures start at 0 % and are probed down (https://wiki.eveuniversity.org/Odyssey). In space
+ * "the anomalies appear as green diamonds", "the signatures are red and have animated circles
+ * around them" (CCP, "Sensor overlay changes in EVE Odyssey", 2013-06-03):
+ *   https://www.eveonline.com/news/view/sensor-overlay-changes-in-eve-odyssey
+ * On the solar system map green dots are what you can warp to, red ones signatures still being
+ * scanned (https://wiki.eveuniversity.org/Exploration).
+ *
+ * Groups. 119.3 "added icons for each type of exploration site to the Probe Scanner window and
+ * solar system map"; none of these sources gives the groups colours, and the game has none: a
+ * wormhole and a data site scanned to 100 % are the same green. So the group is told by its icon
+ * (ours, drawn after the game's: a vortex, a reticle, a chip, a ruin, a cloud, a rock), the colour
+ * says how far it was scanned, and the outline what it is (circle: signature, diamond: anomaly).
+ *
+ * Hex. The sources name the colours but give no values; these are the client's hues as close as
+ * we could match them, fixed in every theme like SECURITY_COLORS. On light themes the game's
+ * orange, yellow and green are unreadable on white (2.5, 1.5 and 2.0 : 1), so a darker variant of
+ * each (and of the red) is used there; all are at least 4.5 : 1 on their surfaces.
+ */
+
+export type ScanColor = 'red' | 'orange' | 'yellow' | 'green';
+
+export const SCAN_COLORS: Readonly<Record<ScanColor, { game: string; light: string }>> = {
+  red: { game: '#f04a3a', light: '#c22a1c' },
+  orange: { game: '#f08a24', light: '#a85a00' },
+  yellow: { game: '#e8d23a', light: '#7d6c00' },
+  green: { game: '#4fd04a', light: '#17802a' },
+};
+
+/** The colours as custom properties (`--scan-red`, ...), the game's on dark themes. */
+export const SCAN_COLOR_VARS = Object.fromEntries(
+  Object.entries(SCAN_COLORS).map(([name, c]) => [`--scan-${name}`, `light-dark(${c.light}, ${c.game})`]),
+) as CSSProperties;
+
+/** The probe scanner's colour for a signal strength in percent. */
+export function strengthColor(percent: number): ScanColor {
+  if (percent >= 100) return 'green';
+  if (percent >= 75) return 'yellow';
+  if (percent >= 25) return 'orange';
+  return 'red';
+}
+
+/**
+ * How far a result was scanned, from what is known of it (the strength itself is not kept): an
+ * anomaly is always at 100 %; a signature without a group is under 25 %, with a group but no name
+ * (nor a type or a link, for a hole) under 75 %, and with one, scanned down. Other results (ships,
+ * structures) have no scan state here.
+ */
+export function scanStrength(
+  sig: Pick<SignatureDto, 'kind' | 'group' | 'name' | 'type' | 'connectionId'>,
+): number | null {
+  const kind = sig.kind ?? 'signature';
+  if (kind === 'other') return null;
+  if (kind === 'anomaly') return 100;
+  if (sig.group === 'unknown') return 0;
+  const known = sig.name || (sig.group === 'wormhole' && (sig.type || sig.connectionId));
+  return known ? 100 : 25;
+}
+
+export function scanColor(sig: Parameters<typeof scanStrength>[0]): ScanColor | null {
+  const strength = scanStrength(sig);
+  return strength === null ? null : strengthColor(strength);
+}
+
+/** "Cosmic signature, not scanned yet" and the like, for the group cell's title. */
+export function scanTitle(sig: Parameters<typeof scanStrength>[0]): string | undefined {
+  const kind = sig.kind ?? 'signature';
+  if (kind === 'other') return undefined;
+  if (kind === 'anomaly') return 'Cosmic anomaly: no probing needed';
+  const strength = scanStrength(sig)!;
+  if (strength < 25) return 'Cosmic signature: not scanned yet (under 25 %)';
+  if (strength < 100) return 'Cosmic signature: group known, not scanned down (under 75 %)';
+  return 'Cosmic signature: scanned down';
+}
+
+/** The glyph inside the outline, per group; an unknown result has none yet (the game's icons show from 25 %). */
+const GLYPH: Record<SignatureGroup, string | null> = {
+  unknown: null,
+  // A vortex.
+  wormhole: 'M8.9 8a.9.9 0 1 1-.9-.9A1.9 1.9 0 0 1 9.9 9 2.9 2.9 0 0 1 7 11.9 3.2 3.2 0 0 1 4.8 6.6',
+  // A reticle.
+  combat: 'M8 4.6v1.9M8 9.5v1.9M4.6 8h1.9M9.5 8h1.9M8 8h0',
+  // A chip with pins.
+  data: 'M6 6h4v4H6zM7 4.8v1.2M9 4.8v1.2M7 10v1.2M9 10v1.2',
+  // A ruined temple.
+  relic: 'M5.2 11h5.6M6.2 11V7.4M8 11V7.4M9.8 11V7.4M5.2 7.4 8 5.2l2.8 2.2z',
+  // A cloud.
+  gas: 'M6 10.6h4.3a1.5 1.5 0 0 0 .2-3 2.1 2.1 0 0 0-4-.1 1.6 1.6 0 0 0-.5 3.1z',
+  // A rock.
+  ore: 'M5.2 9.6 6 6.6l2.6-1.3 2.3 1.7-.4 3.2-3 1.3z',
+};
+
+/**
+ * The result's mark: the group's icon in a circle (a signature) or a diamond (an anomaly), in
+ * the colour of how far it was scanned (`--scan`, set on the row). Nothing for other results.
+ */
+export function ScanMark({
+  signature,
+}: {
+  signature: Pick<SignatureDto, 'kind' | 'group' | 'name' | 'type' | 'connectionId'>;
+}) {
+  const kind = signature.kind ?? 'signature';
+  if (kind === 'other') return null;
+  const glyph = GLYPH[signature.group];
+  return (
+    <svg
+      className={styles.mark}
+      viewBox="0 0 16 16"
+      aria-hidden
+      data-kind={kind}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.3}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {kind === 'anomaly' ? <path d="M8 1.3 14.7 8 8 14.7 1.3 8z" /> : <circle cx={8} cy={8} r={6.6} />}
+      {glyph ? <path d={glyph} /> : <circle cx={8} cy={8} r={1} fill="currentColor" stroke="none" />}
+    </svg>
+  );
+}

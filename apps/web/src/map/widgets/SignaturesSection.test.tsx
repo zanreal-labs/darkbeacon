@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import type { ReactElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw/http';
 import { buildPath, routes, type ConnectionDto, type SignatureDto } from '@darkbeacon/shared';
@@ -181,6 +181,34 @@ describe('SignaturesSection', () => {
       title: '3 new / 1 updated',
       description: undefined,
     });
+  });
+
+  it('marks each row with its scan state in the game colours, neutral when colour is off', async () => {
+    const { container } = render(
+      <Section
+        signatures={[
+          signatureFixture('s1', SYSTEM, 'AAA-100'),
+          signatureFixture('s2', SYSTEM, 'BBB-200', { group: 'gas' }),
+          signatureFixture('s3', SYSTEM, 'CCC-300', { group: 'wormhole', type: 'D845' }),
+          signatureFixture('s4', SYSTEM, 'DDD-400', { kind: 'anomaly', group: 'combat', name: 'Solar Cell' }),
+        ]}
+      />,
+    );
+    const root = container.querySelector<HTMLElement>('[data-signatures]')!;
+    expect(root.style.getPropertyValue('--scan-red')).toMatch(/^light-dark\(#[0-9a-f]{6}, #[0-9a-f]{6}\)$/);
+    const row = (id: string) => screen.getByText(id).closest('tr')!;
+    expect(row('AAA-100').dataset).toMatchObject({ kind: 'signature', scan: 'red' });
+    expect(row('BBB-200').dataset).toMatchObject({ kind: 'signature', scan: 'orange' });
+    expect(row('CCC-300').dataset).toMatchObject({ kind: 'signature', scan: 'green' });
+    expect(row('CCC-300').querySelector('svg[data-kind="signature"]')).toBeTruthy();
+    expect(row('AAA-100').querySelector('td[data-group]')?.getAttribute('title')).toMatch(/not scanned yet/);
+    await userEvent.click(screen.getByRole('button', { name: /Anomalies and other results/ }));
+    expect(row('DDD-400').dataset).toMatchObject({ kind: 'anomaly', scan: 'green' });
+    expect(row('DDD-400').querySelector('svg[data-kind="anomaly"]')).toBeTruthy();
+    expect(root.dataset.color).toBe('true');
+    act(() => setSignaturePrefs({ colorByGroup: false }));
+    expect(root.dataset.color).toBeUndefined();
+    setSignaturePrefs(DEFAULT_SIGNATURE_PREFS);
   });
 
   it('folds anomalies and other scanner results away, filterable, and marks custom entries', async () => {

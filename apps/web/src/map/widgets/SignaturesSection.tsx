@@ -43,6 +43,7 @@ import { TypeLabel } from '../signatures/catalog';
 import { TypeReferenceButton } from '../../reference/WormholeReferenceHost';
 import { ageLabel, freshness, GROUP_LABEL, targetOf, visibleSignatures } from '../signatures/facts';
 import { OtherFilters } from '../signatures/FilterChips';
+import { SCAN_COLOR_VARS, ScanMark, scanColor, scanTitle } from '../signatures/scan';
 import { LeadsToMenu } from '../signatures/LeadsToMenu';
 import { announceLink } from '../signatures/onLink';
 import {
@@ -398,6 +399,8 @@ export function SignaturesSection({
             <tr
               key={s.id}
               data-group={s.group}
+              data-kind={s.kind ?? 'signature'}
+              data-scan={scanColor(s) ?? undefined}
               data-selected={isSelected || undefined}
               data-bubbled={s.bubbled || undefined}
               aria-selected={can.edit ? isSelected : undefined}
@@ -416,8 +419,15 @@ export function SignaturesSection({
               <td className={`${styles.sigId} ${sig.id}`} title={s.eveId}>
                 {s.eveId}
               </td>
-              <td className={sig.group} data-group={s.group}>
-                {GROUP_LABEL[s.group]}
+              <td
+                className={sig.group}
+                data-group={s.group}
+                title={[GROUP_LABEL[s.group], scanTitle(s)].filter(Boolean).join(' · ')}
+              >
+                <span className={sig.groupLabel}>
+                  <ScanMark signature={s} />
+                  <span className={sig.groupText}>{GROUP_LABEL[s.group]}</span>
+                </span>
               </td>
               <td>
                 <span className={sig.info}>
@@ -577,6 +587,7 @@ export function SignaturesSection({
       tabIndex={-1}
       onKeyDown={onKeyDown}
       data-color={prefs.colorByGroup || undefined}
+      style={SCAN_COLOR_VARS}
     >
       {can.edit && (pasteField === 'always' || signatures.length === 0) && (
         <div className={styles.pasteRow}>

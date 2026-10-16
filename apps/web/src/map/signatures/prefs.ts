@@ -22,7 +22,7 @@ export interface SignaturePrefs {
   /** Kinds of scan results shown (signatures, anomalies, the rest); missing: shown. */
   kinds: Partial<Record<SignatureKind, boolean>>;
   sort: { field: SignatureSortField; dir: 'asc' | 'desc' };
-  /** Rows tinted by group (wormholes, sites, unknown). */
+  /** Ids and group icons in the game's signal colours (how far each result was scanned); off: neutral. */
   colorByGroup: boolean;
   /** "Remove missing" starts on when a system is opened. */
   lazyDelete: boolean;
