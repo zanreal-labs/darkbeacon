@@ -24,13 +24,13 @@ export const COLORS = {
   /** edge-mass-critical */
   critical: 0xff4040,
   /** status-hostile */
-  danger: 0xd26060,
+  danger: 0x940604,
   /** status-occupied */
-  kill: 0xb58157,
+  kill: 0xc99a3a,
   /** status-warning */
-  ping: 0xc4a64a,
+  ping: 0xc44604,
   /** status-friendly */
-  arrival: 0x5e9e7d,
+  arrival: 0x2c66c4,
 } as const;
 
 export interface Embed {
