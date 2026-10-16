@@ -1,0 +1,44 @@
+---
+import Logo from './Logo.astro';
+import { APP_URL, REPO_URL } from '../config';
+import { arrow, github } from './icons';
+
+// Absolute anchors so the same bar works on every page.
+const links = [
+  { href: '/#scan', label: 'Features' },
+  { href: '/#wanderer', label: 'From Wanderer' },
+  { href: '/#self-host', label: 'Self-host' },
+  { href: '/#roadmap', label: 'Roadmap' },
+  { href: '/sponsor', label: 'Sponsor' },
+];
+const current = Astro.url.pathname.replace(/\/$/, '') || '/';
+---
+
+<header class="nav">
+  <div class="nav-inner container">
+    <div class="nav-brand">
+      <a class="brand" href="/" aria-label="Darkbeacon home">
+        <Logo size={24} />
+        <span>Darkbeacon</span>
+      </a>
+      <a class="beta" href="/#beta" title="What Beta means here">Beta</a>
+    </div>
+    <nav class="nav-links" aria-label="Site">
+      {links.map((l) => <a href={l.href} aria-current={l.href === current ? 'page' : undefined}>{l.label}</a>)}
+    </nav>
+    <div class="nav-actions">
+      <a class="btn btn--ghost btn--sm nav-github" href={REPO_URL} aria-label="Darkbeacon on GitHub"><Fragment set:html={github} /><span>GitHub</span></a>
+      <a class="btn btn--primary btn--sm" href={APP_URL} data-warp><span class="warp-label">Open app</span><Fragment set:html={arrow} /></a>
+    </div>
+  </div>
+</header>
+
+<script>
+  // Transparent over the top of the page; a dark glass bar once the page has scrolled.
+  const nav = document.querySelector<HTMLElement>('.nav');
+  if (nav) {
+    const update = () => nav.toggleAttribute('data-scrolled', window.scrollY > 8);
+    addEventListener('scroll', update, { passive: true });
+    update();
+  }
+</script>

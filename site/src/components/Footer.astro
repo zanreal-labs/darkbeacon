@@ -1,0 +1,45 @@
+---
+import Logo from './Logo.astro';
+import { APP_URL, COMPANY_URL, ISSUES_URL, REPO_URL, SELF_HOST_URL } from '../config';
+import { arrow } from './icons';
+---
+
+<footer class="footer">
+  <div class="container footer-inner">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <a class="brand" href="/" aria-label="Darkbeacon home"><Logo size={22} /><span>Darkbeacon</span></a>
+        <p>The live wormhole mapper for EVE Online. Beta.</p>
+        <a class="btn btn--primary btn--sm" href={APP_URL} data-warp><span class="warp-label">Open app</span><Fragment set:html={arrow} /></a>
+      </div>
+      <nav class="footer-links" aria-label="Footer">
+        <div>
+          <p>Product</p>
+          <a href="/#scan">Features</a>
+          <a href="/#wanderer">Coming from Wanderer</a>
+          <a href="/#roadmap">Roadmap</a>
+        </div>
+        <div>
+          <p>Run it</p>
+          <a href={SELF_HOST_URL}>Self-host</a>
+          <a href={REPO_URL}>Source on GitHub</a>
+          <a href={ISSUES_URL}>Report a problem</a>
+        </div>
+        <div>
+          <p>Project</p>
+          <a href="/sponsor">Sponsor with ISK</a>
+          <a href={COMPANY_URL} rel="author">ZanReal</a>
+        </div>
+      </nav>
+    </div>
+    <div class="footer-bottom">
+      <p>
+        Made by <a href={COMPANY_URL} rel="author">ZanReal</a>, in game <span class="mono">Z4NR34L</span>.
+      </p>
+      <p class="ccp">
+        EVE Online and all related logos and designs are trademarks or registered trademarks of CCP ehf. Darkbeacon is not
+        affiliated with or endorsed by CCP.
+      </p>
+    </div>
+  </div>
+</footer>

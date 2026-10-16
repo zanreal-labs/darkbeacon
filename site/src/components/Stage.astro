@@ -1,0 +1,51 @@
+---
+/**
+ * A GPU stage: one canvas the runtime draws a scene into, over a still pre-rendered from the
+ * same scene. The still is what a browser without WebGPU shows (with the scene's loop where it
+ * has one), and what any stage falls back to if its device gives up. Decorative throughout: the
+ * section's text says everything the picture does, so the stage is hidden from assistive tech.
+ *
+ * Sized entirely by CSS from the outside, so nothing here can shift the layout when the canvas
+ * arrives or does not.
+ */
+interface Props {
+  scene: 'beacon' | 'transit' | 'probes' | 'chain' | 'jump';
+  /** Base path of the still, without extension: `/media/<name>` serves `-1600.avif/.webp` etc. */
+  still: string;
+  /** Widths the still is published at. */
+  widths?: number[];
+  /** Base path of a still composed for narrow screens, published at `mobileWidths`. */
+  mobileStill?: string;
+  mobileWidths?: number[];
+  /** Base path of a loop (`.webm` and `.mp4`) shown without WebGPU. */
+  loop?: string;
+  mood?: string;
+  class?: string;
+  sizes?: string;
+  eager?: boolean;
+}
+
+const { scene, still, widths = [960, 1920], mobileStill, mobileWidths = [480, 900], loop, mood, class: className, sizes = '100vw', eager = false } = Astro.props;
+const set = (base: string, list: number[], ext: string) => list.map((w) => `${base}-${w}.${ext} ${w}w`).join(', ');
+const srcset = (ext: string) => set(still, widths, ext);
+const narrow = '(max-width: 899px)';
+---
+
+<div class:list={['stage', `stage--${scene}`, className]} data-stage={scene} data-state="idle" data-mood={mood} data-loop={loop} aria-hidden="true">
+  <picture class="stage-still">
+    {mobileStill && <source media={narrow} type="image/avif" srcset={set(mobileStill, mobileWidths, 'avif')} sizes="100vw" />}
+    {mobileStill && <source media={narrow} type="image/webp" srcset={set(mobileStill, mobileWidths, 'webp')} sizes="100vw" />}
+    <source type="image/avif" srcset={srcset('avif')} sizes={sizes} />
+    <img
+      src={`${still}-${widths[widths.length - 1]}.webp`}
+      srcset={srcset('webp')}
+      sizes={sizes}
+      alt=""
+      loading={eager ? 'eager' : 'lazy'}
+      decoding="async"
+      fetchpriority={eager ? 'auto' : 'low'}
+    />
+  </picture>
+  <canvas class="stage-canvas"></canvas>
+  <slot />
+</div>
