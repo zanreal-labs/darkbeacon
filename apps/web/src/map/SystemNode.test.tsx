@@ -135,11 +135,19 @@ describe('SystemNode', () => {
   });
 
   it('shows the nearest hub under an exit, with a square only for one kind of space', () => {
-    const { container, unmount } = renderNode({ hub: { name: 'Jita', jumps: 4, space: 'high' } });
+    const { container, unmount } = renderNode({
+      hub: { name: 'Jita', jumps: 4, space: 'high', rules: 'viewer' },
+    });
     expect(screen.getByText('Jita 4j')).toBeTruthy();
-    expect(container.querySelector('[data-space="high"]')).toBeTruthy();
+    // The square is the game's own 0.8 green, no theme's.
+    expect((container.querySelector('[data-space="high"]') as HTMLElement).style.background).toBe(
+      'rgb(0, 239, 71)',
+    );
+    expect(screen.getByText('Jita 4j').getAttribute('title')).toMatch(
+      /^Nearest hub: Jita, 4 jumps from .+, all in high-sec; with your route options/,
+    );
     unmount();
-    const mixed = renderNode({ hub: { name: 'Amarr', jumps: 9, space: 'mixed' } });
+    const mixed = renderNode({ hub: { name: 'Amarr', jumps: 9, space: 'mixed', rules: 'viewer' } });
     expect(screen.getByText('Amarr 9j')).toBeTruthy();
     expect(mixed.container.querySelector('[data-space]')).toBeNull();
     mixed.unmount();

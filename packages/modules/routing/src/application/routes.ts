@@ -338,23 +338,11 @@ export class RouteQueries {
     );
   }
 
-  /** The kind of space the route from an exit to its nearest hub runs through. */
-  private async spaceOf(
-    mapId: string,
-    fromId: number,
-    hubId: number,
-    policy: RoutePolicy,
-    options: RouteOptions,
-    alliance: number | null,
-  ) {
-    const graph = await this.deps.router.graphFor(mapId, options, alliance);
-    // A search over the whole universe: one exit at a time, letting requests through between.
-    await yieldTurn();
-    const steps = graph && findRoute(graph, fromId, hubId, policy);
-    if (!graph || !steps) return 'mixed' as const;
-    return routeSpace(steps.flatMap((step) => graph.node(step.id) ?? []));
-  }
-
+  /**
+   * The chain's exits. A connected exit's hubs come from the very search the Routes widget runs
+   * from that system (`hubRoutes`: one `routesFrom` over the same graph, policy and tie-break),
+   * so the jumps on an exit's chip are the jumps the widget shows for that hub from that exit.
+   */
   private async exitsOf(
     mapId: string,
     policy: RoutePolicy,
@@ -363,7 +351,8 @@ export class RouteQueries {
     alliance: number | null,
   ): Promise<MapExitDto[]> {
     const chain = await this.deps.router.chain(mapId);
-    if (!chain) throw new NotFoundError('Map');
+    const graph = await this.deps.router.graphFor(mapId, options, alliance);
+    if (!chain || !graph) throw new NotFoundError('Map');
     const { universe } = this.deps;
     const connected: MapExitDto[] = [];
     const statics: MapExitDto[] = [];
@@ -384,8 +373,18 @@ export class RouteQueries {
         const destination = classDestination(system.whClass);
         if (destination) reached.set(from, [...(reached.get(from) ?? []), destination]);
       }
-      const distances = await this.distances(mapId, id, hubs, policy, options, alliance);
+      // A search over the whole universe: one exit at a time, letting requests through between.
+      await yieldTurn();
+      const tree = routesFrom(graph, id, policy);
+      const routes = new Map(hubs.map((hub) => [hub.solarSystemId, tree.to(hub.solarSystemId)]));
+      const distances: HubDistanceDto[] = hubs
+        .map((hub) => {
+          const steps = routes.get(hub.solarSystemId);
+          return { ...hub, jumps: steps ? steps.length - 1 : null };
+        })
+        .sort((a, b) => (a.jumps ?? Infinity) - (b.jumps ?? Infinity) || a.name.localeCompare(b.name));
       const nearest = distances.find((d) => d.jumps !== null) ?? null;
+      const nearestSteps = nearest ? routes.get(nearest.solarSystemId) : null;
       connected.push({
         kind: 'connected',
         solarSystemId: id,
@@ -398,7 +397,9 @@ export class RouteQueries {
         statics: [],
         nearest: nearest && {
           ...nearest,
-          space: await this.spaceOf(mapId, id, nearest.solarSystemId, policy, options, alliance),
+          space: nearestSteps
+            ? routeSpace(nearestSteps.flatMap((step) => graph.node(step.id) ?? []))
+            : 'mixed',
         },
         hubs: distances,
       });

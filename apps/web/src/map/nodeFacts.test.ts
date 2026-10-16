@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest';
 import type { MapExitDto, UniverseSystemDto } from '@darkbeacon/shared';
 import { contrastRatio, darkTheme, lightTheme } from '@darkbeacon/theme-sdk';
 import { DEFAULT_ZOOM, MAP_TYPE, READABLE } from './mapType';
-import { classPill, exitHubs, SECURITY_COLORS, shownSecurity } from './nodeFacts';
+import {
+  classPill,
+  exitChips,
+  exitHubs,
+  nearestHubTitle,
+  ROUTE_SPACE_COLOR,
+  SECURITY_COLORS,
+  shownSecurity,
+} from './nodeFacts';
 
 const sys = (extra: Partial<UniverseSystemDto>): UniverseSystemDto => ({
   id: 1,
@@ -77,8 +85,41 @@ describe('exit hubs', () => {
       exit({ solarSystemId: 2, nearest: { ...jita, jumps: null } }),
       exit({ solarSystemId: 3, kind: 'static', statics: [{ code: 'D845', destination: 'hs' }] }),
     ]);
-    expect([...hubs]).toEqual([[30002537, { name: 'Jita', jumps: 4, space: 'low' }]]);
+    expect([...hubs]).toEqual([[30002537, { name: 'Jita', jumps: 4, space: 'low', rules: 'viewer' }]]);
     expect(exitHubs(null).size).toBe(0);
+  });
+
+  it("shows the jumps the viewer's Routes widget shows from the exit, not the map-wide ones", () => {
+    // The report: Routes said Dodixie 19 (through a Turnur hole EVE-Scout lists), the chip under
+    // the same exit said 44 - it showed the map-wide exits, routed without EVE-Scout holes.
+    const dodixie = {
+      solarSystemId: 30002659,
+      name: 'Dodixie',
+      security: 0.87,
+      kind: 'trade' as const,
+      near: null,
+    };
+    const shared = [exit({ nearest: { ...dodixie, jumps: 44, space: 'mixed' } })];
+    const viewer = [exit({ nearest: { ...dodixie, jumps: 19, space: 'mixed' } })];
+    const chip = exitChips(viewer, shared, false).get(30002537)!;
+    expect(chip).toMatchObject({ name: 'Dodixie', jumps: 19, rules: 'viewer' });
+    expect(nearestHubTitle(chip, 'Amamake')).toBe(
+      'Nearest hub: Dodixie, 19 jumps from Amamake, through mixed space; with your route options, as the Routes widget routes from here',
+    );
+    // Until the viewer's own exits load, no chip rather than one the widget would contradict.
+    expect(exitChips(undefined, shared, false).size).toBe(0);
+    // Where they cannot be had (a public view, a failed request) the map-wide ones say what they are.
+    const fallback = exitChips(undefined, shared, true).get(30002537)!;
+    expect(fallback).toMatchObject({ jumps: 44, rules: 'shared' });
+    expect(nearestHubTitle(fallback, 'Amamake')).toMatch(/shortest way, without Thera and Turnur holes/);
+  });
+
+  it('colours the route space square in the game palette, not a theme colour', () => {
+    expect(ROUTE_SPACE_COLOR).toEqual({
+      high: SECURITY_COLORS['0.8'],
+      low: SECURITY_COLORS['0.4'],
+      null: SECURITY_COLORS['0.0'],
+    });
   });
 });
 

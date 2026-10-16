@@ -11,6 +11,7 @@ import {
   type HubDto,
   type HubRoutesDto,
   type HubsDto,
+  type MapExitsDto,
   type MapRoutingSettingsDto,
   type RouteDto,
   type RoutePreferencesDto,
@@ -34,6 +35,7 @@ export const routeKeys = {
     ['routes', mapId, 'to-hubs', from, list, params] as const,
   by: (mapId: string, from: number, kind: RoutesByKind, highsec: boolean, params: string) =>
     ['routes', mapId, 'by', from, kind, highsec, params] as const,
+  exits: (mapId: string) => ['routes', mapId, 'exits'] as const,
   settings: (mapId: string) => ['routes', mapId, 'settings'] as const,
   preferences: ['route-preferences'] as const,
   stations: (solarSystemId: number) => ['stations', solarSystemId] as const,
@@ -71,13 +73,43 @@ export function useRouteRefresh(mapId: string) {
   });
 }
 
+/**
+ * The chain's exits as this viewer's Routes widget would route from each of them: the same mode,
+ * EVE-Scout holes, bridges, skips and avoid lists (`routeParams`), so an exit's nearest-hub chip
+ * and the widget agree. Reloaded (debounced) after the same map events as the routes.
+ */
+export function useViewerExits(mapId: string, enabled = true) {
+  const client = useQueryClient();
+  const { preferences, loaded } = useRoutePreferences(enabled);
+  const params = new URLSearchParams(routeParams(preferences)).toString();
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useStream(enabled ? `map:${mapId}` : null, (message) => {
+    if (message.op !== 'event') return;
+    if (!ROUTE_EVENTS.has((message.event as TypedEvent).type)) return;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      void client.invalidateQueries({ queryKey: routeKeys.exits(mapId) });
+    }, 400);
+  });
+  return useQuery({
+    queryKey: [...routeKeys.exits(mapId), params] as const,
+    queryFn: () => api<MapExitsDto>(`${buildPath(routes.routing.exits.path, { mapId })}?${params}`),
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+    // Not before the viewer's options are known: the defaults would answer other numbers.
+    enabled: enabled && loaded,
+    retry: false,
+  });
+}
+
 /** The viewer's route options, saved on the server; changes apply at once. */
-export function useRoutePreferences() {
+export function useRoutePreferences(enabled = true) {
   const client = useQueryClient();
   const query = useQuery({
     queryKey: routeKeys.preferences,
     queryFn: () => api<RoutePreferencesDto>(routes.routing.preferences.path),
     staleTime: Infinity,
+    enabled,
   });
   const preferences = query.data ?? DEFAULT_ROUTE_PREFERENCES;
   const save = useMutation({
@@ -113,7 +145,7 @@ export function useHubRoutes(
   const params = new URLSearchParams({
     from: String(from),
     hubs: list,
-    ...routeOptionsParams(pilotSafe(preferences)),
+    ...routeParams(preferences),
   }).toString();
   return useQuery({
     queryKey: routeKeys.hubRoutes(mapId, from, list, params),
@@ -136,7 +168,7 @@ export function useRoutesBy(
     from: String(from),
     kind,
     ...(highsec ? { highsec: 'true' } : {}),
-    ...routeOptionsParams(pilotSafe(preferences)),
+    ...routeParams(preferences),
   }).toString();
   return useQuery({
     queryKey: routeKeys.by(mapId, from, kind, highsec, params),
@@ -158,7 +190,7 @@ export function useRoute(
   const params = new URLSearchParams({
     from: String(from ?? 0),
     to: String(to ?? 0),
-    ...routeOptionsParams(pilotSafe(preferences)),
+    ...routeParams(preferences),
   }).toString();
   return useQuery({
     queryKey: [...routeKeys.all(mapId), 'route', params] as const,
@@ -169,9 +201,13 @@ export function useRoute(
   });
 }
 
-/** The pilot mode needs a character; without one the shortest way is asked for. */
-function pilotSafe(p: RoutePreferencesDto): RoutePreferencesDto {
-  return p.mode === 'pilot' && p.characterId === null ? { ...p, mode: 'shortest' } : p;
+/**
+ * The query parameters of the viewer's route options, the same for every route request (the
+ * Routes widget, Routes By, the rally card, the exits' chips). The pilot mode needs a character;
+ * without one the shortest way is asked for.
+ */
+export function routeParams(p: RoutePreferencesDto): Record<string, string> {
+  return routeOptionsParams(p.mode === 'pilot' && p.characterId === null ? { ...p, mode: 'shortest' } : p);
 }
 
 export function useMapRoutingSettings(mapId: string) {

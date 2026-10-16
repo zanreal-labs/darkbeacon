@@ -42,7 +42,8 @@ import { boundsOf, fitViewport, type Point, type Rect } from './geometry';
 import { MapControls } from './MapControls';
 import { DEFAULT_ZOOM, FIT_MIN_ZOOM, mapTypeVars } from './mapType';
 import type { MapState } from './mapState';
-import { exitHubs } from './nodeFacts';
+import { exitChips } from './nodeFacts';
+import { useViewerExits } from './routes/api';
 import { SystemNode, systemDisplayName, type SystemNodeType } from './SystemNode';
 import { useBookmarkLabels } from './useBookmarkLabels';
 import { useMapPreferences } from './useMapPreferences';
@@ -233,6 +234,12 @@ export function MapCanvas({
   const intel = useMapIntel(mapId, publicToken, !readOnly || publicToken !== undefined);
   const standings = useStandings(!readOnly);
   const routeHubs = useRouteHubs(mapId, !readOnly);
+  // An exit's nearest-hub chip routes as the viewer's Routes widget does from that exit.
+  const viewerExits = useViewerExits(mapId, !readOnly);
+  const chips = useMemo(
+    () => exitChips(viewerExits.data?.exits, state.exits, readOnly || viewerExits.isError),
+    [viewerExits.data, viewerExits.isError, readOnly, state.exits],
+  );
 
   // The viewer's own character on the map: their main first, then any other one that is online.
   const myLocation = useMemo(() => {
@@ -272,7 +279,7 @@ export function MapCanvas({
     }
     for (const list of pilotsHere.values())
       list.sort((a, b) => Number(b.mine) - Number(a.mine) || a.name.localeCompare(b.name));
-    const hubs = exitHubs(state.exits);
+    const hubs = chips;
     const tagById = new Map(labels.map((l) => [l.id, l]));
     setNodes((prev) => {
       const previous = new Map(prev.map((n) => [n.id, n]));
@@ -321,7 +328,7 @@ export function MapCanvas({
     me.data,
     state.systems,
     state.characters,
-    state.exits,
+    chips,
     labels,
     systemLabels,
     universe,
