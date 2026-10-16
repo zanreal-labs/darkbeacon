@@ -8,6 +8,7 @@ import { renderWithProviders, setupMockServer } from '../test/setup';
 import { wormholeCatalogFixture } from '../test/wormholes';
 import { TooltipProvider } from '../ui';
 import { closeWormholeReference, openWormholeReference } from './open';
+import { REFERENCE_LEGEND_KEY, resetLegendCache } from './prefs';
 import {
   TypeReferenceButton,
   WormholeReferenceHost,
@@ -16,7 +17,11 @@ import {
 
 setupMockServer(http.get(routes.universe.wormholes.path, () => HttpResponse.json(wormholeCatalogFixture())));
 
-afterEach(() => act(() => closeWormholeReference()));
+afterEach(() => {
+  act(() => closeWormholeReference());
+  window.localStorage.clear();
+  resetLegendCache();
+});
 
 function view() {
   return renderWithProviders(
@@ -43,7 +48,7 @@ const shownCodes = (root: HTMLElement) =>
   [...root.querySelectorAll('tbody tr[data-code]')].map((r) => r.getAttribute('data-code'));
 
 describe('the wormhole types reference', () => {
-  it('opens from the rail with every type, its size, and the size legend', async () => {
+  it("opens from the rail with every type and its size in the game's words", async () => {
     view();
     await userEvent.click(screen.getByRole('button', { name: 'Wormhole types' }));
     const d = await dialog();
@@ -55,10 +60,51 @@ describe('the wormhole types reference', () => {
     expect(within(row).getByText('2 000 000 t')).toBeTruthy();
     expect(within(row).getByText('375 000 t')).toBeTruthy();
     expect(within(row).getByText('L')).toBeTruthy();
+    expect(within(row).getByText('Large')).toBeTruthy();
     expect(within(row).getByText('static')).toBeTruthy();
+    // One word per size, never the hulls: those are in the tooltip.
+    const small = d.querySelector('tr[data-code="E004"] [data-size-cell]') as HTMLElement;
+    expect(small.textContent).toBe('SSmall');
+    const capital = d.querySelector('tr[data-code="H296"] [data-size-cell]') as HTMLElement;
+    expect(capital.textContent).toBe('CExtra large');
+    // The size legend is off until turned on.
+    expect(d.querySelector('dl[aria-label="Ship sizes"]')).toBeNull();
+  });
+
+  it("shows the hulls that fit in a size's tooltip", async () => {
+    view();
+    act(() => openWormholeReference());
+    const d = await dialog();
+    await waitFor(() => expect(d.querySelector('tr[data-code="C247"]')).toBeTruthy());
+    await userEvent.hover(d.querySelector('tr[data-code="C247"] [data-size-cell]') as HTMLElement);
+    const tip = await screen.findByRole('tooltip', {}, { timeout: 2000 });
+    expect(tip.textContent).toContain('Max ship size: Large');
+    expect(tip.textContent).toContain('≤ 375 000 t per jump');
+    expect(tip.textContent).toContain('Battleships');
+    expect(tip.textContent).not.toContain('Freighters');
+  });
+
+  it('shows the size legend at the bottom when turned on, and remembers it', async () => {
+    view();
+    act(() => openWormholeReference());
+    const d = await dialog();
+    await waitFor(() => expect(shownCodes(d).length).toBeGreaterThan(0));
+    await userEvent.click(within(d).getByRole('switch', { name: 'Size legend' }));
     const legend = d.querySelector('dl[aria-label="Ship sizes"]') as HTMLElement;
-    expect(within(legend).getByText('up to Cruisers, Battlecruisers, Industrials')).toBeTruthy();
-    expect(within(legend).getByText('Frigates, Destroyers')).toBeTruthy();
+    expect(legend.closest('footer')).toBeTruthy();
+    expect(legend.textContent).toContain('Small ≤ 5 000 t');
+    expect(legend.textContent).toContain('Medium ≤ 62 000 t');
+    expect(legend.textContent).toContain('Extra large ≤ 2 000 000 t');
+    expect(window.localStorage.getItem(REFERENCE_LEGEND_KEY)).toBe('on');
+
+    act(() => closeWormholeReference());
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    act(() => openWormholeReference());
+    const again = await dialog();
+    expect(again.querySelector('dl[aria-label="Ship sizes"]')).toBeTruthy();
+    await userEvent.click(within(again).getByRole('switch', { name: 'Size legend' }));
+    expect(again.querySelector('dl[aria-label="Ship sizes"]')).toBeNull();
+    expect(window.localStorage.getItem(REFERENCE_LEGEND_KEY)).toBeNull();
   });
 
   it('searches by code and class, and keeps statics only', async () => {

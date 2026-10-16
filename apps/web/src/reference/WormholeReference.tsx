@@ -1,9 +1,8 @@
 'use client';
 
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, ChevronsUpDown, Search, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronsUpDown, Info, Search, X } from 'lucide-react';
 import {
-  HULL_CLASS_LABEL,
   WORMHOLE_DESTINATION_LABEL,
   WormholeDestination,
   type ShipSize,
@@ -20,11 +19,15 @@ import {
   EmptyState,
   IconButton,
   Input,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   Select,
   Skeleton,
   Switch,
+  Tooltip,
 } from '../ui';
-import { SHIP_SIZE_LABEL, SHIP_SIZE_TEXT } from '../map/edgeStyle';
+import { SHIP_SIZE_LABEL } from '../map/edgeStyle';
 import { destinationPill } from '../map/nodeFacts';
 import { useWormholeCatalog } from '../map/signatures/catalog';
 import {
@@ -34,8 +37,10 @@ import {
   firstSort,
   filterRows,
   lifetimeText,
+  MAX_SHIP_SIZE_NAME,
   nextSort,
   referenceRows,
+  sizeHint,
   sizeLegend,
   sortRows,
   tonnes,
@@ -44,6 +49,7 @@ import {
   type ReferenceSort,
   type ReferenceSortKey,
 } from './rows';
+import { setLegendShown, useLegendShown } from './prefs';
 import styles from './reference.module.css';
 
 const COLUMNS: readonly { key: ReferenceSortKey; label: string; title?: string; num?: boolean }[] = [
@@ -52,7 +58,7 @@ const COLUMNS: readonly { key: ReferenceSortKey; label: string; title?: string; 
   { key: 'lifetime', label: 'Lifetime', num: true },
   { key: 'totalMass', label: 'Total mass', num: true },
   { key: 'maxJumpMass', label: 'Max / jump', title: 'Heaviest ship that may jump', num: true },
-  { key: 'size', label: 'Size', title: 'Ship size, from the max jump mass' },
+  { key: 'size', label: 'Size', title: 'Maximum ship size, as the game names it' },
   { key: 'respawn', label: 'Respawn' },
 ];
 
@@ -109,20 +115,37 @@ function AreaPill({ area }: { area: string }) {
   );
 }
 
-/** The ship size letter, as on the map's connections, with what fits through. */
-function SizeMark({ size, title }: { size: ShipSize | null; title?: string }) {
-  if (!size) return <span className={styles.muted}>—</span>;
+/** The ship size letter, as on the map's connections. */
+function SizeMark({ size }: { size: ShipSize }) {
   return (
-    <span className={styles.size} data-size={size} title={title ?? SHIP_SIZE_TEXT[size]}>
+    <span className={styles.size} data-size={size} aria-hidden>
       {SHIP_SIZE_LABEL[size]}
     </span>
   );
 }
 
-function fitsTitle(row: ReferenceRow): string | undefined {
-  if (!row.size) return undefined;
-  const hulls = row.fits.map((h) => HULL_CLASS_LABEL[h]).join(', ');
-  return `${SHIP_SIZE_TEXT[row.size]}${hulls ? `\nFits: ${hulls}` : ''}`;
+/** A size's tooltip: the game's name, the jump mass and the hulls that fit. */
+function SizeHint({ hint }: { hint: ReturnType<typeof sizeHint> }) {
+  return (
+    <span className={styles.hint}>
+      <strong>Max ship size: {hint.name}</strong>
+      {hint.mass && <span>{hint.mass}</span>}
+      {hint.fits && <span>Fits: {hint.fits}</span>}
+    </span>
+  );
+}
+
+/** The size column: the map's letter and the game's one-word name; the hulls in the tooltip. */
+function SizeCell({ row }: { row: ReferenceRow }) {
+  if (!row.size) return <span className={styles.muted}>—</span>;
+  return (
+    <Tooltip content={<SizeHint hint={sizeHint(row.size, row.maxJumpMass, row.fits)} />}>
+      <span className={styles.sizeCell} data-size-cell>
+        <SizeMark size={row.size} />
+        <span>{MAX_SHIP_SIZE_NAME[row.size]}</span>
+      </span>
+    </Tooltip>
+  );
 }
 
 function TypeCell({ row }: { row: ReferenceRow }) {
@@ -177,13 +200,10 @@ function Row({ row }: { row: ReferenceRow }) {
         <span>{tonnes(row.maxJumpMass)}</span>
       </td>
       <td data-label="Size">
-        <span className={styles.sizeCell}>
-          <SizeMark size={row.size} title={fitsTitle(row)} />
-          {row.size && <span className={styles.muted}>{SHIP_SIZE_TEXT[row.size]}</span>}
-        </span>
+        <SizeCell row={row} />
       </td>
       <td data-label="Respawn">
-        <span className={styles.chips}>
+        <span className={styles.respawns}>
           {row.respawn.map((r) => (
             <span key={r} className={styles.respawn} data-respawn={r} title={RESPAWN_TEXT[r]}>
               {r}
@@ -231,28 +251,52 @@ const SORT_OPTIONS = (Object.keys(SORT_LABEL) as ReferenceSortKey[]).map((k) => 
   label: SORT_LABEL[k],
 }));
 
-/** What each size letter lets through, from the catalog's hull classes. */
+/**
+ * The size legend: one muted line under the table, each letter with the game's name and the
+ * heaviest jump of its types; the hulls that fit are in each entry's tooltip.
+ */
 function SizeLegend({ legend }: { legend: ReturnType<typeof sizeLegend> }) {
   if (legend.length === 0) return null;
   return (
-    <dl className={styles.legend} aria-label="Ship sizes">
-      {legend.map((entry, i) => (
-        <div key={entry.size} className={styles.legendItem}>
-          <dt>
-            <SizeMark size={entry.size} />
-          </dt>
-          <dd>
-            <span>
-              {i === 0 ? '' : 'up to '}
-              {entry.adds.map((h) => HULL_CLASS_LABEL[h]).join(', ') || '—'}
-            </span>
-            <span className={`${styles.muted} ${styles.legendMass}`}>
-              ≤ {tonnes(entry.maxJumpMass)} per jump
-            </span>
-          </dd>
-        </div>
-      ))}
-    </dl>
+    <div className={styles.legend}>
+      <span className={styles.legendLead} aria-hidden>
+        Max ship size
+      </span>
+      <dl className={styles.legendList} aria-label="Ship sizes">
+        {legend.map((entry) => (
+          <Tooltip
+            key={entry.size}
+            content={<SizeHint hint={sizeHint(entry.size, entry.maxJumpMass, entry.fits)} />}
+          >
+            <div className={styles.legendItem} data-size={entry.size}>
+              <dt>{SHIP_SIZE_LABEL[entry.size]}</dt>
+              <dd>
+                {MAX_SHIP_SIZE_NAME[entry.size]} ≤ {tonnes(entry.maxJumpMass)}
+              </dd>
+            </div>
+          </Tooltip>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+/** Where the numbers come from, behind a small "Sources" button (a popover, so phones get it too). */
+function Sources() {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button type="button" className={styles.sourcesButton}>
+          <Info aria-hidden />
+          Sources
+        </button>
+      </PopoverTrigger>
+      <PopoverContent width={300} side="top" align="end" className={styles.sources}>
+        Lifetime, masses and where each type leads: CCP&apos;s Static Data Export. Where it spawns and how it
+        respawns: the EVE University wormhole type tables. Size names: a wormhole&apos;s Show Info. Total mass
+        varies by ±10 % per hole.
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -279,6 +323,7 @@ export function WormholeReference({
     staticsOnly: false,
   });
   const [sort, setSort] = useState<ReferenceSort>(DEFAULT_SORT);
+  const legendShown = useLegendShown();
   const types = catalog.data?.types;
   const all = useMemo(() => referenceRows(types ?? []), [types]);
   const legend = useMemo(() => sizeLegend(types ?? []), [types]);
@@ -334,8 +379,7 @@ export function WormholeReference({
           <div className={styles.heading}>
             <DialogTitle className={styles.title}>Wormhole types</DialogTitle>
             <DialogDescription className={styles.description}>
-              Every wormhole type: where it leads and spawns, how long it lives, how much mass it takes and
-              which ships fit.
+              Masses, lifetimes and ship sizes
             </DialogDescription>
           </div>
           <DialogClose asChild>
@@ -390,14 +434,19 @@ export function WormholeReference({
             {catalog.data ? `${rows.length}${filtered ? ` of ${all.length}` : ''} types` : ''}
           </span>
         </div>
-        <SizeLegend legend={legend} />
         <div className={styles.scroll} data-reference-scroll>
           {body}
         </div>
-        <p className={styles.source}>
-          Lifetime, masses and where each type leads come from CCP&apos;s Static Data Export; spawns and
-          respawn from the EVE University wormhole type tables. Total mass varies by ±10 % per hole.
-        </p>
+        <footer className={styles.footer}>
+          <Switch
+            className={styles.legendSwitch}
+            checked={legendShown}
+            onCheckedChange={setLegendShown}
+            label="Size legend"
+          />
+          {legendShown && <SizeLegend legend={legend} />}
+          <Sources />
+        </footer>
       </DialogSheet>
     </Dialog>
   );
