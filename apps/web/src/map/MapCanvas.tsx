@@ -226,6 +226,8 @@ export function MapCanvas({
   const [nodes, setNodes, onNodesChange] = useNodesState<SystemNodeType>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<ConnectionEdgeType>([]);
   const opened = useRef(false);
+  /** The view the canvas showed last, so it shows it again after being hidden (see below). */
+  const lastView = useRef<Viewport | null>(null);
   const handledFocus = useRef(0);
   const canvasRef = useRef<HTMLDivElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -410,11 +412,30 @@ export function MapCanvas({
     [rectsOf],
   );
 
+  // Next.js keeps a route the viewer left (the jump planner, say) mounted but hidden, and shows it
+  // again on the way back. Hiding runs the effects' cleanups, and React Flow's resets its store:
+  // the view falls back to the origin, far from any real chain, and the map looked empty. Hidden,
+  // the canvas counts as not opened; shown again, it opens anew, on the view it had.
+  useEffect(
+    () => () => {
+      opened.current = false;
+    },
+    [],
+  );
+
+  /** Shows the view the canvas had before it was hidden; false the first time it opens. */
+  const reopen = useCallback(() => {
+    if (!lastView.current) return false;
+    void rf.setViewport(lastView.current);
+    return true;
+  }, [rf]);
+
   // First view, once systems are measured and the saved view is known.
   useEffect(() => {
     if (readOnly || opened.current || !loaded || !settled || nodes.length === 0) return;
     if (!nodes.every((n) => n.measured?.width)) return; // runs again once React Flow measured them
     opened.current = true;
+    if (reopen()) return;
     if (isViewport(preferences.viewport)) {
       // Saved as the point in the middle of the view, so it fits a phone and a desktop alike. A
       // saved view that shows none of the map's systems (they were hidden, moved or imported since)
@@ -479,6 +500,7 @@ export function MapCanvas({
     readOnly,
     rectsOf,
     visibleBox,
+    reopen,
   ]);
 
   const fitChain = useCallback(() => {
@@ -502,6 +524,7 @@ export function MapCanvas({
     if (!readOnly || opened.current || !loaded || nodes.length === 0) return;
     if (!nodes.every((n) => n.measured?.width)) return;
     opened.current = true;
+    if (reopen()) return;
     // A preview opens on what it is about: the marked way, else its system, at a readable zoom.
     const marked =
       highlight && highlight.systems.size > 1
@@ -522,7 +545,7 @@ export function MapCanvas({
     const at = openOn !== undefined ? centerOfSystem(openOn) : null;
     if (at) centerOn(at, DEFAULT_ZOOM, false);
     else fitChain();
-  }, [readOnly, loaded, nodes, fitChain, openOn, centerOfSystem, centerOn, highlight, rectsOf, rf]);
+  }, [readOnly, loaded, nodes, fitChain, openOn, centerOfSystem, centerOn, highlight, rectsOf, rf, reopen]);
 
   const centerOnMe = useCallback(() => {
     const at = myLocation ? centerOfSystem(myLocation.solarSystemId) : null;
@@ -787,6 +810,10 @@ export function MapCanvas({
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onSelectionChange={onSelectionChange}
+        onMove={(_, viewport) => {
+          // Only once opened: while hidden and shown again React Flow is back at its default view.
+          if (opened.current) lastView.current = viewport;
+        }}
         onMoveEnd={(_, viewport) => saveViewport(viewport)}
         onNodeDragStop={(_, __, dragged) =>
           void store.moveSystems(
