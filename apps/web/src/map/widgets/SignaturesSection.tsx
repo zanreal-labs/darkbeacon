@@ -62,6 +62,17 @@ import sig from '../signatures/signatures.module.css';
 
 export { GROUP_LABEL };
 
+/** The group in a word or two letters, for narrow windows. */
+const GROUP_SHORT: Record<keyof typeof GROUP_LABEL, string> = {
+  unknown: '?',
+  wormhole: 'WH',
+  combat: 'Combat',
+  relic: 'Relic',
+  data: 'Data',
+  gas: 'Gas',
+  ore: 'Ore',
+};
+
 /** "3 new / 1 updated", and what else the paste did. */
 export function pasteSummary(r: PasteSignaturesResult): { title: string; description?: string } {
   const parts = [`${r.added} new`, `${r.updated} updated`];
@@ -447,6 +458,10 @@ export function SignaturesSection({
                 <span className={sig.groupLabel}>
                   <ScanMark signature={s} />
                   <span className={sig.groupText}>{GROUP_LABEL[s.group]}</span>
+                  {/* In a narrow window: a short word, so groups still read apart at a glance. */}
+                  <span className={sig.groupShort} aria-hidden>
+                    {GROUP_SHORT[s.group]}
+                  </span>
                 </span>
               </td>
               <td>

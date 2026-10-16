@@ -173,10 +173,22 @@ td.group[data-group='unknown'] {
   text-overflow: ellipsis;
 }
 
-/* A narrow window keeps the icons only (the group is in the cell's title), so the info has room. */
+/* The short group word shows only in a narrow window, in place of the full name. */
+.groupShort {
+  display: none;
+  font-size: var(--dbk-font-size-xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* A narrow window keeps the icon and a short word (the full group is in the cell's title). */
 @container signatures (width < 460px) {
   .table th.colGroup {
-    width: 34px;
+    width: 74px;
+  }
+
+  .groupShort {
+    display: inline;
   }
 
   .table th.colGroup .sortButton {

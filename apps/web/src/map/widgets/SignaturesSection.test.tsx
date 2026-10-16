@@ -235,7 +235,7 @@ describe('SignaturesSection', () => {
     );
     const signatures = screen.getByRole('table', { name: 'Signatures' });
     expect(signatures.textContent).toContain('ABC-123');
-    expect(signatures.textContent).toContain('Tower 3Unknowncustom');
+    expect(signatures.textContent).toContain('Tower 3Unknown?custom');
     expect(signatures.textContent).not.toContain('JKL-012');
     // Collapsed by default.
     const fold = screen.getByRole('button', { name: /Anomalies and other results/ });
