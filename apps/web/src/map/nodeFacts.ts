@@ -118,18 +118,28 @@ export function destinationPill(destination: WormholeDestination): Exclude<Class
   return classPill(DESTINATION_SYSTEM[destination]) as Exclude<ClassPill, { kind: 'unknown' }>;
 }
 
-/** Nearest hub under an exit, as the routing API answers it: "Jita 4j" and the route's space. */
+/**
+ * Nearest hub under an exit, as the routing API answers it: "Jita 4j" and the route's space.
+ * `rules` says how it was routed: `viewer` with the viewer's own route options, exactly as their
+ * Routes widget routes from that exit; `shared` the map-wide fallback (shortest, stargates, the
+ * chain and bridges, no EVE-Scout holes), shown only when the viewer's own could not be loaded.
+ */
 export interface NearestHub {
   name: string;
   jumps: number;
   space: RouteSpace | null;
+  rules: 'viewer' | 'shared';
 }
 
-/** The square after the hub: only when the whole route runs through one kind of space. */
-export const ROUTE_SPACE_TOKEN: Partial<Record<RouteSpace, TokenName>> = {
-  high: 'security-high',
-  low: 'security-low',
-  null: 'security-null',
+/**
+ * The square after the hub, only when the whole route runs through one kind of space: the game's
+ * own security colour of that space (0.8 for high-sec, 0.4 for low-sec, 0.0 for null-sec), the
+ * same in every theme.
+ */
+export const ROUTE_SPACE_COLOR: Partial<Record<RouteSpace, string>> = {
+  high: SECURITY_COLORS['0.8']!,
+  low: SECURITY_COLORS['0.4']!,
+  null: SECURITY_COLORS['0.0']!,
 };
 
 export const ROUTE_SPACE_TEXT: Record<RouteSpace, string> = {
@@ -143,7 +153,10 @@ export const ROUTE_SPACE_TEXT: Record<RouteSpace, string> = {
  * Nearest hubs of the chain's exits by system: known-space systems the chain reaches through a
  * wormhole (the routing API's `connected` exits) that have a route to a hub.
  */
-export function exitHubs(exits: readonly MapExitDto[] | null | undefined): Map<number, NearestHub> {
+export function exitHubs(
+  exits: readonly MapExitDto[] | null | undefined,
+  rules: NearestHub['rules'] = 'viewer',
+): Map<number, NearestHub> {
   const hubs = new Map<number, NearestHub>();
   for (const exit of exits ?? []) {
     if (exit.kind !== 'connected' || !exit.nearest || exit.nearest.jumps === null) continue;
@@ -151,7 +164,34 @@ export function exitHubs(exits: readonly MapExitDto[] | null | undefined): Map<n
       name: exit.nearest.name,
       jumps: exit.nearest.jumps,
       space: exit.nearest.space ?? null,
+      rules,
     });
   }
   return hubs;
+}
+
+/**
+ * The nearest-hub chips of the exits: the viewer's own exits (routed with their route options,
+ * exactly as their Routes widget routes from each exit) once loaded. The map-wide ones stand in
+ * only when the viewer's cannot be had (`fallback`: a public view, a failed request); while the
+ * viewer's load, no chip, rather than a number the Routes widget would contradict.
+ */
+export function exitChips(
+  viewer: readonly MapExitDto[] | undefined,
+  shared: readonly MapExitDto[] | null | undefined,
+  fallback: boolean,
+): Map<number, NearestHub> {
+  if (viewer) return exitHubs(viewer, 'viewer');
+  return fallback ? exitHubs(shared, 'shared') : exitHubs(null);
+}
+
+/** The chip's tooltip: which hub, how far from which system, and routed how. */
+export function nearestHubTitle(hub: NearestHub, from: string): string {
+  const jumps = `${hub.jumps} jump${hub.jumps === 1 ? '' : 's'} from ${from}`;
+  const space = hub.space ? `, ${ROUTE_SPACE_TEXT[hub.space]}` : '';
+  const how =
+    hub.rules === 'viewer'
+      ? 'with your route options, as the Routes widget routes from here'
+      : 'shortest way, without Thera and Turnur holes (your route options did not load)';
+  return `Nearest hub: ${hub.name}, ${jumps}${space}; ${how}`;
 }

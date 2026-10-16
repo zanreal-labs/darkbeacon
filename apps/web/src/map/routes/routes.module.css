@@ -64,7 +64,8 @@
 }
 
 /*
- * One route a row, 21 px: the name, the systems on the way as a strip, the jumps on the right.
+ * One route a row, at least 21 px: the name, the systems on the way as a strip (a long one wraps
+ * onto another line, as in Wanderer), the jumps on the right.
  * The actions button shows over the end of the strip while the row is hovered or focused.
  */
 .row {
@@ -205,6 +206,11 @@
 
 /* ---- The strip ---- */
 
+/*
+ * Wanderer's route list (RoutesWidget/RoutesList/RoutesList.module.scss and the shape classes of
+ * components/map/styles/eve-common.scss): 8 px marks 2 px apart that wrap onto more lines, the
+ * others faded to 0.3 over 200 ms while one is hovered. No ring, outline or tint of our own.
+ */
 .strip {
   position: relative;
   display: flex;
@@ -217,14 +223,15 @@
 
 .step {
   flex: none;
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   padding: 0;
   border: 0;
-  border-radius: 1px;
+  border-radius: 0;
   background: var(--step-color);
   cursor: pointer;
-  transition: opacity 0.2s ease;
+  opacity: 1;
+  transition: opacity 200ms;
 }
 
 .step[data-shape='round'] {
@@ -232,34 +239,7 @@
 }
 
 .step[data-shape='triangle'] {
-  border-radius: 0;
   clip-path: polygon(50% 0, 0 100%, 100% 100%);
-}
-
-/* Off the stargates: a jump bridge or an EVE-Scout hole gets a ring in the accent colour. */
-.step[data-via='bridge'],
-.step[data-via='ansiblex'],
-.step[data-via='eve-scout'] {
-  box-shadow:
-    0 0 0 1px var(--dbk-color-surface),
-    0 0 0 2px var(--dbk-color-accent);
-}
-
-/*
- * In a row the strip stays on one line: each mark narrows (down to 2 px) as routes get longer, a
- * compact security strip of the route.
- */
-.row .strip {
-  flex-wrap: nowrap;
-  gap: 1px;
-  padding: 0;
-}
-
-.row .step {
-  flex: 0 1 8px;
-  width: auto;
-  min-width: 2px;
-  height: 8px;
 }
 
 .strip[data-hovering] .step:not([data-active]) {
@@ -271,26 +251,28 @@
   outline-offset: 1px;
 }
 
+/* The system's security (or class) in its colour, then its name: nothing else. */
 .stepTip {
   position: absolute;
   z-index: 4;
-  display: grid;
-  gap: 1px;
+  display: flex;
+  gap: 4px;
+  align-items: baseline;
   min-width: max-content;
-  padding: 5px 8px;
+  padding: 3px 6px;
   border: 1px solid var(--dbk-color-border);
   border-radius: var(--dbk-radius);
   background: var(--dbk-color-surface-raised);
   box-shadow: var(--dbk-shadow-medium);
   color: var(--dbk-color-text);
   font-size: var(--dbk-font-size-small);
+  white-space: nowrap;
   pointer-events: none;
   transform: translate(-50%, calc(-100% - 6px));
 }
 
 .stepTipClass {
   font-family: var(--dbk-font-family-mono);
-  font-size: var(--dbk-font-size-xs);
   font-weight: 700;
   /* The palette is the game's, light on dark: an outline keeps it readable on light themes. */
   text-shadow: 0 0 1px rgb(0 0 0 / 0.6);
@@ -298,11 +280,6 @@
 
 .stepTipName {
   font-weight: 600;
-}
-
-.stepTipRegion {
-  color: var(--dbk-color-text-muted);
-  font-size: var(--dbk-font-size-xs);
 }
 
 /* ---- Adding a hub ---- */

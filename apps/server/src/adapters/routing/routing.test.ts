@@ -232,6 +232,56 @@ describeEachDialect('routing over a map', (t) => {
     expect(exits[2]!.statics).toEqual([{ code: 'B274', destination: 'hs' }]);
   });
 
+  it("gives an exit's hubs the jumps the Routes widget shows from that exit, EVE-Scout holes included", async () => {
+    // The report: the Routes widget said Dodixie 19 (through a Turnur hole), the chip under the
+    // exit said 44. The chip showed the map-wide exits, which leave EVE-Scout's holes out.
+    await hubs.setMapHubs(alice, map.id, [S.jita, S.amarr, S.dodixie, S.rens, S.hek]);
+    const thera = 31000005;
+    const nextToDodixie = universe.gateNeighbours(S.dodixie)[0]!;
+    const hole = (b: number) => ({
+      a: thera,
+      b,
+      via: 'wormhole' as const,
+      connectionId: null,
+      origin: 'eve-scout' as const,
+      state: {
+        timeStatus: 'normal' as const,
+        massStatus: 'fresh' as const,
+        shipSize: 'large' as const,
+        dangerous: false,
+        bubbled: 'none' as const,
+      },
+    });
+    router.addEdgeSource({ edges: async () => [hole(S.tama), hole(nextToDodixie)] });
+
+    const widget = await queries.hubRoutes(bob, map.id, { from: S.tama, hubs: 'map', mode: 'shortest' });
+    const dodixie = widget.routes.find((r) => r.solarSystemId === S.dodixie)!;
+    // Tama, Thera, the system next to Dodixie, Dodixie.
+    expect(dodixie.jumps).toBe(3);
+    expect(dodixie.steps.filter((s) => s.edge === 'eve-scout')).toHaveLength(2);
+
+    // The map-wide exits (what every viewer's snapshot carries) route without the holes...
+    const shared = (await queries.sharedExits(map.id)).find((e) => e.solarSystemId === S.tama)!;
+    expect(shared.hubs.find((h) => h.solarSystemId === S.dodixie)!.jumps).toBe(8);
+
+    // ...the viewer's own exits route as the widget does, hub for hub, in every mode.
+    for (const mode of ['shortest', 'safer', 'highsec'] as const) {
+      const routed = await queries.hubRoutes(bob, map.id, { from: S.tama, hubs: 'map', mode });
+      const { exits } = await queries.exits(bob, map.id, { mode });
+      const tama = exits.find((e) => e.solarSystemId === S.tama)!;
+      for (const hub of tama.hubs) {
+        const route = routed.routes.find((r) => r.solarSystemId === hub.solarSystemId)!;
+        expect(hub.jumps, `${mode} ${hub.name}`).toBe(route.jumps);
+      }
+      expect(tama.nearest!.jumps).toBe(Math.min(...routed.routes.flatMap((r) => r.jumps ?? [])));
+    }
+    const { exits } = await queries.exits(bob, map.id, { mode: 'shortest' });
+    expect(exits[0]!.nearest).toMatchObject({ name: 'Dodixie', jumps: 3 });
+    // Without EVE-Scout's holes in the viewer's options, both agree on the long way again.
+    const without = await queries.exits(bob, map.id, { mode: 'shortest', thera: false });
+    expect(without.exits[0]!.nearest).toEqual(shared.nearest);
+  });
+
   it('suggests low-sec staging systems to outlaws', async () => {
     const { exits } = await queries.exits(bob, map.id, { mode: 'outlaw' });
     const hubsOfTama = exits[0]!.hubs;

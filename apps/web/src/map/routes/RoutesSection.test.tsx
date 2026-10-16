@@ -16,7 +16,7 @@ import { renderWithProviders, setupMockServer } from '../../test/setup';
 import { ToastProvider, TooltipProvider } from '../../ui';
 import { SECURITY_COLORS } from '../nodeFacts';
 import { RoutesWidget, unreachableText } from './RoutesSection';
-import { stepClass, stepLook } from './RouteStrip';
+import { SPACE_COLORS, stepClass, stepClassColor, stepLook } from './RouteStrip';
 
 const step = (
   solarSystemId: number,
@@ -99,14 +99,43 @@ const section = (onSelectSystem = vi.fn()) => {
   return onSelectSystem;
 };
 
+const hexToRgb = (hex: string) => {
+  const n = Number.parseInt(hex.slice(1), 16);
+  return `rgb(${n >> 16}, ${(n >> 8) & 255}, ${n & 255})`;
+};
+
 describe('route strip', () => {
-  it('draws known space in the game palette, wormholes round and Pochven as triangles', () => {
+  it("draws every system as Wanderer does: the game's security palette, its class colours and shapes", () => {
+    // Known space: a square in the game's own security colour.
     expect(stepLook(step(1, 'Jita', 0.946))).toEqual({ color: SECURITY_COLORS['0.9'], shape: 'square' });
     expect(stepLook(step(1, 'Null', -0.4))).toEqual({ color: SECURITY_COLORS['0.0'], shape: 'square' });
-    expect(stepLook({ whClass: 3, security: -1 }).shape).toBe('round');
-    expect(stepLook({ whClass: 25, security: -1 }).shape).toBe('triangle');
-    expect(stepLook({ whClass: 7, security: 0.6, invasion: 'edencom' }).shape).toBe('triangle');
+    // Turnur is low-sec 0.4 like any other: no mark of its own in the fork or the SDE.
+    expect(stepLook({ solarSystemId: 30002086, whClass: 8, security: 0.387 })).toEqual({
+      color: SECURITY_COLORS['0.4'],
+      shape: 'square',
+    });
+    // Wormhole space: rounded, in the fork's class colours; Thera white.
+    expect(stepLook({ whClass: 3, security: -1 })).toEqual({ color: SPACE_COLORS.c3, shape: 'round' });
+    expect(stepLook({ whClass: 3, security: -1 }).color).toBe('#a8cb70');
+    expect(stepLook({ solarSystemId: 31000005, whClass: 12, security: -0.99 })).toEqual({
+      color: '#ffffff',
+      shape: 'round',
+    });
+    expect(stepLook({ whClass: 13, security: -1 }).color).toBe('#988cb5');
+    expect(stepLook({ whClass: 15, security: -1 }).color).toBe('#ff44f6');
+    // Pochven: a triangle in the C6 red; invaded known space a triangle in its security colour.
+    expect(stepLook({ whClass: 25, security: -1 })).toEqual({ color: '#e76363', shape: 'triangle' });
+    expect(stepLook({ whClass: 7, security: 0.6, invasion: 'edencom' })).toEqual({
+      color: SECURITY_COLORS['0.6'],
+      shape: 'triangle',
+    });
+    // Zarzakh in the fork's near-black, named in its security colour.
+    expect(stepLook({ solarSystemId: 30100000, whClass: 9, security: -1 }).color).toBe('#212121');
+    expect(stepClassColor({ solarSystemId: 30100000, whClass: 9, security: -1 })).toBe(
+      SECURITY_COLORS['0.0'],
+    );
     expect(stepClass({ whClass: 12, security: -1 })).toBe('Thera');
+    expect(stepClass({ whClass: 25, security: -1 })).toBe('Pochven');
     expect(stepClass({ whClass: 8, security: 0.04 })).toBe('0.1');
   });
 });
@@ -118,14 +147,15 @@ describe('routes section', () => {
     const rows = within(list).getAllByRole('listitem');
     expect(rows.map((r) => r.textContent)).toEqual(['Jita3', 'Amarr—']);
     expect(within(rows[1]!).getByTitle('No route')).toBeTruthy();
-    const marks = within(rows[0]!).getAllByRole('button', { name: /Tama|Perimeter|Jita,/ });
-    expect(marks.map((m) => m.getAttribute('aria-label'))).toEqual([
-      '0.3 Tama, The Citadel, through a wormhole',
-      '0.9 Perimeter, The Forge, by jump bridge',
-      '0.9 Jita, The Forge',
-    ]);
+    const marks = within(rows[0]!).getAllByRole('button', { name: /^0\.\d / });
+    expect(marks.map((m) => m.getAttribute('aria-label'))).toEqual(['0.3 Tama', '0.9 Perimeter', '0.9 Jita']);
+    // Off the stargates or not, a mark looks the same: no ring of our own.
+    expect(marks.some((m) => m.hasAttribute('data-via'))).toBe(false);
     fireEvent.pointerEnter(marks[0]!);
-    expect(within(rows[0]!).getByRole('tooltip').textContent).toBe('0.3TamaThe Citadelthrough a wormhole');
+    // The tooltip is the system: its security in the game's colour and its name, nothing else.
+    const tip = within(rows[0]!).getByRole('tooltip');
+    expect(tip.textContent).toBe('0.3Tama');
+    expect((tip.firstElementChild as HTMLElement).style.color).toBe(hexToRgb(SECURITY_COLORS['0.3']!));
     // A click on a system on the map selects it; one off the map does nothing.
     fireEvent.click(marks[0]!);
     expect(select).toHaveBeenCalledWith(30002813);

@@ -72,6 +72,7 @@ export function setupMockServer(...handlers: Parameters<typeof setupServer>) {
   const routing = [
     http.get(routes.routing.preferences.path, () => HttpResponse.json(DEFAULT_ROUTE_PREFERENCES)),
     http.get(routes.routing.hubs.path, () => HttpResponse.json({ trade: [], map: [], personal: [] })),
+    http.get(routes.routing.exits.path, () => HttpResponse.json({ mode: 'shortest', exits: [] })),
     http.get(routes.routing.hubRoutes.path, ({ request }) =>
       HttpResponse.json({
         from: Number(new URL(request.url).searchParams.get('from')),

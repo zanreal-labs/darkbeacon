@@ -22,8 +22,8 @@ import { PluginSlot } from '../plugins/PluginSlot';
 import { Tooltip, useToast } from '../ui';
 import {
   classPill,
-  ROUTE_SPACE_TEXT,
-  ROUTE_SPACE_TOKEN,
+  nearestHubTitle,
+  ROUTE_SPACE_COLOR,
   STATUS_BORDER,
   STATUS_LABEL,
   type NearestHub,
@@ -255,7 +255,7 @@ export const SystemNode = memo(function SystemNode({
       () => toast({ title: 'Could not copy to the clipboard', tone: 'warning' }),
     );
   };
-  const square = hub?.space ? ROUTE_SPACE_TOKEN[hub.space] : undefined;
+  const square = hub?.space ? ROUTE_SPACE_COLOR[hub.space] : undefined;
 
   return (
     <div
@@ -392,16 +392,13 @@ export const SystemNode = memo(function SystemNode({
       </div>
 
       {hub && (
-        <span
-          className={styles.hub}
-          title={`Nearest hub: ${hub.name}, ${hub.jumps} jump${hub.jumps === 1 ? '' : 's'}${hub.space ? `, ${ROUTE_SPACE_TEXT[hub.space]}` : ''}`}
-        >
+        <span className={styles.hub} title={nearestHubTitle(hub, info?.name ?? name)}>
           {hub.name} {hub.jumps}j
           {square && (
             <span
               className={styles.square}
               data-space={hub.space}
-              style={{ background: cssVar(square) }}
+              style={{ background: square }}
               aria-hidden
             />
           )}
