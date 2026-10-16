@@ -316,7 +316,7 @@
   font-style: italic;
 }
 
-/* The top of the node, cut off by the preview's edge: pill, name and the status border. */
+/* The top of the node, cut off by the preview's edge: pill, name and the status tint. */
 .node {
   display: flex;
   align-items: center;
@@ -325,9 +325,9 @@
   height: 34px;
   margin-bottom: -6px;
   padding: 0 10px 6px;
-  border: var(--dbk-node-border-width, 3px) solid var(--node-status, var(--dbk-node-border));
+  border: var(--dbk-node-border-width, 1px) solid var(--dbk-node-border);
   border-radius: var(--dbk-node-radius, 8px) var(--dbk-node-radius, 8px) 0 0;
-  background: var(--dbk-node-bg);
+  background: var(--node-tint-image, none), var(--dbk-node-bg);
   color: var(--dbk-node-text);
 }
 

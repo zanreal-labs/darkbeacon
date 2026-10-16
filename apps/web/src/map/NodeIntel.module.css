@@ -7,7 +7,7 @@
   padding: 0;
   border: 0;
   background: none;
-  color: var(--dbk-color-text-muted);
+  color: var(--node-muted, var(--dbk-color-text-muted));
   font: inherit;
   font-size: var(--map-text-secondary, 13px);
   font-weight: 700;
@@ -86,25 +86,24 @@
   text-align: right;
 }
 
-/* Sovereignty in the bottom-right corner: small, muted, monospace ticker. */
-.sov {
-  flex: none;
-  margin-left: auto;
-  color: var(--dbk-color-text-muted);
+/*
+ * Sovereignty, as a chip below the node (framed and placed by the node): the ticker in monospace;
+ * a holder the viewer has a standing towards takes its colour, in the text, the frame and a faint
+ * fill.
+ */
+.sov[data-kind] {
   font-family: var(--dbk-font-family-mono);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 20px;
-  white-space: nowrap;
-  cursor: help;
 }
 
 .sov[data-kind='faction'] {
   font-family: inherit;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .sov[data-standing]:not([data-standing='neutral']) {
+  border-color: color-mix(in oklab, var(--sov-color) 75%, var(--dbk-node-border));
+  background: color-mix(in oklab, var(--sov-color) 12%, var(--dbk-node-bg));
+  color: var(--sov-color);
   font-weight: 800;
 }
 
@@ -120,7 +119,7 @@
 .shattered {
   display: inline-flex;
   flex: none;
-  color: var(--dbk-color-text-muted);
+  color: var(--node-muted, var(--dbk-color-text-muted));
   cursor: help;
 }
 

@@ -471,6 +471,7 @@ export class IntelRuntime implements OnModuleInit, OnModuleDestroy {
           contacts: new EsiContactsSource(client),
           clock,
           overrides: repo,
+          onError: (message) => new Logger('Intel').warn(message),
         }),
       inject: [AccountService, CharacterService, EsiPublicClient, CLOCK, INTEL_REPOSITORY],
     },

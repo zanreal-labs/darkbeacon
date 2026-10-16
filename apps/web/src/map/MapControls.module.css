@@ -132,9 +132,9 @@
   display: block;
   width: 40px;
   height: 20px;
-  border: 3px solid var(--status);
+  border: var(--dbk-node-border-width) solid var(--dbk-node-border);
   border-radius: var(--dbk-radius-small);
-  background: var(--dbk-node-bg);
+  background: var(--status-tint, none), var(--dbk-node-bg);
 }
 
 /* Phones: pinch zooms, so only fit and the legend; above the system sheet when it is open. */

@@ -12,13 +12,18 @@ export const CONTACT_SCOPES = {
 
 /** ESI caches contacts for five minutes; standings change rarely, so a quarter of an hour is kept. */
 const TTL = 15 * MINUTE;
+/**
+ * A read that missed a list (ESI or the token refresh failed) is kept a minute only: holding it a
+ * quarter of an hour would leave every holder but one's own neutral long after ESI is back.
+ */
+const RETRY_TTL = MINUTE;
 
 /**
  * The signed-in account's standings, from the contacts of its characters, their corporations and
  * alliances (each list read with a character that has the scope), kept a quarter of an hour.
  */
 export class Standings {
-  private readonly cache = new Map<string, { value: StandingsDto; at: number }>();
+  private readonly cache = new Map<string, { value: StandingsDto; at: number; ttl: number }>();
 
   constructor(
     private readonly deps: {
@@ -27,6 +32,8 @@ export class Standings {
       clock: Clock;
       /** Standings set by hand; without it there are none. */
       overrides?: Pick<IntelRepository, 'standingOverrides' | 'setStandingOverride'>;
+      /** A contact list or token that could not be read (the read goes on without it). */
+      onError?: (message: string) => void;
     },
   ) {}
 
@@ -44,16 +51,29 @@ export class Standings {
     const now = this.deps.clock.now();
     const overrides = (await this.deps.overrides?.standingOverrides(account.id)) ?? new Map<number, number>();
     const hit = this.cache.get(account.id);
-    if (hit && now - hit.at < TTL) return withOverrides(hit.value, overrides);
+    if (hit && now - hit.at < hit.ttl) return withOverrides(hit.value, overrides);
     const characters = await this.deps.pilots.characters(account.id);
     const lists: CharacterContacts[] = [];
     let missingScopes = false;
+    // A list that should have been read and was not: the result is kept briefly, and said in the log.
+    const outcome = { incomplete: false };
+    const failed = (what: string, reason: string) => {
+      outcome.incomplete = true;
+      this.deps.onError?.(`standings: ${what}: ${reason}`);
+      return null;
+    };
     // Corporations and alliances shared by several characters are read once.
     const read = new Map<string, Promise<CharacterContacts['alliance']>>();
     for (const c of characters) {
       const has = (scope: string) => c.scopes.includes(scope);
       if (!Object.values(CONTACT_SCOPES).every(has)) missingScopes = true;
-      const token = c.scopes.length > 0 ? await this.deps.pilots.accessToken(c.id) : null;
+      // One character's token failing to refresh leaves its lists out, not everyone's standings.
+      const token =
+        c.scopes.length > 0
+          ? await this.deps.pilots
+              .accessToken(c.id)
+              .catch((error: unknown) => failed(`token of character ${c.id}`, describe(error)))
+          : null;
       const list = (kind: keyof typeof CONTACT_SCOPES, id: number | null) => {
         if (id === null || !token || !has(CONTACT_SCOPES[kind])) return Promise.resolve(null);
         const key = `${kind}:${id}`;
@@ -62,8 +82,8 @@ export class Standings {
             key,
             this.deps.contacts
               .contacts({ kind, id }, token)
-              .then((r) => (r.ok ? r.data : null))
-              .catch(() => null),
+              .then((r) => (r.ok ? r.data : failed(`${kind} ${id} contacts`, r.reason)))
+              .catch((error: unknown) => failed(`${kind} ${id} contacts`, describe(error))),
           );
         }
         return read.get(key)!;
@@ -83,9 +103,13 @@ export class Standings {
       missingScopes,
       overrides: [],
     };
-    this.cache.set(account.id, { value, at: now });
+    this.cache.set(account.id, { value, at: now, ttl: outcome.incomplete ? RETRY_TTL : TTL });
     return withOverrides(value, overrides);
   }
+}
+
+function describe(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 /** Standings set by hand win over the contacts'. */

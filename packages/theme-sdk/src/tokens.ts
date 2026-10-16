@@ -84,12 +84,19 @@ export const TOKENS = {
   'node-bg': { group: 'node', description: 'System node background' },
   'node-border': { group: 'node', description: 'System node border' },
   'node-text': { group: 'node', description: 'System node text' },
-  'node-selected-border': { group: 'node', description: 'Selected node border' },
+  'node-selected-border': {
+    group: 'node',
+    description: 'Selected node: the accent line on its left edge, handles, hovered chips',
+  },
+  'node-tint': {
+    group: 'node',
+    description: 'Share of the status colour mixed into the node background (a percentage)',
+  },
   'node-pill-text': { group: 'node', description: 'Text on a filled designation pill (class or security)' },
   'pill-wormhole': { group: 'node', description: 'Designation pill fill of wormhole classes C1-C6' },
   'pill-special': { group: 'node', description: 'Designation pill fill of Thera, C13, Drifter and Pochven' },
   'node-radius': { group: 'node', description: 'Node corner radius' },
-  'node-border-width': { group: 'node', description: 'Node border width (the border carries the status)' },
+  'node-border-width': { group: 'node', description: 'Node frame width (a neutral hairline)' },
   'node-min-width': { group: 'node', description: 'Node minimum width' },
   'node-padding': { group: 'node', description: 'Node inner padding' },
 

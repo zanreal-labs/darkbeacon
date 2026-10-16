@@ -127,9 +127,16 @@ and danger, `status-warning` amber for pings and stars, `status-friendly` green 
   `node-min-width` (200 px) and never wider than 1.6 times it (320 px), where a long custom name is
   cut with an ellipsis and statics that do not fit are left out whole (all are in the tooltip). The
   region never widens a node. Both rows have a fixed height, so every node is 70 px tall.
-- Surface: the neutral node background, never tinted. A 3 px border carries the status: grey by
-  default, home blue, friendly green, warning yellow, hostile and dangerous red, target purple. No
-  side stripe. Selection is an accent outline outside the border.
+- Surface: one neutral hairline frame (`node-border-width`, 1 px) and a background the status tints
+  gently, as Wanderer does: `node-tint` of the status colour at the right edge fading to half of it
+  towards the pill (light 16 %, dark 22 %, high contrast 30 %). Home blue, friendly green, empty a
+  faint grey, occupied brown, warning amber, hostile red, target purple; unknown keeps the plain
+  background. An unmarked system in space held by someone the viewer has a standing towards takes
+  the status it implies (friendly from +5, warning from -5, hostile at -10). Secondary text in the
+  node sits a quarter of the way from muted to the node text, so it reads on every tint (tested).
+- Selection never adds a frame: the selected node (every one of a multi-selection) gets a slightly
+  lifted background and a short accent line inside its left edge. Hover lifts the background less
+  and adds nothing.
 - Row 1: a solid, fixed-width designation pill first, the class (`C1`-`C6`, `Thera`, `C13`, Drifter
   and Pochven names) or the security (`0.8`, `0.4`, `-0.4`, `-1.0`) in its EVE colour as the pill's
   background with dark bold monospace text; then the name (15 px semibold) and, for a wormhole with
@@ -137,10 +144,7 @@ and danger, `status-warning` amber for pings and stars, `status-friendly` green 
 - Row 2: the statics as plain text, the hole type in the normal text colour (white in dark themes)
   and monospace, the destination (`HS`, `LS`, `NS`, `C1`-`C6`) in its colour right after it:
   `D845 HS`. No chips, no borders. Known space without a custom name shows its region there instead
-  (Pochven: the constellation), muted. The bottom-right corner holds the lock and who holds the
-  system: the alliance ticker `[CONDI]` in small muted monospace (coloured by the viewer's standing
-  towards it), or the faction's short name in NPC null-sec (`Sansha`); never in wormholes, high- or
-  low-sec. Full names are in its tooltip. Last on the row: the kills of the last hour (a skull and
+  (Pochven: the constellation), muted. The bottom-right corner holds the lock. Last on the row: the kills of the last hour (a skull and
   the number, muted, only when above zero, amber from 5 and red from 20; hovering lists the
   killmails), then the pilot count, in the accent colour when I am there. Each count sits in a slot
   as wide as a two-digit count, there only while the count is, so the node does not change width
@@ -153,6 +157,10 @@ and danger, `status-warning` amber for pings and stars, `status-friendly` green 
   bold text in a neutral frame), its custom label (`bait`, the same), the bookmark code (`ABC-123`,
   grey mono, a click copies it) and its Tags (`Staging`, framed in the tag's muted colour). All are
   the same 14 px chips; they never widen the node.
+- Below the node, on the right: who holds the system, a chip like the others: the alliance ticker
+  `[CONDI]` in monospace, in the colour of the viewer's standing towards it (text, frame and a faint
+  fill; plain when neutral), or the faction's short name in NPC null-sec (`Sansha`); never in
+  wormholes, high- or low-sec. Full names are in its tooltip.
 - Below an exit system, left-aligned: the nearest hub and its jumps (`Jita 4j`), followed by a small
   square in the colour of the space the whole route runs through (high-sec green, low-sec orange,
   null-sec red) only when it runs through one kind of space; a mixed route shows no square. The

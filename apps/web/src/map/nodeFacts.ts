@@ -5,7 +5,7 @@ import type {
   UniverseSystemDto,
   WormholeDestination,
 } from '@darkbeacon/shared';
-import type { TokenName } from '@darkbeacon/theme-sdk';
+import { cssVar, type TokenName } from '@darkbeacon/theme-sdk';
 
 export const STATUS_LABEL: Record<SystemStatus, string> = {
   unknown: 'Unknown',
@@ -31,19 +31,35 @@ export const STATUS_MEANING: Record<SystemStatus, string> = {
 };
 
 /**
- * The node border of each status: grey by default (unknown, empty), coloured where it means
- * something. One token each, so themes recolour them.
+ * The colour each status tints its node's background with (`node-tint` of it, see SystemNode):
+ * none while unknown, a faint grey once scouted empty, a hue where it means something. One token
+ * each, so themes recolour them.
  */
-export const STATUS_BORDER: Record<SystemStatus, TokenName> = {
-  unknown: 'node-border',
+export const STATUS_COLOR: Record<SystemStatus, TokenName | null> = {
+  unknown: null,
   home: 'status-home',
   friendly: 'status-friendly',
-  empty: 'node-border',
+  empty: 'status-empty',
   occupied: 'status-occupied',
   warning: 'status-warning',
   hostile: 'status-hostile',
   target: 'status-target',
 };
+
+/**
+ * The status as a background layer, as Wanderer draws it: the status colour (`node-tint` of it)
+ * at the right edge, fading to half that towards the pill, over the node background. `none` for
+ * no tint, so the node keeps its plain surface.
+ */
+export function statusTint(status: SystemStatus): string {
+  const token = STATUS_COLOR[status];
+  if (!token) return 'none';
+  const color = cssVar(token);
+  return (
+    `linear-gradient(275deg, color-mix(in oklab, ${color} var(--dbk-node-tint), transparent), ` +
+    `color-mix(in oklab, ${color} calc(var(--dbk-node-tint) / 2), transparent))`
+  );
+}
 
 /**
  * Security colours exactly as the game client draws them, 1.0 down to 0.0 (negative systems take
