@@ -121,6 +121,27 @@
   color: var(--scan);
 }
 
+/*
+ * An identified wormhole stands out from the sites (see scan.tsx, Wormholes): its ID, group and
+ * mark in the wormhole colour (the mark is all a narrow window shows of the group), the text bold,
+ * with a bar at the row's start. How far it was scanned stays in the group cell's title.
+ */
+[data-color] .table tr[data-wormhole] td.id,
+[data-color] .table tr[data-wormhole] td.group,
+[data-color] .table tr[data-wormhole] .mark {
+  color: var(--scan-wormhole);
+}
+
+[data-color] .table tr[data-wormhole] td.id,
+[data-color] .table tr[data-wormhole] td.group {
+  font-weight: 600;
+}
+
+/* A bubbled hole keeps its amber bar: the bubble matters more. */
+[data-color] .table tbody tr[data-wormhole]:not([data-bubbled]) td:first-child {
+  box-shadow: inset 3px 0 0 var(--scan-wormhole);
+}
+
 /* The group's icon in its outline (circle: signature, diamond: anomaly), neutral when colour is off. */
 .groupLabel {
   display: flex;

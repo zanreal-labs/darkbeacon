@@ -112,6 +112,9 @@ export class MapUseCases extends MappingUseCases {
           ...(request.settings?.signatureRetentionDays !== undefined
             ? { signatureRetentionDays: request.settings.signatureRetentionDays }
             : {}),
+          ...(request.settings?.signatureLazyDelete !== undefined
+            ? { signatureLazyDelete: request.settings.signatureLazyDelete }
+            : {}),
           ...(request.settings?.onlyTrackedCharacters !== undefined
             ? { onlyTrackedCharacters: request.settings.onlyTrackedCharacters }
             : {}),

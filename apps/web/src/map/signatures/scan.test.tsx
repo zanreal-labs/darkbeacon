@@ -2,7 +2,16 @@
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
 import { signatureFixture } from '../../test/fixtures';
-import { SCAN_COLOR_VARS, SCAN_COLORS, ScanMark, scanColor, scanTitle, strengthColor } from './scan';
+import {
+  isIdentifiedWormhole,
+  SCAN_COLOR_VARS,
+  SCAN_COLORS,
+  ScanMark,
+  scanColor,
+  scanTitle,
+  strengthColor,
+  WORMHOLE_COLOR,
+} from './scan';
 
 const SYSTEM = 31000001;
 
@@ -45,6 +54,29 @@ describe('scan colours', () => {
     for (const c of Object.values(SCAN_COLORS)) {
       expect(c.game).toMatch(/^#[0-9a-f]{6}$/);
       expect(c.light).toMatch(/^#[0-9a-f]{6}$/);
+    }
+  });
+
+  it('sets identified wormholes apart from sites in their own colour, unscanned results stay red', () => {
+    const sig = (extra: Parameters<typeof signatureFixture>[3]) =>
+      signatureFixture('s', SYSTEM, 'ABC-123', extra);
+    expect(isIdentifiedWormhole(sig({ group: 'wormhole' }))).toBe(true);
+    expect(isIdentifiedWormhole(sig({ group: 'wormhole', type: 'H296' }))).toBe(true);
+    // Scanned down to the same green as a site, but still a wormhole.
+    expect(scanColor(sig({ group: 'wormhole', type: 'H296' }))).toBe(
+      scanColor(sig({ group: 'data', name: 'x' })),
+    );
+    expect(isIdentifiedWormhole(sig({}))).toBe(false);
+    expect(scanColor(sig({}))).toBe('red');
+    expect(isIdentifiedWormhole(sig({ group: 'data', name: 'Unsecured Frontier Database' }))).toBe(false);
+    expect(isIdentifiedWormhole(sig({ kind: 'anomaly', group: 'combat' }))).toBe(false);
+    expect(SCAN_COLOR_VARS).toMatchObject({
+      '--scan-wormhole': `light-dark(${WORMHOLE_COLOR.light}, ${WORMHOLE_COLOR.game})`,
+    });
+    // Clear of every scan colour.
+    for (const c of Object.values(SCAN_COLORS)) {
+      expect(c.game).not.toBe(WORMHOLE_COLOR.game);
+      expect(c.light).not.toBe(WORMHOLE_COLOR.light);
     }
   });
 

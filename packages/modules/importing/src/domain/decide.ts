@@ -203,6 +203,23 @@ export function decideSignature(
 }
 
 /**
+ * Whether a signature Wanderer still has was deleted on the map after Wanderer last changed it
+ * (by someone, a paste, the sweeper's lazy delete or an earlier removal): then it is not added
+ * again. One Wanderer changed since (scanned again, edited) comes back; one whose change time
+ * Wanderer did not give stays deleted.
+ */
+export function removedHere(
+  planned: Pick<PlannedSignature, 'key' | 'remoteUpdatedAt'>,
+  here: ReadonlyMap<string, unknown>,
+  tombstones: ReadonlyMap<string, number>,
+): boolean {
+  if (here.has(planned.key)) return false;
+  const deletedAt = tombstones.get(planned.key);
+  if (deletedAt === undefined) return false;
+  return planned.remoteUpdatedAt === null || planned.remoteUpdatedAt <= deletedAt;
+}
+
+/**
  * An access rule: added when the map has none for the subject. One the import added before and
  * nobody changed since follows Wanderer's role; any other rule here is kept.
  */

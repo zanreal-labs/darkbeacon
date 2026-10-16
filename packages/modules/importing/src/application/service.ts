@@ -157,11 +157,12 @@ export class ImportService {
     const mapId = request.mapId;
     const role = await this.requireMergeRole(account, mapId);
     const admin = hasMapRole(role, 'admin');
-    const [map, systems, connections, signatures, rules, links] = await Promise.all([
+    const [map, systems, connections, signatures, signatureTombstones, rules, links] = await Promise.all([
       this.deps.target.map(account, mapId),
       this.deps.target.systems(account, mapId),
       this.deps.target.connections(account, mapId),
       this.deps.target.signatures(account, mapId),
+      this.deps.target.signatureTombstones(account, mapId),
       admin ? this.deps.access.list(account, mapId) : Promise.resolve(null),
       this.deps.links.list(mapId, sourceKey(job.source)),
     ]);
@@ -174,7 +175,15 @@ export class ImportService {
     });
     const { outcome, conflicts } = assess(
       placed,
-      { labels: map.labels, systemLabels: map.systemLabels, systems, connections, signatures, rules },
+      {
+        labels: map.labels,
+        systemLabels: map.systemLabels,
+        systems,
+        connections,
+        signatures,
+        signatureTombstones,
+        rules,
+      },
       index,
       { removeMissing: false, includeAccess: admin },
     );

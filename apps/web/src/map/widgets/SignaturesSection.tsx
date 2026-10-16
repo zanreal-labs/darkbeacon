@@ -43,7 +43,7 @@ import { TypeLabel } from '../signatures/catalog';
 import { TypeReferenceButton } from '../../reference/WormholeReferenceHost';
 import { ageLabel, freshness, GROUP_LABEL, targetOf, visibleSignatures } from '../signatures/facts';
 import { OtherFilters } from '../signatures/FilterChips';
-import { SCAN_COLOR_VARS, ScanMark, scanColor, scanTitle } from '../signatures/scan';
+import { isIdentifiedWormhole, SCAN_COLOR_VARS, ScanMark, scanColor, scanTitle } from '../signatures/scan';
 import { LeadsToMenu } from '../signatures/LeadsToMenu';
 import { announceLink } from '../signatures/onLink';
 import {
@@ -420,6 +420,7 @@ export function SignaturesSection({
               data-group={s.group}
               data-kind={s.kind ?? 'signature'}
               data-scan={scanColor(s) ?? undefined}
+              data-wormhole={isIdentifiedWormhole(s) || undefined}
               data-selected={isSelected || undefined}
               data-bubbled={s.bubbled || undefined}
               aria-selected={can.edit ? isSelected : undefined}

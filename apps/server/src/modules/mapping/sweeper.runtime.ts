@@ -22,7 +22,7 @@ export const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 /**
  * Runs the sweeper (`ChainSweeper`) over every map every five minutes with the instance's
  * settings (Admin, Instance): EOL as lifetimes run out, expired wormholes deleted, idle systems
- * hidden. Not in tests (they call `runOnce`), not in demo mode, not during maintenance.
+ * hidden, and each map's lazy delete of day-old signatures (Map settings, Signatures). Not in tests (they call `runOnce`), not in demo mode, not during maintenance.
  */
 @Injectable()
 export class SweeperRuntime implements OnApplicationBootstrap, OnModuleDestroy {
@@ -60,7 +60,7 @@ export class SweeperRuntime implements OnApplicationBootstrap, OnModuleDestroy {
 
   /** One pass over every map; a pass still running makes the next one a no-op. */
   async runOnce(): Promise<SweepResult> {
-    const total: SweepResult = { eol: 0, deleted: 0, hidden: 0 };
+    const total: SweepResult = { eol: 0, deleted: 0, hidden: 0, signatures: 0 };
     if (this.running || this.maintenance.active) return total;
     this.running = true;
     try {
@@ -79,15 +79,16 @@ export class SweeperRuntime implements OnApplicationBootstrap, OnModuleDestroy {
           total.eol += done.eol;
           total.deleted += done.deleted;
           total.hidden += done.hidden;
+          total.signatures += done.signatures;
         } catch (error) {
           this.logger.error(
             `sweeping map ${mapId}: ${error instanceof Error ? error.message : String(error)}`,
           );
         }
       }
-      if (total.eol + total.deleted + total.hidden > 0)
+      if (total.eol + total.deleted + total.hidden + total.signatures > 0)
         this.logger.log(
-          `marked ${total.eol} EOL, deleted ${total.deleted} expired, hid ${total.hidden} idle systems`,
+          `marked ${total.eol} EOL, deleted ${total.deleted} expired, hid ${total.hidden} idle systems, lazily deleted ${total.signatures} signatures`,
         );
       return total;
     } finally {

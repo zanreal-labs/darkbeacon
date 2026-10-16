@@ -25,6 +25,7 @@ import { createApp } from '../../app.js';
 import { parseEnv } from '../../config/config.js';
 import { Browser } from '../../test-support/browser.js';
 import { startFakeWanderer } from '../../test-support/fake-wanderer.js';
+import { SweeperRuntime } from '../mapping/sweeper.runtime.js';
 import { IMPORTING_DEPS } from './importing.module.js';
 
 describeEachDialect('imports from Wanderer over HTTP', (t) => {
@@ -530,6 +531,132 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
     const history = await owner.json<AuditPageDto>(`/api/maps/${mapId}/history?types=import.sync_changed`);
     expect(history.entries.map((e) => e.diff.syncing?.after)).toEqual([false, true]);
   });
+
+  it("a sync's pull removes the signatures Wanderer deleted or replaced, not ones changed or deleted here", async () => {
+    await allowPrivate();
+    const job = await importNew(owner, { keepSyncing: { intervalMinutes: 5 } });
+    const mapId = job.mapId!;
+    const deps = app.get<ImportingDeps>(IMPORTING_DEPS);
+    const syncId = (await owner.json<ImportSyncDto>(`/api/maps/${mapId}/import-sync`)).id;
+    const sync = (await deps.syncs.find(syncId))!;
+    expect(sync.removeMissing).toBe(false);
+    const every = async () =>
+      new Map((await deps.target.signatures(sync.actor, mapId)).map((s) => [s.eveId, s]));
+    const before = await every();
+    expect([...before.keys()]).toEqual(
+      expect.arrayContaining(['PKM-342', 'EHX-232', 'NNV-694', 'HPW-234', 'CXF-894', 'DWR-193', 'HID-001']),
+    );
+    // Wanderer's soft-deleted row was never imported.
+    expect(before.has('DEL-404')).toBe(false);
+
+    const now = new Date().toISOString();
+    const row = (eveId: string) => wanderer.map.signatures.find((g) => g.eve_id === eveId)!;
+    // In Wanderer: a relic site deleted (JSON:API still lists it, `deleted: true`; the other routes
+    // leave it out), a data site gone from every list, a gas site re-scanned under a new id, an
+    // ore site re-pasted as what it really is, a hole of a hidden system deleted.
+    row('PKM-342').deleted = true;
+    row('PKM-342').updated_at = now;
+    wanderer.map.signatures.splice(wanderer.map.signatures.indexOf(row('EHX-232')), 1);
+    Object.assign(row('NNV-694'), { eve_id: 'QRS-111', id: 'c3b7c8f4-5d0e-4c4a-9d0a-111111111111' });
+    Object.assign(row('QRS-111'), { inserted_at: now, updated_at: now });
+    Object.assign(row('HPW-234'), {
+      group: 'Gas Site',
+      name: 'Bountiful Frontier Reservoir',
+      updated_at: now,
+    });
+    row('HID-001').deleted = true;
+    // Deleted in Wanderer too, but someone wrote on it here since the pull: it stays.
+    row('CXF-894').deleted = true;
+    await owner.json(`/api/maps/${mapId}/signatures/${before.get('CXF-894')!.id}`, {
+      method: 'PATCH',
+      json: { description: 'Sleepers asleep, run it later' },
+    });
+    // Removed here, unchanged in Wanderer: the pull does not bring it back.
+    await owner.request(`/api/maps/${mapId}/signatures/${before.get('DWR-193')!.id}`, { method: 'DELETE' });
+
+    const pullNow = async () => {
+      await deps.syncs.update({ ...(await deps.syncs.find(syncId))!, nextRunAt: 0 });
+      expect(await app.get(SyncScheduler).tick()).toBe(1);
+      await drain();
+      const pulled = (await owner.json<ImportSyncDto>(`/api/maps/${mapId}/import-sync`))!;
+      return owner.json<ImportJobDto>(`/api/imports/${pulled.lastJobId}`);
+    };
+    const pull = await pullNow();
+    expect(pull.status).toBe('done');
+    expect(pull.outcome.signatures).toMatchObject({ created: 1, updated: 1, removed: 4 });
+    // Only signatures: the rest still needs removals asked for.
+    expect(pull.outcome.systems!.removed).toBe(0);
+    expect(pull.outcome.connections!.removed).toBe(0);
+
+    const after = await every();
+    for (const gone of ['PKM-342', 'EHX-232', 'NNV-694', 'HID-001', 'DWR-193'])
+      expect(after.has(gone)).toBe(false);
+    expect(after.get('QRS-111')).toMatchObject({ group: 'gas' });
+    expect(after.get('HPW-234')).toMatchObject({ group: 'gas', name: 'Bountiful Frontier Reservoir' });
+    expect(after.get('CXF-894')!.description).toBe('Sleepers asleep, run it later');
+    expect(after.size).toBe(before.size - 5 + 1);
+
+    // Each removal is in the history, as the import, and leaves a tombstone.
+    const history = await owner.json<AuditPageDto>(
+      `/api/maps/${mapId}/history?types=signature.removed&limit=50`,
+    );
+    // The hidden system's goes quietly, as everything about it.
+    expect(history.entries.filter((e) => e.channel.id?.startsWith('wanderer:'))).toHaveLength(3);
+    const tombstones = await deps.target.signatureTombstones(sync.actor, mapId);
+    expect([...tombstones.keys()]).toEqual(
+      expect.arrayContaining([
+        '31002531:PKM-342',
+        '31002531:EHX-232',
+        '31001924:NNV-694',
+        '31002385:HID-001',
+      ]),
+    );
+
+    // The next pull changes nothing.
+    const again = await pullNow();
+    expect(again.outcome.signatures).toMatchObject({ created: 0, updated: 0, removed: 0 });
+    expect((await every()).size).toBe(after.size);
+  }, 60_000);
+
+  it('does not bring back what the lazy delete removed, unless Wanderer scanned it again', async () => {
+    await allowPrivate();
+    const row = (eveId: string) => wanderer.map.signatures.find((g) => g.eve_id === eveId)!;
+    const dayAndAHalf = new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString();
+    for (const eveId of ['PKM-342', 'EHX-232'])
+      Object.assign(row(eveId), { inserted_at: dayAndAHalf, updated_at: dayAndAHalf });
+    const job = await importNew(owner, { keepSyncing: { intervalMinutes: 5 } });
+    const mapId = job.mapId!;
+    const deps = app.get<ImportingDeps>(IMPORTING_DEPS);
+    const syncId = (await owner.json<ImportSyncDto>(`/api/maps/${mapId}/import-sync`)).id;
+    const actor = (await deps.syncs.find(syncId))!.actor;
+    const codes = async () => new Set((await deps.target.signatures(actor, mapId)).map((s) => s.eveId));
+    expect((await codes()).has('PKM-342')).toBe(true);
+
+    // Added in Wanderer a day and a half ago: gone. (Wanderer's JSON:API gives no times, so the
+    // hidden system's signatures count from the import.)
+    await app.get(SweeperRuntime).runOnce();
+    let left = await codes();
+    for (const gone of ['PKM-342', 'EHX-232']) expect(left.has(gone)).toBe(false);
+    expect(left.has('HID-001')).toBe(true);
+    expect(left.has('NNV-694')).toBe(true);
+    const history = await owner.json<AuditPageDto>(`/api/maps/${mapId}/history?types=signature.removed`);
+    expect(history.entries.map((e) => e.channel)).toEqual([
+      expect.objectContaining({ kind: 'system', id: 'sweeper' }),
+      expect.objectContaining({ kind: 'system', id: 'sweeper' }),
+    ]);
+
+    // Wanderer scans one of them again; the other is just still listed there.
+    Object.assign(row('EHX-232'), {
+      name: 'Unsecured Frontier Database',
+      updated_at: new Date().toISOString(),
+    });
+    await deps.syncs.update({ ...(await deps.syncs.find(syncId))!, nextRunAt: 0 });
+    expect(await app.get(SyncScheduler).tick()).toBe(1);
+    await drain();
+    left = await codes();
+    expect(left.has('EHX-232')).toBe(true);
+    expect(left.has('PKM-342')).toBe(false);
+  }, 60_000);
 
   it('cancels a staged import, which cannot start then', async () => {
     await allowPrivate();

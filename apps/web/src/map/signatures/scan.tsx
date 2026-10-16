@@ -22,10 +22,24 @@ import styles from './signatures.module.css';
  * scanned (https://wiki.eveuniversity.org/Exploration).
  *
  * Groups. 119.3 "added icons for each type of exploration site to the Probe Scanner window and
- * solar system map"; none of these sources gives the groups colours, and the game has none: a
- * wormhole and a data site scanned to 100 % are the same green. So the group is told by its icon
- * (ours, drawn after the game's: a vortex, a reticle, a chip, a ruin, a cloud, a rock), the colour
- * says how far it was scanned, and the outline what it is (circle: signature, diamond: anomaly).
+ * solar system map": the group is told by its icon (ours, drawn after the game's: a vortex, a
+ * reticle, a chip, a ruin, a cloud, a rock), the colour of the mark says how far it was scanned
+ * (a wormhole's aside, below), and the outline what it is (circle: signature, diamond: anomaly).
+ *
+ * Wormholes. In the game an identified wormhole is told apart from the sites by its own icon in
+ * the probe scanner (119.3, above). Its colour is not documented: the CCP posts above and EVE
+ * University's Exploration and Cosmic signature pages give the scan bands only, no hue per group,
+ * and a wormhole scanned down is the same green as a site. Players coming from Wanderer know
+ * wormholes in a colour of their own ("Color signatures by type", on by default: wormholes sky
+ * blue, sites lime, unscanned rose; assets/js/hooks/Mapper/components/mapInterface/widgets/
+ * SystemSignatures/helpers/rowStyles.ts in our fork). So an identified wormhole (group known,
+ * whatever its strength) takes its own colour in the ID and Group cells, its mark included (a
+ * narrow window shows only the mark of the group), with a bar at the row's start; how far it was
+ * probed stays in the group cell's title. An unscanned result stays red: it is no wormhole yet.
+ * The hue is ours, as no source gives one: the map's W-space class pill (`pill-wormhole`,
+ * #7b93ff), a blue-violet clear of the scan reds, oranges, yellows and greens and of the security
+ * colours (1.0 is cyan #2fefef, 0.9 teal); on light themes a darker one (#3550d0, 6.5 : 1 on
+ * white).
  *
  * Hex. The sources name the colours but give no values; these are the client's hues as close as
  * we could match them, fixed in every theme like SECURITY_COLORS. On light themes the game's
@@ -42,10 +56,21 @@ export const SCAN_COLORS: Readonly<Record<ScanColor, { game: string; light: stri
   green: { game: '#4fd04a', light: '#17802a' },
 };
 
-/** The colours as custom properties (`--scan-red`, ...), the game's on dark themes. */
+/** An identified wormhole's colour (see Wormholes above): the W-space pill's, darker on light themes. */
+export const WORMHOLE_COLOR = { game: '#7b93ff', light: '#3550d0' } as const;
+
+/** The colours as custom properties (`--scan-red`, ..., `--scan-wormhole`), the game's on dark themes. */
 export const SCAN_COLOR_VARS = Object.fromEntries(
-  Object.entries(SCAN_COLORS).map(([name, c]) => [`--scan-${name}`, `light-dark(${c.light}, ${c.game})`]),
+  Object.entries({ ...SCAN_COLORS, wormhole: WORMHOLE_COLOR }).map(([name, c]) => [
+    `--scan-${name}`,
+    `light-dark(${c.light}, ${c.game})`,
+  ]),
 ) as CSSProperties;
+
+/** A result known to be a wormhole: a cosmic signature with its group identified as one. */
+export function isIdentifiedWormhole(sig: Pick<SignatureDto, 'kind' | 'group'>): boolean {
+  return (sig.kind ?? 'signature') === 'signature' && sig.group === 'wormhole';
+}
 
 /** The probe scanner's colour for a signal strength in percent. */
 export function strengthColor(percent: number): ScanColor {
@@ -107,7 +132,8 @@ const GLYPH: Record<SignatureGroup, string | null> = {
 
 /**
  * The result's mark: the group's icon in a circle (a signature) or a diamond (an anomaly), in
- * the colour of how far it was scanned (`--scan`, set on the row). Nothing for other results.
+ * the colour of how far it was scanned (`--scan`, set on the row), an identified wormhole's in
+ * the wormhole colour. Nothing for other results.
  */
 export function ScanMark({
   signature,

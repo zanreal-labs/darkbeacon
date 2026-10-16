@@ -14,6 +14,7 @@ import {
   decideConnection,
   decideSignature,
   decideSystem,
+  removedHere,
   type ConnectionWrite,
   type SignatureWrite,
   type SystemWrite,
@@ -74,6 +75,8 @@ export interface TargetState {
   systems: MapSystemDto[];
   connections: ConnectionDto[];
   signatures: SignatureDto[];
+  /** When signatures were deleted on the map (by plan key); those are not added again. */
+  signatureTombstones?: ReadonlyMap<string, number>;
   /** Null when the caller may not see or change access rules. */
   rules: AccessRuleDto[] | null;
 }
@@ -185,10 +188,12 @@ export function assess(
   }
 
   const signatures = new Map(state.signatures.map((s) => [`${s.solarSystemId}:${s.eveId}`, s]));
+  const deletedHere = state.signatureTombstones ?? new Map<string, number>();
   for (const planned of plan.signatures) {
     if (
-      !systems.has(planned.solarSystemId) &&
-      !plan.systems.some((s) => s.solarSystemId === planned.solarSystemId)
+      (!systems.has(planned.solarSystemId) &&
+        !plan.systems.some((s) => s.solarSystemId === planned.solarSystemId)) ||
+      removedHere(planned, signatures, deletedHere)
     ) {
       outcome.signatures!.skipped++;
       continue;

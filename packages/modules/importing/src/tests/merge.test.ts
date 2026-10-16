@@ -1,7 +1,13 @@
 import type { ConnectionDto, MapSystemDto, SignatureDto } from '@darkbeacon/shared';
 import { describe, expect, it } from 'vitest';
 import { apiDump, SYS, systemName } from '../test-support.js';
-import { decideAccess, decideConnection, decideSignature, decideSystem } from '../domain/decide.js';
+import {
+  decideAccess,
+  decideConnection,
+  decideSignature,
+  decideSystem,
+  removedHere,
+} from '../domain/decide.js';
 import { mergeFields } from '../domain/merge.js';
 import { translate } from '../domain/translate.js';
 
@@ -248,5 +254,23 @@ describe('import decisions', () => {
     });
     expect(decideAccess(rule, existing, { role: 'member', ruleId: 'r1' }).action).toBe('replace');
     expect(decideAccess(rule, { ...existing, role: 'admin' }, null).action).toBe('unchanged');
+  });
+});
+
+describe('signatures deleted on the map', () => {
+  const key = '31002531:PKM-342';
+  const deletedAt = Date.parse('2026-10-14T12:00:00Z');
+  const tombstones = new Map([[key, deletedAt]]);
+
+  it('are not added again while Wanderer has not changed them since', () => {
+    const wanderer = (at: string | null) => ({ key, remoteUpdatedAt: at === null ? null : Date.parse(at) });
+    expect(removedHere(wanderer('2026-10-14T11:59:00Z'), new Map(), tombstones)).toBe(true);
+    // Wanderer gave no time: the deletion here stands.
+    expect(removedHere(wanderer(null), new Map(), tombstones)).toBe(true);
+    // Scanned again in Wanderer after it was deleted here: it comes back.
+    expect(removedHere(wanderer('2026-10-14T12:05:00Z'), new Map(), tombstones)).toBe(false);
+    // Never deleted, or here again (pasted anew): merged as usual.
+    expect(removedHere({ key: '31002531:EHX-232', remoteUpdatedAt: 0 }, new Map(), tombstones)).toBe(false);
+    expect(removedHere(wanderer(null), new Map([[key, {}]]), tombstones)).toBe(false);
   });
 });
