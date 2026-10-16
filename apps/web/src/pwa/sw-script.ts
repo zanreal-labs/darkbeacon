@@ -30,7 +30,10 @@ self.addEventListener('activate', (event) => {
     (async () => {
       for (const key of await caches.keys())
         if (key.startsWith(${JSON.stringify(CACHE_PREFIX)}) && key !== CACHE) await caches.delete(key);
-      if (self.registration.navigationPreload) await self.registration.navigationPreload.enable();
+      // Off, and switched off where an earlier worker turned it on: with it on, the browser sends
+      // its preload for every navigation, also those this worker leaves alone, and then fetches
+      // them again. An SSO callback sent twice spends its one-time code on the first and fails.
+      if (self.registration.navigationPreload) await self.registration.navigationPreload.disable();
       await self.clients.claim();
     })(),
   );

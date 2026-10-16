@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { Body, Controller, Get, HttpCode, Inject, Logger, Post, Query, Req, Res } from '@nestjs/common';
 import { InstanceSettingsService } from '@darkbeacon/access';
 import { isDomainError, requireAccount, type Actor } from '@darkbeacon/core';
@@ -39,6 +40,14 @@ import { SignInAudit } from './sign-in-audit.js';
 type CallbackQuery = { code?: string; state?: string; error?: string };
 
 const PENDING_PATH = '/api/auth';
+/** How long a finished callback's outcome is kept for a duplicate of it (see `redirect`). */
+const DUPLICATE_WINDOW_MS = 30_000;
+
+/** What a callback answered: where it sent the browser and the cookies it set. */
+interface CallbackOutcome {
+  location: string;
+  cookies: string[];
+}
 
 /** Where Discord and EVE SSO send people back to; registered with each provider. */
 export const oauthCallbackUrl = (config: AppConfig, provider: 'discord' | 'eve') =>
@@ -48,6 +57,8 @@ export const oauthCallbackUrl = (config: AppConfig, provider: 'discord' | 'eve')
 export class AuthController {
   private readonly logger = new Logger('Auth');
   private readonly secure: boolean;
+  /** Callbacks in progress or just finished, by provider and state (see `redirect`). */
+  private readonly callbacks = new Map<string, Promise<CallbackOutcome>>();
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
@@ -131,6 +142,7 @@ export class AuthController {
       async (reason) => {
         if (pending?.kind !== 'discord-connect') await this.audit.failed('discord', reason);
       },
+      callbackKey('discord', query, readCookie(request, PENDING_COOKIE)),
     );
   }
 
@@ -189,6 +201,7 @@ export class AuthController {
       async (reason) => {
         if (signingIn) await this.audit.failed('eve', reason);
       },
+      callbackKey('eve', query, readCookie(request, PENDING_COOKIE)),
     );
   }
 
@@ -288,19 +301,60 @@ export class AuthController {
     fallback: string,
     work: () => Promise<string>,
     onFailure?: (reason: string) => Promise<void>,
+    duplicateKey?: string | null,
   ): Promise<void> {
-    let location: string;
-    try {
-      location = await work();
-    } catch (error) {
-      if (!isDomainError(error))
-        this.logger.error(error instanceof Error ? (error.stack ?? error.message) : error);
-      const reason = isDomainError(error) ? error.message : 'Sign-in failed, please try again';
-      await onFailure?.(reason);
-      location = withError(fallback, reason);
+    // The same callback twice (a browser or worker sending the navigation again, a double click):
+    // the provider's code works once, so the copy gets the first one's answer and cookies instead
+    // of spending the code again and showing an error over a sign-in that worked.
+    const earlier = duplicateKey ? this.callbacks.get(duplicateKey) : undefined;
+    if (earlier) {
+      const outcome = await earlier;
+      for (const cookie of outcome.cookies) this.addCookie(reply, cookie);
+      await reply.code(302).header('location', outcome.location).send();
+      return;
     }
+    const outcome = (async (): Promise<CallbackOutcome> => {
+      let location: string;
+      try {
+        location = await work();
+      } catch (error) {
+        if (!isDomainError(error))
+          this.logger.error(error instanceof Error ? (error.stack ?? error.message) : error);
+        const reason = isDomainError(error) ? error.message : 'Sign-in failed, please try again';
+        await onFailure?.(reason);
+        location = withError(fallback, reason);
+      }
+      return { location, cookies: setCookies(reply) };
+    })();
+    if (duplicateKey) {
+      this.callbacks.set(duplicateKey, outcome);
+      void outcome.finally(() => {
+        setTimeout(() => this.callbacks.delete(duplicateKey), DUPLICATE_WINDOW_MS).unref();
+      });
+    }
+    const { location } = await outcome;
     await reply.code(302).header('location', location).send();
   }
+}
+
+/**
+ * Identifies one provider round trip in one browser: the code and state from the URL plus the
+ * sealed round-trip cookie only that browser holds, so someone replaying a leaked callback URL
+ * never gets the first request's session.
+ */
+function callbackKey(
+  provider: 'discord' | 'eve',
+  query: CallbackQuery,
+  pending: string | null,
+): string | null {
+  if (!query.state || !query.code || !pending) return null;
+  const hash = createHash('sha256').update(`${query.state}\n${query.code}\n${pending}`).digest('base64url');
+  return `${provider}:${hash}`;
+}
+
+function setCookies(reply: FastifyReply): string[] {
+  const current = reply.getHeader('set-cookie');
+  return current === undefined ? [] : Array.isArray(current) ? current.map(String) : [String(current)];
 }
 
 function userAgent(request: FastifyRequest): string | null {

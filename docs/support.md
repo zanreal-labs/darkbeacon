@@ -53,8 +53,8 @@ in the help menu are different again: an anonymous telemetry event with an enum 
 
 ## Turning it off or pointing it elsewhere
 
-| Variable          | Default                          | Meaning                                                           |
-| ----------------- | -------------------------------- | ----------------------------------------------------------------- |
+| Variable          | Default                        | Meaning                                                           |
+| ----------------- | ------------------------------ | ----------------------------------------------------------------- |
 | `SUPPORT_HUB_URL` | `https://app.darkbeacon.space` | where the help menu sends people; `off` hides the support entries |
 
 Without a hub the help menu keeps "What's new" and the documentation. A fork can run its own hub (below)

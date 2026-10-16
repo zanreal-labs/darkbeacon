@@ -216,6 +216,31 @@ describeEachDialect('identity and access over HTTP', (t) => {
     expect(anonymousEve.headers.get('location')).toMatch(/auth_error=Sign/);
   });
 
+  it('answers a callback the browser sends twice with the first one’s sign-in', async () => {
+    const alice = browser();
+    const begin = await alice.request('/api/auth/discord/login?returnTo=/m/home');
+    const provider = new URL(begin.headers.get('location')!);
+    const code = network.approveDiscord(
+      discordUser('1004', 'twice'),
+      provider.searchParams.get('code_challenge'),
+    );
+    const callback = `/api/auth/discord/callback?code=${code}&state=${provider.searchParams.get('state')}`;
+    // Both copies leave before either answer comes back, as a navigation preload and its fetch do.
+    const roundTrip = alice.cookies.get('dbk_oauth')!;
+    const copy = browser();
+    copy.cookies.set('dbk_oauth', roundTrip);
+    const [first, second] = await Promise.all([alice.request(callback), copy.request(callback)]);
+    expect(first.headers.get('location')).toBe('/m/home');
+    expect(second.headers.get('location')).toBe('/m/home');
+    expect(copy.cookies.get('dbk_session')).toBe(alice.cookies.get('dbk_session'));
+
+    // A leaked callback URL without that browser's round-trip cookie gets nothing.
+    const mallory = browser();
+    const stolen = await mallory.request(callback);
+    expect(stolen.headers.get('location')).toMatch(/auth_error=/);
+    expect(mallory.cookies.has('dbk_session')).toBe(false);
+  });
+
   it('dev login, admin roles, settings and log out everywhere', async () => {
     const owner = browser();
     const me = await owner.json<MeDto>('/api/auth/dev', {

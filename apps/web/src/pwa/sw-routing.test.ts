@@ -145,7 +145,7 @@ function runWorker(script: string, fetchImpl: (req: unknown) => Promise<Response
       (await open(options?.cacheName ?? [...stores.keys()][0]!)).match(req),
   };
   const registration = {
-    navigationPreload: { enable: vi.fn(async () => {}) },
+    navigationPreload: { enable: vi.fn(async () => {}), disable: vi.fn(async () => {}) },
     unregister: vi.fn(async () => true),
   };
   const self = {
@@ -182,12 +182,25 @@ describe('the service worker script', () => {
     );
     await worker.dispatch('activate');
     expect([...worker.stores.keys()].sort()).toEqual(['darkbeacon-static-b2', 'someone-else']);
-    expect(worker.registration.navigationPreload.enable).toHaveBeenCalled();
+    // Navigation preload stays off: with it on, navigations the worker leaves alone (SSO
+    // callbacks) would reach the server twice.
+    expect(worker.registration.navigationPreload.disable).toHaveBeenCalled();
+    expect(worker.registration.navigationPreload.enable).not.toHaveBeenCalled();
     expect(worker.self.clients.claim).toHaveBeenCalled();
     // It waits for the page to say so before replacing a running worker.
     expect(worker.self.skipWaiting).not.toHaveBeenCalled();
     await worker.dispatch('message', { data: { type: 'SKIP_WAITING' } });
     expect(worker.self.skipWaiting).toHaveBeenCalledOnce();
+  });
+
+  it('leaves SSO callback navigations to the browser', async () => {
+    const fetchImpl = vi.fn(async () => new Response(''));
+    const worker = runWorker(serviceWorkerScript('b1'), fetchImpl);
+    const { event } = await worker.dispatch('fetch', {
+      request: page('/api/auth/eve/callback?code=c&state=s'),
+    });
+    expect(event.respondWith).not.toHaveBeenCalled();
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it('does not intercept API calls at all', async () => {
