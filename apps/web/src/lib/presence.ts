@@ -10,7 +10,6 @@ import {
   type PresenceEditing,
   type PresencePeerDto,
   type PresencePeerPatch,
-  type PresenceSelection,
   type PresenceSettingsDto,
   type PresenceStatePatch,
   type UpdatePresenceSettingsRequest,
@@ -18,6 +17,7 @@ import {
 import { api } from './api';
 import type { PresenceMessage, RealtimeClient } from './realtime';
 import { useRealtime } from './RealtimeProvider';
+import { ActivityTracker, type ActivityReporter, type ActivityTimers } from './presence-activity';
 import { presenceSettingsKey } from './session-keys';
 
 const NO_PEERS: readonly PresencePeerDto[] = [];
@@ -181,13 +181,65 @@ export function editorsOf(
 }
 
 export interface PresencePublisher {
-  /** The pointer in map (flow) coordinates; null when it leaves the canvas. */
+  /**
+   * The pointer in map (flow) coordinates; null when it leaves the canvas. Remembered always,
+   * shared only while this tab is changing something.
+   */
   cursor(point: MapPoint | null): void;
   /** Systems being dragged and where they would land; null when the drag ends. */
   drag(drag: PresenceDrag | null): void;
   /** What this tab has open for editing; null when closed. */
   editing(editing: PresenceEditing | null): void;
-  selection(selection: PresenceSelection | null): void;
+  /** What this tab is actively changing: the others see its cursor only meanwhile. */
+  activity: ActivityReporter;
+}
+
+/**
+ * Shares this tab's cursor and drag preview only while it is changing something (and the grace
+ * time after): moving the mouse, hovering or selecting sends nothing. The activity starting
+ * sends where the pointer is; it ending clears the cursor for everyone. The store throttles.
+ */
+export class ActivePresence implements PresencePublisher {
+  private pointer: MapPoint | null = null;
+  private dragging: PresenceDrag | null = null;
+  private readonly tracker: ActivityTracker;
+  readonly activity: ActivityReporter;
+
+  constructor(
+    private readonly send: (patch: PresenceStatePatch) => void,
+    options: { graceMs?: number; timers?: ActivityTimers } = {},
+  ) {
+    this.tracker = new ActivityTracker(
+      (activity) =>
+        this.send(
+          activity
+            ? { activity, cursor: this.pointer, drag: this.dragging }
+            : { activity: null, cursor: null, drag: null },
+        ),
+      options,
+    );
+    this.activity = {
+      begin: (token, activity) => this.tracker.begin(token, activity),
+      end: (token) => this.tracker.end(token),
+      pulse: (activity) => this.tracker.pulse(activity),
+    };
+  }
+
+  cursor = (point: MapPoint | null): void => {
+    this.pointer = point;
+    if (this.tracker.active) this.send({ cursor: point });
+  };
+
+  drag = (drag: PresenceDrag | null): void => {
+    this.dragging = drag;
+    if (this.tracker.active) this.send({ drag });
+  };
+
+  editing = (editing: PresenceEditing | null): void => this.send({ editing });
+
+  dispose(): void {
+    this.tracker.dispose();
+  }
 }
 
 export interface MapPresence {
@@ -198,36 +250,38 @@ export interface MapPresence {
   publish: PresencePublisher;
 }
 
+const idlePublisher: PresencePublisher = {
+  cursor: () => {},
+  drag: () => {},
+  editing: () => {},
+  activity: { begin: () => {}, end: () => {}, pulse: () => {} },
+};
+
 /**
  * Presence on a map: joins while mounted (others see this tab), returns the others and stable
- * functions to share the cursor, a drag preview, an editing marker and the selection.
+ * functions to share what this tab is changing, with its cursor and drag preview meanwhile.
  * `stream` is `map:<id>`; null while unknown. Respecting "show others" is the server's job.
  */
 export function useMapPresence(stream: string | null): MapPresence {
   const client = useRealtime();
   // Made during render (it does nothing until started), started and stopped by the effect.
   const store = useMemo(() => (stream ? new PresenceStore(client, stream) : null), [client, stream]);
+  const publish = useMemo(() => (store ? new ActivePresence((patch) => store.update(patch)) : null), [store]);
   useEffect(() => {
     if (!store) return;
     store.start();
-    return () => store.stop();
-  }, [store]);
+    return () => {
+      publish?.dispose();
+      store.stop();
+    };
+  }, [store, publish]);
   const peers = useSyncExternalStore(
     store?.subscribe ?? noopSubscribe,
     store?.getSnapshot ?? emptyPeers,
     emptyPeers,
   );
   const people = useMemo(() => peopleOf(peers), [peers]);
-  const publish = useMemo<PresencePublisher>(
-    () => ({
-      cursor: (cursor) => store?.update({ cursor }),
-      drag: (drag) => store?.update({ drag }),
-      editing: (editing) => store?.update({ editing }),
-      selection: (selection) => store?.update({ selection }),
-    }),
-    [store],
-  );
-  return { peers, people, publish };
+  return { peers, people, publish: publish ?? idlePublisher };
 }
 
 const noopSubscribe = () => () => {};

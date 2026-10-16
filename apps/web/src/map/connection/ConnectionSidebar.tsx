@@ -64,6 +64,7 @@ import {
 } from './format';
 import { TypeReferenceButton } from '../../reference/WormholeReferenceHost';
 import { shipIcon } from './ShipPicker';
+import { useActivity } from '../presence/activity';
 import sidebarStyles from '../widgets/widgets.module.css';
 import styles from './connection.module.css';
 
@@ -230,6 +231,7 @@ function ConnectionDetails({
   store: Store;
   now: number;
 }) {
+  const activity = useActivity();
   if (c.type !== 'wormhole')
     return (
       <p className={sidebarStyles.empty}>
@@ -252,9 +254,10 @@ function ConnectionDetails({
             className={styles.select}
             value={c.massStatus}
             options={MASS_OPTIONS}
-            onValueChange={(massStatus) =>
-              void store.updateConnection(c.id, { massStatus: massStatus as MassStatus })
-            }
+            onValueChange={(massStatus) => {
+              activity.pulse({ verb: 'editing', target: { kind: 'connection', id: c.id } });
+              void store.updateConnection(c.id, { massStatus: massStatus as MassStatus });
+            }}
           />
         ) : (
           `${MASS_WORD[c.massStatus]} (${MASS_MEANING[c.massStatus]})`
@@ -269,9 +272,10 @@ function ConnectionDetails({
             className={styles.select}
             value={c.timeStatus}
             options={TIME_OPTIONS}
-            onValueChange={(timeStatus) =>
-              void store.updateConnection(c.id, { timeStatus: timeStatus as TimeStatus })
-            }
+            onValueChange={(timeStatus) => {
+              activity.pulse({ verb: 'editing', target: { kind: 'connection', id: c.id } });
+              void store.updateConnection(c.id, { timeStatus: timeStatus as TimeStatus });
+            }}
           />
         ) : c.timeStatus === 'eol' ? (
           'End of life'

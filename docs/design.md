@@ -242,8 +242,10 @@ unless the template places `{tempName}` itself. The chain is walked from the hom
 - Context menus are short lists (at most about eight items, one line each with an icon and a key
   hint) with submenus for choices (`Status ▸`, `Labels ▸`, `Tags ▸`, `Mass ▸`, `Time ▸`...), never settings
   panels with chips or switches.
-- Other people on the map are arrow cursors with a name tag in their colour; the top bar says
-  `Live · 3 on this map`. No avatar circles for presence.
+- Other people's arrow cursors show only while they change something (move or link systems, edit,
+  paste a scan), with their name and what they do (`moving`, `editing J014348`) in their colour and
+  what they change outlined; they fade 2.5 s after. Moving the mouse or selecting shows nothing. The
+  top bar says `Live · 3 on this map`. No avatar circles for presence.
 
 ## The jump planner
 
@@ -308,8 +310,8 @@ Estimates are upper bounds (a hole may have spawned before anyone saw it) and sh
 
 ## Presence
 
-- Everyone on the map has one colour (`--dbk-presence-0` … `-7`) for their cursor, drag preview,
-  selection outline and editing marker, the same on every tab and map.
+- Everyone on the map has one colour (`--dbk-presence-0` … `-7`) for their cursor, the outline on
+  what they change and editing marker, the same on every tab and map. Selections are not shared.
 - "Who is here" shows one entry per person (portrait, character name, a tab count when above one), not
   per tab.
 - Cursors are opt-out on both sides (account page: share my cursor, show other people's cursors); who

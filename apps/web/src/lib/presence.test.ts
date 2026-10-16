@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PresencePeerDto } from '@darkbeacon/shared';
-import { editorsOf, peopleOf, PresenceStore } from './presence.js';
+import type { PresenceStatePatch } from '@darkbeacon/shared';
+import { ACTIVITY_GRACE_MS } from './presence-activity.js';
+import { ActivePresence, editorsOf, peopleOf, PresenceStore } from './presence.js';
 import { RealtimeClient } from './realtime.js';
 
 class FakeSocket {
@@ -41,6 +43,7 @@ const peer = (key: string, accountId: string, extra: Partial<PresencePeerDto> = 
   drag: null,
   editing: null,
   selection: null,
+  activity: null,
   ...extra,
 });
 
@@ -198,5 +201,46 @@ describe('people and editors', () => {
     ]);
     expect(editorsOf(peers, 'system', '7').map((p) => p.key)).toEqual(['b1']);
     expect(editorsOf(peers, 'system', '7', 'tag')).toEqual([]);
+  });
+});
+
+describe('ActivePresence', () => {
+  const setup = () => {
+    vi.useFakeTimers();
+    const sent: PresenceStatePatch[] = [];
+    return { sent, presence: new ActivePresence((patch) => sent.push(patch)) };
+  };
+
+  it('sends no cursor while the mouse only moves, hovers or selects', () => {
+    const { sent, presence } = setup();
+    for (let i = 0; i < 30; i++) presence.cursor({ x: i, y: i });
+    presence.drag(null);
+    expect(sent).toEqual([]);
+  });
+
+  it('shares the cursor from the start of an action to the end of its grace time', () => {
+    const { sent, presence } = setup();
+    presence.cursor({ x: 1, y: 2 });
+    const moving = { verb: 'moving', target: { kind: 'system', id: '31000005' } } as const;
+    presence.activity.begin('drag', moving);
+    expect(sent).toEqual([{ activity: moving, cursor: { x: 1, y: 2 }, drag: null }]);
+    presence.cursor({ x: 3, y: 4 });
+    presence.drag({ systems: [{ solarSystemId: 31000005, x: 3, y: 4 }] });
+    presence.drag(null);
+    presence.activity.end('drag');
+    // The grace time: the cursor still follows the mouse.
+    presence.cursor({ x: 5, y: 6 });
+    expect(sent.slice(1)).toEqual([
+      { cursor: { x: 3, y: 4 } },
+      { drag: { systems: [{ solarSystemId: 31000005, x: 3, y: 4 }] } },
+      { drag: null },
+      { cursor: { x: 5, y: 6 } },
+    ]);
+    vi.advanceTimersByTime(ACTIVITY_GRACE_MS);
+    expect(sent.at(-1)).toEqual({ activity: null, cursor: null, drag: null });
+    const count = sent.length;
+    presence.cursor({ x: 7, y: 8 });
+    expect(sent).toHaveLength(count);
+    presence.dispose();
   });
 });

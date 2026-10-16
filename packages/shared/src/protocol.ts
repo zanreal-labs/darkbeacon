@@ -22,7 +22,8 @@ import { SystemIntelDto } from './dto/intel.js';
  * ({op:'presence', full: true}) and then sends changes, coalesced per map at most PRESENCE_HZ
  * times a second, less on crowded maps (PRESENCE_PEER_BUDGET), as patches
  * ({op:'presence', full: false, peers: [{key, ...changed fields}], left: keys}). Unsubscribing,
- * losing access or closing the socket leaves.
+ * losing access or closing the socket leaves. A cursor and drag preview reach the others only
+ * while the peer's `activity` is set (it is changing something); selections are never shared.
  *
  * Intel (ephemeral, not events): {op:'intel', stream, systems} on a `map:<id>` stream the socket
  * follows, when sovereignty, hourly activity or kill counts of the map's systems changed. Clients

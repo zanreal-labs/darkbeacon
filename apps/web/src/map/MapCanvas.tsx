@@ -221,7 +221,6 @@ export function MapCanvas({
   const prefs = readOnly ? { ...ownPrefs, minimap: 'off' as const, dragSelects: false } : ownPrefs;
   // A right drag pans in the drag-to-select mode; its release must not open the pane menu.
   const rightDrag = useRef<{ x: number; y: number; moved: boolean } | null>(null);
-  const sharedSelection = useRef('null');
   const rf = useReactFlow<SystemNodeType, ConnectionEdgeType>();
   const [nodes, setNodes, onNodesChange] = useNodesState<SystemNodeType>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<ConnectionEdgeType>([]);
@@ -739,7 +738,7 @@ export function MapCanvas({
     if (e.pointerType === 'mouse' && (onPointerAt || presence)) {
       const at = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY });
       onPointerAt?.(at);
-      // Others see where this mouse points; the presence store keeps it to its rate.
+      // Remembered; the others see it only while this tab changes something (see ActivePresence).
       presence?.publish.cursor({ x: Math.round(at.x), y: Math.round(at.y) });
     }
   };
@@ -758,23 +757,28 @@ export function MapCanvas({
     }
   };
 
+  // Others see this tab's cursor only while it changes something: a drag, a connection drawn.
+  const pointerOf = (e: MouseEvent | TouchEvent) => {
+    const point = 'touches' in e ? e.touches[0] : e;
+    if (!point) return null;
+    const at = rf.screenToFlowPosition({ x: point.clientX, y: point.clientY });
+    return { x: Math.round(at.x), y: Math.round(at.y) };
+  };
+  const shareDrag = (e: MouseEvent | TouchEvent, dragged: SystemNodeType[]) => {
+    if (!presence) return;
+    const at = pointerOf(e);
+    if (at) presence.publish.cursor(at);
+    presence.publish.drag({
+      systems: dragged.slice(0, 50).map((n) => ({
+        solarSystemId: Number(n.id),
+        x: Math.round(n.position.x),
+        y: Math.round(n.position.y),
+      })),
+    });
+  };
+
   const onSelectionChange = ({ nodes: selected, edges: edgesSelected }: OnSelectionChangeParams) => {
-    // React Flow reports the selection again on every render: share it only when it changed.
-    const shared =
-      selected.length + edgesSelected.length > 0
-        ? {
-            systems: selected.slice(0, 200).map((n) => Number(n.id)),
-            connections: edgesSelected
-              .filter((e) => !e.id.startsWith('pending:'))
-              .slice(0, 200)
-              .map((e) => e.id),
-          }
-        : null;
-    const key = JSON.stringify(shared);
-    if (presence && key !== sharedSelection.current) {
-      sharedSelection.current = key;
-      presence.publish.selection(shared);
-    }
+    // A selection is not shared: selecting a system says nothing about changing it.
     setSelectedId(selected.length === 1 ? selected[0]!.id : null);
     // A click on a connection selects it alone; the sidebar then shows the connection.
     const edge = selected.length === 0 && edgesSelected.length === 1 ? edgesSelected[0]!.id : null;
@@ -815,15 +819,32 @@ export function MapCanvas({
           if (opened.current) lastView.current = viewport;
         }}
         onMoveEnd={(_, viewport) => saveViewport(viewport)}
-        onNodeDragStop={(_, __, dragged) =>
+        onNodeDragStart={(e, node, dragged) => {
+          presence?.publish.activity.begin('drag', {
+            verb: 'moving',
+            target: { kind: 'system', id: node.id },
+          });
+          shareDrag(e, dragged);
+        }}
+        onNodeDrag={(e, _, dragged) => shareDrag(e, dragged)}
+        onNodeDragStop={(_, __, dragged) => {
+          presence?.publish.drag(null);
+          presence?.publish.activity.end('drag');
           void store.moveSystems(
             dragged.map((n) => ({
               solarSystemId: Number(n.id),
               x: Math.round(n.position.x),
               y: Math.round(n.position.y),
             })),
-          )
+          );
+        }}
+        onConnectStart={(_, { nodeId }) =>
+          presence?.publish.activity.begin('link', {
+            verb: 'linking',
+            target: nodeId ? { kind: 'system', id: nodeId } : null,
+          })
         }
+        onConnectEnd={() => presence?.publish.activity.end('link')}
         onConnect={({ source, target }) => {
           if (source !== target) void store.addConnection(Number(source), Number(target));
         }}

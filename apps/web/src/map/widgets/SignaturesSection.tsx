@@ -53,6 +53,7 @@ import {
   type SignatureSortField,
 } from '../signatures/prefs';
 import { SignatureEditor } from '../signatures/SignatureEditor';
+import { useActivity, useHeldActivity } from '../presence/activity';
 import { rememberRemoved, useSignatureRemoval, useUndo } from '../signatures/undo';
 import type { MapStore } from '../useMapStore';
 import { usePhone } from './storage';
@@ -98,18 +99,29 @@ export function useSignaturePaste(
   const [busy, setBusy] = useState(false);
   const [replace, setReplace] = useState(() => signaturePrefs().lazyDelete);
   const { pasteSignatures } = store;
+  const activity = useActivity();
   const submit = useCallback(
     async (text: string) => {
       if (solarSystemId === null || !text.trim() || busy) return;
       setBusy(true);
-      const result = await pasteSignatures(solarSystemId, { text, mode: replace ? 'replace' : 'merge' });
-      setBusy(false);
+      // The others see "pasting scan" on the system until the grace time after it is in.
+      activity.begin('paste-scan', {
+        verb: 'pasting',
+        target: { kind: 'system', id: String(solarSystemId) },
+      });
+      let result: Awaited<ReturnType<typeof pasteSignatures>>;
+      try {
+        result = await pasteSignatures(solarSystemId, { text, mode: replace ? 'replace' : 'merge' });
+      } finally {
+        activity.end('paste-scan');
+        setBusy(false);
+      }
       if (!result) return;
       toast({ ...pasteSummary(result), tone: 'success' });
       if (result.removedSignatures?.length) rememberRemoved(mapId, solarSystemId, result.removedSignatures);
       if (replace && !signaturePrefs().keepLazyDelete) setReplace(false);
     },
-    [mapId, solarSystemId, busy, pasteSignatures, replace, toast],
+    [mapId, solarSystemId, busy, pasteSignatures, replace, toast, activity],
   );
   return { busy, replace, setReplace, submit };
 }
@@ -270,6 +282,13 @@ export function SignaturesSection({
     .flatMap((b) => b.signatures)
     .filter((s) => s.solarSystemId === solarSystemId && !live.has(s.eveId));
   const editingSig = editing ? signatures.find((s) => s.id === editing) : undefined;
+  // The others see "editing ABC-123" on the system while the signature editor is open.
+  useHeldActivity(
+    'edit-signature',
+    editingSig
+      ? { verb: 'editing', target: { kind: 'system', id: String(solarSystemId) }, label: editingSig.eveId }
+      : null,
+  );
 
   const onPaste = (e: ClipboardEvent) => {
     e.preventDefault();

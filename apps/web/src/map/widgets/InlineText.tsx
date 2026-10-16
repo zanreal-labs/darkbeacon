@@ -1,9 +1,14 @@
 'use client';
 
 import { useState, type KeyboardEvent, type Ref } from 'react';
+import type { PresenceActivity } from '@darkbeacon/shared';
+import { useActivity } from '../presence/activity';
 import styles from './widgets.module.css';
 
-/** A text value edited in place: saved on Enter or leaving the field, Escape puts it back. */
+/**
+ * A text value edited in place: saved on Enter or leaving the field, Escape puts it back. With
+ * `activity`, the others see it (and this tab's cursor) while someone types here.
+ */
 export function InlineText({
   label,
   value,
@@ -11,6 +16,7 @@ export function InlineText({
   maxLength,
   mono,
   inputRef,
+  activity,
   onCommit,
 }: {
   label: string;
@@ -19,9 +25,11 @@ export function InlineText({
   maxLength: number;
   mono?: boolean;
   inputRef?: Ref<HTMLInputElement>;
+  activity?: PresenceActivity;
   onCommit(value: string | null): void;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
+  const reporter = useActivity();
   const commit = () => {
     if (draft === null) return;
     const next = draft.trim();
@@ -45,7 +53,10 @@ export function InlineText({
       placeholder={placeholder}
       value={draft ?? value}
       onFocus={() => setDraft(value)}
-      onChange={(e) => setDraft(e.target.value)}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        if (activity) reporter.pulse(activity);
+      }}
       onBlur={commit}
       onKeyDown={onKeyDown}
     />
