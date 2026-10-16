@@ -125,4 +125,48 @@ describe('standings', () => {
     expect(of(cleared)).toBe(5);
     expect(cleared.overrides).toEqual([]);
   });
+
+  it('keeps the holders it could read when a token or a contact list fails, says so, and tries again soon', async () => {
+    const errors: string[] = [];
+    let esiDown = true;
+    const pilots: StandingPilots = {
+      // The main's token cannot be refreshed (SSO unreachable); the alt's works.
+      characters: async () => [
+        { id: 1, corporationId: 98000001, allianceId: 99000001, scopes: ALL },
+        { id: 2, corporationId: 98000002, allianceId: 99000002, scopes: ALL },
+      ],
+      accessToken: async (id) => {
+        if (id === 1 && esiDown) throw new TypeError('fetch failed');
+        return `token-${id}`;
+      },
+    };
+    const contacts: ContactsSource = {
+      contacts: async (owner) =>
+        owner.kind === 'alliance' && esiDown
+          ? { ok: false, retryAt: 0, reason: 'HTTP 502' }
+          : { ok: true, data: [{ id: 99000666, standing: owner.kind === 'alliance' ? -10 : 0 }], nextAt: 0 },
+    };
+    const clock = new ManualClock();
+    const standings = new Standings({ pilots, contacts, clock, onError: (m) => errors.push(m) });
+    const of = (dto: { standings: Array<{ id: number; standing: number }> }) =>
+      new Map(dto.standings.map((s) => [s.id, s.standing]));
+
+    // The read does not fail: own alliances stay blue, which is what an unmarked system in one's
+    // own space takes its status from.
+    const first = of(await standings.forAccount(alice));
+    expect(first.get(99000001)).toBe(10);
+    expect(first.get(99000002)).toBe(10);
+    expect(statusFromStanding(first.get(99000666))).toBeNull();
+    expect(errors).toEqual([
+      'standings: token of character 1: fetch failed',
+      'standings: alliance 99000002 contacts: HTTP 502',
+    ]);
+
+    // A partial read is not held for a quarter of an hour: a minute later ESI is asked again.
+    esiDown = false;
+    clock.advance(61_000);
+    const second = of(await standings.forAccount(alice));
+    expect(second.get(99000666)).toBe(-10);
+    expect(statusFromStanding(second.get(99000666))).toBe('hostile');
+  });
 });

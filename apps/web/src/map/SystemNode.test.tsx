@@ -61,7 +61,7 @@ function renderNode(data: Partial<SystemNodeData>, connectable = true) {
 const box = (container: HTMLElement) => container.querySelector<HTMLElement>('[data-status]')!;
 
 describe('SystemNode', () => {
-  it('shows the status as the border only, with the rest in the tooltip', () => {
+  it('tints the background with the status, with the rest in the tooltip', () => {
     const { container } = renderNode({
       system: systemFixture(31000001, {
         status: 'hostile',
@@ -71,7 +71,11 @@ describe('SystemNode', () => {
       }),
     });
     expect(box(container).dataset.status).toBe('hostile');
-    expect(box(container).style.getPropertyValue('--node-status')).toBe('var(--dbk-status-hostile)');
+    const tint = box(container).style.getPropertyValue('--node-tint-image');
+    expect(tint).toContain('linear-gradient(');
+    expect(tint).toContain(
+      'color-mix(in oklab, var(--dbk-status-hostile) var(--dbk-node-tint), transparent)',
+    );
     expect(screen.getByText('C3')).toBeTruthy();
     expect(screen.getByText('J100001')).toBeTruthy();
     // Notes and lock are not on the node, only in its tooltip; the old free-text tag is nowhere.
@@ -85,9 +89,14 @@ describe('SystemNode', () => {
     expect(title).toContain('Notes: Rattlesnakes');
   });
 
-  it('keeps a grey border for systems without a status', () => {
-    const { container } = renderNode({});
-    expect(box(container).style.getPropertyValue('--node-status')).toBe('var(--dbk-node-border)');
+  it('keeps the plain background for systems without a status, and a faint grey once scouted empty', () => {
+    const { container, unmount } = renderNode({});
+    expect(box(container).style.getPropertyValue('--node-tint-image')).toBe('none');
+    unmount();
+    const empty = renderNode({ system: systemFixture(31000001, { status: 'empty' }) });
+    expect(box(empty.container).style.getPropertyValue('--node-tint-image')).toContain(
+      'var(--dbk-status-empty)',
+    );
   });
 
   it('shows a custom name with the real one in the tooltip, and fills known space with its security', () => {
@@ -228,7 +237,7 @@ describe('SystemNode', () => {
     expect(screen.queryByRole('button', { name: /kills? in the last hour/ })).toBeNull();
   });
 
-  it('puts the holder ticker small in the bottom-right corner, a faction by its short name, nothing in wormholes', () => {
+  it('hangs the holder below the node on the right, a faction by its short name, nothing in wormholes', () => {
     const { container, unmount } = renderNode({
       info: nullSec,
       system: systemFixture(30004759),
@@ -245,7 +254,9 @@ describe('SystemNode', () => {
     expect(ticker.getAttribute('title')).toBe('Sovereignty: Goonswarm Federation [CONDI]');
     // Known space without a custom name names its region on the bottom row.
     expect(screen.getByText('Delve')).toBeTruthy();
-    expect(ticker.closest('[data-status]')).toBe(container.querySelector('[data-status]'));
+    // Below the box, not on it: a chip of the node itself, outside both rows.
+    expect(ticker.parentElement).toBe(box(container));
+    expect(box(container).querySelector('[class*="line"]')!.textContent).not.toContain('CONDI');
     unmount();
     const faction = renderNode({
       info: { ...nullSec, regionName: 'Stain' },
@@ -260,6 +271,23 @@ describe('SystemNode', () => {
     });
     expect(screen.getByText('Sansha').getAttribute('title')).toBe("Faction space: Sansha's Nation");
     faction.unmount();
+    // Under an exit, the hub chip sits on the left of the same row and the holder on the right.
+    const exit = renderNode({
+      info: nullSec,
+      system: systemFixture(30004759),
+      hub: { name: 'Dodixie', jumps: 7, space: 'mixed' },
+      intel: intel({
+        sovereignty: {
+          kind: 'alliance',
+          holder: { id: 1354830081, name: 'Goonswarm Federation', ticker: 'CONDI' },
+          corporation: null,
+        },
+      }),
+    });
+    const hubChip = screen.getByText('Dodixie 7j');
+    expect(hubChip.parentElement).toBe(box(exit.container));
+    expect(hubChip.nextElementSibling).toBe(screen.getByText('[CONDI]'));
+    exit.unmount();
     renderNode({ intel: intel({}) });
     expect(screen.queryByText(/^\[/)).toBeNull();
   });

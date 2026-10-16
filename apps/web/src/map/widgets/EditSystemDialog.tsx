@@ -20,10 +20,9 @@ import {
   type UniverseSystemDto,
   type UpdateSystemRequest,
 } from '@darkbeacon/shared';
-import { cssVar } from '@darkbeacon/theme-sdk';
 import type { MapPermissions } from '../../lib/roles';
 import { Button, Dialog, DialogClose, DialogContent, Input, Select, Switch } from '../../ui';
-import { STATUS_BORDER, STATUS_LABEL, STATUS_MEANING } from '../nodeFacts';
+import { STATUS_LABEL, STATUS_MEANING, statusTint } from '../nodeFacts';
 import node from '../SystemNode.module.css';
 import type { MapStore } from '../useMapStore';
 import { DesignationPill, isWormholeSpace, spaceText, statusColor } from './SystemDetails';
@@ -621,7 +620,7 @@ function Preview({
         </ul>
         <div
           className={css.node}
-          style={{ '--node-status': cssVar(STATUS_BORDER[system.status]) } as CSSProperties}
+          style={{ '--node-tint-image': statusTint(system.status) } as CSSProperties}
           aria-hidden
         >
           <DesignationPill info={info} />

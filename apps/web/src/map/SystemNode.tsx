@@ -24,8 +24,8 @@ import {
   classPill,
   ROUTE_SPACE_TEXT,
   ROUTE_SPACE_TOKEN,
-  STATUS_BORDER,
   STATUS_LABEL,
+  statusTint,
   type NearestHub,
 } from './nodeFacts';
 import { EffectDot, NodeKills, NodeSovereignty, ShatteredMark } from './NodeIntel';
@@ -212,11 +212,11 @@ function StaticsList({
 }
 
 /**
- * The one system node, built for a glance: a neutral box whose 3 px border carries the status,
- * as wide as its own content: the designation pill and the name; the statics (or the region),
- * the corner marks, the kills and the pilot count. Above it, left to right: its
- * Labels, its custom label, the bookmark code and its Tags; the nearest hub of an exit below it.
- * Everything else is in the tooltip.
+ * The one system node, built for a glance: a box in a neutral hairline frame whose background the
+ * status tints (Wanderer's way), as wide as its own content: the designation pill and the name;
+ * the statics (or the region), the corner marks, the kills and the pilot count. Above it, left to
+ * right: its Labels, its custom label, the bookmark code and its Tags. Below it: the nearest hub of
+ * an exit on the left, who holds the system on the right. Everything else is in the tooltip.
  */
 export const SystemNode = memo(function SystemNode({
   data,
@@ -265,7 +265,7 @@ export const SystemNode = memo(function SystemNode({
       data-status={status}
       data-derived={derived ? true : undefined}
       data-pulse={pulse || undefined}
-      style={{ '--node-status': cssVar(STATUS_BORDER[status]) } as CSSProperties}
+      style={{ '--node-tint-image': statusTint(status) } as CSSProperties}
       title={
         systemTooltip(system, info, intel) +
         (derived ? `\n${STATUS_LABEL[derived]} from your standing towards the holder` : '')
@@ -368,10 +368,6 @@ export const SystemNode = memo(function SystemNode({
               <Lock aria-label="Locked" />
             </span>
           )}
-          <NodeSovereignty
-            intel={intel}
-            {...(standing != null ? { standing: standingTone(standing) } : {})}
-          />
           {/* Live counts sit in fixed slots, so a count going 3 -> 12 never resizes the node. */}
           {kills > 0 && (
             <span className={styles.slot} data-slot="kills">
@@ -407,6 +403,12 @@ export const SystemNode = memo(function SystemNode({
           )}
         </span>
       )}
+
+      <NodeSovereignty
+        intel={intel}
+        className={styles.sov}
+        {...(standing != null ? { standing: standingTone(standing) } : {})}
+      />
     </div>
   );
 });

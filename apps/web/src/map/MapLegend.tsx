@@ -1,9 +1,8 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { SystemStatus, type ConnectionDto } from '@darkbeacon/shared';
-import { cssVar } from '@darkbeacon/theme-sdk';
 import { Kbd } from '../ui';
 import { edgeInnerStyle, edgeOuterStyle, edgeVisual, EOL_WINDOW_MS } from './edgeStyle';
-import { STATUS_BORDER, STATUS_LABEL } from './nodeFacts';
+import { STATUS_LABEL, statusTint } from './nodeFacts';
 import edgeStyles from './ConnectionEdge.module.css';
 import styles from './MapControls.module.css';
 
@@ -115,7 +114,7 @@ export function MapLegend({ id }: { id: string }) {
               <span
                 className={styles.statusSample}
                 data-legend-status={s}
-                style={{ '--status': cssVar(STATUS_BORDER[s]) } as CSSProperties}
+                style={{ '--status-tint': statusTint(s) } as CSSProperties}
               />
             }
           >

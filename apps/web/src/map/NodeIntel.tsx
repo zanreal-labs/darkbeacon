@@ -88,13 +88,19 @@ function NodeKillList({
   );
 }
 
-/** Who holds the system, small and muted in the node's bottom-right corner: `[TICKER]` or a faction. */
+/**
+ * Who holds the system, as a chip below the node's right edge: the alliance ticker `[TICKER]` in
+ * the colour of the viewer's standing towards it (neutral: plain), or a faction's short name.
+ * `className` places and frames it like the node's other chips.
+ */
 export function NodeSovereignty({
   intel,
   standing,
+  className,
 }: {
   intel: SystemIntelDto | undefined;
   standing?: StandingTone;
+  className?: string;
 }) {
   const sov = intel?.sovereignty;
   if (!sov) return null;
@@ -110,10 +116,16 @@ export function NodeSovereignty({
     : `Sovereignty: ${sov.holder.name ?? 'an alliance'}${sov.holder.ticker ? ` [${sov.holder.ticker}]` : ''}`;
   const style =
     standing && standing !== 'neutral'
-      ? ({ color: cssVar(`standing-${standing}`) } as CSSProperties)
+      ? ({ '--sov-color': cssVar(`standing-${standing}`) } as CSSProperties)
       : undefined;
   return (
-    <span className={styles.sov} data-kind={sov.kind} data-standing={standing} style={style} title={title}>
+    <span
+      className={className ? `${styles.sov} ${className}` : styles.sov}
+      data-kind={sov.kind}
+      data-standing={standing}
+      style={style}
+      title={title}
+    >
       {label}
     </span>
   );

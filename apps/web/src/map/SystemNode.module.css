@@ -1,11 +1,15 @@
 /*
  * The node is as wide as its own content (the pill and the name; the statics, the corner marks and
  * the live counts), never narrower than the theme's minimum and never wider than the cap, where a
- * long custom name is cut with an ellipsis. Two rows of fixed height. The background is the plain
- * node surface; the 3 px border is the status.
+ * long custom name is cut with an ellipsis. Two rows of fixed height. One neutral hairline frame;
+ * the status tints the background (`--node-tint-image`, see `statusTint`), and selection and hover
+ * lift it a little (`--node-lift`) instead of adding frames.
  */
 .node {
   --node-max-width: calc(var(--dbk-node-min-width) * 1.6);
+  --node-lift: transparent;
+  /* Secondary text a quarter of the way to the node text: readable on every status tint. */
+  --node-muted: color-mix(in oklab, var(--dbk-node-text) 25%, var(--dbk-color-text-muted));
 
   position: relative;
   display: flex;
@@ -15,9 +19,10 @@
   min-width: var(--dbk-node-min-width);
   max-width: var(--node-max-width);
   padding: var(--dbk-node-padding);
-  border: var(--dbk-node-border-width) solid var(--node-status, var(--dbk-node-border));
+  border: var(--dbk-node-border-width) solid var(--dbk-node-border);
   border-radius: var(--dbk-node-radius);
-  background: var(--dbk-node-bg);
+  background:
+    linear-gradient(var(--node-lift), var(--node-lift)), var(--node-tint-image, none), var(--dbk-node-bg);
   box-shadow: var(--dbk-shadow-small);
   color: var(--dbk-node-text);
   font-size: var(--map-text-secondary, 13px);
@@ -26,11 +31,29 @@
   transition: box-shadow var(--dbk-motion-fast) var(--dbk-motion-easing);
 }
 
-/* Selected: an accent outline outside the status border, which keeps its colour. */
+/* Hovered: the background a shade lighter (darker in light themes), nothing else. */
+.node:hover {
+  --node-lift: color-mix(in oklab, var(--dbk-node-text) 3%, transparent);
+}
+
+/*
+ * Selected (one or many): a brighter background and a short accent line inside the left edge. The
+ * frame and the status tint stay as they are; no second frame.
+ */
 .node[data-selected] {
-  box-shadow:
-    0 0 0 2px var(--dbk-color-canvas),
-    0 0 0 4px var(--dbk-node-selected-border);
+  --node-lift: color-mix(in oklab, var(--dbk-node-text) 6%, transparent);
+}
+
+.node[data-selected]::before {
+  content: '';
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 2px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--dbk-node-selected-border);
+  pointer-events: none;
 }
 
 .node[data-hidden] {
@@ -63,7 +86,7 @@
 
 .pill[data-kind='unknown'] {
   border: 1px solid var(--dbk-node-border);
-  color: var(--dbk-color-text-muted);
+  color: var(--node-muted);
 }
 
 .name {
@@ -82,7 +105,7 @@
   flex: none;
   align-items: center;
   gap: 3px;
-  color: var(--dbk-color-text-muted);
+  color: var(--node-muted);
   font-size: var(--map-text-secondary, 13px);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -104,7 +127,7 @@
   height: 20px;
 }
 
-/* The right end of the second row: notes, route hub, lock and sovereignty, then kills and pilots. */
+/* The right end of the second row: notes, route hub and lock, then kills and pilots. */
 .end {
   display: inline-flex;
   flex: none;
@@ -136,7 +159,7 @@
   width: 0;
   min-width: 0;
   overflow: hidden;
-  color: var(--dbk-color-text-muted);
+  color: var(--node-muted);
   font-size: 12px;
   line-height: 20px;
   text-overflow: ellipsis;
@@ -171,7 +194,7 @@
 .lock {
   display: inline-flex;
   flex: none;
-  color: var(--dbk-color-text-muted);
+  color: var(--node-muted);
 }
 
 .lock svg {
@@ -215,9 +238,9 @@
   font-weight: 800;
 }
 
-/* ---- Above and below the box, left-aligned with its left edge: framed chips, big enough to read
-   at a glance. Labels (WH1) and the custom label are plain text in a neutral frame, the bookmark
-   code and the hub are neutral grey, a Tag is framed in its own colour. */
+/* ---- Above and below the box: framed chips, big enough to read at a glance. Above, left-aligned:
+   Labels (WH1) inverted, the custom label in a neutral frame, the bookmark code grey, a Tag framed
+   in its own colour. Below: the hub on the left, the sovereignty holder on the right. */
 .above {
   position: absolute;
   bottom: calc(100% + 6px);
@@ -241,7 +264,8 @@
 .label,
 .systemLabel,
 .bookmark,
-.hub {
+.hub,
+.sov {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -310,6 +334,18 @@
   top: calc(100% + 6px);
   left: calc(-1 * var(--dbk-node-border-width));
   font-variant-numeric: tabular-nums;
+}
+
+/* Who holds the system, below its right edge; coloured by the viewer's standing (NodeIntel). */
+.sov {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: calc(-1 * var(--dbk-node-border-width));
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: auto;
+  cursor: help;
 }
 
 .square {

@@ -71,7 +71,7 @@ const shared = {
   'control-height-small': '26px',
   'control-height': '32px',
   'node-radius': '8px',
-  'node-border-width': '3px',
+  'node-border-width': '1px',
   'node-min-width': '200px',
   'node-padding': '8px 10px',
   'edge-width': '12px',
@@ -126,7 +126,8 @@ const paired: Record<PairedToken, readonly [light: string, dark: string]> = {
   'security-null': ['#c40000', '#f00000'],
   'security-wormhole': ['#4760dd', '#7b93ff'],
   'security-special': ['#8a4bd6', '#b98cf5'],
-  // Muted on purpose: a status colours a whole border, and a chain of bright borders shouts.
+  // Muted on purpose: a status tints a whole node background (`node-tint` of it), and a chain of
+  // bright boxes shouts.
   'status-home': ['#3d63b8', '#6286cc'],
   'status-friendly': ['#3f7a5c', '#5e9e7d'],
   'status-empty': ['#7d8593', '#7d8798'],
@@ -151,6 +152,8 @@ const paired: Record<PairedToken, readonly [light: string, dark: string]> = {
   'node-border': ['#b9c0cb', '#3a4252'],
   'node-text': ['#14171f', '#e6e9ef'],
   'node-selected-border': ['#0b7f91', '#38c6d6'],
+  // How much of the status colour tints a node (its strongest edge; the rest fades to half).
+  'node-tint': ['16%', '22%'],
   // Designation pills: a solid EVE-ish fill with dark bold text, the same in light and dark.
   'node-pill-text': ['#0a0c10', '#0a0c10'],
   'pill-wormhole': ['#7b93ff', '#7b93ff'],
@@ -251,7 +254,8 @@ export const contrastTheme: Theme = {
     'node-border': '#ffffff',
     'node-text': '#ffffff',
     'node-selected-border': '#ffd400',
-    'node-border-width': '3px',
+    'node-border-width': '1px',
+    'node-tint': '30%',
     'edge-width': '13px',
     'edge-color': '#ffffff',
     'edge-gate': '#d0d0d0',
