@@ -179,6 +179,21 @@ const roadmap = [
   },
 ];
 
+// What an assistant can do over MCP (docs/mcp.md, the tool table), in a pilot's words.
+const agentAsks = [
+  ['“Where are we, and what is still open?”', 'Reads the chain: systems with class, statics and effect, connections most urgent first with mass and time left, and which hulls still fit.'],
+  ['“How do I get to Jita from here?”', 'Finds the shortest, safer, high-sec or outlaw route over gates and the chain, and the exits closest to every trade hub.'],
+  ['“Log these signatures.”', 'With a key that may write: records signatures, connections, mass and EOL, and notes, through the same checks as the app.'],
+  ['“What changed while I was docked?”', 'Lists the latest changes on the map: what, who, and whether a pilot or an agent made them.'],
+];
+
+const agentRules = [
+  'Off until an admin turns it on, and each map can stay closed to agents.',
+  'An assistant signs in like a pilot (OAuth) or uses an API key, and you choose its maps and whether it may write.',
+  'It gets exactly the access of the person who approved it, never more.',
+  'Every write lands in the map history as “via MCP” with the client’s name, and can be reverted.',
+];
+
 const statusLabel: Record<string, string> = { done: 'Done', now: 'In progress', next: 'Next', later: 'Later' };
 
 const alliance = [
@@ -523,6 +538,30 @@ const alliance = [
               </li>
             ))
           }
+        </ul>
+      </div>
+    </section>
+
+    <!-- ───────────── AI agents (MCP) ───────────── -->
+    <section class="feature feature--agents" id="agents" aria-labelledby="agents-title">
+      <div class="container">
+        <div class="feature-head feature-head--inline">
+          <p class="eyebrow"><b>MCP</b> Ask the map</p>
+          <h2 id="agents-title" class="feature-title">Your assistant reads the chain.<br /><span>You keep flying.</span></h2>
+          <p class="feature-lede">Darkbeacon speaks the Model Context Protocol, so Claude, VS Code or any other MCP client can work with your map. Paste the address <code>/mcp</code> into the client, sign in, approve, and ask.</p>
+        </div>
+        <ul class="cards">
+          {
+            agentAsks.map(([ask, text]) => (
+              <li class="card">
+                <h3>{ask}</h3>
+                <p>{text}</p>
+              </li>
+            ))
+          }
+        </ul>
+        <ul class="agent-rules">
+          {agentRules.map((rule) => <li>{rule}</li>)}
         </ul>
       </div>
     </section>

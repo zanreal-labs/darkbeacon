@@ -1043,6 +1043,42 @@ figcaption strong {
   }
 }
 
+/* AI agents: the guarantees under the example questions */
+.feature--agents .cards h3 {
+  font-style: italic;
+}
+
+.agent-rules {
+  display: grid;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 900px) {
+  .agent-rules {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.agent-rules li {
+  position: relative;
+  padding-left: 1.4rem;
+  color: var(--ink-soft);
+}
+
+.agent-rules li::before {
+  content: '';
+  position: absolute;
+  top: 0.62em;
+  left: 0.2rem;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--beacon);
+}
+
 /* Wanderer */
 .ticks {
   display: grid;
