@@ -11,6 +11,41 @@
 
 .minimap svg {
   display: block;
+  background: var(--dbk-color-surface);
+  cursor: grab;
+  touch-action: none;
+}
+
+.minimap svg:active {
+  cursor: grabbing;
+}
+
+.minimapNode {
+  fill: var(--dbk-color-text-subtle);
+  opacity: 0.8;
+}
+
+/* Selected systems and home. */
+.minimapBright {
+  fill: var(--dbk-color-text);
+}
+
+.minimapEdges {
+  stroke: var(--dbk-color-text-subtle);
+  stroke-width: 1;
+  opacity: 0.5;
+}
+
+.minimapMask {
+  fill: color-mix(in oklab, var(--dbk-color-canvas) 35%, transparent);
+  pointer-events: none;
+}
+
+.minimapFrame {
+  fill: none;
+  stroke: var(--dbk-color-accent);
+  stroke-width: 2;
+  pointer-events: none;
 }
 
 /* Under the top bar (search, filters), beside the view controls, left of the panel. */
