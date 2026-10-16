@@ -6,7 +6,7 @@ import { PostHogSurveys } from './posthog-surveys.js';
 
 const SECRET = 'phs_test_secret';
 const TOKEN = 'widget-public-token';
-const HUB = 'https://darkbeacon.zanreal.app';
+const HUB = 'https://app.darkbeacon.space';
 const ME: SupportIdentity = {
   distinctId: 'eve:2112000001',
   characterId: 2112000001,
@@ -46,7 +46,7 @@ describe('PostHog Support desk against a widget API double', () => {
     posthog = new FakePostHogSupport({
       token: TOKEN,
       secret: SECRET,
-      allowedDomains: ['darkbeacon.zanreal.app'],
+      allowedDomains: ['app.darkbeacon.space'],
     });
     const host = await posthog.start();
     desk = new PostHogSupportDesk({

@@ -3,7 +3,7 @@
 Every Darkbeacon instance has a help menu (the question mark at the bottom of the left rail; in the top bar
 on phones) with **Report a problem**, **Send feedback** and **My tickets**; the first two are also in the
 account menu. They open the **support hub**: by default the maintainers' own instance,
-`https://darkbeacon.zanreal.app`, in a small window. Tickets are answered by the maintainers (ZanReal) and
+`https://app.darkbeacon.space`, in a small window. Tickets are answered by the maintainers (ZanReal) and
 the answer shows up on the hub's page and, as a count, on the help icon of the instance the pilot came from.
 
 This is separate from [anonymous telemetry](telemetry.md): a ticket carries what someone wrote and is tied
@@ -55,7 +55,7 @@ in the help menu are different again: an anonymous telemetry event with an enum 
 
 | Variable          | Default                          | Meaning                                                           |
 | ----------------- | -------------------------------- | ----------------------------------------------------------------- |
-| `SUPPORT_HUB_URL` | `https://darkbeacon.zanreal.app` | where the help menu sends people; `off` hides the support entries |
+| `SUPPORT_HUB_URL` | `https://app.darkbeacon.space` | where the help menu sends people; `off` hides the support entries |
 
 Without a hub the help menu keeps "What's new" and the documentation. A fork can run its own hub (below)
 and point its builds at it with `SUPPORT_HUB_URL`.
@@ -144,7 +144,7 @@ staff API cannot create tickets, which is why it is not used. If it breaks, swit
 3. **Support** (Conversations): enable it **API only** (the widget stays off; nothing of PostHog runs in
    browsers). Copy the **public token** (`SUPPORT_PUBLIC_TOKEN`) and generate the **Secret API key**
    (`SUPPORT_SECRET_KEY`).
-4. Support settings, **Allowed domains**: `darkbeacon.zanreal.app`. The hub sends its own origin as
+4. Support settings, **Allowed domains**: `app.darkbeacon.space`. The hub sends its own origin as
    `Origin` and `Referer`, so PostHog accepts its calls and refuses the token anywhere else.
 5. **Surveys**: create two surveys of type **API** (no popup):
    - "Quick feedback": a rating question (1-5) and an open text question;
@@ -154,7 +154,7 @@ staff API cannot create tickets, which is why it is not used. If it breaks, swit
      `SUPPORT_SURVEY_FEATURE=<survey>:<text question>`. Copy the project API key (`phc_...`) into
      `SUPPORT_SURVEYS_KEY`.
 6. Optional, faster unread badges: a PostHog **workflow** on "support ticket message from staff" that sends
-   `POST https://darkbeacon.zanreal.app/api/support/webhook` with the header
+   `POST https://app.darkbeacon.space/api/support/webhook` with the header
    `x-support-webhook-secret: <SUPPORT_WEBHOOK_SECRET>` and the body `{"distinct_id": "<the ticket's distinct
 id>"}` (pick the workflow's variable for it).
    Without it answers show within a minute (the hub's cache).
@@ -179,7 +179,7 @@ The instance's own `EVE_CLIENT_ID` / `EVE_CLIENT_SECRET` (and Discord, if it use
 sign-in the hub needs.
 
 `SUPPORT_HUB_URL` stays unset there: a hub sends its own help menu to itself (in the app, not a popup).
-`PUBLIC_URL` must be `https://darkbeacon.zanreal.app`.
+`PUBLIC_URL` must be `https://app.darkbeacon.space`.
 
 ### The hub's own store
 

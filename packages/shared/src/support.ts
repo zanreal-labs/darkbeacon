@@ -10,7 +10,7 @@ import { TelemetryPage, TelemetrySection, TelemetryThemeId, ViewportBucket } fro
  */
 
 /** The maintainers' hub. `SUPPORT_HUB_URL=off` turns the entries off, another URL picks another hub. */
-export const DEFAULT_SUPPORT_HUB_URL = 'https://darkbeacon.zanreal.app';
+export const DEFAULT_SUPPORT_HUB_URL = 'https://app.darkbeacon.space';
 
 export const SUPPORT_CATEGORIES = ['bug', 'support', 'question'] as const;
 export const SupportCategory = z.enum(SUPPORT_CATEGORIES);

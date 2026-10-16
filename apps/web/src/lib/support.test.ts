@@ -15,7 +15,7 @@ import {
   supportUrl,
 } from './support';
 
-const HUB = 'https://darkbeacon.zanreal.app';
+const HUB = 'https://app.darkbeacon.space';
 const ME = 'https://map.example.com';
 
 const client = (over: Partial<SupportClientDto> = {}): SupportClientDto => ({
