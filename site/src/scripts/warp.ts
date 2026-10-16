@@ -12,6 +12,7 @@
 
 const ACCELERATE = 0.4;
 const DECELERATE = 0.25;
+/** On leave the dark fill holds while the stars wind down, then turns white (global.css). */
 const BURST_MS = 230;
 /** The depth a star is born at, and where it has passed the camera. */
 const FAR = 1;
@@ -67,7 +68,7 @@ function setup(button: HTMLElement): Warp | undefined {
   button.prepend(canvas);
   const rect = button.getBoundingClientRect();
   // Fewer stars on the small nav button, more on the big ones.
-  const count = Math.round(Math.min(110, Math.max(36, (rect.width * rect.height) / 70)));
+  const count = Math.round(Math.min(140, Math.max(48, (rect.width * rect.height) / 50)));
   const stars = Array.from({ length: count }, () => {
     const s = { x: 0, y: 0, z: 1 };
     seed(s, rect.width, rect.height, true);
@@ -115,7 +116,7 @@ function draw(button: HTMLElement, warp: Warp, now: number) {
   // Depth travelled per second: a slow drift at rest, a rush at full speed.
   const dz = (0.06 + s * 1.5) * dt;
   // The trail is where the star was a moment ago; its length grows with speed.
-  const trail = 0.012 + s * 0.11;
+  const trail = 0.012 + s * 0.16;
   for (const star of warp.stars) {
     star.z -= dz * (0.6 + 0.4 * star.z);
     const x = cx + project(star.x, star.z);
@@ -129,8 +130,8 @@ function draw(button: HTMLElement, warp: Warp, now: number) {
     const ty = cy + project(star.y, zt);
     // Near the camera a star is brighter, wider and longer; far away it is a faint point.
     const near = 1 - (star.z - NEAR) / (FAR - NEAR);
-    const alpha = Math.min(1, 0.15 + near * near * 1.1);
-    const width = 0.4 + near * 0.9;
+    const alpha = Math.min(1, 0.2 + near * 1.3);
+    const width = 0.5 + near * 1.1;
     const r = Math.round(190 + 65 * near);
     const g = Math.round(220 + 35 * near);
     // Two strokes: a dim tail and a bright head, so a streak tapers into its own motion.
@@ -162,15 +163,21 @@ function draw(button: HTMLElement, warp: Warp, now: number) {
   // rush past around it and never across it.
   ctx.globalCompositeOperation = 'destination-out';
   ctx.globalAlpha = 1;
+  // Sized to the label itself, so the rest of the pill keeps the full tunnel.
+  const label = button.querySelector('.warp-label')?.getBoundingClientRect();
+  const rx = Math.min(w * 0.45, (label?.width ?? w * 0.5) / 2 + 10);
+  const ry = h * 0.4;
+  // Centred on the label, which sits left of the pill's centre to make room for the chevron.
+  const lx = label ? label.left - rect.left + label.width / 2 : cx;
   ctx.save();
-  ctx.translate(cx, cy);
-  ctx.scale(1, h / (w * 0.62));
-  const lens = ctx.createRadialGradient(0, 0, 0, 0, 0, w * 0.4);
-  lens.addColorStop(0, 'rgba(0, 0, 0, 0.92)');
-  lens.addColorStop(0.55, 'rgba(0, 0, 0, 0.7)');
+  ctx.translate(lx, cy);
+  ctx.scale(1, ry / rx);
+  const lens = ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
+  lens.addColorStop(0, 'rgba(0, 0, 0, 0.97)');
+  lens.addColorStop(0.7, 'rgba(0, 0, 0, 0.9)');
   lens.addColorStop(1, 'rgba(0, 0, 0, 0)');
   ctx.fillStyle = lens;
-  ctx.fillRect(-w / 2, -w, w, w * 2);
+  ctx.fillRect(-rx, -rx, rx * 2, rx * 2);
   ctx.restore();
   ctx.globalCompositeOperation = 'source-over';
 

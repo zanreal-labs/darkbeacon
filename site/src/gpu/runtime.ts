@@ -3,6 +3,7 @@ import type { Gpu } from 'vgpu';
 import { installPointer, parkedPointer } from './pointer';
 import type { Pointer } from './pointer';
 import { BUDGET, dprCap } from './sizing';
+import { importWithRetry } from './retry';
 import type { Scene, SceneBuilder } from './types';
 
 /**
@@ -70,6 +71,19 @@ export async function start(options: RuntimeOptions): Promise<void> {
   const { reducedMotion } = options;
   let gpu: Gpu;
   try {
+    // A software adapter (SwiftShader and the like, what headless browsers and blocklisted
+    // drivers get) cannot hold these scenes' frame rate and tends to lose its device: those
+    // visitors get the pre-rendered stills. The capture tooling renders through one on purpose.
+    const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+    const info = adapter?.info as (GPUAdapterInfo & { isFallbackAdapter?: boolean }) | undefined;
+    const software =
+      !adapter ||
+      Boolean((adapter as GPUAdapter & { isFallbackAdapter?: boolean }).isFallbackAdapter) ||
+      Boolean(info?.isFallbackAdapter) ||
+      /swiftshader|llvmpipe|software/i.test(`${info?.vendor} ${info?.architecture} ${info?.description}`);
+    // `?gpu=software` lets a test browser without a GPU run the live scenes anyway.
+    const allowSoftware = options.capture || new URLSearchParams(location.search).get('gpu') === 'software';
+    if (software && !allowSoftware) throw new Error('software adapter');
     gpu = await init({ powerPreference: 'high-performance' });
   } catch (error) {
     options.onUnavailable(error);
@@ -148,7 +162,7 @@ export async function start(options: RuntimeOptions): Promise<void> {
     if (stage.state !== 'idle' || dead) return;
     setState(stage, 'loading');
     try {
-      const { create } = await SCENES[stage.name]!();
+      const { create } = await importWithRetry(SCENES[stage.name]!);
       if (dead) return;
       const rect = stage.canvas.getBoundingClientRect();
       // Captures render at the page's full device pixel ratio; visitors get the budget.

@@ -13,6 +13,8 @@
  * who have not asked for reduced motion or reduced data.
  */
 
+import { importWithRetry } from './retry';
+
 const root = document.documentElement;
 const params = new URLSearchParams(location.search);
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -67,7 +69,9 @@ afterLoad(() => {
     attachLoops();
     return;
   }
-  import('./runtime')
+  // Only this, a browser with no WebGPU or no adapter, or a device lost at start turns the whole
+  // page to stills; a scene that fails later falls back on its own stage (runtime.ts).
+  importWithRetry(() => import('./runtime'))
     .then(({ start }) =>
       start({
         reducedMotion,
