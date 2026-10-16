@@ -870,8 +870,11 @@ describe('the widgets', () => {
     );
     wrap(<Widgets state={{}} />);
     const info = region('System info');
-    expect(await within(info).findByText('Goonswarm Federation')).toBeTruthy();
-    expect(info.textContent).toContain('claimed by KarmaFleet [KARMA]');
+    const holder = await within(info).findByRole('link', { name: /Goonswarm Federation/ });
+    // One short line: the ticker and name; who claimed it is in the tooltip.
+    expect(holder.textContent).toBe('[CONDI] Goonswarm Federation');
+    expect(info.textContent).not.toContain('claimed by');
+    expect(holder.closest('p')!.getAttribute('title')).toContain('claimed by KarmaFleet [KARMA]');
     const relink = await within(info).findByRole('link', { name: 'Link your characters again' });
     expect(relink.getAttribute('href')).toContain('/api/auth/eve/login');
   });

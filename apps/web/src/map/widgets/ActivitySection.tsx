@@ -110,60 +110,53 @@ export function topKillers(groups: readonly ActiveGroupDto[], count = 4): Active
     .slice(0, count);
 }
 
-/** One line under the system's facts: who holds it, with the logo; unclaimed null-sec, the region's holder. */
+/**
+ * One short line under the system's facts: the holder's logo, ticker and name (the claiming
+ * corporation only in the tooltip); unclaimed null-sec, the region's main holder.
+ */
 export function SovereigntyLine({ intel }: { intel: SystemActivityDto['intel'] | undefined }) {
   const sov: SovereigntyDto | null | undefined = intel?.sovereignty;
   const region = intel?.regionHolder;
   if (sov) {
     const faction = sov.kind === 'faction';
+    const name = sov.holder.name ?? (faction ? 'Faction' : 'Alliance');
+    const claimed = sov.corporation
+      ? ` · claimed by ${sov.corporation.name ?? 'a corporation'}${sov.corporation.ticker ? ` [${sov.corporation.ticker}]` : ''}`
+      : '';
     return (
-      <p className={styles.holder}>
+      <p className={styles.holder} title={`${faction ? 'Faction space' : 'Sovereignty'}: ${name}${claimed}`}>
         <Avatar
           src={faction ? images.corporation(sov.holder.id) : images.alliance(sov.holder.id)}
-          name={sov.holder.name ?? '?'}
+          name={name}
           size={16}
           shape="rounded"
         />
-        <span>
-          {faction ? 'Faction space: ' : 'Held by '}
-          <a
-            href={faction ? zkill.system(intel!.solarSystemId) : zkill.alliance(sov.holder.id)}
-            target="_blank"
-            rel="noreferrer"
-          >
-            {sov.holder.name ?? 'an alliance ESI does not name yet'}
-          </a>
-          {!faction && sov.holder.ticker && <span className={styles.ticker}> [{sov.holder.ticker}]</span>}
-          {sov.corporation && (
-            <span className={styles.muted}>
-              {' '}
-              · claimed by {sov.corporation.name ?? 'a corporation'}
-              {sov.corporation.ticker && ` [${sov.corporation.ticker}]`}
-            </span>
-          )}
-        </span>
+        <a
+          href={faction ? zkill.system(intel!.solarSystemId) : zkill.alliance(sov.holder.id)}
+          target="_blank"
+          rel="noreferrer"
+        >
+          {!faction && sov.holder.ticker ? (
+            <span className={styles.ticker}>[{sov.holder.ticker}]</span>
+          ) : null}{' '}
+          {name}
+        </a>
       </p>
     );
   }
   if (region) {
+    const name = region.holder.name ?? 'Alliance';
     return (
-      <p className={styles.holder}>
-        <Avatar
-          src={images.alliance(region.holder.id)}
-          name={region.holder.name ?? '?'}
-          size={16}
-          shape="rounded"
-        />
-        <span>
-          Unclaimed; {region.region} is held by{' '}
-          <a href={zkill.alliance(region.holder.id)} target="_blank" rel="noreferrer">
-            {region.holder.name ?? 'an alliance'}
-          </a>
-          {region.holder.ticker && <span className={styles.ticker}> [{region.holder.ticker}]</span>}{' '}
-          <span className={styles.muted}>
-            ({region.held}/{region.total})
-          </span>
-        </span>
+      <p
+        className={styles.holder}
+        title={`Unclaimed; ${region.region} is held by ${name} (${region.held}/${region.total})`}
+      >
+        <Avatar src={images.alliance(region.holder.id)} name={name} size={16} shape="rounded" />
+        <span className={styles.muted}>Region</span>
+        <a href={zkill.alliance(region.holder.id)} target="_blank" rel="noreferrer">
+          {region.holder.ticker ? <span className={styles.ticker}>[{region.holder.ticker}]</span> : null}{' '}
+          {name}
+        </a>
       </p>
     );
   }
