@@ -111,7 +111,7 @@ describe('SystemNode', () => {
     expect(pill.style.background).not.toBe('');
   });
 
-  it('writes statics as plain text and puts Labels, custom label, bookmark and Tags above the node', () => {
+  it('shows only where statics lead and puts Labels, custom label, bookmark and Tags above the node', () => {
     const { container } = renderNode({
       system: systemFixture(31000001, { customLabel: 'bait' }),
       info: { ...info, statics: ['D845', 'U210'] },
@@ -120,7 +120,10 @@ describe('SystemNode', () => {
       tags: [tag('a', 'Staging'), tag('b', 'Sites')],
     });
     const statics = screen.getByRole('list', { name: 'Statics' });
-    expect([...statics.querySelectorAll('li')].map((li) => li.textContent)).toEqual(['D845HS', 'U210LS']);
+    // Only where each static leads on the card; its code is in the tooltip.
+    const items = [...statics.querySelectorAll('li')];
+    expect(items.map((li) => li.textContent)).toEqual(['HS', 'LS']);
+    expect(items[0]!.getAttribute('title')).toContain('D845');
     const labels = screen.getByRole('list', { name: 'Labels' });
     expect([...labels.querySelectorAll('li')].map((li) => li.textContent)).toEqual(['WH1', 'bait']);
     const tags = screen.getByRole('list', { name: 'Tags' });
@@ -133,7 +136,7 @@ describe('SystemNode', () => {
     // Labels are neutral text markers; only Tags carry a colour.
     expect(labels.querySelector('[style]')).toBeNull();
     expect(tags.querySelector('li')!.getAttribute('style')).toContain('--label-color');
-    expect(container.querySelector('[data-status] > [class*="line"]')?.textContent).toBe('D845HSU210LS');
+    expect(container.querySelector('[data-status] > [class*="line"]')?.textContent).toBe('HSLS');
   });
 
   it('shows a custom label alone, without Labels', () => {

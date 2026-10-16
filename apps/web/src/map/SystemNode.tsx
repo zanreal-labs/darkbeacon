@@ -198,11 +198,13 @@ function StaticsList({
         const where = to ? WORMHOLE_DESTINATION_LABEL[to] : null;
         return (
           <li key={type} title={staticFacts(type, types.get(type))}>
-            <span className={styles.code}>{type}</span>
-            {where && (
+            {/* Only where it leads on the card; the type code is in the tooltip and the details. */}
+            {where ? (
               <span className={styles.to} style={{ color: cssVar(destinationToken(to)) }}>
                 {where}
               </span>
+            ) : (
+              <span className={styles.code}>{type}</span>
             )}
           </li>
         );

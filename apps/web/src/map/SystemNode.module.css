@@ -1,12 +1,12 @@
 /*
- * The node is as wide as its own content (the pill and the name; the statics, the corner marks and
- * the live counts), never narrower than the theme's minimum and never wider than the cap, where a
- * long custom name is cut with an ellipsis. Two rows of fixed height. One neutral hairline frame;
+ * Every node has the same width (the theme's `node-min-width`, 10 cells of the 24 px grid), as in
+ * Wanderer: nodes on the grid line up by their middles too, so connections between them run
+ * straight. A long custom name is cut with an ellipsis; statics that do not fit drop out whole. Two rows of fixed height. One neutral hairline frame;
  * the status tints the background (`--node-tint-image`, see `statusTint`), and selection and hover
  * lift it a little (`--node-lift`) instead of adding frames.
  */
 .node {
-  --node-max-width: calc(var(--dbk-node-min-width) * 1.6);
+  --node-max-width: var(--dbk-node-min-width);
   --node-lift: transparent;
   /* Secondary text a quarter of the way to the node text: readable on every status tint. */
   --node-muted: color-mix(in oklab, var(--dbk-node-text) 25%, var(--dbk-color-text-muted));
@@ -15,7 +15,7 @@
   display: flex;
   flex-direction: column;
   row-gap: 4px;
-  width: max-content;
+  width: var(--dbk-node-min-width);
   min-width: var(--dbk-node-min-width);
   max-width: var(--node-max-width);
   padding: var(--dbk-node-padding);

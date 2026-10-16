@@ -72,7 +72,7 @@ const shared = {
   'control-height': '32px',
   'node-radius': '8px',
   'node-border-width': '1px',
-  'node-min-width': '200px',
+  'node-min-width': '240px',
   'node-padding': '8px 10px',
   'edge-width': '12px',
   'motion-fast': '120ms',
