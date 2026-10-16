@@ -105,7 +105,7 @@ export function SignatureSettingsMenu({ can }: { can: { edit: boolean } }) {
                 onSelect={keep}
                 onCheckedChange={(colorByGroup) => set({ colorByGroup })}
               >
-                Colour by group
+                Colour by scan state
               </MenuCheckboxItem>
             </MenuSubContent>
           </MenuSub>

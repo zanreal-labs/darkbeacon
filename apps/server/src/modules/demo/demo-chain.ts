@@ -145,6 +145,11 @@ export async function seedDemoChain(actor: Actor, mapping: DemoMapping): Promise
     { system: HOME, eveId: 'RLK-302', group: 'relic', name: 'Forgotten Frontier Quarantine Outpost' },
     { system: HOME, eveId: 'DTA-559', group: 'data', name: 'Unsecured Frontier Database' },
     { system: HOME, eveId: 'QNV-904' },
+    // Probed to the group only (25 % to 75 %): the name is not in yet.
+    { system: HOME, eveId: 'GSX-118', group: 'gas' },
+    // Combat and ore sites in w-space are anomalies: on the scanner at once, no probes.
+    { system: HOME, eveId: 'FCS-731', kind: 'anomaly', group: 'combat', name: 'Frontier Barracks' },
+    { system: HOME, eveId: 'ODP-206', kind: 'anomaly', group: 'ore', name: 'Ordinary Perimeter Deposit' },
     {
       system: HOME,
       eveId: 'WND-552',
