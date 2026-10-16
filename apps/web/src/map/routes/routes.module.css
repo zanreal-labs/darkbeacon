@@ -181,28 +181,6 @@
   font-size: var(--dbk-font-size-xs);
 }
 
-/* No hub reachable: why, in one line, and the hubs it is about. */
-.unreachable {
-  display: grid;
-  gap: 2px;
-  padding: 2px 0;
-}
-
-.why {
-  margin: 0;
-  color: var(--dbk-color-text);
-  font-size: var(--dbk-font-size-small);
-}
-
-.hubNames {
-  margin: 0;
-  overflow: hidden;
-  color: var(--dbk-color-text-subtle);
-  font-size: var(--dbk-font-size-xs);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* ---- The strip ---- */
 
 .strip {

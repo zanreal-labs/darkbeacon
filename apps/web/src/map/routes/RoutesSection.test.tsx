@@ -116,8 +116,8 @@ describe('routes section', () => {
     const select = section();
     const list = await screen.findByRole('list', { name: 'Routes to map hubs' });
     const rows = within(list).getAllByRole('listitem');
-    expect(rows.map((r) => r.textContent)).toEqual(['Jita3', 'Amarr—']);
-    expect(within(rows[1]!).getByTitle('No route')).toBeTruthy();
+    expect(rows.map((r) => r.textContent)).toEqual(['Jita3', 'AmarrNo connection']);
+    expect(within(rows[1]!).getByText('No connection')).toBeTruthy();
     const marks = within(rows[0]!).getAllByRole('button', { name: /Tama|Perimeter|Jita,/ });
     expect(marks.map((m) => m.getAttribute('aria-label'))).toEqual([
       '0.3 Tama, The Citadel, through a wormhole',
@@ -161,15 +161,21 @@ describe('routes section', () => {
     expect(screen.getByRole('button', { name: 'Route options: no EOL', hidden: true })).toBeTruthy();
   });
 
-  it('says once why no hub can be reached instead of a row per hub', async () => {
+  it('lists every hub even without a route, as "No connection" with the reason on hover', async () => {
     mapHubRoutes = {
       routes: [far, { ...far, solarSystemId: 30002659, name: 'Dodixie' }],
       unreachable: 'no-exit',
     };
     section();
-    const status = await screen.findByRole('status');
-    expect(status.textContent).toBe('No route out of this chain to k-space.Amarr · Dodixie');
-    expect(screen.queryByRole('list', { name: 'Routes to map hubs' })).toBeNull();
+    const list = await screen.findByRole('list', { name: 'Routes to map hubs' });
+    const rows = within(list).getAllByRole('listitem');
+    expect(rows.map((r) => r.textContent)).toEqual([
+      expect.stringContaining('Amarr'),
+      expect.stringContaining('Dodixie'),
+    ]);
+    const none = within(list).getAllByText('No connection');
+    expect(none).toHaveLength(2);
+    expect(none[0]!.getAttribute('title')).toBe('No route out of this chain to k-space.');
     expect(unreachableText('isolated', false)).toMatch(/no connections on the map/);
     expect(unreachableText('no-exit', true)).toBe(
       'No route out of this chain to k-space with these route options.',

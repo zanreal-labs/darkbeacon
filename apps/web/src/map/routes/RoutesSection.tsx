@@ -276,8 +276,6 @@ function RoutesBody({
                   : 'This map has no hubs yet.'
                 : 'No hubs of yours (they show on every map). Add one with +, or right-click a system › My hub.'}
             </p>
-          ) : hubRoutes.data!.routes.every((r) => r.jumps === null) ? (
-            <Unreachable result={hubRoutes.data!} optionsSet={optionsSet} />
           ) : (
             <ul
               className={styles.list}
@@ -291,6 +289,7 @@ function RoutesBody({
                   onSelect={select}
                   onMenu={(e) => openMenu(route, e)}
                   onStepMenu={stepMenu}
+                  why={unreachableText(hubRoutes.data!.unreachable, optionsSet)}
                 />
               ))}
             </ul>
@@ -326,16 +325,6 @@ export function unreachableText(reason: HubRoutesDto['unreachable'], optionsSet:
     default:
       return 'No route to any of these hubs.';
   }
-}
-
-/** No hub reachable: one line saying why instead of a row per hub, then the hubs it is about. */
-function Unreachable({ result, optionsSet }: { result: HubRoutesDto; optionsSet: boolean }) {
-  return (
-    <div className={styles.unreachable} role="status">
-      <p className={styles.why}>{unreachableText(result.unreachable, optionsSet)}</p>
-      <p className={styles.hubNames}>{result.routes.map((r) => r.name).join(' · ')}</p>
-    </div>
-  );
 }
 
 /** A row's actions: shown while the row is hovered or focused; a right-click opens them too. */
@@ -375,19 +364,25 @@ function NameButton({
   );
 }
 
-/** A hub: its name, the systems on the way as a strip, the jumps (a dash without a route). */
+/**
+ * A hub: its name, the systems on the way as a strip, the jumps. Without a route the row stays, as
+ * in Wanderer, saying "No connection" (why, on hover).
+ */
 function HubRow({
   route,
   onMap,
   onSelect,
   onMenu,
   onStepMenu,
+  why,
 }: {
   route: HubRouteDto;
   onMap: ReadonlySet<number>;
   onSelect(id: number): void;
   onMenu(e: MouseEvent): void;
   onStepMenu(step: RouteStepDto, at: { x: number; y: number }): void;
+  /** Why no hub of the list can be reached, for the tooltip of a row without a route. */
+  why: string;
 }) {
   return (
     <li className={styles.row} data-unreachable={route.jumps === null || undefined} onContextMenu={onMenu}>
@@ -399,16 +394,16 @@ function HubRow({
         onSelect={onSelect}
       />
       {route.jumps === null ? (
-        <span />
+        <span className={styles.none} title={why}>
+          No connection
+        </span>
       ) : route.jumps === 0 ? (
         <span className={styles.none}>here</span>
       ) : (
         <RouteStrip steps={route.steps} onSelect={(s) => onSelect(s.solarSystemId)} onMenu={onStepMenu} />
       )}
       {route.jumps === null ? (
-        <span className={styles.jumps} title="No route">
-          —
-        </span>
+        <span className={styles.jumps} />
       ) : (
         <span className={styles.jumps}>{route.jumps}</span>
       )}
