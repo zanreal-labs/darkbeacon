@@ -136,14 +136,15 @@ const paired: Record<PairedToken, readonly [light: string, dark: string]> = {
   'security-null': ['#c40000', '#f00000'],
   'security-wormhole': ['#4760dd', '#7b93ff'],
   'security-special': ['#8a4bd6', '#b98cf5'],
-  // Muted on purpose: a status tints a whole node background (`node-tint` of it), and a chain of
-  // bright boxes shouts.
-  'status-home': ['#3d63b8', '#6286cc'],
-  'status-friendly': ['#3f7a5c', '#5e9e7d'],
-  'status-empty': ['#7d8593', '#7d8798'],
-  'status-occupied': ['#9a6236', '#b58157'],
-  'status-warning': ['#977a1c', '#c4a64a'],
-  'status-hostile': ['#b73c3c', '#d26060'],
+  // A status tints a whole node background. Statuses that mean a standing take the game's standing
+  // colour exactly (the same hex as `standing-*`, see there): Friendly +5, Empty neutral, Warning -5,
+  // Hostile -10. Home, Occupied and Target have no standing; their hues stay clear of those.
+  'status-home': ['#1f8f86', '#33b3a6'],
+  'status-friendly': ['#2c66c4', '#2c66c4'],
+  'status-empty': ['#8c8a8c', '#8c8a8c'],
+  'status-occupied': ['#a8740e', '#c99a3a'],
+  'status-warning': ['#c44604', '#c44604'],
+  'status-hostile': ['#940604', '#940604'],
   'status-target': ['#6f55b8', '#9583cc'],
   // Wormhole effects: a small dot on the node, one hue each, as mappers have always drawn them.
   'effect-black-hole': ['#4b5563', '#a1a9b8'],

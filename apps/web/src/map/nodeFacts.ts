@@ -66,7 +66,9 @@ function tintLayer(token: TokenName, strength: string): string {
  */
 export function statusTint(status: SystemStatus): string {
   const token = STATUS_COLOR[status];
-  return token ? tintLayer(token, 'var(--dbk-node-tint)') : 'none';
+  // As strong as a standing tint: Friendly, Warning and Hostile are standing colours, and must read
+  // apart (and like the sov tints) at a glance.
+  return token ? tintLayer(token, 'var(--dbk-node-tint-standing)') : 'none';
 }
 
 /** The game's colour of each standing level (`standing-*`, the same hex in every theme). */

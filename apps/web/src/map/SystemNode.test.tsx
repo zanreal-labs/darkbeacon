@@ -74,7 +74,7 @@ describe('SystemNode', () => {
     const tint = box(container).style.getPropertyValue('--node-tint-image');
     expect(tint).toContain('linear-gradient(');
     expect(tint).toContain(
-      'color-mix(in oklab, var(--dbk-status-hostile) var(--dbk-node-tint), transparent)',
+      'color-mix(in oklab, var(--dbk-status-hostile) var(--dbk-node-tint-standing), transparent)',
     );
     expect(screen.getByText('C3')).toBeTruthy();
     expect(screen.getByText('J100001')).toBeTruthy();
@@ -390,7 +390,7 @@ describe('SystemNode', () => {
         expect(box(container).dataset.status).toBe(status);
         expect(box(container).dataset.standingTint).toBeUndefined();
         expect(tintOf(container)).toContain(`var(--dbk-status-${status})`);
-        expect(tintOf(container)).not.toContain('standing');
+        expect(tintOf(container)).not.toContain('var(--dbk-standing-');
         expect(chip().dataset.standing).toBe('excellent');
         unmount();
       }
