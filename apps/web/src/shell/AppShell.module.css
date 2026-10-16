@@ -268,10 +268,18 @@ button.railLink {
 }
 
 /* ---- Help menu: at the bottom of the rail (the top bar on phones); the unread badge sits on the icon ---- */
+/* Settings and Help, pinned to the bottom of the rail. */
+.railBottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: inherit;
+  margin-top: auto;
+}
+
 .railHelp {
   position: relative;
   display: inline-flex;
-  margin-top: auto;
 }
 
 .topbarHelp {

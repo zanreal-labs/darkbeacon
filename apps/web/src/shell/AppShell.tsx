@@ -122,15 +122,17 @@ export function AppShell({
               <LogoMark size={26} />
             </Link>
             <RailLink item={MAPS_NAV} />
-            {/* Reads the URL and the map's role, so it waits for both; nothing shows meanwhile. */}
-            <Suspense fallback={null}>
-              <MapSettingsRailButton />
-            </Suspense>
             <RailLink item={JUMP_NAV} />
             <RailLink item={CHARACTERS_NAV} />
             <WormholeReferenceRailButton />
             {adminRail}
-            <HelpMenu placement="rail" />
+            {/* At the bottom, above Help, on every page: the rail never shifts. */}
+            <span className={styles.railBottom}>
+              <Suspense fallback={<span className={styles.railLink} aria-hidden />}>
+                <MapSettingsRailButton />
+              </Suspense>
+              <HelpMenu placement="rail" />
+            </span>
           </nav>
           <header className={styles.topbar}>
             <Link href="/" className={styles.mobileLogo} aria-label="Darkbeacon home">
