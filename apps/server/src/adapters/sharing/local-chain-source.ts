@@ -56,7 +56,7 @@ import {
   type ChainSources,
   type ChainWriteContext,
 } from '@darkbeacon/sharing';
-import { spotNear } from '../tracking/mapping-auto-map-target.js';
+import { arrivalSpot } from '../tracking/mapping-auto-map-target.js';
 
 /** The tracked characters of a map (tracking's ListMapCharacters). */
 export interface MapCharacters {
@@ -374,13 +374,8 @@ export class LocalChainSource implements ChainSource {
   /** Adds `solarSystemId` next to `near` unless this map shows it already (as auto-mapping does). */
   private async place(actor: Actor, delegated: boolean, solarSystemId: number, near: number): Promise<void> {
     const { systems } = this.useCases(delegated);
-    const all = await this.deps.ports.systems.list(this.mapId);
-    const existing = all.find((s) => s.solarSystemId === solarSystemId);
-    if (existing?.visible) return;
-    const anchor = all.find((s) => s.solarSystemId === near && s.visible);
-    const taken = all.filter((s) => s.visible).map((s) => s.position);
-    const position = !existing && anchor ? spotNear(anchor.position, taken) : undefined;
-    await systems.add(actor, this.mapId, position ? { solarSystemId, position } : { solarSystemId });
+    const spot = arrivalSpot(await this.deps.ports.systems.list(this.mapId), solarSystemId, near);
+    if (spot) await systems.add(actor, this.mapId, { solarSystemId, ...spot });
   }
 
   private async connectionOrNull(key: string): Promise<Connection | null> {

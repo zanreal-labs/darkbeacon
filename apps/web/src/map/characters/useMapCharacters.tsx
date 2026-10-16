@@ -1,8 +1,8 @@
 'use client';
 
 import { useMemo, type ReactNode } from 'react';
-import type { MapDto } from '@darkbeacon/shared';
-import { useMapTrackingSettings, useShipTypes } from '../../lib/characters';
+import type { MapDto, TrackingProblemDto } from '@darkbeacon/shared';
+import { useMapTrackingSettings, useMyTracking, useShipTypes } from '../../lib/characters';
 import type { MapPermissions } from '../../lib/roles';
 import { useMe } from '../../lib/session';
 import { useUniverseSystems } from '../../lib/universe';
@@ -37,6 +37,13 @@ export function useMapCharacters({
   const myCharacters = useMemo(() => me.data?.characters ?? [], [me.data]);
   const accountMain = me.data?.account.mainCharacterId ?? null;
   const main = settings.mainCharacterId ?? accountMain;
+  // What stops tracking from reading where my characters are (the top bar's mark).
+  const tracking = useMyTracking({ enabled: signedIn });
+  const problems = useMemo(() => {
+    const out = new Map<number, TrackingProblemDto>();
+    for (const c of tracking.data?.characters ?? []) if (c.problem) out.set(c.characterId, c.problem);
+    return out;
+  }, [tracking.data]);
 
   const presence = state.characters;
   const systemIds = useMemo(
@@ -56,7 +63,7 @@ export function useMapCharacters({
   });
 
   if (!signedIn) return { bar: views ?? null };
-  const own = ownOnMap(myCharacters, presence, main, settings.followCharacterId);
+  const own = ownOnMap(myCharacters, presence, main, settings.followCharacterId, problems);
   return {
     bar: (
       <CharacterBar

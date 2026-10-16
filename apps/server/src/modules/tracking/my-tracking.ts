@@ -2,7 +2,7 @@ import { hasMapRole, requireAccount, type Actor } from '@darkbeacon/core';
 import type { CharacterService } from '@darkbeacon/identity';
 import type { MapUseCases } from '@darkbeacon/mapping';
 import type { MyTrackingDto, OnlineCountsDto } from '@darkbeacon/shared';
-import type { TrackingRepository } from '@darkbeacon/tracking';
+import type { TrackingProblemStore, TrackingRepository } from '@darkbeacon/tracking';
 
 /**
  * Views across maps that join identity (my characters), mapping (the maps I can see) and
@@ -14,6 +14,7 @@ export class TrackingOverview {
       characters: Pick<CharacterService, 'listForAccount'>;
       maps: Pick<MapUseCases, 'list'>;
       tracking: TrackingRepository;
+      problems?: TrackingProblemStore;
     },
   ) {}
 
@@ -25,9 +26,13 @@ export class TrackingOverview {
       this.deps.tracking.listTracked(),
     ]);
     const visible = new Set(maps.map((m) => m.id));
-    const presence = new Map(
-      (await this.deps.tracking.listPresence(characters.map((c) => c.id))).map((p) => [p.characterId, p]),
-    );
+    const ids = characters.map((c) => c.id);
+    const [presences, problemList] = await Promise.all([
+      this.deps.tracking.listPresence(ids),
+      this.deps.problems?.list(ids) ?? [],
+    ]);
+    const presence = new Map(presences.map((p) => [p.characterId, p]));
+    const problems = new Map(problemList.map(({ characterId, ...problem }) => [characterId, problem]));
     return {
       characters: characters.map((c) => {
         const p = presence.get(c.id);
@@ -44,6 +49,7 @@ export class TrackingOverview {
           trackedOn: tracked
             .filter((t) => t.characterId === c.id && t.accountId === account.id && visible.has(t.mapId))
             .map((t) => t.mapId),
+          ...(problems.has(c.id) ? { problem: problems.get(c.id)! } : {}),
         };
       }),
       maps: maps

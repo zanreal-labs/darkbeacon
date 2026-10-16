@@ -2,7 +2,12 @@
 
 import { useState, type ReactNode } from 'react';
 import { Eye, Star, TriangleAlert, UsersRound } from 'lucide-react';
-import type { CharacterDto, CharacterPresenceDto, UniverseSystemDto } from '@darkbeacon/shared';
+import type {
+  CharacterDto,
+  CharacterPresenceDto,
+  TrackingProblemDto,
+  UniverseSystemDto,
+} from '@darkbeacon/shared';
 import { cx, CharacterAvatar, Popover, PopoverContent, PopoverTrigger, Tooltip } from '../../ui';
 import { ActivityDialog } from './ActivityDialog';
 import { OnTheMapPanel } from './OnTheMapPanel';
@@ -16,6 +21,8 @@ export interface OwnCharacter {
   presence: CharacterPresenceDto | null;
   main: boolean;
   following: boolean;
+  /** Why tracking cannot read where it is, while it cannot. */
+  problem?: TrackingProblemDto;
 }
 
 /** My characters tracked on this map, main first, then online ones, then by name. */
@@ -24,6 +31,7 @@ export function ownOnMap(
   characters: ReadonlyMap<number, CharacterPresenceDto>,
   mainId: number | null,
   followId: number | null,
+  problems: ReadonlyMap<number, TrackingProblemDto> = new Map(),
 ): OwnCharacter[] {
   return myCharacters
     .filter((c) => characters.has(c.id))
@@ -32,6 +40,7 @@ export function ownOnMap(
       presence: characters.get(c.id) ?? null,
       main: c.id === mainId,
       following: c.id === followId,
+      ...(problems.has(c.id) ? { problem: problems.get(c.id)! } : {}),
     }))
     .sort(
       (a, b) =>
@@ -58,8 +67,9 @@ export function whereabouts(
 /**
  * The map's character controls in its top bar: my characters tracked here (portraits with
  * online, expired, main and followed marks; a click centres the map on one), a mark only while
- * tracking needs a look (a sign-in expired; it opens Tracking in the map's settings), the quick
- * views (`children`, where the tracking button was) and "On the map" with everyone tracked here.
+ * tracking needs a look (a sign-in expired, or tracking cannot read where a character is; it
+ * opens Tracking in the map's settings), the quick views (`children`, where the tracking button
+ * was) and "On the map" with everyone tracked here.
  */
 export function CharacterBar({
   mapId,
@@ -92,6 +102,16 @@ export function CharacterBar({
   const [activity, setActivity] = useState(false);
   const shown = own.slice(0, SHOWN);
   const expired = own.filter((o) => !o.character.tokenValid).length;
+  // An expired sign-in says so itself; the others are characters tracking cannot read.
+  const unread = own.filter((o) => o.character.tokenValid && o.problem);
+  const attention = [
+    expired > 0 ? `${expired} sign-in${expired === 1 ? '' : 's'} expired` : null,
+    unread.length > 0
+      ? `cannot read where ${unread.map((o) => o.character.name).join(', ')} ${unread.length === 1 ? 'is' : 'are'}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join('; ');
   const online = [...characters.values()].filter((c) => c.online).length;
   const systemName = (id: number) => universe.get(id)?.name;
   return (
@@ -104,7 +124,11 @@ export function CharacterBar({
             const at = o.presence?.online ? o.presence.solarSystemId : null;
             const tip = [
               o.character.name,
-              expired ? 'Sign-in expired: link it again to resume tracking' : where,
+              expired
+                ? 'Sign-in expired: link it again to resume tracking'
+                : o.problem
+                  ? `${where} · ${o.problem.message}`
+                  : where,
               o.main ? 'Main on this map' : null,
               o.following ? 'The map follows it' : null,
             ]
@@ -117,6 +141,7 @@ export function CharacterBar({
                   className={styles.portrait}
                   data-online={(!!o.presence?.online && !expired) || undefined}
                   data-expired={expired || undefined}
+                  data-problem={(!expired && !!o.problem) || undefined}
                   aria-label={tip}
                   disabled={at === null}
                   onClick={() => at !== null && onCenter(at)}
@@ -129,13 +154,13 @@ export function CharacterBar({
             );
           })}
           {own.length > SHOWN && <span className={styles.more}>+{own.length - SHOWN}</span>}
-          {expired > 0 && (
-            <Tooltip content="Tracking needs a look: a sign-in expired">
+          {attention && (
+            <Tooltip content={`Tracking needs a look: ${attention}`}>
               <button
                 type="button"
                 className={styles.attention}
                 onClick={onOpenTracking}
-                aria-label={`Tracking needs a look: ${expired} sign-in${expired === 1 ? '' : 's'} expired`}
+                aria-label={`Tracking needs a look: ${attention}`}
               >
                 <TriangleAlert aria-hidden />
               </button>

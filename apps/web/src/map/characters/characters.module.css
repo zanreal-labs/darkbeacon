@@ -54,6 +54,13 @@
   opacity: 1;
 }
 
+/* Tracking cannot read where it is: a ring in the warning colour. */
+.portrait[data-problem] > :first-child {
+  box-shadow:
+    0 0 0 2px var(--dbk-color-surface),
+    0 0 0 3px var(--dbk-color-warning);
+}
+
 .portrait[data-expired] > :first-child {
   box-shadow:
     0 0 0 2px var(--dbk-color-surface),
@@ -337,6 +344,19 @@
   white-space: nowrap;
 }
 
+.trackProblem {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--dbk-color-warning);
+}
+
+.trackProblem svg {
+  flex: none;
+  width: 12px;
+  height: 12px;
+}
+
 .inlineLink {
   display: inline-flex;
   align-items: center;
@@ -424,7 +444,7 @@
   padding-top: var(--dbk-space-2);
 }
 
-/* The top bar's one mark while tracking needs a look (a sign-in expired). */
+/* The top bar's one mark while tracking needs a look (a sign-in expired, a location unread). */
 .attention {
   display: inline-flex;
   align-items: center;

@@ -4,6 +4,7 @@ import type {
   CharacterTokenSource,
   Clock,
   EventLog,
+  TrackingProblemStore,
   TrackingRepository,
   UnitOfWork,
 } from '../ports/index.js';
@@ -49,7 +50,13 @@ export async function untrack(
 export class TrackingCleanup {
   private readonly actor: ActorRef = { kind: 'system', id: 'tracking' };
 
-  constructor(private readonly deps: UntrackDeps & { characters: CharacterTokenSource; clock: Clock }) {}
+  constructor(
+    private readonly deps: UntrackDeps & {
+      characters: CharacterTokenSource;
+      clock: Clock;
+      problems?: TrackingProblemStore;
+    },
+  ) {}
 
   /** The map was deleted (`map.removed`): nothing is tracked on it any more. */
   forgetMap(mapId: string): Promise<void> {
@@ -69,5 +76,7 @@ export class TrackingCleanup {
     await untrack(this.deps, stale, this.actor, clock.now());
     const presence = await tracking.getPresence(characterId);
     if (presence && presence.accountId !== owner?.accountId) await tracking.deletePresence(characterId);
+    // What went wrong with the former owner's sign-in is not the new owner's business.
+    await this.deps.problems?.clear(characterId);
   }
 }
