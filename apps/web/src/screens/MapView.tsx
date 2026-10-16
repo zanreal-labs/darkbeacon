@@ -14,6 +14,7 @@ import {
 import { AlertTriangle, PanelRight, Plus, Radio, Waypoints, X } from 'lucide-react';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
 import { setMapPeople, useMapPresence } from '../lib/presence';
+import { useMaps } from '../lib/maps';
 import { mapPermissions } from '../lib/roles';
 import { useMe } from '../lib/session';
 import { track } from '../lib/telemetry';
@@ -59,7 +60,13 @@ import { WidgetsMenu } from '../map/widgets/WidgetsMenu';
 import { useViews } from '../map/views/useViews';
 import { ViewSwitcher } from '../map/views/ViewSwitcher';
 import { SignatureLayer } from '../map/signatures/SignatureLayer';
-import { filterableSources, permissionsFor, withoutSources } from '../map/sharing/chain';
+import {
+  filterableSources,
+  lockedHere,
+  permissionsFor,
+  sourceManager,
+  withoutSources,
+} from '../map/sharing/chain';
 import { ProvenanceLine, provenanceText } from '../map/sharing/ProvenanceLine';
 import { SourceFilter, useHiddenSources } from '../map/sharing/SourceFilter';
 import { useSlot } from '../plugins/PluginSlot';
@@ -181,6 +188,12 @@ export function MapView({
   const [selectedConnection, setSelectedConnection] = useState<string | null>(null);
   const [connectionDialog, setConnectionDialog] = useState<ConnectionDialog | null>(null);
   const merged = !!state.sources;
+  // A lock a merged map holds is lifted there by its managers: the viewer's roles on their maps.
+  const myMaps = useMaps({ enabled: merged });
+  const managesSource = useMemo(
+    () => sourceManager(state.sources, myMaps.data),
+    [state.sources, myMaps.data],
+  );
   useLivePassages(map.id);
   const intel = useMapIntel(map.id);
   const traffic = useMemo(
@@ -495,6 +508,7 @@ export function MapView({
           labels,
           systemLabels,
           can: permissionsFor(can, sys.provenance, map.kind === 'composite'),
+          managesSource,
           store,
           onEdit: () => setEditing(sys.solarSystemId),
           plugins: systemPlugins,
@@ -572,7 +586,7 @@ export function MapView({
           onLock: (locked) =>
             updateSelection(
               ids,
-              (s) => (s.locked === locked ? null : { locked }),
+              (s) => (lockedHere(s) === locked ? null : { locked }),
               `${locked ? 'Locked' : 'Unlocked'} ${n}`,
             ),
           ...(clipboard.canCopy ? { onCopy: () => copySelection(ids) } : {}),
@@ -598,6 +612,7 @@ export function MapView({
           connection,
           names: { source: end(connection.source), target: end(connection.target) },
           can: permissionsFor(can, connection.provenance),
+          managesSource,
           store,
           plugins: connectionPlugins,
           onLogJump: () => setConnectionDialog({ kind: 'log', connectionId: connection.id }),
@@ -800,6 +815,8 @@ export function MapView({
         systemLabels={systemLabels}
         state={state}
         can={system ? permissionsFor(can, system.provenance, map.kind === 'composite') : can}
+        connectionCan={(c) => permissionsFor(can, c.provenance)}
+        managesSource={managesSource}
         store={store}
         myCharacters={me.data?.characters ?? []}
         plugins={widgetPlugins}
@@ -821,6 +838,7 @@ export function MapView({
           const sys = editing !== null ? state.systems.get(editing) : undefined;
           return sys ? permissionsFor(can, sys.provenance, map.kind === 'composite') : can;
         })()}
+        managesSource={managesSource}
         store={store}
         onManageLabels={() => {
           setEditing(null);

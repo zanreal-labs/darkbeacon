@@ -1,6 +1,7 @@
 import {
   ConflictError,
   ForbiddenError,
+  hasMapRole,
   NotFoundError,
   requireMapRole,
   type Actor,
@@ -34,7 +35,7 @@ import {
 import { connectionGroupOf, pairKey, refId, signatureKey, signatureKeyOf } from '../domain/keys.js';
 import { passagesShared } from '../domain/passages.js';
 import { objectAllowed } from '../domain/scopes.js';
-import { SELF, type SourceInfo } from '../domain/view.js';
+import { isLocked, lockOf, SELF, type MergedLock, type SourceInfo } from '../domain/view.js';
 import type { ChainMerger } from './merger.js';
 import type { SharingPorts } from './ports.js';
 
@@ -80,29 +81,61 @@ export class ChainWrites {
     const ref = refId('system', String(solarSystemId));
     if (map.merge.holders(ref).length === 0) throw new NotFoundError('System');
     const composite = map.info.kind === 'composite';
-    const local = composite ? map.local.get(solarSystemId) : undefined;
-    // Locking and unlocking is for managers, as on any map.
-    if (request.locked !== undefined) await requireMapRole(this.ports.access, who, mapId, 'manager');
-    const unlocking = request.locked === false;
-    if (local?.locked && !unlocking && (request.position || request.visible === false))
-      throw new ConflictError('The system is locked');
-    if (request.visible === false) {
-      await this.removeSystem(who, mapId, solarSystemId);
-      return;
-    }
+    const lock = this.systemLock(map, solarSystemId);
+    // Unlocking lifts the map's own lock when it has one, else the sources' (theirs to lift).
+    const lifts =
+      request.locked === false ? (lock.here ? 'here' : lock.sources.length > 0 ? 'sources' : null) : null;
+    // Locking and unlocking here is for this map's managers, as on any map.
+    if (request.locked !== undefined && lifts !== 'sources')
+      await requireMapRole(this.ports.access, who, mapId, 'manager');
+    const lockSources = this.sourcesOf(map, lock);
+    if (lifts === 'sources') await this.requireSourceManagers(who, lockSources, 'system', 'unlock');
+    const stays: MergedLock =
+      lifts === 'here' ? { here: false, sources: lock.sources } : lifts === 'sources' ? NO_LOCK : lock;
+    if (request.position) this.refuseLocked(map, solarSystemId, stays, 'moved');
+    if (request.visible === false) this.refuseLocked(map, solarSystemId, stays, 'removed');
+
     // Labels cross by name: the merged map's own names of the ones picked.
     const fields = systemFields(request, (ids) => labelNamesById(ids, map.info.systemLabels ?? []));
+    // A lock counts where it is held: never written to every source like the other fields.
+    delete fields.locked;
+    if (lifts === 'sources') {
+      // Unlocked at the source, as its manager, recorded there as made via this map.
+      for (const source of lockSources)
+        await this.write(who, map, source, {
+          op: 'system.update',
+          key: String(solarSystemId),
+          fields: { locked: false },
+        });
+    }
+    const own: Partial<{ notes: string | null; labelIds: string[]; locked: boolean }> = {};
+    const lockHere = request.locked === true ? !lock.here : lifts === 'here';
+    if (lockHere) {
+      // A composite keeps its own lock; another map locks its own objects.
+      if (composite) own.locked = request.locked!;
+      else {
+        if (!map.merge.holders(ref).includes(SELF))
+          throw new ForbiddenError('Only this map’s own systems can be locked here');
+        await this.write(who, map, this.self(map), {
+          op: 'system.update',
+          key: String(solarSystemId),
+          fields: { locked: request.locked },
+        });
+      }
+    }
+    if (request.visible === false) {
+      if (Object.keys(own).length > 0) await this.merger.setLocal(who, mapId, solarSystemId, own);
+      await this.hideSystem(who, map, solarSystemId);
+      return;
+    }
     if (composite) {
       // Notes, Tags and locks of a composite are its own, kept over what its sources say.
-      const own: Partial<{ notes: string | null; labelIds: string[]; locked: boolean }> = {};
       if ('notes' in fields) own.notes = (fields.notes as string) || null;
       if ('labelIds' in fields) own.labelIds = fields.labelIds as string[];
-      if ('locked' in fields) own.locked = fields.locked as boolean;
       delete fields.notes;
       delete fields.labelIds;
-      delete fields.locked;
-      if (Object.keys(own).length > 0) await this.merger.setLocal(who, mapId, solarSystemId, own);
     }
+    if (Object.keys(own).length > 0) await this.merger.setLocal(who, mapId, solarSystemId, own);
     if (Object.keys(fields).length > 0)
       await this.writeHolders(
         who,
@@ -119,12 +152,14 @@ export class ChainWrites {
     if (request.position) await this.merger.move(who, mapId, [{ solarSystemId, position: request.position }]);
   }
 
-  /** Positions are the merged map's own layout; sources keep theirs. A composite's locks hold. */
+  /**
+   * Positions are the merged map's own layout; sources keep theirs. Locks hold, the map's own and
+   * its sources' alike.
+   */
   async moveSystems(actor: Actor | null, mapId: string, request: MoveSystemsRequest): Promise<void> {
     const { who, map } = await this.open(actor, mapId);
-    const locked = request.positions.find((p) => map.local.get(p.solarSystemId)?.locked);
-    if (locked)
-      throw new ConflictError('A locked system cannot be moved', { solarSystemId: locked.solarSystemId });
+    for (const { solarSystemId } of request.positions)
+      this.refuseLocked(map, solarSystemId, this.systemLock(map, solarSystemId), 'moved');
     await this.merger.move(
       who,
       mapId,
@@ -132,11 +167,29 @@ export class ChainWrites {
     );
   }
 
-  /** Hides the system on every writable source holding it; read-only sources keep showing it. */
+  /**
+   * Hides the system on every writable source holding it; read-only sources keep showing it.
+   * Refused while it is locked here or on any map it comes from.
+   */
   async removeSystem(actor: Actor | null, mapId: string, solarSystemId: number): Promise<void> {
     const { who, map } = await this.open(actor, mapId);
-    if (map.local.get(solarSystemId)?.locked) throw new ConflictError('The system is locked');
+    this.refuseLocked(map, solarSystemId, this.systemLock(map, solarSystemId), 'removed');
+    await this.hideSystem(who, map, solarSystemId);
+  }
+
+  private async hideSystem(who: Actor, map: MergedMapState, solarSystemId: number): Promise<void> {
     const ref = refId('system', String(solarSystemId));
+    // A source hides a system a locked connection of its own leads to for its managers only.
+    const holding = new Set(map.merge.holders(ref));
+    const heldByLocked = this.writable(map, 'system').filter(
+      (source) =>
+        source.id !== SELF &&
+        holding.has(source.id) &&
+        map.merge
+          .held(source.id, 'connection', solarSystemId)
+          .some((c) => map.merge.sourceField(source.id, c, 'locked') === true),
+    );
+    await this.requireSourceManagers(who, heldByLocked, 'connection', 'remove-system');
     await this.writeHolders(who, map, 'system', ref, () => ({
       op: 'system.remove',
       key: String(solarSystemId),
@@ -176,20 +229,48 @@ export class ChainWrites {
     const { who, map } = await this.open(actor, mapId);
     const group = connectionGroupOf(connectionId);
     if (!group) throw new NotFoundError('Connection');
+    const ref = refId('connection', group.pair);
     const fields = connectionFields(request);
-    if (Object.keys(fields).length === 0) return;
-    await this.writeHolders(
-      who,
-      map,
-      'connection',
-      refId('connection', group.pair),
-      (allowed) => ({
-        op: 'connection.update',
-        key: group.pair,
-        fields: allowed,
-      }),
-      fields,
-    );
+    // A lock counts where it is held: never written to every source like the other fields.
+    const locked = fields.locked as boolean | undefined;
+    delete fields.locked;
+    if (locked === undefined && Object.keys(fields).length === 0) return;
+    const holders = map.merge.holders(ref);
+    if (holders.length === 0) throw new NotFoundError('Connection');
+    const lock = lockOf(map.merge, ref, holders);
+    const setLock = (source: SourceInfo, value: boolean) =>
+      this.write(who, map, source, { op: 'connection.update', key: group.pair, fields: { locked: value } });
+
+    // Unlocking lifts the map's own lock when it has one, else the sources' (theirs to lift).
+    const liftsSources = locked === false && !lock.here && lock.sources.length > 0;
+    if (locked === false && isLocked(lock)) {
+      const targets = lock.here ? [this.self(map)] : this.sourcesOf(map, lock);
+      await this.requireSourceManagers(who, targets, 'connection', 'unlock');
+      for (const target of targets) await setLock(target, false);
+    }
+    if (Object.keys(fields).length > 0) {
+      // Changing a connection a source locks is for that map's managers.
+      if (!liftsSources)
+        await this.requireSourceManagers(who, this.lockedWriters(map, lock), 'connection', 'change');
+      await this.writeHolders(
+        who,
+        map,
+        'connection',
+        ref,
+        (allowed) => ({ op: 'connection.update', key: group.pair, fields: allowed }),
+        fields,
+      );
+    }
+    // Locking: the map's own connection, else the writable sources holding it (their managers).
+    if (locked === true && !isLocked(lock)) {
+      const targets = holders.includes(SELF)
+        ? [this.self(map)]
+        : this.writable(map, 'connection').filter((s) => holders.includes(s.id));
+      if (targets.length === 0)
+        throw new ForbiddenError('Only maps shared read-only hold this; it cannot be changed here');
+      await this.requireSourceManagers(who, targets, 'connection', 'lock');
+      for (const target of targets) await setLock(target, true);
+    }
   }
 
   /** Removes it from the writable sources; their deletion hides older read-only copies too. */
@@ -197,7 +278,11 @@ export class ChainWrites {
     const { who, map } = await this.open(actor, mapId);
     const group = connectionGroupOf(connectionId);
     if (!group) throw new NotFoundError('Connection');
-    await this.writeHolders(who, map, 'connection', refId('connection', group.pair), () => ({
+    const ref = refId('connection', group.pair);
+    // Removing a connection a source locks is for that map's managers.
+    const lock = lockOf(map.merge, ref, map.merge.holders(ref));
+    await this.requireSourceManagers(who, this.lockedWriters(map, lock), 'connection', 'remove');
+    await this.writeHolders(who, map, 'connection', ref, () => ({
       op: 'connection.remove',
       key: group.pair,
     }));
@@ -354,6 +439,78 @@ export class ChainWrites {
 
   // --- helpers --------------------------------------------------------------------------------
 
+  /** Who locks a merged system: the map itself (a composite's own lock) and merged sources. */
+  private systemLock(map: MergedMapState, solarSystemId: number): MergedLock {
+    const ref = refId('system', String(solarSystemId));
+    return lockOf(map.merge, ref, map.merge.holders(ref), map.local.get(solarSystemId));
+  }
+
+  private sourcesOf(map: MergedMapState, lock: MergedLock): SourceInfo[] {
+    return lock.sources.flatMap((id) => map.sources.find((s) => s.id === id) ?? []);
+  }
+
+  /** The sources locking an object that a write to it reaches (read-only ones are not written). */
+  private lockedWriters(map: MergedMapState, lock: MergedLock): SourceInfo[] {
+    const writing = new Set(this.writable(map, 'connection').map((s) => s.id));
+    return this.sourcesOf(map, lock).filter((s) => writing.has(s.id));
+  }
+
+  private self(map: MergedMapState): SourceInfo {
+    return map.sources.find((s) => s.id === SELF)!;
+  }
+
+  /** A locked system cannot be moved or removed: refused naming the map that holds the lock. */
+  private refuseLocked(
+    map: MergedMapState,
+    solarSystemId: number,
+    lock: MergedLock,
+    what: 'moved' | 'removed',
+  ): void {
+    if (lock.here)
+      throw new ConflictError(what === 'moved' ? 'A locked system cannot be moved' : 'The system is locked', {
+        solarSystemId,
+      });
+    const on = this.sourcesOf(map, lock).map((s) => s.name);
+    if (on.length === 0) return;
+    const names = listNames(on);
+    throw new ConflictError(
+      `The system is locked on ${names}, so it cannot be ${what} here; a manager of ${names} can unlock it`,
+      { solarSystemId, lockedOn: on },
+    );
+  }
+
+  /**
+   * A source's locks are its managers' to lift (and a connection it locks theirs to change or
+   * remove): the person must manage every one of `sources` (the map's own objects check that
+   * themselves). Refused before anything changes, naming the maps.
+   */
+  private async requireSourceManagers(
+    who: Actor,
+    sources: readonly SourceInfo[],
+    kind: 'system' | 'connection',
+    what: 'unlock' | 'lock' | 'change' | 'remove' | 'remove-system',
+  ): Promise<void> {
+    const refused: string[] = [];
+    for (const source of sources) {
+      if (source.id === SELF) continue;
+      const role =
+        source.origin.instance === LOCAL_INSTANCE
+          ? await this.ports.access.roleOf(who, source.origin.mapId)
+          : null;
+      if (!hasMapRole(role, 'manager')) refused.push(source.name);
+    }
+    if (refused.length === 0) return;
+    const names = listNames(refused);
+    const message = {
+      unlock: `The ${kind} is locked on ${names}; only a manager of ${names} can unlock it`,
+      lock: `Only a manager of ${names} can lock this ${kind}`,
+      change: `The ${kind} is locked on ${names}; only a manager of ${names} can change it`,
+      remove: `The ${kind} is locked on ${names}; only a manager of ${names} can remove it`,
+      'remove-system': `A connection locked on ${names} leads to the system; only a manager of ${names} can remove it`,
+    }[what];
+    throw new ForbiddenError(message, { lockedOn: refused });
+  }
+
   /** Writable sources holding the hole that share its status, the one taking new objects first. */
   private passageWriters(map: MergedMapState, pair: string): SourceInfo[] {
     const holding = new Set(map.merge.holders(refId('connection', pair)));
@@ -474,4 +631,11 @@ export class ChainWrites {
       ? 'Only maps shared read-only hold this system'
       : `The maps holding this do not share ${SCOPE_WORDS[kind === 'signature' ? 'signatures' : 'topology']} with this map`;
   }
+}
+
+const NO_LOCK: MergedLock = { here: false, sources: [] };
+
+/** "Corp A", "Corp A and Corp B", "Corp A, Corp B and Corp C". */
+function listNames(names: readonly string[]): string {
+  return names.length <= 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
 }

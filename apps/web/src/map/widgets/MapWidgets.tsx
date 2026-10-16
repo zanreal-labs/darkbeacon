@@ -157,6 +157,10 @@ interface Props {
   state: Pick<MapState, 'signatures' | 'connections' | 'characters' | 'has'> &
     Partial<Pick<MapState, 'systems'>>;
   can: MapPermissions;
+  /** On a merged map: what the viewer may do with one connection (it may come from elsewhere). */
+  connectionCan?(connection: ConnectionDto): MapPermissions;
+  /** On a merged map: whether the viewer manages the map behind a source (lifts its locks). */
+  managesSource?(sourceId: string): boolean;
   store: Store;
   myCharacters: CharacterDto[];
   plugins: readonly SlotEntry<'widget'>[];
@@ -354,6 +358,8 @@ function SystemWidgets({
   systemLabels = [],
   state,
   can,
+  connectionCan,
+  managesSource,
   store,
   myCharacters,
   plugins,
@@ -512,6 +518,8 @@ function SystemWidgets({
             connections={state.connections}
             universe={universe}
             can={can}
+            connectionCan={connectionCan}
+            managesSource={managesSource}
             store={store}
             onSelectSystem={onSelectSystem}
           />

@@ -3,6 +3,8 @@ import type {
   CharacterPresenceDto,
   ChainOrigin,
   ConnectionDto,
+  LockHolderDto,
+  LockedBy,
   ConnectionType,
   MapSourceDto,
   MapSystemDto,
@@ -109,7 +111,7 @@ export function positionHint(object: MergedObject): Position | null {
   return x === null || y === null ? null : { x, y };
 }
 
-export function systemDto(object: MergedObject, ctx: ViewContext): MapSystemDto {
+export function systemDto(object: MergedObject, ctx: ViewContext, lock: MergedLock): MapSystemDto {
   const solarSystemId = Number(object.key);
   const f = object.fields;
   const local = ctx.local?.get(solarSystemId);
@@ -129,12 +131,47 @@ export function systemDto(object: MergedObject, ctx: ViewContext): MapSystemDto 
       ? labelIdsByName(f.systemLabels, ctx.systemLabels ?? [])
       : [],
     customLabel: str(f.customLabel),
-    locked: local?.locked ?? f.locked === true,
+    // Never the merged value: one source's lock says nothing about another's.
+    locked: isLocked(lock),
+    ...lockFields(lock, ctx),
     visible: true,
     createdAt: object.born,
     updatedAt: object.updatedAt,
     provenance: provenance(object, ctx),
   };
+}
+
+/**
+ * Who holds the lock of a merged system or connection. A lock counts on the map holding it only:
+ * the merged map's own one (a composite keeps its own; else its own objects', `self`), and each
+ * merged source's own, which only that map's managers lift.
+ */
+export interface MergedLock {
+  here: boolean;
+  /** Merged sources (never `self`) whose copy is locked, in source order. */
+  sources: string[];
+}
+
+/** The lock of `ref` among `holders` (the live copies); `local` is a composite's own lock. */
+export function lockOf(
+  merge: ChainMerge,
+  ref: string,
+  holders: readonly string[],
+  local?: { locked: boolean },
+): MergedLock {
+  return {
+    here: local?.locked ?? merge.sourceField(SELF, ref, 'locked') === true,
+    sources: holders.filter((id) => id !== SELF && merge.sourceField(id, ref, 'locked') === true),
+  };
+}
+
+export const isLocked = (lock: MergedLock) => lock.here || lock.sources.length > 0;
+
+/** `lockedBy` and `lockedOn` of a merged DTO: nothing while unlocked. */
+function lockFields(lock: MergedLock, ctx: ViewContext): { lockedBy?: LockedBy; lockedOn?: LockHolderDto[] } {
+  if (!isLocked(lock)) return {};
+  const on = lock.sources.map((id) => ({ sourceId: id, name: ctx.sources.get(id)?.name ?? id }));
+  return { lockedBy: lock.here ? 'here' : 'source', ...(on.length > 0 ? { lockedOn: on } : {}) };
 }
 
 /** A wire lifetime mark (`{ mark, at }`) as the DTO field, or nothing. */
@@ -155,7 +192,7 @@ function bubbledOf(value: unknown): Bubbled {
   return 'none';
 }
 
-export function connectionDto(object: MergedObject, ctx: ViewContext): ConnectionDto {
+export function connectionDto(object: MergedObject, ctx: ViewContext, lock: MergedLock): ConnectionDto {
   const pair = parsePair(object.key.split(':')[0]!)!;
   const f = object.fields;
   const time = obj(f.time);
@@ -174,7 +211,7 @@ export function connectionDto(object: MergedObject, ctx: ViewContext): Connectio
     bubbled: bubbledOf(f.bubbled),
     eolAt: num(time?.eolAt),
     massStatusAt: num(mass?.at),
-    ...(f.locked === true ? { locked: true } : {}),
+    ...(isLocked(lock) ? { locked: true, ...lockFields(lock, ctx) } : {}),
     ...(str(f.note) ? { note: str(f.note)! } : {}),
     ...lifetimeOf(f.lifetime),
     createdAt: object.born,
@@ -240,14 +277,16 @@ export function entitiesOf(merge: ChainMerge, ref: string, ctx: ViewContext): Vi
   const shown = (solarSystemId: number) => merge.objects(refId('system', String(solarSystemId))).length > 0;
   switch (kind) {
     case 'system': {
-      const dto = systemDto(objects[0]!, ctx);
+      const object = objects[0]!;
+      const local = ctx.local?.get(Number(object.key));
+      const dto = systemDto(object, ctx, lockOf(merge, ref, object.holders, local));
       return [{ kind, id: String(dto.solarSystemId), dto }];
     }
     case 'connection': {
       const pair = parsePair(key);
       if (!pair || !shown(pair[0]) || !shown(pair[1])) return [];
       return objects.map((object) => {
-        const dto = connectionDto(object, ctx);
+        const dto = connectionDto(object, ctx, lockOf(merge, ref, object.holders));
         return { kind, id: dto.id, dto };
       });
     }

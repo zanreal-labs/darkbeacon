@@ -30,6 +30,7 @@ import {
 } from './nodeFacts';
 import { EffectDot, NodeKills, NodeSovereignty, ShatteredMark } from './NodeIntel';
 import { destinationToken } from './WormholeFacts';
+import { lockedText } from './sharing/chain';
 import styles from './SystemNode.module.css';
 
 export interface SystemNodeData extends Record<string, unknown> {
@@ -149,7 +150,7 @@ export function systemTooltip(
     );
   if (intel && intel.kills1h > 0) lines.push(`Kills in the last hour: ${intel.kills1h}`);
   if (info?.statics.length) lines.push(`Statics: ${info.statics.join(', ')}`);
-  if (system.locked) lines.push('Locked');
+  if (system.locked) lines.push(lockedText(system));
   if (!system.visible) lines.push('Hidden from the map');
   if (system.description.trim()) lines.push(`Notes: ${system.description.trim().slice(0, 200)}`);
   return lines.join('\n');
@@ -365,8 +366,12 @@ export const SystemNode = memo(function SystemNode({
             </span>
           )}
           {system.locked && (
-            <span className={styles.lock} title="Locked: cannot be moved or removed" data-locked>
-              <Lock aria-label="Locked" />
+            <span
+              className={styles.lock}
+              title={`${lockedText(system)}: cannot be moved or removed`}
+              data-locked={system.lockedBy ?? 'here'}
+            >
+              <Lock aria-label={lockedText(system)} />
             </span>
           )}
           {/* Live counts sit in fixed slots, so a count going 3 -> 12 never resizes the node. */}

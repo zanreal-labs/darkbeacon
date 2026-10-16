@@ -1,8 +1,10 @@
 import type { ChainDelta, ChainEntry, ChainObjectKind, ShareScope } from '@darkbeacon/shared';
 
 /**
- * Who may see a field outside its map. `local` fields never leave their map (Tags and locks
- * point at things only that map has); they reach a map's own merged view only.
+ * Who may see a field outside its map. `local` fields never leave their map (Tags point at things
+ * only that map has); they reach a map's own merged view only. Locks are topology: a map merging
+ * another must know what that map keeps from being moved or removed, but a lock only ever counts
+ * on the map that holds it (merged views say where, see `view.ts`).
  */
 export type FieldScope = ShareScope | 'local';
 
@@ -26,7 +28,8 @@ export const FIELD_SCOPES: Record<ChainObjectKind, Record<string, FieldScope>> =
     customLabel: 'labels',
     /** The system's Tags: ids of the map's own list. */
     labelIds: 'local',
-    locked: 'local',
+    /** Held by its own map only: a merged map shows where, and refuses moves and removals. */
+    locked: 'topology',
   },
   connection: {
     /** `wormhole`, `gate` or `bridge`. */
@@ -46,8 +49,8 @@ export const FIELD_SCOPES: Record<ChainObjectKind, Record<string, FieldScope>> =
     lifetime: 'connectionStatus',
     /** Free text about the hole. */
     note: 'intel',
-    /** Who may change it is the map's own business, like a system's lock. */
-    locked: 'local',
+    /** Held by its own map: only its managers change a locked connection, from wherever. */
+    locked: 'topology',
   },
   signature: {
     group: 'signatures',

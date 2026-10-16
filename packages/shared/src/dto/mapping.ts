@@ -201,6 +201,17 @@ export const ProvenanceDto = z.object({
 });
 export type ProvenanceDto = z.infer<typeof ProvenanceDto>;
 
+/**
+ * Where a lock of a merged object is held: `here` on the map itself (a composite's own lock, or
+ * the map's own objects), `source` only on maps it merges. Only on maps that merge others.
+ */
+export const LockedBy = z.enum(['here', 'source']);
+export type LockedBy = z.infer<typeof LockedBy>;
+
+/** A merged map holding a lock: the source id (`MapSourceDto.id`) and its name. */
+export const LockHolderDto = z.object({ sourceId: Id, name: z.string() });
+export type LockHolderDto = z.infer<typeof LockHolderDto>;
+
 export const Position = z.object({ x: z.number().finite(), y: z.number().finite() });
 export type Position = z.infer<typeof Position>;
 
@@ -234,7 +245,12 @@ export const MapSystemDto = z.object({
   systemLabelIds: z.array(Id),
   /** One free-text label of the system ("bait"), shown after its Labels; null for none. */
   customLabel: z.string().nullable(),
+  /** On a merged map: locked here or on any map it merges. */
   locked: z.boolean(),
+  /** On maps that merge others, while locked: where the lock is held (`here` wins). */
+  lockedBy: LockedBy.optional(),
+  /** On maps that merge others: the merged maps that lock it (they alone may unlock it there). */
+  lockedOn: z.array(LockHolderDto).optional(),
   /** Hidden systems keep their intel; nothing routes to them. */
   visible: z.boolean(),
   createdAt: Timestamp,
@@ -344,6 +360,10 @@ export const ConnectionDto = z.object({
    * means unlocked.
    */
   locked: z.boolean().optional(),
+  /** On maps that merge others, while locked: where the lock is held (`here` wins). */
+  lockedBy: LockedBy.optional(),
+  /** On maps that merge others: the merged maps that lock it (their managers change it). */
+  lockedOn: z.array(LockHolderDto).optional(),
   /** Free text about the hole (who rolled it, what is behind it). Absent means none. */
   note: z.string().max(CONNECTION_NOTE_MAX).optional(),
   /** The last lifetime mark ("less than 16 h left") and when it was set; absent or null: none. */

@@ -161,5 +161,5 @@ export const SCOPE_WORDS: Record<FieldScope, string> = {
   intel: 'system intel',
   characters: 'characters',
   labels: 'labels',
-  local: 'the map’s own tags and locks',
+  local: 'the map’s own tags',
 };

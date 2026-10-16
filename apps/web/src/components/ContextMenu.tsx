@@ -31,6 +31,11 @@ export type MenuItem =
       icon?: ReactNode;
       danger?: boolean;
       shortcut?: string;
+      /** Muted, before the shortcut (where the action applies). */
+      hint?: string;
+      /** Shown but not done: it says why in `title` (still focusable, so it can be read). */
+      disabled?: boolean;
+      title?: string;
     }
   | {
       /** On or off. Inside a submenu it keeps the menu open, so several can be set in a row. */
@@ -465,15 +470,20 @@ function Panel(props: PanelProps) {
                 data-index={i}
                 className={styles.item}
                 data-danger={item.danger || undefined}
+                data-disabled={item.disabled || undefined}
+                aria-disabled={item.disabled || undefined}
+                title={item.title}
                 onPointerEnter={(e) => onRowEnter(e, i, false)}
                 onPointerLeave={onRowLeave}
                 onClick={() => {
+                  if (item.disabled) return;
                   item.onSelect();
                   close();
                 }}
               >
                 {lead(item.icon)}
                 <span className={styles.label}>{item.label}</span>
+                {item.hint && <span className={styles.trail}>{item.hint}</span>}
                 {item.shortcut && <kbd className={styles.trail}>{item.shortcut}</kbd>}
               </button>
             );

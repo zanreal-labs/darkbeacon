@@ -1,7 +1,8 @@
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mapStream, type DomainEvent } from '@darkbeacon/core';
 import { describeEachDialect } from '@darkbeacon/db/testing';
 import { BookmarkNumberUseCases, type ChainMap } from '@darkbeacon/mapping';
+import { shareScope } from '@darkbeacon/shared';
 import type {
   ConnectionDto,
   MapShareDto,
@@ -142,6 +143,65 @@ describeEachDialect('sharing and merged chains', (t) => {
     // Positions are the composite's own and do not cover each other.
     const spots = new Set(merged.systems.map((s) => `${s.position.x},${s.position.y}`));
     expect(spots.size).toBe(merged.systems.length);
+  });
+
+  it('never lets a map that only added an object blank what another map set on it', async () => {
+    const { jita, perimeter } = SYSTEMS;
+    // Corp A scouts Jita and Perimeter and marks the gate between them...
+    for (const id of [jita, perimeter]) await env.systems.add(alice, corpA.id, { solarSystemId: id });
+    await env.systems.update(alice, corpA.id, jita, {
+      status: 'hostile',
+      description: 'Keepstar',
+      temporaryName: 'A1',
+      customLabel: 'bait',
+      customName: 'Trade hub',
+    });
+    const gate = await env.connections.add(alice, corpA.id, { source: jita, target: perimeter });
+    await env.connections.update(alice, corpA.id, gate.id, {
+      massStatus: 'critical',
+      timeStatus: 'eol',
+      dangerous: true,
+      note: 'camped',
+      lifetime: '4h',
+    });
+    await env.signatures.add(alice, corpA.id, jita, { eveId: 'ABC-123', group: 'relic', name: 'Ruins' });
+    // ... and Corp B adds the same ones later, touching nothing.
+    env.clock.advance(60_000);
+    for (const id of [jita, perimeter]) await env.systems.add(bob, corpB.id, { solarSystemId: id });
+    await env.connections.add(bob, corpB.id, { source: jita, target: perimeter });
+    await env.signatures.add(bob, corpB.id, jita, { eveId: 'ABC-123' });
+    const all = [...shareScope.options];
+    await share(corpA, alice, 'read', all);
+    await share(corpB, bob, 'read', all);
+
+    const merged = await view(alliance.id);
+    expect(merged.systems.find((s) => s.solarSystemId === jita)).toMatchObject({
+      status: 'hostile',
+      description: 'Keepstar',
+      temporaryName: 'A1',
+      customLabel: 'bait',
+      customName: 'Trade hub',
+    });
+    expect(edge(merged.connections, jita, perimeter)).toMatchObject({
+      massStatus: 'critical',
+      timeStatus: 'eol',
+      dangerous: true,
+      note: 'camped',
+      lifetime: { mark: '4h' },
+    });
+    expect(merged.signatures.find((s) => s.eveId === 'ABC-123')).toMatchObject({
+      group: 'relic',
+      name: 'Ruins',
+    });
+
+    // A value Corp B does set, later, still wins.
+    env.clock.advance(1_000);
+    await env.systems.update(bob, corpB.id, jita, { status: 'friendly', description: 'Keepstar down' });
+    await env.settle();
+    expect((await view(alliance.id)).systems.find((s) => s.solarSystemId === jita)).toMatchObject({
+      status: 'friendly',
+      description: 'Keepstar down',
+    });
   });
 
   it('follows changes on a source live, on the composite stream with its own seq', async () => {
@@ -504,6 +564,133 @@ describeEachDialect('sharing and merged chains', (t) => {
     // Survives a rebuild from scratch.
     await sharingTestEnv(t.db).merger.rebuildAll();
     expect((await view(alliance.id)).systems.find((s) => s.solarSystemId === c5)!.locked).toBe(true);
+  });
+
+  describe('locks held by a source', () => {
+    const system = async (id: number) =>
+      (await view(alliance.id)).systems.find((s) => s.solarSystemId === id)!;
+
+    it('shows the source’s lock on the composite, in snapshots and live events', async () => {
+      await env.systems.update(alice, corpA.id, c5, { locked: true });
+      const a = await share(corpA, alice, 'read-write');
+      expect(await system(c5)).toMatchObject({
+        locked: true,
+        lockedBy: 'source',
+        lockedOn: [{ sourceId: a.id, name: 'Corp A' }],
+      });
+      const open = await system(c2);
+      expect(open.locked).toBe(false);
+      expect(open).not.toHaveProperty('lockedBy');
+
+      // A lock set on the source later reaches the composite's viewers as an update.
+      const head = await env.ports.events.headSeq(mapStream(alliance.id));
+      await env.systems.update(alice, corpA.id, c2, { locked: true });
+      await env.settle();
+      const updates = (await env.events(alliance.id, head)).filter((e) => e.type === 'system.updated');
+      expect(updates.map((e) => e.data)).toEqual([
+        expect.objectContaining({ solarSystemId: c2, locked: true, lockedBy: 'source' }),
+      ]);
+      // And survives a rebuild from scratch.
+      await sharingTestEnv(t.db).merger.rebuildAll();
+      expect(await system(c2)).toMatchObject({ locked: true, lockedBy: 'source' });
+    });
+
+    it('refuses moving and removing it with a message naming the map holding the lock', async () => {
+      await env.systems.update(alice, corpA.id, c5, { locked: true });
+      await share(corpA, alice, 'read-write', ['topology', 'labels']);
+      const refusal = { code: 'conflict', message: expect.stringMatching(/locked on Corp A/) };
+      await expect(env.writes.removeSystem(dave, alliance.id, c5)).rejects.toMatchObject(refusal);
+      await expect(env.writes.updateSystem(dave, alliance.id, c5, { visible: false })).rejects.toMatchObject(
+        refusal,
+      );
+      await expect(
+        env.writes.moveSystems(dave, alliance.id, { positions: [{ solarSystemId: c5, x: 9, y: 9 }] }),
+      ).rejects.toMatchObject(refusal);
+      expect((await env.ports.systems.find(corpA.id, c5))!.visible).toBe(true);
+      // Its other fields still go through.
+      await env.writes.updateSystem(dave, alliance.id, c5, { customLabel: 'bait' });
+      expect((await env.ports.systems.find(corpA.id, c5))!.customLabel).toBe('bait');
+    });
+
+    it('is unlocked there by a manager of the source, audited on the source; refused to anyone else', async () => {
+      await env.systems.update(alice, corpA.id, c5, { locked: true });
+      // Read-only: the lock is still the source's managers' to lift.
+      await share(corpA, alice, 'read');
+      const refusal = { code: 'forbidden', message: expect.stringMatching(/only a manager of Corp A/) };
+      // Neither a member nor the composite's own admin manage Corp A.
+      await expect(env.writes.updateSystem(dave, alliance.id, c5, { locked: false })).rejects.toMatchObject(
+        refusal,
+      );
+      await expect(env.writes.updateSystem(carol, alliance.id, c5, { locked: false })).rejects.toMatchObject(
+        refusal,
+      );
+      expect((await env.ports.systems.find(corpA.id, c5))!.locked).toBe(true);
+
+      env.access.grant('dave', corpA.id, 'manager');
+      env.clock.advance(1_000);
+      await env.writes.updateSystem(dave, alliance.id, c5, { locked: false });
+      await env.settle();
+      expect((await env.ports.systems.find(corpA.id, c5))!.locked).toBe(false);
+      const open = await system(c5);
+      expect(open.locked).toBe(false);
+      expect(open).not.toHaveProperty('lockedOn');
+
+      const [written] = (await env.events(corpA.id)).filter((e) => e.type === 'system.updated').slice(-1);
+      expect(written).toMatchObject({ actor: { kind: 'account', id: 'dave' }, data: { locked: false } });
+      const audit = await t.db
+        .db<{ event_log: { id: string; audit: string } }>()
+        .selectFrom('event_log')
+        .select('audit')
+        .where('id', '=', written!.id)
+        .executeTakeFirstOrThrow();
+      expect(JSON.parse(audit.audit)).toMatchObject({ via: { mapId: alliance.id, name: 'Alliance chain' } });
+      // Nothing was kept on the composite itself.
+      expect((await env.sharingPorts.local.list(alliance.id)).get(c5)?.locked ?? false).toBe(false);
+    });
+
+    it('keeps the composite’s own lock apart from the source’s: unlocking lifts its own first', async () => {
+      await share(corpA, alice, 'read-write');
+      await env.writes.updateSystem(carol, alliance.id, c5, { locked: true });
+      expect(await system(c5)).toMatchObject({ locked: true, lockedBy: 'here' });
+      expect(await system(c5)).not.toHaveProperty('lockedOn');
+      await env.systems.update(alice, corpA.id, c5, { locked: true });
+      await env.settle();
+      expect(await system(c5)).toMatchObject({ lockedBy: 'here', lockedOn: [{ name: 'Corp A' }] });
+      // Carol manages the composite, not Corp A: her unlock lifts the composite's lock only.
+      await env.writes.updateSystem(carol, alliance.id, c5, { locked: false });
+      expect(await system(c5)).toMatchObject({ locked: true, lockedBy: 'source' });
+      expect((await env.ports.systems.find(corpA.id, c5))!.locked).toBe(true);
+    });
+
+    it('holds connections locked on the source for that map’s managers', async () => {
+      const ab = (await env.ports.connections.findBetween(corpA.id, c5, c1))!;
+      await env.connections.update(alice, corpA.id, ab.id, { locked: true });
+      await share(corpA, alice, 'read-write');
+      const merged = edge((await view(alliance.id)).connections, c5, c1)!;
+      expect(merged).toMatchObject({ locked: true, lockedBy: 'source', lockedOn: [{ name: 'Corp A' }] });
+      const refusal = { code: 'forbidden', message: expect.stringMatching(/locked on Corp A/) };
+      await expect(
+        env.writes.updateConnection(dave, alliance.id, merged.id, { dangerous: true }),
+      ).rejects.toMatchObject(refusal);
+      await expect(env.writes.removeConnection(dave, alliance.id, merged.id)).rejects.toMatchObject(refusal);
+      await expect(env.writes.removeSystem(dave, alliance.id, c1)).rejects.toMatchObject({
+        code: 'forbidden',
+        message: expect.stringMatching(/connection locked on Corp A/),
+      });
+      await expect(
+        env.writes.updateConnection(dave, alliance.id, merged.id, { locked: false }),
+      ).rejects.toMatchObject(refusal);
+
+      env.access.grant('dave', corpA.id, 'manager');
+      await env.writes.updateConnection(dave, alliance.id, merged.id, { locked: false });
+      await env.settle();
+      expect((await env.ports.connections.findBetween(corpA.id, c5, c1))!.locked ?? false).toBe(false);
+      expect(edge((await view(alliance.id)).connections, c5, c1)).not.toHaveProperty('locked');
+      // Locking on a composite locks it on the sources taking writes, for their managers.
+      await env.writes.updateConnection(dave, alliance.id, merged.id, { locked: true });
+      await env.settle();
+      expect((await env.ports.connections.findBetween(corpA.id, c5, c1))!.locked).toBe(true);
+    });
   });
 
   it('sends a composite’s new systems to the source its admins picked', async () => {
