@@ -149,7 +149,7 @@ export const BUILT_IN_VIEWS: readonly NamedView[] = [
   // A fight: Local is the main window, the comments at the bottom with room for a few of them.
   builtIn('pvp', 'PvP', {
     visible: ['info', 'local', 'kills', 'comments'],
-    caps: { local: 360, comments: 200 },
+    caps: { local: 340, comments: 280 },
     dockWidth: 400,
   }),
   builtIn('roll', 'Roll', { visible: ['info', 'connections', 'local'] }),
