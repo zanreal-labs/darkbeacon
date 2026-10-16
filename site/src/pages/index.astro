@@ -47,9 +47,11 @@ const marks = [
   { n: 10, x: 79.4, y: 7.6, text: 'Who is on the map, then views 1, 2, 3: Scan, PvP, Roll. Alt+1 to Alt+3.' },
 ];
 
+// Each label in whichever of black or white reads better on its colour (only 0.1 needs white).
 const security = ['1.0', '0.9', '0.8', '0.7', '0.6', '0.5', '0.4', '0.3', '0.2', '0.1', '0.0'].map((label, i) => [
   label,
   `var(--sec-${String(10 - i).padStart(2, '0')})`,
+  label === '0.1' ? '#fff' : '#000',
 ]);
 
 // The systems of the demo chain the map scene draws (apps/server/src/modules/demo/demo-chain.ts),
@@ -379,7 +381,7 @@ const alliance = [
             <h3>Colours mean what they mean in game</h3>
             <p class="card-note">Security, exactly as the client draws it:</p>
             <ol class="sec-scale">
-              {security.map(([label, color]) => <li style={`--c:${color}`}><span class="mono">{label}</span></li>)}
+              {security.map(([label, color, ink]) => <li style={`--c:${color};--ink:${ink}`}><span class="mono">{label}</span></li>)}
             </ol>
             <p class="card-note">Standings toward who holds the space, as the client tags them:</p>
             <ul class="standings">

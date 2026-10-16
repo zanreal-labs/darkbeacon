@@ -847,7 +847,7 @@ figcaption strong {
   height: 2rem;
   border-radius: 4px;
   background: var(--c);
-  color: #000;
+  color: var(--ink, #000);
   font-size: 0.6875rem;
 }
 
