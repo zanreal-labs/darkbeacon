@@ -55,6 +55,7 @@ import {
 } from './format';
 import { searchSystems, securityColor, securityLabel, type StarModel } from './model';
 import type { AnsiblexParse, PlannerSettings } from './settings';
+import { rankSystems, whyLabel, type End, type Suggestion, type SuggestionWhy } from './suggest';
 import styles from './jump.module.css';
 
 interface SystemOption extends PickerOption {
@@ -85,6 +86,10 @@ export interface JumpPanelProps {
   destination: number | null;
   setOrigin(i: number | null): void;
   setDestination(i: number | null): void;
+  /** Start and destination change places, in one step. */
+  onSwap(): void;
+  /** The pointer or focus is on the swap button: a chance to get the reverse route early. */
+  onSwapIntent(): void;
   avoidSystems: ReadonlySet<number>;
   avoidRegions: readonly number[];
   ansiblex: AnsiblexParse;
@@ -98,9 +103,8 @@ export interface JumpPanelProps {
   open: boolean;
   setOpen(open: boolean): void;
   phone: boolean;
-  /** Known-space systems the viewer's chain reaches, as quick starts. */
-  exits: readonly number[];
-  chainName: string | null;
+  /** What each picker offers on focus and ranks first while typing. */
+  suggestions: Readonly<Record<End, readonly Suggestion[]>>;
   ref?: Ref<HTMLDivElement>;
 }
 
@@ -110,13 +114,22 @@ type PanelState = Omit<JumpPanelProps, 'ref'>;
 export function JumpPanel({ ref, ...props }: JumpPanelProps) {
   const { model, ship, settings, update, origin, destination, plan, open, setOpen, phone } = props;
   const [optionsOpen, setOptionsOpen] = useState(false);
-  const option = (i: number): SystemOption => ({
-    key: String(model.ids[i]),
-    index: i,
-    label: model.names[i]!,
-    detail: `${securityLabel(model.security[i]!)} · ${model.regionNames[model.regionOf[i]!]}`,
+  // Turns the swap icon half a turn per swap (the only motion; the values change in place).
+  const [swaps, setSwaps] = useState(0);
+  const option = (i: number, why: SuggestionWhy | null = null): SystemOption => {
+    const place = `${securityLabel(model.security[i]!)} · ${model.regionNames[model.regionOf[i]!]}`;
+    return {
+      key: String(model.ids[i]),
+      index: i,
+      label: model.names[i]!,
+      detail: why ? `${whyLabel(why)} · ${place}` : place,
+    };
+  };
+  // Suggestions and search share one list: the same rows, suggestions first.
+  const searchFor = (end: End) => async (text: string) => ({
+    options: rankSystems(model, text, props.suggestions[end]).map((r) => option(r.index, r.why)),
   });
-  const search = async (text: string) => ({ options: searchSystems(model, text).map(option) });
+  const suggestionsKey = (end: End) => props.suggestions[end].map(suggestionKey).join(',');
   const hulls = JUMP_HULLS.filter((h) => props.meta.ships.some((s) => s.hull === h));
   const shipsOfHull = props.meta.ships.filter((s) => s.hull === ship.hull);
   const route = plan?.route ?? null;
@@ -206,41 +219,38 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
                 <SearchPicker<SystemOption>
                   value={origin === null ? null : option(origin)}
                   onChange={(o) => props.setOrigin(o?.index ?? null)}
-                  search={search}
-                  cacheKey={['jump-systems']}
+                  search={searchFor('origin')}
+                  cacheKey={['jump-systems', 'origin', suggestionsKey('origin')]}
+                  minLength={0}
+                  debounce={0}
                   placeholder="System name ( / )"
                   empty="No known-space system by that name"
                 />
               </Field>
             </div>
-            {props.exits.length > 0 && origin === null && (
-              <div className={styles.exits}>
-                <span>From {props.chainName ?? 'the chain'}:</span>
-                {props.exits.slice(0, 4).map((i) => (
-                  <Button key={i} size="sm" variant="ghost" onClick={() => props.setOrigin(i)}>
-                    {model.names[i]}
-                  </Button>
-                ))}
-              </div>
-            )}
-            {(origin !== null || destination !== null) && (
-              <IconButton
-                className={styles.swap}
-                label="Swap start and destination"
-                icon={<ArrowUpDown />}
-                onClick={() => {
-                  props.setOrigin(destination);
-                  props.setDestination(origin);
-                }}
-              />
-            )}
+            {/* Always there (disabled with no ends), so nothing moves when it becomes useful. */}
+            <IconButton
+              className={styles.swap}
+              label="Swap start and destination"
+              icon={<ArrowUpDown data-turned={swaps % 2 === 1 || undefined} />}
+              disabled={origin === null && destination === null}
+              onPointerEnter={props.onSwapIntent}
+              onPointerDown={props.onSwapIntent}
+              onFocus={props.onSwapIntent}
+              onClick={() => {
+                setSwaps((n) => n + 1);
+                props.onSwap();
+              }}
+            />
             <div data-picker="destination">
               <Field label="Destination">
                 <SearchPicker<SystemOption>
                   value={destination === null ? null : option(destination)}
                   onChange={(o) => props.setDestination(o?.index ?? null)}
-                  search={search}
-                  cacheKey={['jump-systems']}
+                  search={searchFor('destination')}
+                  cacheKey={['jump-systems', 'destination', suggestionsKey('destination')]}
+                  minLength={0}
+                  debounce={0}
                   placeholder="System name"
                   empty="No known-space system by that name"
                 />
@@ -300,6 +310,14 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
       )}
     </aside>
   );
+}
+
+/** Identifies a suggestion and what its row says, for the picker's cache. */
+function suggestionKey(s: Suggestion): string {
+  const why = s.why;
+  return why.kind === 'character'
+    ? `${s.index}:c${why.online ? 1 : 0}${why.names.join('|')}`
+    : `${s.index}:${why.kind}`;
 }
 
 function optionsSummary(settings: PlannerSettings, props: PanelState): string {

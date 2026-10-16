@@ -10,12 +10,15 @@ const JumpPage = dynamic(() => import('./JumpPage').then((m) => m.JumpPage), {
   loading: () => <JumpLoading />,
 });
 
-/** Known-space systems the viewer's chain reaches through a wormhole, and the map's name. */
-export interface ChainExits {
+/** The viewer's map as far as the planner cares: its name, its chain's exits and its systems. */
+export interface PlannerMap {
   map: string;
+  /** Known-space systems the chain reaches through a wormhole. */
+  exits: number[];
+  /** Every visible system on the map, wormholes included (the planner keeps known space). */
   systems: number[];
 }
 
-export function JumpPlannerClient({ meta, chain }: { meta: JumpMetaDto; chain: ChainExits | null }) {
+export function JumpPlannerClient({ meta, chain }: { meta: JumpMetaDto; chain: PlannerMap | null }) {
   return <JumpPage meta={meta} chain={chain} />;
 }

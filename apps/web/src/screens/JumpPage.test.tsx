@@ -3,12 +3,13 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw/http';
-import { routes, type JumpPlanDto, type JumpPlanRequest } from '@darkbeacon/shared';
+import { routes, type JumpPlanDto, type JumpPlanRequest, type MyTrackingDto } from '@darkbeacon/shared';
 import { ARK, META, UNIVERSE } from '../jump/fixtures.test-support';
 import { meFixture } from '../test/fixtures';
 import { installFlowMocks, renderWithProviders, setupMockServer } from '../test/setup';
 import { ToastProvider, TooltipProvider } from '../ui';
 import { JumpPage } from './JumpPage';
+import type { PlannerMap } from './JumpPlannerClient';
 
 installFlowMocks({ width: 1200, height: 800 });
 // jsdom has no canvas: the map draws nothing, the controls still work.
@@ -72,17 +73,40 @@ setupMockServer(
     return HttpResponse.json(plan);
   }),
   http.get(routes.accounts.me.path, () => HttpResponse.json(meFixture())),
+  // Ayla Vex (online) sits in Ignoitton.
+  http.get(routes.characters.myTracking.path, () =>
+    HttpResponse.json({
+      characters: [
+        {
+          characterId: 3_900_000_001,
+          solarSystemId: 30002647,
+          shipTypeId: null,
+          shipName: null,
+          online: true,
+          docked: false,
+          updatedAt: 0,
+          trackedOn: [],
+        },
+      ],
+      maps: [],
+    } satisfies MyTrackingDto),
+  ),
 );
 
-function renderPage() {
+/** The demo chain: Ahbazon is an exit, Ami a known-space system on it (and a wormhole). */
+const CHAIN: PlannerMap = { map: 'Home chain', exits: [30005196], systems: [31002531, 30005196, 30005035] };
+
+function renderPage(chain: PlannerMap | null = null) {
   return renderWithProviders(
     <TooltipProvider>
       <ToastProvider>
-        <JumpPage meta={META} />
+        <JumpPage meta={META} chain={chain} />
       </ToastProvider>
     </TooltipProvider>,
   );
 }
+
+const optionNames = () => screen.getAllByRole('option').map((o) => o.textContent);
 
 describe('JumpPage', () => {
   beforeEach(() => {
@@ -115,6 +139,63 @@ describe('JumpPage', () => {
       gates: 'finish',
     });
     await waitFor(() => expect(window.location.search).toBe('?from=Ignoitton&to=Ami&ship=Ark'));
+  });
+
+  it('suggests where my characters are and the chain as search results, on focus', async () => {
+    const user = userEvent.setup();
+    renderPage(CHAIN);
+    const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+    const [start, destination] = within(panel).getAllByRole('combobox').slice(2);
+
+    await user.click(start!);
+    await waitFor(() => expect(optionNames()[0]).toMatch(/^Ignoitton.*Ayla Vex/));
+    expect(optionNames()).toEqual([
+      expect.stringMatching(/^Ignoitton.*Ayla Vex/),
+      expect.stringMatching(/^Ahbazon.*Chain exit/),
+      expect.stringMatching(/^Ami.*On the map/),
+    ]);
+    await user.click(screen.getByRole('option', { name: /Ignoitton/ }));
+
+    // The destination offers the map first (the start left out), and typing keeps it first.
+    await user.click(destination!);
+    await waitFor(() =>
+      expect(optionNames()).toEqual([
+        expect.stringMatching(/^Ahbazon.*Chain exit/),
+        expect.stringMatching(/^Ami.*On the map/),
+      ]),
+    );
+    await user.type(destination!, 'a');
+    // The suggestions stay listed until the answer for "a" replaces them.
+    await waitFor(() =>
+      expect(optionNames()).toEqual([
+        expect.stringMatching(/^Ahbazon.*Chain exit/),
+        expect.stringMatching(/^Ami.*On the map/),
+        expect.stringMatching(/^Jita/),
+      ]),
+    );
+  });
+
+  it('swaps start and destination in one step, keeping focus and the sheet', async () => {
+    window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&ship=Ark');
+    const user = userEvent.setup();
+    renderPage();
+    const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+    await screen.findByRole('region', { name: 'Route' });
+    const swap = within(panel).getByRole('button', { name: 'Swap start and destination' });
+    await user.click(swap);
+    const start = panel.querySelector('[data-picker="origin"]')!;
+    const destination = panel.querySelector('[data-picker="destination"]')!;
+    expect(start.textContent).toMatch(/Ami/);
+    expect(destination.textContent).toMatch(/Ignoitton/);
+    expect(document.activeElement).toBe(swap);
+    await waitFor(() => expect(window.location.search).toBe('?from=Ami&to=Ignoitton&ship=Ark'));
+    await waitFor(() => expect(requests.at(-1)).toMatchObject({ origin: 30005035, destination: 30002647 }));
+    // With only a destination, a swap makes it the start.
+    await user.click(within(start as HTMLElement).getByRole('button', { name: 'Choose another' }));
+    await user.click(swap);
+    expect(start.textContent).toMatch(/Ignoitton/);
+    expect(destination.querySelector('input')).toBeTruthy();
+    expect(document.activeElement).toBe(swap);
   });
 
   it('starts from the address and clears with Escape', async () => {

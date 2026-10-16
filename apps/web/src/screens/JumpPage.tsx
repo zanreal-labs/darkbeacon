@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useCallback, useDeferredValue, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   routes,
   type JumpMetaDto,
@@ -10,25 +10,29 @@ import {
   type JumpUniverseDto,
 } from '@darkbeacon/shared';
 import { api } from '../lib/api';
+import { useMyTracking } from '../lib/characters';
+import { useMe } from '../lib/session';
 import { usePageView } from '../lib/useTelemetry';
 import { useBreadcrumbs } from '../shell/breadcrumbs';
 import { ErrorState } from '../ui';
 import type { Overlay, RouteLeg } from '../jump/draw';
+import { endpointsReducer } from '../jump/endpoints';
 import { JumpPanel } from '../jump/JumpPanel';
 import { SystemCard } from '../jump/SystemCard';
 import { buildStarModel, distanceLy, noCynoReason, type StarModel } from '../jump/model';
 import { loadSettings, parseAnsiblex, saveSettings, type PlannerSettings } from '../jump/settings';
 import { StarMap, type StarMapHandle } from '../jump/StarMap';
+import { pushRecent, suggestionsFor, type CharacterPlace, type SuggestionSources } from '../jump/suggest';
 import styles from '../jump/jump.module.css';
 import { JumpLoading } from './JumpLoading';
-import type { ChainExits } from './JumpPlannerClient';
+import type { PlannerMap } from './JumpPlannerClient';
 
 /**
  * `/jump`: the jump planner. A map of all known space where a capital's jump route is planned
  * from A to B; the route comes from the server (`POST /api/jumps/plan`), the map data once per
  * dataset version (cached by the browser for good).
  */
-export function JumpPage({ meta, chain = null }: { meta: JumpMetaDto; chain?: ChainExits | null }) {
+export function JumpPage({ meta, chain = null }: { meta: JumpMetaDto; chain?: PlannerMap | null }) {
   useBreadcrumbs([{ label: 'Jump planner' }]);
   usePageView('jump');
   const universe = useQuery({
@@ -56,6 +60,19 @@ export function JumpPage({ meta, chain = null }: { meta: JumpMetaDto; chain?: Ch
   return <Planner meta={meta} model={model} chain={chain} />;
 }
 
+const PLAN_STALE = 5 * 60_000;
+
+const planKey = (request: JumpPlanRequest | null) => ['jumps', 'plan', request] as const;
+
+function fetchPlan(request: JumpPlanRequest, signal: AbortSignal): Promise<JumpPlanDto> {
+  return api<JumpPlanDto>(routes.jumps.plan.path, { method: 'POST', json: request, signal });
+}
+
+/** The systems of a route in order: where it starts, then where each leg ends. */
+function routeSystems(legs: readonly RouteLeg[]): number[] {
+  return [legs[0]!.from, ...legs.map((l) => l.to)];
+}
+
 interface Pinned {
   system: number;
   at: { x: number; y: number };
@@ -68,7 +85,7 @@ function readQuery(): URLSearchParams {
   return typeof window === 'undefined' ? new URLSearchParams() : new URLSearchParams(window.location.search);
 }
 
-function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; chain: ChainExits | null }) {
+function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; chain: PlannerMap | null }) {
   const mapRef = useRef<StarMapHandle>(null);
   const indexByName = useMemo(() => {
     const map = new Map<string, number>();
@@ -88,8 +105,32 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
     const ship = readQuery().get('ship');
     return ship ? { ...stored, ship } : stored;
   });
-  const [origin, setOrigin] = useState<number | null>(() => find(readQuery().get('from')));
-  const [destination, setDestination] = useState<number | null>(() => find(readQuery().get('to')));
+  // Start and destination change in one step (a swap is never seen half done).
+  const [ends, dispatch] = useReducer(endpointsReducer, null, () => ({
+    origin: find(readQuery().get('from')),
+    destination: find(readQuery().get('to')),
+  }));
+  const { origin, destination } = ends;
+  // A system picked for either end is remembered as a recent pick (swaps and the address are not).
+  const remember = useCallback(
+    (system: number | null) => {
+      if (system === null) return;
+      const name = model.names[system]!;
+      setSettings((s) => (s.recent[0] === name ? s : { ...s, recent: pushRecent(s.recent, name) }));
+    },
+    [model],
+  );
+  const setOrigin = useCallback(
+    (system: number | null) => {
+      dispatch({ type: 'origin', system });
+      remember(system);
+    },
+    [remember],
+  );
+  const pickDestination = (system: number | null) => {
+    dispatch({ type: 'destination', system });
+    remember(system);
+  };
   const [hover, setHover] = useState<Pinned | null>(null);
   const [pinned, setPinned] = useState<Pinned | null>(null);
   const [activeLeg, setActiveLeg] = useState<number | null>(null);
@@ -136,18 +177,47 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
     [settings.avoidRegions, regionByName],
   );
   const exits = useMemo(
+    () => (chain?.exits ?? []).flatMap((id) => model.indexById.get(id) ?? []),
+    [chain, model],
+  );
+
+  // What the pickers offer before anything is typed: where my characters are, the map's exits
+  // and known-space systems, and what was picked here before.
+  const me = useMe();
+  const tracking = useMyTracking();
+  const characters = useMemo((): CharacterPlace[] => {
+    const names = new Map((me.data?.characters ?? []).map((c) => [c.id, c.name]));
+    return (tracking.data?.characters ?? []).flatMap((c) => {
+      const system = c.solarSystemId === null ? undefined : model.indexById.get(c.solarSystemId);
+      const name = names.get(c.characterId);
+      return system === undefined || name === undefined ? [] : [{ system, name, online: c.online === true }];
+    });
+  }, [me.data, tracking.data, model]);
+  const mapSystems = useMemo(
     () => (chain?.systems ?? []).flatMap((id) => model.indexById.get(id) ?? []),
     [chain, model],
   );
+  const recent = useMemo(
+    () => settings.recent.flatMap((name) => find(name) ?? []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- find reads indexByName
+    [settings.recent, indexByName],
+  );
+  const suggestions = useMemo(() => {
+    const sources: SuggestionSources = { characters, exits, mapSystems, recent };
+    return {
+      origin: suggestionsFor('origin', sources, destination),
+      destination: suggestionsFor('destination', sources, origin),
+    };
+  }, [characters, exits, mapSystems, recent, origin, destination]);
   const ansiblexText = useDeferredValue(settings.ansiblex);
   const ansiblex = useMemo(() => parseAnsiblex(ansiblexText, model), [ansiblexText, model]);
 
-  const request: JumpPlanRequest | null =
-    origin !== null && destination !== null && origin !== destination
+  const requestFor = (from: number | null, to: number | null): JumpPlanRequest | null =>
+    from !== null && to !== null && from !== to
       ? {
           shipTypeId: ship.typeId,
-          origin: model.ids[origin]!,
-          destination: model.ids[destination]!,
+          origin: model.ids[from]!,
+          destination: model.ids[to]!,
           skills: settings.skills,
           avoidSystems: [...avoidSystems].map((i) => model.ids[i]!),
           avoidRegions: avoidRegions.map((r) => model.regionIds[r]!),
@@ -162,15 +232,28 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
           bridgeTonnes: ship.bridges ? settings.bridgeTonnes : null,
         }
       : null;
+  const request = requestFor(origin, destination);
   const plan = useQuery({
-    queryKey: ['jumps', 'plan', request],
-    queryFn: ({ signal }) =>
-      api<JumpPlanDto>(routes.jumps.plan.path, { method: 'POST', json: request, signal }),
+    queryKey: planKey(request),
+    queryFn: ({ signal }) => fetchPlan(request!, signal),
     enabled: request !== null,
-    staleTime: 5 * 60_000,
+    staleTime: PLAN_STALE,
     placeholderData: keepPreviousData,
     retry: false,
   });
+  // Pointer or focus on the swap button: ask for the reverse route already, so the swap shows it
+  // at once instead of the old route while it comes.
+  const queryClient = useQueryClient();
+  const prefetchSwap = () => {
+    const reverse = requestFor(destination, origin);
+    if (reverse)
+      void queryClient.prefetchQuery({
+        queryKey: planKey(reverse),
+        queryFn: ({ signal }) => fetchPlan(reverse, signal),
+        staleTime: PLAN_STALE,
+        retry: false,
+      });
+  };
   const result = request !== null ? (plan.data ?? null) : null;
   const legs: RouteLeg[] | null = useMemo(
     () =>
@@ -212,16 +295,25 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
   );
 
   // Bring what matters into view: the whole route once it arrives, else the start and its range.
-  const routeKey = legs ? legs.map((l) => `${l.from}-${l.to}`).join(',') : null;
+  // Keyed by the route's systems in any order, so the reverse route (a swap) leaves the view be.
+  const routeKey = legs?.length
+    ? routeSystems(legs)
+        .sort((a, b) => a - b)
+        .join(',')
+    : null;
   useEffect(() => {
     if (!legs || legs.length === 0) return;
-    mapRef.current?.fit([legs[0]!.from, ...legs.map((l) => l.to)]);
+    mapRef.current?.fit(routeSystems(legs));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by the route's systems
   }, [routeKey]);
+  const lastEnds = useRef(ends);
   useEffect(() => {
-    if (origin === null || destination !== null) return;
-    mapRef.current?.centre(origin);
-  }, [origin, destination]);
+    const before = lastEnds.current;
+    lastEnds.current = ends;
+    // A destination that became the start (a swap) is where the view already is.
+    if (ends.origin === null || ends.destination !== null || ends.origin === before.destination) return;
+    mapRef.current?.centre(ends.origin);
+  }, [ends]);
 
   const update = useCallback(
     (change: Partial<PlannerSettings>) => setSettings((s) => ({ ...s, ...change })),
@@ -257,8 +349,7 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
         if (document.querySelector('[role="menu"], [role="listbox"]')) return;
         if (pinned) setPinned(null);
         else {
-          setOrigin(null);
-          setDestination(null);
+          dispatch({ type: 'clear' });
           setActiveLeg(null);
         }
       }
@@ -294,12 +385,10 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
           onClose={() => setPinned(null)}
           onOrigin={() => {
             setOrigin(card.system);
-            if (destination === card.system) setDestination(null);
             setPinned(null);
           }}
           onDestination={() => {
-            setDestination(card.system);
-            if (origin === card.system) setOrigin(null);
+            pickDestination(card.system);
             setPinned(null);
           }}
           onAvoid={() => {
@@ -319,12 +408,14 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
         destination={destination}
         setOrigin={setOrigin}
         setDestination={(i) => {
-          setDestination(i);
-          // On phones the answer is the map: fold the sheet once both ends are set.
-          if (phone && i !== null && origin !== null) setPanelOpen(false);
+          pickDestination(i);
+          // On phones the answer is the map: fold the sheet once a destination is picked for a
+          // start (a swap keeps it open: the pilot is still at the controls).
+          if (phone && i !== null && origin !== null && origin !== i) setPanelOpen(false);
         }}
-        exits={exits}
-        chainName={chain?.map ?? null}
+        onSwap={() => dispatch({ type: 'swap' })}
+        onSwapIntent={prefetchSwap}
+        suggestions={suggestions}
         avoidSystems={avoidSystems}
         avoidRegions={avoidRegions}
         ansiblex={ansiblex}
