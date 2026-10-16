@@ -195,9 +195,9 @@ describe('translating a Wanderer map', () => {
     const c2 = system(plan, SYS.c2).fields.position;
     expect(c2.x - home.x).toBeGreaterThanOrEqual(260);
     expect(line(report, 'approximated', /Positions spread/)).toBeDefined();
-    // Given the scale of an earlier import, positions follow it exactly.
+    // Given the scale of an earlier import, positions follow it exactly (on the 24 px grid: 150 x 2).
     const again = translate(apiDump(), { systemName, layoutScale: 2 }).plan;
-    expect(system(again, SYS.c2).fields.position).toEqual({ x: 300, y: 0 });
+    expect(system(again, SYS.c2).fields.position).toEqual({ x: 312, y: 0 });
   });
 
   it('maps connection types, mass, size, end of life and danger', () => {

@@ -56,8 +56,11 @@ export const DEFAULT_CANVAS_PREFS: CanvasPrefs = {
   dotlan: 'system',
 };
 
-/** The grid dragged systems snap to, in map pixels (half the background's dot spacing). */
-export const SNAP_GRID: [number, number] = [12, 12];
+/**
+ * The grid dragged systems snap to, in map pixels: the background's dot spacing, so a system's
+ * corner always lands on a dot and rows and columns line up exactly.
+ */
+export const SNAP_GRID: [number, number] = [24, 24];
 
 const oneOf =
   <T extends string>(values: readonly T[]) =>

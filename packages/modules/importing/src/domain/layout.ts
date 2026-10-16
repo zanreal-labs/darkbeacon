@@ -10,6 +10,14 @@ import type { Position } from '@darkbeacon/shared';
  */
 export const NODE_ROOM = { width: 360, height: 125 } as const;
 const MAX_SCALE = 3;
+/** The map's snap grid (the web app's `SNAP_GRID`): imported systems land on it, so they line up. */
+export const GRID = 24;
+const onGrid = (v: number) => Math.round(v / GRID) * GRID;
+
+/** A Wanderer position spread by `factor`, on the map's grid. */
+export function placeOnGrid(p: Position, factor: number): Position {
+  return { x: onGrid(p.x * factor), y: onGrid(p.y * factor) };
+}
 
 /**
  * Spreads a layout just enough that no two systems overlap at Darkbeacon's node size, keeping
@@ -35,7 +43,7 @@ export function spreadLayout(positions: ReadonlyArray<Position>): { positions: P
   }
   scale = Math.min(MAX_SCALE, Math.round(scale * 100) / 100);
   return {
-    positions: positions.map((p) => ({ x: Math.round(p.x * scale), y: Math.round(p.y * scale) })),
+    positions: positions.map((p) => placeOnGrid(p, scale)),
     scale,
   };
 }

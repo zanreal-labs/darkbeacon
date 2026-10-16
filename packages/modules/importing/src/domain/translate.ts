@@ -18,7 +18,7 @@ import {
   type TimeStatus,
 } from '@darkbeacon/shared';
 import { planAccess, type PlannedAccessRule } from './acl.js';
-import { spreadLayout } from './layout.js';
+import { placeOnGrid, spreadLayout } from './layout.js';
 import { ReportBuilder } from './report.js';
 import { planWebhooks, type PlannedWebhook } from './webhooks.js';
 import type { WandererConnection, WandererMapDump, WandererSignature, WandererSystem } from './wanderer.js';
@@ -751,7 +751,7 @@ export function pairKey(a: number, b: number): string {
 }
 
 function scaled(p: Position, factor: number): Position {
-  return { x: Math.round(p.x * factor), y: Math.round(p.y * factor) };
+  return placeOnGrid(p, factor);
 }
 
 function systemStatus(
