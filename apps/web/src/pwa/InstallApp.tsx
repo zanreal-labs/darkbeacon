@@ -6,7 +6,7 @@ import { Button, Dialog, DialogClose, DialogContent } from '../ui';
 import { runInstallPrompt, useInstallOption, type InstallOption } from './install';
 import styles from './pwa.module.css';
 
-const STEPS: Record<'ios' | 'mac-safari', { title: string; steps: ReactNode[] }> = {
+const STEPS: Record<'ios' | 'mac-safari' | 'manual', { title: string; steps: ReactNode[] }> = {
   ios: {
     title: 'Add Darkbeacon to your Home Screen',
     steps: [
@@ -20,6 +20,22 @@ const STEPS: Record<'ios' | 'mac-safari', { title: string; steps: ReactNode[] }>
       </>,
       <>
         Tap <strong>Add</strong>.
+      </>,
+    ],
+  },
+  manual: {
+    title: 'Install Darkbeacon as an app',
+    steps: [
+      <>
+        <strong>Chrome or Edge</strong>: click the install icon at the right end of the address bar, or open
+        the browser menu and choose <strong>Install Darkbeacon</strong> (Chrome:{' '}
+        <strong>Cast, save and share › Install page as app</strong>).
+      </>,
+      <>
+        <strong>Safari on a Mac</strong>: <strong>File › Add to Dock</strong>.
+      </>,
+      <>
+        <strong>Firefox</strong> cannot install sites as apps; use one of the above.
       </>,
     ],
   },
@@ -43,10 +59,10 @@ const STEPS: Record<'ios' | 'mac-safari', { title: string; steps: ReactNode[] }>
  */
 export function useInstallApp(): { option: InstallOption; run(): void; dialog: ReactNode } {
   const option = useInstallOption();
-  const [steps, setSteps] = useState<'ios' | 'mac-safari' | null>(null);
+  const [steps, setSteps] = useState<'ios' | 'mac-safari' | 'manual' | null>(null);
   const run = () => {
     if (option === 'prompt') void runInstallPrompt();
-    else if (option === 'ios' || option === 'mac-safari') setSteps(option);
+    else if (option === 'ios' || option === 'mac-safari' || option === 'manual') setSteps(option);
   };
   const shown = steps ? STEPS[steps] : null;
   const dialog = (

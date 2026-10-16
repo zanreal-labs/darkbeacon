@@ -6,10 +6,12 @@ import { useSyncExternalStore } from 'react';
  * How this browser can install Darkbeacon, if at all:
  * - `prompt`: Chromium offered it (`beforeinstallprompt`); the menu item calls `prompt()`;
  * - `ios`: Safari (or any browser) on iPhone and iPad, through Share › Add to Home Screen;
- * - `mac-safari`: Safari 17+ on macOS, through File › Add to Dock;
- * - null: nothing to offer (already installed, switched off, or a browser that cannot).
+ * - `mac-safari`: Safari on macOS, through File › Add to Dock;
+ * - `manual`: any other browser: the steps for the usual ones (Chrome/Edge address bar install,
+ *   Firefox has none), so the item is never missing where the browser simply has not offered yet;
+ * - null: nothing to offer (already installed or switched off).
  */
-export type InstallOption = 'prompt' | 'ios' | 'mac-safari' | null;
+export type InstallOption = 'prompt' | 'ios' | 'mac-safari' | 'manual' | null;
 
 export interface InstallEnvironment {
   /** The instance serves the manifest (`PWA` is not off). */
@@ -28,15 +30,16 @@ export function installOption(env: InstallEnvironment): InstallOption {
   const ua = env.userAgent;
   // iPadOS reports itself as a Mac; the touch screen gives it away.
   if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && env.maxTouchPoints > 1)) return 'ios';
+  // Safari on a Mac: any version that can (17+), and when the version is not told, offer it anyway.
   if (
     /Macintosh/.test(ua) &&
     /Safari\//.test(ua) &&
     !/Chrome|Chromium|CriOS|Edg|OPR|Firefox|FxiOS/.test(ua)
   ) {
-    const version = Number(/Version\/(\d+)/.exec(ua)?.[1] ?? 0);
-    if (version >= 17) return 'mac-safari';
+    const version = Number(/Version\/(\d+)/.exec(ua)?.[1] ?? 99);
+    return version >= 17 ? 'mac-safari' : 'manual';
   }
-  return null;
+  return 'manual';
 }
 
 /** Chromium's install event (not in the DOM typings). */

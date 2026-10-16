@@ -43,8 +43,8 @@ const env = (patch: Partial<InstallEnvironment>): InstallEnvironment => ({
 });
 
 describe('installOption (the "Install app" item)', () => {
-  it('shows the browser prompt only once Chromium offered it', () => {
-    expect(installOption(env({ canPrompt: false }))).toBeNull();
+  it('uses the browser prompt once Chromium offered it, the steps until then', () => {
+    expect(installOption(env({ canPrompt: false }))).toBe('manual');
     expect(installOption(env({ canPrompt: true }))).toBe('prompt');
     expect(installOption(env({ canPrompt: true, userAgent: UA.edge }))).toBe('prompt');
     expect(installOption(env({ canPrompt: true, userAgent: UA.macChrome }))).toBe('prompt');
@@ -56,15 +56,15 @@ describe('installOption (the "Install app" item)', () => {
     expect(installOption(env({ userAgent: UA.ipad, maxTouchPoints: 5 }))).toBe('ios');
   });
 
-  it('explains Add to Dock in Safari 17+ on macOS', () => {
+  it('explains Add to Dock in Safari 17+ on macOS, and the general steps elsewhere', () => {
     expect(installOption(env({ userAgent: UA.macSafari }))).toBe('mac-safari');
-    expect(installOption(env({ userAgent: UA.macSafari16 }))).toBeNull();
-    expect(installOption(env({ userAgent: UA.macChrome }))).toBeNull();
-    expect(installOption(env({ userAgent: UA.macFirefox }))).toBeNull();
+    expect(installOption(env({ userAgent: UA.macSafari16 }))).toBe('manual');
+    expect(installOption(env({ userAgent: UA.macChrome }))).toBe('manual');
+    expect(installOption(env({ userAgent: UA.macFirefox }))).toBe('manual');
+    expect(installOption(env({ userAgent: UA.firefox }))).toBe('manual');
   });
 
-  it('hides it in browsers that cannot install, in the app itself and when switched off', () => {
-    expect(installOption(env({ userAgent: UA.firefox }))).toBeNull();
+  it('hides it in the app itself and when switched off', () => {
     expect(installOption(env({ canPrompt: true, standalone: true }))).toBeNull();
     expect(installOption(env({ userAgent: UA.iphone, maxTouchPoints: 5, standalone: true }))).toBeNull();
     expect(installOption(env({ canPrompt: true, enabled: false }))).toBeNull();
@@ -99,15 +99,16 @@ describe('useInstallApp', () => {
       userChoice: Promise.resolve({ outcome: 'dismissed' as const }),
     }) as BeforeInstallPromptEvent;
     render(<Item />);
-    expect(screen.queryByText('Install app')).toBeNull();
     act(() => {
       setInstallEnabled(true);
       holdInstallPrompt(event);
     });
     await userEvent.click(screen.getByText('Install app'));
     expect(prompt).toHaveBeenCalledOnce();
-    // The event is spent; the item goes until Chromium offers again.
-    expect(screen.queryByText('Install app')).toBeNull();
+    // The event is spent; the item now gives the steps until Chromium offers again.
+    await userEvent.click(screen.getByText('Install app'));
+    expect(prompt).toHaveBeenCalledOnce();
+    expect(screen.getByRole('dialog', { name: 'Install Darkbeacon as an app' })).toBeTruthy();
   });
 
   it('shows the Home Screen steps on an iPhone', async () => {
