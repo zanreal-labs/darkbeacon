@@ -159,7 +159,8 @@
   width: 0;
   min-width: 0;
   overflow: hidden;
-  color: var(--node-muted);
+  /* Read at a glance like the statics beside it, not as a faint footnote. */
+  color: color-mix(in oklab, var(--dbk-node-text) 82%, transparent);
   font-size: 12px;
   line-height: 20px;
   text-overflow: ellipsis;
