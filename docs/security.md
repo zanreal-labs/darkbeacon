@@ -44,6 +44,21 @@ What changed when Darkbeacon opened up to integrations and agents, what can go w
 | Support hub: tickets read by someone else, CSRF, a buyer reading a seller's tickets, the unread count as a tracker | The app's own sign-in and session (no separate support login; the cookie counts only on same-origin requests, SameSite=Lax); the sign-in returns only to `/support` paths on the hub; a ticket belongs to a character linked to the account (others refused); tickets per character and owner (the owner hash the app stores at sign-in; a new owner hash is a new identity); PostHog verifies an HMAC of the identity made with a secret only the hub's server holds; unread handles are opaque, bound to one origin, revocable, kept as hashes, answer a number only and are rate-limited; the opener's context is untrusted, sanitized to an allow-list and shown before sending (docs/support.md). |
 | Federation (later)                                                                                                 | `federation:*` scopes are reserved and refused today, so no key can be made that a later feature would silently widen.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
+## The installable app (service worker)
+
+The service worker (`/sw.js`, `apps/web/src/pwa/`) never sees credentials-dependent content: it caches only
+content-hashed build output, the icons and the offline page, and does not intercept `/api` (sign-in and SSO
+callbacks included), `/ws`, `/mcp`, `/oauth`, `/.well-known`, `/support`, `/metrics`, RSC payloads or
+prefetches. Page loads go to the network every time and are never stored, so signing out or switching
+characters leaves nothing behind in the browser's cache storage. `/sw.js` is served `no-cache, no-store` with
+`Service-Worker-Allowed: /`. `PWA=off` replaces any installed worker with one that deletes its caches and
+unregisters itself.
+
+Darkbeacon sends no Content-Security-Policy for its pages (only the API reference at `/api/docs` has one,
+which the worker never touches). A reverse proxy that adds one must allow `worker-src 'self'` and
+`manifest-src 'self'` (or a `default-src 'self'` covering both), besides what the pages already need (inline
+scripts: Next.js's streamed payloads, the theme head script, the offline page's retry button).
+
 ## What is out of scope here
 
 - A multi-process deployment would need the rate limiters in shared storage; Darkbeacon is one process by

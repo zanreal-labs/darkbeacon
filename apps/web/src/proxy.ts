@@ -183,6 +183,6 @@ export const config = {
   // Pages only: not the API (Nest answers it before this app sees anything), not built assets,
   // not the files crawlers and browsers ask for on their own.
   matcher: [
-    '/((?!api/|ws$|_next/static|_next/image|healthz$|favicon\\.svg$|favicon\\.ico$|icons/|manifest\\.webmanifest$|robots\\.txt$|sitemap\\.xml$|apple-touch-icon[^/]*\\.png$|\\.well-known/).*)',
+    '/((?!api/|ws$|_next/static|_next/image|healthz$|favicon\\.svg$|favicon\\.ico$|icons/|manifest\\.webmanifest$|sw\\.js$|offline\\.html$|robots\\.txt$|sitemap\\.xml$|apple-touch-icon[^/]*\\.png$|\\.well-known/).*)',
   ],
 };

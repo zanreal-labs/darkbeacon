@@ -5,7 +5,7 @@
 
 - `apps/web/public/favicon.svg` and `apps/web/public/icons/mark.svg`: the mark in the built-in light
   and dark colours, switching with `prefers-color-scheme`;
-- `apps/web/public/icons/icon-192.png`, `icon-512.png`, `icon-maskable-512.png` (PWA manifest) and
+- `apps/web/public/icons/icon-192.png`, `icon-512.png`, `icon-maskable-192.png`, `icon-maskable-512.png` (PWA manifest) and
   `apple-touch-icon.png`, on the dark background;
 - `docs/brand/mark-light.svg` and `mark-dark.svg` for the README.
 

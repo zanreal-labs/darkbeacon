@@ -10,6 +10,7 @@ import {
   CircleHelp,
   Inbox,
   MessageSquareHeart,
+  MonitorDown,
   Sparkles,
   ThumbsDown,
   ThumbsUp,
@@ -27,6 +28,7 @@ import {
   type SupportKind,
 } from '../lib/support';
 import { browserOptedOut, track } from '../lib/telemetry';
+import { useInstallApp } from '../pwa/InstallApp';
 import { openWormholeReference } from '../reference/open';
 import { useTheme } from '../theme/ThemeProvider';
 import {
@@ -151,7 +153,8 @@ export function SupportMenuItems() {
  * The help menu, at the bottom of the main rail (in the top bar on phones, where the rail is the
  * tab bar): report a problem, send feedback, my tickets (with the unread badge
  * from the hub), a thumbs up or down for the page (anonymous telemetry, when it is on), the
- * wormhole types reference (the phones' way to it), what's new and the documentation.
+ * wormhole types reference (the phones' way to it), what's new, the documentation and, when this
+ * browser can install it, "Install app".
  */
 export function HelpMenu({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }) {
   const router = useRouter();
@@ -161,6 +164,7 @@ export function HelpMenu({ placement = 'rail' }: { placement?: 'rail' | 'topbar'
   const open = useOpenSupport();
   const telemetry = useQuery<TelemetryClientDto>({ queryKey: telemetryClientKey, enabled: false });
   const canRate = !!telemetry.data?.active && !browserOptedOut();
+  const install = useInstallApp();
 
   useEffect(() => installErrorCapture(), []);
 
@@ -176,71 +180,82 @@ export function HelpMenu({ placement = 'rail' }: { placement?: 'rail' | 'topbar'
 
   const label = unread > 0 ? `Help, ${unread} unread ${unread === 1 ? 'reply' : 'replies'}` : 'Help';
   return (
-    <Menu>
-      <span className={placement === 'rail' ? styles.railHelp : styles.topbarHelp}>
-        {placement === 'rail' ? (
-          <Tooltip content={label} side="right">
-            <MenuTrigger className={styles.railLink} aria-label={label}>
-              <CircleHelp />
+    <>
+      <Menu>
+        <span className={placement === 'rail' ? styles.railHelp : styles.topbarHelp}>
+          {placement === 'rail' ? (
+            <Tooltip content={label} side="right">
+              <MenuTrigger className={styles.railLink} aria-label={label}>
+                <CircleHelp />
+              </MenuTrigger>
+            </Tooltip>
+          ) : (
+            <MenuTrigger asChild>
+              <IconButton label={label} icon={<CircleHelp />} tooltip={false} />
             </MenuTrigger>
-          </Tooltip>
-        ) : (
-          <MenuTrigger asChild>
-            <IconButton label={label} icon={<CircleHelp />} tooltip={false} />
-          </MenuTrigger>
-        )}
-        {unread > 0 && (
-          <span className={styles.helpBadge} aria-hidden>
-            {unread > 9 ? '9+' : unread}
-          </span>
-        )}
-      </span>
-      <MenuContent className={styles.helpMenu} side={placement === 'rail' ? 'right' : 'bottom'} align="end">
-        {open && (
-          <>
-            <MenuLabel>Support</MenuLabel>
-            <MenuItem icon={<Bug />} onSelect={() => open('ticket')}>
-              Report a problem
-            </MenuItem>
-            <MenuItem icon={<MessageSquareHeart />} onSelect={() => open('feedback')}>
-              Send feedback
-            </MenuItem>
-            <MenuItem icon={<Inbox />} onSelect={() => open('tickets')}>
-              <span className={styles.helpItem}>
-                My tickets
-                {unread > 0 && <span className={styles.helpCount}>{unread} new</span>}
-              </span>
-            </MenuItem>
-            <MenuSeparator />
-          </>
-        )}
-        {canRate && (
-          <>
-            <MenuLabel>Is this page working for you?</MenuLabel>
-            <div className={styles.helpRate} role="group" aria-label="Rate this page">
-              <MenuItem icon={<ThumbsUp />} onSelect={() => rate('up')}>
-                Yes
+          )}
+          {unread > 0 && (
+            <span className={styles.helpBadge} aria-hidden>
+              {unread > 9 ? '9+' : unread}
+            </span>
+          )}
+        </span>
+        <MenuContent className={styles.helpMenu} side={placement === 'rail' ? 'right' : 'bottom'} align="end">
+          {open && (
+            <>
+              <MenuLabel>Support</MenuLabel>
+              <MenuItem icon={<Bug />} onSelect={() => open('ticket')}>
+                Report a problem
               </MenuItem>
-              <MenuItem icon={<ThumbsDown />} onSelect={() => rate('down')}>
-                Not really
+              <MenuItem icon={<MessageSquareHeart />} onSelect={() => open('feedback')}>
+                Send feedback
               </MenuItem>
-            </div>
-            <MenuSeparator />
-          </>
-        )}
-        <MenuItem icon={<BookOpen />} onSelect={() => openWormholeReference()}>
-          Wormhole types
-        </MenuItem>
-        <MenuItem icon={<Sparkles />} onSelect={() => router.push('/changelog')}>
-          What&apos;s new
-        </MenuItem>
-        <MenuItem
-          icon={<ArrowUpRight />}
-          onSelect={() => window.open(DOCS_URL, '_blank', 'noopener,noreferrer')}
-        >
-          Documentation
-        </MenuItem>
-      </MenuContent>
-    </Menu>
+              <MenuItem icon={<Inbox />} onSelect={() => open('tickets')}>
+                <span className={styles.helpItem}>
+                  My tickets
+                  {unread > 0 && <span className={styles.helpCount}>{unread} new</span>}
+                </span>
+              </MenuItem>
+              <MenuSeparator />
+            </>
+          )}
+          {canRate && (
+            <>
+              <MenuLabel>Is this page working for you?</MenuLabel>
+              <div className={styles.helpRate} role="group" aria-label="Rate this page">
+                <MenuItem icon={<ThumbsUp />} onSelect={() => rate('up')}>
+                  Yes
+                </MenuItem>
+                <MenuItem icon={<ThumbsDown />} onSelect={() => rate('down')}>
+                  Not really
+                </MenuItem>
+              </div>
+              <MenuSeparator />
+            </>
+          )}
+          <MenuItem icon={<BookOpen />} onSelect={() => openWormholeReference()}>
+            Wormhole types
+          </MenuItem>
+          <MenuItem icon={<Sparkles />} onSelect={() => router.push('/changelog')}>
+            What&apos;s new
+          </MenuItem>
+          <MenuItem
+            icon={<ArrowUpRight />}
+            onSelect={() => window.open(DOCS_URL, '_blank', 'noopener,noreferrer')}
+          >
+            Documentation
+          </MenuItem>
+          {install.option && (
+            <>
+              <MenuSeparator />
+              <MenuItem icon={<MonitorDown />} onSelect={install.run}>
+                Install app
+              </MenuItem>
+            </>
+          )}
+        </MenuContent>
+      </Menu>
+      {install.dialog}
+    </>
   );
 }

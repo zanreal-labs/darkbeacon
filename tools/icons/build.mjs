@@ -106,6 +106,7 @@ if (process.env.SKIP_PNG !== '1') {
   };
   await png(join(PUBLIC, 'icons/icon-192.png'), tile(DARK), 192);
   await png(join(PUBLIC, 'icons/icon-512.png'), tile(DARK), 512);
+  await png(join(PUBLIC, 'icons/icon-maskable-192.png'), tile(DARK, { inset: 4.8, radius: 0 }), 192);
   await png(join(PUBLIC, 'icons/icon-maskable-512.png'), tile(DARK, { inset: 4.8, radius: 0 }), 512);
   await png(join(PUBLIC, 'icons/apple-touch-icon.png'), tile(DARK, { radius: 0 }), 180);
   // A preview sheet of the mark at the sizes it must survive, light and dark.

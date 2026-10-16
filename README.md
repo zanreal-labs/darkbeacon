@@ -107,6 +107,18 @@ Pages are served as a prerendered shell (the rail, the top bar, the page frame) 
 the parts that depend on who is looking (the account, the maps list, the map, settings) stream into it. The
 map opens on a snapshot read on the server and then stays live over the WebSocket.
 
+### Install it as an app
+
+Darkbeacon can be installed as an app from the browser, so it runs in its own window next to the EVE client
+(Windows, macOS, Linux) or from the home screen on a phone. Only the web front end is installed; it still talks
+to your instance. Chrome and Edge: **Help › Install app** (or the install icon in the address bar). Safari on
+iPhone and iPad: Share › Add to Home Screen; Safari on macOS: File › Add to Dock (the help menu shows the
+steps). The app needs the connection: its service worker caches only the build's static files and icons and
+shows an offline page when there is no network; pages, the API, sign-in and the WebSocket always go to the
+server. Browsers allow service workers only over HTTPS (or on `localhost`/`127.0.0.1`), so serve the instance
+over HTTPS. `PWA=off` switches it all off (no manifest, and the service worker browsers installed removes
+itself on their next visit); it is read at start, no rebuild needed.
+
 ### Moving from Wanderer
 
 Groups on Wanderer bring their maps along, intel included: **All maps**, **Import from Wanderer**. Point it at
