@@ -237,6 +237,19 @@ export function MapView({
     widgets,
     onApplied: showWidgets,
   });
+  // Save the widgets into the view in use, right from the widgets menu.
+  const activeView = views.slots.find((s) => s.slot === views.active)?.view;
+  const activeViewSave = activeView
+    ? {
+        view: activeView.name,
+        changed: views.modified,
+        onSave: () =>
+          void views.saveActive().then(
+            () => toast({ title: `${activeView.name} saved`, tone: 'success', duration: 2000 }),
+            () => toast({ title: 'The view did not change', tone: 'danger' }),
+          ),
+      }
+    : undefined;
   // My characters on this map: the top bar's strip, follow mode, On the map; tracking is in settings.
   const characters = useMapCharacters({
     map,
@@ -724,6 +737,7 @@ export function MapView({
           plugins={widgetPlugins}
           shown={widgetsShown}
           onShownChange={setWidgetsShown}
+          save={activeViewSave}
           className={styles.toolButton}
         />
         {connection && !system && (

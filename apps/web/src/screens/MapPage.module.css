@@ -177,3 +177,20 @@
     bottom: calc(var(--covered-bottom, 0px) + var(--dbk-space-4));
   }
 }
+
+/* The top bar's tool buttons; the widgets button marks unsaved changes to the view in use. */
+.toolButton {
+  position: relative;
+}
+
+.toolButton[data-changed]::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dbk-color-accent);
+  pointer-events: none;
+}

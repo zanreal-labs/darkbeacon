@@ -1,6 +1,6 @@
 'use client';
 
-import { FoldVertical, LayoutGrid, RotateCcw } from 'lucide-react';
+import { FoldVertical, LayoutGrid, RotateCcw, Save } from 'lucide-react';
 import type { SlotEntry } from '../../plugins/registry';
 import {
   IconButton,
@@ -25,6 +25,7 @@ export function WidgetsMenu({
   plugins,
   shown,
   onShownChange,
+  save,
   className,
 }: {
   controller: WidgetsController;
@@ -32,6 +33,11 @@ export function WidgetsMenu({
   /** All windows shown, or all hidden for a moment. */
   shown: boolean;
   onShownChange(shown: boolean): void;
+  /**
+   * Keeps the widgets as they are now in the view in use (quick slot 1, 2 or 3): right where the
+   * widgets are changed, without going through the Views menu.
+   */
+  save?: { view: string; changed: boolean; onSave(): void };
   className?: string;
 }) {
   const keepOpen = (e: Event) => e.preventDefault();
@@ -45,12 +51,21 @@ export function WidgetsMenu({
         <IconButton
           variant="secondary"
           className={className}
-          label="Widgets"
+          label={save?.changed ? `Widgets: unsaved changes to ${save.view}` : 'Widgets'}
           data-off={shown ? undefined : true}
+          data-changed={save?.changed || undefined}
           icon={<LayoutGrid />}
         />
       </MenuTrigger>
       <MenuContent align="end">
+        {save?.changed && (
+          <>
+            <MenuItem icon={<Save />} onSelect={save.onSave}>
+              Save
+            </MenuItem>
+            <MenuSeparator />
+          </>
+        )}
         <MenuCheckboxItem
           checked={shown}
           onCheckedChange={(on) => onShownChange(on === true)}
