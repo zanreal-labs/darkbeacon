@@ -50,6 +50,7 @@ import { LinkedMapPreview } from '../map/linked/LinkedMapPreview';
 import { usePingCommands, usePings } from '../map/pings/api';
 import { isWormholeSpace } from '../map/widgets/SystemDetails';
 import { EditSystemDialog } from '../map/widgets/EditSystemDialog';
+import { PresenceActivityContext } from '../map/presence/activity';
 import { useBookmarkLabels } from '../map/useBookmarkLabels';
 import { useMapPreferences } from '../map/useMapPreferences';
 import { MapWidgets, type WidgetCover } from '../map/widgets/MapWidgets';
@@ -266,6 +267,18 @@ export function MapView({
   const systemLabels = useMemo(() => shownMap.systemLabels ?? [], [shownMap]);
   const ids = useMemo(() => [...state.systems.keys()], [state.systems]);
   const universe = useUniverseSystems(ids);
+  // While Edit system is open the others see "editing J014348" and the system outlined.
+  const reportActivity = presence.publish.activity;
+  const editedName = editing !== null ? (universe.get(editing)?.name ?? null) : null;
+  useEffect(() => {
+    if (editing === null) return;
+    reportActivity.begin('edit-system', {
+      verb: 'editing',
+      target: { kind: 'system', id: String(editing) },
+      ...(editedName ? { label: editedName.slice(0, 40) } : {}),
+    });
+    return () => reportActivity.end('edit-system');
+  }, [reportActivity, editing, editedName]);
   // The bookmark label of the system in Edit system, for its preview (worked out only while open).
   const { preferences } = useMapPreferences(map.id);
   const bookmarks = useBookmarkLabels({
@@ -660,284 +673,286 @@ export function MapView({
   };
 
   return (
-    <div
-      className={styles.page}
-      data-immersive
-      style={
-        {
-          '--covered-right': `${covered.right}px`,
-          '--covered-bottom': `${covered.bottom}px`,
-        } as CSSProperties
-      }
-    >
-      <MapCanvas
-        mapId={map.id}
-        state={state}
-        loaded={store.loaded}
-        labels={labels}
-        systemLabels={systemLabels}
-        universe={universe}
-        can={can}
-        store={store}
-        onSelect={(id) => {
-          if (id !== null && id !== selected) setPanel(true);
-          if (id !== null) setSelectedConnection(null);
-          setSelected(id);
-        }}
-        onSelectConnection={(id) => {
-          if (id === null) return setSelectedConnection(null);
-          if (id !== selectedConnection) setPanel(true);
-          setSelected(null);
-          setSelectedConnection(id);
-        }}
-        traffic={traffic}
-        focus={focusNode}
-        onMenu={openMenu}
-        onDeleteSelection={removeSelection}
-        onPointerAt={(p) => {
-          pointer.current = p;
-        }}
-        rallies={pinged}
-        presence={presence}
-        coveredRight={canvasCover.right}
-        coveredRightBottom={canvasCover.rightBottom}
-        onEditSystem={(id) => {
-          const sys = state.systems.get(id);
-          if (sys && permissionsFor(can, sys.provenance, map.kind === 'composite').edit) setEditing(id);
-        }}
-        coveredBottom={covered.bottom}
-      />
+    <PresenceActivityContext.Provider value={reportActivity}>
+      <div
+        className={styles.page}
+        data-immersive
+        style={
+          {
+            '--covered-right': `${covered.right}px`,
+            '--covered-bottom': `${covered.bottom}px`,
+          } as CSSProperties
+        }
+      >
+        <MapCanvas
+          mapId={map.id}
+          state={state}
+          loaded={store.loaded}
+          labels={labels}
+          systemLabels={systemLabels}
+          universe={universe}
+          can={can}
+          store={store}
+          onSelect={(id) => {
+            if (id !== null && id !== selected) setPanel(true);
+            if (id !== null) setSelectedConnection(null);
+            setSelected(id);
+          }}
+          onSelectConnection={(id) => {
+            if (id === null) return setSelectedConnection(null);
+            if (id !== selectedConnection) setPanel(true);
+            setSelected(null);
+            setSelectedConnection(id);
+          }}
+          traffic={traffic}
+          focus={focusNode}
+          onMenu={openMenu}
+          onDeleteSelection={removeSelection}
+          onPointerAt={(p) => {
+            pointer.current = p;
+          }}
+          rallies={pinged}
+          presence={presence}
+          coveredRight={canvasCover.right}
+          coveredRightBottom={canvasCover.rightBottom}
+          onEditSystem={(id) => {
+            const sys = state.systems.get(id);
+            if (sys && permissionsFor(can, sys.provenance, map.kind === 'composite').edit) setEditing(id);
+          }}
+          coveredBottom={covered.bottom}
+        />
 
-      <div className={styles.topbar}>
-        <AddSystemSearch
-          onMap={onMap}
-          onPick={addSystem}
-          entries={searchEntries}
-          onFind={(id) => select(id, true)}
-          canAdd={can.edit}
-          focusToken={focus.search}
-          placeholder={addAt ? 'Add a system at the pointer…' : undefined}
-        />
-        {store.pendingCount > 0 && (
-          <span className={styles.saving} role="status">
-            <Spinner label="Saving" />
-            Saving…
-          </span>
-        )}
-        <span className={styles.spacer} />
-        {characters.bar}
-        <SourceFilter
-          sources={filterableSources(store.state.sources)}
-          hidden={sourceFilter.hidden}
-          onToggle={sourceFilter.toggle}
-          className={styles.toolButton}
-        />
-        <WidgetsMenu
-          controller={widgets}
-          plugins={widgetPlugins}
-          shown={widgetsShown}
-          onShownChange={setWidgetsShown}
-          save={activeViewSave}
-          className={styles.toolButton}
-        />
-        {connection && !system && (
-          <IconButton
-            variant="secondary"
-            className={styles.toolButton}
-            label={panel ? 'Hide connection panel' : 'Show connection panel'}
-            aria-pressed={panel}
-            icon={<PanelRight />}
-            onClick={() => setPanel((p) => !p)}
+        <div className={styles.topbar}>
+          <AddSystemSearch
+            onMap={onMap}
+            onPick={addSystem}
+            entries={searchEntries}
+            onFind={(id) => select(id, true)}
+            canAdd={can.edit}
+            focusToken={focus.search}
+            placeholder={addAt ? 'Add a system at the pointer…' : undefined}
           />
+          {store.pendingCount > 0 && (
+            <span className={styles.saving} role="status">
+              <Spinner label="Saving" />
+              Saving…
+            </span>
+          )}
+          <span className={styles.spacer} />
+          {characters.bar}
+          <SourceFilter
+            sources={filterableSources(store.state.sources)}
+            hidden={sourceFilter.hidden}
+            onToggle={sourceFilter.toggle}
+            className={styles.toolButton}
+          />
+          <WidgetsMenu
+            controller={widgets}
+            plugins={widgetPlugins}
+            shown={widgetsShown}
+            onShownChange={setWidgetsShown}
+            save={activeViewSave}
+            className={styles.toolButton}
+          />
+          {connection && !system && (
+            <IconButton
+              variant="secondary"
+              className={styles.toolButton}
+              label={panel ? 'Hide connection panel' : 'Show connection panel'}
+              aria-pressed={panel}
+              icon={<PanelRight />}
+              onClick={() => setPanel((p) => !p)}
+            />
+          )}
+        </div>
+
+        {store.loaded && state.systems.size === 0 && (
+          <div className={styles.overlayCard}>
+            <EmptyState
+              icon={<Waypoints />}
+              title="This map is empty"
+              description={
+                map.kind === 'composite'
+                  ? 'It shows the maps shared with it, merged into one chain. Accept their offers under Sharing.'
+                  : can.edit
+                    ? 'Search for a system to start the chain, or track a character and the map follows as you jump.'
+                    : 'Nobody has mapped anything here yet.'
+              }
+              actions={
+                map.kind === 'composite'
+                  ? can.admin && (
+                      <Button variant="primary" onClick={() => settings.show('sharing')}>
+                        Open Sharing
+                      </Button>
+                    )
+                  : can.edit && (
+                      <>
+                        <Button
+                          variant="primary"
+                          icon={<Plus />}
+                          onClick={() => setFocus((f) => ({ ...f, search: f.search + 1 }))}
+                        >
+                          Add a system
+                        </Button>
+                        <Button icon={<Radio />} onClick={() => settings.show('tracking')}>
+                          Track a character
+                        </Button>
+                      </>
+                    )
+              }
+            />
+          </div>
+        )}
+        {!store.loaded && (
+          <div className={styles.center} role="status">
+            <Spinner label="Loading systems" />
+            <span>Loading systems…</span>
+          </div>
+        )}
+        {store.loaded && store.state.has.characters && untracked.length > 0 && (
+          <OnlyTrackedGate map={map} can={can} untracked={untracked} />
+        )}
+        {store.streamError && (
+          <div className={styles.streamError} role="alert">
+            <AlertTriangle aria-hidden />
+            {store.streamError}
+          </div>
+        )}
+
+        <MapWidgets
+          mapId={map.id}
+          system={system}
+          info={system ? universe.get(system.solarSystemId) : undefined}
+          universe={universe}
+          labels={labels}
+          systemLabels={systemLabels}
+          state={state}
+          can={system ? permissionsFor(can, system.provenance, map.kind === 'composite') : can}
+          store={store}
+          myCharacters={me.data?.characters ?? []}
+          plugins={widgetPlugins}
+          controller={widgets}
+          shown={widgetsOn}
+          onEdit={setEditing}
+          onSelectSystem={(id) => select(id, true)}
+          onCover={onWidgetCover}
+          note={system && <ProvenanceLine provenance={system.provenance} sources={state.sources} />}
+        />
+
+        <EditSystemDialog
+          system={editing !== null ? state.systems.get(editing) : undefined}
+          info={editing !== null ? universe.get(editing) : undefined}
+          labels={labels}
+          systemLabels={systemLabels}
+          bookmark={editing !== null ? bookmarks.get(editing) : null}
+          can={(() => {
+            const sys = editing !== null ? state.systems.get(editing) : undefined;
+            return sys ? permissionsFor(can, sys.provenance, map.kind === 'composite') : can;
+          })()}
+          store={store}
+          onManageLabels={() => {
+            setEditing(null);
+            settings.show('labels');
+          }}
+          onManageTags={() => {
+            setEditing(null);
+            settings.show('tags');
+          }}
+          onClose={() => setEditing(null)}
+        />
+
+        <SignatureLayer mapId={map.id} state={state} universe={universe} store={store} canEdit={can.edit} />
+        {connection && !system && (
+          <ConnectionSidebar
+            mapId={map.id}
+            connection={connection}
+            names={{ source: endName(connection.source), target: endName(connection.target) }}
+            universe={universe}
+            can={permissionsFor(can, connection.provenance)}
+            store={store}
+            merged={merged}
+            open={panel}
+            onClose={deselect}
+            onSelectSystem={(id) => select(id, true)}
+            onCover={onCover}
+            onLogJump={() => setConnectionDialog({ kind: 'log', connectionId: connection.id })}
+            onPlanRoll={() => setConnectionDialog({ kind: 'roll', connectionId: connection.id })}
+            note={<ProvenanceLine provenance={connection.provenance} sources={state.sources} />}
+          />
+        )}
+
+        {connectionDialog?.kind === 'roll' && (
+          <RollDialog
+            mapId={map.id}
+            connectionId={connectionDialog.connectionId}
+            merged={merged}
+            onClose={() => setConnectionDialog(null)}
+          />
+        )}
+        {connectionDialog?.kind === 'log' && state.connections.get(connectionDialog.connectionId) && (
+          <LogDialog
+            mapId={map.id}
+            connection={state.connections.get(connectionDialog.connectionId)!}
+            names={{
+              source: endName(state.connections.get(connectionDialog.connectionId)!.source),
+              target: endName(state.connections.get(connectionDialog.connectionId)!.target),
+            }}
+            merged={merged}
+            onClose={() => setConnectionDialog(null)}
+          />
+        )}
+
+        {rally && state.systems.has(rally.solarSystemId) && (
+          <RallyCard
+            mapId={map.id}
+            ping={rally}
+            name={endName(rally.solarSystemId)}
+            from={
+              selected !== null && state.systems.has(selected)
+                ? { solarSystemId: selected, name: endName(selected) }
+                : myLocation !== null
+                  ? { solarSystemId: myLocation, name: endName(myLocation) }
+                  : null
+            }
+            corner={prefs.pings}
+            canCancel={can.edit && map.kind !== 'composite'}
+            characters={me.data?.characters}
+            routable={!isWormholeSpace(universe.get(rally.solarSystemId))}
+            notify={toast}
+            onShow={() => select(rally.solarSystemId, true)}
+            onSelectStep={(id) => (state.systems.has(id) ? select(id, true) : undefined)}
+            onCancel={() => pingCommands.cancel(rally.id)}
+          />
+        )}
+
+        {preview && (
+          <LinkedMapPreview
+            linked={preview.linked}
+            solarSystemId={preview.solarSystemId}
+            onClose={() => setPreview(null)}
+          />
+        )}
+
+        <ul className={styles.notices} aria-live="polite">
+          {store.notices.map((n) => (
+            <li key={n.id} className={styles.toast}>
+              <AlertTriangle className={styles.toastIcon} aria-hidden />
+              <span className={styles.toastText}>{n.message}</span>
+              <IconButton
+                size="sm"
+                label="Dismiss"
+                tooltip={false}
+                icon={<X />}
+                onClick={() => store.dismiss(n.id)}
+              />
+            </li>
+          ))}
+        </ul>
+
+        {menu && menuContent && menuContent.items.length > 0 && (
+          <ContextMenu x={menu.x} y={menu.y} {...menuContent} onClose={closeMenu} />
         )}
       </div>
-
-      {store.loaded && state.systems.size === 0 && (
-        <div className={styles.overlayCard}>
-          <EmptyState
-            icon={<Waypoints />}
-            title="This map is empty"
-            description={
-              map.kind === 'composite'
-                ? 'It shows the maps shared with it, merged into one chain. Accept their offers under Sharing.'
-                : can.edit
-                  ? 'Search for a system to start the chain, or track a character and the map follows as you jump.'
-                  : 'Nobody has mapped anything here yet.'
-            }
-            actions={
-              map.kind === 'composite'
-                ? can.admin && (
-                    <Button variant="primary" onClick={() => settings.show('sharing')}>
-                      Open Sharing
-                    </Button>
-                  )
-                : can.edit && (
-                    <>
-                      <Button
-                        variant="primary"
-                        icon={<Plus />}
-                        onClick={() => setFocus((f) => ({ ...f, search: f.search + 1 }))}
-                      >
-                        Add a system
-                      </Button>
-                      <Button icon={<Radio />} onClick={() => settings.show('tracking')}>
-                        Track a character
-                      </Button>
-                    </>
-                  )
-            }
-          />
-        </div>
-      )}
-      {!store.loaded && (
-        <div className={styles.center} role="status">
-          <Spinner label="Loading systems" />
-          <span>Loading systems…</span>
-        </div>
-      )}
-      {store.loaded && store.state.has.characters && untracked.length > 0 && (
-        <OnlyTrackedGate map={map} can={can} untracked={untracked} />
-      )}
-      {store.streamError && (
-        <div className={styles.streamError} role="alert">
-          <AlertTriangle aria-hidden />
-          {store.streamError}
-        </div>
-      )}
-
-      <MapWidgets
-        mapId={map.id}
-        system={system}
-        info={system ? universe.get(system.solarSystemId) : undefined}
-        universe={universe}
-        labels={labels}
-        systemLabels={systemLabels}
-        state={state}
-        can={system ? permissionsFor(can, system.provenance, map.kind === 'composite') : can}
-        store={store}
-        myCharacters={me.data?.characters ?? []}
-        plugins={widgetPlugins}
-        controller={widgets}
-        shown={widgetsOn}
-        onEdit={setEditing}
-        onSelectSystem={(id) => select(id, true)}
-        onCover={onWidgetCover}
-        note={system && <ProvenanceLine provenance={system.provenance} sources={state.sources} />}
-      />
-
-      <EditSystemDialog
-        system={editing !== null ? state.systems.get(editing) : undefined}
-        info={editing !== null ? universe.get(editing) : undefined}
-        labels={labels}
-        systemLabels={systemLabels}
-        bookmark={editing !== null ? bookmarks.get(editing) : null}
-        can={(() => {
-          const sys = editing !== null ? state.systems.get(editing) : undefined;
-          return sys ? permissionsFor(can, sys.provenance, map.kind === 'composite') : can;
-        })()}
-        store={store}
-        onManageLabels={() => {
-          setEditing(null);
-          settings.show('labels');
-        }}
-        onManageTags={() => {
-          setEditing(null);
-          settings.show('tags');
-        }}
-        onClose={() => setEditing(null)}
-      />
-
-      <SignatureLayer mapId={map.id} state={state} universe={universe} store={store} canEdit={can.edit} />
-      {connection && !system && (
-        <ConnectionSidebar
-          mapId={map.id}
-          connection={connection}
-          names={{ source: endName(connection.source), target: endName(connection.target) }}
-          universe={universe}
-          can={permissionsFor(can, connection.provenance)}
-          store={store}
-          merged={merged}
-          open={panel}
-          onClose={deselect}
-          onSelectSystem={(id) => select(id, true)}
-          onCover={onCover}
-          onLogJump={() => setConnectionDialog({ kind: 'log', connectionId: connection.id })}
-          onPlanRoll={() => setConnectionDialog({ kind: 'roll', connectionId: connection.id })}
-          note={<ProvenanceLine provenance={connection.provenance} sources={state.sources} />}
-        />
-      )}
-
-      {connectionDialog?.kind === 'roll' && (
-        <RollDialog
-          mapId={map.id}
-          connectionId={connectionDialog.connectionId}
-          merged={merged}
-          onClose={() => setConnectionDialog(null)}
-        />
-      )}
-      {connectionDialog?.kind === 'log' && state.connections.get(connectionDialog.connectionId) && (
-        <LogDialog
-          mapId={map.id}
-          connection={state.connections.get(connectionDialog.connectionId)!}
-          names={{
-            source: endName(state.connections.get(connectionDialog.connectionId)!.source),
-            target: endName(state.connections.get(connectionDialog.connectionId)!.target),
-          }}
-          merged={merged}
-          onClose={() => setConnectionDialog(null)}
-        />
-      )}
-
-      {rally && state.systems.has(rally.solarSystemId) && (
-        <RallyCard
-          mapId={map.id}
-          ping={rally}
-          name={endName(rally.solarSystemId)}
-          from={
-            selected !== null && state.systems.has(selected)
-              ? { solarSystemId: selected, name: endName(selected) }
-              : myLocation !== null
-                ? { solarSystemId: myLocation, name: endName(myLocation) }
-                : null
-          }
-          corner={prefs.pings}
-          canCancel={can.edit && map.kind !== 'composite'}
-          characters={me.data?.characters}
-          routable={!isWormholeSpace(universe.get(rally.solarSystemId))}
-          notify={toast}
-          onShow={() => select(rally.solarSystemId, true)}
-          onSelectStep={(id) => (state.systems.has(id) ? select(id, true) : undefined)}
-          onCancel={() => pingCommands.cancel(rally.id)}
-        />
-      )}
-
-      {preview && (
-        <LinkedMapPreview
-          linked={preview.linked}
-          solarSystemId={preview.solarSystemId}
-          onClose={() => setPreview(null)}
-        />
-      )}
-
-      <ul className={styles.notices} aria-live="polite">
-        {store.notices.map((n) => (
-          <li key={n.id} className={styles.toast}>
-            <AlertTriangle className={styles.toastIcon} aria-hidden />
-            <span className={styles.toastText}>{n.message}</span>
-            <IconButton
-              size="sm"
-              label="Dismiss"
-              tooltip={false}
-              icon={<X />}
-              onClick={() => store.dismiss(n.id)}
-            />
-          </li>
-        ))}
-      </ul>
-
-      {menu && menuContent && menuContent.items.length > 0 && (
-        <ContextMenu x={menu.x} y={menu.y} {...menuContent} onClose={closeMenu} />
-      )}
-    </div>
+    </PresenceActivityContext.Provider>
   );
 }

@@ -75,10 +75,37 @@ export interface PresenceRelay {
 /** Every process repeats its peers this often; a remote peer not heard of for 3 times as long is gone. */
 export const RELAY_REFRESH_MS = 5_000;
 
-const EMPTY_STATE: PresenceState = { cursor: null, drag: null, editing: null, selection: null };
-const FIELDS = ['cursor', 'drag', 'editing', 'selection'] as const;
+const EMPTY_STATE: PresenceState = {
+  cursor: null,
+  drag: null,
+  editing: null,
+  selection: null,
+  activity: null,
+};
+/** Fields kept and relayed. `selection` is accepted from older clients and ignored. */
+const FIELDS = ['activity', 'cursor', 'drag', 'editing'] as const;
 type Field = (typeof FIELDS)[number];
 const MOTION: ReadonlySet<Field> = new Set(['cursor', 'drag']);
+
+/** A peer shows its cursor and drag preview only while it is changing something. */
+function active(state: PresenceState): boolean {
+  return state.activity !== null;
+}
+
+/**
+ * The relay filter: what of a peer's state leaves this process (to viewers and to the other
+ * replicas). Idle peers have no cursor or drag; selections are never shared.
+ */
+export function sharedState(state: PresenceState): PresenceState {
+  const moving = active(state);
+  return {
+    cursor: moving ? state.cursor : null,
+    drag: moving ? state.drag : null,
+    editing: state.editing,
+    selection: null,
+    activity: state.activity,
+  };
+}
 
 interface Peer {
   member: PresenceMember;
@@ -168,7 +195,7 @@ export class PresenceRooms {
     if (!peer) {
       const joined: Peer = {
         member,
-        state: { ...EMPTY_STATE, ...patch },
+        state: { ...EMPTY_STATE, ...patch, selection: null },
         color: presenceColor(member.identity.accountId),
         since: this.now(),
         changed: new Set(),
@@ -307,16 +334,27 @@ export class PresenceRooms {
     return room;
   }
 
-  /** Applies a state patch to a peer; false when nothing changed. */
+  /**
+   * Applies a state patch to a peer; false when nothing anyone hears of changed. Motion (cursor,
+   * drag) of an idle peer is kept but never sent: when it starts changing something the others
+   * get where it is, when it stops they get its cursor cleared.
+   */
   private patch(room: Room, peer: Peer, patch: PresenceStatePatch): boolean {
     let changed = false;
+    const wasActive = active(peer.state);
     for (const field of FIELDS) {
       if (!(field in patch)) continue;
       const value = patch[field] ?? null;
       if (sameValue(value, peer.state[field])) continue;
       (peer.state as Record<Field, unknown>)[field] = value;
+      // FIELDS starts with `activity`, so this sees the activity of this very patch.
+      if (MOTION.has(field) && !active(peer.state)) continue;
       peer.changed.add(field);
       if (field === 'editing') room.summaryChanged = true;
+      changed = true;
+    }
+    if (wasActive !== active(peer.state)) {
+      for (const field of MOTION) peer.changed.add(field);
       changed = true;
     }
     if (changed) {
@@ -337,7 +375,7 @@ export class PresenceRooms {
       if (!known) {
         room.peers.set(relayed.key, {
           member: { key: relayed.key, identity: relayed.identity, settings, send: () => {} },
-          state: { ...EMPTY_STATE, ...relayed.state },
+          state: { ...EMPTY_STATE, ...relayed.state, selection: null },
           color: presenceColor(relayed.identity.accountId),
           since: relayed.since,
           changed: new Set(),
@@ -389,7 +427,7 @@ export class PresenceRooms {
         identity: p.member.identity,
         shareCursor: p.member.settings.shareCursor,
         since: p.since,
-        state: p.state,
+        state: sharedState(p.state),
       })),
     });
   }
@@ -466,33 +504,38 @@ export class PresenceRooms {
   }
 }
 
-/** A peer in full, as a viewer sees it: no cursor or drag when either side said so. */
+/**
+ * A peer in full, as a viewer sees it: no cursor or drag when either side said so, nor while the
+ * peer is not changing anything.
+ */
 function dto(peer: Peer, viewerSeesMotion: boolean): PresencePeerDto {
   const motion = peer.member.settings.shareCursor && viewerSeesMotion;
+  const shared = sharedState(peer.state);
   return {
     key: peer.member.key,
     ...peer.member.identity,
     color: peer.color,
     since: peer.since,
-    cursor: motion ? peer.state.cursor : null,
-    drag: motion ? peer.state.drag : null,
-    editing: peer.state.editing,
-    selection: peer.state.selection,
+    ...shared,
+    cursor: motion ? shared.cursor : null,
+    drag: motion ? shared.drag : null,
   };
 }
 
 /**
  * What changed about a peer since the last flush, for one kind of viewer: the whole peer after a
- * join or a settings change, else its key and the changed fields (motion only when visible).
+ * join or a settings change, else its key and the changed fields (motion only when visible, and
+ * null once the peer stopped changing things, so older clients drop the cursor too).
  */
 function patchOf(peer: Peer, viewerSeesMotion: boolean): PresencePeerPatch | null {
   if (peer.whole) return dto(peer, viewerSeesMotion);
   const motion = peer.member.settings.shareCursor && viewerSeesMotion;
+  const shared = sharedState(peer.state);
   const patch: PresencePeerPatch = { key: peer.member.key };
   let any = false;
   for (const field of peer.changed) {
     if (MOTION.has(field) && !motion) continue;
-    (patch as Record<string, unknown>)[field] = peer.state[field];
+    (patch as Record<string, unknown>)[field] = shared[field];
     any = true;
   }
   return any ? patch : null;

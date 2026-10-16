@@ -134,6 +134,7 @@ export function ConnectionsSection({
                 value={c.note ?? ''}
                 placeholder="Note"
                 maxLength={2000}
+                activity={{ verb: 'editing', target: { kind: 'connection', id: c.id }, label: 'note' }}
                 onCommit={(note) => void store.updateConnection(c.id, { note: note ?? '' })}
               />
             ) : (

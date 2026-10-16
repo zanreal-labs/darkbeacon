@@ -38,7 +38,13 @@ const crowd = (n: number): PresenceBroadcast => ({
     },
     shareCursor: true,
     since: 1,
-    state: { cursor: { x: i, y: i }, drag: null, editing: null, selection: null },
+    state: {
+      cursor: { x: i, y: i },
+      drag: null,
+      editing: null,
+      selection: null,
+      activity: { verb: 'moving' },
+    },
   })),
 });
 

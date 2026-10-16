@@ -86,7 +86,11 @@ describeEachDialect('presence over /ws', (t) => {
     a.send({});
     // Alice is in the room before Bob joins, so Bob's first list has her (no race between joins).
     await vi.waitFor(() => expect(a.presence().length).toBeGreaterThan(0));
-    b.send({ cursor: { x: 100, y: 50 }, editing: { kind: 'system', id: '31000005', field: 'status' } });
+    b.send({
+      cursor: { x: 100, y: 50 },
+      editing: { kind: 'system', id: '31000005', field: 'status' },
+      activity: { verb: 'editing', target: { kind: 'system', id: '31000005' }, label: 'J014348' },
+    });
 
     await vi.waitFor(() =>
       expect(b.presence()[0]).toMatchObject({
@@ -100,6 +104,7 @@ describeEachDialect('presence over /ws', (t) => {
           name: 'bob',
           characterName: 'bob Main',
           cursor: { x: 100, y: 50 },
+          activity: { verb: 'editing', target: { kind: 'system', id: '31000005' }, label: 'J014348' },
           editing: { kind: 'system', id: '31000005', field: 'status' },
         }),
       ),

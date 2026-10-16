@@ -13,9 +13,12 @@ import {
   type PresenceMember,
   type PresenceMessage,
   type PresenceRelay,
+  sharedState,
 } from './presence.js';
 import { RealtimeHub } from './realtime.hub.js';
 import { RealtimeRegistry } from './realtime.registry.js';
+
+const MOVING = { verb: 'moving' } as const;
 
 const member = (key: string, accountId: string, settings = DEFAULT_PRESENCE_SETTINGS) => {
   const inbox: PresenceMessage[] = [];
@@ -44,7 +47,7 @@ describe('PresenceRooms', () => {
     expect(b.inbox[0]).toMatchObject({ full: true, peers: [{ key: 'ka', name: 'alice', cursor: null }] });
 
     // Many moves between two flushes reach the others as one message with the latest state.
-    for (let i = 0; i < 50; i++) rooms.update('map:m', b.m, { cursor: { x: i, y: i } });
+    for (let i = 0; i < 50; i++) rooms.update('map:m', b.m, { cursor: { x: i, y: i }, activity: MOVING });
     rooms.update('map:m', b.m, { editing: { kind: 'system', id: '31000005', field: 'status' } });
     rooms.flush();
     expect(a.inbox).toHaveLength(2);
@@ -78,10 +81,14 @@ describe('PresenceRooms', () => {
     const a = member('ka', 'alice');
     const b = member('kb', 'bob', { shareCursor: false, showOthers: true });
     rooms.update('map:m', a.m, {});
-    rooms.update('map:m', b.m, { cursor: { x: 5, y: 5 }, selection: { systems: [1], connections: [] } });
+    rooms.update('map:m', b.m, {
+      cursor: { x: 5, y: 5 },
+      activity: MOVING,
+      selection: { systems: [1], connections: [] },
+    });
     rooms.flush();
     expect(a.inbox.at(-1)).toMatchObject({
-      peers: [{ key: 'kb', cursor: null, selection: { systems: [1] } }],
+      peers: [{ key: 'kb', cursor: null, activity: MOVING, selection: null }],
     });
 
     // Bob shares again: Alice gets his cursor without him moving.
@@ -108,13 +115,13 @@ describe('PresenceRooms', () => {
     });
     const mover = member('km', 'mover');
     for (const v of viewers) rooms.update('map:m', v.m, {});
-    rooms.update('map:m', mover.m, { selection: { systems: [1], connections: [] } });
+    rooms.update('map:m', mover.m, { activity: MOVING });
     rooms.flush();
     texts.length = 0;
 
     rooms.update('map:m', mover.m, { cursor: { x: 3, y: 4 } });
     rooms.flush();
-    // Only the key and the cursor: nothing about who it is, nor the unchanged selection.
+    // Only the key and the cursor: nothing about who it is, nor the unchanged activity.
     for (const v of viewers)
       expect(v.inbox.at(-1)).toEqual({
         op: 'presence',
@@ -146,7 +153,7 @@ describe('PresenceRooms', () => {
     expect(rooms.roomIntervalMs(1000)).toBe(250);
 
     const people = Array.from({ length: 150 }, (_, i) => member(`k${i}`, `a${i}`));
-    for (const p of people) rooms.update('map:m', p.m, {});
+    for (const p of people) rooms.update('map:m', p.m, { activity: MOVING });
     rooms.flush();
     const received = () => people[0]!.inbox.length;
     const start = received();
@@ -180,7 +187,7 @@ describe('PresenceRooms', () => {
       const b = member('kb', 'bob');
       one.update('map:m', a.m, {});
       one.flush();
-      two.update('map:m', b.m, {});
+      two.update('map:m', b.m, { activity: MOVING });
       // Bob (on two) is told about Alice (on one) in his first full list.
       expect(b.inbox[0]).toMatchObject({ full: true, peers: [{ key: 'ka', accountId: 'alice' }] });
       two.flush();
@@ -255,6 +262,96 @@ describe('PresenceRooms', () => {
   });
 });
 
+describe('the relay filter (cursors only while changing something)', () => {
+  let rooms: PresenceRooms | undefined;
+  afterEach(() => rooms?.close());
+
+  it('keeps idle positions and selections to itself', () => {
+    expect(
+      sharedState({
+        cursor: { x: 1, y: 2 },
+        drag: { systems: [{ solarSystemId: 31000005, x: 3, y: 4 }] },
+        editing: null,
+        selection: { systems: [1], connections: [] },
+        activity: null,
+      }),
+    ).toEqual({ cursor: null, drag: null, editing: null, selection: null, activity: null });
+    expect(
+      sharedState({
+        cursor: { x: 1, y: 2 },
+        drag: null,
+        editing: null,
+        selection: { systems: [1], connections: [] },
+        activity: MOVING,
+      }),
+    ).toEqual({ cursor: { x: 1, y: 2 }, drag: null, editing: null, selection: null, activity: MOVING });
+  });
+
+  it('sends nothing while someone only moves the mouse or selects', () => {
+    rooms = new PresenceRooms();
+    const a = member('ka', 'alice');
+    const b = member('kb', 'bob');
+    rooms.update('map:m', a.m, {});
+    rooms.update('map:m', b.m, {});
+    rooms.flush();
+    const before = a.inbox.length;
+    for (let i = 0; i < 20; i++) rooms.update('map:m', b.m, { cursor: { x: i, y: i } });
+    rooms.update('map:m', b.m, { selection: { systems: [31000005], connections: [] } });
+    rooms.flush();
+    expect(a.inbox).toHaveLength(before);
+    // Someone joining later sees Bob without a cursor or a selection.
+    const c = member('kc', 'carol');
+    rooms.update('map:m', c.m, {});
+    expect(c.inbox[0]).toMatchObject({ full: true });
+    expect(c.inbox[0]!.peers.find((p) => p.key === 'kb')).toMatchObject({ cursor: null, selection: null });
+  });
+
+  it('starts with where the cursor is, follows it, and clears it when the action ends', () => {
+    rooms = new PresenceRooms();
+    const a = member('ka', 'alice');
+    const b = member('kb', 'bob');
+    rooms.update('map:m', a.m, {});
+    rooms.update('map:m', b.m, { cursor: { x: 5, y: 5 } });
+    rooms.flush();
+    const linking = { verb: 'linking', target: { kind: 'system', id: '31000005' } } as const;
+    rooms.update('map:m', b.m, { activity: linking });
+    rooms.flush();
+    expect(a.inbox.at(-1)!.peers).toEqual([
+      { key: 'kb', activity: linking, cursor: { x: 5, y: 5 }, drag: null },
+    ]);
+    rooms.update('map:m', b.m, { cursor: { x: 6, y: 6 } });
+    rooms.flush();
+    expect(a.inbox.at(-1)!.peers).toEqual([{ key: 'kb', cursor: { x: 6, y: 6 } }]);
+    // The end clears the cursor for everyone, clients from before `activity` included.
+    rooms.update('map:m', b.m, { activity: null, cursor: { x: 7, y: 7 } });
+    rooms.flush();
+    expect(a.inbox.at(-1)!.peers).toEqual([{ key: 'kb', activity: null, cursor: null, drag: null }]);
+    const after = a.inbox.length;
+    rooms.update('map:m', b.m, { cursor: { x: 8, y: 8 } });
+    rooms.flush();
+    expect(a.inbox).toHaveLength(after);
+  });
+
+  it('relays no idle positions to the other replicas', () => {
+    const published: PresenceBroadcast[] = [];
+    const relay: PresenceRelay = { publish: (b) => published.push(b), subscribe: () => () => {} };
+    rooms = new PresenceRooms({ relay, processId: 'one' });
+    const b = member('kb', 'bob');
+    rooms.update('map:m', b.m, {});
+    rooms.flush();
+    published.length = 0;
+    for (let i = 0; i < 10; i++) rooms.update('map:m', b.m, { cursor: { x: i, y: i } });
+    rooms.flush();
+    expect(published).toEqual([]);
+    rooms.update('map:m', b.m, { activity: MOVING });
+    rooms.flush();
+    expect(published.at(-1)!.peers[0]!.state).toMatchObject({ activity: MOVING, cursor: { x: 9, y: 9 } });
+    rooms.update('map:m', b.m, { activity: null });
+    rooms.flush();
+    expect(published.at(-1)!.peers[0]!.state).toMatchObject({ activity: null, cursor: null });
+  });
+});
+
 const alice: Actor = { kind: 'account', id: 'alice', instanceRole: 'user' };
 const bob: Actor = { kind: 'account', id: 'bob', instanceRole: 'user' };
 
@@ -326,7 +423,11 @@ describeEachDialect('presence over the realtime hub', (t) => {
     b.send({
       op: 'presence',
       stream: 'map:m',
-      state: { cursor: { x: 11, y: 21 }, drag: { systems: [{ solarSystemId: 31000005, x: 300, y: 40 }] } },
+      state: {
+        activity: MOVING,
+        cursor: { x: 11, y: 21 },
+        drag: { systems: [{ solarSystemId: 31000005, x: 300, y: 40 }] },
+      },
     });
     await a.until(() =>
       a.presence().some((p) => p.peers.some((x) => x.cursor?.x === 11 && x.drag?.systems[0]?.x === 300)),
