@@ -6,3 +6,4 @@ packages/sde/data
 .claude
 .next
 next-env.d.ts
+site

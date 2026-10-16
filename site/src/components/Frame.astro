@@ -1,0 +1,28 @@
+---
+/**
+ * A real screenshot in a floating frame: a hairline bezel, a lit top edge and a soft reflection
+ * of the beacon under it. Where the browser has scroll-driven animations (and the visitor has not
+ * asked for less motion), it comes in tilted back in perspective and settles flat as it reaches
+ * the middle of the screen. Transform only: it never moves the layout.
+ */
+interface Props {
+  class?: string;
+  tilt?: 'up' | 'left' | 'right';
+  label?: string;
+}
+const { class: className, tilt = 'up', label } = Astro.props;
+---
+
+<div class:list={['frame3d', `frame3d--${tilt}`, className]}>
+  <div class="frame3d-body">
+    {
+      label && (
+        <div class="frame3d-bar" aria-hidden="true">
+          <span class="frame3d-dot" />
+          <p>{label}</p>
+        </div>
+      )
+    }
+    <slot />
+  </div>
+</div>

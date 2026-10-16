@@ -1,0 +1,26 @@
+---
+// The Darkbeacon mark (geometry from apps/web/src/shell/Logo.tsx): a black hole's core in its
+// accretion ring, the beacon leaving through a break in the ring.
+interface Props {
+  size?: number;
+  class?: string;
+}
+const { size = 22, class: className } = Astro.props;
+const id = `mark-${Math.random().toString(36).slice(2, 8)}`;
+---
+
+<svg class:list={['mark', className]} viewBox="0 0 24 24" width={size} height={size} aria-hidden="true">
+  <defs>
+    <mask id={`${id}-gap`} maskUnits="userSpaceOnUse" x="-6" y="-6" width="36" height="36">
+      <rect x="-6" y="-6" width="36" height="36" fill="#fff"></rect>
+      <path d="M 12.937 11.063 L 13.846 -0.043 A 13.35 13.35 0 0 1 24.043 10.154 Z" fill="#000"></path>
+    </mask>
+    <linearGradient id={`${id}-beam`} gradientUnits="userSpaceOnUse" x1="14" y1="10" x2="20" y2="4">
+      <stop offset="0" stop-color="#5fe0ee"></stop>
+      <stop offset="1" stop-color="#8c9bff"></stop>
+    </linearGradient>
+  </defs>
+  <circle cx="11" cy="13" r="7.25" fill="none" stroke="currentColor" stroke-width="1.75" mask={`url(#${id}-gap)`}></circle>
+  <circle cx="11" cy="13" r="3.25" fill="currentColor"></circle>
+  <path d="M 14.182 9.818 L 15.390 1.564 A 12.25 12.25 0 0 1 22.436 8.610 Z" fill={`url(#${id}-beam)`}></path>
+</svg>

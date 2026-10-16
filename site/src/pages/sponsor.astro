@@ -1,0 +1,130 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Stage from '../components/Stage.astro';
+import { arrow, github } from '../components/icons';
+import { APP_URL, DONATION_CHARACTER, DONATION_CHARACTER_ID, ISSUES_URL, REPO_URL } from '../config';
+
+const title = 'Sponsor Darkbeacon with ISK';
+const description = `Darkbeacon is built and run in its author’s own time. If it helps your corp, you can send ISK in game to ${DONATION_CHARACTER}. No tiers, no rewards, no priority.`;
+const portrait = (size: number) => `https://images.evetech.net/characters/${DONATION_CHARACTER_ID}/portrait?size=${size}`;
+---
+
+<Layout title={title} description={description} ogImage="/og-sponsor.png" ogImageAlt={`Sponsor Darkbeacon: send ISK in game to ${DONATION_CHARACTER}`}>
+  <main id="main" class="sponsor">
+    <section class="sponsor-hero" aria-labelledby="sponsor-title" data-stage-host>
+      <Stage scene="transit" mood="sponsor" still="/media/transit-sponsor" class="sponsor-stage" eager />
+      <div class="sponsor-hero-inner container">
+        <p class="eyebrow"><b>ISK</b> Sponsor</p>
+        <h1 id="sponsor-title" class="sponsor-title">Keep the beacon lit.</h1>
+        <p class="sponsor-lede">
+          Darkbeacon is built and run in its author’s own time. If it saves your fleet a few jumps and you want to say
+          thanks, you can send ISK to his main character, in game.
+        </p>
+      </div>
+    </section>
+
+    <section class="container sponsor-body" aria-label="How to send ISK">
+      <div class="sponsor-grid">
+        <div class="card pilot">
+          <img
+            class="pilot-portrait"
+            src={portrait(256)}
+            srcset={`${portrait(128)} 128w, ${portrait(256)} 256w, ${portrait(512)} 512w`}
+            sizes="(min-width: 640px) 160px, 128px"
+            width="160"
+            height="160"
+            alt={`${DONATION_CHARACTER}, the author’s main character`}
+            loading="lazy"
+            decoding="async"
+            referrerpolicy="no-referrer"
+          />
+          <div class="pilot-copy">
+            <p class="pilot-label">Send ISK to</p>
+            <p class="pilot-name"><code>{DONATION_CHARACTER}</code></p>
+            <p class="pilot-note">The author’s main character.</p>
+            <div class="pilot-actions">
+              <button class="btn btn--sm" type="button" data-copy={DONATION_CHARACTER} aria-describedby="copy-status">Copy name</button>
+              <span class="copy-status" id="copy-status" role="status" aria-live="polite"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="steps-card">
+          <h2 class="feature-title feature-title--sm">In game</h2>
+          <ol class="howto">
+            <li>
+              <span class="howto-n" aria-hidden="true">1</span>
+              <div>
+                <h3>Find the character</h3>
+                <p>Search for <code>{DONATION_CHARACTER}</code> in the client, or open the name wherever you see it.</p>
+              </div>
+            </li>
+            <li>
+              <span class="howto-n" aria-hidden="true">2</span>
+              <div>
+                <h3>Right-click, Give Money</h3>
+                <p>Right-click the name and choose <strong>Give Money</strong>.</p>
+              </div>
+            </li>
+            <li>
+              <span class="howto-n" aria-hidden="true">3</span>
+              <div>
+                <h3>Amount, then send</h3>
+                <p>Enter the amount and, if you like, a reason, then <strong>Send it</strong>.</p>
+              </div>
+            </li>
+          </ol>
+          <p class="howto-alt">
+            Or from your <strong>Wallet</strong>: <strong>Give ISK</strong>, type the name in <strong>Transfer to</strong>,
+            pick it from the list, enter the amount and <strong>Transfer</strong>. A transfer cannot be taken back, so check
+            the name before you send.
+          </p>
+        </div>
+      </div>
+
+      <div class="sponsor-facts">
+        <div class="card">
+          <h3>What it does</h3>
+          <p>
+            ISK stays in New Eden: it does not pay for servers. It keeps the author’s pilots flying, which is where
+            Darkbeacon is used and tested in real chains, and it says thank you for the evenings the project takes.
+          </p>
+        </div>
+        <div class="card">
+          <h3>What it does not</h3>
+          <p>
+            It buys no features, no priority and no support tier, and it promises nothing. Every instance works the same
+            whether or not anyone sends a single ISK.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Other ways to help</h3>
+          <p>
+            Report what breaks (Help, Report a problem in the app, or <a href={ISSUES_URL}>GitHub issues</a>), send a pull
+            request, or tell your corp about it.
+          </p>
+        </div>
+      </div>
+
+      <div class="sponsor-cta">
+        <a class="btn btn--primary btn--lg" href={APP_URL} data-warp><span class="warp-label">Open app</span><Fragment set:html={arrow} /></a>
+        <a class="btn btn--lg" href={REPO_URL}><Fragment set:html={github} />Source on GitHub</a>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    for (const button of document.querySelectorAll<HTMLButtonElement>('[data-copy]')) {
+      button.addEventListener('click', async () => {
+        const status = document.getElementById('copy-status');
+        try {
+          await navigator.clipboard.writeText(button.dataset.copy ?? '');
+          if (status) status.textContent = 'Copied';
+        } catch {
+          if (status) status.textContent = 'Select the name and copy it';
+        }
+        window.setTimeout(() => status && (status.textContent = ''), 2500);
+      });
+    }
+  </script>
+</Layout>

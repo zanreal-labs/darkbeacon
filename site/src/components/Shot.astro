@@ -1,0 +1,33 @@
+---
+// A product screenshot from public/shots: AVIF with a WebP fallback, sized from the manifest.
+import shots from '../data/shots.json';
+
+type Name = keyof typeof shots;
+interface Props {
+  name: Name;
+  alt: string;
+  /** CSS width hint for the browser's srcset choice. */
+  sizes: string;
+  eager?: boolean;
+  class?: string;
+}
+
+const { name, alt, sizes, eager = false, class: className } = Astro.props;
+const shot = shots[name];
+const srcset = (ext: string) => shot.widths.map((w) => `/shots/${name}-${w}.${ext} ${w}w`).join(', ');
+const largest = shot.widths[shot.widths.length - 1];
+---
+
+<picture class={className}>
+  <source type="image/avif" srcset={srcset('avif')} sizes={sizes} />
+  <source type="image/webp" srcset={srcset('webp')} sizes={sizes} />
+  <img
+    src={`/shots/${name}-${largest}.webp`}
+    alt={alt}
+    width={shot.width / 2}
+    height={shot.height / 2}
+    loading={eager ? 'eager' : 'lazy'}
+    fetchpriority={eager ? 'high' : 'auto'}
+    decoding={eager ? 'sync' : 'async'}
+  />
+</picture>

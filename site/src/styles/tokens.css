@@ -1,0 +1,94 @@
+/* Darkbeacon marketing site · v2
+ * Family: zanreal.com (pure black, Geist, white pills, mono labels, generous space, glow).
+ * Accent: the app's beacon cyan, brightened for black, and the wormhole blue-violet the app
+ * draws identified wormholes in. Light comes from the GPU scenes; the UI stays quiet.
+ */
+
+:root {
+  color-scheme: dark;
+
+  --bg: #000;
+  --bg-raised: #08090c;
+  --bg-card: rgb(255 255 255 / 0.025);
+  --bg-card-hover: rgb(255 255 255 / 0.045);
+  --line: rgb(255 255 255 / 0.08);
+  --line-strong: rgb(255 255 255 / 0.14);
+
+  --ink: #ededef;
+  --ink-muted: #a3a8b3;
+  /* Secondary text that sits on a GPU scene: brighter than muted, so it holds AA on the scene's
+     brightest frame (with the scrims in site.css). */
+  --ink-soft: #cdd1d9;
+  --ink-subtle: #868c99;
+
+  --beacon: #5fe0ee;
+  --beacon-deep: #38c6d6;
+  --wormhole: #8c9bff;
+  --accent-gradient: linear-gradient(100deg, var(--beacon) 0%, var(--wormhole) 100%);
+  --glow-beacon: 0 0 0 1px rgb(95 224 238 / 0.18), 0 0 40px -8px rgb(95 224 238 / 0.35);
+
+  /* Data colours, only where they mean what they mean in the app. */
+  --sec-10: #2fefef;
+  --sec-09: #48f0c0;
+  --sec-08: #00ef47;
+  --sec-07: #00f000;
+  --sec-06: #8fef2f;
+  --sec-05: #efef00;
+  --sec-04: #d77700;
+  --sec-03: #f06000;
+  --sec-02: #f04800;
+  --sec-01: #d73000;
+  --sec-00: #f00000;
+  --standing-excellent: #042274;
+  --standing-good: #2c66c4;
+  --standing-bad: #c44604;
+  --standing-terrible: #940604;
+  --scan-red: #f04a3a;
+  --scan-orange: #f08a24;
+  --scan-yellow: #e8d23a;
+  --scan-green: #4fd04a;
+  --edge: #9aa3b4;
+  --edge-eol: #b25ee0;
+  --edge-time-critical: #ff5fae;
+  --edge-reduced: #f5b83a;
+  --edge-critical: #ff4040;
+  --edge-dangerous: #f05252;
+  --edge-bubble: #ffb03a;
+
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: clamp(1.125rem, 1rem + 0.4vw, 1.3125rem);
+  --text-2xl: clamp(1.5rem, 1.2rem + 1vw, 2rem);
+  --text-3xl: clamp(2.125rem, 1.4rem + 3vw, 3.75rem);
+  --text-display: clamp(2.625rem, 1.3rem + 5.6vw, 5.5rem);
+
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  --space-3xl: 4.5rem;
+  --space-4xl: 7rem;
+  --section: clamp(5rem, 3rem + 7vw, 10rem);
+
+  --radius-sm: 0.5rem;
+  --radius: 0.875rem;
+  --radius-lg: 1.25rem;
+  --radius-pill: 999px;
+
+  --container: 75rem;
+  --gutter: clamp(1rem, 0.4rem + 2.6vw, 2rem);
+  --measure: 60ch;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-short: 140ms;
+  --dur-medium: 240ms;
+}
