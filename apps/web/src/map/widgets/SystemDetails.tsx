@@ -22,6 +22,7 @@ import { destinationToken } from '../WormholeFacts';
 import { SystemIntel } from './ActivitySection';
 import { EffectTable } from './EffectTable';
 import { WidgetWindow } from './WidgetWindow';
+import { lockedText } from '../sharing/chain';
 import styles from './widgets.module.css';
 
 /** Wormhole space as Anoikis lists it: classes 1-6, Thera, the shattered C13s and drifter holes. */
@@ -271,7 +272,7 @@ export function SystemInfoWidget({
           </h2>
           {custom && <span className={styles.realName}>{realName}</span>}
           <StatusBadge status={system.status} />
-          {system.locked && <Lock className={styles.lockIcon} aria-label="Locked" />}
+          {system.locked && <Lock className={styles.lockIcon} aria-label={lockedText(system)} />}
         </span>
       }
       actions={

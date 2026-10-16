@@ -20,7 +20,8 @@ import {
   type UniverseSystemDto,
   type UpdateSystemRequest,
 } from '@darkbeacon/shared';
-import type { MapPermissions } from '../../lib/roles';
+import { atLeast, type MapPermissions } from '../../lib/roles';
+import { lockView, mapNames } from '../sharing/chain';
 import { Button, Dialog, DialogClose, DialogContent, Input, Select, Switch } from '../../ui';
 import { STATUS_LABEL, STATUS_MEANING, statusTint } from '../nodeFacts';
 import node from '../SystemNode.module.css';
@@ -45,6 +46,7 @@ export function EditSystemDialog({
   bookmark,
   can,
   store,
+  managesSource,
   onManageLabels,
   onManageTags,
   onClose,
@@ -60,6 +62,8 @@ export function EditSystemDialog({
   bookmark?: string | null;
   can: MapPermissions;
   store: Store;
+  /** On a merged map: whether the viewer manages the map behind a source (lifts its locks). */
+  managesSource?(sourceId: string): boolean;
   /** Opens the map's Labels settings (shown to managers). */
   onManageLabels?(): void;
   /** Opens the map's Tags settings (shown to managers). */
@@ -79,6 +83,7 @@ export function EditSystemDialog({
           bookmark={bookmark ?? null}
           can={can}
           store={store}
+          managesSource={managesSource}
           onManageLabels={can.manage ? onManageLabels : undefined}
           onManageTags={can.manage ? onManageTags : undefined}
         />
@@ -116,6 +121,7 @@ function EditSystemContent({
   bookmark,
   can,
   store,
+  managesSource,
   onManageLabels,
   onManageTags,
 }: {
@@ -126,6 +132,7 @@ function EditSystemContent({
   bookmark: string | null;
   can: MapPermissions;
   store: Store;
+  managesSource?(sourceId: string): boolean;
   onManageLabels?(): void;
   onManageTags?(): void;
 }) {
@@ -174,6 +181,7 @@ function EditSystemContent({
         systemLabels={systemLabels}
         bookmark={bookmark}
         can={can}
+        managesSource={managesSource}
         save={save}
         onManageLabels={onManageLabels}
         onManageTags={onManageTags}
@@ -213,6 +221,7 @@ function SystemForm({
   systemLabels,
   bookmark,
   can,
+  managesSource,
   save,
   onManageLabels,
   onManageTags,
@@ -224,11 +233,15 @@ function SystemForm({
   systemLabels: readonly SystemLabelDto[];
   bookmark: string | null;
   can: MapPermissions;
+  managesSource?(sourceId: string): boolean;
   save(patch: UpdateSystemRequest): void;
   onManageLabels?(): void;
   onManageTags?(): void;
 }) {
   const ids = useId();
+  const lock = lockView(system, can.manage, managesSource);
+  const lockedOn = mapNames(lock.on);
+  const heldHere = lock.here || !lock.locked;
   const onLabels = system.systemLabelIds.filter((l) => systemLabels.some((x) => x.id === l));
   const toggleLabel = (labelId: string) => {
     const on = onLabels.includes(labelId);
@@ -381,12 +394,20 @@ function SystemForm({
         </p>
       </Section>
 
-      {can.manage && (
+      {/* This map's lock is its managers'; one a merged map holds is lifted there, by its managers. */}
+      {(heldHere ? can.manage : atLeast(can.role, 'member')) && (
         <div className={css.lock}>
           <Switch
             checked={system.locked}
             label="Lock position"
-            description="Nobody can move or remove the system on the map while it is locked."
+            description={
+              heldHere
+                ? 'Nobody can move or remove the system on the map while it is locked.'
+                : lock.canUnlock
+                  ? `Locked on ${lockedOn}. Turning this off unlocks it there.`
+                  : `Locked on ${lockedOn}: only a manager of ${lockedOn} can unlock it.`
+            }
+            disabled={!heldHere && !lock.canUnlock}
             onCheckedChange={(locked) => save({ locked })}
           />
         </div>

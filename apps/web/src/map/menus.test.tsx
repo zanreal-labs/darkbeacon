@@ -201,6 +201,56 @@ describe('system menu', () => {
     expect(r).not.toContain('Hide from routes');
   });
 
+  describe('on a shared map, a system locked on a map it merges', () => {
+    const onCorpA = {
+      locked: true,
+      lockedBy: 'source' as const,
+      lockedOn: [{ sourceId: 'a', name: 'Corp A' }],
+    };
+    const action = (items: MenuItem[], label: string) => {
+      const item = items.find((i) => i.kind === 'action' && i.label === label);
+      if (item?.kind !== 'action') throw new Error(`no action ${label}`);
+      return item;
+    };
+
+    it('says where it is locked, offers no Lock, Remove or Hide, and does nothing when picked', () => {
+      // Even the shared map's own manager: the lock is Corp A's.
+      for (const role of ['member', 'manager'] as const) {
+        const { items, commands } = system(role, onCorpA, { managesSource: () => false });
+        const r = rows(items);
+        expect(r).not.toContain('Lock');
+        expect(r).not.toContain('Unlock');
+        expect(r).not.toContain('Remove from map');
+        expect(r).not.toContain('Hide from routes');
+        const held = action(items, 'Locked on Corp A');
+        expect(held).toMatchObject({ disabled: true, title: 'Only a manager of Corp A can unlock it' });
+        held.onSelect();
+        expect(commands.updateSystem).not.toHaveBeenCalled();
+      }
+      expect(rows(system('viewer', onCorpA).items)).not.toContain('Locked on Corp A');
+    });
+
+    it('offers Unlock to a manager of that map, which unlocks it there', () => {
+      const { items, commands } = system('member', onCorpA, { managesSource: (id: string) => id === 'a' });
+      expect(action(items, 'Unlock')).toMatchObject({
+        hint: 'Corp A',
+        title: 'Unlocks the system on Corp A',
+      });
+      expect(rows(items)).not.toContain('Remove from map');
+      pick(items, 'Unlock');
+      expect(commands.updateSystem).toHaveBeenCalledWith(31000005, { locked: false });
+    });
+
+    it('lifts the shared map’s own lock first, for its managers', () => {
+      const both = { ...onCorpA, lockedBy: 'here' as const };
+      expect(rows(system('member', both).items)).not.toContain('Unlock');
+      const { items, commands } = system('manager', both);
+      expect(action(items, 'Unlock').hint).toBeUndefined();
+      pick(items, 'Unlock');
+      expect(commands.updateSystem).toHaveBeenCalledWith(31000005, { locked: false });
+    });
+  });
+
   it('marks the current status and sets another; toggles tags', () => {
     const { items, commands } = system('member', { status: 'hostile' });
     const status = sub(items, 'Status');
@@ -310,6 +360,35 @@ describe('connection menu', () => {
     expect(rows(menu('manager', locked).items)).toContain('Unlock');
     expect(rows(sub(items, 'Size'))).toEqual(['Frigate', 'Medium', 'Large', 'Freighter', 'Capital']);
     expect(rows(sub(items, 'Bubbled'))).toEqual(['None', 'Near J123456', 'Near Jita', 'Both ends']);
+  });
+
+  it('leaves a connection locked on a merged map to that map’s managers', () => {
+    const onCorpA = {
+      locked: true,
+      lockedBy: 'source' as const,
+      lockedOn: [{ sourceId: 'a', name: 'Corp A' }],
+    };
+    const shared = (role: MapRole, manages: boolean) => {
+      const commands = store();
+      const items = connectionMenu({
+        mapId: MAP_ID,
+        connection: connectionFixture('c1', 1, 2, onCorpA),
+        names: { source: 'J123456', target: 'Jita' },
+        can: mapPermissions(role),
+        store: commands,
+        plugins: [],
+        managesSource: () => manages,
+      });
+      return { items, commands };
+    };
+    const outsider = rows(shared('manager', false).items);
+    expect(outsider).toContain('Locked on Corp A');
+    for (const gone of ['Mass', 'Dangerous', 'Unlock', 'Remove connection'])
+      expect(outsider).not.toContain(gone);
+    const { items, commands } = shared('member', true);
+    expect(rows(items)).toEqual(expect.arrayContaining(['Mass', 'Dangerous', 'Unlock', 'Remove connection']));
+    pick(items, 'Unlock');
+    expect(commands.updateConnection).toHaveBeenCalledWith('c1', { locked: false });
   });
 
   it('colours the mass options like the line on the map', () => {

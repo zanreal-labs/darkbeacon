@@ -7,7 +7,8 @@ import {
   type ConnectionDto,
   type UniverseSystemDto,
 } from '@darkbeacon/shared';
-import type { MapPermissions } from '../../lib/roles';
+import { atLeast, type MapPermissions } from '../../lib/roles';
+import { lockedText, lockView, mapNames } from '../sharing/chain';
 import { IconButton } from '../../ui';
 import type { MapStore } from '../useMapStore';
 import { InlineText } from './InlineText';
@@ -31,6 +32,10 @@ interface Props {
   connections: Map<string, ConnectionDto>;
   universe: Map<number, UniverseSystemDto>;
   can: MapPermissions;
+  /** On a merged map: what the viewer may do with one connection (it may come from elsewhere). */
+  connectionCan?(connection: ConnectionDto): MapPermissions;
+  /** On a merged map: whether the viewer manages the map behind a source (lifts its locks). */
+  managesSource?(sourceId: string): boolean;
   store: Pick<MapStore, 'updateConnection'>;
   onSelectSystem(solarSystemId: number): void;
 }
@@ -44,7 +49,9 @@ export function ConnectionsSection({
   solarSystemId,
   connections,
   universe,
-  can,
+  can: mapCan,
+  connectionCan,
+  managesSource,
   store,
   onSelectSystem,
 }: Props) {
@@ -57,8 +64,13 @@ export function ConnectionsSection({
       {mine.map((c) => {
         const other = c.source === solarSystemId ? c.target : c.source;
         const name = universe.get(other)?.name ?? '…';
-        const locked = c.locked ?? false;
-        const editable = can.edit && (!locked || can.manage);
+        const can = connectionCan?.(c) ?? mapCan;
+        // A locked connection is changed by managers of the map holding the lock only.
+        const lock = lockView(c, can.manage, managesSource);
+        const locked = lock.locked;
+        const editable = can.edit && lock.canOverride;
+        const toggles = (!locked || lock.here) && can.manage;
+        const liftsThere = locked && !lock.here && lock.canUnlock && atLeast(can.role, 'member');
         const lifetime = lifetimeText(c);
         const facts: { text: string; tone?: 'warning' | 'danger' }[] = [
           { text: TYPE_NAME[c.type] },
@@ -109,12 +121,18 @@ export function ConnectionsSection({
               ) : (
                 lifetime && <span className={styles.connectionFacts}>{lifetime}</span>
               )}
-              {can.manage ? (
+              {toggles || liftsThere ? (
                 <IconButton
                   size="sm"
                   className={styles.lockButton}
                   aria-pressed={locked}
-                  label={locked ? `Unlock the connection to ${name}` : `Lock the connection to ${name}`}
+                  label={
+                    liftsThere
+                      ? `Unlock the connection to ${name} on ${mapNames(lock.on)}`
+                      : locked
+                        ? `Unlock the connection to ${name}`
+                        : `Lock the connection to ${name}`
+                  }
                   icon={locked ? <Lock /> : <LockOpen />}
                   onClick={() => void store.updateConnection(c.id, { locked: !locked })}
                 />
@@ -122,7 +140,11 @@ export function ConnectionsSection({
                 locked && (
                   <Lock
                     className={styles.lockIcon}
-                    aria-label="Locked: a map manager can change it"
+                    aria-label={
+                      lock.here
+                        ? 'Locked: a map manager can change it'
+                        : `${lockedText(c)}: a manager of ${mapNames(lock.on)} can change it`
+                    }
                     role="img"
                   />
                 )

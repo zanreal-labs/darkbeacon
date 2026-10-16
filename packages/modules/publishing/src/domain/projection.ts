@@ -15,7 +15,8 @@ import type {
  * value (empty notes, `unknown` status, no bookmark label) so the DTO keeps its shape and the map
  * canvas renders it as it renders any map, but the value never leaves. Fields belong to the same
  * scopes as in shares between maps (sharing's `FIELD_SCOPES`); what sharing keeps on its map
- * (label assignments, locks, the owning account) never leaves.
+ * (label assignments, the owning account) never leaves, nor do locks (shared between maps only, so
+ * a merged map honours them).
  */
 export type Scopes = ReadonlySet<ShareScope>;
 

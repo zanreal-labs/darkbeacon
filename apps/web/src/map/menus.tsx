@@ -44,7 +44,8 @@ import {
   Weight,
 } from 'lucide-react';
 import type { MenuItem } from '../components/ContextMenu';
-import type { MapPermissions } from '../lib/roles';
+import { atLeast, type MapPermissions } from '../lib/roles';
+import { lockView, mapNames } from './sharing/chain';
 import { SlotItem } from '../plugins/PluginSlot';
 import type { SlotEntry } from '../plugins/registry';
 import type { ToastInput } from '../ui';
@@ -131,6 +132,54 @@ export interface SystemMenuContext {
   rally?: Omit<PingMenuContext, 'solarSystemId' | 'canEdit'>;
   /** Other maps the system is on, each opened read only. */
   linked?: { maps: readonly LinkedMapDto[] | undefined; open(map: LinkedMapDto): void };
+  /** On a merged map: whether the viewer manages the map behind a source (lifts its locks). */
+  managesSource?(sourceId: string): boolean;
+}
+
+/**
+ * Lock and Unlock of a system or connection: this map's lock for its managers; a lock a merged
+ * map holds is lifted there by its managers, and otherwise shown, not offered.
+ */
+export function lockItems(
+  object: Parameters<typeof lockView>[0],
+  can: MapPermissions,
+  managesSource: ((sourceId: string) => boolean) | undefined,
+  setLocked: (locked: boolean) => void,
+  what: 'system' | 'connection',
+): MenuItem[] {
+  const lock = lockView(object, can.manage, managesSource);
+  if (!lock.locked || lock.here)
+    return can.manage
+      ? [
+          {
+            kind: 'action',
+            label: lock.locked ? 'Unlock' : 'Lock',
+            icon: lock.locked ? <LockOpen /> : <Lock />,
+            onSelect: () => setLocked(!lock.locked),
+          },
+        ]
+      : [];
+  if (!atLeast(can.role, 'member')) return [];
+  const names = mapNames(lock.on);
+  return [
+    lock.canUnlock
+      ? {
+          kind: 'action',
+          label: 'Unlock',
+          icon: <LockOpen />,
+          hint: names,
+          title: `Unlocks the ${what} on ${names}`,
+          onSelect: () => setLocked(false),
+        }
+      : {
+          kind: 'action',
+          label: `Locked on ${names}`,
+          icon: <Lock />,
+          disabled: true,
+          title: `Only a manager of ${names} can unlock it`,
+          onSelect: () => {},
+        },
+  ];
 }
 
 /** "WH1" or "WH1 — Static to high-sec": the name alone is often a letter or two. */
@@ -275,14 +324,7 @@ export function systemMenu(ctx: SystemMenuContext): MenuItem[] {
       onSubmit: (customName) => update({ customName: customName || null }),
     });
   }
-  if (can.manage) {
-    edit.push({
-      kind: 'action',
-      label: system.locked ? 'Unlock' : 'Lock',
-      icon: system.locked ? <LockOpen /> : <Lock />,
-      onSelect: () => update({ locked: !system.locked }),
-    });
-  }
+  edit.push(...lockItems(system, can, ctx.managesSource, (locked) => update({ locked }), 'system'));
   // A locked system cannot be hidden (the server refuses), so the toggle goes with the lock.
   const hide: MenuItem[] =
     can.edit && !system.locked
@@ -360,6 +402,8 @@ export interface ConnectionMenuContext {
   plugins: readonly SlotEntry<'connectionContextMenu'>[];
   onLogJump?(): void;
   onPlanRoll?(): void;
+  /** On a merged map: whether the viewer manages the map behind a source (changes what it locks). */
+  managesSource?(sourceId: string): boolean;
 }
 
 const MASS_LABEL: Record<MassStatus, string> = { fresh: 'Fresh', reduced: 'Reduced', critical: 'Critical' };
@@ -397,9 +441,10 @@ export function connectionMenu(ctx: ConnectionMenuContext): MenuItem[] {
 
   const state: MenuItem[] = [];
   const flags: MenuItem[] = [];
-  const locked = c.locked ?? false;
-  // A locked connection is changed by managers only; others see it as it is.
-  if (can.edit && (!locked || can.manage)) {
+  // A locked connection is changed by managers only (of the map holding the lock); others see it as it is.
+  const lock = lockView(c, can.manage, ctx.managesSource);
+  const changeable = can.edit && lock.canOverride;
+  if (changeable) {
     if (wormhole) {
       state.push(
         {
@@ -503,30 +548,23 @@ export function connectionMenu(ctx: ConnectionMenuContext): MenuItem[] {
         onSelect: () => update({ massSaved: !c.massSaved }),
       });
   }
-  if (can.manage)
-    flags.push({
-      kind: 'action',
-      label: locked ? 'Unlock' : 'Lock',
-      icon: locked ? <LockOpen /> : <Lock />,
-      onSelect: () => update({ locked: !locked }),
-    });
+  flags.push(...lockItems(c, can, ctx.managesSource, (locked) => update({ locked }), 'connection'));
   flags.push(...connectionSignatureItems(c, can));
   flags.push(...more(ctx.plugins, (close) => ({ mapId: ctx.mapId, connectionId: c.id, close })));
-  const remove: MenuItem[] =
-    can.edit && (!locked || can.manage)
-      ? [
-          {
-            kind: 'action',
-            label: 'Remove connection',
-            icon: <Trash2 />,
-            danger: true,
-            onSelect: () =>
-              void store.removeConnection(c.id, {
-                withSignatures: signaturePrefs().deleteConnectionWithSigs,
-              }),
-          },
-        ]
-      : [];
+  const remove: MenuItem[] = changeable
+    ? [
+        {
+          kind: 'action',
+          label: 'Remove connection',
+          icon: <Trash2 />,
+          danger: true,
+          onSelect: () =>
+            void store.removeConnection(c.id, {
+              withSignatures: signaturePrefs().deleteConnectionWithSigs,
+            }),
+        },
+      ]
+    : [];
   return groups(state, passageMenuItems(ctx), flags, remove);
 }
 

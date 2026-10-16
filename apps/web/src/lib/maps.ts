@@ -6,12 +6,13 @@ import { routes, type InstanceInfoDto, type MapSummaryDto, type MeDto } from '@d
 import { api } from './api';
 import { instanceKey, mapsKey, meKey } from './session-keys';
 
-/** The maps the account can see (name order), with its role on each. */
-export function useMaps() {
+/** The maps the account can see (name order), with its role on each. `enabled: false` reads none. */
+export function useMaps(options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: mapsKey,
     queryFn: () => api<MapSummaryDto[]>(routes.maps.list.path),
     retry: false,
+    enabled: options.enabled ?? true,
   });
 }
 

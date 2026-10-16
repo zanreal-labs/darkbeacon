@@ -491,7 +491,16 @@ function plan(
   return out;
 }
 
-const at = (times: FieldTimes, field: string, born: number) => times[field] ?? born;
+/**
+ * When a field last changed: its recorded time, else when the object was made. A field nobody set
+ * since then that still holds the default every new object starts with was never written at all
+ * (time 0): a map that only added a system, a hole or a signature must not blank the status, notes,
+ * mass or name another map set on it earlier. A value the object was made with still counts then.
+ */
+const at = (times: FieldTimes, field: string, born: number, unset = false) =>
+  times[field] ?? (unset ? 0 : born);
+const isEmpty = (v: unknown) =>
+  v === null || v === undefined || v === '' || v === false || (Array.isArray(v) && v.length === 0);
 
 /** The map's Labels, to name the ones a system has (they cross by name). */
 type LabelList = ReadonlyArray<{ id: string; name: string }>;
@@ -505,15 +514,18 @@ function systemEntry(s: MapSystem, times: FieldTimes, systemLabels: LabelList): 
     born,
     fields: {
       pos: stamp(s.position, at(times, 'position', born)),
-      status: stamp(s.status, at(times, 'status', born)),
-      tag: stamp(s.tag, at(times, 'tag', born)),
-      customName: stamp(s.customName, at(times, 'customName', born)),
-      notes: stamp(s.description, at(times, 'description', born)),
-      label: stamp(s.temporaryName, at(times, 'temporaryName', born)),
-      systemLabels: stamp(labelNamesById(s.systemLabelIds, systemLabels), at(times, 'systemLabelIds', born)),
-      customLabel: stamp(s.customLabel, at(times, 'customLabel', born)),
-      labelIds: stamp(s.labelIds, at(times, 'labelIds', born)),
-      locked: stamp(s.locked, at(times, 'locked', born)),
+      status: stamp(s.status, at(times, 'status', born, s.status === 'unknown')),
+      tag: stamp(s.tag, at(times, 'tag', born, isEmpty(s.tag))),
+      customName: stamp(s.customName, at(times, 'customName', born, isEmpty(s.customName))),
+      notes: stamp(s.description, at(times, 'description', born, isEmpty(s.description))),
+      label: stamp(s.temporaryName, at(times, 'temporaryName', born, isEmpty(s.temporaryName))),
+      systemLabels: stamp(
+        labelNamesById(s.systemLabelIds, systemLabels),
+        at(times, 'systemLabelIds', born, isEmpty(s.systemLabelIds)),
+      ),
+      customLabel: stamp(s.customLabel, at(times, 'customLabel', born, isEmpty(s.customLabel))),
+      labelIds: stamp(s.labelIds, at(times, 'labelIds', born, isEmpty(s.labelIds))),
+      locked: stamp(s.locked, at(times, 'locked', born, !s.locked)),
     },
   };
 }
@@ -527,6 +539,8 @@ function bubbledByEnd(c: Connection): string {
 
 function connectionEntry(c: Connection, times: FieldTimes, linked: readonly Signature[]): ChainEntry {
   const born = c.createdAt;
+  const freshTime = c.timeStatus === 'normal' && c.eolAt === null;
+  const freshMass = c.massStatus === 'fresh' && (c.massStatusAt ?? null) === null;
   const typed = linked
     .map((s) => ({ code: signatureTypeCode(s), at: s.updatedAt }))
     .filter((t): t is { code: string; at: number } => !!t.code && t.code !== 'K162');
@@ -534,19 +548,20 @@ function connectionEntry(c: Connection, times: FieldTimes, linked: readonly Sign
     kind: stamp(c.type, at(times, 'type', born)),
     time: stamp(
       { status: c.timeStatus, eolAt: c.eolAt },
-      Math.max(at(times, 'timeStatus', born), at(times, 'eolAt', born)),
+      Math.max(at(times, 'timeStatus', born, freshTime), at(times, 'eolAt', born, freshTime)),
     ),
     mass: stamp(
       { status: c.massStatus, at: c.massStatusAt ?? null },
-      Math.max(at(times, 'massStatus', born), at(times, 'massStatusAt', born)),
+      Math.max(at(times, 'massStatus', born, freshMass), at(times, 'massStatusAt', born, freshMass)),
     ),
+    // Made from the systems' classes, the same everywhere: it counts from when the hole was made.
     size: stamp(c.shipSize, at(times, 'shipSize', born)),
-    massSaved: stamp(c.massSaved, at(times, 'massSaved', born)),
-    dangerous: stamp(c.dangerous, at(times, 'dangerous', born)),
-    bubbled: stamp(bubbledByEnd(c), at(times, 'bubbled', born)),
-    lifetime: stamp(c.lifetime ?? null, at(times, 'lifetime', born)),
-    note: stamp(c.note ?? '', at(times, 'note', born)),
-    locked: stamp(c.locked ?? false, at(times, 'locked', born)),
+    massSaved: stamp(c.massSaved, at(times, 'massSaved', born, !c.massSaved)),
+    dangerous: stamp(c.dangerous, at(times, 'dangerous', born, !c.dangerous)),
+    bubbled: stamp(bubbledByEnd(c), at(times, 'bubbled', born, c.bubbled === 'none')),
+    lifetime: stamp(c.lifetime ?? null, at(times, 'lifetime', born, isEmpty(c.lifetime))),
+    note: stamp(c.note ?? '', at(times, 'note', born, isEmpty(c.note))),
+    locked: stamp(c.locked ?? false, at(times, 'locked', born, !c.locked)),
   };
   if (typed.length > 0) {
     const first = typed.sort((a, b) => a.at - b.at)[0]!;
@@ -563,21 +578,21 @@ function signatureEntry(s: Signature, times: FieldTimes, pairs: ReadonlyMap<stri
     state: 'present',
     born,
     fields: {
-      group: stamp(s.group, at(times, 'group', born)),
-      type: stamp(s.type, at(times, 'type', born)),
-      name: stamp(s.name, at(times, 'name', born)),
-      notes: stamp(s.description, at(times, 'description', born)),
+      group: stamp(s.group, at(times, 'group', born, s.group === 'unknown')),
+      type: stamp(s.type, at(times, 'type', born, isEmpty(s.type))),
+      name: stamp(s.name, at(times, 'name', born, isEmpty(s.name))),
+      notes: stamp(s.description, at(times, 'description', born, isEmpty(s.description))),
       link: stamp(
         s.connectionId ? (pairs.get(s.connectionId) ?? null) : null,
-        at(times, 'connectionId', born),
+        at(times, 'connectionId', born, isEmpty(s.connectionId)),
       ),
-      tempName: stamp(s.tempName ?? null, at(times, 'tempName', born)),
-      destination: stamp(s.destination ?? null, at(times, 'destination', born)),
-      bubbled: stamp(s.bubbled ?? false, at(times, 'bubbled', born)),
-      time: stamp(s.timeStatus ?? null, at(times, 'timeStatus', born)),
-      mass: stamp(s.massStatus ?? null, at(times, 'massStatus', born)),
+      tempName: stamp(s.tempName ?? null, at(times, 'tempName', born, isEmpty(s.tempName))),
+      destination: stamp(s.destination ?? null, at(times, 'destination', born, isEmpty(s.destination))),
+      bubbled: stamp(s.bubbled ?? false, at(times, 'bubbled', born, !s.bubbled)),
+      time: stamp(s.timeStatus ?? null, at(times, 'timeStatus', born, isEmpty(s.timeStatus))),
+      mass: stamp(s.massStatus ?? null, at(times, 'massStatus', born, isEmpty(s.massStatus))),
       kind: stamp(s.kind ?? 'signature', at(times, 'kind', born)),
-      custom: stamp(s.custom ?? false, at(times, 'custom', born)),
+      custom: stamp(s.custom ?? false, at(times, 'custom', born, !s.custom)),
     },
   };
 }

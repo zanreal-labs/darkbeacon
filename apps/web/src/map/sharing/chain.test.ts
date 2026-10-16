@@ -4,7 +4,16 @@ import type { StreamMessage } from '../../lib/realtime';
 import { mapPermissions } from '../../lib/roles';
 import { connectionFixture, eventMessage, signatureFixture, systemFixture } from '../../test/fixtures';
 import { applyMapMessage, emptyMapState, type MapState } from '../mapState';
-import { filterableSources, permissionsFor, withoutSources } from './chain';
+import {
+  filterableSources,
+  lockedHere,
+  lockedText,
+  lockView,
+  mapNames,
+  permissionsFor,
+  sourceManager,
+  withoutSources,
+} from './chain';
 import { provenanceText } from './ProvenanceLine';
 
 const STREAM = 'map:alliance';
@@ -112,5 +121,46 @@ describe('merged maps in the browser', () => {
       'Corp A, Corp B · updated by Corp B 1 min ago · read-only',
     );
     expect(provenanceText(prov(['a'], true), SOURCES, 1_000)).toBe('updated by Corp A just now');
+  });
+
+  it('tells a lock held here from one a merged map holds, and who may lift each', () => {
+    const onA = { locked: true, lockedBy: 'source' as const, lockedOn: [{ sourceId: 'a', name: 'Corp A' }] };
+    expect(lockView({ locked: false }, true)).toMatchObject({
+      locked: false,
+      canUnlock: false,
+      canOverride: true,
+    });
+    // Plain maps say nothing of where: the lock is the map's own.
+    expect(lockView({ locked: true }, true)).toMatchObject({ here: true, on: [], canUnlock: true });
+    expect(lockView({ locked: true }, false)).toMatchObject({ canUnlock: false, canOverride: false });
+    expect(lockView(onA, true)).toMatchObject({
+      here: false,
+      on: ['Corp A'],
+      canUnlock: false,
+      canOverride: false,
+    });
+    expect(lockView(onA, false, (id) => id === 'a')).toMatchObject({ canUnlock: true, canOverride: true });
+    expect(lockedText(onA)).toBe('Locked on Corp A');
+    expect(lockedText({ locked: true })).toBe('Locked');
+    expect(lockedHere(onA)).toBe(false);
+    expect(lockedHere({ ...onA, lockedBy: 'here' })).toBe(true);
+    expect(mapNames(['Corp A', 'Corp B', 'Corp C'])).toBe('Corp A, Corp B and Corp C');
+  });
+
+  it('knows a manager of a source from the viewer’s own maps, on this instance only', () => {
+    const remote = { ...source('r', 'Far away'), origin: { instance: 'elsewhere', mapId: 'b' } };
+    const manages = sourceManager(
+      [...SOURCES, remote],
+      [
+        { id: 'a', role: 'manager' },
+        { id: 'b', role: 'admin' },
+      ],
+    );
+    expect(manages('a')).toBe(true);
+    expect(manages('b')).toBe(true);
+    expect(manages('r')).toBe(false);
+    expect(manages('self')).toBe(false);
+    expect(sourceManager(SOURCES, [{ id: 'a', role: 'member' }])('a')).toBe(false);
+    expect(sourceManager(SOURCES, undefined)('a')).toBe(false);
   });
 });

@@ -123,6 +123,16 @@
   background: var(--dbk-color-danger-subtle);
 }
 
+/* Shown to say why something is not on offer (a lock held elsewhere); it does nothing. */
+.item[data-disabled] {
+  color: var(--dbk-color-text-subtle);
+}
+
+.item[data-disabled]:focus {
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--dbk-color-border);
+}
+
 .lead {
   flex: none;
   display: inline-flex;

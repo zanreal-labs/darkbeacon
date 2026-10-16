@@ -421,6 +421,31 @@ describe('SystemNode', () => {
     expect(list.textContent).toContain('ship unknown');
   });
 
+  it('draws the padlock for a lock of its own and for one a merged map holds, naming that map', () => {
+    const own = renderNode({ system: systemFixture(31000001, { locked: true }) });
+    const mine = own.container.querySelector('[data-locked]')!;
+    expect(mine.getAttribute('data-locked')).toBe('here');
+    expect(mine.getAttribute('title')).toBe('Locked: cannot be moved or removed');
+    own.unmount();
+
+    const { container } = renderNode({
+      system: systemFixture(31000001, {
+        locked: true,
+        lockedBy: 'source',
+        lockedOn: [{ sourceId: 'a', name: 'Corp A' }],
+      }),
+    });
+    const theirs = container.querySelector('[data-locked]')!;
+    expect(theirs.getAttribute('data-locked')).toBe('source');
+    expect(theirs.getAttribute('title')).toBe('Locked on Corp A: cannot be moved or removed');
+    expect(screen.getByLabelText('Locked on Corp A')).toBeTruthy();
+  });
+
+  it('draws no padlock while nothing locks it', () => {
+    const { container } = renderNode({ system: systemFixture(31000001) });
+    expect(container.querySelector('[data-locked]')).toBeNull();
+  });
+
   it('marks a shattered system after its name and in its tooltip', () => {
     const { container } = renderNode({ info: { ...info, effect: 'redGiant', shattered: true } });
     expect(container.querySelector('[data-shattered]')!.getAttribute('title')).toBe('Shattered system');

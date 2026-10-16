@@ -63,7 +63,15 @@ describe('share scopes', () => {
       { state: 'present' }
     >;
     expect(Object.keys(shared.fields)).not.toContain('labelIds');
-    expect(Object.keys(shared.fields)).not.toContain('locked');
+  });
+
+  it('shares locks with topology, so a merged map knows what its sources keep in place', () => {
+    expect(FIELD_SCOPES.system.locked).toBe('topology');
+    expect(FIELD_SCOPES.connection.locked).toBe('topology');
+    for (const kind of ['system', 'connection'] as const) {
+      const cut = projectEntry(present(kind), ['topology']) as Extract<ChainEntry, { state: 'present' }>;
+      expect(Object.keys(cut.fields), kind).toContain('locked');
+    }
   });
 
   it('passes deletions and absences of shared kinds, and drops those of kinds not shared', () => {
@@ -87,21 +95,20 @@ describe('share scopes', () => {
       refusedFields('connection', { mass: { status: 'critical' } }, ['topology', 'connectionStatus']),
     ).toEqual([]);
     expect(refusedFields('signature', { code: 'ABC-124' }, ['topology'])).toEqual(['code']);
-    expect(refusedFields('system', { locked: true }, [...shareScope.options])).toEqual(['locked']);
-    expect(refusedFields('system', { locked: true }, 'all')).toEqual([]);
+    expect(refusedFields('system', { labelIds: ['t'] }, [...shareScope.options])).toEqual(['labelIds']);
+    expect(refusedFields('system', { labelIds: ['t'] }, 'all')).toEqual([]);
+    expect(refusedFields('system', { locked: false }, ['topology'])).toEqual([]);
   });
 
-  it('shares connection notes as intel, lifetime marks as status, and keeps locks on their map', () => {
+  it('shares connection notes as intel and lifetime marks as status', () => {
     expect(FIELD_SCOPES.connection.note).toBe('intel');
     expect(FIELD_SCOPES.connection.lifetime).toBe('connectionStatus');
-    expect(FIELD_SCOPES.connection.locked).toBe('local');
     expect(FIELD_SCOPES.signature.kind).toBe('signatures');
     expect(FIELD_SCOPES.signature.custom).toBe('signatures');
     const cut = projectEntry(present('connection'), ['topology', 'connectionStatus']);
     const fields = cut && cut.state === 'present' ? Object.keys(cut.fields) : [];
     expect(fields).toContain('lifetime');
     expect(fields).not.toContain('note');
-    expect(fields).not.toContain('locked');
   });
 
   it('shares Labels and the custom label under "labels"; Tags never leave the map', () => {

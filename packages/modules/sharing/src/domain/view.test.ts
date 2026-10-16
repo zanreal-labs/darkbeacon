@@ -78,6 +78,63 @@ describe('merged view', () => {
     });
   });
 
+  it('shows a lock held by any source, says where, and never takes one source’s lock for another’s', () => {
+    const { merge, ctx } = setup();
+    merge.apply('ro', [present('system', String(J1), 1, { locked: s(true, 2) })]);
+    // A newer "unlocked" from another source must not hide the first one's lock.
+    merge.apply('rw', [present('system', String(J1), 1, { locked: s(false, 9) })]);
+    const named = {
+      ...ctx,
+      sources: new Map([...ctx.sources].map(([id, v]) => [id, { ...v, name: `Map ${id}` }])),
+    };
+    const [j1] = entitiesOf(merge, refId('system', String(J1)), named);
+    expect(j1!.dto).toMatchObject({
+      locked: true,
+      lockedBy: 'source',
+      lockedOn: [{ sourceId: 'ro', name: 'Map ro' }],
+    });
+
+    // A composite's own lock wins the label; the sources holding one stay listed.
+    const local = new Map([[J1, { notes: null, labelIds: [], locked: true }]]);
+    const [own] = entitiesOf(merge, refId('system', String(J1)), { ...named, local });
+    expect(own!.dto).toMatchObject({ locked: true, lockedBy: 'here', lockedOn: [{ sourceId: 'ro' }] });
+
+    // Unlocked everywhere: no lock fields at all.
+    merge.apply('ro', [present('system', String(J1), 1, { locked: s(false, 10) })]);
+    const [open] = entitiesOf(merge, refId('system', String(J1)), named);
+    expect(open!.dto).toMatchObject({ locked: false });
+    expect(open!.dto).not.toHaveProperty('lockedBy');
+    expect(open!.dto).not.toHaveProperty('lockedOn');
+  });
+
+  it('shows a map’s own lock as held here, apart from what shares say', () => {
+    const merge = new ChainMerge();
+    merge.setSource(SELF, 0);
+    merge.setSource('rw', 1);
+    merge.apply(SELF, [
+      present('system', String(J1), 1, { locked: s(true, 1) }),
+      present('system', String(J2), 1),
+      present('connection', PAIR, 1, { locked: s(false, 1) }),
+    ]);
+    merge.apply('rw', [
+      present('system', String(J1), 1, { locked: s(false, 5) }),
+      present('connection', PAIR, 1, { locked: s(true, 5) }),
+    ]);
+    const ctx: ViewContext = {
+      mapId: 'mine',
+      sources: new Map([
+        [SELF, source(SELF, 'read-write')],
+        ['rw', source('rw', 'read-write')],
+      ]),
+      layout: new Map(),
+    };
+    const [j1] = entitiesOf(merge, refId('system', String(J1)), ctx);
+    expect(j1!.dto).toMatchObject({ locked: true, lockedBy: 'here' });
+    expect(j1!.dto).not.toHaveProperty('lockedOn');
+    const [edge] = entitiesOf(merge, refId('connection', PAIR), ctx);
+    expect(edge!.dto).toMatchObject({ locked: true, lockedBy: 'source', lockedOn: [{ sourceId: 'rw' }] });
+  });
+
   it('draws connections from the lower id and turns bubbled ends back into source/target', () => {
     const { merge, ctx } = setup();
     merge.apply('ro', [present('system', String(J1), 1), present('system', String(J2), 1)]);

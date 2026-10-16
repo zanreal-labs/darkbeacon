@@ -3,6 +3,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { describeEachDialect } from '@darkbeacon/db/testing';
 import type {
+  ApiErrorBody,
+  AuditPageDto,
   ConnectionDto,
   MapDto,
   MapShareDto,
@@ -211,5 +213,84 @@ describeEachDialect('merged chains over HTTP and /ws', (t) => {
     ).data as MapSnapshot;
     expect(after.systems).toEqual([]);
     expect(after.sources!.map((s) => s.name)).toEqual(['Alliance chain']);
+  });
+
+  it('shows a system locked on a source as locked, refuses removing it, and lets only the source’s managers unlock it', async () => {
+    const alice = await signIn('alice'); // Corp A's admin
+    const carol = await signIn('carol'); // the alliance chain's admin
+    const dave = await signIn('dave'); // edits the alliance chain only
+    const corp = await alice.call<MapDto>('POST', '/api/maps', { name: 'Corp A' });
+    for (const id of [C2, C5])
+      await alice.call('POST', `/api/maps/${corp.id}/systems`, { solarSystemId: id });
+    await alice.call('PATCH', `/api/maps/${corp.id}/systems/${C5}`, { locked: true });
+    const alliance = await carol.call<MapDto>('POST', '/api/maps', {
+      name: 'Alliance chain',
+      kind: 'composite',
+    });
+    for (const who of [dave, alice])
+      await carol.call('POST', `/api/maps/${alliance.id}/access-rules`, {
+        subjectKind: 'account',
+        subjectId: who.me.account.id,
+        role: 'member',
+      });
+    const offered = await alice.call<MapShareDto>('POST', `/api/maps/${corp.id}/shares`, {
+      targetSlug: alliance.slug,
+      level: 'read-write',
+    });
+    await carol.call('POST', `/api/maps/${alliance.id}/shares/${offered.id}/accept`, {});
+
+    const stream = `map:${alliance.id}`;
+    const snapshot = async () =>
+      (await dave.call<StreamSnapshotDto>('GET', `/api/streams/${encodeURIComponent(stream)}/snapshot`))
+        .data as MapSnapshot;
+    await vi.waitFor(async () =>
+      expect((await snapshot()).systems!.find((s) => s.solarSystemId === C5)).toMatchObject({
+        locked: true,
+        lockedBy: 'source',
+        lockedOn: [{ sourceId: offered.id, name: 'Corp A' }],
+      }),
+    );
+
+    // Removing it is refused, saying where the lock is; so is unlocking by anyone not managing Corp A.
+    const refused = async (who: typeof dave, method: string, path: string, json?: unknown) => {
+      const r = await fetch(`http://${base}${path}`, {
+        method,
+        headers: {
+          cookie: who.cookie,
+          ...(json === undefined ? {} : { 'content-type': 'application/json' }),
+        },
+        ...(json === undefined ? {} : { body: JSON.stringify(json) }),
+      });
+      return { status: r.status, message: ((await r.json()) as ApiErrorBody).error.message };
+    };
+    const system = `/api/maps/${alliance.id}/systems/${C5}`;
+    const removal = await refused(dave, 'DELETE', system);
+    expect(removal.status).toBe(409);
+    expect(removal.message).toMatch(/locked on Corp A/);
+    for (const who of [dave, carol]) {
+      const unlock = await refused(who, 'PATCH', system, { locked: false });
+      expect(unlock.status).toBe(403);
+      expect(unlock.message).toMatch(/only a manager of Corp A can unlock it/);
+    }
+
+    // Alice manages Corp A: her unlock through the alliance chain lands there, audited as made via it.
+    const live = await open(dave.cookie, stream);
+    await alice.call('PATCH', system, { locked: false });
+    await vi.waitFor(() =>
+      expect(live.events()).toContainEqual(
+        expect.objectContaining({
+          type: 'system.updated',
+          data: expect.objectContaining({ solarSystemId: C5, locked: false }),
+        }),
+      ),
+    );
+    const history = await alice.call<AuditPageDto>('GET', `/api/maps/${corp.id}/systems/${C5}/history`);
+    expect(history.entries[0]).toMatchObject({
+      type: 'system.updated',
+      via: { mapId: alliance.id, name: 'Alliance chain' },
+      diff: { locked: { before: true, after: false } },
+    });
+    // Now it can go.
+    await dave.call('DELETE', system);
   });
 });

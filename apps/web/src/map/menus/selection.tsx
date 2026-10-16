@@ -4,6 +4,7 @@ import type { LabelDto, MapSystemDto, SystemLabelDto, SystemStatus } from '@dark
 import { CircleDot, Copy, Lock, LockOpen, Tags, Trash2, Type } from 'lucide-react';
 import type { MenuItem } from '../../components/ContextMenu';
 import type { MapPermissions } from '../../lib/roles';
+import { lockedHere } from '../sharing/chain';
 
 /*
  * The menu of a selection of several systems (right click on one of them, or on the selection's
@@ -96,7 +97,8 @@ export function selectionMenu(ctx: SelectionMenuContext): MenuItem[] {
       });
   }
   if (can.manage) {
-    const locked = allHave(systems, (s) => s.locked);
+    // This map's own locks: one a merged map holds is lifted there, one system at a time.
+    const locked = allHave(systems, lockedHere);
     edit.push({
       kind: 'action',
       label: locked ? 'Unlock' : 'Lock',
