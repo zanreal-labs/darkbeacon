@@ -1,15 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { ManualClock } from '@darkbeacon/core';
-import { EsiStructuresError, TheraFeed } from '@darkbeacon/routing';
+import { ANSIBLEX_TYPE_ID, EsiStructuresError, farSideOf, TheraFeed } from '@darkbeacon/routing';
 import { StaticUniverseCatalog } from '../universe/static-universe-catalog.js';
 import {
   AccountAlliances,
   CORPORATION_STRUCTURES_SCOPE,
+  EsiAnsiblexSearch,
   EsiCorporationStructures,
   EsiSovereignty,
   HttpEveScoutClient,
   KspaceDistances,
   StaticInvasionLookup,
+  STRUCTURE_SEARCH_SCOPE,
+  UNIVERSE_STRUCTURES_SCOPE,
 } from './external-adapters.js';
 
 const universe = StaticUniverseCatalog.load('/nonexistent');
@@ -112,6 +115,118 @@ describe('ESI', () => {
     ).rejects.toBeInstanceOf(EsiStructuresError);
   });
 
+  describe('Ansiblexes a character may use', () => {
+    const idOf = (name: string) => [...universe.systems()].find((s) => s.name === name)?.id ?? null;
+    const DQ = idOf('1DQ1-A')!;
+    const O4 = idOf('4O-239')!;
+    const CHARACTER = 9001;
+    /** What `GET /universe/structures/{id}` answers per structure (as the ESI spec describes it). */
+    const STRUCTURES: Record<number, { status: number; body: unknown }> = {
+      1020000000001: {
+        status: 200,
+        body: { name: '1DQ1-A » 4O-239 - Home', owner_id: 98000002, solar_system_id: DQ, type_id: 35841 },
+      },
+      // Another alliance's gate: the character is not on its access list.
+      1020000000002: { status: 403, body: { error: 'Forbidden' } },
+      1020000000003: {
+        status: 200,
+        body: { name: '1DQ1-A » Market', owner_id: 98000002, solar_system_id: DQ, type_id: 35832 },
+      },
+      // `type_id` is optional in the spec; the name tells.
+      1020000000004: {
+        status: 200,
+        body: { name: '4O-239 » 1DQ1-A - Back', owner_id: 98000003, solar_system_id: O4 },
+      },
+    };
+
+    const setup = (
+      options: { scopes?: string[]; search?: number; limit?: (url: string) => Record<string, string> } = {},
+    ) => {
+      const calls: Array<{ url: string; auth: string | null }> = [];
+      const clock = new ManualClock();
+      const sleeps: number[] = [];
+      const search = new EsiAnsiblexSearch({
+        userAgent: 'test',
+        clock,
+        scopes: async () => options.scopes ?? [STRUCTURE_SEARCH_SCOPE, UNIVERSE_STRUCTURES_SCOPE],
+        accessToken: async () => 'token',
+        sleep: async (ms) => {
+          sleeps.push(ms);
+          clock.advance(ms);
+        },
+        fetch: (async (url: string, init?: RequestInit) => {
+          calls.push({ url, auth: new Headers(init?.headers).get('authorization') });
+          const headers = options.limit?.(url) ?? {};
+          if (url.includes('/search?')) {
+            if (options.search) return json({ error: 'no' }, { status: options.search, headers });
+            return json({ structure: Object.keys(STRUCTURES).map(Number) }, { headers });
+          }
+          const id = Number(url.split('/').at(-1));
+          const answer = STRUCTURES[id]!;
+          return json(answer.body, { status: answer.status, headers });
+        }) as typeof fetch,
+      });
+      return { search, calls, clock, sleeps };
+    };
+
+    it('searches " » ", reads every hit and keeps the Ansiblexes, skipping a refused one', async () => {
+      const { search, calls, clock } = setup();
+      const gates = await search.ansiblexes(CHARACTER);
+      expect(gates).toEqual([
+        { structureId: 1020000000001, solarSystemId: DQ, name: '1DQ1-A » 4O-239 - Home' },
+        { structureId: 1020000000004, solarSystemId: O4, name: '4O-239 » 1DQ1-A - Back' },
+      ]);
+      expect(ANSIBLEX_TYPE_ID).toBe(35841);
+      const first = new URL(calls[0]!.url);
+      expect(first.pathname).toBe(`/characters/${CHARACTER}/search`);
+      expect(first.searchParams.get('categories')).toBe('structure');
+      expect(first.searchParams.get('search')).toBe(' » ');
+      expect(
+        calls
+          .slice(1)
+          .map((c) => new URL(c.url).pathname)
+          .sort(),
+      ).toEqual(Object.keys(STRUCTURES).map((id) => `/universe/structures/${id}`));
+      expect(calls.every((c) => c.auth === 'Bearer token')).toBe(true);
+      // The far side comes from the name, as for the corporation's gates.
+      expect(gates.map((g) => farSideOf(g.name!, g.solarSystemId, idOf))).toEqual([O4, DQ]);
+
+      // Kept for a while, then asked again.
+      await search.ansiblexes(CHARACTER);
+      expect(calls).toHaveLength(5);
+      clock.advance(16 * 60_000);
+      await search.ansiblexes(CHARACTER);
+      expect(calls).toHaveLength(10);
+    });
+
+    it('says which scope is missing and when EVE refuses the search', async () => {
+      await expect(
+        setup({ scopes: [STRUCTURE_SEARCH_SCOPE, CORPORATION_STRUCTURES_SCOPE] }).search.ansiblexes(
+          CHARACTER,
+        ),
+      ).rejects.toMatchObject({ reason: 'no-scope' });
+      await expect(setup({ search: 403 }).search.ansiblexes(CHARACTER)).rejects.toMatchObject({
+        reason: 'forbidden',
+      });
+      await expect(setup({ search: 502 }).search.ansiblexes(CHARACTER)).rejects.toBeInstanceOf(
+        EsiStructuresError,
+      );
+    });
+
+    it("waits for ESI's error window when few errors are left", async () => {
+      // The search leaves 5 errors in a window resetting in 30 s: nothing is sent before then.
+      const { search, calls, sleeps } = setup({
+        limit: (url) =>
+          url.includes('/search?')
+            ? { 'x-esi-error-limit-remain': '5', 'x-esi-error-limit-reset': '30' }
+            : { 'x-esi-error-limit-remain': '100', 'x-esi-error-limit-reset': '60' },
+      });
+      expect(await search.ansiblexes(CHARACTER)).toHaveLength(2);
+      expect(sleeps).toEqual([31_000]);
+      expect(calls).toHaveLength(5);
+    });
+  });
+
   it('reads who holds each system and keeps it for an hour', async () => {
     const urls: string[] = [];
     const clock = new ManualClock();
@@ -170,6 +285,21 @@ describe('static data and identity', () => {
       ],
     });
     expect(await noMain.allianceOf('a')).toBe(20);
+  });
+
+  it("takes the pilot's alliance when the account owns the pilot", async () => {
+    const alliances = new AccountAlliances({
+      mainCharacterOf: async () => 2,
+      charactersOf: async () => [
+        { id: 1, allianceId: 10 },
+        { id: 2, allianceId: 20 },
+        { id: 3, allianceId: null },
+      ],
+    });
+    expect(await alliances.allianceOf('a', 1)).toBe(10);
+    expect(await alliances.allianceOf('a', 3)).toBeNull();
+    // Someone else's character: the main's.
+    expect(await alliances.allianceOf('a', 99)).toBe(20);
   });
 
   it('knows how the invasion left a system', () => {

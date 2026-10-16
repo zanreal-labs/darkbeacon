@@ -3,7 +3,8 @@
  *
  * In game an Ansiblex is named after the two systems it links, "1DQ1-A » 8WA-Z6 - Home Bridge",
  * and the structure browser copies one per line, often with more columns after a tab. People
- * also share lists as "UALX-3 -> 1DQ1-A", "A - B", "A, B" or with tabs.
+ * also share lists as "UALX-3 -> 1DQ1-A", "A - B", "A, B", with tabs or just a space between the
+ * names ("PQRE-W A-7XFN").
  */
 
 /** The SDE type id of the Ansiblex Jump Gate. */
@@ -63,15 +64,23 @@ function nearName(before: string): string {
   return columns[columns.length - 1]!;
 }
 
-/** Reads every line of a paste into pairs of names; names are resolved to systems elsewhere. */
-export function parseBridgeLines(text: string): { pairs: BridgeLine[]; unreadable: UnreadableLine[] } {
+/**
+ * Reads every line of a paste into pairs of names; names are resolved to systems elsewhere.
+ * `isSystem` (a cleaned name is a solar system) settles lines without an arrow: null-sec names
+ * hold dashes and some names hold spaces ("3-LJW3 M-ZJWJ", "Old Man Star Jita"), so every split
+ * point is tried and the one whose both halves are systems wins.
+ */
+export function parseBridgeLines(
+  text: string,
+  isSystem?: (name: string) => boolean,
+): { pairs: BridgeLine[]; unreadable: UnreadableLine[] } {
   const pairs: BridgeLine[] = [];
   const unreadable: UnreadableLine[] = [];
   text.split(/\r?\n/).forEach((raw, i) => {
     const line = i + 1;
     const trimmed = raw.trim();
     if (trimmed === '' || trimmed.startsWith('#')) return;
-    const pair = splitPair(raw);
+    const pair = splitPair(raw, isSystem);
     if (!pair) return unreadable.push({ line, text: trimmed, reason: 'Two system names were expected' });
     const from = cleanSystemName(pair[0]);
     const to = cleanSystemName(pair[1]);
@@ -82,7 +91,7 @@ export function parseBridgeLines(text: string): { pairs: BridgeLine[]; unreadabl
   return { pairs, unreadable };
 }
 
-function splitPair(raw: string): [string, string] | null {
+function splitPair(raw: string, isSystem?: (name: string) => boolean): [string, string] | null {
   const line = raw.trim();
   let best: { at: number; arrow: string } | null = null;
   for (const arrow of ARROWS) {
@@ -90,9 +99,37 @@ function splitPair(raw: string): [string, string] | null {
     if (at > 0 && (!best || at < best.at)) best = { at, arrow };
   }
   if (best) return [nearName(line.slice(0, best.at)), farName(line.slice(best.at + best.arrow.length))];
+  const known = isSystem && splitByNames(line, isSystem);
+  if (known) return known;
   for (const separator of SEPARATORS) {
     const at = line.indexOf(separator);
     if (at > 0) return [line.slice(0, at), line.slice(at + separator.length)];
+  }
+  // "3-LJW3 M-ZJWJ": two words, the space between them.
+  const words = line.split(/\s+/);
+  if (words.length === 2) return [words[0]!, words[1]!];
+  return null;
+}
+
+/**
+ * The split of a line whose both halves are systems: at a separator first, then at a space, then
+ * at a dash ("PQRE-W-A-7XFN"), leftmost first. Null when no split names two systems.
+ */
+function splitByNames(line: string, isSystem: (name: string) => boolean): [string, string] | null {
+  const points: Array<{ at: number; length: number }> = [];
+  for (const separator of SEPARATORS) {
+    for (let at = line.indexOf(separator); at >= 0; at = line.indexOf(separator, at + 1))
+      points.push({ at, length: separator.length });
+  }
+  for (const space of line.matchAll(/\s+/g)) points.push({ at: space.index, length: space[0].length });
+  for (const dash of line.matchAll(/-/g)) points.push({ at: dash.index, length: 1 });
+  for (const { at, length } of points) {
+    if (at <= 0) continue;
+    const near = line.slice(0, at);
+    const far = line.slice(at + length);
+    const a = cleanSystemName(near);
+    const b = cleanSystemName(far);
+    if (a && b && isSystem(a) && isSystem(b)) return [near, far];
   }
   return null;
 }
@@ -107,7 +144,7 @@ export function farSideOf(
   ownSystemId: number,
   systemByName: (name: string) => number | null,
 ): number | null {
-  const { pairs } = parseBridgeLines(structureName);
+  const { pairs } = parseBridgeLines(structureName, (name) => systemByName(name) !== null);
   const pair = pairs[0];
   if (!pair) return null;
   for (const name of [pair.from, pair.to]) {
@@ -133,10 +170,13 @@ export function isForeignBridge(
   return [holderOf(a), holderOf(b)].some((holder) => holder !== null && holder !== alliance);
 }
 
-/** Why ESI gave no structures: no grant or role, no corporation, or no answer. */
+/**
+ * Why ESI gave no structures: EVE refused (no role, grant gone), no working login, the grant
+ * lacks a scope the read needs (linking the character again with it fixes that), or no answer.
+ */
 export class EsiStructuresError extends Error {
   constructor(
-    readonly reason: 'forbidden' | 'no-token' | 'unavailable',
+    readonly reason: 'forbidden' | 'no-token' | 'no-scope' | 'unavailable',
     message: string,
   ) {
     super(message);

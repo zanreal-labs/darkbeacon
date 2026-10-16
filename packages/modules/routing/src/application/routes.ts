@@ -443,8 +443,9 @@ export class RouteQueries {
 
   /**
    * Everything a routing request needs: its policy (keeping out of the avoided systems and
-   * space), its options (Thera only where the map allows it) and the viewer's alliance, which
-   * decides the jump bridges they may use.
+   * space), its options (Thera only where the map allows it) and the pilot's alliance, which
+   * decides the jump bridges they may use: in `pilot` mode the chosen character's (an alt in the
+   * alliance holding the bridges may take them while the main may not), else the main's.
    */
   private async request(actor: Actor | null, mapId: string, query: OptionQuery) {
     const { policy, securityStatus } = await this.policy(actor, query);
@@ -452,9 +453,10 @@ export class RouteQueries {
     if (options.thera && (await this.deps.settings?.mapSettings(mapId))?.thera === false) {
       options.thera = false;
     }
+    const pilot = query.mode === 'pilot' ? query.characterId : undefined;
     const alliance =
       options.bridges && !options.capital && actor?.kind === 'account' && this.deps.alliances
-        ? await this.deps.alliances.allianceOf(actor.id)
+        ? await this.deps.alliances.allianceOf(actor.id, pilot)
         : null;
     return { policy: withAvoidance(policy, options), securityStatus, options, alliance };
   }

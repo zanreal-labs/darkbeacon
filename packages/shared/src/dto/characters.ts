@@ -1,8 +1,11 @@
 import { z } from 'zod';
 import { EveId, Id, Timestamp } from './common.js';
 
-/** Scopes a character grants only when its owner opts in: assets (ship fit mass) and wallet. */
-export const OptionalEveScope = z.enum(['assets', 'wallet']);
+/**
+ * Scopes a character grants only when its owner opts in: assets (ship fit mass), wallet, and
+ * structures (the structures it may use, to find jump bridges).
+ */
+export const OptionalEveScope = z.enum(['assets', 'wallet', 'structures']);
 export type OptionalEveScope = z.infer<typeof OptionalEveScope>;
 
 /** What each ESI scope Darkbeacon asks for is used for, in words people recognise. */
@@ -18,6 +21,7 @@ export const EVE_SCOPE_LABELS: Readonly<Record<string, string>> = {
   'esi-corporations.read_structures.v1': 'Corporation structures (jump bridges)',
   'esi-assets.read_assets.v1': 'Assets (the ship you fly, for jump mass)',
   'esi-wallet.read_character_wallet.v1': 'Wallet balance',
+  'esi-universe.read_structures.v1': 'Structures you may use (finding jump bridges)',
 };
 
 /** A readable name for an ESI scope (the scope itself when it is not one Darkbeacon knows). */

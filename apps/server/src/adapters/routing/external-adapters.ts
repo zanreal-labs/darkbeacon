@@ -3,6 +3,8 @@ import {
   ANSIBLEX_TYPE_ID,
   EsiStructuresError,
   type AllianceDirectory,
+  type AnsiblexStructure,
+  type CharacterStructureSearch,
   type CorporationAnsiblex,
   type CorporationStructures,
   type EveScoutClient,
@@ -93,6 +95,139 @@ export class EsiCorporationStructures implements CorporationStructures {
     return found;
   }
 }
+
+/** The ESI scope of `GET /characters/{character_id}/search` (every category, structures too). */
+export const STRUCTURE_SEARCH_SCOPE = 'esi-search.search_structures.v1';
+/** The ESI scope of `GET /universe/structures/{structure_id}`. */
+export const UNIVERSE_STRUCTURES_SCOPE = 'esi-universe.read_structures.v1';
+
+/**
+ * What the structure search asks for. Every Ansiblex is named "A » B - Name" by the game, and the
+ * search wants at least 3 characters (`minLength: 3` in https://esi.evetech.net/meta/openapi.json),
+ * so " » " finds them all and few other structures.
+ */
+export const ANSIBLEX_SEARCHES: readonly string[] = [' » '];
+
+/** Structures read at once. */
+const STRUCTURE_READS = 8;
+/** Below this many errors left in ESI's window no request is sent until the window resets. */
+const ERROR_FLOOR = 20;
+/** ESI's error window is a minute; a reset further away than this is not waited for. */
+const MAX_BACKOFF_MS = 65_000;
+/** How long a character's bridges are kept (ESI caches the search and structures for an hour). */
+const SEARCH_CACHE_MS = 15 * 60_000;
+
+/**
+ * The Ansiblexes a character may use, whoever owns them: ESI's character search for structures
+ * named like an Ansiblex (scope `esi-search.search_structures.v1`), then
+ * `GET /universe/structures/{id}` for each hit (scope `esi-universe.read_structures.v1`; ESI
+ * answers 403 for a structure the character is not on the access list of, which is skipped),
+ * keeping type 35841. ESI's error limit is shared by the whole server: every 403 counts, so the
+ * reads follow `X-ESI-Error-Limit-Remain` and wait for `X-ESI-Error-Limit-Reset` when few errors
+ * are left (https://developers.eveonline.com/docs/services/esi/best-practices/). A character's
+ * result is kept for a while.
+ */
+export class EsiAnsiblexSearch implements CharacterStructureSearch {
+  private readonly cache = new Map<number, { until: number; gates: AnsiblexStructure[] }>();
+  private errorsLeft = Number.POSITIVE_INFINITY;
+  private resetAt = 0;
+
+  constructor(
+    private readonly options: HttpOptions & {
+      clock: Clock;
+      scopes(characterId: number): Promise<string[]>;
+      accessToken(characterId: number): Promise<string | null>;
+      sleep?(ms: number): Promise<void>;
+    },
+  ) {}
+
+  async ansiblexes(characterId: number): Promise<AnsiblexStructure[]> {
+    const now = this.options.clock.now();
+    const cached = this.cache.get(characterId);
+    if (cached && cached.until > now) return cached.gates;
+    const scopes = await this.options.scopes(characterId);
+    if (!scopes.includes(STRUCTURE_SEARCH_SCOPE) || !scopes.includes(UNIVERSE_STRUCTURES_SCOPE))
+      throw new EsiStructuresError('no-scope', 'The grant does not cover the structures it may use');
+    const token = await this.options.accessToken(characterId);
+    if (!token) throw new EsiStructuresError('no-token', 'No working EVE login');
+    const base = this.options.baseUrl ?? ESI;
+
+    const ids = new Set<number>();
+    for (const search of ANSIBLEX_SEARCHES) {
+      const query = new URLSearchParams({ categories: 'structure', search });
+      const response = await this.get(`${base}/characters/${characterId}/search?${query}`, token);
+      if (!response) throw new EsiStructuresError('unavailable', 'EVE did not answer');
+      if (response.status === 401 || response.status === 403)
+        throw new EsiStructuresError('forbidden', 'EVE refused the structure search');
+      if (!response.ok) throw new EsiStructuresError('unavailable', `ESI answered ${response.status}`);
+      const body = (await response.json()) as { structure?: number[] };
+      for (const id of body.structure ?? []) ids.add(id);
+    }
+
+    const queue = [...ids];
+    const gates: AnsiblexStructure[] = [];
+    let failed = 0;
+    const read = async () => {
+      for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
+        const response = await this.get(`${base}/universe/structures/${id}`, token);
+        // Not on its access list (403), gone (404): not a bridge the character may use.
+        if (response && [401, 403, 404].includes(response.status)) continue;
+        if (!response?.ok) {
+          failed++;
+          continue;
+        }
+        const row = (await response.json()) as { name?: string; solar_system_id?: number; type_id?: number };
+        if (!row.solar_system_id || !isAnsiblex(row)) continue;
+        gates.push({ structureId: id, solarSystemId: row.solar_system_id, name: row.name ?? null });
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(STRUCTURE_READS, queue.length) }, read));
+    if (failed > 0 && gates.length === 0)
+      throw new EsiStructuresError('unavailable', `EVE did not answer for ${failed} structures`);
+    gates.sort((a, b) => a.structureId - b.structureId);
+    // A partial answer is used, but asked for again next time.
+    if (failed === 0) this.cache.set(characterId, { until: now + SEARCH_CACHE_MS, gates });
+    return gates;
+  }
+
+  /** One GET, after waiting out ESI's error window when few errors are left; null without an answer. */
+  private async get(url: string, token: string): Promise<Response | null> {
+    await this.backOff();
+    const response = await (this.options.fetch ?? fetch)(url, {
+      headers: headers(this.options.userAgent, token),
+      signal: AbortSignal.timeout(15_000),
+    }).catch(() => null);
+    if (!response) return null;
+    const remain = Number(response.headers.get('x-esi-error-limit-remain'));
+    const reset = Number(response.headers.get('x-esi-error-limit-reset'));
+    if (response.headers.has('x-esi-error-limit-remain') && Number.isFinite(remain)) {
+      this.errorsLeft = remain;
+      this.resetAt = this.options.clock.now() + (Number.isFinite(reset) ? reset : 60) * 1000;
+    }
+    // ESI's own answer when the limit is spent: wait for the reset before anything else.
+    if (response.status === 420) {
+      this.errorsLeft = 0;
+      if (this.resetAt <= this.options.clock.now()) this.resetAt = this.options.clock.now() + 60_000;
+    }
+    return response;
+  }
+
+  private async backOff(): Promise<void> {
+    if (this.errorsLeft > ERROR_FLOOR) return;
+    const wait = this.resetAt - this.options.clock.now();
+    if (wait > MAX_BACKOFF_MS) throw new EsiStructuresError('unavailable', 'ESI error limit reached');
+    if (wait > 0) await (this.options.sleep ?? sleep)(wait + 1000);
+    this.errorsLeft = Number.POSITIVE_INFINITY;
+  }
+}
+
+/** An Ansiblex by its type; without a type (ESI may leave it out), by its "A » B" name. */
+function isAnsiblex(row: { name?: string; type_id?: number }): boolean {
+  if (row.type_id !== undefined) return row.type_id === ANSIBLEX_TYPE_ID;
+  return row.name?.includes('»') ?? false;
+}
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /** EVE-Scout's public Thera and Turnur signatures (https://api.eve-scout.com/ui/). */
 export class HttpEveScoutClient implements EveScoutClient {
@@ -196,7 +331,10 @@ export class KspaceDistances implements SystemDistances {
   }
 }
 
-/** The alliance of an account's main character (else of its first character in one). */
+/**
+ * The alliance of an account's pilot: the given character's when the account owns it, else the
+ * main character's (else the first character's in one).
+ */
 export class AccountAlliances implements AllianceDirectory {
   constructor(
     private readonly deps: {
@@ -205,11 +343,13 @@ export class AccountAlliances implements AllianceDirectory {
     },
   ) {}
 
-  async allianceOf(accountId: string): Promise<number | null> {
+  async allianceOf(accountId: string, characterId?: number): Promise<number | null> {
     const [main, characters] = await Promise.all([
       this.deps.mainCharacterOf(accountId),
       this.deps.charactersOf(accountId),
     ]);
+    const pilot = characterId === undefined ? undefined : characters.find((c) => c.id === characterId);
+    if (pilot) return pilot.allianceId;
     const pick = characters.find((c) => c.id === main) ?? characters.find((c) => c.allianceId !== null);
     return pick?.allianceId ?? null;
   }

@@ -239,6 +239,14 @@ describeEachDialect('routing and connections over HTTP', (t) => {
     expect((await route('&bridges=false')).body.jumps).toBeGreaterThan(1);
     expect((await route('&capital=true')).body.jumps).toBeGreaterThan(1);
     expect((await route('&skip=dangerous')).body.jumps).toBe(1);
+    // The active pilot's routes take the bridges too, from one system or to every hub.
+    expect((await route(`&mode=pilot&characterId=${PILOT}&securityStatus=0`)).body).toMatchObject({
+      mode: 'pilot',
+      jumps: 1,
+      steps: [{}, { via: 'bridge', edge: 'ansiblex' }],
+    });
+    expect((await route('&mode=pilot&securityStatus=-5')).body.jumps).toBe(1);
+    expect((await route('&mode=safer')).body.jumps).toBe(1);
 
     const bridge = paste.body.bridges[0]!;
     expect(
@@ -258,6 +266,12 @@ describeEachDialect('routing and connections over HTTP', (t) => {
     expect(all.body.limit).toBe(20);
     expect(all.body.routes.map((r) => r.name).sort()).toEqual(['1DQ1-A', 'Amamake', 'Jita']);
     const hubJumps = all.body.routes.map((r) => r.jumps!);
+    const fromO4 = (mode: string) =>
+      request<HubRoutesDto>('GET', `/api/maps/${mapId}/routes/hubs?from=${t5}&${mode}`, 'alice');
+    for (const mode of ['mode=shortest', `mode=pilot&characterId=${PILOT}&securityStatus=0`]) {
+      const toDq = (await fromO4(mode)).body.routes.find((r) => r.name === '1DQ1-A')!;
+      expect(toDq).toMatchObject({ jumps: 1, steps: [{}, { via: 'bridge' }] });
+    }
     expect(hubJumps).toEqual([...hubJumps].sort((a, b) => a - b));
     const jita = all.body.routes.find((r) => r.name === 'Jita')!;
     expect(jita.steps[0]).toMatchObject({ solarSystemId: TAMA, via: 'start', regionName: 'The Citadel' });
@@ -332,6 +346,21 @@ describeEachDialect('routing and connections over HTTP', (t) => {
     const home = await request<WayHomeDto>('GET', `/api/maps/${mapId}/way-home`, 'alice');
     expect(home.body.routes[0]!.mouth.name).toBe('Tama');
     expect(home.body.routes.every((r) => !r.viaEveScout)).toBe(true);
+
+    // Exits: a hole out to 4O-239 reaches the 1DQ1-A hub over the bridge, in every mode.
+    await request('POST', `/api/maps/${mapId}/systems`, 'alice', { solarSystemId: t5 });
+    await request('POST', `/api/maps/${mapId}/connections`, 'alice', { source: HOME, target: t5 });
+    for (const mode of ['mode=shortest', `mode=pilot&characterId=${PILOT}&securityStatus=0`]) {
+      const exits = await request<MapExitsDto>('GET', `/api/maps/${mapId}/exits?${mode}`, 'alice');
+      const out = exits.body.exits.find((e) => e.solarSystemId === t5)!;
+      expect(out.hubs.find((h) => h.solarSystemId === dq)).toMatchObject({ jumps: 1 });
+      expect(out.nearest).toMatchObject({ solarSystemId: dq, jumps: 1 });
+    }
+    expect(
+      (await request<MapExitsDto>('GET', `/api/maps/${mapId}/exits?bridges=false`, 'alice')).body.exits
+        .find((e) => e.solarSystemId === t5)!
+        .hubs.find((h) => h.solarSystemId === dq)!.jumps,
+    ).toBeGreaterThan(1);
 
     expect((await request('DELETE', `/api/maps/${mapId}/bridges`, 'alice')).status).toBe(204);
     expect((await request<unknown[]>('GET', `/api/maps/${mapId}/bridges`, 'alice')).body).toEqual([]);

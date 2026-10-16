@@ -28,3 +28,9 @@
   width: 220px;
   margin-left: auto;
 }
+
+/* The "Link again" button under the notice that a character cannot find jump bridges yet. */
+.linkAgain {
+  display: block;
+  margin-top: 8px;
+}

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { OptionalEveScope } from './characters.js';
 import { EveId, Id, Timestamp } from './common.js';
 
 export const InstanceRole = z.enum(['owner', 'admin', 'user']);
@@ -37,8 +38,8 @@ export const CharacterDto = z.object({
    * linking it again adds them. Absent when unknown (characters without an EVE grant).
    */
   missingScopes: z.array(z.string()).optional(),
-  /** Opt-in scopes the grant holds (`assets`, `wallet`). */
-  extras: z.array(z.enum(['assets', 'wallet'])).optional(),
+  /** Opt-in scopes the grant holds (`assets`, `wallet`, `structures`). */
+  extras: z.array(OptionalEveScope).optional(),
 });
 export type CharacterDto = z.infer<typeof CharacterDto>;
 

@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CloudDownload, Network, Star, Trash2, TriangleAlert, Upload, X } from 'lucide-react';
+import { Network, RefreshCw, Search, Star, Trash2, TriangleAlert, Upload, X } from 'lucide-react';
 import {
   buildPath,
   routes,
@@ -14,6 +14,7 @@ import {
 } from '@darkbeacon/shared';
 import { api, ApiError } from '../../lib/api';
 import type { MapPermissions } from '../../lib/roles';
+import { hereForReturn, relinkHref } from '../../lib/scope-health';
 import { relativeTime } from '../../lib/time';
 import { useMe } from '../../lib/session';
 import {
@@ -165,9 +166,10 @@ export function RoutesSettings({ map, can }: { map: MapDto; can: MapPermissions 
 }
 
 /**
- * Map settings, Bridges: the Ansiblex jump bridges this map routes over. Pasted from the in-game
- * structure browser or read from a corporation's structures through ESI; flagged dangerous or
- * removed by the map's managers.
+ * Map settings, Bridges: the Ansiblex jump bridges this map routes over. Found through ESI (the
+ * gates a character may use, its alliance's too, and its corporation's) or pasted from the in-game
+ * structure browser; flagged dangerous or removed by the map's managers. Finding them needs the
+ * optional `structures` access; a character without it is offered linking again with it.
  */
 export function BridgesSettings({ map }: { map: MapDto }) {
   const toast = useToast();
@@ -185,6 +187,13 @@ export function BridgesSettings({ map }: { map: MapDto }) {
   const characters = me.data?.characters ?? [];
   const [characterId, setCharacterId] = useState<number | null>(null);
   const reader = characterId ?? characters[0]?.id ?? null;
+  const readerCharacter = characters.find((c) => c.id === reader) ?? null;
+  // Without the optional structures access EVE's structure search cannot name the gates it finds.
+  const needsLink = readerCharacter !== null && !(readerCharacter.extras ?? []).includes('structures');
+  const linkAgain = readerCharacter
+    ? relinkHref(hereForReturn(), [...new Set([...(readerCharacter.extras ?? []), 'structures' as const])])
+    : null;
+  const [readWith, setReadWith] = useState<string | null>(null);
 
   const done = (r: ImportBridgesResultDto) => {
     setResult(r);
@@ -208,6 +217,7 @@ export function BridgesSettings({ map }: { map: MapDto }) {
         method: 'POST',
         json: { characterId: reader },
       }),
+    onMutate: () => setReadWith(readerCharacter?.name ?? null),
     onSuccess: done,
   });
   const flag = useMutation({
@@ -247,14 +257,14 @@ export function BridgesSettings({ map }: { map: MapDto }) {
         <form onSubmit={submit} aria-label="Import jump bridges">
           <CardHeader
             title="Jump bridges"
-            description="Ansiblex bridges this map routes over. Paste them from the structure browser in game (or any list like UALX-3 » 1DQ1-A, one per line), or read your corporation's from EVE."
+            description="Ansiblex bridges this map routes over. Let EVE find the ones a character may use (its alliance's, whichever corporation owns them), or paste them from the structure browser in game (or any list like UALX-3 » 1DQ1-A, one per line)."
           />
           <CardBody className={styles.stack}>
             <Field label="Paste the list">
               <Textarea
                 rows={6}
                 value={text}
-                placeholder={'UALX-3 » 1DQ1-A - Home Bridge\nT5ZI-S -> 1DQ1-A'}
+                placeholder={'UALX-3 » 1DQ1-A - Home Bridge\nT5ZI-S -> 1DQ1-A\nPQRE-W A-7XFN'}
                 onChange={(e) => setText(e.target.value)}
               />
             </Field>
@@ -277,7 +287,7 @@ export function BridgesSettings({ map }: { map: MapDto }) {
                 <span className={styles.reader}>
                   <Select
                     size="sm"
-                    aria-label="Character to read with"
+                    aria-label="Character to find jump bridges with"
                     value={String(reader ?? '')}
                     options={characters.map((c) => ({ value: String(c.id), label: c.name }))}
                     onValueChange={(v) => setCharacterId(Number(v))}
@@ -285,18 +295,30 @@ export function BridgesSettings({ map }: { map: MapDto }) {
                 </span>
               )}
               <Button
-                icon={<CloudDownload />}
+                icon={<Search />}
                 loading={readEsi.isPending}
                 disabled={reader === null}
                 onClick={() => readEsi.mutate()}
               >
-                Read from EVE
+                {readerCharacter ? `Find jump bridges from ${readerCharacter.name}` : 'Find jump bridges'}
               </Button>
             </div>
+            {readerCharacter && needsLink && linkAgain && (
+              <Callout tone="warning" title="Link again to find jump bridges">
+                Darkbeacon finds the jump bridges {readerCharacter.name} may use with EVE&apos;s structure
+                search, which needs one more permission: reading the structures it may use. Without it only
+                its corporation&apos;s own gates can be read (Station Manager role).
+                <span className={styles.linkAgain}>
+                  <Button asChild size="sm" icon={<RefreshCw />}>
+                    <a href={linkAgain}>Link {readerCharacter.name} again</a>
+                  </Button>
+                </span>
+              </Callout>
+            )}
             {error && (
               <Callout tone="danger">{errorText(error, 'The bridges could not be imported.')}</Callout>
             )}
-            {result && !error && <ImportResult result={result} />}
+            {result && !error && <ImportResult result={result} character={readWith} />}
           </CardBody>
         </form>
       </Card>
@@ -377,14 +399,26 @@ export function BridgesSettings({ map }: { map: MapDto }) {
   );
 }
 
-function ImportResult({ result }: { result: ImportBridgesResultDto }) {
+function ImportResult({ result, character }: { result: ImportBridgesResultDto; character: string | null }) {
   const parts = [
     result.added > 0 ? `${result.added} new` : null,
     result.known > 0 ? `${result.known} already known` : null,
   ].filter(Boolean);
+  const notes = result.notes?.map((note) => ` ${note}`);
+  if (result.found === 0)
+    return (
+      <Callout tone="neutral" title="No jump bridges found">
+        EVE showed {character ?? 'this character'} no Ansiblex jump bridge it may use. The search only finds
+        gates whose access list lets the character in: ask your alliance for access, or paste the list from
+        the structure browser.
+        {notes}
+      </Callout>
+    );
   return (
     <Callout tone={result.added > 0 ? 'success' : 'neutral'}>
       {parts.length > 0 ? `Imported: ${parts.join(', ')}.` : 'Nothing to import.'}
+      {result.found !== undefined && ` EVE showed ${result.found} Ansiblex gates.`}
+      {notes}
       {result.unknownSystems.length > 0 && ` Unknown systems: ${result.unknownSystems.join(', ')}.`}
       {result.unreadable.length > 0 && (
         <ul className={styles.problems}>

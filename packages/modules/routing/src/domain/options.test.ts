@@ -192,6 +192,64 @@ describe('bridge lists', () => {
     expect(unreadable).toEqual([{ line: 13, text: 'Jita', reason: 'Two system names were expected' }]);
   });
 
+  it('splits lines without an arrow where both halves are systems', () => {
+    const systems = new Set(
+      [
+        'PQRE-W',
+        'A-7XFN',
+        'O-VWPB',
+        'Atioth',
+        '3-LJW3',
+        'M-ZJWJ',
+        'UALX-3',
+        '1DQ1-A',
+        'Old Man Star',
+        'Jita',
+      ].map((n) => n.toLowerCase()),
+    );
+    const isSystem = (name: string) => systems.has(name.toLowerCase());
+    const { pairs, unreadable } = parseBridgeLines(
+      [
+        'PQRE-W A-7XFN',
+        'O-VWPB Atioth',
+        '3-LJW3 M-ZJWJ',
+        'UALX-3 » 1DQ1-A - Home Bridge',
+        '3-LJW3\tM-ZJWJ',
+        '3-LJW3-M-ZJWJ',
+        '3-LJW3 - M-ZJWJ',
+        '3-LJW3 -> M-ZJWJ',
+        '3-LJW3 <-> M-ZJWJ',
+        '3-LJW3,M-ZJWJ',
+        'Old Man Star Jita',
+        '  PQRE-W   A-7XFN  ',
+        'PQRE-W A-7XFN Atioth',
+      ].join('\n'),
+      isSystem,
+    );
+    expect(pairs.map((p) => [p.from, p.to])).toEqual([
+      ['PQRE-W', 'A-7XFN'],
+      ['O-VWPB', 'Atioth'],
+      ['3-LJW3', 'M-ZJWJ'],
+      ['UALX-3', '1DQ1-A'],
+      ['3-LJW3', 'M-ZJWJ'],
+      ['3-LJW3', 'M-ZJWJ'],
+      ['3-LJW3', 'M-ZJWJ'],
+      ['3-LJW3', 'M-ZJWJ'],
+      ['3-LJW3', 'M-ZJWJ'],
+      ['3-LJW3', 'M-ZJWJ'],
+      ['Old Man Star', 'Jita'],
+      ['PQRE-W', 'A-7XFN'],
+    ]);
+    // Three names: no split names two systems, and three words are not a pair.
+    expect(unreadable).toEqual([
+      { line: 13, text: 'PQRE-W A-7XFN Atioth', reason: 'Two system names were expected' },
+    ]);
+    // Without the names a space still splits two words; unknown ones are reported later.
+    expect(parseBridgeLines('PQRE-W A-7XFN').pairs.map((p) => [p.from, p.to])).toEqual([
+      ['PQRE-W', 'A-7XFN'],
+    ]);
+  });
+
   it('keeps names that look like grid markers', () => {
     expect(cleanSystemName('5-3722')).toBe('5-3722');
     expect(cleanSystemName(' PQRE-W 1-1 ')).toBe('PQRE-W');

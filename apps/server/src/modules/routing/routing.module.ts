@@ -28,6 +28,7 @@ import {
   Waypoints,
   type AllianceDirectory,
   type BridgeRepository,
+  type CharacterStructureSearch,
   type CorporationStructures,
   type HubRepository,
   type PilotDirectory,
@@ -44,6 +45,7 @@ import {
 } from '../../adapters/routing/esi-adapters.js';
 import {
   AccountAlliances,
+  EsiAnsiblexSearch,
   EsiCorporationStructures,
   EsiSovereignty,
   HttpEveScoutClient,
@@ -81,6 +83,7 @@ const ROUTING_SETTINGS_REPOSITORY = 'RoutingSettingsRepository';
 const PILOT_DIRECTORY = 'PilotDirectory';
 const WAYPOINT_GATEWAY = 'WaypointGateway';
 const CORPORATION_STRUCTURES = 'CorporationStructures';
+const STRUCTURE_SEARCH = 'CharacterStructureSearch';
 const ALLIANCES = 'AllianceDirectory';
 const STATIONS = ROUTING_STATIONS;
 
@@ -305,6 +308,19 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
       inject: [APP_CONFIG, CharacterService, HTTP_FETCH],
     },
     {
+      provide: STRUCTURE_SEARCH,
+      useFactory: (config: AppConfig, characters: CharacterService, clock: Clock, fetchFn: typeof fetch) =>
+        new EsiAnsiblexSearch({
+          fetch: fetchFn,
+          userAgent: userAgent(config),
+          baseUrl: config.esiBaseUrl,
+          clock,
+          scopes: (id) => characters.scopes(id),
+          accessToken: (id) => characters.accessToken(id),
+        }),
+      inject: [APP_CONFIG, CharacterService, CLOCK, HTTP_FETCH],
+    },
+    {
       provide: ALLIANCES,
       useFactory: (characters: CharacterService, accounts: AccountService) =>
         new AccountAlliances({
@@ -416,6 +432,7 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
         bridges: BridgeRepository,
         universe: RoutingUniverse,
         structures: CorporationStructures,
+        search: CharacterStructureSearch,
         pilots: PilotDirectory,
         access: MapAccess,
         events: EventLog,
@@ -426,6 +443,7 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
           bridges,
           universe,
           structures,
+          search,
           pilots,
           access,
           events,
@@ -438,6 +456,7 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
         BRIDGE_REPOSITORY,
         UNIVERSE_CATALOG,
         CORPORATION_STRUCTURES,
+        STRUCTURE_SEARCH,
         PILOT_DIRECTORY,
         MAP_ACCESS,
         EVENT_LOG,

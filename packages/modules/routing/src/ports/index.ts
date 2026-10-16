@@ -100,12 +100,15 @@ export interface BridgeRepository {
   forgetMap(mapId: string): Promise<void>;
 }
 
-/** An Ansiblex of a corporation, as ESI lists its structures. */
-export interface CorporationAnsiblex {
+/** An Ansiblex structure as ESI names it: the system it stands in and its in-game name. */
+export interface AnsiblexStructure {
   structureId: number;
   solarSystemId: number;
   name: string | null;
 }
+
+/** An Ansiblex of a corporation, as ESI lists its structures. */
+export type CorporationAnsiblex = AnsiblexStructure;
 
 /**
  * ESI `GET /corporations/{corporation_id}/structures` (scope `esi-corporations.read_structures.v1`,
@@ -113,6 +116,17 @@ export interface CorporationAnsiblex {
  */
 export interface CorporationStructures {
   ansiblexes(characterId: number): Promise<CorporationAnsiblex[]>;
+}
+
+/**
+ * The Ansiblexes a character may use, whoever owns them (its alliance's gates of other
+ * corporations too): ESI's character structure search (`GET /characters/{id}/search`, scope
+ * `esi-search.search_structures.v1`) and `GET /universe/structures/{id}` for each hit (scope
+ * `esi-universe.read_structures.v1`). Throws `EsiStructuresError` (domain); `no-scope` when the
+ * grant lacks one of the two.
+ */
+export interface CharacterStructureSearch {
+  ansiblexes(characterId: number): Promise<AnsiblexStructure[]>;
 }
 
 /** Distances between known-space systems (static data); null when one has no position. */
@@ -159,7 +173,11 @@ export interface PingTargets {
 
 /** The viewer's alliance (that of the main character), for which bridges they may use. */
 export interface AllianceDirectory {
-  allianceOf(accountId: string): Promise<number | null>;
+  /**
+   * The alliance of the account's pilot: `characterId`'s when it is one of the account's own
+   * characters (the pilot a route is planned for), else the main character's.
+   */
+  allianceOf(accountId: string, characterId?: number): Promise<number | null>;
 }
 
 /** Route preferences of accounts and routing settings of maps. */

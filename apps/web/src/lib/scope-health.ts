@@ -1,4 +1,10 @@
-import { eveScopeLabel, routes, type CharacterDto, type MeDto } from '@darkbeacon/shared';
+import {
+  eveScopeLabel,
+  routes,
+  type CharacterDto,
+  type MeDto,
+  type OptionalEveScope,
+} from '@darkbeacon/shared';
 
 /** What is wrong with a character's EVE grant, if anything. */
 export interface CharacterAttention {
@@ -33,7 +39,7 @@ export function attentionText(a: CharacterAttention): string {
  * Where linking a character (again) starts. Extras the character already granted are asked for
  * again, so linking it anew never drops them.
  */
-export function relinkHref(returnTo = '/account', extras: readonly ('assets' | 'wallet')[] = []): string {
+export function relinkHref(returnTo = '/account', extras: readonly OptionalEveScope[] = []): string {
   const params = new URLSearchParams({ returnTo });
   if (extras.length > 0) params.set('extras', extras.join(','));
   return `${routes.auth.eveLogin.path}?${params}`;

@@ -989,7 +989,7 @@ export const routes = {
       body: dto.PasteBridgesRequest,
       response: dto.ImportBridgesResultDto,
     }),
-    /** Reads the Ansiblex gates of the character's corporation (ESI, Station Manager role). */
+    /** Finds the Ansiblex gates a character may use (ESI structure search and corporation structures). */
     readFromEsi: route({
       method: 'POST',
       path: '/api/maps/:mapId/bridges/esi',
