@@ -128,7 +128,12 @@
  */
 [data-color] .table tr[data-wormhole] td.id,
 [data-color] .table tr[data-wormhole] td.group,
-[data-color] .table tr[data-wormhole] .mark {
+/* The group word carries the scan colour (the game's red/orange/yellow/green), a wormhole's its own. */
+[data-color] .table td.group {
+  color: var(--scan, var(--dbk-color-text));
+}
+
+[data-color] .table tr[data-wormhole] td.group {
   color: var(--scan-wormhole);
 }
 
@@ -148,17 +153,6 @@
   align-items: center;
   gap: 5px;
   min-width: 0;
-}
-
-.mark {
-  flex: none;
-  width: 15px;
-  height: 15px;
-  color: var(--dbk-color-text-muted);
-}
-
-[data-color] .mark {
-  color: var(--scan, var(--dbk-color-text-muted));
 }
 
 td.group[data-group='unknown'] {

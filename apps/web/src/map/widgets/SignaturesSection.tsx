@@ -43,7 +43,7 @@ import { TypeLabel } from '../signatures/catalog';
 import { TypeReferenceButton } from '../../reference/WormholeReferenceHost';
 import { ageLabel, freshness, GROUP_LABEL, targetOf, visibleSignatures } from '../signatures/facts';
 import { OtherFilters } from '../signatures/FilterChips';
-import { isIdentifiedWormhole, SCAN_COLOR_VARS, ScanMark, scanColor, scanTitle } from '../signatures/scan';
+import { isIdentifiedWormhole, SCAN_COLOR_VARS, scanColor, scanTitle } from '../signatures/scan';
 import { LeadsToMenu } from '../signatures/LeadsToMenu';
 import { announceLink } from '../signatures/onLink';
 import {
@@ -456,7 +456,6 @@ export function SignaturesSection({
                 title={[GROUP_LABEL[s.group], scanTitle(s)].filter(Boolean).join(' · ')}
               >
                 <span className={sig.groupLabel}>
-                  <ScanMark signature={s} />
                   <span className={sig.groupText}>{GROUP_LABEL[s.group]}</span>
                   {/* In a narrow window: a short word, so groups still read apart at a glance. */}
                   <span className={sig.groupShort} aria-hidden>

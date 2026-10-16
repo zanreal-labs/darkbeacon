@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { render } from '@testing-library/react';
 import { signatureFixture } from '../../test/fixtures';
 import {
   isIdentifiedWormhole,
   SCAN_COLOR_VARS,
   SCAN_COLORS,
-  ScanMark,
   scanColor,
   scanTitle,
   strengthColor,
@@ -78,17 +76,5 @@ describe('scan colours', () => {
       expect(c.game).not.toBe(WORMHOLE_COLOR.game);
       expect(c.light).not.toBe(WORMHOLE_COLOR.light);
     }
-  });
-
-  it('draws a circle for a signature, a diamond for an anomaly, nothing for other results', () => {
-    const mark = (extra: Parameters<typeof signatureFixture>[3]) =>
-      render(<ScanMark signature={signatureFixture('s', SYSTEM, 'ABC-123', extra)} />).container;
-    const signature = mark({ group: 'gas' }).querySelector('svg')!;
-    expect(signature.getAttribute('data-kind')).toBe('signature');
-    expect(signature.querySelector('circle')).toBeTruthy();
-    const anomaly = mark({ kind: 'anomaly', group: 'ore' }).querySelector('svg')!;
-    expect(anomaly.getAttribute('data-kind')).toBe('anomaly');
-    expect(anomaly.querySelector('circle')).toBeNull();
-    expect(mark({ kind: 'other' }).querySelector('svg')).toBeNull();
   });
 });

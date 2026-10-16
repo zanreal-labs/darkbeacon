@@ -1,6 +1,5 @@
 import type { CSSProperties } from 'react';
-import type { SignatureDto, SignatureGroup } from '@darkbeacon/shared';
-import styles from './signatures.module.css';
+import type { SignatureDto } from '@darkbeacon/shared';
 
 /*
  * Scan results as the game shows them.
@@ -111,52 +110,4 @@ export function scanTitle(sig: Parameters<typeof scanStrength>[0]): string | und
   if (strength < 25) return 'Cosmic signature: not scanned yet (under 25 %)';
   if (strength < 100) return 'Cosmic signature: group known, not scanned down (under 75 %)';
   return 'Cosmic signature: scanned down';
-}
-
-/** The glyph inside the outline, per group; an unknown result has none yet (the game's icons show from 25 %). */
-const GLYPH: Record<SignatureGroup, string | null> = {
-  unknown: null,
-  // A vortex.
-  wormhole: 'M8.9 8a.9.9 0 1 1-.9-.9A1.9 1.9 0 0 1 9.9 9 2.9 2.9 0 0 1 7 11.9 3.2 3.2 0 0 1 4.8 6.6',
-  // A reticle.
-  combat: 'M8 4.6v1.9M8 9.5v1.9M4.6 8h1.9M9.5 8h1.9M8 8h0',
-  // A chip with pins.
-  data: 'M6 6h4v4H6zM7 4.8v1.2M9 4.8v1.2M7 10v1.2M9 10v1.2',
-  // A ruined temple.
-  relic: 'M5.2 11h5.6M6.2 11V7.4M8 11V7.4M9.8 11V7.4M5.2 7.4 8 5.2l2.8 2.2z',
-  // A cloud.
-  gas: 'M6 10.6h4.3a1.5 1.5 0 0 0 .2-3 2.1 2.1 0 0 0-4-.1 1.6 1.6 0 0 0-.5 3.1z',
-  // A rock.
-  ore: 'M5.2 9.6 6 6.6l2.6-1.3 2.3 1.7-.4 3.2-3 1.3z',
-};
-
-/**
- * The result's mark: the group's icon in a circle (a signature) or a diamond (an anomaly), in
- * the colour of how far it was scanned (`--scan`, set on the row), an identified wormhole's in
- * the wormhole colour. Nothing for other results.
- */
-export function ScanMark({
-  signature,
-}: {
-  signature: Pick<SignatureDto, 'kind' | 'group' | 'name' | 'type' | 'connectionId'>;
-}) {
-  const kind = signature.kind ?? 'signature';
-  if (kind === 'other') return null;
-  const glyph = GLYPH[signature.group];
-  return (
-    <svg
-      className={styles.mark}
-      viewBox="0 0 16 16"
-      aria-hidden
-      data-kind={kind}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.3}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {kind === 'anomaly' ? <path d="M8 1.3 14.7 8 8 14.7 1.3 8z" /> : <circle cx={8} cy={8} r={6.6} />}
-      {glyph ? <path d={glyph} /> : <circle cx={8} cy={8} r={1} fill="currentColor" stroke="none" />}
-    </svg>
-  );
 }

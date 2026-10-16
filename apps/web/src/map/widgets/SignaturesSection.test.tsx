@@ -200,7 +200,7 @@ describe('SignaturesSection', () => {
     expect(row('AAA-100').dataset).toMatchObject({ kind: 'signature', scan: 'red' });
     expect(row('BBB-200').dataset).toMatchObject({ kind: 'signature', scan: 'orange' });
     expect(row('CCC-300').dataset).toMatchObject({ kind: 'signature', scan: 'green', wormhole: 'true' });
-    expect(row('CCC-300').querySelector('svg[data-kind="signature"]')).toBeTruthy();
+    expect(row('CCC-300').getAttribute('data-kind')).toBe('signature');
     // Only the identified wormhole stands out; sites and unscanned results do not.
     expect(row('AAA-100').dataset.wormhole).toBeUndefined();
     expect(row('BBB-200').dataset.wormhole).toBeUndefined();
@@ -210,7 +210,7 @@ describe('SignaturesSection', () => {
     expect(row('AAA-100').querySelector('td[data-group]')?.getAttribute('title')).toMatch(/not scanned yet/);
     await userEvent.click(screen.getByRole('button', { name: /Anomalies and other results/ }));
     expect(row('DDD-400').dataset).toMatchObject({ kind: 'anomaly', scan: 'green' });
-    expect(row('DDD-400').querySelector('svg[data-kind="anomaly"]')).toBeTruthy();
+    expect(row('DDD-400').getAttribute('data-kind')).toBe('anomaly');
     expect(root.dataset.color).toBe('true');
     act(() => setSignaturePrefs({ colorByGroup: false }));
     expect(root.dataset.color).toBeUndefined();
