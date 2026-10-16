@@ -11,7 +11,14 @@ import {
 } from '@xyflow/react';
 import type { ConnectionDto } from '@darkbeacon/shared';
 import { PluginSlot } from '../plugins/PluginSlot';
-import { edgeInnerStyle, edgeOuterStyle, edgeVisual, SHIP_SIZE_TEXT, type EdgeVisual } from './edgeStyle';
+import {
+  edgeInnerStyle,
+  edgeOuterStyle,
+  edgeVisual,
+  SHIP_SIZE_LABEL,
+  SHIP_SIZE_TEXT,
+  type EdgeVisual,
+} from './edgeStyle';
 import { floatingEnds, type Point, type Rect } from './geometry';
 import { lifetimeText } from './widgets/ConnectionsSection';
 import styles from './ConnectionEdge.module.css';
@@ -72,26 +79,53 @@ function useMinuteClock(on: boolean): number {
   return now;
 }
 
-function typeText(c: ConnectionDto): string {
-  if (c.type === 'gate') return 'Stargate';
-  if (c.type === 'bridge') return 'Ansiblex jump bridge';
-  return `Wormhole · ${SHIP_SIZE_TEXT[c.shipSize]}`;
+/** "6 · 30 152 t": jumps counted and the mass they took, since the mass was last marked. */
+function trafficShort(traffic: ConnectionTraffic | undefined): string | null {
+  if (!traffic || traffic.passages === 0) return null;
+  const tonnes = Math.round(traffic.passed / 1000)
+    .toLocaleString('en-US')
+    .replace(/,/g, ' ');
+  return `${traffic.passages} · ${tonnes} t`;
 }
 
-/** Everything about the connection, shown while the pointer is on it. */
+type Tone = 'warning' | 'danger' | 'eol' | undefined;
+
+/**
+ * The connection at a glance while the pointer is on it: the two ends and the size letter, then a
+ * few short rows (mass, life, jumps), coloured only when something is off; flags and the note last.
+ */
 function EdgeDetails({ data, visual, at }: { data: ConnectionEdgeData; visual: EdgeVisual; at: Point }) {
   const c = data.connection;
+  const wormhole = c.type === 'wormhole';
   const name = (end: 'source' | 'target') =>
     (end === 'source' ? data.sourceName : data.targetName) ?? 'this end';
-  const lines = [
-    ...visual.states.filter((s) => s.kind !== 'size').map((s) => s.title),
-    ...visual.bubbles.map((end) => `Bubbled on the ${name(end)} side`),
-    ...(c.type === 'wormhole' && c.massStatus === 'fresh' ? ['Mass fresh: over 50 % left'] : []),
-    ...(c.type === 'wormhole' && c.timeStatus === 'normal' && !c.lifetime ? ['Lifetime normal'] : []),
-    ...(c.type === 'wormhole' && c.lifetime ? [`Lifetime ${lifetimeText(c)}`] : []),
-    ...(c.locked ? ['Locked: a map manager can change it'] : []),
-    ...(c.note ? [`Note: ${c.note.length > 120 ? `${c.note.slice(0, 119)}…` : c.note}`] : []),
-    ...(c.type === 'wormhole' && trafficLine(data.traffic) ? [trafficLine(data.traffic)!] : []),
+  const state = (kind: string) => visual.states.find((s) => s.kind === kind);
+  const rows: Array<{ key: string; value: string; tone?: Tone }> = [];
+  if (wormhole) {
+    rows.push(
+      c.massStatus === 'critical'
+        ? { key: 'Mass', value: 'Critical (< 10 %)', tone: 'danger' }
+        : c.massStatus === 'reduced'
+          ? { key: 'Mass', value: 'Reduced (< 50 %)', tone: 'warning' }
+          : { key: 'Mass', value: 'Fresh' },
+    );
+    const eol = state('timeCritical') ?? state('eol');
+    const marked = lifetimeText(c);
+    rows.push(
+      eol
+        ? { key: 'Life', value: eol.title.replace(/^End of life: /, 'EOL, '), tone: 'eol' }
+        : marked
+          ? { key: 'Life', value: marked.replace(/^under /, '< ') }
+          : { key: 'Life', value: 'Normal' },
+    );
+    const traffic = trafficShort(data.traffic);
+    if (traffic) rows.push({ key: 'Jumps', value: traffic });
+  }
+  const flags = [
+    ...(state('dangerous') ? ['Dangerous'] : []),
+    ...visual.bubbles.map((end) => `Bubble at ${name(end)}`),
+    ...(state('saved') ? ['Mass saved'] : []),
+    ...(c.locked ? ['Locked'] : []),
   ];
   return (
     <div
@@ -99,13 +133,38 @@ function EdgeDetails({ data, visual, at }: { data: ConnectionEdgeData; visual: E
       role="tooltip"
       style={{ transform: `translate(-50%, calc(-100% - 18px)) translate(${at.x}px, ${at.y}px)` }}
     >
-      <strong>
-        {data.sourceName && data.targetName ? `${data.sourceName} ↔ ${data.targetName}` : typeText(c)}
-      </strong>
-      {data.sourceName && data.targetName && <span>{typeText(c)}</span>}
-      {lines.map((line) => (
-        <span key={line}>{line}</span>
-      ))}
+      <div className={styles.detailsHead}>
+        <strong>
+          {data.sourceName && data.targetName
+            ? `${data.sourceName} ↔ ${data.targetName}`
+            : c.type === 'gate'
+              ? 'Stargate'
+              : c.type === 'bridge'
+                ? 'Jump bridge'
+                : 'Wormhole'}
+        </strong>
+        {wormhole ? (
+          <span className={styles.detailsSize} title={SHIP_SIZE_TEXT[c.shipSize]}>
+            {SHIP_SIZE_LABEL[c.shipSize]}
+          </span>
+        ) : (
+          <span className={styles.detailsKind}>{c.type === 'gate' ? 'Gate' : 'Ansiblex'}</span>
+        )}
+      </div>
+      {rows.length > 0 && (
+        <dl className={styles.detailsRows}>
+          {rows.map((r) => (
+            <div key={r.key}>
+              <dt>{r.key}</dt>
+              <dd data-tone={r.tone}>{r.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {flags.length > 0 && <span className={styles.detailsFlags}>{flags.join(' · ')}</span>}
+      {c.note && (
+        <span className={styles.detailsNote}>{c.note.length > 80 ? `${c.note.slice(0, 79)}…` : c.note}</span>
+      )}
     </div>
   );
 }

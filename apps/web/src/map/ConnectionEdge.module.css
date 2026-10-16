@@ -99,6 +99,77 @@
 }
 
 .details strong {
+  overflow: hidden;
   color: var(--dbk-color-text);
   font-weight: 650;
+  text-overflow: ellipsis;
+}
+
+.detailsHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* The size letter, as on the line. */
+.detailsSize {
+  flex: none;
+  min-width: 20px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--dbk-node-text);
+  color: var(--dbk-color-canvas);
+  font-weight: 800;
+  text-align: center;
+}
+
+.detailsKind {
+  flex: none;
+  color: var(--dbk-color-text-subtle);
+}
+
+/* Short rows: a muted key, the value; coloured only when something is off. */
+.detailsRows {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1px 10px;
+  margin: 2px 0 0;
+}
+
+.detailsRows > div {
+  display: contents;
+}
+
+.detailsRows dt {
+  color: var(--dbk-color-text-subtle);
+}
+
+.detailsRows dd {
+  margin: 0;
+  color: var(--dbk-color-text);
+}
+
+.detailsRows dd[data-tone='warning'] {
+  color: var(--dbk-edge-mass-reduced);
+}
+
+.detailsRows dd[data-tone='danger'] {
+  color: var(--dbk-edge-mass-critical);
+}
+
+.detailsRows dd[data-tone='eol'] {
+  color: var(--dbk-edge-time-eol);
+}
+
+.detailsFlags {
+  color: var(--dbk-color-text-muted);
+}
+
+.detailsNote {
+  overflow: hidden;
+  color: var(--dbk-color-text-muted);
+  font-style: italic;
+  text-overflow: ellipsis;
 }

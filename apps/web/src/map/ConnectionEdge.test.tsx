@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import {
   ConnectionMode,
   Handle,
@@ -113,8 +113,11 @@ describe('ConnectionEdge', () => {
     fireEvent.mouseEnter(container.querySelector('.react-flow__edge g')!);
     const tip = await screen.findByRole('tooltip');
     expect(tip.textContent).toContain('J100001 ↔ Amamake');
-    expect(tip.textContent).toContain('Mass reduced: 10 to 50 % left');
-    expect(tip.textContent).toContain('Bubbled on the Amamake side');
+    // Short rows: the key, the value; the off-normal one coloured.
+    const mass = within(tip).getByText('Reduced (< 50 %)');
+    expect(mass.getAttribute('data-tone')).toBe('warning');
+    expect(within(tip).getByText('Normal').getAttribute('data-tone')).toBeNull();
+    expect(tip.textContent).toContain('Bubble at Amamake');
     expect(tip.textContent).toContain('Mass saved');
   });
 
