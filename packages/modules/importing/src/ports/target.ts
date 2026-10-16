@@ -68,6 +68,11 @@ export interface ChainTarget {
   connections(actor: Actor, mapId: string): Promise<ConnectionDto[]>;
   /** Every signature, those of hidden systems included. */
   signatures(actor: Actor, mapId: string): Promise<SignatureDto[]>;
+  /**
+   * When signatures were deleted on the map, by `<solar system id>:<ABC-123>` (the plan's keys):
+   * by someone, a paste, the sweeper or an earlier removal of an import.
+   */
+  signatureTombstones(actor: Actor, mapId: string): Promise<Map<string, number>>;
   putSystem(
     actor: Actor,
     mapId: string,
@@ -137,6 +142,7 @@ export interface ChainTarget {
   setDescription(actor: Actor, mapId: string, description: string): Promise<void>;
   hideSystem(actor: Actor, mapId: string, solarSystemId: number): Promise<void>;
   removeConnection(actor: Actor, mapId: string, connectionId: string): Promise<void>;
+  /** Removes a signature (with a tombstone), that of a hidden system too; its connection stays. */
   removeSignature(actor: Actor, mapId: string, signatureId: string): Promise<void>;
   hubs(actor: Actor, mapId: string): Promise<number[]>;
   setHubs(actor: Actor, mapId: string, solarSystemIds: number[]): Promise<void>;

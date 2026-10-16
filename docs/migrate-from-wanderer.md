@@ -138,6 +138,10 @@ systems of a connection, system and signature id, the subject of an access rule)
 - A system **locked** here keeps its position. A system Wanderer took off its map is hidden here only when
   **Remove what Wanderer no longer has** is on.
 - **Removals** (asked for) remove only what an earlier import brought and nobody changed here since.
+- **Signatures on a sync** are the exception: every pull removes the ones Wanderer deleted or replaced by a
+  re-scan, whether or not removals were asked for (still only what an earlier pull brought and nobody changed
+  here since). A signature deleted here, by someone or by the lazy delete, is not brought back while
+  Wanderer has not changed it since.
 - **Access rules**: a subject without a rule gets one; a rule an earlier import added and nobody changed
   follows Wanderer's role; any other rule here is kept as it is.
 

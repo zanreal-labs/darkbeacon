@@ -8,7 +8,13 @@ import {
   type Actor,
 } from '@darkbeacon/core';
 import type { EventPayloads, EventType, MapRole } from '@darkbeacon/shared';
-import { decideAccess, decideConnection, decideSignature, decideSystem } from '../domain/decide.js';
+import {
+  decideAccess,
+  decideConnection,
+  decideSignature,
+  decideSystem,
+  removedHere,
+} from '../domain/decide.js';
 import type { ConnectionWrite, SignatureWrite, SystemWrite } from '../domain/decide.js';
 import { pairKey, translate, type ImportPlan } from '../domain/translate.js';
 import type { ImportJobRecord, ImportLinkRecord, ImportSyncRecord } from '../ports/repositories.js';
@@ -350,9 +356,10 @@ export class ImportRunner {
       const here = new Map(
         (await deps.target.signatures(actor, mapId)).map((s) => [`${s.solarSystemId}:${s.eveId}`, s]),
       );
+      const deletedHere = await deps.target.signatureTombstones(actor, mapId);
       for (const planned of plan.signatures) {
         this.check(r.id);
-        if (!systems.has(planned.solarSystemId)) {
+        if (!systems.has(planned.solarSystemId) || removedHere(planned, here, deletedHere)) {
           step('signatures', 'skipped');
           await job.step();
           continue;
@@ -511,9 +518,14 @@ export class ImportRunner {
     }
 
     // Removals ----------------------------------------------------------------------------------
-    if (reached('removals') && options.removeMissing) {
+    // A sync's pull always removes the signatures Wanderer deleted (or that a re-scan replaced):
+    // they are scan results of the moment, not the map's own. The rest only when asked.
+    const pull = Boolean(r.syncId);
+    if (reached('removals') && (options.removeMissing || pull)) {
       await job.phase('removals');
-      await this.removals(actor, mapId, key, plan, links, job, step);
+      await this.removals(actor, mapId, key, plan, links, job, step, {
+        signaturesOnly: !options.removeMissing,
+      });
     }
 
     await job.finish('done', null);
@@ -648,7 +660,10 @@ export class ImportRunner {
       );
   }
 
-  /** Removes what came from Wanderer, is gone there and was not changed here since. */
+  /**
+   * Removes what came from Wanderer, is gone there (deleted, or replaced by a re-scan under a new
+   * id) and was not changed here since; `signaturesOnly` for a sync's pull without removals asked.
+   */
   private async removals(
     actor: Actor,
     mapId: string,
@@ -657,6 +672,7 @@ export class ImportRunner {
     links: LinkIndex,
     job: JobProgress,
     step: (kind: 'systems' | 'connections' | 'signatures', what: 'removed' | 'skipped') => void,
+    { signaturesOnly }: { signaturesOnly: boolean },
   ): Promise<void> {
     const { deps } = this;
     const planned = {
@@ -673,6 +689,10 @@ export class ImportRunner {
         step('signatures', 'removed');
       } else if (here) step('signatures', 'skipped');
       await deps.links.delete(mapId, key, 'signature', link.externalId);
+    }
+    if (signaturesOnly) {
+      await job.step(0);
+      return;
     }
     const connections = new Map((await deps.target.connections(actor, mapId)).map((c) => [c.id, c]));
     for (const link of links.all('connection')) {

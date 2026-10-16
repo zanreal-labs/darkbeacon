@@ -88,6 +88,10 @@ export class MappingChainTarget implements ChainTarget {
     return this.mapping.imports.signatures(actor, mapId);
   }
 
+  signatureTombstones(actor: Actor, mapId: string) {
+    return this.mapping.imports.signatureTombstones(actor, mapId);
+  }
+
   putSystem(...args: Parameters<ChainTarget['putSystem']>) {
     return this.mapping.imports.putSystem(...args);
   }
@@ -149,7 +153,7 @@ export class MappingChainTarget implements ChainTarget {
   }
 
   removeSignature(actor: Actor, mapId: string, signatureId: string): Promise<void> {
-    return this.mapping.signatures.remove(actor, mapId, signatureId);
+    return this.mapping.imports.removeSignature(actor, mapId, signatureId);
   }
 
   async hubs(actor: Actor, mapId: string): Promise<number[]> {

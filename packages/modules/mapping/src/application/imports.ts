@@ -19,6 +19,7 @@ import {
   validateLabels,
   validateSystemLabels,
 } from '../domain/rules.js';
+import { signatureKey } from '../domain/stamps.js';
 import { MappingUseCases, type EventBatch } from './base.js';
 import { renumberBookmarks } from './bookmark-numbers.js';
 import { passageEvent } from './intel.js';
@@ -99,6 +100,39 @@ export class ChainImportUseCases extends MappingUseCases {
   async signatures(actor: Actor | null, mapId: string): Promise<Signature[]> {
     await this.authorize(actor, mapId, 'viewer');
     return this.ports.signatures.listForMap(mapId);
+  }
+
+  /** When signatures of the map were deleted, by `<solar system id>:<code>`. */
+  async signatureTombstones(actor: Actor | null, mapId: string): Promise<Map<string, number>> {
+    await this.authorize(actor, mapId, 'viewer');
+    return this.ports.stamps.tombstones(mapId, 'signature');
+  }
+
+  /**
+   * Removes a signature Wanderer no longer has, as a deliberate removal (tombstone): that of a
+   * hidden system too, quietly then, as everything about it. Its connection stays.
+   */
+  async removeSignature(actor: Actor | null, mapId: string, signatureId: string): Promise<void> {
+    const who = await this.authorizeEdit(actor, mapId);
+    await this.write(who, mapId, async (events) => {
+      const signature = await this.ports.signatures.findById(mapId, signatureId);
+      if (!signature) return;
+      const now = this.ports.clock.now();
+      await this.ports.stamps.putTombstone(
+        mapId,
+        'signature',
+        signatureKey(signature.solarSystemId, signature.eveId),
+        now,
+      );
+      await this.ports.signatures.delete(mapId, signature.id);
+      const system = await this.ports.systems.find(mapId, signature.solarSystemId);
+      if (system?.visible)
+        events.add(
+          'signature.removed',
+          { id: signature.id, solarSystemId: signature.solarSystemId },
+          signature,
+        );
+    });
   }
 
   /**

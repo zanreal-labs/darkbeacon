@@ -199,8 +199,14 @@ describe('SignaturesSection', () => {
     const row = (id: string) => screen.getByText(id).closest('tr')!;
     expect(row('AAA-100').dataset).toMatchObject({ kind: 'signature', scan: 'red' });
     expect(row('BBB-200').dataset).toMatchObject({ kind: 'signature', scan: 'orange' });
-    expect(row('CCC-300').dataset).toMatchObject({ kind: 'signature', scan: 'green' });
+    expect(row('CCC-300').dataset).toMatchObject({ kind: 'signature', scan: 'green', wormhole: 'true' });
     expect(row('CCC-300').querySelector('svg[data-kind="signature"]')).toBeTruthy();
+    // Only the identified wormhole stands out; sites and unscanned results do not.
+    expect(row('AAA-100').dataset.wormhole).toBeUndefined();
+    expect(row('BBB-200').dataset.wormhole).toBeUndefined();
+    expect(root.style.getPropertyValue('--scan-wormhole')).toMatch(
+      /^light-dark\(#[0-9a-f]{6}, #[0-9a-f]{6}\)$/,
+    );
     expect(row('AAA-100').querySelector('td[data-group]')?.getAttribute('title')).toMatch(/not scanned yet/);
     await userEvent.click(screen.getByRole('button', { name: /Anomalies and other results/ }));
     expect(row('DDD-400').dataset).toMatchObject({ kind: 'anomaly', scan: 'green' });

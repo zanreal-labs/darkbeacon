@@ -57,7 +57,7 @@ describeEachDialect('sweeper', (t) => {
     const seen = env.clock.now();
 
     env.clock.set(seen + 11.9 * HOUR);
-    expect(await sweeper.sweep(map.id, ON)).toEqual({ eol: 0, deleted: 0, hidden: 0 });
+    expect(await sweeper.sweep(map.id, ON)).toEqual({ eol: 0, deleted: 0, hidden: 0, signatures: 0 });
     env.clock.set(seen + 12 * HOUR);
     expect(await sweeper.sweep(map.id, ON)).toMatchObject({ eol: 1 });
     const eol = await env.ports.connections.findById(map.id, untyped.id);
@@ -125,6 +125,55 @@ describeEachDialect('sweeper', (t) => {
 
   it('has nothing to sweep on a composite', async () => {
     const composite = await new MapUseCases(env.ports).create(alice, { name: 'All', kind: 'composite' });
-    expect(await sweeper.sweep(composite.id, ON)).toEqual({ eol: 0, deleted: 0, hidden: 0 });
+    expect(await sweeper.sweep(composite.id, ON)).toEqual({ eol: 0, deleted: 0, hidden: 0, signatures: 0 });
+  });
+
+  it('lazily deletes signatures a day after they were added, as itself, keeping linked holes and custom entries', async () => {
+    const OFF: SweepSettings = { expiredConnectionMinutes: null, autoEol: false, staleSystemMinutes: null };
+    const signatures = new SignatureUseCases(env.ports);
+    const hole = await connections.add(alice, map.id, { source: HOME, target: C2 });
+    const site = await signatures.add(alice, map.id, HOME, { eveId: 'GOM-778', group: 'gas' });
+    const linked = await signatures.add(alice, map.id, HOME, { eveId: 'DKM-763' });
+    await signatures.update(alice, map.id, linked.id, { connectionId: hole.id });
+    await signatures.add(alice, map.id, HOME, { eveId: 'Tower at P3', custom: true });
+    await signatures.add(alice, map.id, TAMA, { eveId: 'KCH-395', group: 'gas' });
+    await systems.remove(alice, map.id, TAMA);
+    const added = env.clock.now();
+
+    // A paste an hour later sees the site again: the day still counts from when it was added.
+    env.clock.set(added + HOUR);
+    await signatures.paste(alice, map.id, HOME, {
+      text: 'GOM-778\tCosmic Signature\tGas Site\tSizeable Perimeter Reservoir\t100.0%\t4.2 AU',
+      mode: 'merge',
+    });
+    const fresh = await signatures.add(alice, map.id, HOME, { eveId: 'NEW-001' });
+
+    env.clock.set(added + 23.9 * HOUR);
+    expect(await sweeper.sweep(map.id, OFF)).toMatchObject({ signatures: 0 });
+    env.clock.set(added + 24 * HOUR);
+    // The site and the hidden system's signature; the linked hole, the custom entry and the new one stay.
+    expect(await sweeper.sweep(map.id, OFF)).toMatchObject({ signatures: 2 });
+    const left = (await env.ports.signatures.listForMap(map.id)).map((s) => s.eveId).sort();
+    expect(left).toEqual(['DKM-763', 'NEW-001', 'Tower at P3']);
+    const removed = await events('signature.removed');
+    // The hidden system's goes quietly.
+    expect(removed.map((e) => e.data)).toEqual([{ id: site.id, solarSystemId: HOME }]);
+    expect(removed[0]!.actor).toEqual({ kind: 'system', id: 'sweeper' });
+    // Deliberate removals: a merge or a Wanderer sync does not bring them back.
+    expect([...(await env.ports.stamps.tombstones(map.id, 'signature')).keys()].sort()).toEqual([
+      `${TAMA}:KCH-395`,
+      `${HOME}:GOM-778`,
+    ]);
+
+    // Once its connection is gone, the linked hole follows.
+    await connections.remove(alice, map.id, hole.id);
+    expect(await sweeper.sweep(map.id, OFF)).toMatchObject({ signatures: 1 });
+    expect(await env.ports.signatures.findById(map.id, linked.id)).toBeNull();
+
+    // A map that switched it off keeps them.
+    await new MapUseCases(env.ports).update(alice, map.id, { settings: { signatureLazyDelete: false } });
+    env.clock.set(added + 48 * HOUR);
+    expect(await sweeper.sweep(map.id, OFF)).toMatchObject({ signatures: 0 });
+    expect(await env.ports.signatures.findById(map.id, fresh.id)).not.toBeNull();
   });
 });

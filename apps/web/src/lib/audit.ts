@@ -115,6 +115,7 @@ const FIELD_LABELS: Record<string, string> = {
   endsAt: 'Timer',
   notes: 'Notes',
   signatureRetentionDays: 'Signatures kept',
+  signatureLazyDelete: 'Lazy delete of signatures',
   bookmarkNumber: 'Bookmark number',
   bookmarkParent: 'Numbered from',
   role: 'Role',
