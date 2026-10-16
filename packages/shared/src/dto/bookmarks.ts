@@ -71,7 +71,15 @@ export const DEFAULT_BOOKMARK_NUMBERING: BookmarkNumbering = { order: 'found', r
  * of a chain and a step down to find a free spot. Every system node has the same box (about 240 by
  * 100 with the bookmark tag above it), and a step leaves room for two badges on the line between.
  */
-export const SYSTEM_PLACEMENT = { x: 360, y: 150 } as const;
+export const SYSTEM_PLACEMENT = { x: 360, y: 144 } as const;
+
+/** The map's grid, in canvas pixels: the background's dots; every system's corner sits on it. */
+export const MAP_GRID = 24;
+
+/** A position on the map grid, so systems line up exactly. */
+export function onMapGrid(p: { x: number; y: number }): { x: number; y: number } {
+  return { x: Math.round(p.x / MAP_GRID) * MAP_GRID, y: Math.round(p.y / MAP_GRID) * MAP_GRID };
+}
 
 const VARIABLE = /\{([A-Za-z0-9]+)\}/g;
 

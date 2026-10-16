@@ -21,7 +21,7 @@ describe('systemClass', () => {
 
 describe('placement helpers', () => {
   it('moves a new system below the ones it would cover', () => {
-    expect(freeSpot({ x: 10.4, y: 0 }, [{ x: 0, y: 0 }])).toEqual({ x: 10, y: 150 });
+    expect(freeSpot({ x: 10.4, y: 0 }, [{ x: 0, y: 0 }])).toEqual({ x: 10, y: 144 });
     expect(freeSpot({ x: 500, y: 0 }, [{ x: 0, y: 0 }])).toEqual({ x: 500, y: 0 });
   });
 

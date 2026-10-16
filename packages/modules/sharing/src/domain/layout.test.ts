@@ -4,7 +4,7 @@ import { asPosition, besideNeighbour, placeFree } from './layout.js';
 describe('merged map layout', () => {
   it('places a system where its source has it, moved down until it covers nothing', () => {
     expect(placeFree({ x: 10, y: 20 }, [])).toEqual({ x: 10, y: 20 });
-    expect(placeFree({ x: 10, y: 20 }, [{ x: 0, y: 0 }])).toEqual({ x: 10, y: 170 });
+    expect(placeFree({ x: 10, y: 20 }, [{ x: 0, y: 0 }])).toEqual({ x: 10, y: 164 });
     expect(
       placeFree(null, [
         { x: 0, y: 0 },
