@@ -145,23 +145,12 @@ describe('routes section', () => {
     const select = section();
     const list = await screen.findByRole('list', { name: 'Routes to map hubs' });
     const rows = within(list).getAllByRole('listitem');
-<<<<<<< HEAD
     expect(rows.map((r) => r.textContent)).toEqual(['Jita3', 'AmarrNo connection']);
     expect(within(rows[1]!).getByText('No connection')).toBeTruthy();
-    const marks = within(rows[0]!).getAllByRole('button', { name: /Tama|Perimeter|Jita,/ });
-    expect(marks.map((m) => m.getAttribute('aria-label'))).toEqual([
-      '0.3 Tama, The Citadel, through a wormhole',
-      '0.9 Perimeter, The Forge, by jump bridge',
-      '0.9 Jita, The Forge',
-    ]);
-=======
-    expect(rows.map((r) => r.textContent)).toEqual(['Jita3', 'Amarr—']);
-    expect(within(rows[1]!).getByTitle('No route')).toBeTruthy();
     const marks = within(rows[0]!).getAllByRole('button', { name: /^0\.\d / });
     expect(marks.map((m) => m.getAttribute('aria-label'))).toEqual(['0.3 Tama', '0.9 Perimeter', '0.9 Jita']);
     // Off the stargates or not, a mark looks the same: no ring of our own.
     expect(marks.some((m) => m.hasAttribute('data-via'))).toBe(false);
->>>>>>> fix/route-strip-game-marks
     fireEvent.pointerEnter(marks[0]!);
     // The tooltip is the system: its security in the game's colour and its name, nothing else.
     const tip = within(rows[0]!).getByRole('tooltip');
