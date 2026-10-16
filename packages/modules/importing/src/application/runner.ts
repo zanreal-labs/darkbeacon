@@ -7,7 +7,7 @@ import {
   newId,
   type Actor,
 } from '@darkbeacon/core';
-import type { EventPayloads, EventType, MapRole } from '@darkbeacon/shared';
+import type { EventPayloads, EventType, MapRole, SignatureDto } from '@darkbeacon/shared';
 import {
   decideAccess,
   decideConnection,
@@ -16,7 +16,7 @@ import {
   removedHere,
 } from '../domain/decide.js';
 import type { ConnectionWrite, SignatureWrite, SystemWrite } from '../domain/decide.js';
-import { pairKey, translate, type ImportPlan } from '../domain/translate.js';
+import { pairKey, translate, type ImportPlan, type PlannedSignature } from '../domain/translate.js';
 import type { ImportJobRecord, ImportLinkRecord, ImportSyncRecord } from '../ports/repositories.js';
 import type { ImportingDeps } from './deps.js';
 import {
@@ -364,21 +364,30 @@ export class ImportRunner {
           await job.step();
           continue;
         }
+        // Linked to the connection Wanderer links it to, when the map connects the two.
+        const leadsTo = planned.linkedTo ?? planned.leadsTo;
         const connectionId =
-          planned.linkedTo !== null
-            ? (pairs.get(pairKey(planned.solarSystemId, planned.linkedTo)) ?? null)
-            : null;
+          leadsTo !== null ? (pairs.get(pairKey(planned.solarSystemId, leadsTo)) ?? null) : null;
         const link = links.get('signature', planned.key);
+        const current = here.get(planned.key);
         const decision = decideSignature(
           planned,
-          here.get(planned.key),
+          current,
           (link?.written as SignatureWrite) ?? null,
           connectionId,
         );
         await this.item(job, 'signatures', planned.name, async () => {
           await deps.uow.transaction(async () => {
-            let localId = here.get(planned.key)?.id;
-            if (decision.action === 'create' || decision.action === 'update') {
+            let localId = current?.id;
+            if (current && decision.action === 'unchanged' && seenSince(planned, current, deps.clock.now())) {
+              // Pasted again in Wanderer: the same record, its times following Wanderer's (the
+              // lazy delete counts from them).
+              await deps.target.seeSignature(actor, mapId, current.id, {
+                createdAt: planned.createdAt,
+                seenAt: planned.seenAt!,
+              });
+              step('signatures', 'unchanged');
+            } else if (decision.action === 'create' || decision.action === 'update') {
               const { signature, outcome } = await deps.target.putSignature(
                 actor,
                 mapId,
@@ -910,4 +919,20 @@ function describe(error: unknown): string {
 
 function sameSet(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((x) => b.includes(x));
+}
+
+/**
+ * Whether Wanderer saw an unchanged signature after the map did: pasted again there (a later
+ * `updated_at`) or added again under the same code (a later `inserted_at`).
+ */
+function seenSince(
+  planned: Pick<PlannedSignature, 'createdAt' | 'seenAt'>,
+  here: Pick<SignatureDto, 'createdAt' | 'updatedAt'>,
+  now: number,
+): boolean {
+  if (planned.seenAt === null) return false;
+  return (
+    Math.min(planned.seenAt, now) > here.updatedAt ||
+    (planned.createdAt !== null && Math.min(planned.createdAt, now) > here.createdAt)
+  );
 }

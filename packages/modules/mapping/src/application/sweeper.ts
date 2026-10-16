@@ -2,7 +2,7 @@ import type { Actor } from '@darkbeacon/core';
 import { SIGNATURE_LAZY_DELETE_HOURS } from '@darkbeacon/shared';
 import { lifetimeOf } from '../domain/intel.js';
 import { connectionLocked } from '../domain/lifetime.js';
-import type { Connection, MapSystem } from '../domain/map.js';
+import type { Connection, MapSystem, Signature } from '../domain/map.js';
 import { pairKey, signatureKey } from '../domain/stamps.js';
 import { MappingUseCases } from './base.js';
 import { renumberBookmarks } from './bookmark-numbers.js';
@@ -45,11 +45,14 @@ const HOUR = 60 * MINUTE;
  *   deliberate removal (tombstone), `expiredConnectionMinutes` later;
  * - a visible system nobody touched for `staleSystemMinutes`, with no connection, no tracked
  *   character in it, not locked and not home, is hidden (its intel stays);
- * - with the map's lazy delete on (the default), a scanner result added more than
- *   `SIGNATURE_LAZY_DELETE_HOURS` ago is removed, as a deliberate removal (tombstone, so a merge or
- *   a Wanderer sync does not bring it back), unless it leads through a connection still on the
- *   map (that hole's own lifetime decides; once the connection goes, the signature follows) or it
- *   is a custom entry someone wrote. Hidden systems' signatures go quietly.
+ * - with the map's lazy delete on (the default), a scanner result last pasted or changed more
+ *   than `SIGNATURE_LAZY_DELETE_HOURS` ago (`lastActive`: a paste that still lists it and an
+ *   import that still has it move `updatedAt` forward) is removed, unless it leads through a
+ *   connection still on the map (that hole's own lifetime decides; once the connection goes, the
+ *   signature is unlinked, a change, and gets its own day from then) or it is a custom entry
+ *   someone wrote. Its tombstone is an expiry (from `lastActive`): a Wanderer sync whose source saw
+ *   the signature after that brings it back, and it is judged again. Hidden systems' signatures go
+ *   quietly.
  * Locked connections and systems are left alone. Composites have nothing of their own to sweep.
  * Every change is an event of the map, audited as the `sweeper` process.
  */
@@ -155,11 +158,11 @@ export class ChainSweeper extends MappingUseCases {
     return result;
   }
 
-  /** Removes the map's scanner results older than the lazy delete allows; returns how many. */
+  /** Removes the map's scanner results idle longer than the lazy delete allows; returns how many. */
   private async lazyDelete(mapId: string, now: number): Promise<number> {
-    const addedBefore = now - SIGNATURE_LAZY_DELETE_HOURS * HOUR;
+    const activeBefore = now - SIGNATURE_LAZY_DELETE_HOURS * HOUR;
     const old = (await this.ports.signatures.listForMap(mapId)).filter(
-      (s) => !s.custom && s.createdAt <= addedBefore,
+      (s) => !s.custom && lastActive(s) <= activeBefore,
     );
     if (old.length === 0) return 0;
     const connections = new Set((await this.ports.connections.list(mapId)).map((c) => c.id));
@@ -172,12 +175,13 @@ export class ChainSweeper extends MappingUseCases {
       let removed = 0;
       for (const signature of doomed) {
         const current = await this.ports.signatures.findById(mapId, signature.id);
-        if (!current || current.createdAt > addedBefore) continue;
+        if (!current || lastActive(current) > activeBefore) continue;
         await this.ports.stamps.putTombstone(
           mapId,
           'signature',
           signatureKey(current.solarSystemId, current.eveId),
           now,
+          { from: lastActive(current) },
         );
         await this.ports.signatures.delete(mapId, current.id);
         if (visible.has(current.solarSystemId))
@@ -187,4 +191,12 @@ export class ChainSweeper extends MappingUseCases {
       return removed;
     });
   }
+}
+
+/**
+ * When a signature was last seen or changed: added, edited, pasted again (a paste that still lists
+ * it touches `updatedAt`) or still had by the source of an import (Wanderer's `updated_at`).
+ */
+export function lastActive(signature: Pick<Signature, 'createdAt' | 'updatedAt'>): number {
+  return Math.max(signature.createdAt, signature.updatedAt);
 }

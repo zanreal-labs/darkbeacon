@@ -23,7 +23,7 @@ const label = (days: number) =>
 
 /**
  * Map settings: the lazy delete (on unless switched off: scanner results go a day after they were
- * added, linked holes stay while their connection does) and how long signatures nobody changed or
+ * last pasted or changed, linked holes stay while their connection does) and how long signatures nobody changed or
  * scanned again are kept before the server removes them (14 days unless set). Admins.
  */
 export function SignatureRetention({ map }: { map: MapDto }) {
@@ -44,7 +44,7 @@ export function SignatureRetention({ map }: { map: MapDto }) {
     <Card>
       <CardHeader
         title="Old signatures"
-        description="When the server removes signatures. Every removal is in the map's history, and a Wanderer sync does not bring them back."
+        description="When the server removes signatures. Every removal is in the map's history; a Wanderer sync brings one back only once Wanderer has seen it again."
       />
       <CardBody>
         <div style={{ marginBottom: 'var(--dbk-space-4)' }}>
@@ -53,7 +53,7 @@ export function SignatureRetention({ map }: { map: MapDto }) {
             disabled={save.isPending}
             onCheckedChange={(on) => save.mutate({ settings: { signatureLazyDelete: on } })}
             label={`Lazy delete after ${SIGNATURE_LAZY_DELETE_HOURS} hours`}
-            description={`Scanned signatures are removed ${SIGNATURE_LAZY_DELETE_HOURS} hours after they were added, so yesterday's scan does not linger. Wormholes linked to a connection stay while the connection does; custom entries stay.`}
+            description={`Scanned signatures are removed ${SIGNATURE_LAZY_DELETE_HOURS} h after they were last pasted or changed, so yesterday's scan does not linger. Wormholes linked to a connection stay while the connection does; custom entries stay.`}
           />
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--dbk-space-3)', flexWrap: 'wrap' }}>

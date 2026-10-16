@@ -19,6 +19,7 @@ import { parseSignaturePaste } from '../domain/signature-paste.js';
 import { MappingUseCases, type EventBatch } from './base.js';
 import { renumberBookmarks } from './bookmark-numbers.js';
 import { patchConnection } from './connections.js';
+import { lastActive } from './sweeper.js';
 import { removeConnection } from './systems.js';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -377,7 +378,7 @@ export class SignatureUseCases extends MappingUseCases {
         let removed = 0;
         for (const signature of stale) {
           const system = await this.ports.systems.find(mapId, signature.solarSystemId);
-          await this.tombstone(signature, now);
+          await this.tombstone(signature, now, { from: lastActive(signature) });
           await this.ports.signatures.delete(mapId, signature.id);
           // A hidden system's signatures go quietly, as everything about it.
           if (system?.visible)
@@ -475,13 +476,17 @@ export class SignatureUseCases extends MappingUseCases {
     return (await this.ports.authors?.author(actor)) ?? null;
   }
 
-  /** Records a deletion, so maps merging this one drop older copies of the signature too. */
-  private tombstone(signature: Signature, at: number): Promise<void> {
+  /**
+   * Records a deletion, so maps merging this one drop older copies of the signature too: on
+   * purpose, or with `expired` the sweep's expiry (see `SignatureTombstone`).
+   */
+  private tombstone(signature: Signature, at: number, expired?: { from: number }): Promise<void> {
     return this.ports.stamps.putTombstone(
       signature.mapId,
       'signature',
       signatureKey(signature.solarSystemId, signature.eveId),
       at,
+      expired,
     );
   }
 

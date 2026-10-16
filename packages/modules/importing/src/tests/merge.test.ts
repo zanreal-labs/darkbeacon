@@ -260,10 +260,11 @@ describe('import decisions', () => {
 describe('signatures deleted on the map', () => {
   const key = '31002531:PKM-342';
   const deletedAt = Date.parse('2026-10-14T12:00:00Z');
-  const tombstones = new Map([[key, deletedAt]]);
+  const tombstones = new Map([[key, { deletedAt }]]);
+  const at = (iso: string | null) => (iso === null ? null : Date.parse(iso));
 
   it('are not added again while Wanderer has not changed them since', () => {
-    const wanderer = (at: string | null) => ({ key, remoteUpdatedAt: at === null ? null : Date.parse(at) });
+    const wanderer = (iso: string | null) => ({ key, remoteUpdatedAt: at(iso), seenAt: at(iso) });
     expect(removedHere(wanderer('2026-10-14T11:59:00Z'), new Map(), tombstones)).toBe(true);
     // Wanderer gave no time: the deletion here stands.
     expect(removedHere(wanderer(null), new Map(), tombstones)).toBe(true);
@@ -272,5 +273,27 @@ describe('signatures deleted on the map', () => {
     // Never deleted, or here again (pasted anew): merged as usual.
     expect(removedHere({ key: '31002531:EHX-232', remoteUpdatedAt: 0 }, new Map(), tombstones)).toBe(false);
     expect(removedHere(wanderer(null), new Map([[key, {}]]), tombstones)).toBe(false);
+  });
+
+  it('come back after the sweeper let them expire, once Wanderer has seen them since the expiry counted', () => {
+    // Expired at noon, last seen here the day before at 11:00.
+    const expired = new Map([[key, { deletedAt, expiredFrom: Date.parse('2026-10-13T11:00:00Z') }]]);
+    const wanderer = (iso: string | null) => ({ key, remoteUpdatedAt: at(iso), seenAt: at(iso) });
+    // Re-pasted in Wanderer after that (before the deletion, too): back, to be judged again.
+    expect(removedHere(wanderer('2026-10-13T17:56:00Z'), new Map(), expired)).toBe(false);
+    expect(removedHere(wanderer('2026-10-14T12:05:00Z'), new Map(), expired)).toBe(false);
+    // Not seen in Wanderer since: stays out, so the sweeper and the sync do not take turns.
+    expect(removedHere(wanderer('2026-10-13T11:00:00Z'), new Map(), expired)).toBe(true);
+    // Wanderer gave no time of its own (the read time stands in for it): stays out.
+    expect(
+      removedHere(
+        { key, remoteUpdatedAt: Date.parse('2026-10-14T13:00:00Z'), seenAt: null },
+        new Map(),
+        expired,
+      ),
+    ).toBe(true);
+    // An expiry from before the reason was kept with its time: any time Wanderer gives brings it back.
+    const unknown = new Map([[key, { deletedAt, expiredFrom: null }]]);
+    expect(removedHere(wanderer('2026-10-01T00:00:00Z'), new Map(), unknown)).toBe(false);
   });
 });

@@ -92,6 +92,10 @@ export class MappingChainTarget implements ChainTarget {
     return this.mapping.imports.signatureTombstones(actor, mapId);
   }
 
+  seeSignature(...args: Parameters<ChainTarget['seeSignature']>) {
+    return this.mapping.imports.seeSignature(...args);
+  }
+
   putSystem(...args: Parameters<ChainTarget['putSystem']>) {
     return this.mapping.imports.putSystem(...args);
   }

@@ -11,7 +11,7 @@ import type {
   StructureStatus,
   SystemLabelDto,
 } from '@darkbeacon/shared';
-import type { ConnectionWrite, SignatureWrite, SystemWrite } from '../domain/decide.js';
+import type { ConnectionWrite, SignatureTombstone, SignatureWrite, SystemWrite } from '../domain/decide.js';
 
 export type WriteOutcome = 'created' | 'updated' | 'unchanged';
 
@@ -70,9 +70,19 @@ export interface ChainTarget {
   signatures(actor: Actor, mapId: string): Promise<SignatureDto[]>;
   /**
    * When signatures were deleted on the map, by `<solar system id>:<ABC-123>` (the plan's keys):
-   * by someone, a paste, the sweeper or an earlier removal of an import.
+   * on purpose (by someone, a paste, an earlier removal of an import) or expired by the sweeper.
    */
-  signatureTombstones(actor: Actor, mapId: string): Promise<Map<string, number>>;
+  signatureTombstones(actor: Actor, mapId: string): Promise<Map<string, SignatureTombstone>>;
+  /**
+   * Wanderer still has the signature, unchanged: its times follow Wanderer's (`seenAt` moves
+   * `updatedAt` forward, a later `createdAt` moves it forward), same record, nothing published.
+   */
+  seeSignature(
+    actor: Actor,
+    mapId: string,
+    signatureId: string,
+    seen: { createdAt?: number | null; seenAt: number },
+  ): Promise<boolean>;
   putSystem(
     actor: Actor,
     mapId: string,

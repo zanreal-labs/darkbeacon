@@ -129,8 +129,15 @@ export interface PlannedSignature {
   fields: SignatureFields;
   /** The system the signature leads to; linked to the connection between them when there is one. */
   linkedTo: number | null;
+  /**
+   * The system Wanderer links it to, also when the plan has no connection there (`linkedTo` is
+   * null then): linked all the same when the map connects the two.
+   */
+  leadsTo: number | null;
   createdAt: number | null;
   remoteUpdatedAt: number | null;
+  /** Wanderer's own `updated_at` (when it was last pasted or changed there); null when not given. */
+  seenAt: number | null;
   extra: Record<string, unknown> | null;
 }
 
@@ -959,8 +966,10 @@ function translateSignature(
       custom,
     },
     linkedTo: s.linkedSystemId,
+    leadsTo: s.linkedSystemId,
     createdAt: s.insertedAt,
     remoteUpdatedAt: s.updatedAt ?? readAt,
+    seenAt: s.updatedAt,
     extra: Object.keys(extra).length > 0 ? extra : null,
   };
 }

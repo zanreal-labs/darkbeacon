@@ -10,6 +10,7 @@ import {
   type SystemLabelDto,
 } from '@darkbeacon/shared';
 import type { Connection, MapSystem, Passage, Signature } from '../domain/map.js';
+import type { SignatureTombstone } from '../ports/change-stamps.js';
 import {
   changes,
   compactConnection,
@@ -102,10 +103,39 @@ export class ChainImportUseCases extends MappingUseCases {
     return this.ports.signatures.listForMap(mapId);
   }
 
-  /** When signatures of the map were deleted, by `<solar system id>:<code>`. */
-  async signatureTombstones(actor: Actor | null, mapId: string): Promise<Map<string, number>> {
+  /**
+   * When signatures of the map were deleted, by `<solar system id>:<code>`, and whether the
+   * sweeper let them expire (see `SignatureTombstone`).
+   */
+  async signatureTombstones(actor: Actor | null, mapId: string): Promise<Map<string, SignatureTombstone>> {
     await this.authorize(actor, mapId, 'viewer');
-    return this.ports.stamps.tombstones(mapId, 'signature');
+    return this.ports.stamps.signatureTombstones(mapId);
+  }
+
+  /**
+   * The source still has the signature, unchanged: its times follow the source's, so the lazy
+   * delete counts from when it was last seen there. `seenAt` (the source's last change, never in
+   * the future) moves `updatedAt` forward; `createdAt` moves forward to the source's when the
+   * source added it again since (a re-paste under the same code). The record keeps its id; nothing
+   * is published (as a paste that sees a signature again). False when there was nothing to move.
+   */
+  async seeSignature(
+    actor: Actor | null,
+    mapId: string,
+    signatureId: string,
+    seen: { createdAt?: number | null; seenAt: number },
+  ): Promise<boolean> {
+    const who = await this.authorizeEdit(actor, mapId);
+    return this.write(who, mapId, async () => {
+      const current = await this.ports.signatures.findById(mapId, signatureId);
+      if (!current) return false;
+      const now = this.ports.clock.now();
+      const createdAt = followCreated(current.createdAt, seen.createdAt ?? undefined, now);
+      const updatedAt = Math.max(current.updatedAt, createdAt, Math.min(seen.seenAt, now));
+      if (createdAt === current.createdAt && updatedAt === current.updatedAt) return false;
+      await this.ports.signatures.update({ ...current, createdAt, updatedAt });
+      return true;
+    });
   }
 
   /**
@@ -324,10 +354,14 @@ export class ChainImportUseCases extends MappingUseCases {
       );
       if (current) {
         if (!changes(current, patch)) return { signature: current, outcome: 'unchanged' as const };
+        // The same record (its id stays), with the source's times: added again there since moves
+        // `createdAt` forward.
+        const added = followCreated(current.createdAt, createdAt, now);
         const next: Signature = {
           ...current,
           ...patch,
-          updatedAt: changeTime(current.updatedAt, changedAt, now),
+          createdAt: added,
+          updatedAt: changeTime(Math.max(current.updatedAt, added), changedAt, now),
         };
         await this.ports.signatures.update(next);
         if (system.visible) events.add('signature.updated', next, current);
@@ -510,4 +544,13 @@ export class ChainImportUseCases extends MappingUseCases {
  */
 function changeTime(floor: number, changedAt: number | undefined, now: number): number {
   return Math.max(floor, Math.min(changedAt ?? now, now));
+}
+
+/**
+ * `createdAt` of a record the source added again since it was created here (a re-paste of the
+ * same code there): the source's time, never in the future; the record's own otherwise.
+ */
+function followCreated(current: number, sourceCreatedAt: number | undefined, now: number): number {
+  if (sourceCreatedAt === undefined || sourceCreatedAt <= current) return current;
+  return Math.min(sourceCreatedAt, now);
 }

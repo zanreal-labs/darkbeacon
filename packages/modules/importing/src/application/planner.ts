@@ -16,6 +16,7 @@ import {
   decideSystem,
   removedHere,
   type ConnectionWrite,
+  type SignatureTombstone,
   type SignatureWrite,
   type SystemWrite,
 } from '../domain/decide.js';
@@ -75,8 +76,8 @@ export interface TargetState {
   systems: MapSystemDto[];
   connections: ConnectionDto[];
   signatures: SignatureDto[];
-  /** When signatures were deleted on the map (by plan key); those are not added again. */
-  signatureTombstones?: ReadonlyMap<string, number>;
+  /** When and how signatures were deleted on the map (by plan key); see `removedHere`. */
+  signatureTombstones?: ReadonlyMap<string, SignatureTombstone>;
   /** Null when the caller may not see or change access rules. */
   rules: AccessRuleDto[] | null;
 }
@@ -188,7 +189,7 @@ export function assess(
   }
 
   const signatures = new Map(state.signatures.map((s) => [`${s.solarSystemId}:${s.eveId}`, s]));
-  const deletedHere = state.signatureTombstones ?? new Map<string, number>();
+  const deletedHere = state.signatureTombstones ?? new Map<string, SignatureTombstone>();
   for (const planned of plan.signatures) {
     if (
       (!systems.has(planned.solarSystemId) &&
@@ -202,7 +203,9 @@ export function assess(
       planned.linkedTo !== null && linkedPairs.has(pairKey(planned.solarSystemId, planned.linkedTo));
     const connectionId = linked
       ? (connections.get(pairKey(planned.solarSystemId, planned.linkedTo!))?.id ?? 'new')
-      : null;
+      : planned.leadsTo !== null
+        ? (connections.get(pairKey(planned.solarSystemId, planned.leadsTo))?.id ?? null)
+        : null;
     const base = links.get('signature', planned.key)?.written as SignatureWrite | undefined;
     const decision = decideSignature(planned, signatures.get(planned.key), base ?? null, connectionId);
     count(outcome.signatures!, decision.action);

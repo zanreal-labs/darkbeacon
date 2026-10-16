@@ -658,6 +658,165 @@ describeEachDialect('imports from Wanderer over HTTP', (t) => {
     expect(left.has('PKM-342')).toBe(false);
   }, 60_000);
 
+  /** A map imported from the fake Wanderer that keeps syncing, with ways to pull and look at it. */
+  const syncing = async () => {
+    const job = await importNew(owner, { keepSyncing: { intervalMinutes: 5 } });
+    const mapId = job.mapId!;
+    const deps = app.get<ImportingDeps>(IMPORTING_DEPS);
+    const syncId = (await owner.json<ImportSyncDto>(`/api/maps/${mapId}/import-sync`)).id;
+    const actor = (await deps.syncs.find(syncId))!.actor;
+    return {
+      mapId,
+      deps,
+      actor,
+      signatures: async () => new Map((await deps.target.signatures(actor, mapId)).map((s) => [s.eveId, s])),
+      tombstone: async (key: string) => (await deps.target.signatureTombstones(actor, mapId)).get(key),
+      pull: async () => {
+        await deps.syncs.update({ ...(await deps.syncs.find(syncId))!, nextRunAt: 0 });
+        expect(await app.get(SyncScheduler).tick()).toBe(1);
+        await drain();
+        const pulled = (await owner.json<ImportSyncDto>(`/api/maps/${mapId}/import-sync`))!;
+        const done = await owner.json<ImportJobDto>(`/api/imports/${pulled.lastJobId}`);
+        expect(done.status).toBe('done');
+        return done;
+      },
+    };
+  };
+  const HOUR = 60 * 60 * 1000;
+  const hoursAgo = (hours: number) => new Date(Date.now() - hours * HOUR).toISOString();
+  const wandererRow = (eveId: string) => wanderer.map.signatures.find((g) => g.eve_id === eveId)!;
+  const sweep = () => app.get(SweeperRuntime).runOnce();
+
+  it("keeps a signature Wanderer pasted again alive: the same record, with Wanderer's times", async () => {
+    await allowPrivate();
+    const old = hoursAgo(30);
+    for (const eveId of ['PKM-342', 'EHX-232', 'NNV-694'])
+      Object.assign(wandererRow(eveId), { inserted_at: old, updated_at: old });
+    const map = await syncing();
+    const before = await map.signatures();
+    expect(before.get('PKM-342')).toMatchObject({ createdAt: Date.parse(old), updatedAt: Date.parse(old) });
+
+    // In Wanderer: the relic site pasted again (a later `updated_at`), the data site deleted and
+    // pasted anew under the same code (a new row), the gas site left alone.
+    const repasted = hoursAgo(1);
+    const readded = hoursAgo(2);
+    wandererRow('PKM-342').updated_at = repasted;
+    Object.assign(wandererRow('EHX-232'), {
+      id: 'c3b7c8f4-5d0e-4c4a-9d0a-222222222222',
+      inserted_at: readded,
+      updated_at: readded,
+    });
+    const pull = await map.pull();
+    expect(pull.outcome.signatures).toMatchObject({ created: 0, updated: 0, removed: 0 });
+    const after = await map.signatures();
+    // No second record: each keeps its id, its times follow Wanderer's.
+    expect(after.size).toBe(before.size);
+    expect(after.get('PKM-342')).toMatchObject({
+      id: before.get('PKM-342')!.id,
+      createdAt: Date.parse(old),
+      updatedAt: Date.parse(repasted),
+    });
+    expect(after.get('EHX-232')).toMatchObject({
+      id: before.get('EHX-232')!.id,
+      createdAt: Date.parse(readded),
+      updatedAt: Date.parse(readded),
+    });
+
+    // The lazy delete counts from those: only the one Wanderer did not see for a day goes.
+    expect(await sweep()).toMatchObject({ signatures: 1 });
+    const left = await map.signatures();
+    expect(left.has('PKM-342')).toBe(true);
+    expect(left.has('EHX-232')).toBe(true);
+    expect(left.has('NNV-694')).toBe(false);
+
+    // Wanderer still lists it, not seen since the expiry counted: the sync does not bring it back,
+    // so the two do not take turns.
+    const again = await map.pull();
+    expect(again.outcome.signatures).toMatchObject({ created: 0, removed: 0 });
+    expect((await map.signatures()).has('NNV-694')).toBe(false);
+    expect(await sweep()).toMatchObject({ signatures: 0 });
+  }, 60_000);
+
+  it('brings back what the sweeper let expire once Wanderer has seen it since, linked to its connection', async () => {
+    await allowPrivate();
+    // As on the map in production: first imported days ago ...
+    const first = hoursAgo(72);
+    for (const eveId of ['PKM-342', 'EHX-232', 'DKM-763'])
+      Object.assign(wandererRow(eveId), { inserted_at: first, updated_at: first });
+    // ... with a hole whose connection Wanderer did not have yet.
+    const at = wanderer.map.connections.findIndex(
+      (c) => c.solar_system_source === 31002531 && c.solar_system_target === 31000399,
+    );
+    const [connection] = wanderer.map.connections.splice(at, 1);
+    const map = await syncing();
+    expect((await map.signatures()).get('DKM-763')).toMatchObject({ connectionId: null, group: 'wormhole' });
+
+    // In Wanderer: re-pasted yesterday evening (one as a new row under the same code), and the
+    // hole linked to its connection overnight.
+    const inserted = hoursAgo(19);
+    const pasted = hoursAgo(18);
+    const linked = hoursAgo(10);
+    Object.assign(wandererRow('PKM-342'), {
+      id: 'c3b7c8f4-5d0e-4c4a-9d0a-333333333333',
+      inserted_at: inserted,
+      updated_at: pasted,
+    });
+    wandererRow('EHX-232').updated_at = pasted;
+    wandererRow('DKM-763').updated_at = linked;
+    wanderer.map.connections.push(connection!);
+
+    // The sweeper gets there before the next pull: here they look idle for three days.
+    expect(await sweep()).toMatchObject({ signatures: 3 });
+    const gone = await map.signatures();
+    for (const eveId of ['PKM-342', 'EHX-232', 'DKM-763']) expect(gone.has(eveId)).toBe(false);
+    expect(await map.tombstone('31002531:PKM-342')).toMatchObject({ expiredFrom: Date.parse(first) });
+
+    // The pull brings them back with Wanderer's times, the hole linked to its connection.
+    const pull = await map.pull();
+    expect(pull.outcome.signatures).toMatchObject({ created: 3 });
+    const back = await map.signatures();
+    expect(back.get('PKM-342')).toMatchObject({
+      createdAt: Date.parse(inserted),
+      updatedAt: Date.parse(pasted),
+    });
+    expect(back.get('EHX-232')).toMatchObject({
+      createdAt: Date.parse(first),
+      updatedAt: Date.parse(pasted),
+    });
+    const hole = (await map.deps.target.connections(map.actor, map.mapId)).find(
+      (c) => c.source === 31002531 && c.target === 31000399,
+    );
+    expect(back.get('DKM-763')).toMatchObject({
+      connectionId: hole!.id,
+      group: 'wormhole',
+      updatedAt: Date.parse(linked),
+    });
+
+    // Judged again by when Wanderer last saw them: all within the day, and the hole stays while
+    // its connection does. The next pull changes nothing.
+    expect(await sweep()).toMatchObject({ signatures: 0 });
+    const again = await map.pull();
+    expect(again.outcome.signatures).toMatchObject({ created: 0, updated: 0, removed: 0 });
+    expect((await map.signatures()).size).toBe(back.size);
+  }, 60_000);
+
+  it("does not undo a person's deletion, even of a signature Wanderer pasted again just before", async () => {
+    await allowPrivate();
+    const map = await syncing();
+    wandererRow('PKM-342').updated_at = hoursAgo(0.1);
+    const pkm = (await map.signatures()).get('PKM-342')!;
+    await owner.request(`/api/maps/${map.mapId}/signatures/${pkm.id}`, { method: 'DELETE' });
+    const tombstone = await map.tombstone('31002531:PKM-342');
+    // On purpose: no expiry.
+    expect(tombstone).toEqual({ deletedAt: expect.any(Number) });
+
+    const pull = await map.pull();
+    expect(pull.outcome.signatures!.created).toBe(0);
+    expect((await map.signatures()).has('PKM-342')).toBe(false);
+    await sweep();
+    expect(await map.tombstone('31002531:PKM-342')).toEqual(tombstone);
+  }, 60_000);
+
   it('cancels a staged import, which cannot start then', async () => {
     await allowPrivate();
     const preview = await owner.json<ImportJobDto>('/api/imports/wanderer', {

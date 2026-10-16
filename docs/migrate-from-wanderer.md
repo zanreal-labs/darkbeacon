@@ -140,8 +140,10 @@ systems of a connection, system and signature id, the subject of an access rule)
 - **Removals** (asked for) remove only what an earlier import brought and nobody changed here since.
 - **Signatures on a sync** are the exception: every pull removes the ones Wanderer deleted or replaced by a
   re-scan, whether or not removals were asked for (still only what an earlier pull brought and nobody changed
-  here since). A signature deleted here, by someone or by the lazy delete, is not brought back while
-  Wanderer has not changed it since.
+  here since). A signature someone deleted here is not brought back while Wanderer has not changed it
+  since. One the lazy delete removed comes back once Wanderer has seen it again (pasted it after the
+  moment the lazy delete counted from), with Wanderer's times. A signature Wanderer pastes again keeps its
+  record here; its times follow Wanderer's, so the lazy delete counts from Wanderer's last paste.
 - **Access rules**: a subject without a rule gets one; a rule an earlier import added and nobody changed
   follows Wanderer's role; any other rule here is kept as it is.
 

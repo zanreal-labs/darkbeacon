@@ -15,6 +15,7 @@ import {
   type PassageRepository,
   type Signature,
   type SignatureRepository,
+  type SignatureTombstone,
   type SystemRepository,
 } from '@darkbeacon/mapping';
 import type { LifetimeMark, SignatureKind } from '@darkbeacon/shared';
@@ -113,7 +114,16 @@ export interface MappingTables {
     created_by: string | null;
     updated_by: string | null;
   };
-  map_tombstones: { map_id: string; kind: string; key: string; deleted_at: number };
+  map_tombstones: {
+    map_id: string;
+    kind: string;
+    key: string;
+    deleted_at: number;
+    /** `expired` for the sweeper's removals; null for deletions on purpose. */
+    reason: string | null;
+    /** For expiries: when the signature was last seen or changed (what the expiry counted from). */
+    expired_from: number | null;
+  };
   map_connection_passages: {
     id: string;
     map_id: string;
@@ -598,16 +608,38 @@ export class KyselyChangeStamps extends Repository implements ChangeStamps {
     return new Map(rows.map((r) => [r.key, Number(r.deleted_at)]));
   }
 
+  async signatureTombstones(mapId: string): Promise<Map<string, SignatureTombstone>> {
+    const rows = await this.db
+      .selectFrom('map_tombstones')
+      .select(['key', 'deleted_at', 'reason', 'expired_from'])
+      .where('map_id', '=', mapId)
+      .where('kind', '=', 'signature')
+      .execute();
+    return new Map(
+      rows.map((r) => [
+        r.key,
+        {
+          deletedAt: Number(r.deleted_at),
+          ...(r.reason === 'expired'
+            ? { expiredFrom: r.expired_from == null ? null : Number(r.expired_from) }
+            : {}),
+        },
+      ]),
+    );
+  }
+
   async putTombstone(
     mapId: string,
     kind: 'connection' | 'signature',
     key: string,
     at: number,
+    expired?: { from: number | null },
   ): Promise<void> {
+    const what = { reason: expired ? 'expired' : null, expired_from: expired?.from ?? null };
     await this.db
       .insertInto('map_tombstones')
-      .values({ map_id: mapId, kind, key, deleted_at: at })
-      .onConflict((oc) => oc.columns(['map_id', 'kind', 'key']).doUpdateSet({ deleted_at: at }))
+      .values({ map_id: mapId, kind, key, deleted_at: at, ...what })
+      .onConflict((oc) => oc.columns(['map_id', 'kind', 'key']).doUpdateSet({ deleted_at: at, ...what }))
       .execute();
   }
 

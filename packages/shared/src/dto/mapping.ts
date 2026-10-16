@@ -23,8 +23,9 @@ export const MapSettings = z.object({
    */
   signatureRetentionDays: z.number().int().min(0).max(365).optional(),
   /**
-   * Lazy delete: scanner results are removed `SIGNATURE_LAZY_DELETE_HOURS` after they were added
-   * (by the sweeper), unless they lead through a connection on the map. Custom entries stay.
+   * Lazy delete: scanner results are removed `SIGNATURE_LAZY_DELETE_HOURS` after they were last
+   * pasted or changed (by the sweeper; a paste or a Wanderer sync that still has one counts as
+   * seeing it again), unless they lead through a connection on the map. Custom entries stay.
    * Absent means on.
    */
   signatureLazyDelete: z.boolean().optional(),
@@ -47,7 +48,7 @@ export type MapSettings = z.infer<typeof MapSettings>;
 
 export const DEFAULT_SIGNATURE_RETENTION_DAYS = 14;
 
-/** How long after it was added a signature goes when the map's lazy delete is on. */
+/** How long after it was last pasted or changed a signature goes when the map's lazy delete is on. */
 export const SIGNATURE_LAZY_DELETE_HOURS = 24;
 
 export const Color = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'expected #rrggbb');

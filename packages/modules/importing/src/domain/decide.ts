@@ -202,21 +202,40 @@ export function decideSignature(
   return outcome(patch, wanderer, conflicts);
 }
 
+/** A signature deleted on the map: when, and whether the sweeper let it expire. */
+export interface SignatureTombstone {
+  deletedAt: number;
+  /**
+   * Present when the sweeper let it expire (lazy delete, retention) instead of someone deleting
+   * it: when it was last seen or changed, which the expiry counted from (null: not known).
+   */
+  expiredFrom?: number | null;
+}
+
 /**
- * Whether a signature Wanderer still has was deleted on the map after Wanderer last changed it
- * (by someone, a paste, the sweeper's lazy delete or an earlier removal): then it is not added
- * again. One Wanderer changed since (scanned again, edited) comes back; one whose change time
- * Wanderer did not give stays deleted.
+ * Whether a signature Wanderer still has stays deleted on the map:
+ * - deleted on purpose (by someone, a paste's "remove missing", an earlier removal of an import):
+ *   while Wanderer has not changed it since the deletion; one Wanderer changed since (scanned
+ *   again, edited) comes back, one whose change time Wanderer did not give stays deleted;
+ * - expired by the sweeper: only while Wanderer has not seen it since the moment the expiry
+ *   counted from (`seenAt`: Wanderer's own `updated_at`, null when it gave none). A signature
+ *   Wanderer saw later comes back with Wanderer's times, and the sweeper judges it again; one it
+ *   did not see since stays out, so the two do not take turns removing and adding it.
  */
 export function removedHere(
-  planned: Pick<PlannedSignature, 'key' | 'remoteUpdatedAt'>,
+  planned: Pick<PlannedSignature, 'key' | 'remoteUpdatedAt'> & { seenAt?: number | null },
   here: ReadonlyMap<string, unknown>,
-  tombstones: ReadonlyMap<string, number>,
+  tombstones: ReadonlyMap<string, SignatureTombstone>,
 ): boolean {
   if (here.has(planned.key)) return false;
-  const deletedAt = tombstones.get(planned.key);
-  if (deletedAt === undefined) return false;
-  return planned.remoteUpdatedAt === null || planned.remoteUpdatedAt <= deletedAt;
+  const tombstone = tombstones.get(planned.key);
+  if (tombstone === undefined) return false;
+  if (tombstone.expiredFrom !== undefined) {
+    const seenAt = planned.seenAt ?? null;
+    if (seenAt === null) return true;
+    return tombstone.expiredFrom !== null && seenAt <= tombstone.expiredFrom;
+  }
+  return planned.remoteUpdatedAt === null || planned.remoteUpdatedAt <= tombstone.deletedAt;
 }
 
 /**

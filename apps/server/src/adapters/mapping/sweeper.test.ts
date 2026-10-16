@@ -128,7 +128,7 @@ describeEachDialect('sweeper', (t) => {
     expect(await sweeper.sweep(composite.id, ON)).toEqual({ eol: 0, deleted: 0, hidden: 0, signatures: 0 });
   });
 
-  it('lazily deletes signatures a day after they were added, as itself, keeping linked holes and custom entries', async () => {
+  it('lazily deletes signatures a day after they were last pasted or changed, as itself, keeping linked holes and custom entries', async () => {
     const OFF: SweepSettings = { expiredConnectionMinutes: null, autoEol: false, staleSystemMinutes: null };
     const signatures = new SignatureUseCases(env.ports);
     const hole = await connections.add(alice, map.id, { source: HOME, target: C2 });
@@ -139,41 +139,81 @@ describeEachDialect('sweeper', (t) => {
     await signatures.add(alice, map.id, TAMA, { eveId: 'KCH-395', group: 'gas' });
     await systems.remove(alice, map.id, TAMA);
     const added = env.clock.now();
-
-    // A paste an hour later sees the site again: the day still counts from when it was added.
-    env.clock.set(added + HOUR);
-    await signatures.paste(alice, map.id, HOME, {
+    const paste = {
       text: 'GOM-778\tCosmic Signature\tGas Site\tSizeable Perimeter Reservoir\t100.0%\t4.2 AU',
-      mode: 'merge',
-    });
+      mode: 'merge' as const,
+    };
+
+    // A paste an hour later names the site: changed, so its day starts again.
+    env.clock.set(added + HOUR);
+    await signatures.paste(alice, map.id, HOME, paste);
     const fresh = await signatures.add(alice, map.id, HOME, { eveId: 'NEW-001' });
 
     env.clock.set(added + 23.9 * HOUR);
     expect(await sweeper.sweep(map.id, OFF)).toMatchObject({ signatures: 0 });
     env.clock.set(added + 24 * HOUR);
-    // The site and the hidden system's signature; the linked hole, the custom entry and the new one stay.
-    expect(await sweeper.sweep(map.id, OFF)).toMatchObject({ signatures: 2 });
+    // The hidden system's signature, idle for a day; the rest was pasted or added since.
+    expect(await sweeper.sweep(map.id, OFF)).toMatchObject({ signatures: 1 });
+
+    // A paste that still lists the site, unchanged, keeps it alive.
+    env.clock.set(added + 24.5 * HOUR);
+    await signatures.paste(alice, map.id, HOME, paste);
+    env.clock.set(added + 25 * HOUR);
+    expect(await sweeper.sweep(map.id, OFF)).toMatchObject({ signatures: 1 });
+    expect(await env.ports.signatures.findById(map.id, fresh.id)).toBeNull();
+    env.clock.set(added + 48.4 * HOUR);
+    expect(await sweeper.sweep(map.id, OFF)).toMatchObject({ signatures: 0 });
+    env.clock.set(added + 48.5 * HOUR);
+    expect(await sweeper.sweep(map.id, OFF)).toMatchObject({ signatures: 1 });
     const left = (await env.ports.signatures.listForMap(map.id)).map((s) => s.eveId).sort();
-    expect(left).toEqual(['DKM-763', 'NEW-001', 'Tower at P3']);
+    expect(left).toEqual(['DKM-763', 'Tower at P3']);
     const removed = await events('signature.removed');
     // The hidden system's goes quietly.
-    expect(removed.map((e) => e.data)).toEqual([{ id: site.id, solarSystemId: HOME }]);
-    expect(removed[0]!.actor).toEqual({ kind: 'system', id: 'sweeper' });
-    // Deliberate removals: a merge or a Wanderer sync does not bring them back.
-    expect([...(await env.ports.stamps.tombstones(map.id, 'signature')).keys()].sort()).toEqual([
-      `${TAMA}:KCH-395`,
-      `${HOME}:GOM-778`,
+    expect(removed.map((e) => e.data)).toEqual([
+      { id: fresh.id, solarSystemId: HOME },
+      { id: site.id, solarSystemId: HOME },
     ]);
+    expect(removed[0]!.actor).toEqual({ kind: 'system', id: 'sweeper' });
+    // Expiries, counted from when each was last seen: a sync whose source saw one later brings it back.
+    const tombstones = await env.ports.stamps.signatureTombstones(map.id);
+    expect(Object.fromEntries(tombstones)).toEqual({
+      [`${TAMA}:KCH-395`]: { deletedAt: added + 24 * HOUR, expiredFrom: added },
+      [`${HOME}:NEW-001`]: { deletedAt: added + 25 * HOUR, expiredFrom: added + HOUR },
+      [`${HOME}:GOM-778`]: { deletedAt: added + 48.5 * HOUR, expiredFrom: added + 24.5 * HOUR },
+    });
 
-    // Once its connection is gone, the linked hole follows.
+    // Once its connection is gone, the hole is a signature like the others: unlinked (a change)
+    // now, it goes a day later.
     await connections.remove(alice, map.id, hole.id);
+    expect(await sweeper.sweep(map.id, OFF)).toMatchObject({ signatures: 0 });
+    env.clock.set(added + 72.5 * HOUR);
     expect(await sweeper.sweep(map.id, OFF)).toMatchObject({ signatures: 1 });
     expect(await env.ports.signatures.findById(map.id, linked.id)).toBeNull();
 
     // A map that switched it off keeps them.
+    const late = await signatures.add(alice, map.id, HOME, { eveId: 'LAT-001' });
     await new MapUseCases(env.ports).update(alice, map.id, { settings: { signatureLazyDelete: false } });
-    env.clock.set(added + 48 * HOUR);
+    env.clock.set(added + 96 * HOUR);
     expect(await sweeper.sweep(map.id, OFF)).toMatchObject({ signatures: 0 });
-    expect(await env.ports.signatures.findById(map.id, fresh.id)).not.toBeNull();
+    expect(await env.ports.signatures.findById(map.id, late.id)).not.toBeNull();
+  });
+
+  it('a deletion on purpose replaces an expiry of the same signature', async () => {
+    const signatures = new SignatureUseCases(env.ports);
+    const OFF: SweepSettings = { expiredConnectionMinutes: null, autoEol: false, staleSystemMinutes: null };
+    await signatures.add(alice, map.id, HOME, { eveId: 'GOM-778' });
+    const added = env.clock.now();
+    env.clock.set(added + 25 * HOUR);
+    expect(await sweeper.sweep(map.id, OFF)).toMatchObject({ signatures: 1 });
+    expect((await env.ports.stamps.signatureTombstones(map.id)).get(`${HOME}:GOM-778`)).toEqual({
+      deletedAt: added + 25 * HOUR,
+      expiredFrom: added,
+    });
+    // Pasted again, then deleted by someone: that deletion holds.
+    const again = await signatures.add(alice, map.id, HOME, { eveId: 'GOM-778' });
+    await signatures.remove(alice, map.id, again.id);
+    expect((await env.ports.stamps.signatureTombstones(map.id)).get(`${HOME}:GOM-778`)).toEqual({
+      deletedAt: added + 25 * HOUR,
+    });
   });
 });
