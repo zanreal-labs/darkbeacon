@@ -9,9 +9,10 @@ export const DEFAULT_INSTANCE_SETTINGS: InstanceSettings = {
   eventRetentionDays: null,
   loginMethod: null,
   defaultMapId: null,
-  // The sweeper, as Wanderer does it: delete holes once they cannot exist any more, mark them EOL
-  // when their last 4 hours begin, hide systems left alone for 15 minutes.
-  expiredConnectionMinutes: 0,
+  // The sweeper: delete holes an hour after they cannot exist any more (estimates can be off, and
+  // a hole taken away under a pilot costs more than one left a little long), mark them EOL when
+  // their last 4 hours begin, hide systems left alone for 15 minutes.
+  expiredConnectionMinutes: 60,
   autoEol: true,
   staleSystemMinutes: 15,
   mcpMode: 'off',

@@ -6,7 +6,12 @@ import {
   hasMapRole,
   type Actor,
 } from '@darkbeacon/core';
-import type { AddSystemRequest, MoveSystemsRequest, UpdateSystemRequest } from '@darkbeacon/shared';
+import {
+  SYSTEM_PLACEMENT,
+  type AddSystemRequest,
+  type MoveSystemsRequest,
+  type UpdateSystemRequest,
+} from '@darkbeacon/shared';
 import type { Connection, MapSystem } from '../domain/map.js';
 import { changes, defined, nextPosition } from '../domain/rules.js';
 import { MappingUseCases, type EventBatch, type MappingPorts } from './base.js';
@@ -25,15 +30,16 @@ export class SystemUseCases extends MappingUseCases {
     return this.write(who, mapId, async (events) => {
       const existing = await this.ports.systems.find(mapId, request.solarSystemId);
       if (existing?.visible) return existing;
-      if (existing)
-        return this.restore(
-          events,
-          { ...existing, position: request.position ?? existing.position },
-          existing,
-        );
+      const placed = (await this.ports.systems.list(mapId)).filter((s) => s.visible);
+      if (existing) {
+        // Back where it was, unless something has taken that spot meanwhile.
+        const taken = placed.some((s) => overlaps(s.position, existing.position));
+        const position =
+          request.position ?? (taken ? nextPosition(placed.map((s) => s.position)) : existing.position);
+        return this.restore(events, { ...existing, position }, existing);
+      }
 
       const now = this.ports.clock.now();
-      const placed = (await this.ports.systems.list(mapId)).filter((s) => s.visible);
       const system: MapSystem = {
         mapId,
         solarSystemId: request.solarSystemId,
@@ -206,4 +212,9 @@ export async function removeConnection(
     }
   }
   events.add('connection.removed', { id: connection.id }, connection);
+}
+
+/** Whether two systems placed at these corners would cover each other. */
+function overlaps(a: { x: number; y: number }, b: { x: number; y: number }): boolean {
+  return Math.abs(a.x - b.x) < SYSTEM_PLACEMENT.x && Math.abs(a.y - b.y) < SYSTEM_PLACEMENT.y;
 }

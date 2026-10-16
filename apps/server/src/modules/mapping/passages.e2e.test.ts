@@ -233,8 +233,8 @@ describeEachDialect('passages, rolling and the sweeper over HTTP', (t) => {
     const sweeper = app.get(SweeperRuntime);
     expect(await sweeper.runOnce()).toMatchObject({ deleted: 0 });
 
-    // Four hours after it was marked EOL it is gone in game; the sweeper deletes it.
-    vi.useFakeTimers({ now: Date.now() + 4 * 60 * 60 * 1000 + 1000, toFake: ['Date'] });
+    // Four hours after it was marked EOL it is gone in game; the sweeper deletes it an hour later.
+    vi.useFakeTimers({ now: Date.now() + 5 * 60 * 60 * 1000 + 1000, toFake: ['Date'] });
     try {
       expect(await sweeper.runOnce()).toMatchObject({ deleted: 1 });
     } finally {

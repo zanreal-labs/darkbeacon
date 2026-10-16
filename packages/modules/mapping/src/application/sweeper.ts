@@ -36,13 +36,16 @@ export const SWEEPER: Actor = { kind: 'system', id: 'sweeper' };
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
+/** A hole jumped this recently is in use: the sweeper never deletes it then. */
+export const IN_USE_MS = HOUR;
 
 /**
  * Keeps a map's chain honest as time passes, like Wanderer's cleanup ticks:
  * - a wormhole whose lifetime's last 4 hours begin is marked EOL (`eolAt` = that moment), which
  *   the Discord notifier and webhooks report like any EOL;
- * - a wormhole past the latest moment it can exist (`connectionLifetime`) is deleted, as a
- *   deliberate removal (tombstone), `expiredConnectionMinutes` later;
+ * - a wormhole past the latest moment it can exist (`connectionLifetime`, dated from its sightings:
+ *   drawn, its signature pasted, a jump) is deleted, as a deliberate removal (tombstone),
+ *   `expiredConnectionMinutes` later, unless someone jumped it in the last hour;
  * - a visible system nobody touched for `staleSystemMinutes`, with no connection, no tracked
  *   character in it, not locked and not home, is hidden (its intel stays);
  * - with the map's lazy delete on (the default), a scanner result last pasted or changed more
@@ -67,6 +70,7 @@ export class ChainSweeper extends MappingUseCases {
     const systems = await this.ports.systems.list(mapId);
     const visible = new Set(systems.filter((s) => s.visible).map((s) => s.solarSystemId));
     const signatures = await this.ports.signatures.listForMap(mapId);
+    const passages = await this.ports.passages.listForMap(mapId);
     const expired: Connection[] = [];
     const turning: Array<{ connection: Connection; eolAt: number }> = [];
     for (const connection of await this.ports.connections.list(mapId)) {
@@ -77,11 +81,19 @@ export class ChainSweeper extends MappingUseCases {
         source: universe.getSystem(connection.source),
         target: universe.getSystem(connection.target),
         signatures: signatures.filter((s) => s.connectionId === connection.id),
+        passages: passages.filter((p) => p.connectionId === connection.id),
         wormholeType: (code) => universe.wormholeType(code),
       });
+      const lastJump = Math.max(
+        0,
+        ...passages.filter((p) => p.connectionId === connection.id).map((p) => p.occurredAt),
+      );
+      // Its own EOL mark moves `updatedAt` too, so only a jump counts as use.
+      const inUse = now - lastJump < IN_USE_MS;
       if (
         settings.expiredConnectionMinutes !== null &&
         lifetime.expiresBy !== null &&
+        !inUse &&
         now >= lifetime.expiresBy + settings.expiredConnectionMinutes * MINUTE
       )
         expired.push(connection);

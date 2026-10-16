@@ -52,9 +52,9 @@ export function ChainCleanupCard({
           <Switch
             checked={deleteAfter !== null}
             disabled={busy}
-            onCheckedChange={(on) => onSave({ expiredConnectionMinutes: on ? 0 : null })}
+            onCheckedChange={(on) => onSave({ expiredConnectionMinutes: on ? 60 : null })}
             label="Delete wormholes that cannot exist any more"
-            description="Once its lifetime since the map first saw it, or 4 hours after it was marked EOL, has passed."
+            description="Once its lifetime since it was last seen (drawn, its signature pasted, a jump), or 4 hours after it was marked EOL, has passed. A hole someone jumped in the last hour always stays."
           />
           {deleteAfter !== null && (
             <Field label="Delete them">

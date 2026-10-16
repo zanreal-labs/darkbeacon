@@ -5,6 +5,7 @@ import {
   ChainSweeper,
   ConnectionUseCases,
   MapUseCases,
+  PassageUseCases,
   SignatureUseCases,
   SystemUseCases,
   type ChainMap,
@@ -98,6 +99,20 @@ describeEachDialect('sweeper', (t) => {
     expect(await sweeper.sweep(map.id, ON)).toMatchObject({ deleted: 1 });
   });
 
+  it('keeps a hole someone jumped in the last hour, past its estimated end', async () => {
+    const hole = await connections.add(alice, map.id, { source: HOME, target: C2 }); // 16 h by class
+    const drawn = env.clock.now();
+    env.clock.set(drawn + 15.5 * HOUR);
+    await new PassageUseCases(env.ports).log(alice, map.id, hole.id, {
+      shipTypeId: 641, // Megathron
+      direction: 'sourceToTarget',
+    });
+    env.clock.set(drawn + 16.2 * HOUR);
+    expect(await sweeper.sweep(map.id, ON)).toMatchObject({ deleted: 0 });
+    env.clock.set(drawn + 16.6 * HOUR);
+    expect(await sweeper.sweep(map.id, ON)).toMatchObject({ deleted: 1 });
+  });
+
   it('deletes a hole marked EOL 4 hours later, plus the configured delay, and can be switched off', async () => {
     const c = await connections.add(alice, map.id, { source: HOME, target: C2 });
     await connections.update(alice, map.id, c.id, { timeStatus: 'eol' });
@@ -138,6 +153,25 @@ describeEachDialect('sweeper', (t) => {
     expect(visible.sort()).toEqual([HOME, C2, TAMA, JITA, PERIMETER].sort());
     expect((await events('system.removed')).map((e) => e.data)).toEqual([{ solarSystemId: AMARR }]);
     expect(await sweeper.sweep(map.id, { ...ON, staleSystemMinutes: null })).toMatchObject({ hidden: 0 });
+  });
+
+  it('restores a hidden system where it was, or beside the chain when that spot is taken', async () => {
+    const amarr = await systems.add(alice, map.id, { solarSystemId: AMARR });
+    await systems.update(alice, map.id, AMARR, { visible: false });
+    expect((await systems.add(alice, map.id, { solarSystemId: AMARR })).position).toEqual(amarr.position);
+
+    await systems.update(alice, map.id, AMARR, { visible: false });
+    await systems.move(alice, map.id, { positions: [{ solarSystemId: HOME, ...amarr.position }] });
+    const back = await systems.add(alice, map.id, { solarSystemId: AMARR });
+    expect(back.position).not.toEqual(amarr.position);
+    const others = (await env.ports.systems.list(map.id)).filter(
+      (s) => s.visible && s.solarSystemId !== AMARR,
+    );
+    for (const other of others)
+      expect(
+        Math.abs(other.position.x - back.position.x) >= 360 ||
+          Math.abs(other.position.y - back.position.y) >= 144,
+      ).toBe(true);
   });
 
   it('has nothing to sweep on a composite', async () => {

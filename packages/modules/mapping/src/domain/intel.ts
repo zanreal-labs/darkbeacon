@@ -103,7 +103,10 @@ export interface IntelInput {
  * panel shows and what the sweeper acts on.
  */
 export function lifetimeOf(
-  input: Pick<IntelInput, 'connection' | 'source' | 'target' | 'signatures' | 'wormholeType'>,
+  input: Pick<IntelInput, 'connection' | 'source' | 'target' | 'signatures' | 'wormholeType'> & {
+    /** Jumps through the hole: each one shows it was open then. */
+    passages?: readonly Pick<Passage, 'occurredAt'>[];
+  },
 ) {
   const c = input.connection;
   const sigOn = (systemId: number) =>
@@ -125,6 +128,7 @@ export function lifetimeOf(
   const firstSeenAt = firstSightingOf(
     c,
     input.signatures.filter((s) => s.connectionId === c.id),
+    input.passages ?? [],
     (typeLifetimeHours ?? defaultLifetimeHours(c.shipSize, sourceClass, targetClass)) * HOUR,
   );
   // The hole is at most `lifetime` old when first seen; EOL leaves at most 4 hours.
@@ -140,7 +144,7 @@ export function lifetimeOf(
 
 /**
  * When this hole was first seen. Every sighting counts: the connection being drawn, its signatures
- * being recorded and pasted again (`updatedAt`). A hole lives at most `lifetimeMs`, so a sighting
+ * being recorded and pasted again (`updatedAt`), and every jump through it. A hole lives at most `lifetimeMs`, so a sighting
  * older than that before the latest one cannot be of the same hole: a signature entry kept from an
  * earlier hole (a Wanderer sync brings its first `inserted_at`), or an ID the scanner gave again.
  * Those are left out, so a hole seen alive is never judged gone by an older record.
@@ -148,9 +152,14 @@ export function lifetimeOf(
 export function firstSightingOf(
   connection: Pick<Connection, 'createdAt'>,
   signatures: ReadonlyArray<Pick<Signature, 'createdAt' | 'updatedAt'>>,
+  passages: ReadonlyArray<Pick<Passage, 'occurredAt'>>,
   lifetimeMs: number,
 ): number {
-  const sightings = [connection.createdAt, ...signatures.flatMap((s) => [s.createdAt, s.updatedAt])];
+  const sightings = [
+    connection.createdAt,
+    ...signatures.flatMap((s) => [s.createdAt, s.updatedAt]),
+    ...passages.map((p) => p.occurredAt),
+  ];
   const latest = Math.max(...sightings);
   return Math.min(...sightings.filter((at) => at >= latest - lifetimeMs));
 }

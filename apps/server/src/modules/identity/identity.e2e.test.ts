@@ -276,7 +276,7 @@ describeEachDialect('identity and access over HTTP', (t) => {
       eventRetentionDays: null,
       loginMethod: null,
       defaultMapId: null,
-      expiredConnectionMinutes: 0,
+      expiredConnectionMinutes: 60,
       autoEol: true,
       staleSystemMinutes: 15,
       mcpMode: 'off',
