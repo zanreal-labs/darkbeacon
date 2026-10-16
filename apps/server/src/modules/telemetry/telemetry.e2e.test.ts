@@ -201,7 +201,9 @@ describeEachDialect('telemetry over HTTP', (t) => {
   it.each([
     ['TELEMETRY=off', { TELEMETRY: 'off' }, 'env_opt_out'],
     ['DO_NOT_TRACK=1', { DO_NOT_TRACK: '1' }, 'do_not_track'],
-    ['an empty key', { TELEMETRY_POSTHOG_KEY: '' }, 'no_key'],
+    // The build carries the maintainers' key, so an empty TELEMETRY_POSTHOG_KEY falls back to it;
+    // an unusable host is what leaves an instance without one.
+    ['a host that is not a URL', { TELEMETRY_POSTHOG_HOST: 'not a url' }, 'no_key'],
     ['a test server', { NODE_ENV: 'test' }, 'not_production'],
   ])('sends nothing with %s', async (_, env, reason) => {
     await start(env);

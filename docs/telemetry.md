@@ -29,12 +29,12 @@ the switch; it is shown once per admin.
 
 ## Configuration
 
-| Variable                 | Default                                | Meaning                             |
-| ------------------------ | -------------------------------------- | ----------------------------------- |
-| `TELEMETRY`              | on                                     | `off` turns telemetry off           |
-| `DO_NOT_TRACK`           | unset                                  | `1` turns telemetry off             |
-| `TELEMETRY_POSTHOG_KEY`  | `DEFAULT_TELEMETRY_KEY` (in the build) | PostHog project API key (`phc_...`) |
-| `TELEMETRY_POSTHOG_HOST` | `https://eu.i.posthog.com`             | PostHog ingestion host              |
+| Variable                 | Default                                            | Meaning                                  |
+| ------------------------ | -------------------------------------------------- | ---------------------------------------- |
+| `TELEMETRY`              | on                                                 | `off` turns telemetry off                |
+| `DO_NOT_TRACK`           | unset                                              | `1` turns telemetry off                  |
+| `TELEMETRY_POSTHOG_KEY`  | `DEFAULT_TELEMETRY_KEY` (in the build)             | PostHog project API key (`phc_...`)      |
+| `TELEMETRY_POSTHOG_HOST` | `DEFAULT_TELEMETRY_HOST` (`https://g.zanreal.com`) | PostHog ingestion host (ZanReal's proxy) |
 
 The build default lives in one place: `packages/modules/telemetry/src/domain/defaults.ts`. While it is empty,
 telemetry is inert and the admin card says "This build has no telemetry project key". A fork can point it at
@@ -192,11 +192,12 @@ typed.
 ## For the maintainers: setting up PostHog
 
 1. In the ZanReal organization, create a project (e.g. "Darkbeacon telemetry") in the **EU** region
-   (`eu.posthog.com`; events go to `https://eu.i.posthog.com`).
+   (`eu.posthog.com`). Events go through ZanReal's proxy, `https://g.zanreal.com`.
 2. Project settings: turn on **Discard client IP data**, keep person profiles off ("Identified only" or
    never), and leave session recording, autocapture, heatmaps and surveys off (nothing uses them).
 3. Copy the project API key (`phc_...`; it can only write events) into `DEFAULT_TELEMETRY_KEY` in
-   `packages/modules/telemetry/src/domain/defaults.ts`. Builds made after that send; older ones stay inert.
+   `packages/modules/telemetry/src/domain/defaults.ts` (done), with the proxy as `DEFAULT_TELEMETRY_HOST`.
+   Builds made after that send; older ones stay inert.
 4. Useful insights: unique `instance_id` of `instance_heartbeat` per day (instances), sum of the latest
    `accounts_mau` per instance (players), feature events broken down by their properties, `demo = false` as a
    filter everywhere.
