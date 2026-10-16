@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import type { CharacterPresenceDto, MapDto } from '@darkbeacon/shared';
+import type { CharacterPresenceDto, MapDto, TrackingProblemDto } from '@darkbeacon/shared';
 import { useMyTracking, useShipTypes } from '../../lib/characters';
 import type { MapPermissions } from '../../lib/roles';
 import { useMe } from '../../lib/session';
@@ -38,6 +38,11 @@ export function MapTrackingSettings({ map, can }: { map: MapDto; can: MapPermiss
     }
     return out;
   }, [tracking.data, map.id, characters, me.data]);
+  const problems = useMemo(() => {
+    const out = new Map<number, TrackingProblemDto>();
+    for (const l of tracking.data?.characters ?? []) if (l.problem) out.set(l.characterId, l.problem);
+    return out;
+  }, [tracking.data]);
   const universe = useUniverseSystems(
     [...presence.values()].flatMap((p) => (p.solarSystemId === null ? [] : [p.solarSystemId])),
   );
@@ -60,6 +65,7 @@ export function MapTrackingSettings({ map, can }: { map: MapDto; can: MapPermiss
             myCharacters={characters}
             accountMainId={me.data?.account.mainCharacterId ?? null}
             characters={presence}
+            problems={problems}
             universe={universe}
             shipName={(id) => ships.get(id)?.name}
             canTrack={can.edit}

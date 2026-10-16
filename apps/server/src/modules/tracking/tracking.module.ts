@@ -17,6 +17,7 @@ import {
   type BridgeLookup,
   type CharacterTokenSource,
   type EsiGateway,
+  type TrackingProblemStore,
   type TrackingRepository,
   type UniverseLookup,
 } from '@darkbeacon/tracking';
@@ -36,6 +37,7 @@ import { SharingAutoMapTarget } from '../../adapters/sharing/sharing-auto-map-ta
 import { ChainMerger, ChainWrites } from '@darkbeacon/sharing';
 import {
   KyselyMapCharacterSettings,
+  KyselyTrackingProblems,
   KyselyTrackingRepository,
 } from '../../adapters/tracking/kysely-tracking-repository.js';
 import { KyselyActivityReader } from '../../adapters/tracking/kysely-activity-reader.js';
@@ -75,6 +77,7 @@ export const ESI_REQUESTS_PER_SECOND = 500;
 export { MAP_CHARACTER_SETTINGS } from './tracking.tokens.js';
 import { MAP_CHARACTER_SETTINGS } from './tracking.tokens.js';
 const BRIDGE_LOOKUP = 'tracking.BridgeLookup';
+const TRACKING_PROBLEMS = 'tracking.TrackingProblems';
 
 const { version } = JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')) as {
   version: string;
@@ -127,6 +130,11 @@ const { version } = JSON.parse(readFileSync(new URL('../../../package.json', imp
     {
       provide: TRACKING_REPOSITORY,
       useFactory: (database: Database) => new KyselyTrackingRepository(database),
+      inject: [Database],
+    },
+    {
+      provide: TRACKING_PROBLEMS,
+      useFactory: (database: Database) => new KyselyTrackingProblems(database),
       inject: [Database],
     },
     {
@@ -204,9 +212,13 @@ const { version } = JSON.parse(readFileSync(new URL('../../../package.json', imp
     },
     {
       provide: TrackingOverview,
-      useFactory: (characters: CharacterService, maps: MapUseCases, tracking: TrackingRepository) =>
-        new TrackingOverview({ characters, maps, tracking }),
-      inject: [CharacterService, MapUseCases, TRACKING_REPOSITORY],
+      useFactory: (
+        characters: CharacterService,
+        maps: MapUseCases,
+        tracking: TrackingRepository,
+        problems: TrackingProblemStore,
+      ) => new TrackingOverview({ characters, maps, tracking, problems }),
+      inject: [CharacterService, MapUseCases, TRACKING_REPOSITORY, TRACKING_PROBLEMS],
     },
     {
       provide: BRIDGE_LOOKUP,
@@ -241,6 +253,7 @@ const { version } = JSON.parse(readFileSync(new URL('../../../package.json', imp
         uow: UnitOfWork,
         clock: Clock,
         hub: RealtimeHub,
+        problems: TrackingProblemStore,
       ) => {
         const logger = new Logger('TrackingPoller');
         return new TrackingPoller({
@@ -255,6 +268,12 @@ const { version } = JSON.parse(readFileSync(new URL('../../../package.json', imp
           viewers: new RealtimeMapViewers(hub),
           onError: (error, characterId) =>
             logger.error(`polling character ${characterId} failed: ${String(error)}`),
+          problems,
+          // Once per change, so a character that cannot be read does not flood the log.
+          onProblem: (characterId, problem) =>
+            problem
+              ? logger.warn(`character ${characterId}: cannot read its location: ${problem.message}`)
+              : logger.log(`character ${characterId}: reading its location again`),
         });
       },
       inject: [
@@ -266,6 +285,7 @@ const { version } = JSON.parse(readFileSync(new URL('../../../package.json', imp
         UNIT_OF_WORK,
         CLOCK,
         RealtimeHub,
+        TRACKING_PROBLEMS,
       ],
     },
     {
@@ -287,8 +307,9 @@ const { version } = JSON.parse(readFileSync(new URL('../../../package.json', imp
         events: EventLog,
         uow: UnitOfWork,
         clock: Clock,
-      ) => new TrackingCleanup({ tracking, characters, events, uow, clock }),
-      inject: [TRACKING_REPOSITORY, CHARACTER_TOKENS, EVENT_LOG, UNIT_OF_WORK, CLOCK],
+        problems: TrackingProblemStore,
+      ) => new TrackingCleanup({ tracking, characters, events, uow, clock, problems }),
+      inject: [TRACKING_REPOSITORY, CHARACTER_TOKENS, EVENT_LOG, UNIT_OF_WORK, CLOCK, TRACKING_PROBLEMS],
     },
     TrackingRuntime,
   ],

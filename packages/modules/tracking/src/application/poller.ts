@@ -1,13 +1,16 @@
 import { hasMapRole, mapStream, newEvent, type ActorRef } from '@darkbeacon/core';
+import type { TrackingProblemKind } from '@darkbeacon/shared';
 import { observe, type Observation, type TrackedCharacter } from '../domain/presence.js';
 import type {
   CharacterTokenSource,
   Clock,
   EsiGateway,
+  EsiResult,
   EventLog,
   MapAccess,
   MapViewers,
   RateLimiter,
+  TrackingProblemStore,
   TrackingRepository,
   UnitOfWork,
 } from '../ports/index.js';
@@ -43,6 +46,52 @@ export interface PollerOptions {
   random?: () => number;
 }
 
+/**
+ * What stops tracking from reading a character's location. `sign-in` (no usable token) is only
+ * logged: the owner sees an expired sign-in on the character itself, and demo or dev characters
+ * never have one.
+ */
+export interface PollProblem {
+  kind: TrackingProblemKind | 'sign-in';
+  message: string;
+}
+
+/** The ESI scope each route needs, named in what the owner is told. */
+const ROUTE_SCOPES = {
+  online: 'esi-location.read_online.v1',
+  location: 'esi-location.read_location.v1',
+  ship: 'esi-location.read_ship_type.v1',
+} as const;
+
+const NO_TOKEN: PollProblem = {
+  kind: 'sign-in',
+  message: 'No usable EVE sign-in (it expired or EVE refused to refresh it): link the character again.',
+};
+
+/**
+ * What one ESI answer says about tracking: fine (`ok`), nothing (`unknown`: the gateway held the
+ * request back to pace itself) or a problem.
+ */
+export function problemOf(
+  route: keyof typeof ROUTE_SCOPES,
+  result: EsiResult<unknown>,
+): PollProblem | 'ok' | 'unknown' {
+  if (result.ok) return 'ok';
+  const { reason } = result;
+  if (reason === 'rate limited') return 'unknown';
+  if (/HTTP 40[13]\b/.test(reason))
+    return {
+      kind: 'refused',
+      message: `ESI refused the ${route} (${reason}): link the character again so it grants ${ROUTE_SCOPES[route]}.`,
+    };
+  if (/\b42[09]\b/.test(reason))
+    return {
+      kind: 'unavailable',
+      message: `ESI is limiting requests (${reason}); tracking waits and retries.`,
+    };
+  return { kind: 'unavailable', message: `ESI did not answer the ${route} (${reason}); tracking retries.` };
+}
+
 const DEFAULTS: Required<PollerOptions> = {
   concurrency: 64,
   startupSpreadMs: 15_000,
@@ -63,6 +112,16 @@ interface PollState {
   /** Entries that passed that check (until the next one). */
   allowed: TrackedCharacter[];
   token: { value: string; until: number } | null;
+  /**
+   * What each route answered last (absent: fine or not asked yet). A route asked less often
+   * (online) answering fine says nothing about another (location) that failed.
+   */
+  failing: Partial<Record<keyof typeof ROUTE_SCOPES, PollProblem>>;
+  /**
+   * The problem last reported for the character (null: none); undefined until the first poll of
+   * this process, which reports either way and so clears what an earlier process left.
+   */
+  reported?: PollProblem | null;
 }
 
 /**
@@ -102,6 +161,10 @@ export class TrackingPoller {
       /** Maps someone has open; without it every map counts the same. */
       viewers?: MapViewers;
       onError?: (error: unknown, characterId: number) => void;
+      /** Where problems are kept for the owner to see; without it they are only reported. */
+      problems?: TrackingProblemStore;
+      /** A character's problem started or changed (null: it ended): once per change, not per poll. */
+      onProblem?: (characterId: number, problem: PollProblem | null) => void;
     },
     private readonly actor: ActorRef = { kind: 'system', id: 'tracking' },
     options: PollerOptions = {},
@@ -114,7 +177,12 @@ export class TrackingPoller {
     const now = this.deps.clock.now();
     this.startedAt ??= now;
     const characters = await this.trackedCharacters(now);
-    for (const id of this.states.keys()) if (!characters.has(id)) this.states.delete(id);
+    for (const [id, state] of this.states)
+      if (!characters.has(id)) {
+        this.states.delete(id);
+        // Not tracked anywhere any more: nothing to warn about.
+        if (state.reported) void this.deps.problems?.clear(id).catch(() => undefined);
+      }
 
     const due: Array<{ id: number; entries: TrackedCharacter[]; dueAt: number; viewed: boolean }> = [];
     for (const [id, entries] of characters) {
@@ -218,6 +286,7 @@ export class TrackingPoller {
         accessCheckedAt: -Infinity,
         allowed: [],
         token: null,
+        failing: {},
       };
       this.states.set(characterId, state);
     }
@@ -273,12 +342,22 @@ export class TrackingPoller {
     const token = await this.token(id, state, now);
     if (!token) {
       state.nextLocationAt = state.nextOnlineAt = now + POLL_INTERVALS.noToken;
+      await this.report(id, state, NO_TOKEN, now);
       return;
     }
     const seen: Observation = { continuous: false };
+    let asked = false;
+    const answered = (route: keyof typeof ROUTE_SCOPES, result: EsiResult<unknown>) => {
+      const answer = problemOf(route, result);
+      if (answer === 'unknown') return;
+      asked = true;
+      if (answer === 'ok') delete state.failing[route];
+      else state.failing[route] = answer;
+    };
 
     if (state.nextOnlineAt <= now) {
       const online = await esi.online(id, token, state.etags.online);
+      answered('online', online);
       if (online.ok) {
         state.etags.online = online.etag ?? undefined;
         state.nextOnlineAt = Math.max(now + POLL_INTERVALS.online, online.expiresAt) + this.jitter();
@@ -295,6 +374,8 @@ export class TrackingPoller {
         esi.location(id, token, state.etags.location),
         esi.ship(id, token, state.etags.ship),
       ]);
+      answered('location', location);
+      answered('ship', ship);
       let next = now + POLL_INTERVALS.location;
       if (location.ok) {
         state.etags.location = location.etag ?? undefined;
@@ -317,6 +398,11 @@ export class TrackingPoller {
         next = Math.max(next, ship.retryAt);
       }
       state.nextLocationAt = next + this.jitter();
+    }
+
+    if (asked) {
+      const { location, ship, online } = state.failing;
+      await this.report(id, state, location ?? ship ?? online ?? null, now);
     }
 
     // Nothing new from ESI (304s, refusals): nothing can have changed.
@@ -348,5 +434,34 @@ export class TrackingPoller {
         ),
       );
     });
+  }
+
+  /**
+   * Tells the owner (and the log) when a character's problem starts, changes or ends, once per
+   * change. Keeping it must not stop the poll: a failed write is tried again on the next one.
+   */
+  private async report(
+    id: number,
+    state: PollState,
+    problem: PollProblem | null,
+    now: number,
+  ): Promise<void> {
+    const before = state.reported;
+    if (before !== undefined && (before?.message ?? null) === (problem?.message ?? null)) return;
+    try {
+      if (problem && problem.kind !== 'sign-in')
+        await this.deps.problems?.set({
+          characterId: id,
+          kind: problem.kind,
+          message: problem.message,
+          since: now,
+        });
+      else await this.deps.problems?.clear(id);
+    } catch {
+      return;
+    }
+    state.reported = problem;
+    // A clean first poll after a start is not news.
+    if (problem || before) this.deps.onProblem?.(id, problem);
   }
 }

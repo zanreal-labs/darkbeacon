@@ -25,6 +25,22 @@ export function eveScopeLabel(scope: string): string {
   return EVE_SCOPE_LABELS[scope] ?? scope;
 }
 
+/**
+ * Why tracking cannot read where a character is: `refused` (ESI said 401/403: a scope is missing
+ * or the grant is gone; linking the character again fixes both) or `unavailable` (ESI errors,
+ * rate limits, timeouts). An expired sign-in is not one: the character says so itself.
+ */
+export const TrackingProblemKind = z.enum(['refused', 'unavailable']);
+export type TrackingProblemKind = z.infer<typeof TrackingProblemKind>;
+
+export const TrackingProblemDto = z.object({
+  kind: TrackingProblemKind,
+  /** One sentence for the character's owner, with ESI's answer. */
+  message: z.string(),
+  since: Timestamp,
+});
+export type TrackingProblemDto = z.infer<typeof TrackingProblemDto>;
+
 /** Where one of my characters is, from tracking; null fields are unknown (never tracked yet). */
 export const CharacterLocationDto = z.object({
   characterId: EveId,
@@ -37,6 +53,8 @@ export const CharacterLocationDto = z.object({
   updatedAt: Timestamp.nullable(),
   /** Maps the character is tracked on. */
   trackedOn: z.array(Id),
+  /** Set while tracking cannot read the character's location; absent while it can. */
+  problem: TrackingProblemDto.optional(),
 });
 export type CharacterLocationDto = z.infer<typeof CharacterLocationDto>;
 

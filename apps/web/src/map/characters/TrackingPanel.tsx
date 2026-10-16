@@ -2,8 +2,13 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Eye, RefreshCw, Star } from 'lucide-react';
-import type { CharacterDto, CharacterPresenceDto, UniverseSystemDto } from '@darkbeacon/shared';
+import { Eye, RefreshCw, Star, TriangleAlert } from 'lucide-react';
+import type {
+  CharacterDto,
+  CharacterPresenceDto,
+  TrackingProblemDto,
+  UniverseSystemDto,
+} from '@darkbeacon/shared';
 import { ApiError } from '../../lib/api';
 import { useMapTrackingSettings, useSetTracking } from '../../lib/characters';
 import { hereForReturn, relinkHref } from '../../lib/scope-health';
@@ -22,6 +27,7 @@ export function TrackingPanel({
   myCharacters,
   accountMainId,
   characters,
+  problems = new Map(),
   universe,
   shipName,
   canTrack,
@@ -31,6 +37,8 @@ export function TrackingPanel({
   /** The account's own main, the default main on every map. */
   accountMainId: number | null;
   characters: ReadonlyMap<number, CharacterPresenceDto>;
+  /** Why tracking cannot read where a character is, while it cannot. */
+  problems?: ReadonlyMap<number, TrackingProblemDto>;
   universe: ReadonlyMap<number, UniverseSystemDto>;
   shipName(typeId: number): string | undefined;
   /** Members and up may track characters here. */
@@ -100,6 +108,7 @@ export function TrackingPanel({
               const expired = !c.tokenValid;
               const isMain = main === c.id;
               const following = settings.followCharacterId === c.id;
+              const problem = tracked && !expired ? problems.get(c.id) : undefined;
               return (
                 <li key={c.id} className={styles.trackRow} data-expired={expired || undefined}>
                   <CharacterAvatar id={c.id} name={c.name} size={32} />
@@ -110,6 +119,20 @@ export function TrackingPanel({
                         <>
                           <span className="error">Sign-in expired.</span>{' '}
                           {eve && (
+                            <a
+                              href={relinkHref(hereForReturn(), c.extras ?? [])}
+                              className={styles.inlineLink}
+                            >
+                              <RefreshCw aria-hidden /> Link again
+                            </a>
+                          )}
+                        </>
+                      ) : problem ? (
+                        <>
+                          <span className={styles.trackProblem} title={problem.message}>
+                            <TriangleAlert aria-hidden /> {problem.message}
+                          </span>{' '}
+                          {eve && problem.kind === 'refused' && (
                             <a
                               href={relinkHref(hereForReturn(), c.extras ?? [])}
                               className={styles.inlineLink}

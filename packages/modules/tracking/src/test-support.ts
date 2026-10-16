@@ -10,6 +10,8 @@ import type {
   EsiShip,
   EventLog,
   MapAccess,
+  TrackingProblem,
+  TrackingProblemStore,
   TrackingRepository,
   UnitOfWork,
 } from './ports/index.js';
@@ -46,6 +48,26 @@ export class MemoryTrackingRepository implements TrackingRepository {
   deletePresence(characterId: number): Promise<void> {
     this.presence.delete(characterId);
     return Promise.resolve();
+  }
+}
+
+export class MemoryTrackingProblems implements TrackingProblemStore {
+  problems = new Map<number, TrackingProblem>();
+
+  set(problem: TrackingProblem): Promise<void> {
+    this.problems.set(problem.characterId, { ...problem });
+    return Promise.resolve();
+  }
+
+  clear(characterId: number): Promise<void> {
+    this.problems.delete(characterId);
+    return Promise.resolve();
+  }
+
+  list(characterIds: readonly number[]): Promise<TrackingProblem[]> {
+    return Promise.resolve(
+      characterIds.flatMap((id) => (this.problems.has(id) ? [this.problems.get(id)!] : [])),
+    );
   }
 }
 

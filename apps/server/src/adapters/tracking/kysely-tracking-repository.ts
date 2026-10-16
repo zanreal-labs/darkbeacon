@@ -1,9 +1,12 @@
 import { bool, type Database } from '@darkbeacon/db';
+import { TrackingProblemKind } from '@darkbeacon/shared';
 import type {
   CharacterPresence,
   MapCharacterSettings,
   MapCharacterSettingsRepository,
   TrackedCharacter,
+  TrackingProblem,
+  TrackingProblemStore,
   TrackingRepository,
 } from '@darkbeacon/tracking';
 
@@ -20,6 +23,7 @@ export interface TrackingTables {
     updated_at: number;
     docked: number | null;
   };
+  tracking_problem: { character_id: number; kind: string; message: string; since: number };
   map_character_setting: {
     map_id: string;
     account_id: string;
@@ -155,6 +159,44 @@ function toPresence(row: PresenceRow): CharacterPresence {
     updatedAt: Number(row.updated_at),
     ...(row.docked === null || row.docked === undefined ? {} : { docked: bool.decode(row.docked) }),
   };
+}
+
+/** Why tracking cannot read a character's location, while it cannot. */
+export class KyselyTrackingProblems implements TrackingProblemStore {
+  constructor(private readonly database: Database) {}
+
+  private get db() {
+    return this.database.db<TrackingTables>();
+  }
+
+  async set(problem: TrackingProblem): Promise<void> {
+    const changes = { kind: problem.kind, message: problem.message, since: problem.since };
+    await this.db
+      .insertInto('tracking_problem')
+      .values({ character_id: problem.characterId, ...changes })
+      .onConflict((oc) => oc.column('character_id').doUpdateSet(changes))
+      .execute();
+  }
+
+  async clear(characterId: number): Promise<void> {
+    await this.db.deleteFrom('tracking_problem').where('character_id', '=', characterId).execute();
+  }
+
+  async list(characterIds: readonly number[]): Promise<TrackingProblem[]> {
+    if (characterIds.length === 0) return [];
+    const rows = await this.db
+      .selectFrom('tracking_problem')
+      .selectAll()
+      .where('character_id', 'in', [...characterIds])
+      .execute();
+    return rows.map((row) => ({
+      characterId: Number(row.character_id),
+      // A kind written by a later version reads as the generic one.
+      kind: TrackingProblemKind.catch('unavailable').parse(row.kind),
+      message: row.message,
+      since: Number(row.since),
+    }));
+  }
 }
 
 /** Each account's main and followed character per map. */

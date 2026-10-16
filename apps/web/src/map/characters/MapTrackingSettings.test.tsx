@@ -13,6 +13,7 @@ import { MapTrackingSettings } from './MapTrackingSettings';
 const me = meFixture();
 const AYLA = me.characters[0]!.id;
 let tracked = false;
+let problem: MyTrackingDto['characters'][number]['problem'];
 const changes: unknown[] = [];
 
 setupMockServer(
@@ -29,6 +30,7 @@ setupMockServer(
           docked: null,
           updatedAt: 1,
           trackedOn: tracked ? [MAP_ID] : [],
+          ...(problem ? { problem } : {}),
         },
       ],
       maps: [{ id: MAP_ID, name: 'Home', slug: 'home', canTrack: true }],
@@ -103,6 +105,11 @@ describe('the top bar', () => {
     );
     return () => opened;
   };
+  const READ_REFUSED = {
+    kind: 'refused' as const,
+    message: 'ESI refused the location (HTTP 403): link the character again.',
+    since: 1,
+  };
 
   it('has no Track button any more, the views in its place', () => {
     bar(true);
@@ -115,5 +122,42 @@ describe('the top bar', () => {
     const opened = bar(false);
     fireEvent.click(screen.getByRole('button', { name: /Tracking needs a look: 1 sign-in expired/ }));
     expect(opened()).toBe(1);
+  });
+
+  it('marks a character whose location tracking cannot read, with ESI’s answer', () => {
+    const characters = me.characters.map((c) => ({ ...c, tokenValid: true }));
+    let opened = 0;
+    wrap(
+      <CharacterBar
+        mapId={MAP_ID}
+        own={ownOnMap(characters, presence, AYLA, null, new Map([[AYLA, READ_REFUSED]]))}
+        hasCharacters
+        characters={presence}
+        universe={new Map()}
+        shipName={() => undefined}
+        canSeeAll={false}
+        onCenter={() => {}}
+        onOpenTracking={() => (opened += 1)}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Tracking needs a look: cannot read where Ayla Vex is' }),
+    );
+    expect(opened).toBe(1);
+    expect(screen.getByRole('button', { name: /HTTP 403/ }).getAttribute('data-problem')).toBe('true');
+  });
+});
+
+describe('a character tracking cannot read', () => {
+  it('says why in its row in the settings', async () => {
+    tracked = true;
+    problem = {
+      kind: 'refused',
+      message: 'ESI refused the location (HTTP 403): link the character again.',
+      since: 1,
+    };
+    wrap(<MapTrackingSettings map={MAP} can={mapPermissions('member')} />);
+    expect(await screen.findByText(/ESI refused the location \(HTTP 403\)/)).toBeTruthy();
+    problem = undefined;
   });
 });
