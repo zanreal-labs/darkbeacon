@@ -1,17 +1,33 @@
 // @vitest-environment jsdom
+import { Activity, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { http, HttpResponse } from 'msw/http';
 import { ReactFlowProvider } from '@xyflow/react';
-import type { UniverseSystemDto } from '@darkbeacon/shared';
+import { routes, type UniverseSystemDto } from '@darkbeacon/shared';
+import { META, UNIVERSE } from '../jump/fixtures.test-support';
 import { mapPermissions } from '../lib/roles';
-import { connectionFixture, MAP_ID, systemFixture } from '../test/fixtures';
+import { JumpPage } from '../screens/JumpPage';
+import { connectionFixture, MAP_ID, meFixture, systemFixture } from '../test/fixtures';
 import { installFlowMocks, renderWithProviders, setupMockServer } from '../test/setup';
 import { ToastProvider, TooltipProvider } from '../ui';
 import { MapCanvas } from './MapCanvas';
 import { emptyMapState, type MapState } from './mapState';
 
 installFlowMocks();
-const server = setupMockServer();
+// jsdom has no canvas: the jump planner's star map draws nothing.
+HTMLCanvasElement.prototype.getContext = (() => null) as unknown as HTMLCanvasElement['getContext'];
+const server = setupMockServer(
+  http.get(routes.accounts.me.path, () => HttpResponse.json(meFixture())),
+  http.get(routes.maps.getPreferences.path, () =>
+    HttpResponse.json({ viewport: null, bookmarkTemplate: null, bookmarkOrder: null, updatedAt: 0 }),
+  ),
+  http.get(routes.jumps.universe.path, () => HttpResponse.json(UNIVERSE)),
+  // Not what these tests are about: the canvas works without them.
+  ...[routes.auth.providers.path, routes.intel.map.path, routes.intel.standings.path].map((path) =>
+    http.get(path, () => new HttpResponse(null, { status: 404 })),
+  ),
+);
 
 const universe = new Map<number, UniverseSystemDto>(
   [31000001, 31000002].map((id) => [
@@ -87,5 +103,102 @@ describe('MapCanvas read-only (public view)', () => {
     expect(store.moveSystems).not.toHaveBeenCalled();
     // Neither the account nor the viewer's saved view is asked for.
     expect(requests.filter((p) => p !== '/api/themes')).toEqual([]);
+  });
+});
+
+/** A chain where real ones are: thousands of pixels away from the origin. */
+function farChain(): MapState {
+  const state = chain();
+  state.systems = new Map(
+    [...state.systems].map(([id, s]) => [
+      id,
+      { ...s, position: { x: s.position.x + 6000, y: s.position.y + 4000 } },
+    ]),
+  );
+  return state;
+}
+
+function SignedInMap() {
+  return (
+    <div style={{ width: 800, height: 600 }}>
+      <MapCanvas
+        mapId={MAP_ID}
+        state={farChain()}
+        loaded
+        labels={[]}
+        systemLabels={[]}
+        universe={universe}
+        can={mapPermissions('member')}
+        store={{ moveSystems: vi.fn(), addConnection: vi.fn() }}
+        onSelect={() => {}}
+        focus={null}
+        onMenu={() => {}}
+      />
+    </div>
+  );
+}
+
+function Frame({ children }: { children: ReactNode }) {
+  return (
+    <TooltipProvider>
+      <ToastProvider>{children}</ToastProvider>
+    </TooltipProvider>
+  );
+}
+
+const viewOf = (container: HTMLElement) =>
+  container.querySelector<HTMLElement>('.react-flow__viewport')?.style.transform ?? null;
+
+describe('MapCanvas after the jump planner', () => {
+  // Next.js keeps a route the viewer left mounted but hidden (React Activity) and shows it again on
+  // the way back; React Flow resets its view meanwhile. The map came back at the origin: empty.
+  it('shows the chain again when the map was hidden for the jump planner and shown again', async () => {
+    const page = (route: 'map' | 'jump') => (
+      <Frame>
+        <Activity mode={route === 'map' ? 'visible' : 'hidden'}>
+          <ReactFlowProvider>
+            <SignedInMap />
+          </ReactFlowProvider>
+        </Activity>
+        {route === 'jump' && <JumpPage meta={META} />}
+      </Frame>
+    );
+    const { container, rerender } = renderWithProviders(page('map'));
+    await waitFor(() => expect(container.querySelectorAll('.react-flow__node')).toHaveLength(2));
+    await waitFor(() => expect(viewOf(container)).not.toMatch(/^translate\(0px, ?0px\)/));
+    const opened = viewOf(container);
+
+    rerender(page('jump'));
+    expect(await screen.findByRole('img', { name: /Star map of known space/ })).toBeTruthy();
+
+    rerender(page('map'));
+    await waitFor(() => expect(container.querySelectorAll('.react-flow__node')).toHaveLength(2));
+    await waitFor(() => expect(viewOf(container)).toBe(opened));
+  });
+
+  it('opens on the chain again when the map was unmounted for the jump planner and mounted again', async () => {
+    const page = (route: 'map' | 'jump') => (
+      <Frame>
+        {route === 'map' ? (
+          <ReactFlowProvider>
+            <SignedInMap />
+          </ReactFlowProvider>
+        ) : (
+          <JumpPage meta={META} />
+        )}
+      </Frame>
+    );
+    const { container, rerender } = renderWithProviders(page('map'));
+    await waitFor(() => expect(container.querySelectorAll('.react-flow__node')).toHaveLength(2));
+    await waitFor(() => expect(viewOf(container)).not.toMatch(/^translate\(0px, ?0px\)/));
+    const opened = viewOf(container);
+
+    rerender(page('jump'));
+    expect(await screen.findByRole('img', { name: /Star map of known space/ })).toBeTruthy();
+    expect(container.querySelector('.react-flow')).toBeNull();
+
+    rerender(page('map'));
+    await waitFor(() => expect(container.querySelectorAll('.react-flow__node')).toHaveLength(2));
+    await waitFor(() => expect(viewOf(container)).toBe(opened));
   });
 });
