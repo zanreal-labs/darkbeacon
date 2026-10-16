@@ -1,0 +1,555 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Shot from '../components/Shot.astro';
+import Window from '../components/Window.astro';
+import { APP_URL, DEMO_URL, REPO_URL, DONATION_CHARACTER } from '../config';
+
+const title = 'Darkbeacon · self-hosted wormhole mapper for EVE Online';
+const description =
+  'A live chain map your whole corp edits at once: signatures in the game’s scan colours, routes to the trade hubs, kill intel, a capital jump planner and an import from Wanderer. One Docker container.';
+
+// The chain rail: every section is a system on it.
+const chain = [
+  { id: 'top', name: 'Darkbeacon', pill: 'HOME' },
+  { id: 'scan', name: 'Scan', pill: '01' },
+  { id: 'map', name: 'Map', pill: '02' },
+  { id: 'fight', name: 'Fight', pill: '03' },
+  { id: 'capitals', name: 'Move capitals', pill: '04' },
+  { id: 'alliance', name: 'Run it for your alliance', pill: '05' },
+  { id: 'wanderer', name: 'Coming from Wanderer', pill: 'K162' },
+  { id: 'self-host', name: 'Self-host', pill: 'HS' },
+  { id: 'source', name: 'Open source', pill: 'SRC' },
+  { id: 'support', name: 'Support the project', pill: 'ISK' },
+];
+
+// Numbered marks on the hero screenshot (fractions of the image), described in the legend under it.
+const marks = [
+  { n: 1, x: 47.8, y: 37.3, text: 'Home. Class pill, statics with where they lead (D845 HS, U210 LS), the effect as a dot.' },
+  { n: 2, x: 41.6, y: 45.6, text: 'End of life. Time is the outer colour of a connection: purple at EOL, pink under an hour.' },
+  { n: 3, x: 28.6, y: 33.4, text: 'Critical mass, flagged dangerous. Mass is the core colour, danger a red halo.' },
+  { n: 4, x: 54.2, y: 48.8, text: 'Reduced mass: an amber core on a neutral line.' },
+  { n: 5, x: 22.6, y: 43.4, text: 'Frigate hole. Size is a letter on the line, never its width.' },
+  { n: 6, x: 9.4, y: 48.2, text: 'Bubbled on the EC-P8R side.' },
+  { n: 7, x: 56.2, y: 36.6, text: 'Exits name the nearest trade hub and the jumps to it.' },
+  { n: 8, x: 73.2, y: 31.2, text: 'Signatures in the probe scanner’s colours; identified wormholes in their own blue.' },
+  { n: 9, x: 73.2, y: 75.6, text: 'Routes to every trade hub, one square per system in its security colour.' },
+  { n: 10, x: 79.4, y: 7.6, text: 'Who is on the map, then views 1, 2, 3: Scan, PvP, Roll. Alt+1 to Alt+3.' },
+];
+
+const security = [
+  ['1.0', 'var(--sec-10)'],
+  ['0.9', 'var(--sec-09)'],
+  ['0.8', 'var(--sec-08)'],
+  ['0.7', 'var(--sec-07)'],
+  ['0.6', 'var(--sec-06)'],
+  ['0.5', 'var(--sec-05)'],
+  ['0.4', 'var(--sec-04)'],
+  ['0.3', 'var(--sec-03)'],
+  ['0.2', 'var(--sec-02)'],
+  ['0.1', 'var(--sec-01)'],
+  ['0.0', 'var(--sec-00)'],
+];
+
+// The first lines of what "Copy route" put on the clipboard for the route in the screenshot.
+const copiedRoute = `Thanatos: Amamake > 1DQ1-A (8 jumps, 45.97 ly, 82,754 oxygen isotopes)
+1. Jump 5.41 ly to Fasse (0.4, Sinq Laison), cyno, 9,744 fuel
+2. Jump 5.14 ly to Ahbazon (0.4, Genesis), cyno, 9,259 fuel
+3. Jump 6.80 ly to Noranim (0.3, Genesis), cyno, 12,249 fuel
+…
+8. Jump 6.09 ly to 1DQ1-A (-0.4, Delve), cyno, 10,971 fuel
+Fatigue at the end: 5 h`;
+
+const compose = `services:
+  darkbeacon:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - '3000:3000'
+    volumes:
+      - dbk-data:/data
+
+volumes:
+  dbk-data:`;
+---
+
+<Layout title={title} description={description}>
+  <header class="topbar">
+    <a class="brand" href="#top" aria-label="Darkbeacon, back to the top">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+        <defs>
+          <mask id="mark-gap" maskUnits="userSpaceOnUse" x="-6" y="-6" width="36" height="36">
+            <rect x="-6" y="-6" width="36" height="36" fill="#fff"></rect>
+            <path d="M 12.937 11.063 L 13.846 -0.043 A 13.35 13.35 0 0 1 24.043 10.154 Z" fill="#000"></path>
+          </mask>
+        </defs>
+        <circle cx="11" cy="13" r="7.25" fill="none" stroke-width="1.75" class="mark-ring" mask="url(#mark-gap)"
+        ></circle>
+        <circle cx="11" cy="13" r="3.25" class="mark-core"></circle>
+        <path d="M 14.182 9.818 L 15.390 1.564 A 12.25 12.25 0 0 1 22.436 8.610 Z" class="mark-beam"></path>
+      </svg>
+      <span>Darkbeacon</span>
+    </a>
+    <nav class="topnav" aria-label="Sections">
+      <a href="#scan">Scan</a>
+      <a href="#map">Map</a>
+      <a href="#fight">Fight</a>
+      <a href="#capitals">Capitals</a>
+      <a href="#alliance">Alliance</a>
+      <a href="#self-host">Self-host</a>
+    </nav>
+    <div class="topbar-actions">
+      <a class="toplink" href={REPO_URL}>GitHub</a>
+      <a class="btn btn--primary btn--sm" href={APP_URL}>Open app</a>
+    </div>
+  </header>
+
+  <div class="frame">
+    <nav class="rail" aria-label="On this page">
+      <ol class="chain">
+        {
+          chain.map((s) => (
+            <li>
+              <a class="node" href={`#${s.id}`} data-target={s.id}>
+                <span class="pill">{s.pill}</span>
+                <span class="node-name">{s.name}</span>
+              </a>
+            </li>
+          ))
+        }
+      </ol>
+    </nav>
+
+    <main id="main">
+      <section class="hero" id="top" aria-labelledby="hero-title">
+        <div class="hero-head">
+        <div class="hero-copy">
+          <h1 id="hero-title">Darkbeacon</h1>
+          <p class="claim">The chain map your whole wormhole corp edits live, on a server you run.</p>
+          <p class="lede">
+            Built to replace Wanderer, and it imports from it. Scan, map, fight and plan capital jumps in one app
+            next to the client. Every change reaches everyone looking at the map the moment it is made.
+          </p>
+          <div class="actions">
+            <a class="btn btn--primary" href={APP_URL}>Open the hosted instance</a>
+            <a class="btn" href={DEMO_URL}>Try the demo</a>
+            <a class="btn" href={REPO_URL}>View on GitHub</a>
+          </div>
+        </div>
+        <dl class="facts">
+          <div><dt>Runs as</dt><dd>One Docker container, one port</dd></div>
+          <div><dt>Database</dt><dd>SQLite, or Postgres</dd></div>
+          <div><dt>Sign-in</dt><dd>EVE Online, or Discord</dd></div>
+          <div><dt>Data</dt><dd>ESI, zKillboard, EVE-Scout</dd></div>
+        </dl>
+        </div>
+
+        <figure class="annotated">
+          <div class="annotated-scroll" tabindex="0" role="region" aria-label="Annotated screenshot, scrolls sideways on small screens">
+          <div class="annotated-frame">
+            <Shot
+              name="chain"
+              eager
+              sizes="(min-width: 1440px) 1100px, (min-width: 1100px) calc(100vw - 20rem), calc(100vw - 2rem)"
+              alt="The demo chain in Darkbeacon: a C3 home hole linked to a C2, a C5 Pulsar flagged hostile, a null-sec system, a high-sec exit and a low-sec exit. On the right, the System info, Signatures and Routes widgets for the home system."
+            />
+            {
+              marks.map((m) => (
+                <span class="mark" style={`left:${m.x}%;top:${m.y}%`} aria-hidden="true">
+                  {m.n}
+                </span>
+              ))
+            }
+          </div>
+          </div>
+          <figcaption>
+            <p class="swipe">The screenshot scrolls sideways.</p>
+            <ol class="legend">
+              {
+                marks.map((m) => (
+                  <li>
+                    <span class="legend-n" aria-hidden="true">
+                      {m.n}
+                    </span>
+                    <span>{m.text}</span>
+                  </li>
+                ))
+              }
+            </ol>
+          </figcaption>
+        </figure>
+      </section>
+
+      <Window id="scan" step="01" title="Scan" meta="probe scanner · signatures · wormhole types">
+        <h2>Paste the scanner, read the hole.</h2>
+        <div class="split split--scan">
+          <div class="prose">
+            <p>
+              Copy the probe scanner, press <kbd>Ctrl</kbd>+<kbd>V</kbd> anywhere on the map, and the results land in the
+              selected system. A toast says what changed, “3 new / 1 updated”. A paste never downgrades a signature
+              someone already scanned further.
+            </p>
+            <dl class="specs">
+              <div><dt>Scan colours</dt><dd>As the client draws them: red under 25 %, orange to 75 %, yellow to 100 %, green when you can warp.</dd></div>
+              <div><dt>Wormholes</dt><dd>Identified holes in their own blue-violet, with a bar on the row.</dd></div>
+              <div><dt>Leads to</dt><dd>Link a signature to its connection; the bookmark code shows above the system.</dd></div>
+              <div><dt>Expiry</dt><dd>Signatures go 24 h after they were added (a switch per map). Untouched ones also go after 14 days, or what the map sets.</dd></div>
+            </dl>
+          </div>
+          <figure class="shot shot--signatures">
+            <Shot
+              name="signatures"
+              sizes="(min-width: 1100px) 400px, calc(100vw - 2rem)"
+              alt="The Signatures widget: nine signatures, one unscanned in red, four wormholes in blue-violet with their types, K162 and U210 with lifetime marks, and sites in green."
+            />
+          </figure>
+        </div>
+        <figure class="shot shot--wide">
+          <Shot
+            name="wormholes"
+            sizes="(min-width: 1440px) 1040px, (min-width: 1100px) calc(100vw - 22rem), calc(100vw - 2rem)"
+            alt="The Wormhole types dialog: 102 types with where they spawn, lifetime, total mass, mass per jump, size and respawn."
+          />
+          <figcaption>
+            <strong>Wormhole types.</strong> All 102, K162 included: where they spawn, lifetime, total and per-jump mass,
+            the biggest hull that fits, static or wandering. Press <kbd>W</kbd>, or click any type code on the map.
+          </figcaption>
+        </figure>
+      </Window>
+
+      <Window id="map" step="02" title="Map" meta="live · automapping · undo · views">
+        <h2>Everyone edits the same chain. Nobody waits for a refresh.</h2>
+        <div class="columns">
+          <dl class="specs">
+            <div><dt>Live</dt><dd>Every change is streamed to everyone on the map, and to Discord.</dd></div>
+            <div><dt>Cursors</dt><dd>Another pilot’s cursor shows only while they move, link, edit or paste, with their name and what they are doing. 2.5 s later it fades. Moving the mouse shows nothing.</dd></div>
+            <div><dt>Automapping</dt><dd>The server reads tracked characters from ESI every 5 s. A jump adds the system and the connection, browser open or not.</dd></div>
+            <div><dt>Undo</dt><dd><kbd>Ctrl</kbd>+<kbd>Z</kbd> takes back your last 20 changes. The map’s history lists who changed what, reverts it, exports CSV or JSON.</dd></div>
+          </dl>
+          <dl class="specs">
+            <div><dt>Views</dt><dd>Lay the widgets out per job. Scan, PvP and Roll ship as views 1, 2 and 3; managers publish a view as the map’s default.</dd></div>
+            <div><dt>Statics</dt><dd>On the node with where they lead, <code>D845 HS</code>. Effects as a dot: Pulsar, Wolf-Rayet, Magnetar, Black Hole, Red Giant, Cataclysmic Variable.</dd></div>
+            <div><dt>Bookmarks</dt><dd>Numbering kept on the server so everyone sees the same codes. Click to copy.</dd></div>
+            <div><dt>Keys</dt><dd><kbd>F</kbd> fit chain, <kbd>C</kbd> centre on me, <kbd>L</kbd> legend, <kbd>W</kbd> wormhole types.</dd></div>
+          </dl>
+        </div>
+
+        <div class="split split--map">
+          <div class="map-left">
+          <div class="legend-sheet">
+            <h3>Colours mean what they mean in game</h3>
+            <p class="sheet-note">Security, exactly as the client draws it:</p>
+            <ol class="sec-scale">
+              {
+                security.map(([label, color]) => (
+                  <li style={`--c:${color}`}>
+                    <span class="mono">{label}</span>
+                  </li>
+                ))
+              }
+            </ol>
+            <p class="sheet-note">Standings toward who holds the space, as the client tags them:</p>
+            <ul class="standings">
+              <li style="--c: var(--standing-excellent)">+10</li>
+              <li style="--c: var(--standing-good)">+5</li>
+              <li style="--c: var(--standing-bad)">−5</li>
+              <li style="--c: var(--standing-terrible)">−10</li>
+            </ul>
+            <p class="sheet-note">One line per connection, read by colour:</p>
+            <ul class="edges">
+              <li><span class="edge" style="--outer: var(--edge); --core: var(--edge)"></span>Fresh</li>
+              <li><span class="edge" style="--outer: var(--edge-eol); --core: var(--edge)"></span>End of life</li>
+              <li><span class="edge" style="--outer: var(--edge-time-critical); --core: var(--edge)"></span>Under an hour</li>
+              <li><span class="edge" style="--outer: var(--edge); --core: var(--edge-reduced)"></span>Reduced mass</li>
+              <li><span class="edge" style="--outer: var(--edge); --core: var(--edge-critical)"></span>Critical mass</li>
+              <li><span class="edge edge--danger" style="--outer: var(--edge); --core: var(--edge)"></span>Dangerous</li>
+              <li><span class="edge edge--bubble" style="--outer: var(--edge); --core: var(--edge)"></span>Bubbled</li>
+              <li><span class="edge edge--size" style="--outer: var(--edge); --core: var(--edge)"><b>S</b></span>Frigate size</li>
+            </ul>
+          </div>
+        <div class="routes-block">
+          <figure class="shot">
+            <Shot
+              name="routes"
+              sizes="(min-width: 1100px) 400px, calc(100vw - 2rem)"
+              alt="The Routes widget: Jita and Rens 4 jumps, Dodixie 8, Amarr and Hek 9, each route drawn as squares in the security colour of every system on it."
+            />
+          </figure>
+          <div class="prose">
+            <h3>Routes from the chain</h3>
+            <p>
+              Jita, Amarr, Dodixie, Rens and Hek on every map, up to 20 hubs, your own on top. Thera and Turnur holes
+              come from EVE-Scout every five minutes. Shortest, safer, high-sec only or outlaw; skip EOL, critical,
+              frigate or bubbled holes. Set the destination in game for any character whose grant allows it.
+            </p>
+          </div>
+        </div>
+          </div>
+          <figure class="shot shot--dialog">
+            <Shot
+              name="edit-system"
+              sizes="(min-width: 1100px) 420px, calc(100vw - 2rem)"
+              alt="The Edit system dialog for J014348: custom and temporary names, status Home, Labels WH1 to WH3, a preview of the chips above the node, Tags, Markdown notes and the position lock."
+            />
+            <figcaption><strong>Edit system.</strong> Double-click a node. Every change saves as you make it.</figcaption>
+          </figure>
+        </div>
+
+      </Window>
+
+      <Window id="fight" step="03" title="Fight" meta="kills · local · sovereignty · structures">
+        <h2>Know who is in the chain before you undock.</h2>
+        <div class="columns">
+          <dl class="specs">
+            <div><dt>Kills</dt><dd>Killmails from zKillboard, live, on the node and in the Kills widget: this system or the whole map, the last 4, 12 or 24 hours. A new kill rings the node once.</dd></div>
+            <div><dt>Activity</dt><dd>Kills, NPC kills and jumps for the last hour and day from ESI, the busiest hours, and who kills there most over 7 days.</dd></div>
+            <div><dt>Sovereignty</dt><dd>Who holds a null-sec system, as a ticker under the node, in the game’s colour of your standing toward them.</dd></div>
+          </dl>
+          <dl class="specs">
+            <div><dt>Local</dt><dd>Your tracked pilots in the system, with their ships, yours first.</dd></div>
+            <div><dt>Structures</dt><dd>Paste them from the client: type, owner, status and timer.</dd></div>
+            <div><dt>Comments</dt><dd>A thread per system. “Rolling the D845 after downtime.”</dd></div>
+          </dl>
+        </div>
+        <figure class="shot shot--wide">
+          <Shot
+            name="pvp"
+            sizes="(min-width: 1440px) 1040px, (min-width: 1100px) calc(100vw - 22rem), calc(100vw - 2rem)"
+            alt="The PvP view: the chain, and for the home hole System info, Local with two tracked pilots in a Loki and a Sabre, Kills across every system on the map in the last 4 hours, and Comments."
+          />
+          <figcaption>
+            <strong>The PvP view</strong>, one keypress away: <kbd>Alt</kbd>+<kbd>2</kbd>. Kills here are set to every
+            system on the map.
+          </figcaption>
+        </figure>
+      </Window>
+
+      <Window id="capitals" step="04" title="Move capitals" meta="jump planner · fuel · fatigue">
+        <h2>Plan the jumps on a map of known space.</h2>
+        <figure class="shot shot--wide">
+          <Shot
+            name="jump"
+            sizes="(min-width: 1440px) 1040px, (min-width: 1100px) calc(100vw - 22rem), calc(100vw - 2rem)"
+            alt="The jump planner: a Thanatos from Amamake to 1DQ1-A, 8 jumps and 45.97 light years drawn over a top-down map of known space in security colours, with fuel, fatigue and waiting per leg."
+          />
+        </figure>
+        <div class="split split--capitals">
+          <dl class="specs">
+            <div><dt>Hulls</dt><dd>Jump freighters, black ops, Rorqual, carriers, dreads, lancers, FAX, supers and titans.</dd></div>
+            <div><dt>Skills</dt><dd>Jump Drive Calibration, Jump Fuel Conservation and Jump Freighters set range and fuel.</dd></div>
+            <div><dt>Fatigue</dt><dd>Fatigue and waiting per leg; keep it under a limit you pick.</dd></div>
+            <div><dt>Options</dt><dd>Finish over stargates, stop at NPC stations, outlaw, avoid systems, Ansiblex bridges.</dd></div>
+            <div><dt>Out</dt><dd>Set the waypoints in game, or copy the route for fleet chat.</dd></div>
+          </dl>
+          <figure class="copied">
+            <figcaption>Copy route</figcaption>
+            <pre><code>{copiedRoute}</code></pre>
+          </figure>
+        </div>
+      </Window>
+
+      <Window id="alliance" step="05" title="Run it for your alliance" meta="shared chains · access · API · Discord">
+        <h2>One chain per corp, one map for the alliance.</h2>
+        <div class="sheet">
+          <div class="sheet-row">
+            <h3>Shared chains</h3>
+            <p>
+              Corps keep their own maps and share them, read or read-write, with the other side’s admin agreeing. An
+              alliance map merges the shared chains field by field and shows where each system came from.
+            </p>
+          </div>
+          <div class="sheet-row">
+            <h3>Access</h3>
+            <p>
+              Rules by character, corporation, alliance, Discord role or account. One account holds every character of a
+              pilot. Roles are checked again every minute.
+            </p>
+          </div>
+          <div class="sheet-row">
+            <h3>Discord</h3>
+            <p>
+              New connections, EOL, danger, kills in the chain, pings, the way home and arrivals, over a webhook or the
+              bot, with role mentions and quiet hours.
+            </p>
+          </div>
+          <div class="sheet-row">
+            <h3>API keys</h3>
+            <p>
+              Personal tokens and service keys, scoped per resource and action, on one map or all, with expiry, IP
+              allow-list, rate limit and a read-only switch.
+            </p>
+          </div>
+          <div class="sheet-row">
+            <h3>OpenAPI and MCP</h3>
+            <p>
+              REST under <code>/api/v1</code>, described at <code>/api/openapi.json</code>. An MCP endpoint at
+              <code>/mcp</code> lets an assistant read the chain and find the way out; off until an admin turns it on.
+            </p>
+          </div>
+          <div class="sheet-row">
+            <h3>Public maps and webhooks</h3>
+            <p>
+              A read-only live view at <code>/p/&lt;token&gt;</code> that shows only what you choose. Webhooks signed with
+              HMAC, each delivery logged.
+            </p>
+          </div>
+          <div class="sheet-row">
+            <h3>Audit</h3>
+            <p>
+              Every change with who, which character and from where, kept in a hash-chained log with an integrity check.
+            </p>
+          </div>
+          <div class="sheet-row">
+            <h3>Support hub</h3>
+            <p>
+              Report a problem from the help menu. A ticket belongs to the EVE character you pick and lists every detail
+              it sends before you send it.
+            </p>
+          </div>
+        </div>
+      </Window>
+
+      <Window id="wanderer" title="Coming from Wanderer" meta="import · merge · keep syncing">
+        <h2>Bring the chain with you, intel included.</h2>
+        <div class="split split--wanderer">
+          <div class="prose">
+            <p>
+              <strong>All maps, Import from Wanderer.</strong> Point it at wanderer.ltd or your own Wanderer with the
+              map’s API key, upload the file Wanderer exports, or, as an instance admin, read your own Wanderer’s
+              database read-only. Read the preview, then import into a new map or merge into one you use.
+            </p>
+            <ul class="ticks">
+              <li>Systems, connections in every state, signatures, structures, comments, labels, tags and access lists.</li>
+              <li>Hidden systems come over hidden, with their notes, signatures and structures, back when the system is.</li>
+              <li>The preview says what comes over as it is, what comes over close to it, and what is left out and why.</li>
+              <li>Keep syncing from Wanderer every 5 to 60 minutes while the corp moves over.</li>
+            </ul>
+          </div>
+          <figure class="shot">
+            <Shot
+              name="import"
+              sizes="(min-width: 1100px) 560px, calc(100vw - 2rem)"
+              alt="Import from Wanderer: choose Wanderer’s API, an export file or Wanderer’s database, then the address, the map and its API key."
+            />
+          </figure>
+        </div>
+        <div class="parity">
+          <div>
+            <h3>Different from Wanderer</h3>
+            <ul class="ticks">
+              <li>Tracking runs on the server, so jumps are mapped with every browser closed.</li>
+              <li>Removing a system hides it; its signatures and notes come back with it.</li>
+              <li>Routing runs inside the server, with high-sec only and outlaw modes.</li>
+              <li>A jump planner for capitals instead of links to Dotlan.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Does not come over</h3>
+            <ul class="ticks ticks--muted">
+              <li>Tracked characters and settings: pilots sign in and link their characters again.</li>
+              <li>Kills: Darkbeacon reads them live from zKillboard.</li>
+              <li>Wanderer subscriptions and licences.</li>
+            </ul>
+          </div>
+        </div>
+      </Window>
+
+      <Window id="self-host" title="Self-host" meta="docker · sqlite · postgres">
+        <h2>One container. Your data stays on your box.</h2>
+        <div class="split split--host">
+          <figure class="copied">
+            <figcaption>compose.yaml</figcaption>
+            <pre><code>{compose}</code></pre>
+            <figcaption class="copied-after">then</figcaption>
+            <pre><code>{`git clone ${REPO_URL}.git && cd darkbeacon
+cp .env.example .env
+docker compose up -d`}</code></pre>
+          </figure>
+          <dl class="specs">
+            <div><dt>Setup</dt><dd>Set <code>PUBLIC_URL</code> and an EVE application in <code>.env</code>; that is all it needs. The first account to sign in owns the instance.</dd></div>
+            <div><dt>Volume</dt><dd><code>/data</code> holds the SQLite database, backups and the secret key.</dd></div>
+            <div><dt>Database</dt><dd>SQLite in the volume by default; set <code>DATABASE_URL</code> for Postgres.</dd></div>
+            <div><dt>Backups</dt><dd>On SQLite, daily by default, the 14 newest kept. Restore from Admin, Backups, or the command line.</dd></div>
+            <div><dt>Size</dt><dd>One container holds a whole alliance: thousands of accounts, 600 characters tracked online, 400 people connected.</dd></div>
+            <div><dt>Metrics</dt><dd>OpenTelemetry traces, metrics and logs once an OTLP endpoint is set; Prometheus at <code>/metrics</code>.</dd></div>
+            <div><dt>Telemetry</dt><dd>Anonymous usage counts from production builds, never names or systems. <code>TELEMETRY=off</code> stops it.</dd></div>
+            <div><dt>App</dt><dd>Installs from the browser and runs in its own window next to the client.</dd></div>
+          </dl>
+        </div>
+      </Window>
+
+      <div class="pair">
+        <Window id="source" title="Open source" meta="github">
+          <h2>Read every line.</h2>
+          <p class="prose">
+            Server, web app, plugin SDK and themes are on GitHub. Plugins add widgets and Discord notifiers; themes
+            restyle the map. Bug reports and pull requests are welcome.
+          </p>
+          {/* TODO: name the licence here once a LICENSE file is in the repository. */}
+          <p class="repo"><a class="btn" href={REPO_URL}>zanreal-labs/darkbeacon</a></p>
+        </Window>
+
+        <Window id="support" title="Support the project" meta="isk">
+          <h2>Built in spare time, for everyone in J-space.</h2>
+          <p class="prose">
+            If it saves your fleet a few jumps, send ISK in game. It buys no features and no priority; every instance
+            works the same either way.
+          </p>
+          <div class="isk">
+            <span class="isk-label">Send ISK to</span>
+            <code class="isk-name" id="isk-name">{DONATION_CHARACTER}</code>
+            <button class="btn btn--sm" type="button" data-copy={DONATION_CHARACTER} aria-describedby="isk-status">
+              Copy name
+            </button>
+            <span class="isk-status" id="isk-status" role="status" aria-live="polite"></span>
+          </div>
+        </Window>
+      </div>
+    </main>
+  </div>
+
+  <footer class="footer">
+    <p>
+      Darkbeacon is made by ZanReal, in game <span class="mono">Z4NR34L</span>.{' '}
+      <a href={REPO_URL}>Source</a> · <a href={APP_URL}>Hosted instance</a>
+    </p>
+    <p class="ccp">
+      EVE Online and all related logos and designs are trademarks or registered trademarks of CCP ehf. Darkbeacon is not
+      affiliated with or endorsed by CCP.
+    </p>
+  </footer>
+
+  <script>
+    // Copy the donation name.
+    for (const button of document.querySelectorAll<HTMLButtonElement>('[data-copy]')) {
+      button.addEventListener('click', async () => {
+        const status = document.getElementById('isk-status');
+        try {
+          await navigator.clipboard.writeText(button.dataset.copy ?? '');
+          if (status) status.textContent = 'Copied';
+        } catch {
+          if (status) status.textContent = 'Select the name and copy it';
+        }
+        window.setTimeout(() => status && (status.textContent = ''), 2500);
+      });
+    }
+
+    // The chain rail selects the system (section) in view.
+    const links = new Map<string, HTMLElement>();
+    for (const a of document.querySelectorAll<HTMLElement>('.rail [data-target]')) links.set(a.dataset.target!, a);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          for (const a of links.values()) a.removeAttribute('aria-current');
+          links.get(entry.target.id)?.setAttribute('aria-current', 'true');
+        }
+      },
+      { rootMargin: '-35% 0px -60% 0px' },
+    );
+    for (const id of links.keys()) {
+      const section = document.getElementById(id);
+      if (section) observer.observe(section);
+    }
+  </script>
+</Layout>

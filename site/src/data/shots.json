@@ -1,0 +1,64 @@
+{
+  "chain": {
+    "width": 3200,
+    "height": 2000,
+    "widths": [
+      1200,
+      2400
+    ]
+  },
+  "signatures": {
+    "width": 800,
+    "height": 632,
+    "widths": [
+      800
+    ]
+  },
+  "routes": {
+    "width": 800,
+    "height": 300,
+    "widths": [
+      800
+    ]
+  },
+  "pvp": {
+    "width": 3200,
+    "height": 2000,
+    "widths": [
+      1200,
+      2400
+    ]
+  },
+  "edit-system": {
+    "width": 1080,
+    "height": 1904,
+    "widths": [
+      700,
+      1080
+    ]
+  },
+  "wormholes": {
+    "width": 2240,
+    "height": 1560,
+    "widths": [
+      1200,
+      2240
+    ]
+  },
+  "jump": {
+    "width": 3200,
+    "height": 2000,
+    "widths": [
+      1200,
+      2400
+    ]
+  },
+  "import": {
+    "width": 1720,
+    "height": 1096,
+    "widths": [
+      860,
+      1720
+    ]
+  }
+}

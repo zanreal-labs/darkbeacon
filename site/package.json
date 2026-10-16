@@ -1,0 +1,22 @@
+{
+  "name": "darkbeacon-site",
+  "private": true,
+  "type": "module",
+  "description": "The Darkbeacon marketing site. Not part of the pnpm workspace; built on its own (Vercel Root Directory: site).",
+  "engines": {
+    "node": ">=22.22"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/sitemap": "3.7.4",
+    "@fontsource/barlow": "5.3.0",
+    "@fontsource/jetbrains-mono": "5.3.0",
+    "@fontsource/saira-semi-condensed": "5.3.0",
+    "astro": "7.3.8"
+  }
+}

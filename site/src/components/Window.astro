@@ -1,0 +1,24 @@
+---
+// A section framed like a client window: a hairline frame and a title strip, square corners.
+interface Props {
+  id: string;
+  title: string;
+  meta?: string;
+  step?: string;
+}
+
+const { id, title, meta, step } = Astro.props;
+---
+
+<section class="window" id={id} aria-labelledby={`${id}-title`}>
+  <header class="window-bar">
+    <p class="window-title" id={`${id}-title`}>
+      {step && <span class="window-step">{step}</span>}
+      {title}
+    </p>
+    {meta && <p class="window-meta">{meta}</p>}
+  </header>
+  <div class="window-body">
+    <slot />
+  </div>
+</section>
