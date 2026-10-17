@@ -2,7 +2,15 @@
 import { describe, expect, it } from 'vitest';
 import { fireEvent, screen } from '@testing-library/react';
 import { http, HttpResponse } from 'msw/http';
-import { buildPath, routes, type ImportBridgesResultDto, type MapDto, type MeDto } from '@darkbeacon/shared';
+import {
+  buildPath,
+  routes,
+  type BridgeDto,
+  type EveEntityDto,
+  type ImportBridgesResultDto,
+  type MapDto,
+  type MeDto,
+} from '@darkbeacon/shared';
 import { MAP_ID, meFixture } from '../../test/fixtures';
 import { installFlowMocks, renderWithProviders, setupMockServer } from '../../test/setup';
 import { ToastProvider, TooltipProvider } from '../../ui';
@@ -14,10 +22,36 @@ installFlowMocks();
 let me: MeDto = meFixture();
 let answer: { status: number; body: Record<string, unknown> } = { status: 200, body: {} };
 const reads: unknown[] = [];
+let onMap: BridgeDto[] = [];
+
+const end = (solarSystemId: number, name: string) => ({
+  solarSystemId,
+  name,
+  security: -0.4,
+  regionName: 'Delve',
+});
+const bridge = (id: string, a: string, b: string, owner: Partial<BridgeDto> = {}): BridgeDto => ({
+  id,
+  a: end(1, a),
+  b: end(2, b),
+  dangerous: false,
+  source: 'paste',
+  structureName: null,
+  structureId: null,
+  ownerCorporationId: null,
+  ownerAllianceId: null,
+  createdAt: 0,
+  ...owner,
+});
 
 setupMockServer(
   http.get(routes.accounts.me.path, () => HttpResponse.json(me)),
-  http.get(buildPath(routes.bridges.list.path, { mapId: MAP_ID }), () => HttpResponse.json([])),
+  http.get(buildPath(routes.bridges.list.path, { mapId: MAP_ID }), () => HttpResponse.json(onMap)),
+  http.get(routes.eve.entities.path, () =>
+    HttpResponse.json([
+      { id: 99000001, name: 'Our Alliance', category: 'alliance', ticker: 'OURS' },
+    ] satisfies EveEntityDto[]),
+  ),
   http.post(buildPath(routes.bridges.readFromEsi.path, { mapId: MAP_ID }), async ({ request }) => {
     reads.push(await request.json());
     return HttpResponse.json(answer.body, { status: answer.status });
@@ -68,6 +102,22 @@ describe('finding jump bridges in the map settings', () => {
     expect(await screen.findByText('No jump bridges found')).toBeTruthy();
     expect(reads.at(-1)).toEqual({ characterId: me.characters[0]!.id });
     expect(screen.queryByText('Link again to find jump bridges')).toBeNull();
+  });
+
+  it('names the owner of each bridge, and says when a pasted one has none', async () => {
+    me = withExtras(['structures']);
+    onMap = [
+      bridge('b1', '1DQ1-A', '4O-239', {
+        source: 'esi',
+        ownerCorporationId: 98000001,
+        ownerAllianceId: 99000001,
+      }),
+      bridge('b2', 'T5ZI-S', 'PR-8CA'),
+    ];
+    wrap();
+    expect(await screen.findByText(/Our Alliance \[OURS\]/)).toBeTruthy();
+    expect(screen.getByText(/pasted, owner unknown/)).toBeTruthy();
+    onMap = [];
   });
 
   it('shows why EVE refused', async () => {

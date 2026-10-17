@@ -171,6 +171,28 @@ export function isForeignBridge(
 }
 
 /**
+ * The pilot a route is for, as far as bridges go: their direct alliance (null: in none). Null when
+ * no pilot is known (what every viewer of a map sees), and every bridge may then be used.
+ */
+export type BridgePilot = { allianceId: number | null } | null;
+
+/**
+ * Whether a pilot may take a bridge. A bridge whose owner is known (found through ESI) is for the
+ * pilots of the alliance owning it only, as the game has it since 2026-09-22; one whose owner is
+ * not known (pasted by hand) falls back on sovereignty (`isForeignBridge`), when it is known.
+ */
+export function mayUseBridge(
+  edge: { a: number; b: number; ownerAllianceId?: number | null | undefined },
+  pilot: BridgePilot,
+  holderOf: ((solarSystemId: number) => number | null) | null,
+): boolean {
+  if (pilot === null) return true;
+  if (edge.ownerAllianceId !== undefined && edge.ownerAllianceId !== null)
+    return edge.ownerAllianceId === pilot.allianceId;
+  return holderOf === null || !isForeignBridge(edge.a, edge.b, pilot.allianceId, holderOf);
+}
+
+/**
  * Why ESI gave no structures: EVE refused (no role, grant gone), no working login, the grant
  * lacks a scope the read needs (linking the character again with it fixes that), or no answer.
  */

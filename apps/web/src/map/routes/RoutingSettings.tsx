@@ -16,6 +16,7 @@ import { api, ApiError } from '../../lib/api';
 import type { MapPermissions } from '../../lib/roles';
 import { hereForReturn, relinkHref } from '../../lib/scope-health';
 import { relativeTime } from '../../lib/time';
+import { useEveEntities } from '../../lib/characters';
 import { useMe } from '../../lib/session';
 import {
   Badge,
@@ -249,6 +250,14 @@ export function BridgesSettings({ map }: { map: MapDto }) {
     if (text.trim()) paste.mutate();
   };
   const list = bridges.data ?? [];
+  const owners = useEveEntities(list.flatMap((b) => [b.ownerAllianceId ?? b.ownerCorporationId]));
+  /** Who owns a bridge, in words: its alliance (else corporation) by name and ticker. */
+  const ownerText = (b: BridgeDto) => {
+    const id = b.ownerAllianceId ?? b.ownerCorporationId;
+    if (id === null) return b.source === 'paste' ? 'pasted, owner unknown' : 'owner unknown';
+    const e = owners.byId.get(id);
+    return e ? `${e.name}${e.ticker ? ` [${e.ticker}]` : ''}` : `owner ${id}`;
+  };
   const error = paste.error ?? readEsi.error;
 
   return (
@@ -325,7 +334,7 @@ export function BridgesSettings({ map }: { map: MapDto }) {
       <Card>
         <CardHeader
           title={`On this map: ${list.length}`}
-          description="Routes use a bridge only for pilots of the alliance holding sovereignty where it stands, and never for capitals. Routes that avoid dangerous connections leave dangerous bridges out."
+          description="Routes use a bridge found in EVE only for pilots of the alliance owning it; a pasted one, whose owner is unknown, for pilots of the alliance holding sovereignty where it stands. Never for capitals. Routes that avoid dangerous connections leave dangerous bridges out."
           actions={
             list.length > 0 && (
               <Button size="sm" variant="danger-ghost" icon={<Trash2 />} onClick={() => setClearing(true)}>
@@ -352,7 +361,7 @@ export function BridgesSettings({ map }: { map: MapDto }) {
                     b.a.regionName === b.b.regionName
                       ? b.a.regionName
                       : `${b.a.regionName} » ${b.b.regionName}`,
-                    b.source === 'esi' ? 'read from EVE' : 'pasted',
+                    ownerText(b),
                     b.structureName,
                   ]
                     .filter(Boolean)

@@ -3,6 +3,7 @@ import { mapStream } from '@darkbeacon/core';
 import { describeEachDialect } from '@darkbeacon/db/testing';
 import { ConnectionUseCases, MapUseCases, SystemUseCases, type ChainMap } from '@darkbeacon/mapping';
 import {
+  BridgeEdgeSource,
   closedLevels,
   displaySecurity,
   ExitsPublisher,
@@ -21,6 +22,7 @@ import { account, mappingTestPorts } from '../mapping/testing.js';
 import { StaticUniverseCatalog } from '../universe/static-universe-catalog.js';
 import { MappingChainSource } from './esi-adapters.js';
 import { KyselyHubRepository } from './kysely-hub-repository.js';
+import { KyselyBridgeRepository } from './kysely-routing-repositories.js';
 
 const universe = StaticUniverseCatalog.load('/nonexistent');
 
@@ -118,6 +120,7 @@ const pilots: PilotDirectory = {
   scopes: async () => [],
   accessToken: async () => null,
   charactersOf: async () => [],
+  affiliation: async () => null,
 };
 
 describeEachDialect('routing over a map', (t) => {
@@ -416,6 +419,109 @@ describeEachDialect('routing over a map', (t) => {
     const alone = await queries.hubRoutes(bob, shck.id, { from: C.home, hubs: 'map', mode: 'shortest' });
     expect(alone.routes.map((r) => r.jumps)).toEqual([null, null, null, null, null]);
     expect(alone.unreachable).toBe('isolated');
+  });
+
+  it("routes a pilot over their own alliance's bridges and ownerless ones, never another alliance's", async () => {
+    const idOf = (name: string) => [...universe.systems()].find((s) => s.name === name)!.id;
+    const pair = (x: string, y: string) => [idOf(x), idOf(y)].sort((p, q) => p - q) as [number, number];
+    const OURS = 99000001;
+    const THEIRS = 99000002;
+    const own = pair('1DQ1-A', '4O-239');
+    const foreign = pair('UALX-3', '8WA-Z6');
+    const pasted = pair('T5ZI-S', 'PR-8CA');
+    const repo = new KyselyBridgeRepository(t.db);
+    let next = 0;
+    const save = (p: [number, number], owner: { corporation: number; alliance: number } | null) =>
+      repo.upsert(
+        [
+          {
+            mapId: map.id,
+            a: p[0],
+            b: p[1],
+            dangerous: false,
+            source: owner ? 'esi' : 'paste',
+            structureId: null,
+            structureName: null,
+            ownerCorporationId: owner?.corporation ?? null,
+            ownerAllianceId: owner?.alliance ?? null,
+          },
+        ],
+        { id: () => `bridge-${++next}`, now: 1, keepDangerous: true },
+      );
+    await save(own, { corporation: 98000001, alliance: OURS });
+    await save(foreign, { corporation: 98000002, alliance: THEIRS });
+    await save(pasted, null);
+    expect((await repo.list(map.id)).map((b) => [b.source, b.ownerAllianceId]).sort()).toEqual([
+      ['esi', OURS],
+      ['esi', THEIRS],
+      ['paste', null],
+    ]);
+
+    const bridged = new Router({ universe, chains: new MappingChainSource(env.ports) });
+    bridged.addEdgeSource(new BridgeEdgeSource(repo));
+    const routes = new RouteQueries({
+      router: bridged,
+      universe,
+      hubs: new KyselyHubRepository(t.db),
+      pilots,
+      access: env.access,
+      // Alice's main flies for us; her alt 9002 for them; Bob has no character.
+      alliances: {
+        pilotOf: async (accountId, characterId) =>
+          accountId === 'alice' ? { allianceId: characterId === 9002 ? THEIRS : OURS } : null,
+      },
+    });
+    const jumps = async (
+      who: typeof alice,
+      p: [number, number],
+      mode: { mode: RouteMode; characterId?: number; securityStatus?: number } = { mode: 'shortest' },
+    ) => (await routes.route(who, map.id, { from: p[0], to: p[1], ...mode })).jumps;
+
+    for (const mode of [
+      { mode: 'shortest' as const },
+      { mode: 'safer' as const },
+      { mode: 'pilot' as const, characterId: 9001, securityStatus: 0 },
+    ]) {
+      expect(await jumps(alice, own, mode), mode.mode).toBe(1);
+      expect(await jumps(alice, foreign, mode), mode.mode).toBeGreaterThan(1);
+      expect(await jumps(alice, pasted, mode), mode.mode).toBe(1);
+    }
+    // The alt in the other alliance takes theirs, not ours.
+    const alt = { mode: 'pilot' as const, characterId: 9002, securityStatus: 0 };
+    expect(await jumps(alice, own, alt)).toBeGreaterThan(1);
+    expect(await jumps(alice, foreign, alt)).toBe(1);
+    expect(await jumps(alice, pasted, alt)).toBe(1);
+    // No pilot known: every bridge, as before.
+    expect(await jumps(bob, foreign)).toBe(1);
+    // None of the pairs is a stargate apart.
+    for (const p of [own, foreign, pasted]) {
+      expect(
+        (await routes.route(bob, map.id, { from: p[0], to: p[1], mode: 'shortest', bridges: false })).jumps,
+      ).toBeGreaterThan(1);
+    }
+
+    // Hub routes and exits judge the bridges alike.
+    await hubs.setMapHubs(alice, map.id, [own[1], foreign[1]]);
+    const toHubs = async (from: number) =>
+      new Map(
+        (await routes.hubRoutes(alice, map.id, { from, hubs: 'map', mode: 'shortest' })).routes.map((r) => [
+          r.solarSystemId,
+          r.jumps,
+        ]),
+      );
+    expect((await toHubs(own[0])).get(own[1])).toBe(1);
+    expect((await toHubs(foreign[0])).get(foreign[1])).toBeGreaterThan(1);
+    await systems.add(alice, map.id, { solarSystemId: own[0] });
+    await connections.add(alice, map.id, { source: S.home, target: own[0] });
+    bridged.invalidate(map.id);
+    const exit = (await routes.exits(alice, map.id, { mode: 'shortest' })).exits.find(
+      (e) => e.solarSystemId === own[0],
+    )!;
+    expect(exit.hubs.find((h) => h.solarSystemId === own[1])!.jumps).toBe(1);
+    const altExit = (
+      await routes.exits(alice, map.id, { mode: 'pilot', characterId: 9002, securityStatus: 0 })
+    ).exits.find((e) => e.solarSystemId === own[0])!;
+    expect(altExit.hubs.find((h) => h.solarSystemId === own[1])!.jumps).toBeGreaterThan(1);
   });
 
   it('hides routes from people who cannot see the map', async () => {

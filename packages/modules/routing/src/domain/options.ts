@@ -6,6 +6,7 @@ import type {
   ShipSize,
   TimeStatus,
 } from '@darkbeacon/shared';
+import type { BridgePilot } from './bridges.js';
 import type { ExtraEdge } from './graph.js';
 import { isWormholeSpace, type RouteNode, type RoutePolicy } from './modes.js';
 
@@ -64,6 +65,8 @@ export interface EdgeState {
 /** An extra edge with what route options look at. */
 export interface RoutedEdge extends ExtraEdge {
   state: EdgeState;
+  /** A jump bridge's owning alliance, when known (found through ESI); null or absent: not known. */
+  ownerAllianceId?: number | null;
 }
 
 /**
@@ -89,13 +92,14 @@ export function usableEdge(edge: RoutedEdge, options: RouteOptions, foreign: (ed
   return true;
 }
 
-/** Equal keys filter edges alike (the alliance decides which bridges are foreign). */
-export function edgeKey(options: RouteOptions, alliance: number | null): string {
+/** Equal keys filter edges alike (the pilot's alliance decides which bridges they may take). */
+export function edgeKey(options: RouteOptions, pilot: BridgePilot): string {
+  const who = pilot === null ? '' : `:${pilot.allianceId ?? 'none'}`;
   return [
     [...options.skip].sort().join(','),
     options.avoidSpace.includes('wormholes') ? 'w' : '',
     options.thera ? 't' : '',
-    options.bridges && !options.capital ? `b${alliance ?? ''}` : '',
+    options.bridges && !options.capital ? `b${who}` : '',
   ].join('|');
 }
 

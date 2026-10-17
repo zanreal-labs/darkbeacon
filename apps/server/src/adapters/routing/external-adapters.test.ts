@@ -6,6 +6,7 @@ import {
   AccountAlliances,
   CORPORATION_STRUCTURES_SCOPE,
   EsiAnsiblexSearch,
+  EsiCorporationAlliances,
   EsiCorporationStructures,
   EsiSovereignty,
   HttpEveScoutClient,
@@ -96,8 +97,13 @@ describe('ESI', () => {
         }) as typeof fetch,
       });
     expect(await structures().ansiblexes(9001)).toEqual([
-      { structureId: 1, solarSystemId: 30004759, name: '1DQ1-A » UALX-3 - Home' },
-      { structureId: 3, solarSystemId: 30004750, name: null },
+      {
+        structureId: 1,
+        solarSystemId: 30004759,
+        name: '1DQ1-A » UALX-3 - Home',
+        ownerCorporationId: 98000001,
+      },
+      { structureId: 3, solarSystemId: 30004750, name: null, ownerCorporationId: 98000001 },
     ]);
     expect(calls.map((c) => c.url)).toEqual([
       'https://esi.evetech.net/characters/9001',
@@ -173,8 +179,18 @@ describe('ESI', () => {
       const { search, calls, clock } = setup();
       const gates = await search.ansiblexes(CHARACTER);
       expect(gates).toEqual([
-        { structureId: 1020000000001, solarSystemId: DQ, name: '1DQ1-A » 4O-239 - Home' },
-        { structureId: 1020000000004, solarSystemId: O4, name: '4O-239 » 1DQ1-A - Back' },
+        {
+          structureId: 1020000000001,
+          solarSystemId: DQ,
+          name: '1DQ1-A » 4O-239 - Home',
+          ownerCorporationId: 98000002,
+        },
+        {
+          structureId: 1020000000004,
+          solarSystemId: O4,
+          name: '4O-239 » 1DQ1-A - Back',
+          ownerCorporationId: 98000003,
+        },
       ]);
       expect(ANSIBLEX_TYPE_ID).toBe(35841);
       const first = new URL(calls[0]!.url);
@@ -227,6 +243,53 @@ describe('ESI', () => {
     });
   });
 
+  it('reads the alliance of each owner once, together, and keeps it for an hour', async () => {
+    const urls: string[] = [];
+    const clock = new ManualClock();
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    // GET /corporations/{id}: `alliance_id` only for corporations in an alliance.
+    const BODIES: Record<string, unknown> = {
+      98000002: { name: 'Owner', ticker: 'OWN', alliance_id: 99000001 },
+      98000003: { name: 'Other', ticker: 'OTH', alliance_id: 99000002 },
+      98000004: { name: 'Alone', ticker: 'ALN' },
+    };
+    const owners = new EsiCorporationAlliances({
+      userAgent: 'test',
+      clock,
+      fetch: (async (url: string) => {
+        urls.push(url);
+        await gate;
+        const id = url.split('/').at(-1)!;
+        return BODIES[id] ? json(BODIES[id]) : json({ error: 'gone' }, { status: 404 });
+      }) as typeof fetch,
+    });
+    // Many gates of few owners: each owner once, and a second caller shares the reads.
+    const first = owners.alliancesOf([98000002, 98000003, 98000002, 98000004, 98000002, 98000009]);
+    const second = owners.alliancesOf([98000003]);
+    release();
+    expect(await first).toEqual(
+      new Map([
+        [98000002, 99000001],
+        [98000003, 99000002],
+        [98000004, null],
+      ]),
+    );
+    expect(await second).toEqual(new Map([[98000003, 99000002]]));
+    expect(urls.map((u) => new URL(u).pathname).sort()).toEqual([
+      '/corporations/98000002',
+      '/corporations/98000003',
+      '/corporations/98000004',
+      '/corporations/98000009',
+    ]);
+    // Kept for an hour; the one ESI did not answer for is asked again.
+    await owners.alliancesOf([98000002, 98000004, 98000009]);
+    expect(urls).toHaveLength(5);
+    clock.advance(61 * 60_000);
+    await owners.alliancesOf([98000002]);
+    expect(urls).toHaveLength(6);
+  });
+
   it('reads who holds each system and keeps it for an hour', async () => {
     const urls: string[] = [];
     const clock = new ManualClock();
@@ -276,7 +339,7 @@ describe('static data and identity', () => {
         { id: 2, allianceId: 20 },
       ],
     });
-    expect(await alliances.allianceOf('a')).toBe(20);
+    expect(await alliances.pilotOf('a')).toEqual({ allianceId: 20 });
     const noMain = new AccountAlliances({
       mainCharacterOf: async () => null,
       charactersOf: async () => [
@@ -284,7 +347,9 @@ describe('static data and identity', () => {
         { id: 2, allianceId: 20 },
       ],
     });
-    expect(await noMain.allianceOf('a')).toBe(20);
+    expect(await noMain.pilotOf('a')).toEqual({ allianceId: 20 });
+    const none = new AccountAlliances({ mainCharacterOf: async () => null, charactersOf: async () => [] });
+    expect(await none.pilotOf('a')).toBeNull();
   });
 
   it("takes the pilot's alliance when the account owns the pilot", async () => {
@@ -296,10 +361,11 @@ describe('static data and identity', () => {
         { id: 3, allianceId: null },
       ],
     });
-    expect(await alliances.allianceOf('a', 1)).toBe(10);
-    expect(await alliances.allianceOf('a', 3)).toBeNull();
+    expect(await alliances.pilotOf('a', 1)).toEqual({ allianceId: 10 });
+    // A pilot in no alliance is still a pilot: owned bridges are not for them.
+    expect(await alliances.pilotOf('a', 3)).toEqual({ allianceId: null });
     // Someone else's character: the main's.
-    expect(await alliances.allianceOf('a', 99)).toBe(20);
+    expect(await alliances.pilotOf('a', 99)).toEqual({ allianceId: 20 });
   });
 
   it('knows how the invasion left a system', () => {

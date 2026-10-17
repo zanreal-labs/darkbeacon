@@ -29,6 +29,7 @@ import {
   type AllianceDirectory,
   type BridgeRepository,
   type CharacterStructureSearch,
+  type CorporationAlliances,
   type CorporationStructures,
   type HubRepository,
   type PilotDirectory,
@@ -46,6 +47,7 @@ import {
 import {
   AccountAlliances,
   EsiAnsiblexSearch,
+  EsiCorporationAlliances,
   EsiCorporationStructures,
   EsiSovereignty,
   HttpEveScoutClient,
@@ -84,6 +86,7 @@ const PILOT_DIRECTORY = 'PilotDirectory';
 const WAYPOINT_GATEWAY = 'WaypointGateway';
 const CORPORATION_STRUCTURES = 'CorporationStructures';
 const STRUCTURE_SEARCH = 'CharacterStructureSearch';
+const CORPORATION_ALLIANCES = 'CorporationAlliances';
 const ALLIANCES = 'AllianceDirectory';
 const STATIONS = ROUTING_STATIONS;
 
@@ -321,6 +324,17 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
       inject: [APP_CONFIG, CharacterService, CLOCK, HTTP_FETCH],
     },
     {
+      provide: CORPORATION_ALLIANCES,
+      useFactory: (config: AppConfig, clock: Clock, fetchFn: typeof fetch) =>
+        new EsiCorporationAlliances({
+          fetch: fetchFn,
+          userAgent: userAgent(config),
+          baseUrl: config.esiBaseUrl,
+          clock,
+        }),
+      inject: [APP_CONFIG, CLOCK, HTTP_FETCH],
+    },
+    {
       provide: ALLIANCES,
       useFactory: (characters: CharacterService, accounts: AccountService) =>
         new AccountAlliances({
@@ -433,6 +447,7 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
         universe: RoutingUniverse,
         structures: CorporationStructures,
         search: CharacterStructureSearch,
+        owners: CorporationAlliances,
         pilots: PilotDirectory,
         access: MapAccess,
         events: EventLog,
@@ -444,6 +459,7 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
           universe,
           structures,
           search,
+          owners,
           pilots,
           access,
           events,
@@ -457,6 +473,7 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
         UNIVERSE_CATALOG,
         CORPORATION_STRUCTURES,
         STRUCTURE_SEARCH,
+        CORPORATION_ALLIANCES,
         PILOT_DIRECTORY,
         MAP_ACCESS,
         EVENT_LOG,

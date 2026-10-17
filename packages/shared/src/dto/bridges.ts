@@ -25,6 +25,12 @@ export const BridgeDto = z.object({
   /** The structure's in-game name and id, when ESI named them. */
   structureName: z.string().nullable(),
   structureId: EveId.nullable(),
+  /**
+   * Who owns it, when ESI said: the corporation and its alliance. Routes take an owned bridge only
+   * for pilots of that alliance; both are null for a bridge pasted by hand (owner not known).
+   */
+  ownerCorporationId: EveId.nullable(),
+  ownerAllianceId: EveId.nullable(),
   createdAt: Timestamp,
 });
 export type BridgeDto = z.infer<typeof BridgeDto>;

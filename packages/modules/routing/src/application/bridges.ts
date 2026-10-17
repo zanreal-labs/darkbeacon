@@ -28,6 +28,7 @@ import type {
   BridgeRecord,
   BridgeRepository,
   CharacterStructureSearch,
+  CorporationAlliances,
   CorporationStructures,
   NewBridge,
   PilotDirectory,
@@ -42,6 +43,8 @@ export interface BridgeAdminDeps {
   structures: CorporationStructures;
   /** The Ansiblexes a character may use (the alliance's too); without it only the corporation's are read. */
   search?: CharacterStructureSearch;
+  /** The alliances of the gates' owners; without it the owners stay unknown and nothing is filtered. */
+  owners?: CorporationAlliances;
   pilots: PilotDirectory;
   access: MapAccess;
   events: EventLog;
@@ -114,7 +117,9 @@ export class BridgeAdmin {
    * Finds the Ansiblex gates a character can use through ESI: the structures its search finds
    * (its alliance's gates, whichever corporation owns them) and its corporation's own structures
    * (Station Manager role), merged by structure and by pair of systems. One source failing is
-   * fine while the other answers.
+   * fine while the other answers. Each gate keeps its owner (corporation and alliance); only the
+   * gates of the character's alliance are kept (its corporation's when it is in none), as only
+   * that alliance's pilots may take them.
    */
   async readFromEsi(
     actor: Actor | null,
@@ -147,9 +152,15 @@ export class BridgeAdmin {
       notes.push("EVE's structure search did not answer; only your corporation's gates were read.");
 
     const gates = uniqueStructures([...(usable ?? []), ...(corporation ?? [])]);
+    const { kept, foreign, unknown } = await this.ownGates(characterId, gates);
+    if (foreign > 0) notes.push(`${foreign} ${foreign === 1 ? 'gate' : 'gates'} of other alliances skipped.`);
+    if (unknown > 0)
+      notes.push(
+        `${unknown} ${unknown === 1 ? 'gate' : 'gates'} skipped: EVE did not say who owns ${unknown === 1 ? 'it' : 'them'}; try again in a moment.`,
+      );
     const unreadable: UnreadableLine[] = [];
     const bridges = new Map<string, NewBridge>();
-    for (const gate of gates) {
+    for (const { gate, allianceId } of kept) {
       const far = gate.name ? farSideOf(gate.name, gate.solarSystemId, (n) => this.names.idOf(n)) : null;
       const label = gate.name ?? `Structure ${gate.structureId}`;
       if (far === null) {
@@ -166,6 +177,8 @@ export class BridgeAdmin {
         source: 'esi',
         structureId: gate.structureId,
         structureName: gate.name,
+        ownerCorporationId: gate.ownerCorporationId,
+        ownerAllianceId: allianceId,
       });
       // Both ends of a bridge are gates of their own: one pair, the first gate named.
       const pair = `${bridge.a}:${bridge.b}`;
@@ -173,6 +186,44 @@ export class BridgeAdmin {
     }
     const result = await this.save(actor!, mapId, [...bridges.values()], [], unreadable, true);
     return { ...result, found: gates.length, ...(notes.length > 0 ? { notes } : {}) };
+  }
+
+  /**
+   * The gates of the character's own alliance (its corporation's when it is in none), each with
+   * its owner's alliance; how many belong to others and how many have an owner that could not be
+   * read. Without the owners port nothing is known and every gate is kept.
+   */
+  private async ownGates(
+    characterId: number,
+    gates: readonly AnsiblexStructure[],
+  ): Promise<{
+    kept: Array<{ gate: AnsiblexStructure; allianceId: number | null }>;
+    foreign: number;
+    unknown: number;
+  }> {
+    const owners = this.deps.owners;
+    if (!owners) return { kept: gates.map((gate) => ({ gate, allianceId: null })), foreign: 0, unknown: 0 };
+    const [mine, alliances] = await Promise.all([
+      this.deps.pilots.affiliation(characterId),
+      owners.alliancesOf(gates.flatMap((g) => (g.ownerCorporationId === null ? [] : [g.ownerCorporationId]))),
+    ]);
+    const kept: Array<{ gate: AnsiblexStructure; allianceId: number | null }> = [];
+    let foreign = 0;
+    let unknown = 0;
+    for (const gate of gates) {
+      const corporation = gate.ownerCorporationId;
+      if (corporation === null || !alliances.has(corporation)) {
+        unknown++;
+        continue;
+      }
+      const allianceId = alliances.get(corporation)!;
+      const own =
+        mine === null ||
+        (mine.allianceId !== null ? allianceId === mine.allianceId : corporation === mine.corporationId);
+      if (own) kept.push({ gate, allianceId });
+      else foreign++;
+    }
+    return { kept, foreign, unknown };
   }
 
   /** What to tell a manager when no source answered. */
@@ -303,7 +354,8 @@ export class BridgeAdmin {
     mapId: string,
     x: number,
     y: number,
-    rest: Pick<NewBridge, 'dangerous' | 'source'> & Partial<Pick<NewBridge, 'structureId' | 'structureName'>>,
+    rest: Pick<NewBridge, 'dangerous' | 'source'> &
+      Partial<Pick<NewBridge, 'structureId' | 'structureName' | 'ownerCorporationId' | 'ownerAllianceId'>>,
   ): NewBridge {
     return {
       mapId,
@@ -313,6 +365,8 @@ export class BridgeAdmin {
       source: rest.source,
       structureId: rest.structureId ?? null,
       structureName: rest.structureName ?? null,
+      ownerCorporationId: rest.ownerCorporationId ?? null,
+      ownerAllianceId: rest.ownerAllianceId ?? null,
     };
   }
 
@@ -338,6 +392,8 @@ export class BridgeAdmin {
       source: b.source,
       structureName: b.structureName,
       structureId: b.structureId,
+      ownerCorporationId: b.ownerCorporationId,
+      ownerAllianceId: b.ownerAllianceId,
       createdAt: b.createdAt,
     };
   }
@@ -360,6 +416,7 @@ export class BridgeEdgeSource implements RouteEdgeSource {
       via: 'bridge',
       connectionId: null,
       origin: 'ansiblex',
+      ownerAllianceId: b.ownerAllianceId,
       state: {
         timeStatus: 'normal',
         massStatus: 'fresh',

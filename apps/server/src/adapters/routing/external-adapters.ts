@@ -4,7 +4,9 @@ import {
   EsiStructuresError,
   type AllianceDirectory,
   type AnsiblexStructure,
+  type BridgePilot,
   type CharacterStructureSearch,
+  type CorporationAlliances,
   type CorporationAnsiblex,
   type CorporationStructures,
   type EveScoutClient,
@@ -85,11 +87,17 @@ export class EsiCorporationStructures implements CorporationStructures {
         structure_id: number;
         type_id: number;
         system_id: number;
+        corporation_id?: number;
         name?: string;
       }>;
       for (const row of rows) {
         if (row.type_id !== ANSIBLEX_TYPE_ID) continue;
-        found.push({ structureId: row.structure_id, solarSystemId: row.system_id, name: row.name ?? null });
+        found.push({
+          structureId: row.structure_id,
+          solarSystemId: row.system_id,
+          name: row.name ?? null,
+          ownerCorporationId: row.corporation_id ?? corporationId,
+        });
       }
     }
     return found;
@@ -122,7 +130,7 @@ const SEARCH_CACHE_MS = 15 * 60_000;
  * named like an Ansiblex (scope `esi-search.search_structures.v1`), then
  * `GET /universe/structures/{id}` for each hit (scope `esi-universe.read_structures.v1`; ESI
  * answers 403 for a structure the character is not on the access list of, which is skipped),
- * keeping type 35841. ESI's error limit is shared by the whole server: every 403 counts, so the
+ * keeping type 35841 with its owner (`owner_id`, a corporation). ESI's error limit is shared by the whole server: every 403 counts, so the
  * reads follow `X-ESI-Error-Limit-Remain` and wait for `X-ESI-Error-Limit-Reset` when few errors
  * are left (https://developers.eveonline.com/docs/services/esi/best-practices/). A character's
  * result is kept for a while.
@@ -176,9 +184,19 @@ export class EsiAnsiblexSearch implements CharacterStructureSearch {
           failed++;
           continue;
         }
-        const row = (await response.json()) as { name?: string; solar_system_id?: number; type_id?: number };
+        const row = (await response.json()) as {
+          name?: string;
+          solar_system_id?: number;
+          type_id?: number;
+          owner_id?: number;
+        };
         if (!row.solar_system_id || !isAnsiblex(row)) continue;
-        gates.push({ structureId: id, solarSystemId: row.solar_system_id, name: row.name ?? null });
+        gates.push({
+          structureId: id,
+          solarSystemId: row.solar_system_id,
+          name: row.name ?? null,
+          ownerCorporationId: row.owner_id ?? null,
+        });
       }
     };
     await Promise.all(Array.from({ length: Math.min(STRUCTURE_READS, queue.length) }, read));
@@ -218,6 +236,64 @@ export class EsiAnsiblexSearch implements CharacterStructureSearch {
     if (wait > MAX_BACKOFF_MS) throw new EsiStructuresError('unavailable', 'ESI error limit reached');
     if (wait > 0) await (this.options.sleep ?? sleep)(wait + 1000);
     this.errorsLeft = Number.POSITIVE_INFINITY;
+  }
+}
+
+/** Corporations' alliances are kept this long (ESI caches `GET /corporations/{id}` for an hour). */
+const AFFILIATION_CACHE_MS = 60 * 60_000;
+/** Corporations read at once. */
+const CORPORATION_READS = 8;
+
+/**
+ * Corporations' alliances from ESI's public `GET /corporations/{corporation_id}` (`alliance_id`,
+ * absent for corporations in none), each asked once per call however many gates name it, kept for
+ * an hour, and shared by concurrent calls. A corporation ESI does not answer for is left out.
+ */
+export class EsiCorporationAlliances implements CorporationAlliances {
+  private readonly cache = new Map<number, { allianceId: number | null; until: number }>();
+  private readonly reading = new Map<number, Promise<number | null | undefined>>();
+
+  constructor(private readonly options: HttpOptions & { clock: Clock }) {}
+
+  async alliancesOf(corporationIds: readonly number[]): Promise<Map<number, number | null>> {
+    const result = new Map<number, number | null>();
+    const now = this.options.clock.now();
+    const queue: number[] = [];
+    for (const id of new Set(corporationIds)) {
+      const cached = this.cache.get(id);
+      if (cached && cached.until > now) result.set(id, cached.allianceId);
+      else queue.push(id);
+    }
+    const read = async () => {
+      for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
+        const allianceId = await this.read(id);
+        if (allianceId !== undefined) result.set(id, allianceId);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(CORPORATION_READS, queue.length) }, read));
+    return result;
+  }
+
+  /** One corporation's alliance (null: none); undefined when ESI did not answer. */
+  private read(corporationId: number): Promise<number | null | undefined> {
+    let running = this.reading.get(corporationId);
+    if (!running) {
+      running = this.fetchAlliance(corporationId).finally(() => this.reading.delete(corporationId));
+      this.reading.set(corporationId, running);
+    }
+    return running;
+  }
+
+  private async fetchAlliance(corporationId: number): Promise<number | null | undefined> {
+    const response = await (this.options.fetch ?? fetch)(
+      `${this.options.baseUrl ?? ESI}/corporations/${corporationId}`,
+      { headers: headers(this.options.userAgent), signal: AbortSignal.timeout(10_000) },
+    ).catch(() => null);
+    if (!response?.ok) return undefined;
+    const body = (await response.json()) as { alliance_id?: number | null };
+    const allianceId = typeof body.alliance_id === 'number' ? body.alliance_id : null;
+    this.cache.set(corporationId, { allianceId, until: this.options.clock.now() + AFFILIATION_CACHE_MS });
+    return allianceId;
   }
 }
 
@@ -333,7 +409,8 @@ export class KspaceDistances implements SystemDistances {
 
 /**
  * The alliance of an account's pilot: the given character's when the account owns it, else the
- * main character's (else the first character's in one).
+ * main character's (else the first character's in one, else the first's). No pilot without
+ * characters.
  */
 export class AccountAlliances implements AllianceDirectory {
   constructor(
@@ -343,15 +420,17 @@ export class AccountAlliances implements AllianceDirectory {
     },
   ) {}
 
-  async allianceOf(accountId: string, characterId?: number): Promise<number | null> {
+  async pilotOf(accountId: string, characterId?: number): Promise<BridgePilot> {
     const [main, characters] = await Promise.all([
       this.deps.mainCharacterOf(accountId),
       this.deps.charactersOf(accountId),
     ]);
-    const pilot = characterId === undefined ? undefined : characters.find((c) => c.id === characterId);
-    if (pilot) return pilot.allianceId;
-    const pick = characters.find((c) => c.id === main) ?? characters.find((c) => c.allianceId !== null);
-    return pick?.allianceId ?? null;
+    const pick =
+      (characterId === undefined ? undefined : characters.find((c) => c.id === characterId)) ??
+      characters.find((c) => c.id === main) ??
+      characters.find((c) => c.allianceId !== null) ??
+      characters[0];
+    return pick ? { allianceId: pick.allianceId } : null;
   }
 }
 
