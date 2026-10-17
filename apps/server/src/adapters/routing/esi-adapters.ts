@@ -26,6 +26,9 @@ export interface CharacterLookup {
   scopes(characterId: number): Promise<string[]>;
   accessToken(characterId: number): Promise<string | null>;
   listForAccount(accountId: string): Promise<Array<{ id: number; name: string }>>;
+  linked(
+    characterIds: readonly number[],
+  ): Promise<Array<{ id: number; corporationId: number; allianceId: number | null }>>;
 }
 
 const HOUR = 60 * 60 * 1000;
@@ -61,6 +64,13 @@ export class EsiPilotDirectory implements PilotDirectory {
 
   async charactersOf(accountId: string): Promise<Array<{ id: number; name: string }>> {
     return (await this.options.characters.listForAccount(accountId)).map((c) => ({ id: c.id, name: c.name }));
+  }
+
+  async affiliation(
+    characterId: number,
+  ): Promise<{ corporationId: number; allianceId: number | null } | null> {
+    const [character] = await this.options.characters.linked([characterId]);
+    return character ? { corporationId: character.corporationId, allianceId: character.allianceId } : null;
   }
 
   async securityStatus(characterId: number): Promise<number | null> {

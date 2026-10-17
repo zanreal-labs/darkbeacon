@@ -53,16 +53,25 @@ export const EVE_SCOPES: readonly string[] = [
 ];
 
 /**
+ * Lets the app read a structure the character may use (`GET /universe/structures/{id}`: name,
+ * system, type; ESI answers 403 for structures the character is not on the access list of). With
+ * the structure search it finds the alliance's Ansiblex jump bridges.
+ */
+export const UNIVERSE_STRUCTURES_SCOPE = 'esi-universe.read_structures.v1';
+
+/**
  * Scopes a character only grants when its owner opts in (linking again with `extras`): the
- * assets to weigh the ship actually flown, and the wallet balance on the characters page.
+ * assets to weigh the ship actually flown, the wallet balance on the characters page, and the
+ * structures it may use, to find the jump bridges it can take.
  */
 export const OPTIONAL_EVE_SCOPES = {
   assets: 'esi-assets.read_assets.v1',
   wallet: 'esi-wallet.read_character_wallet.v1',
+  structures: UNIVERSE_STRUCTURES_SCOPE,
 } as const;
 export type OptionalEveScope = keyof typeof OPTIONAL_EVE_SCOPES;
 
-/** The extras named in a `?extras=assets,wallet` value; unknown names are ignored. */
+/** The extras named in a `?extras=assets,wallet,structures` value; unknown names are ignored. */
 export function parseExtras(value: unknown): OptionalEveScope[] {
   if (typeof value !== 'string') return [];
   const names = value.split(',').map((v) => v.trim());

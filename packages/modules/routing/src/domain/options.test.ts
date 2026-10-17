@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanSystemName, farSideOf, isForeignBridge, parseBridgeLines } from './bridges.js';
+import { cleanSystemName, farSideOf, isForeignBridge, mayUseBridge, parseBridgeLines } from './bridges.js';
 import { findRoute, jumpsTo, NO_TRANSIT, RouteGraph, routesFrom, StargateGraph, ZARZAKH } from './graph.js';
 import { policyFor, type RouteNode } from './modes.js';
 import { DEFAULT_ROUTE_OPTIONS, edgeKey, usableEdge, withAvoidance, type RoutedEdge } from './options.js';
@@ -129,9 +129,15 @@ describe('route options', () => {
     expect(edgeKey(DEFAULT_ROUTE_OPTIONS, null)).toBe(
       edgeKey({ ...DEFAULT_ROUTE_OPTIONS, avoid: [1] }, null),
     );
-    expect(edgeKey(DEFAULT_ROUTE_OPTIONS, 1)).not.toBe(edgeKey(DEFAULT_ROUTE_OPTIONS, 2));
-    expect(edgeKey({ ...DEFAULT_ROUTE_OPTIONS, capital: true }, 1)).toBe(
-      edgeKey({ ...DEFAULT_ROUTE_OPTIONS, capital: true }, 2),
+    expect(edgeKey(DEFAULT_ROUTE_OPTIONS, { allianceId: 1 })).not.toBe(
+      edgeKey(DEFAULT_ROUTE_OPTIONS, { allianceId: 2 }),
+    );
+    // A pilot in no alliance is not the same as no pilot known.
+    expect(edgeKey(DEFAULT_ROUTE_OPTIONS, { allianceId: null })).not.toBe(
+      edgeKey(DEFAULT_ROUTE_OPTIONS, null),
+    );
+    expect(edgeKey({ ...DEFAULT_ROUTE_OPTIONS, capital: true }, { allianceId: 1 })).toBe(
+      edgeKey({ ...DEFAULT_ROUTE_OPTIONS, capital: true }, { allianceId: 2 }),
     );
   });
 
@@ -192,6 +198,64 @@ describe('bridge lists', () => {
     expect(unreadable).toEqual([{ line: 13, text: 'Jita', reason: 'Two system names were expected' }]);
   });
 
+  it('splits lines without an arrow where both halves are systems', () => {
+    const systems = new Set(
+      [
+        'PQRE-W',
+        'A-7XFN',
+        'O-VWPB',
+        'Atioth',
+        '3-LJW3',
+        'M-ZJWJ',
+        'UALX-3',
+        '1DQ1-A',
+        'Old Man Star',
+        'Jita',
+      ].map((n) => n.toLowerCase()),
+    );
+    const isSystem = (name: string) => systems.has(name.toLowerCase());
+    const { pairs, unreadable } = parseBridgeLines(
+      [
+        'PQRE-W A-7XFN',
+        'O-VWPB Atioth',
+        '3-LJW3 M-ZJWJ',
+        'UALX-3 » 1DQ1-A - Home Bridge',
+        '3-LJW3\tM-ZJWJ',
+        '3-LJW3-M-ZJWJ',
+        '3-LJW3 - M-ZJWJ',
+        '3-LJW3 -> M-ZJWJ',
+        '3-LJW3 <-> M-ZJWJ',
+        '3-LJW3,M-ZJWJ',
+        'Old Man Star Jita',
+        '  PQRE-W   A-7XFN  ',
+        'PQRE-W A-7XFN Atioth',
+      ].join('\n'),
+      isSystem,
+    );
+    expect(pairs.map((p) => [p.from, p.to])).toEqual([
+      ['PQRE-W', 'A-7XFN'],
+      ['O-VWPB', 'Atioth'],
+      ['3-LJW3', 'M-ZJWJ'],
+      ['UALX-3', '1DQ1-A'],
+      ['3-LJW3', 'M-ZJWJ'],
+      ['3-LJW3', 'M-ZJWJ'],
+      ['3-LJW3', 'M-ZJWJ'],
+      ['3-LJW3', 'M-ZJWJ'],
+      ['3-LJW3', 'M-ZJWJ'],
+      ['3-LJW3', 'M-ZJWJ'],
+      ['Old Man Star', 'Jita'],
+      ['PQRE-W', 'A-7XFN'],
+    ]);
+    // Three names: no split names two systems, and three words are not a pair.
+    expect(unreadable).toEqual([
+      { line: 13, text: 'PQRE-W A-7XFN Atioth', reason: 'Two system names were expected' },
+    ]);
+    // Without the names a space still splits two words; unknown ones are reported later.
+    expect(parseBridgeLines('PQRE-W A-7XFN').pairs.map((p) => [p.from, p.to])).toEqual([
+      ['PQRE-W', 'A-7XFN'],
+    ]);
+  });
+
   it('keeps names that look like grid markers', () => {
     expect(cleanSystemName('5-3722')).toBe('5-3722');
     expect(cleanSystemName(' PQRE-W 1-1 ')).toBe('PQRE-W');
@@ -215,5 +279,23 @@ describe('bridge lists', () => {
     expect(isForeignBridge(1, 4, 77, holderOf)).toBe(true);
     expect(isForeignBridge(4, 5, 77, holderOf)).toBe(false);
     expect(isForeignBridge(1, 3, null, holderOf)).toBe(false);
+  });
+
+  it("gives a pilot their own alliance's bridges, and pasted ones unless sovereignty says no", () => {
+    const holders: Record<number, number> = { 1: 77, 2: 77 };
+    const holderOf = (id: number) => holders[id] ?? null;
+    const owned = (ownerAllianceId: number | null) => ({ a: 1, b: 2, ownerAllianceId });
+    const ours = { allianceId: 99 };
+    // The stored owner decides, whatever sovereignty says.
+    expect(mayUseBridge(owned(99), ours, holderOf)).toBe(true);
+    expect(mayUseBridge(owned(77), ours, holderOf)).toBe(false);
+    expect(mayUseBridge(owned(99), { allianceId: null }, holderOf)).toBe(false);
+    // Owner unknown (pasted): sovereignty, when it is known.
+    expect(mayUseBridge(owned(null), ours, holderOf)).toBe(false);
+    expect(mayUseBridge(owned(null), { allianceId: 77 }, holderOf)).toBe(true);
+    expect(mayUseBridge({ a: 3, b: 4 }, ours, holderOf)).toBe(true);
+    expect(mayUseBridge(owned(null), ours, null)).toBe(true);
+    // No pilot known (what every viewer sees): every bridge.
+    expect(mayUseBridge(owned(77), null, holderOf)).toBe(true);
   });
 });

@@ -1,5 +1,5 @@
 import type { ConnectionDto, MapSystemDto, RouteMode, RouteSkip } from '@darkbeacon/shared';
-import { isForeignBridge } from '../domain/bridges.js';
+import { mayUseBridge, type BridgePilot } from '../domain/bridges.js';
 import { RouteGraph, StargateGraph, jumpsTo } from '../domain/graph.js';
 import { largestAllowedRegion, nearestStaging } from '../domain/hubs.js';
 import { policyFor, type RouteNode, type RoutePolicy } from '../domain/modes.js';
@@ -141,17 +141,17 @@ export class Router {
   }
 
   /**
-   * Stargates plus what the options let a route use of the chain and the extra edges; `alliance`
-   * is the pilot's, for which jump bridges they may use.
+   * Stargates plus what the options let a route use of the chain and the extra edges; `pilot`
+   * (their alliance) decides which jump bridges they may take (`mayUseBridge`), null: all of them.
    */
-  graphFor(mapId: string, options: RouteOptions, alliance: number | null): Promise<RouteGraph | null> {
+  graphFor(mapId: string, options: RouteOptions, pilot: BridgePilot): Promise<RouteGraph | null> {
     const state = this.state(mapId);
-    const key = edgeKey(options, alliance);
+    const key = edgeKey(options, pilot);
     let graph = state.graphs.get(key);
     if (!graph) {
-      const foreign = (edge: RoutedEdge) =>
-        this.deps.sovereignty !== undefined &&
-        isForeignBridge(edge.a, edge.b, alliance, (id) => this.deps.sovereignty!.holderOf(id));
+      const sovereignty = this.deps.sovereignty;
+      const holderOf = sovereignty ? (id: number) => sovereignty.holderOf(id) : null;
+      const foreign = (edge: RoutedEdge) => !mayUseBridge(edge, pilot, holderOf);
       graph = state.chain.then((chain) =>
         chain
           ? new RouteGraph(
@@ -171,12 +171,12 @@ export class Router {
     hubId: number,
     policy: RoutePolicy,
     options: RouteOptions = DEFAULT_ROUTE_OPTIONS,
-    alliance: number | null = null,
+    pilot: BridgePilot = null,
   ): Promise<{ graph: RouteGraph; jumps: Int16Array } | null> {
     const state = this.state(mapId);
-    const graph = await this.graphFor(mapId, options, alliance);
+    const graph = await this.graphFor(mapId, options, pilot);
     if (!graph) return null;
-    const key = `${edgeKey(options, alliance)}#${policy.key}`;
+    const key = `${edgeKey(options, pilot)}#${policy.key}`;
     let table = state.tables.get(key);
     if (!table) {
       state.tables.set(key, (table = new Map()));
@@ -200,9 +200,9 @@ export class Router {
     hubId: number,
     policy: RoutePolicy,
     options: RouteOptions = DEFAULT_ROUTE_OPTIONS,
-    alliance: number | null = null,
+    pilot: BridgePilot = null,
   ): Promise<number | null> {
-    const result = await this.jumpsTo(mapId, hubId, policy, options, alliance);
+    const result = await this.jumpsTo(mapId, hubId, policy, options, pilot);
     const i = result?.graph.base.index.get(fromId);
     if (!result || i === undefined) return null;
     const jumps = result.jumps[i]!;

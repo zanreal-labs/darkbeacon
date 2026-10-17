@@ -34,6 +34,7 @@ import {
   type WormholeDestination,
 } from '@darkbeacon/shared';
 import { findRoute, routesFrom, type RouteGraph, type RouteStep, type RouteTree } from '../domain/graph.js';
+import type { BridgePilot } from '../domain/bridges.js';
 import { isLowSec, MAX_HUBS, TRADE_HUBS } from '../domain/hubs.js';
 import { isWormholeSpace, policyFor, routeSpace, type RouteNode, type RoutePolicy } from '../domain/modes.js';
 import { DEFAULT_ROUTE_OPTIONS, routeOptions, withAvoidance, type RouteOptions } from '../domain/options.js';
@@ -58,7 +59,7 @@ export interface RouteQueryDeps {
   access: MapAccess;
   /** Map routing settings (the Thera toggle); without it Thera is allowed everywhere. */
   settings?: RoutingSettingsRepository;
-  /** The viewer's alliance, for the jump bridges they may use. */
+  /** The pilot's alliance, for the jump bridges they may use. */
   alliances?: AllianceDirectory;
   stations?: StationCatalog;
   pings?: PingTargets;
@@ -92,8 +93,8 @@ export class RouteQueries {
     await requireMapRole(this.deps.access, actor, mapId, 'viewer');
     this.system(query.from);
     this.system(query.to);
-    const { policy, securityStatus, options, alliance } = await this.request(actor, mapId, query);
-    const graph = await this.deps.router.graphFor(mapId, options, alliance);
+    const { policy, securityStatus, options, pilot } = await this.request(actor, mapId, query);
+    const graph = await this.deps.router.graphFor(mapId, options, pilot);
     if (!graph) throw new NotFoundError('Map');
     const steps = findRoute(graph, query.from, query.to, policy);
     return {
@@ -119,8 +120,8 @@ export class RouteQueries {
           ? await this.personalHubs(actor.id)
           : []
         : await this.mapAndPingHubs(mapId);
-    const { policy, options, alliance } = await this.request(actor, mapId, query);
-    const graph = await this.deps.router.graphFor(mapId, options, alliance);
+    const { policy, options, pilot } = await this.request(actor, mapId, query);
+    const graph = await this.deps.router.graphFor(mapId, options, pilot);
     if (!graph) throw new NotFoundError('Map');
     const tree = routesFrom(graph, query.from, policy);
     const routes: HubRouteDto[] = hubs.map((hub) => {
@@ -172,8 +173,8 @@ export class RouteQueries {
   async routesBy(actor: Actor | null, mapId: string, query: RoutesByQuery): Promise<RoutesByDto> {
     await requireMapRole(this.deps.access, actor, mapId, 'viewer');
     this.system(query.from);
-    const { policy, options, alliance } = await this.request(actor, mapId, query);
-    const graph = await this.deps.router.graphFor(mapId, options, alliance);
+    const { policy, options, pilot } = await this.request(actor, mapId, query);
+    const graph = await this.deps.router.graphFor(mapId, options, pilot);
     if (!graph) throw new NotFoundError('Map');
     const tree = routesFrom(graph, query.from, policy);
     const entries: RoutesByEntryDto[] = [];
@@ -260,17 +261,17 @@ export class RouteQueries {
   ): Promise<HubDistanceDto[]> {
     await requireMapRole(this.deps.access, actor, mapId, 'viewer');
     this.system(query.from);
-    const { policy, options, alliance } = await this.request(actor, mapId, query);
+    const { policy, options, pilot } = await this.request(actor, mapId, query);
     const hubs = await this.hubsFor(mapId, policy, actor);
-    return this.distances(mapId, query.from, hubs, policy, options, alliance);
+    return this.distances(mapId, query.from, hubs, policy, options, pilot);
   }
 
   async exits(actor: Actor | null, mapId: string, query: ExitsQuery): Promise<MapExitsDto> {
     await requireMapRole(this.deps.access, actor, mapId, 'viewer');
-    const { policy, options, alliance } = await this.request(actor, mapId, query);
+    const { policy, options, pilot } = await this.request(actor, mapId, query);
     return {
       mode: query.mode,
-      exits: await this.exitsOf(mapId, policy, await this.hubsFor(mapId, policy, actor), options, alliance),
+      exits: await this.exitsOf(mapId, policy, await this.hubsFor(mapId, policy, actor), options, pilot),
     };
   }
 
@@ -324,13 +325,13 @@ export class RouteQueries {
     hubs: HubDto[],
     policy: RoutePolicy,
     options: RouteOptions,
-    alliance: number | null,
+    pilot: BridgePilot,
   ) {
     const result: HubDistanceDto[] = [];
     for (const hub of hubs) {
       result.push({
         ...hub,
-        jumps: await this.deps.router.jumps(mapId, fromId, hub.solarSystemId, policy, options, alliance),
+        jumps: await this.deps.router.jumps(mapId, fromId, hub.solarSystemId, policy, options, pilot),
       });
     }
     return result.sort(
@@ -348,10 +349,10 @@ export class RouteQueries {
     policy: RoutePolicy,
     hubs: HubDto[],
     options: RouteOptions,
-    alliance: number | null,
+    pilot: BridgePilot,
   ): Promise<MapExitDto[]> {
     const chain = await this.deps.router.chain(mapId);
-    const graph = await this.deps.router.graphFor(mapId, options, alliance);
+    const graph = await this.deps.router.graphFor(mapId, options, pilot);
     if (!chain || !graph) throw new NotFoundError('Map');
     const { universe } = this.deps;
     const connected: MapExitDto[] = [];
@@ -443,8 +444,9 @@ export class RouteQueries {
 
   /**
    * Everything a routing request needs: its policy (keeping out of the avoided systems and
-   * space), its options (Thera only where the map allows it) and the viewer's alliance, which
-   * decides the jump bridges they may use.
+   * space), its options (Thera only where the map allows it) and the pilot's alliance, which
+   * decides the jump bridges they may use: in `pilot` mode the chosen character's (an alt in the
+   * alliance holding the bridges may take them while the main may not), else the main's.
    */
   private async request(actor: Actor | null, mapId: string, query: OptionQuery) {
     const { policy, securityStatus } = await this.policy(actor, query);
@@ -452,11 +454,12 @@ export class RouteQueries {
     if (options.thera && (await this.deps.settings?.mapSettings(mapId))?.thera === false) {
       options.thera = false;
     }
-    const alliance =
+    const chosen = query.mode === 'pilot' ? query.characterId : undefined;
+    const pilot =
       options.bridges && !options.capital && actor?.kind === 'account' && this.deps.alliances
-        ? await this.deps.alliances.allianceOf(actor.id)
+        ? await this.deps.alliances.pilotOf(actor.id, chosen)
         : null;
-    return { policy: withAvoidance(policy, options), securityStatus, options, alliance };
+    return { policy: withAvoidance(policy, options), securityStatus, options, pilot };
   }
 
   /** The policy of a request; `pilot` needs a security status, given or read for an own character. */

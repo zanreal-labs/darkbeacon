@@ -6,6 +6,7 @@ import type {
   StationDto,
   UniverseSystemDto,
 } from '@darkbeacon/shared';
+import type { BridgePilot } from '../domain/bridges.js';
 import type { Invasion } from '../domain/modes.js';
 import type { RoutedEdge } from '../domain/options.js';
 
@@ -57,6 +58,8 @@ export interface PilotDirectory {
   accessToken(characterId: number): Promise<string | null>;
   /** The account's linked characters. */
   charactersOf(accountId: string): Promise<Array<{ id: number; name: string }>>;
+  /** Corporation and alliance of a linked character (as identity last read them); null when not linked. */
+  affiliation(characterId: number): Promise<{ corporationId: number; allianceId: number | null } | null>;
 }
 
 /** ESI `POST /ui/autopilot/waypoint`. Throws when ESI refuses. */
@@ -82,6 +85,9 @@ export interface BridgeRecord {
   source: 'paste' | 'esi';
   structureId: number | null;
   structureName: string | null;
+  /** Who owns it, when ESI said (found through ESI); null for bridges pasted by hand. */
+  ownerCorporationId: number | null;
+  ownerAllianceId: number | null;
   createdAt: number;
 }
 
@@ -100,12 +106,17 @@ export interface BridgeRepository {
   forgetMap(mapId: string): Promise<void>;
 }
 
-/** An Ansiblex of a corporation, as ESI lists its structures. */
-export interface CorporationAnsiblex {
+/** An Ansiblex structure as ESI names it: the system it stands in, its in-game name and owner. */
+export interface AnsiblexStructure {
   structureId: number;
   solarSystemId: number;
   name: string | null;
+  /** The corporation owning it (`owner_id`, `corporation_id`); null when ESI did not say. */
+  ownerCorporationId: number | null;
 }
+
+/** An Ansiblex of a corporation, as ESI lists its structures. */
+export type CorporationAnsiblex = AnsiblexStructure;
 
 /**
  * ESI `GET /corporations/{corporation_id}/structures` (scope `esi-corporations.read_structures.v1`,
@@ -113,6 +124,26 @@ export interface CorporationAnsiblex {
  */
 export interface CorporationStructures {
   ansiblexes(characterId: number): Promise<CorporationAnsiblex[]>;
+}
+
+/**
+ * The Ansiblexes a character may use, whoever owns them (its alliance's gates of other
+ * corporations too): ESI's character structure search (`GET /characters/{id}/search`, scope
+ * `esi-search.search_structures.v1`) and `GET /universe/structures/{id}` for each hit (scope
+ * `esi-universe.read_structures.v1`). Throws `EsiStructuresError` (domain); `no-scope` when the
+ * grant lacks one of the two.
+ */
+export interface CharacterStructureSearch {
+  ansiblexes(characterId: number): Promise<AnsiblexStructure[]>;
+}
+
+/**
+ * The alliance of each corporation, from ESI's public `GET /corporations/{id}` (`alliance_id`,
+ * absent for corporations in none: null). Each corporation is asked once however often it is
+ * named; one that could not be read is left out of the answer.
+ */
+export interface CorporationAlliances {
+  alliancesOf(corporationIds: readonly number[]): Promise<Map<number, number | null>>;
 }
 
 /** Distances between known-space systems (static data); null when one has no position. */
@@ -159,7 +190,12 @@ export interface PingTargets {
 
 /** The viewer's alliance (that of the main character), for which bridges they may use. */
 export interface AllianceDirectory {
-  allianceOf(accountId: string): Promise<number | null>;
+  /**
+   * The alliance of the account's pilot: `characterId`'s when it is one of the account's own
+   * characters (the pilot a route is planned for), else the main character's. Null when the
+   * account has no character; `allianceId` null when the pilot is in no alliance.
+   */
+  pilotOf(accountId: string, characterId?: number): Promise<BridgePilot>;
 }
 
 /** Route preferences of accounts and routing settings of maps. */

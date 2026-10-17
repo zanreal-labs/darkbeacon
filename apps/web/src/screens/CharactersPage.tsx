@@ -8,6 +8,7 @@ import {
   EyeOff,
   KeyRound,
   MoreHorizontal,
+  Network,
   Plus,
   RefreshCw,
   Star,
@@ -23,6 +24,7 @@ import {
   type CharacterLocationDto,
   type MeDto,
   type MyTrackingDto,
+  type OptionalEveScope,
 } from '@darkbeacon/shared';
 import { api, ApiError } from '../lib/api';
 import {
@@ -244,7 +246,7 @@ function CharactersCard({ me, tracking }: { me: MeDto; tracking: MyTrackingDto |
               const affiliation = [groupName(c.corporationId), groupName(c.allianceId)]
                 .filter(Boolean)
                 .join(' · ');
-              const relink = (more: ('assets' | 'wallet')[] = []) =>
+              const relink = (more: OptionalEveScope[] = []) =>
                 relinkHref('/characters', [...new Set([...extras, ...more])]);
               return (
                 <Row
@@ -340,6 +342,11 @@ function CharactersCard({ me, tracking }: { me: MeDto; tracking: MyTrackingDto |
                               {!extras.includes('assets') && (
                                 <MenuItem icon={<KeyRound />} href={relink(['assets'])}>
                                   Weigh the ship it flies (assets)…
+                                </MenuItem>
+                              )}
+                              {!extras.includes('structures') && (
+                                <MenuItem icon={<Network />} href={relink(['structures'])}>
+                                  Find jump bridges it may use (structures)…
                                 </MenuItem>
                               )}
                               {extras.length > 0 && (

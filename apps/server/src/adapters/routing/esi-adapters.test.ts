@@ -22,6 +22,8 @@ const characters = (scopes: string[], token: string | null = 'token'): Character
   scopes: async () => scopes,
   accessToken: async () => token,
   listForAccount: async (id) => (id === 'alice' ? [{ id: 9001, name: 'Pilot' }] : []),
+  linked: async (ids) =>
+    ids.includes(9001) ? [{ id: 9001, corporationId: 98000001, allianceId: 99000001 }] : [],
 });
 
 describe('ESI adapters for routing', () => {

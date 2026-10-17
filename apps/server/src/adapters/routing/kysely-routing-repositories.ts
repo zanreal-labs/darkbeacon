@@ -16,6 +16,8 @@ interface BridgeRow {
   source: string;
   structure_id: number | null;
   structure_name: string | null;
+  owner_corporation_id: number | null;
+  owner_alliance_id: number | null;
   created_at: number;
 }
 
@@ -34,6 +36,8 @@ const toRecord = (r: BridgeRow): BridgeRecord => ({
   source: r.source === 'esi' ? 'esi' : 'paste',
   structureId: r.structure_id === null ? null : Number(r.structure_id),
   structureName: r.structure_name,
+  ownerCorporationId: r.owner_corporation_id === null ? null : Number(r.owner_corporation_id),
+  ownerAllianceId: r.owner_alliance_id === null ? null : Number(r.owner_alliance_id),
   createdAt: Number(r.created_at),
 });
 
@@ -93,6 +97,8 @@ export class KyselyBridgeRepository implements BridgeRepository {
             source: bridge.source,
             structure_id: bridge.structureId,
             structure_name: bridge.structureName,
+            owner_corporation_id: bridge.ownerCorporationId,
+            owner_alliance_id: bridge.ownerAllianceId,
             created_at: options.now,
           };
           await this.db.insertInto('routing_bridges').values(row).execute();
@@ -104,10 +110,16 @@ export class KyselyBridgeRepository implements BridgeRepository {
         const dangerous = options.keepDangerous ? before.dangerous || bridge.dangerous : bridge.dangerous;
         const structureId = bridge.structureId ?? before.structureId;
         const structureName = bridge.structureName ?? before.structureName;
+        // Found through ESI, a pasted pair learns its owner; a paste never forgets one.
+        const owned = bridge.ownerCorporationId !== null || bridge.ownerAllianceId !== null;
+        const ownerCorporationId = owned ? bridge.ownerCorporationId : before.ownerCorporationId;
+        const ownerAllianceId = owned ? bridge.ownerAllianceId : before.ownerAllianceId;
         if (
           dangerous === before.dangerous &&
           structureId === before.structureId &&
-          structureName === before.structureName
+          structureName === before.structureName &&
+          ownerCorporationId === before.ownerCorporationId &&
+          ownerAllianceId === before.ownerAllianceId
         )
           continue;
         await this.db
@@ -116,10 +128,19 @@ export class KyselyBridgeRepository implements BridgeRepository {
             dangerous: bool.encode(dangerous),
             structure_id: structureId,
             structure_name: structureName,
+            owner_corporation_id: ownerCorporationId,
+            owner_alliance_id: ownerAllianceId,
           })
           .where('id', '=', before.id)
           .execute();
-        updated.push({ ...before, dangerous, structureId, structureName });
+        updated.push({
+          ...before,
+          dangerous,
+          structureId,
+          structureName,
+          ownerCorporationId,
+          ownerAllianceId,
+        });
       }
     });
     return { added, updated, known };
