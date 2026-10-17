@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Search, X } from 'lucide-react';
+import { Popover as P } from 'radix-ui';
 import { Avatar } from './Avatar';
 import { IconButton, Spinner } from './Button';
 import { cx } from './cx';
@@ -74,6 +75,13 @@ export function SearchPicker<T extends PickerOption>({
   const [debounced, setDebounced] = useState('');
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
+  // Inside a modal dialog the list must stay in the dialog (the dialog blocks pointer and focus
+  // outside itself), so it is portalled there; anywhere else to the end of the page.
+  const [dialog, setDialog] = useState<HTMLElement | null>(null);
+  const placeIn = (el: HTMLDivElement | null) => {
+    const host = el?.closest<HTMLElement>('[role="dialog"]') ?? null;
+    if (host !== dialog) setDialog(host);
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => setDebounced(text.trim()), debounce);
@@ -147,40 +155,58 @@ export function SearchPicker<T extends PickerOption>({
   // Nothing to suggest before typing: no list at all, rather than "nothing found".
   const nothingToSuggest = text.trim() === '' && !waiting && options.length === 0 && !results.isError;
   const showList = open && text.trim().length >= minLength && !nothingToSuggest;
+  // The list floats over the page (a portal), so a picker inside a scrolling panel neither
+  // stretches that panel nor gets cut off by it; it flips above the field when there is no room.
   return (
-    <div className={styles.picker}>
-      <div className={fieldStyles.control}>
-        <Search aria-hidden />
-        <input
-          ref={inputRef}
-          id={field?.id}
-          aria-describedby={field?.describedBy}
-          aria-invalid={field?.invalid || undefined}
-          aria-label={aria['aria-label']}
-          role="combobox"
-          aria-expanded={showList}
-          aria-controls={listId}
-          aria-autocomplete="list"
-          aria-activedescendant={showList && options[active] ? `${listId}-${active}` : undefined}
-          className={fieldStyles.bare}
-          placeholder={placeholder}
-          disabled={disabled}
-          autoComplete="off"
-          spellCheck={false}
-          value={text}
-          onChange={(e) => {
-            setText(e.target.value);
-            setActive(0);
-            setOpen(true);
-          }}
-          onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 120)}
-          onKeyDown={keyDown}
-        />
-        {results.isFetching && enabled && debounce > 0 && <Spinner label="Searching" />}
+    <P.Root open={showList}>
+      <div className={styles.picker} ref={placeIn}>
+        <P.Anchor asChild>
+          <div className={fieldStyles.control}>
+            <Search aria-hidden />
+            <input
+              ref={inputRef}
+              id={field?.id}
+              aria-describedby={field?.describedBy}
+              aria-invalid={field?.invalid || undefined}
+              aria-label={aria['aria-label']}
+              role="combobox"
+              aria-expanded={showList}
+              aria-controls={listId}
+              aria-autocomplete="list"
+              aria-activedescendant={showList && options[active] ? `${listId}-${active}` : undefined}
+              className={fieldStyles.bare}
+              placeholder={placeholder}
+              disabled={disabled}
+              autoComplete="off"
+              spellCheck={false}
+              value={text}
+              onChange={(e) => {
+                setText(e.target.value);
+                setActive(0);
+                setOpen(true);
+              }}
+              onFocus={() => setOpen(true)}
+              onBlur={() => setTimeout(() => setOpen(false), 120)}
+              onKeyDown={keyDown}
+            />
+            {results.isFetching && enabled && debounce > 0 && <Spinner label="Searching" />}
+          </div>
+        </P.Anchor>
       </div>
-      {showList && (
-        <div className={styles.list} id={listId} role="listbox" aria-label="Results">
+      <P.Portal container={dialog}>
+        <P.Content
+          className={styles.list}
+          id={listId}
+          role="listbox"
+          aria-label="Results"
+          side="bottom"
+          align="start"
+          sideOffset={4}
+          collisionPadding={12}
+          // The input keeps the focus and the keys; the list is only looked at and clicked.
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onCloseAutoFocus={(e) => e.preventDefault()}
+        >
           {options.map((o, i) => (
             <div
               key={o.key}
@@ -210,8 +236,8 @@ export function SearchPicker<T extends PickerOption>({
             </div>
           )}
           {results.data?.note && <div className={styles.note}>{results.data.note}</div>}
-        </div>
-      )}
-    </div>
+        </P.Content>
+      </P.Portal>
+    </P.Root>
   );
 }
