@@ -579,6 +579,14 @@ export class ChainWrites {
     fields?: Record<string, unknown>,
   ): Promise<void> {
     const holding = new Set(map.merge.holders(ref));
+    const keepers = map.merge.keepers(ref);
+    if (holding.size === 0 && keepers.length > 0) {
+      // Intel a source keeps on a system it hides: that map shows the system again to change it.
+      const names = keepers.map((id) => map.sources.find((s) => s.id === id)?.name ?? id);
+      throw new ForbiddenError(
+        `Only ${listNames(names)} keeps this, on a system it hides; it cannot be changed here`,
+      );
+    }
     if (holding.size === 0)
       throw new NotFoundError(
         kind === 'system' ? 'System' : kind === 'connection' ? 'Connection' : 'Signature',

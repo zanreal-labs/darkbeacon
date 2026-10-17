@@ -134,4 +134,103 @@ describe('merge performance', () => {
     expect(full).toBeLessThan(5_000);
     expect(perEdit).toBeLessThan(5);
   });
+
+  it('keeps an intel library of thousands of hidden systems without showing or slowing anything', () => {
+    const LIBRARY = 6000;
+    const chains = Array.from({ length: SOURCES }, (_, i) => sourceChain(i));
+    // The library hides every system of the pool (so they get its notes) and thousands more.
+    const library: ChainEntry[] = [];
+    for (let i = 0; i < LIBRARY; i++) {
+      const id = 31000000 + i;
+      library.push({
+        kind: 'system',
+        key: String(id),
+        state: 'present',
+        hidden: true,
+        born: 1,
+        fields: { notes: s(`intel ${id}`, 50), status: s('hostile', 50) },
+      });
+      for (let n = 0; n < 2; n++) {
+        library.push({
+          kind: 'signature',
+          key: signatureKey(id, `LIB-${String(n).padStart(3, '0')}`),
+          state: 'present',
+          hidden: true,
+          born: 1,
+          fields: { group: s('relic', 50) },
+        });
+      }
+    }
+    const sources = new Map<string, SourceInfo>(
+      [...chains.map((_, i) => `s${i}`), 'library'].map((id) => [
+        id,
+        {
+          id,
+          origin: { instance: 'local', mapId: id },
+          name: id,
+          instanceName: null,
+          level: 'read',
+          scopes: ['topology', 'signatures', 'intel'],
+          hidden: false,
+        },
+      ]),
+    );
+    const ctx: ViewContext = { mapId: 'alliance', sources, layout: new Map() };
+
+    const started = performance.now();
+    const merge = new ChainMerge();
+    chains.forEach((entries, i) => {
+      merge.setSource(`s${i}`, i);
+      merge.apply(`s${i}`, entries, true);
+    });
+    merge.setSource('library', SOURCES);
+    merge.apply('library', library, true);
+    const refs = [...merge.refs()];
+    const next: ViewEntity[] = refs.flatMap((ref) => entitiesOf(merge, ref, ctx));
+    const view = new ViewState();
+    view.apply(view.diff(refs, next));
+    const full = performance.now() - started;
+
+    const systems = next.filter((e) => e.kind === 'system');
+    // Only the shown systems, each with the library's intel; its own systems stay hidden.
+    expect(systems).toHaveLength(POOL);
+    expect(systems.every((e) => e.kind === 'system' && e.dto.description.startsWith('intel '))).toBe(true);
+    expect(next.filter((e) => e.kind === 'signature')).toHaveLength(POOL * 5);
+
+    // A sync's pull re-reads the library: one changed note costs as little as any edit.
+    const edits = 200;
+    const editStarted = performance.now();
+    for (let n = 0; n < edits; n++) {
+      const id = 31000000 + ((n * 37) % LIBRARY);
+      const touched = merge.apply('library', [
+        {
+          kind: 'system',
+          key: String(id),
+          state: 'present',
+          hidden: true,
+          born: 1,
+          fields: { notes: s(`intel ${id} v${n}`, 100 + n), status: s('hostile', 50) },
+        },
+      ]);
+      const changes = view.diff(
+        touched,
+        [...touched].flatMap((ref) => entitiesOf(merge, ref, ctx)),
+      );
+      expect(changes.length).toBeLessThanOrEqual(1);
+      view.apply(changes);
+    }
+    const perEdit = (performance.now() - editStarted) / edits;
+    // One system's signatures, as a feed signal asks for them, from the index.
+    const heldStarted = performance.now();
+    for (let n = 0; n < edits; n++) merge.held('library', 'signature', 31000000 + n);
+    const perHeld = (performance.now() - heldStarted) / edits;
+
+    console.info(
+      `merge perf: ${SOURCES}×${SYSTEMS_PER_SOURCE} systems and a library of ${LIBRARY} hidden ones built in ${full.toFixed(0)} ms; ` +
+        `one library edit ${perEdit.toFixed(3)} ms; one system's held signatures ${perHeld.toFixed(3)} ms`,
+    );
+    expect(full).toBeLessThan(5_000);
+    expect(perEdit).toBeLessThan(5);
+    expect(perHeld).toBeLessThan(1);
+  });
 });

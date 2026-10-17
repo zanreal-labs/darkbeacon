@@ -137,11 +137,9 @@ export class LocalChainSource implements ChainSource {
       for (const system of systems) {
         const key = String(system.solarSystemId);
         if (!want.system.has(key) && !want.system.all) continue;
-        entries.push(
-          system.visible
-            ? systemEntry(system, times.get(key) ?? {}, systemLabels)
-            : { kind: 'system', key, state: 'absent' },
-        );
+        // A hidden system is the map's intel library: kept, not shown (see `hiddenCopy`).
+        const entry = systemEntry(system, times.get(key) ?? {}, systemLabels);
+        entries.push(system.visible ? entry : { ...entry, hidden: true });
       }
     }
 
@@ -172,10 +170,10 @@ export class LocalChainSource implements ChainSource {
       for (const signature of signatures) {
         const key = signatureKey(signature.solarSystemId, signature.eveId);
         if (!want.signature.matches(key)) continue;
-        // A hidden system's signatures are kept by the map but shown nowhere.
-        if (!visible.has(signature.solarSystemId)) continue;
         live.add(key);
-        entries.push(signatureEntry(signature, times.get(signature.id) ?? {}, pairs));
+        // A hidden system's signatures are kept with it: intel where another map shows the system.
+        const entry = signatureEntry(signature, times.get(signature.id) ?? {}, pairs);
+        entries.push(visible.has(signature.solarSystemId) ? entry : { ...entry, hidden: true });
       }
       for (const [key, at] of tombstones) {
         if (!live.has(key) && want.signature.matches(key))
@@ -192,7 +190,7 @@ export class LocalChainSource implements ChainSource {
 
     const cut: ChainEntry[] = [];
     for (const entry of entries) {
-      const projected = projectEntry(entry, scopes);
+      const projected = hiddenCopy(projectEntry(entry, scopes));
       if (projected) cut.push(projected);
     }
     return {
@@ -442,6 +440,27 @@ class DelegatedAccess implements MapAccess {
 
 // --- reading helpers ----------------------------------------------------------------------------
 
+/** Fields a hidden copy has no use for: where and whether it is locked count only where it shows. */
+const HIDDEN_SKIPS: Partial<Record<ChainEntry['kind'], ReadonlySet<string>>> = {
+  system: new Set(['pos', 'locked']),
+};
+
+/**
+ * A hidden copy (cut to the scopes already) keeps only what it can lend a map that shows the
+ * object elsewhere: fields someone wrote. With nothing left, the source simply does not hold it,
+ * so a share without intel or labels sends nothing of the map's hidden systems.
+ */
+function hiddenCopy(entry: ChainEntry | null): ChainEntry | null {
+  if (!entry || entry.state !== 'present' || !entry.hidden) return entry;
+  const skip = HIDDEN_SKIPS[entry.kind];
+  const fields: typeof entry.fields = {};
+  for (const [name, value] of Object.entries(entry.fields)) {
+    if (value.at > 0 && !skip?.has(name)) fields[name] = value;
+  }
+  if (Object.keys(fields).length === 0) return { kind: entry.kind, key: entry.key, state: 'absent' };
+  return { ...entry, fields };
+}
+
 interface KindPlan {
   all: boolean;
   keys: Set<string>;
@@ -505,7 +524,9 @@ const isEmpty = (v: unknown) =>
 /** The map's Labels, to name the ones a system has (they cross by name). */
 type LabelList = ReadonlyArray<{ id: string; name: string }>;
 
-function systemEntry(s: MapSystem, times: FieldTimes, systemLabels: LabelList): ChainEntry {
+type PresentEntry = Extract<ChainEntry, { state: 'present' }>;
+
+function systemEntry(s: MapSystem, times: FieldTimes, systemLabels: LabelList): PresentEntry {
   const born = s.createdAt;
   return {
     kind: 'system',
@@ -570,7 +591,7 @@ function connectionEntry(c: Connection, times: FieldTimes, linked: readonly Sign
   return { kind: 'connection', key: pairKey(c.source, c.target), state: 'present', born, fields };
 }
 
-function signatureEntry(s: Signature, times: FieldTimes, pairs: ReadonlyMap<string, string>): ChainEntry {
+function signatureEntry(s: Signature, times: FieldTimes, pairs: ReadonlyMap<string, string>): PresentEntry {
   const born = s.createdAt;
   return {
     kind: 'signature',

@@ -1,4 +1,4 @@
-import { SYSTEM_PLACEMENT, type Position } from '@darkbeacon/shared';
+import { MAP_GRID, SYSTEM_PLACEMENT, type Position } from '@darkbeacon/shared';
 
 /** Room a system node takes: a spot closer than this to another system covers it. */
 const GAP = { x: SYSTEM_PLACEMENT.x - 40, y: SYSTEM_PLACEMENT.y - 10 };
@@ -44,4 +44,54 @@ export function besideNeighbour(
     x: neighbourPlaced.x + own.x - neighbourInSource.x,
     y: neighbourPlaced.y + own.y - neighbourInSource.y,
   };
+}
+
+/** The corners of a group of systems: from the top-left one to the bottom-right one. */
+export interface Extent {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+export function extentOf(points: Iterable<Position>): Extent | null {
+  let extent: Extent | null = null;
+  for (const p of points) {
+    if (!extent) extent = { minX: p.x, minY: p.y, maxX: p.x, maxY: p.y };
+    else {
+      extent.minX = Math.min(extent.minX, p.x);
+      extent.minY = Math.min(extent.minY, p.y);
+      extent.maxX = Math.max(extent.maxX, p.x);
+      extent.maxY = Math.max(extent.maxY, p.y);
+    }
+  }
+  return extent;
+}
+
+const onGridUp = (v: number) => Math.ceil(v / MAP_GRID) * MAP_GRID;
+
+/**
+ * Where a source's cluster goes on a merged map: sources lay themselves out in coordinate spaces
+ * of their own, so a cluster is shifted to sit right of what the map already shows (`taken`),
+ * one empty column between them and its top on theirs, by a shift on the map grid. The first
+ * cluster (nothing taken yet) keeps its own coordinates.
+ */
+export function clusterOffset(cluster: Extent | null, taken: Extent | null): Position {
+  if (!cluster || !taken) return { x: 0, y: 0 };
+  return {
+    x: onGridUp(taken.maxX + 2 * SYSTEM_PLACEMENT.x - cluster.minX),
+    y: onGridUp(taken.minY - cluster.minY),
+  };
+}
+
+export const shifted = (p: Position, by: Position): Position => ({ x: p.x + by.x, y: p.y + by.y });
+
+/**
+ * A system a merged map placed where its source has it, before sources had offsets: at its
+ * source position, or moved straight down from it past systems it would have covered
+ * (`placeFree`). Anything else was moved there by someone.
+ */
+export function placedAsSourceHasIt(placed: Position, own: Position): boolean {
+  const down = placed.y - own.y;
+  return placed.x === own.x && down >= 0 && down % SYSTEM_PLACEMENT.y === 0;
 }

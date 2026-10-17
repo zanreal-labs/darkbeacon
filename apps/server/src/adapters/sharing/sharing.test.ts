@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mapStream, type DomainEvent } from '@darkbeacon/core';
+import { mapStream, newEvent, type DomainEvent } from '@darkbeacon/core';
 import { describeEachDialect } from '@darkbeacon/db/testing';
 import { BookmarkNumberUseCases, type ChainMap } from '@darkbeacon/mapping';
 import { shareScope } from '@darkbeacon/shared';
@@ -739,6 +739,238 @@ describeEachDialect('sharing and merged chains', (t) => {
   it('refuses edits of the composite’s own rows through the plain map routes', async () => {
     await expect(env.systems.add(carol, alliance.id, { solarSystemId: c2 })).rejects.toMatchObject({
       code: 'conflict',
+    });
+  });
+
+  describe('intel kept on hidden systems', () => {
+    const { jita } = SYSTEMS;
+    const all = [...shareScope.options];
+
+    /** Corp B keeps intel on C2 and Jita, both hidden: its intel library. */
+    beforeEach(async () => {
+      for (const id of [c2, jita]) {
+        await env.systems.add(bob, corpB.id, { solarSystemId: id });
+        await env.systems.update(bob, corpB.id, id, {
+          status: 'hostile',
+          description: `B intel on ${id}`,
+          customName: 'Their staging',
+          temporaryName: 'B7',
+        });
+        await env.signatures.add(bob, corpB.id, id, { eveId: 'HID-001', group: 'relic', name: 'Ruins' });
+        await env.systems.remove(bob, corpB.id, id);
+      }
+      await env.settle();
+    });
+
+    it('lends a hidden system’s intel and signatures to the system another source shows', async () => {
+      await share(corpA, alice, 'read-write', all);
+      await share(corpB, bob, 'read', all);
+      const merged = await view(alliance.id);
+      const shown = merged.systems.find((s) => s.solarSystemId === c2)!;
+      expect(shown).toMatchObject({
+        status: 'hostile',
+        description: `B intel on ${c2}`,
+        customName: 'Their staging',
+        temporaryName: 'B7',
+      });
+      // Corp B does not show it: changes go to Corp A only, and its own place is Corp A's.
+      const [, a, b] = merged.sources!;
+      expect(shown.provenance).toMatchObject({ sources: [a!.id], updatedBy: b!.id, writable: true });
+      expect(merged.signatures.find((s) => s.solarSystemId === c2)).toMatchObject({
+        eveId: 'HID-001',
+        group: 'relic',
+        name: 'Ruins',
+      });
+      // A newer note on the composite's writable source wins over the kept one, field by field.
+      env.clock.advance(1_000);
+      await env.writes.updateSystem(dave, alliance.id, c2, { status: 'friendly' });
+      await env.settle();
+      expect((await view(alliance.id)).systems.find((s) => s.solarSystemId === c2)).toMatchObject({
+        status: 'friendly',
+        description: `B intel on ${c2}`,
+      });
+      expect((await env.ports.systems.find(corpB.id, c2))!.status).toBe('hostile');
+      // The kept signature is Corp B's alone: it is not changed through a map that hides it.
+      await expect(
+        env.writes.updateSignature(dave, alliance.id, `s:${c2}:HID-001`, { name: 'Gone' }),
+      ).rejects.toMatchObject({ code: 'forbidden', message: expect.stringMatching(/Corp B/) });
+    });
+
+    it('never shows a system only hidden copies hold, nor publishes anything about it', async () => {
+      await share(corpA, alice, 'read-write', all);
+      await share(corpB, bob, 'read', all);
+      const merged = await view(alliance.id);
+      expect(merged.systems.map((s) => s.solarSystemId)).not.toContain(jita);
+      expect(merged.signatures.filter((s) => s.solarSystemId === jita)).toEqual([]);
+      expect(JSON.stringify((await env.events(alliance.id)).map((e) => e.data))).not.toContain(
+        `B intel on ${jita}`,
+      );
+      // When the source that showed C2 hides it too, it leaves the composite with its intel kept.
+      await env.systems.remove(alice, corpA.id, c2);
+      await env.settle();
+      expect((await view(alliance.id)).systems.map((s) => s.solarSystemId)).not.toContain(c2);
+      // ... and comes back with it, as a hidden system does on a map of its own.
+      await env.systems.add(alice, corpA.id, { solarSystemId: c2 });
+      await env.settle();
+      expect((await view(alliance.id)).systems.find((s) => s.solarSystemId === c2)).toMatchObject({
+        description: `B intel on ${c2}`,
+      });
+    });
+
+    it('follows an import that changed a hidden system’s intel silently', async () => {
+      await share(corpA, alice, 'read-write', all);
+      await share(corpB, bob, 'read', all);
+      // A Wanderer pull writes the hidden system without publishing anything about it...
+      const kept = (await env.ports.systems.find(corpB.id, c2))!;
+      env.clock.advance(5_000);
+      await env.ports.systems.update({
+        ...kept,
+        description: 'Fresh from Wanderer',
+        updatedAt: env.clock.now(),
+      });
+      // ... and says it finished.
+      await env.ports.events.append([
+        newEvent({
+          stream: mapStream(corpB.id),
+          type: 'import.finished',
+          actor: { kind: 'system', id: 'importing' },
+          data: {
+            jobId: 'job',
+            source: { kind: 'wanderer-api', host: 'wanderer.example', slug: 'b', name: null },
+            status: 'done',
+            outcome: { systems: { created: 0, updated: 1, unchanged: 0, skipped: 0, removed: 0 } },
+            error: null,
+          },
+          occurredAt: env.clock.now(),
+        }),
+      ]);
+      await env.settle();
+      expect((await view(alliance.id)).systems.find((s) => s.solarSystemId === c2)).toMatchObject({
+        description: 'Fresh from Wanderer',
+      });
+    });
+
+    it('shares no intel of hidden systems without the scopes for it', async () => {
+      await share(corpA, alice, 'read-write', all);
+      await share(corpB, bob, 'read', ['topology', 'signatures']);
+      const merged = await view(alliance.id);
+      expect(merged.systems.find((s) => s.solarSystemId === c2)).toMatchObject({
+        status: 'unknown',
+        description: '',
+        customName: null,
+        temporaryName: null,
+      });
+      expect(merged.signatures.find((s) => s.solarSystemId === c2)).toMatchObject({ eveId: 'HID-001' });
+      expect(JSON.stringify((await env.events(alliance.id)).map((e) => e.data))).not.toContain('B intel');
+
+      // Topology alone: nothing of Corp B's hidden systems reaches the composite at all.
+      const offered = (await env.sharing.list(bob, corpB.id)).outgoing[0]!;
+      await env.sharing.update(bob, corpB.id, offered.id, { scopes: ['topology'] });
+      await env.settle();
+      const state = (await env.merger.state(alliance.id))!;
+      expect(state.merge.keepers(`system|${c2}`)).toEqual([]);
+      expect((await view(alliance.id)).signatures.filter((s) => s.solarSystemId === c2)).toEqual([]);
+    });
+
+    it('brings a hidden system’s intel along when it is added on the composite', async () => {
+      await share(corpA, alice, 'read-write', all);
+      await share(corpB, bob, 'read', all);
+      await env.writes.addSystem(dave, alliance.id, { solarSystemId: jita, position: { x: 2400, y: 480 } });
+      await env.settle();
+      // Added to Corp A (the composite's writable source); Corp B still keeps it hidden.
+      expect((await env.ports.systems.find(corpA.id, jita))!.visible).toBe(true);
+      expect((await env.ports.systems.find(corpB.id, jita))!.visible).toBe(false);
+      const merged = await view(alliance.id);
+      expect(merged.systems.find((s) => s.solarSystemId === jita)).toMatchObject({
+        position: { x: 2400, y: 480 },
+        status: 'hostile',
+        description: `B intel on ${jita}`,
+      });
+      expect(merged.signatures.find((s) => s.solarSystemId === jita)).toMatchObject({ name: 'Ruins' });
+    });
+  });
+
+  describe('layout of sources in different coordinate spaces', () => {
+    const { jita, perimeter } = SYSTEMS;
+    let corpC: ChainMap;
+    const at = async (id: number) =>
+      (await view(alliance.id)).systems.find((s) => s.solarSystemId === id)!.position;
+
+    /** Corp C maps a chain of its own far left of where Corp A has its chain. */
+    beforeEach(async () => {
+      corpC = await env.maps.create(bob, { name: 'Corp C' });
+      await env.systems.add(bob, corpC.id, { solarSystemId: jita, position: { x: -3504, y: -2496 } });
+      await env.systems.add(bob, corpC.id, { solarSystemId: perimeter, position: { x: -3144, y: -2352 } });
+      await env.connections.add(bob, corpC.id, { source: jita, target: perimeter });
+      await share(corpA, alice, 'read-write');
+      await share(corpC, bob, 'read');
+    });
+
+    it('keeps the first source’s places and puts the next cluster beside it, on the grid', async () => {
+      const merged = await view(alliance.id);
+      const ofA = await Promise.all(
+        [c2, c5, c1].map(async (id) => (await env.ports.systems.find(corpA.id, id))!),
+      );
+      for (const system of ofA) expect(await at(system.solarSystemId)).toEqual(system.position);
+      const right = Math.max(...ofA.map((s) => s.position.x));
+      const top = Math.min(...ofA.map((s) => s.position.y));
+      const j = await at(jita);
+      const p = await at(perimeter);
+      // Right of Corp A's chain with a free column between, its top on Corp A's top.
+      expect(j.x).toBeGreaterThanOrEqual(right + 2 * 360);
+      expect(j.y).toBe(top);
+      expect(j.x % 24).toBe(0);
+      expect(j.y % 24).toBe(0);
+      // The cluster keeps its own shape.
+      expect({ x: p.x - j.x, y: p.y - j.y }).toEqual({ x: 360, y: 144 });
+      const spots = new Set(merged.systems.map((s) => `${s.position.x},${s.position.y}`));
+      expect(spots.size).toBe(merged.systems.length);
+    });
+
+    it('keeps the offset between rebuilds, so later systems join their cluster', async () => {
+      const before = { jita: await at(jita), perimeter: await at(perimeter) };
+      const fresh = sharingTestEnv(t.db);
+      await fresh.merger.rebuildAll();
+      expect(await at(jita)).toEqual(before.jita);
+      // A system Corp C adds later lands in Corp C's cluster, where Corp C has it.
+      await env.systems.add(bob, corpC.id, { solarSystemId: shattered, position: { x: -3504, y: -1200 } });
+      await env.settle();
+      expect(await at(shattered)).toEqual({ x: before.jita.x, y: before.jita.y + 1296 });
+      // A system moved on the composite stays where it was put.
+      await env.writes.moveSystems(dave, alliance.id, {
+        positions: [{ solarSystemId: jita, x: 48, y: 960 }],
+      });
+      await fresh.merger.rebuildAll();
+      expect(await at(jita)).toEqual({ x: 48, y: 960 });
+    });
+
+    it('moves the clusters of a map laid out before offsets apart once, leaving moved systems', async () => {
+      const ownOf = async (mapId: string, id: number) => (await env.ports.systems.find(mapId, id))!.position;
+      // As the old rule placed them: every system where its source has it; Corp A's C1 was moved.
+      const { layout } = env.sharingPorts;
+      await layout.clear(alliance.id);
+      await layout.put(
+        alliance.id,
+        [
+          { solarSystemId: c2, position: await ownOf(corpA.id, c2) },
+          { solarSystemId: c5, position: await ownOf(corpA.id, c5) },
+          { solarSystemId: c1, position: { x: 1200, y: 1200 } },
+          { solarSystemId: jita, position: await ownOf(corpC.id, jita) },
+          { solarSystemId: perimeter, position: { x: -3144, y: -2352 + 144 } },
+        ],
+        env.clock.now(),
+      );
+      const fresh = sharingTestEnv(t.db);
+      await fresh.merger.rebuildAll();
+      expect(await at(c2)).toEqual(await ownOf(corpA.id, c2));
+      expect(await at(c1)).toEqual({ x: 1200, y: 1200 });
+      const j = await at(jita);
+      expect(j.x).toBeGreaterThanOrEqual(1200 + 2 * 360);
+      expect(await at(perimeter)).toEqual({ x: j.x + 360, y: j.y + 288 });
+      // Once: the next rebuild changes nothing.
+      const head = await env.ports.events.headSeq(mapStream(alliance.id));
+      await sharingTestEnv(t.db).merger.rebuildAll();
+      expect(await env.events(alliance.id, head)).toEqual([]);
     });
   });
 });

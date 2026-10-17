@@ -17,7 +17,15 @@ import {
 import type { FeedSelector } from '../domain/feed.js';
 import { pairKey, parseRefId, refId, sameOrigin } from '../domain/keys.js';
 import { mergePassages, passagesShared, type ChainPassage } from '../domain/passages.js';
-import { asPosition, besideNeighbour, placeFree } from '../domain/layout.js';
+import {
+  asPosition,
+  besideNeighbour,
+  clusterOffset,
+  extentOf,
+  placeFree,
+  placedAsSourceHasIt,
+  shifted,
+} from '../domain/layout.js';
 import { ChainMerge } from '../domain/merge.js';
 import { shareScopes, type Share } from '../domain/shares.js';
 import {
@@ -42,8 +50,18 @@ interface MergedMap {
   merge: ChainMerge;
   view: ViewState;
   layout: Map<number, Position>;
+  /** How far each source's own coordinates are shifted on the layout (fixed once, by source id). */
+  offsets: Map<string, Position>;
   /** A composite's own notes, labels and locks of systems. */
   local: Map<number, LocalFields>;
+}
+
+/** What placing systems decided: new positions, and the offsets sources got for the first time. */
+interface Placing {
+  layout: Map<number, Position>;
+  placed: Array<{ solarSystemId: number; position: Position }>;
+  offsets: Map<string, Position>;
+  newOffsets: Array<{ sourceId: string; offset: Position }>;
 }
 
 /** The systems, connections and signatures a merged map shows (mapping's ChainOverlay). */
@@ -226,9 +244,10 @@ export class ChainMerger {
       });
       if (changed.length === 0) return;
       const refs = new Set(changed.map((p) => refId('system', String(p.solarSystemId))));
-      const layout = new Map(map.layout);
-      for (const { solarSystemId, position } of changed) layout.set(solarSystemId, position);
-      await this.publish(map, refs, actor, {}, { layout, placed: changed });
+      const placing = this.placing(map);
+      for (const { solarSystemId, position } of changed) placing.layout.set(solarSystemId, position);
+      placing.placed.push(...changed);
+      await this.publish(map, refs, actor, {}, { placing });
     });
   }
 
@@ -332,7 +351,10 @@ export class ChainMerger {
       const exact = new Set<string>();
       for (const s of selectors) {
         if ('key' in s) exact.add(refId(s.kind, s.key));
-        else for (const ref of map.merge.held(sourceId, s.kind, s.solarSystemId)) exact.add(ref);
+        else {
+          const system = 'solarSystemId' in s ? s.solarSystemId : undefined;
+          for (const ref of map.merge.held(sourceId, s.kind, system)) exact.add(ref);
+        }
       }
       const request: ChainSelector[] = [
         ...[...exact].map((ref) => parseRefId(ref)),
@@ -426,11 +448,15 @@ export class ChainMerger {
       merge,
       view: new ViewState(stored.entities),
       layout: await layout.list(mapId),
+      offsets: await layout.offsets(mapId),
       local: info.kind === 'composite' ? await this.ports.local.list(mapId) : new Map(),
     };
     const refs = new Set([...merge.refs(), ...map.view.refs()]);
     const nextSources = list.map(sourceDto);
     const sourcesChanged = JSON.stringify(stored.sources) !== JSON.stringify(merging ? nextSources : null);
+    const placing = this.placing(map);
+    // A map laid out before sources had offsets: their clusters move beside each other once.
+    if (merging && map.offsets.size === 0 && map.layout.size > 0) this.separateClusters(map, placing);
     await this.publish(
       map,
       refs,
@@ -439,6 +465,7 @@ export class ChainMerger {
       {
         sources: merging ? nextSources : [],
         sourcesChanged,
+        placing,
       },
     );
     if (merging) this.maps.set(mapId, map);
@@ -462,8 +489,8 @@ export class ChainMerger {
     actor: Actor,
     audit: AuditContext,
     extra: {
-      layout?: Map<number, Position>;
-      placed?: ReadonlyArray<{ solarSystemId: number; position: Position }>;
+      /** Positions already decided (a drag, clusters moved apart); new systems are placed on top. */
+      placing?: Placing;
       sources?: MapSourceDto[];
       sourcesChanged?: boolean;
       local?: Map<number, LocalFields>;
@@ -474,9 +501,9 @@ export class ChainMerger {
     const merge = actor === SHARING_ACTOR;
     if (merge && map.info.kind !== 'composite') actor = SHARING_COPY_ACTOR;
     const local = extra.local ?? map.local;
-    const layout = extra.layout ?? new Map(map.layout);
-    const placed = [...(extra.placed ?? [])];
-    this.place(map, refs, layout, placed);
+    const placing = extra.placing ?? this.placing(map);
+    this.place(map, refs, placing);
+    const { layout, placed, offsets, newOffsets } = placing;
     const ctx: ViewContext = {
       mapId: map.mapId,
       sources: new Map(map.sources.filter((s) => !s.hidden).map((s) => [s.id, s])),
@@ -487,7 +514,13 @@ export class ChainMerger {
     const next: ViewEntity[] = [];
     for (const ref of refs) next.push(...entitiesOf(map.merge, ref, ctx));
     const changes = map.view.diff(refs, next);
-    if (changes.length === 0 && placed.length === 0 && !extra.sourcesChanged && !extra.localChanged) {
+    if (
+      changes.length === 0 &&
+      placed.length === 0 &&
+      newOffsets.length === 0 &&
+      !extra.sourcesChanged &&
+      !extra.localChanged
+    ) {
       map.layout = layout;
       return;
     }
@@ -522,6 +555,8 @@ export class ChainMerger {
         if (removals.length > 0) await views.remove(map.mapId, removals);
         if (puts.length > 0) await views.put(map.mapId, puts);
         if (placed.length > 0) await this.ports.layout.put(map.mapId, placed, this.ports.clock.now());
+        if (newOffsets.length > 0)
+          await this.ports.layout.putOffsets(map.mapId, newOffsets, this.ports.clock.now());
         if (extra.sources) await views.saveSources(map.mapId, extra.sources);
         if (extra.localChanged) {
           const { solarSystemId, fields } = extra.localChanged;
@@ -532,20 +567,25 @@ export class ChainMerger {
     );
     map.view.apply(changes);
     map.layout = layout;
+    map.offsets = offsets;
     map.local = local;
+  }
+
+  /** A draft of the map's layout to place systems on (committed with the publish). */
+  private placing(map: MergedMap): Placing {
+    return { layout: new Map(map.layout), placed: [], offsets: new Map(map.offsets), newOffsets: [] };
   }
 
   /**
    * Systems new to the map get a position on its own layout: next to a neighbour already placed,
    * at the offset their source has between them (the map's own systems keep their places that
-   * way), else where their first source has them; never covering another system.
+   * way), else where their first source has them, shifted by that source's offset; never covering
+   * another system. Sources lay themselves out in coordinate spaces of their own, so the first time
+   * a source needs room of its own its cluster is shifted right of everything shown (the first
+   * one keeps its coordinates), and the shift is kept so its later systems join it.
    */
-  private place(
-    map: MergedMap,
-    refs: Set<string>,
-    layout: Map<number, Position>,
-    placed: Array<{ solarSystemId: number; position: Position }>,
-  ): void {
+  private place(map: MergedMap, refs: Set<string>, placing: Placing): void {
+    const { layout, placed, offsets, newOffsets } = placing;
     const order = new Map(map.merge.sourceIds().map((id, i) => [id, i]));
     const pending: Array<{ id: number; ref: string; holders: string[]; order: number }> = [];
     for (const ref of refs) {
@@ -553,6 +593,7 @@ export class ChainMerger {
       if (kind !== 'system') continue;
       const id = Number(key);
       if (layout.has(id)) continue;
+      // Only shown systems: hidden copies never show (and are thousands on an intel library).
       const holders = map.merge.holders(ref);
       if (holders.length === 0) continue;
       pending.push({ id, ref, holders, order: order.get(holders[0]!) ?? 0 });
@@ -561,20 +602,33 @@ export class ChainMerger {
     // The map's own systems first, then by source, then by id.
     pending.sort((a, b) => a.order - b.order || a.id - b.id);
     const taken = [...layout.values()];
+    const own = (source: string, ref: string) => asPosition(map.merge.sourceField(source, ref, 'pos'));
     const put = (id: number, spot: Position | null) => {
       const position = placeFree(spot, taken);
       layout.set(id, position);
       taken.push(position);
       placed.push({ solarSystemId: id, position });
     };
+    const offsetOf = (source: string): Position => {
+      const known = offsets.get(source);
+      if (known) return known;
+      // Its cluster: what of it is waiting for a place now.
+      const cluster = extentOf(
+        pending.flatMap((item) => (item.holders[0] === source ? (own(source, item.ref) ?? []) : [])),
+      );
+      const offset = clusterOffset(cluster, extentOf(shownOn(map, layout).map(([, at]) => at)));
+      offsets.set(source, offset);
+      newOffsets.push({ sourceId: source, offset });
+      return offset;
+    };
     const beside = (item: (typeof pending)[number]): Position | null => {
       for (const source of item.holders) {
-        const own = asPosition(map.merge.sourceField(source, item.ref, 'pos'));
-        if (!own) continue;
+        const at = own(source, item.ref);
+        if (!at) continue;
         for (const neighbour of map.merge.neighbours(item.id)) {
           const placedAt = layout.get(neighbour);
-          const there = asPosition(map.merge.sourceField(source, refId('system', String(neighbour)), 'pos'));
-          if (placedAt && there) return besideNeighbour(own, there, placedAt);
+          const there = own(source, refId('system', String(neighbour)));
+          if (placedAt && there) return besideNeighbour(at, there, placedAt);
         }
       }
       return null;
@@ -589,11 +643,65 @@ export class ChainMerger {
         progressed = true;
       }
       if (progressed) continue;
-      // Nothing next to a placed neighbour: the first one goes where its first source has it.
-      const first = pending.shift()!;
-      put(first.id, asPosition(map.merge.sourceField(first.holders[0]!, first.ref, 'pos')));
+      // Nothing next to a placed neighbour: the first one goes where its first source has it,
+      // in that source's cluster (a system several sources hold: the first one's).
+      const first = pending[0]!;
+      const source = first.holders[0]!;
+      const at = own(source, first.ref);
+      const spot = at ? shifted(at, offsetOf(source)) : null;
+      pending.shift();
+      put(first.id, spot);
     }
   }
+
+  /**
+   * Once for a map laid out before sources had offsets (every source's systems where that
+   * source has them, so clusters of different coordinate spaces lie apart or on top of each
+   * other): the first source with systems keeps its coordinates, and each other source's systems
+   * that still sit where it has them (not moved since, nor placed beside another source's) move
+   * as one cluster right of what is placed, as new sources' clusters do. Moved systems stay.
+   */
+  private separateClusters(map: MergedMap, placing: Placing): void {
+    const { layout, placed, offsets, newOffsets } = placing;
+    // Placed systems by the source they were placed from (their first holder), unmoved ones only.
+    const bySource = new Map<string, Array<{ id: number; at: Position }>>();
+    for (const [id, at] of layout) {
+      const ref = refId('system', String(id));
+      const [first] = map.merge.holders(ref);
+      const own = first ? asPosition(map.merge.sourceField(first, ref, 'pos')) : null;
+      if (!first || !own) continue;
+      const list = bySource.get(first) ?? [];
+      if (placedAsSourceHasIt(at, own)) list.push({ id, at });
+      bySource.set(first, list);
+    }
+    const [primary, ...others] = map.merge.sourceIds().filter((id) => bySource.has(id));
+    if (!primary) return;
+    const moving = new Set(others.flatMap((id) => bySource.get(id)!.map((s) => s.id)));
+    const fixed = shownOn(map, layout).flatMap(([id, at]) => (moving.has(id) ? [] : [at]));
+    const record = (sourceId: string, offset: Position) => {
+      offsets.set(sourceId, offset);
+      newOffsets.push({ sourceId, offset });
+    };
+    record(primary, { x: 0, y: 0 });
+    for (const sourceId of others) {
+      const cluster = bySource.get(sourceId)!;
+      // Everything of it was moved or placed beside other sources: its offset comes when needed.
+      if (cluster.length === 0) continue;
+      const offset = clusterOffset(extentOf(cluster.map((s) => s.at)), extentOf(fixed));
+      record(sourceId, offset);
+      for (const { id, at } of cluster) {
+        const position = shifted(at, offset);
+        layout.set(id, position);
+        placed.push({ solarSystemId: id, position });
+        fixed.push(position);
+      }
+    }
+  }
+}
+
+/** Positions of the systems the map shows (the layout also keeps places of systems gone for now). */
+function shownOn(map: MergedMap, layout: ReadonlyMap<number, Position>): Array<[number, Position]> {
+  return [...layout].filter(([id]) => map.merge.shows(refId('system', String(id))));
 }
 
 /** The event that brings viewers from `before` to `after` of one entity. */

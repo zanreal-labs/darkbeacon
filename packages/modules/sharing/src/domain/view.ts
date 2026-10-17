@@ -268,16 +268,17 @@ export function characterDto(object: MergedObject): CharacterPresenceDto {
 
 /**
  * The view entities one merge ref shows on the map: none, one, or (connections) one per hole.
- * Connections need both systems shown, signatures their system.
+ * Connections need both systems shown, signatures their system (a source's hidden copies only
+ * add to what another source shows). The cheap checks come first: a source may keep thousands of
+ * hidden systems and their signatures.
  */
 export function entitiesOf(merge: ChainMerge, ref: string, ctx: ViewContext): ViewEntity[] {
   const { kind, key } = parseRefId(ref);
-  const objects = merge.objects(ref);
-  if (objects.length === 0) return [];
-  const shown = (solarSystemId: number) => merge.objects(refId('system', String(solarSystemId))).length > 0;
+  const shown = (solarSystemId: number) => merge.shows(refId('system', String(solarSystemId)));
   switch (kind) {
     case 'system': {
-      const object = objects[0]!;
+      const object = merge.objects(ref)[0];
+      if (!object) return [];
       const local = ctx.local?.get(Number(object.key));
       const dto = systemDto(object, ctx, lockOf(merge, ref, object.holders, local));
       return [{ kind, id: String(dto.solarSystemId), dto }];
@@ -285,7 +286,7 @@ export function entitiesOf(merge: ChainMerge, ref: string, ctx: ViewContext): Vi
     case 'connection': {
       const pair = parsePair(key);
       if (!pair || !shown(pair[0]) || !shown(pair[1])) return [];
-      return objects.map((object) => {
+      return merge.objects(ref).map((object) => {
         const dto = connectionDto(object, ctx, lockOf(merge, ref, object.holders));
         return { kind, id: dto.id, dto };
       });
@@ -293,12 +294,15 @@ export function entitiesOf(merge: ChainMerge, ref: string, ctx: ViewContext): Vi
     case 'signature': {
       const sig = parseSignatureKey(key);
       if (!sig || !shown(sig.solarSystemId)) return [];
-      const object = objects[0]!;
+      const object = merge.objects(ref)[0];
+      if (!object) return [];
       const dto = signatureDto(object, ctx, linkedConnection(merge, object));
       return [{ kind, id: dto.id, dto }];
     }
     case 'character': {
-      const dto = characterDto(objects[0]!);
+      const object = merge.objects(ref)[0];
+      if (!object) return [];
+      const dto = characterDto(object);
       return [{ kind, id: String(dto.characterId), dto }];
     }
   }
