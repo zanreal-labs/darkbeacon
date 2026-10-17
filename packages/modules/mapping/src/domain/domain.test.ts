@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SYSTEM_LABELS, SystemLabelDto, UpdateSystemRequest } from '@darkbeacon/shared';
-import { defaultShipSize, nextPosition, slugify, validateLabels, validateSystemLabels } from './rules.js';
+import { defaultShipSize, slugify, validateLabels, validateSystemLabels } from './rules.js';
 import { parseSignaturePaste, type ScannerLanguage } from './signature-paste.js';
 
 const universe = (whClass: number | null) => ({
@@ -85,16 +85,6 @@ describe('rules', () => {
     expect(defaultShipSize('wormhole', universe(5), universe(2))).toBe('large');
     expect(defaultShipSize('wormhole', universe(7), universe(1))).toBe('medium');
     expect(defaultShipSize('wormhole', universe(1), universe(13))).toBe('small');
-  });
-
-  it('places new systems to the right', () => {
-    expect(nextPosition([])).toEqual({ x: 0, y: 0 });
-    expect(
-      nextPosition([
-        { x: 10, y: 5 },
-        { x: 300, y: 40 },
-      ]),
-    ).toEqual({ x: 660, y: 40 });
   });
 
   it('rejects duplicate labels', () => {

@@ -17,7 +17,7 @@ import {
 import type { FeedSelector } from '../domain/feed.js';
 import { pairKey, parseRefId, refId, sameOrigin } from '../domain/keys.js';
 import { mergePassages, passagesShared, type ChainPassage } from '../domain/passages.js';
-import { asPosition, besideNeighbour, placeFree } from '../domain/layout.js';
+import { asPosition, besideNeighbour, layoutLinks, placeFree } from '../domain/layout.js';
 import { ChainMerge } from '../domain/merge.js';
 import { shareScopes, type Share } from '../domain/shares.js';
 import {
@@ -538,7 +538,8 @@ export class ChainMerger {
   /**
    * Systems new to the map get a position on its own layout: next to a neighbour already placed,
    * at the offset their source has between them (the map's own systems keep their places that
-   * way), else where their first source has them; never covering another system.
+   * way), else where their first source has them; when that spot is taken, by the map placement
+   * rule (`placeFree`), never covering another system.
    */
   private place(
     map: MergedMap,
@@ -560,21 +561,20 @@ export class ChainMerger {
     if (pending.length === 0) return;
     // The map's own systems first, then by source, then by id.
     pending.sort((a, b) => a.order - b.order || a.id - b.id);
-    const taken = [...layout.values()];
-    const put = (id: number, spot: Position | null) => {
-      const position = placeFree(spot, taken);
+    const put = (id: number, spot: Position | null, near: number | null = null) => {
+      const links = layoutLinks(layout, (n) => map.merge.neighbours(n));
+      const position = placeFree(spot, layout, links, near);
       layout.set(id, position);
-      taken.push(position);
       placed.push({ solarSystemId: id, position });
     };
-    const beside = (item: (typeof pending)[number]): Position | null => {
+    const beside = (item: (typeof pending)[number]): { spot: Position; near: number } | null => {
       for (const source of item.holders) {
         const own = asPosition(map.merge.sourceField(source, item.ref, 'pos'));
         if (!own) continue;
         for (const neighbour of map.merge.neighbours(item.id)) {
           const placedAt = layout.get(neighbour);
           const there = asPosition(map.merge.sourceField(source, refId('system', String(neighbour)), 'pos'));
-          if (placedAt && there) return besideNeighbour(own, there, placedAt);
+          if (placedAt && there) return { spot: besideNeighbour(own, there, placedAt), near: neighbour };
         }
       }
       return null;
@@ -582,9 +582,9 @@ export class ChainMerger {
     while (pending.length > 0) {
       let progressed = false;
       for (const item of [...pending]) {
-        const spot = beside(item);
-        if (!spot) continue;
-        put(item.id, spot);
+        const next = beside(item);
+        if (!next) continue;
+        put(item.id, next.spot, next.near);
         pending.splice(pending.indexOf(item), 1);
         progressed = true;
       }

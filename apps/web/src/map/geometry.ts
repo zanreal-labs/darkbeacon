@@ -1,5 +1,3 @@
-import { SYSTEM_PLACEMENT } from '@darkbeacon/shared';
-
 export interface Rect {
   x: number;
   y: number;
@@ -37,20 +35,6 @@ export function along(a: Point, b: Point, distance: number): Point {
   const length = Math.hypot(b.x - a.x, b.y - a.y) || 1;
   const t = Math.min(1, distance / length);
   return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-}
-
-/** Room a system node takes with its bookmark tag, with a margin (every node has the same box). */
-const NODE_BOX = { width: SYSTEM_PLACEMENT.x - 40, height: SYSTEM_PLACEMENT.y - 10 };
-
-/** Nudges a new system down until it does not cover another one. */
-export function freeSpot(at: Point, taken: Point[]): Point {
-  const spot = { x: Math.round(at.x), y: Math.round(at.y) };
-  while (
-    taken.some((p) => Math.abs(p.x - spot.x) < NODE_BOX.width && Math.abs(p.y - spot.y) < NODE_BOX.height)
-  ) {
-    spot.y += SYSTEM_PLACEMENT.y;
-  }
-  return spot;
 }
 
 export interface Viewport {

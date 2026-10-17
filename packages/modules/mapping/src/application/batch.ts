@@ -27,11 +27,24 @@ export class MapBatchUseCases extends MappingUseCases {
     const connections = new ConnectionUseCases(this.ports);
     return this.ports.uow.transaction(async () => {
       const outSystems: MapSystem[] = [];
+      const shown = new Set(
+        (await this.ports.systems.list(mapId)).filter((s) => s.visible).map((s) => s.solarSystemId),
+      );
       for (const { solarSystemId, ...fields } of request.systems) {
+        // Without a position: next to a system this batch connects it to that is on the map already.
+        const near = fields.position
+          ? undefined
+          : request.connections
+              .flatMap((c) =>
+                c.source === solarSystemId ? [c.target] : c.target === solarSystemId ? [c.source] : [],
+              )
+              .find((id) => shown.has(id));
         const placed = await systems.add(who, mapId, {
           solarSystemId,
           ...(fields.position ? { position: fields.position } : {}),
+          ...(near !== undefined ? { near } : {}),
         });
+        shown.add(solarSystemId);
         const patch = defined(fields);
         outSystems.push(
           Object.keys(patch).length > 0 ? await systems.update(who, mapId, solarSystemId, patch) : placed,

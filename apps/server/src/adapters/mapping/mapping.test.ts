@@ -211,7 +211,8 @@ describeEachDialect('mapping use cases', (t) => {
     const seq = await head();
     const a = await systems.add(bob, map.id, { solarSystemId: SYSTEMS.c2, position: { x: 10, y: 20 } });
     const b = await systems.add(bob, map.id, { solarSystemId: SYSTEMS.c5 });
-    expect(b.position).toEqual({ x: 370, y: 20 });
+    // Nothing to place it next to: below the last system, on the grid (never right of everything).
+    expect(b.position).toEqual({ x: 0, y: 168 });
     // Adding again is a no-op.
     expect(await systems.add(bob, map.id, { solarSystemId: SYSTEMS.c2 })).toEqual(a);
     expect(await eventsSince(seq)).toEqual([
@@ -320,6 +321,47 @@ describeEachDialect('mapping use cases', (t) => {
     expect((await snapshots.snapshot(bob, map.id)).systems).toHaveLength(1);
     const back = await systems.update(bob, map.id, SYSTEMS.c5, { visible: true, tag: 'B' });
     expect(back).toMatchObject({ visible: true, tag: 'B', customName: 'Farm' });
+  });
+
+  it('places systems nobody dragged by the map’s placement rule', async () => {
+    const { x: COLUMN, y: ROW } = { x: 360, y: 144 };
+    const home = await systems.add(bob, map.id, { solarSystemId: SYSTEMS.c2, position: { x: 0, y: 0 } });
+    await systems.update(bob, map.id, home.solarSystemId, { status: 'home' });
+    // Found from the selected system (search with a selection): one column right, in its row.
+    const a = await systems.add(bob, map.id, { solarSystemId: SYSTEMS.c5, near: SYSTEMS.c2 });
+    expect(a.position).toEqual({ x: COLUMN, y: 0 });
+    await connections.add(bob, map.id, { source: SYSTEMS.c2, target: SYSTEMS.c5 });
+    // A sibling stacks under it.
+    const b = await systems.add(bob, map.id, { solarSystemId: SYSTEMS.c1, near: SYSTEMS.c2 });
+    expect(b.position).toEqual({ x: COLUMN, y: ROW });
+    await connections.add(bob, map.id, { source: SYSTEMS.c2, target: SYSTEMS.c1 });
+    // Nothing selected: as near the middle of the viewer's screen as it is free, on the grid.
+    const c = await systems.add(bob, map.id, { solarSystemId: SYSTEMS.shattered, around: { x: 1450, y: 5 } });
+    expect(c.position).toEqual({ x: 1440, y: 0 });
+    // Taken: the nearest free slot around it.
+    await systems.remove(bob, map.id, SYSTEMS.shattered);
+    const d = await systems.add(bob, map.id, {
+      solarSystemId: SYSTEMS.jita,
+      around: { x: COLUMN + 7, y: 3 },
+    });
+    expect(d.position).toEqual({ x: 2 * COLUMN, y: 0 });
+
+    // Restored: back to its old spot when free and near the system it is found from again...
+    await systems.remove(bob, map.id, SYSTEMS.c1);
+    const back = await systems.add(bob, map.id, { solarSystemId: SYSTEMS.c1, near: SYSTEMS.c2 });
+    expect(back.position).toEqual({ x: COLUMN, y: ROW });
+    // ...else next to it like a new system (here its old spot has been taken meanwhile).
+    await systems.remove(bob, map.id, SYSTEMS.c1);
+    await systems.move(bob, map.id, { positions: [{ solarSystemId: SYSTEMS.jita, x: COLUMN, y: ROW }] });
+    const again = await systems.add(bob, map.id, { solarSystemId: SYSTEMS.c1, near: SYSTEMS.c2 });
+    expect(again.position).toEqual({ x: COLUMN, y: 2 * ROW });
+    // Shown again through an update: its old spot while near the chain, else next to home.
+    await systems.update(bob, map.id, SYSTEMS.c1, { visible: false });
+    expect((await systems.update(bob, map.id, SYSTEMS.c1, { visible: true })).position).toEqual(
+      again.position,
+    );
+    const far = await systems.update(bob, map.id, SYSTEMS.shattered, { visible: true });
+    expect(far.position).toEqual({ x: 0, y: ROW });
   });
 
   it('adds, updates and removes connections', async () => {

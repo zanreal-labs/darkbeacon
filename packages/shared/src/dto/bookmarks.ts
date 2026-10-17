@@ -78,7 +78,8 @@ export const MAP_GRID = 24;
 
 /** A position on the map grid, so systems line up exactly. */
 export function onMapGrid(p: { x: number; y: number }): { x: number; y: number } {
-  return { x: Math.round(p.x / MAP_GRID) * MAP_GRID, y: Math.round(p.y / MAP_GRID) * MAP_GRID };
+  // `|| 0`: never -0, which equals 0 everywhere but in Object.is.
+  return { x: Math.round(p.x / MAP_GRID) * MAP_GRID || 0, y: Math.round(p.y / MAP_GRID) * MAP_GRID || 0 };
 }
 
 const VARIABLE = /\{([A-Za-z0-9]+)\}/g;

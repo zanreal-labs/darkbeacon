@@ -270,7 +270,17 @@ export const MapSystemDto = z.object({
 });
 export type MapSystemDto = z.infer<typeof MapSystemDto>;
 
-export const AddSystemRequest = z.object({ solarSystemId: EveId, position: Position.optional() });
+/**
+ * Adds (or restores) a system. Without `position` the server places it by the map's placement rule:
+ * next to `near` (the system it was reached from, say the selected one) when that is on the map,
+ * else as near `around` as it is free (the middle of the viewer's screen, as a node's corner).
+ */
+export const AddSystemRequest = z.object({
+  solarSystemId: EveId,
+  position: Position.optional(),
+  near: EveId.optional(),
+  around: Position.optional(),
+});
 export type AddSystemRequest = z.infer<typeof AddSystemRequest>;
 
 export const UpdateSystemRequest = z

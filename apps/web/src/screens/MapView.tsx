@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import {
+  SYSTEM_NODE_CENTRE,
   SYSTEM_PLACEMENT,
   type ConnectionDto,
   type LinkedMapDto,
@@ -27,7 +28,6 @@ import { useMapIntel as useSystemIntel, useSetStanding, useStandingsQuery } from
 import { MapCanvas, type FocusRequest, type MenuTarget } from '../map/MapCanvas';
 import { useMapCharacters } from '../map/characters/useMapCharacters';
 import type { HolderStanding } from '../map/menus/intel';
-import { freeSpot } from '../map/geometry';
 import { connectionMenu, paneMenu, statusOptions, systemMenu } from '../map/menus';
 import { selectionMenu } from '../map/menus/selection';
 import { keptText, planRemoval } from '../map/selection/removal';
@@ -513,7 +513,10 @@ export function MapView({
         .getNodes()
         .filter((n) => n.selected)
         .map((n) => Number(n.id)),
-    pasteAt: () => pointer.current ?? defaultPosition(),
+    // At the pointer, else next to the selected system, else in the middle of the screen.
+    pasteAt: () =>
+      pointer.current ??
+      (system ? { x: system.position.x + SYSTEM_PLACEMENT.x, y: system.position.y } : viewCentre()),
   });
   const copySelection = (ids: readonly number[]) => clipboard.copy(ids);
 
@@ -664,21 +667,21 @@ export function MapView({
 
   const addSystem = (picked: UniverseSystemDto) => {
     if (onMap.has(picked.id)) return select(picked.id, true);
-    const position = addAt ?? defaultPosition();
+    // The server places it by the map's rule: next to the selected system (the one it was found
+    // from), else around the spot clicked or the middle of the screen.
+    const point = addAt ?? (system ? null : viewCentre());
     setAddAt(null);
     void store.addSystem(
       picked.id,
-      freeSpot(
-        position,
-        [...state.systems.values()].map((s) => s.position),
-      ),
+      point
+        ? { around: { x: point.x - SYSTEM_NODE_CENTRE.x, y: point.y - SYSTEM_NODE_CENTRE.y } }
+        : { near: system!.solarSystemId },
     );
     select(picked.id);
   };
 
-  /** Next to the selected system, or in the middle of the visible canvas. */
-  const defaultPosition = () => {
-    if (system) return { x: system.position.x + SYSTEM_PLACEMENT.x, y: system.position.y };
+  /** The middle of the part of the canvas no window covers, in map coordinates. */
+  const viewCentre = () => {
     const bounds = document.querySelector('.react-flow')?.getBoundingClientRect();
     if (!bounds) return { x: 0, y: 0 };
     return rf.screenToFlowPosition({

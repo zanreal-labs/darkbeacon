@@ -714,15 +714,22 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
         need({ resource: 'connections', action: 'write' }, view.mapId);
         const source = resolveSystem(from);
         const target = resolveSystem(to);
-        for (const id of [source, target]) {
-          if (!view.systems.some((s) => s.solarSystemId === id)) {
-            need({ resource: 'systems', action: 'write' }, view.mapId);
-            await deps.merged.route(
-              view.mapId,
-              (w) => w.addSystem(actor, view.mapId, { solarSystemId: id }),
-              () => deps.systems.add(actor, view.mapId, { solarSystemId: id }),
-            );
-          }
+        const shown = new Set(view.systems.map((s) => s.solarSystemId));
+        const ends: Array<[number, number]> = [
+          [source, target],
+          [target, source],
+        ];
+        for (const [id, other] of ends) {
+          if (shown.has(id)) continue;
+          need({ resource: 'systems', action: 'write' }, view.mapId);
+          // A missing end goes next to the other one.
+          const add = { solarSystemId: id, ...(shown.has(other) ? { near: other } : {}) };
+          await deps.merged.route(
+            view.mapId,
+            (w) => w.addSystem(actor, view.mapId, add),
+            () => deps.systems.add(actor, view.mapId, add),
+          );
+          shown.add(id);
         }
         const request = { source, target, ...(type ? { type } : {}) };
         const c = await deps.merged.route(

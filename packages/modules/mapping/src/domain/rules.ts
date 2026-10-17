@@ -1,9 +1,7 @@
 import {
-  SYSTEM_PLACEMENT,
   type ConnectionType,
   type LabelDto,
   type MapViewDto,
-  type Position,
   type ShipSize,
   type SystemLabelDto,
   type UniverseSystemDto,
@@ -41,16 +39,6 @@ export function defaultShipSize(
   if (classes.includes(SHATTERED_FRIGATE)) return 'small';
   if (classes.includes(C1)) return 'medium';
   return 'large';
-}
-
-/** Spacing used to place a system that was added without a position. */
-export const SYSTEM_SPACING = { x: SYSTEM_PLACEMENT.x, y: 0 };
-
-/** Next free spot to the right of everything already placed. */
-export function nextPosition(existing: readonly Position[]): Position {
-  if (existing.length === 0) return { x: 0, y: 0 };
-  const right = existing.reduce((best, p) => (p.x > best.x ? p : best));
-  return { x: right.x + SYSTEM_SPACING.x, y: right.y + SYSTEM_SPACING.y };
 }
 
 /** Ids and names (any case) must be unique within a list. */
