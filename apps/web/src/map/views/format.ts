@@ -137,12 +137,12 @@ const builtIn = (id: string, name: string, layout: Omit<WidgetsLayout, 'version'
 
 /**
  * The quick slots' views on a map that has published none of its own, so they work from the first
- * sign-in: 1 for scanning (Signatures large, Routes for where the holes lead), 2 for a fight (System info's kill intel, a
+ * sign-in: 1 for scanning (Signatures large, Structures, Routes for where the holes lead), 2 for a fight (System info's kill intel, a
  * large Local, Kills, Comments), 3 for rolling a hole (Connections with their mass and passages, Local).
  */
 export const BUILT_IN_VIEWS: readonly NamedView[] = [
   builtIn('scan', 'Scan', {
-    visible: ['info', 'signatures', 'routes'],
+    visible: ['info', 'signatures', 'structures', 'routes'],
     caps: { signatures: 440 },
     dockWidth: 400,
   }),

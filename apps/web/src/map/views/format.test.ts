@@ -95,7 +95,7 @@ describe('the view format', () => {
       ).toBe(true);
       expect(ViewPresetDto.safeParse(v.view).success, v.name).toBe(true);
     }
-    expect(BUILT_IN_VIEWS[0]!.view.layout.visible).toEqual(['info', 'signatures', 'routes']);
+    expect(BUILT_IN_VIEWS[0]!.view.layout.visible).toEqual(['info', 'signatures', 'structures', 'routes']);
     expect(BUILT_IN_VIEWS[1]!.view.layout.visible).toEqual(['info', 'local', 'kills', 'comments']);
     expect(BUILT_IN_VIEWS[2]!.view.layout.visible).toEqual(['info', 'connections', 'local']);
   });

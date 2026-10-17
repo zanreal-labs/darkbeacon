@@ -97,7 +97,7 @@ describe('quick view slots', () => {
     ]);
 
     fireEvent.click(slot(1));
-    expect(visible()).toBe('info,signatures,routes');
+    expect(visible()).toBe('info,signatures,structures,routes');
     expect(slot(1).getAttribute('aria-pressed')).toBe('true');
     expect(slot(3).getAttribute('aria-pressed')).toBe('false');
   });
@@ -241,7 +241,7 @@ describe('quick view slots', () => {
     await user.click(screen.getByRole('button', { name: 'Publish' }));
     await waitFor(() => expect(puts.views).toHaveLength(1));
     expect(puts.views[0]!.map((v) => [v.name, v.slot, v.view.layout.visible])).toEqual([
-      ['Fleet scan', 2, ['info', 'signatures', 'routes']],
+      ['Fleet scan', 2, ['info', 'signatures', 'structures', 'routes']],
     ]);
     expect(puts.preferences).toEqual([]);
   });
