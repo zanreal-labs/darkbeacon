@@ -156,8 +156,11 @@ interface DomainEvent<T = unknown> {
   a standard map may merge shared maps too. Viewers of a merged map gain no access to its sources.
 - Merge: systems by solar system id, connections by unordered pair (+ wormhole type when known),
   signatures by system and code; every field last-writer-wins by its own change time; deletions
-  are tombstones. Positions are the merged map's own layout. Provenance (source maps, newest change)
-  shows in one line in the sidebar, never on the canvas.
+  are tombstones. A source's hidden systems are its intel library: their intel (within the share's
+  scopes) and signatures count where the merged map shows the system from any source, but they never
+  show on their own. Positions are the merged map's own layout; each source's cluster is shifted
+  beside the others once (sources lay themselves out differently). Provenance (source maps, newest
+  change) shows in one line in the sidebar, never on the canvas.
 - Merged changes are published on the merged map's own stream with its own seq; edits on a merged
   map write through to read-write sources only, never past the share's scopes.
   A composite keeps its own notes, Tags and locks of systems; raising a share to read-write

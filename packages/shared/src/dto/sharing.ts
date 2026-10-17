@@ -133,6 +133,12 @@ export const ChainEntry = z.discriminatedUnion('state', [
     /** When the origin created (or last re-created) the object. */
     born: Timestamp,
     fields: z.record(z.string(), StampedValue),
+    /**
+     * The origin keeps the object but does not show it: a hidden system (its intel library) or a
+     * signature in one. Its fields count where another map shows the object; on its own it shows
+     * nowhere, and writes never go to it.
+     */
+    hidden: z.boolean().optional(),
   }),
   /** The origin does not hold the object (never had it, or only stopped showing it). */
   z.object({ kind: ChainObjectKind, key: ChainKey, state: z.literal('absent') }),

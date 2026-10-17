@@ -44,6 +44,7 @@ export interface SharingTables {
     updated_at: number;
   };
   chain_layout: { map_id: string; solar_system_id: number; x: number; y: number; updated_at: number };
+  chain_source_offsets: { map_id: string; source_id: string; x: number; y: number; updated_at: number };
   /** Mapping's table, read for the map kind only. */
   maps: { id: string; kind: string };
 }
@@ -287,8 +288,45 @@ export class KyselyChainLayoutRepository extends Repository implements ChainLayo
     }
   }
 
+  async offsets(mapId: string): Promise<Map<string, Position>> {
+    const rows = await this.db
+      .selectFrom('chain_source_offsets')
+      .selectAll()
+      .where('map_id', '=', mapId)
+      .execute();
+    return new Map(rows.map((r) => [r.source_id, { x: Number(r.x), y: Number(r.y) }]));
+  }
+
+  async putOffsets(
+    mapId: string,
+    offsets: ReadonlyArray<{ sourceId: string; offset: Position }>,
+    at: number,
+  ): Promise<void> {
+    if (offsets.length === 0) return;
+    await this.db
+      .insertInto('chain_source_offsets')
+      .values(
+        offsets.map((o) => ({
+          map_id: mapId,
+          source_id: o.sourceId,
+          x: o.offset.x,
+          y: o.offset.y,
+          updated_at: at,
+        })),
+      )
+      .onConflict((oc) =>
+        oc.columns(['map_id', 'source_id']).doUpdateSet((eb) => ({
+          x: eb.ref('excluded.x'),
+          y: eb.ref('excluded.y'),
+          updated_at: eb.ref('excluded.updated_at'),
+        })),
+      )
+      .execute();
+  }
+
   async clear(mapId: string): Promise<void> {
     await this.db.deleteFrom('chain_layout').where('map_id', '=', mapId).execute();
+    await this.db.deleteFrom('chain_source_offsets').where('map_id', '=', mapId).execute();
   }
 }
 

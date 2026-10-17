@@ -5,7 +5,8 @@ import { pairKey, signatureKey } from './keys.js';
 /** What to read again from a source after one of its events (mirrors the ports' `ChainSelector`). */
 export type FeedSelector =
   | { kind: 'system' | 'connection' | 'signature' | 'character'; key: string }
-  | { kind: 'connection' | 'signature'; all: true; solarSystemId?: number };
+  | { kind: 'connection' | 'signature'; all: true; solarSystemId?: number }
+  | { kind: 'system'; all: true };
 
 /** A map event's meaning for the maps that merge it. */
 export type FeedSignal =
@@ -70,6 +71,21 @@ export function feedSignal(event: Pick<DomainEvent, 'type' | 'data'>): FeedSigna
         selectors: [
           { kind: 'signature', all: true, solarSystemId: s.solarSystemId },
           { kind: 'connection', all: true, solarSystemId: s.solarSystemId },
+        ],
+      };
+    }
+    case 'import.finished': {
+      // An import writes hidden systems (and their signatures) silently: the maps merging this
+      // one read every system and signature again, which publishes only what changed. A failed
+      // or cancelled one may have written part of it.
+      const { outcome } = d as Data<'import.finished'>;
+      const changed = Object.values(outcome).some((o) => o.created + o.updated + o.removed > 0);
+      if (!changed) return null;
+      return {
+        kind: 'objects',
+        selectors: [
+          { kind: 'system', all: true },
+          { kind: 'signature', all: true },
         ],
       };
     }

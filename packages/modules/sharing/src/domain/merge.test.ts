@@ -169,4 +169,53 @@ describe('ChainMerge', () => {
     expect(merge.held('a', 'signature', J1)).toEqual([`signature|${J1}:ABC-123`]);
     expect(merge.held('b', 'connection')).toEqual([]);
   });
+
+  describe('hidden copies (a source’s intel library)', () => {
+    const hidden = (entry: ChainEntry): ChainEntry => ({ ...entry, hidden: true }) as ChainEntry;
+
+    it('lend their fields to a system another source shows, per field, without holding it', () => {
+      const merge = twoSources();
+      merge.apply('a', [
+        system(J1, 1, { status: s('unknown', 0), notes: s('', 0), pos: s({ x: 1, y: 1 }, 1) }),
+      ]);
+      merge.apply('b', [hidden(system(J1, 2, { status: s('hostile', 5), notes: s('Keepstar', 6) }))]);
+      const [j1] = merge.objects(refId('system', String(J1)));
+      expect(j1).toMatchObject({
+        fields: { status: 'hostile', notes: 'Keepstar', pos: { x: 1, y: 1 } },
+        fieldSources: { status: 'b', notes: 'b', pos: 'a' },
+        holders: ['a'],
+        keepers: ['b'],
+        updatedBy: 'b',
+      });
+      expect(merge.holders(refId('system', String(J1)))).toEqual(['a']);
+      // A newer value where it shows still wins.
+      merge.apply('a', [system(J1, 1, { status: s('friendly', 9) })]);
+      expect(merge.objects(refId('system', String(J1)))[0]!.fields).toMatchObject({
+        status: 'friendly',
+        notes: 'Keepstar',
+      });
+    });
+
+    it('never make a system show on their own', () => {
+      const merge = twoSources();
+      merge.apply('b', [hidden(system(J1, 2, { notes: s('Keepstar', 6) }))]);
+      expect(merge.objects(refId('system', String(J1)))).toEqual([]);
+      expect(merge.shows(refId('system', String(J1)))).toBe(false);
+      expect(merge.keepers(refId('system', String(J1)))).toEqual(['b']);
+      // Shown somewhere, it is there with the kept intel; hidden there again, it goes.
+      merge.apply('a', [system(J1, 1)]);
+      expect(merge.objects(refId('system', String(J1)))[0]!.fields.notes).toBe('Keepstar');
+      merge.apply('a', [hidden(system(J1, 1))]);
+      expect(merge.shows(refId('system', String(J1)))).toBe(false);
+    });
+
+    it('keep the signatures of a hidden system, holding none of them for writes', () => {
+      const merge = twoSources();
+      const key = `${J1}:ABC-123`;
+      merge.apply('b', [hidden(signature(key, 2, { group: s('relic', 2) }))]);
+      const [sig] = merge.objects(refId('signature', key));
+      expect(sig).toMatchObject({ fields: { group: 'relic' }, holders: [], keepers: ['b'] });
+      expect(merge.held('b', 'signature', J1)).toEqual([refId('signature', key)]);
+    });
+  });
 });

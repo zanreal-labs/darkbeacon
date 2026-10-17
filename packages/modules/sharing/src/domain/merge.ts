@@ -5,6 +5,8 @@ import { parsePair, parseRefId, parseSignatureKey, refId } from './keys.js';
 interface Copy {
   born: number;
   fields: Record<string, StampedValue>;
+  /** The source keeps it without showing it (a hidden system, a signature in one): intel only. */
+  hidden: boolean;
 }
 
 interface SourceState {
@@ -27,8 +29,10 @@ export interface MergedObject {
   /** The newest change among the live copies, and the source that made it. */
   updatedAt: number;
   updatedBy: string;
-  /** Sources holding a live copy, in source order. */
+  /** Sources showing a live copy, in source order: the ones a change goes to. */
   holders: string[];
+  /** Sources keeping a live copy they do not show (their fields count, they take no writes). */
+  keepers: string[];
 }
 
 /**
@@ -39,6 +43,9 @@ export interface MergedObject {
  * - a copy is live unless some source deleted the object after the copy last changed (tombstones
  *   are compared by time, so an old copy never brings a deleted object back);
  * - each field is last-writer-wins by its own change time, ties going to the earlier source;
+ * - a hidden copy (a source's intel library: a system it hides, the signatures in one) lends the
+ *   object its fields but never makes it show: a system shows while some source shows it, and a
+ *   hidden copy is no holder (changes go to the sources showing it);
  * - connections of one pair are one object, unless signatures name different wormhole types on
  *   them: then each type is its own hole and copies without a type join the oldest one.
  */
@@ -90,7 +97,7 @@ export class ChainMerge {
       touched.add(ref);
       this.index(ref);
       if (entry.state === 'present') {
-        source.copies.set(ref, { born: entry.born, fields: entry.fields });
+        source.copies.set(ref, { born: entry.born, fields: entry.fields, hidden: entry.hidden === true });
         source.tombstones.delete(ref);
         const link = entry.kind === 'signature' ? entry.fields.link?.v : undefined;
         if (typeof link === 'string') this.linkSet(link).add(ref);
@@ -115,14 +122,17 @@ export class ChainMerge {
   held(sourceId: string, kind: ChainObjectKind, solarSystemId?: number): string[] {
     const source = this.sources.get(sourceId);
     if (!source) return [];
-    const out: string[] = [];
-    for (const ref of [...source.copies.keys(), ...source.tombstones.keys()]) {
-      const { kind: k, key } = parseRefId(ref);
-      if (k !== kind) continue;
-      if (solarSystemId !== undefined && !systemsOf(k, key).includes(solarSystemId)) continue;
-      out.push(ref);
+    const out = new Set<string>();
+    // In one system: from the index (a source may keep thousands of hidden systems).
+    const candidates =
+      solarSystemId !== undefined
+        ? (this.bySystem.get(solarSystemId) ?? [])
+        : [...source.copies.keys(), ...source.tombstones.keys()];
+    for (const ref of candidates) {
+      if (!source.copies.has(ref) && !source.tombstones.has(ref)) continue;
+      if (parseRefId(ref).kind === kind) out.add(ref);
     }
-    return [...new Set(out)];
+    return [...out];
   }
 
   /** A field of one source's copy (positions: every map lays itself out, so they compare only within a source). */
@@ -141,9 +151,19 @@ export class ChainMerge {
     return [...out].sort((a, b) => a - b);
   }
 
-  /** Sources holding a live copy of the ref, in source order. */
+  /** Sources showing a live copy of the ref, in source order (hidden copies are no holders). */
   holders(ref: string): string[] {
-    return this.live(ref).map((c) => c.sourceId);
+    return this.live(ref).flatMap((c) => (c.copy.hidden ? [] : [c.sourceId]));
+  }
+
+  /** Sources keeping a live hidden copy of the ref, in source order. */
+  keepers(ref: string): string[] {
+    return this.live(ref).flatMap((c) => (c.copy.hidden ? [c.sourceId] : []));
+  }
+
+  /** True when some source shows a live copy of the ref (cheap: nothing is merged). */
+  shows(ref: string): boolean {
+    return this.live(ref).some((c) => !c.copy.hidden);
   }
 
   /** Every ref any source holds a copy of. */
@@ -158,6 +178,8 @@ export class ChainMerge {
     const { kind, key } = parseRefId(ref);
     const live = this.live(ref);
     if (live.length === 0) return [];
+    // Hidden copies alone never make a system show; signatures follow their system (see view.ts).
+    if (kind === 'system' && !live.some((c) => !c.copy.hidden)) return [];
     if (kind !== 'connection') return [mergeCopies(kind, key, live)];
     return groupHoles(live).map((group) =>
       mergeCopies(kind, group.key === null ? key : `${key}:${group.key}`, group.copies),
@@ -260,7 +282,8 @@ function mergeCopies(kind: ChainObjectKind, key: string, live: readonly LiveCopy
     born,
     updatedAt,
     updatedBy,
-    holders: [...new Set(live.map((c) => c.sourceId))],
+    holders: [...new Set(live.flatMap((c) => (c.copy.hidden ? [] : [c.sourceId])))],
+    keepers: [...new Set(live.flatMap((c) => (c.copy.hidden ? [c.sourceId] : [])))],
   };
 }
 

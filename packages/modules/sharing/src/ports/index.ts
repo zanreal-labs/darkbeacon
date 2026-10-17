@@ -119,6 +119,17 @@ export interface ChainLayoutRepository {
     positions: ReadonlyArray<{ solarSystemId: number; position: Position }>,
     at: number,
   ): Promise<void>;
+  /**
+   * How far each source's own coordinates are shifted on the merged map (by source id), fixed
+   * the first time the source needed room of its own, so its later systems join its cluster.
+   */
+  offsets(mapId: string): Promise<Map<string, Position>>;
+  putOffsets(
+    mapId: string,
+    offsets: ReadonlyArray<{ sourceId: string; offset: Position }>,
+    at: number,
+  ): Promise<void>;
+  /** Forgets the layout and the offsets. */
   clear(mapId: string): Promise<void>;
 }
 
