@@ -3,6 +3,7 @@ export * from './fit.js';
 export * from './intel.js';
 export * from './lifetime.js';
 export * from './map.js';
+export * from './placement.js';
 export * from './mass.js';
 export * from './rolling.js';
 export * from './rules.js';

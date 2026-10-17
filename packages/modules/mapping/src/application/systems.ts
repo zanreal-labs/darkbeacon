@@ -6,14 +6,10 @@ import {
   hasMapRole,
   type Actor,
 } from '@darkbeacon/core';
-import {
-  SYSTEM_PLACEMENT,
-  type AddSystemRequest,
-  type MoveSystemsRequest,
-  type UpdateSystemRequest,
-} from '@darkbeacon/shared';
+import { type AddSystemRequest, type MoveSystemsRequest, type UpdateSystemRequest } from '@darkbeacon/shared';
 import type { Connection, MapSystem } from '../domain/map.js';
-import { changes, defined, nextPosition } from '../domain/rules.js';
+import { placeSystem } from '../domain/placement.js';
+import { changes, defined } from '../domain/rules.js';
 import { MappingUseCases, type EventBatch, type MappingPorts } from './base.js';
 import { renumberBookmarks } from './bookmark-numbers.js';
 import { guardPinged } from './pings.js';
@@ -30,20 +26,21 @@ export class SystemUseCases extends MappingUseCases {
     return this.write(who, mapId, async (events) => {
       const existing = await this.ports.systems.find(mapId, request.solarSystemId);
       if (existing?.visible) return existing;
-      const placed = (await this.ports.systems.list(mapId)).filter((s) => s.visible);
-      if (existing) {
-        // Back where it was, unless something has taken that spot meanwhile.
-        const taken = placed.some((s) => overlaps(s.position, existing.position));
-        const position =
-          request.position ?? (taken ? nextPosition(placed.map((s) => s.position)) : existing.position);
-        return this.restore(events, { ...existing, position }, existing);
-      }
+      // Nobody dragged it: the map's placement rule, back to its old spot if that still fits.
+      const position =
+        request.position ??
+        placeSystem(await this.ports.systems.list(mapId), await this.ports.connections.list(mapId), {
+          near: request.near ?? null,
+          around: request.around ?? null,
+          previous: existing?.position ?? null,
+        });
+      if (existing) return this.restore(events, { ...existing, position }, existing);
 
       const now = this.ports.clock.now();
       const system: MapSystem = {
         mapId,
         solarSystemId: request.solarSystemId,
-        position: request.position ?? nextPosition(placed.map((s) => s.position)),
+        position,
         customName: null,
         temporaryName: null,
         tag: null,
@@ -98,7 +95,15 @@ export class SystemUseCases extends MappingUseCases {
       }
 
       const next: MapSystem = { ...current, ...patch, updatedAt: this.ports.clock.now() };
-      if (!current.visible) return this.restore(events, next, current);
+      if (!current.visible) {
+        // Shown again where it stood if that still fits, else where the placement rule says.
+        if (!patch.position) {
+          const systems = await this.ports.systems.list(mapId);
+          const connections = await this.ports.connections.list(mapId);
+          next.position = placeSystem(systems, connections, { previous: current.position });
+        }
+        return this.restore(events, next, current);
+      }
       if (!next.visible) {
         await guardPinged(this.ports.pings, mapId, solarSystemId);
         await this.guardLockedConnections(who, mapId, solarSystemId);
@@ -212,9 +217,4 @@ export async function removeConnection(
     }
   }
   events.add('connection.removed', { id: connection.id }, connection);
-}
-
-/** Whether two systems placed at these corners would cover each other. */
-function overlaps(a: { x: number; y: number }, b: { x: number; y: number }): boolean {
-  return Math.abs(a.x - b.x) < SYSTEM_PLACEMENT.x && Math.abs(a.y - b.y) < SYSTEM_PLACEMENT.y;
 }

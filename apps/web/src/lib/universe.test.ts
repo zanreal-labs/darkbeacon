@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { freeSpot } from '../map/geometry';
 import { slugify } from '../screens/HomePage';
 import { systemClass } from './universe';
 
@@ -19,12 +18,7 @@ describe('systemClass', () => {
   });
 });
 
-describe('placement helpers', () => {
-  it('moves a new system below the ones it would cover', () => {
-    expect(freeSpot({ x: 10.4, y: 0 }, [{ x: 0, y: 0 }])).toEqual({ x: 10, y: 144 });
-    expect(freeSpot({ x: 500, y: 0 }, [{ x: 0, y: 0 }])).toEqual({ x: 500, y: 0 });
-  });
-
+describe('map addresses', () => {
   it('derives a map address from its name', () => {
     expect(slugify('  My Chain #2 ')).toBe('my-chain-2');
   });

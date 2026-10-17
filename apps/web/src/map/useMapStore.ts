@@ -84,6 +84,12 @@ function mapWithout<K, V>(map: Map<K, V>, keep: (v: V, k: K) => boolean): Map<K,
   return new Map([...map].filter(([k, v]) => keep(v, k)));
 }
 
+/** Where a new system goes: a spot the viewer chose, or what the server places it by. */
+export type SystemPlacement =
+  | { position: Position; near?: undefined; around?: undefined }
+  | { position?: undefined; near: number; around?: undefined }
+  | { position?: undefined; near?: undefined; around: Position };
+
 /**
  * Live state of one map: the `map:<id>` stream plus optimistic local changes. Commands go
  * over REST; their results come back as events, which replace the optimistic overlay.
@@ -222,35 +228,43 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto, options:
       ids.includes(e.data.solarSystemId);
 
     return {
-      addSystem(solarSystemId: number, position: Position, gesture?: Gesture) {
+      /**
+       * Adds a system: at `position` when the viewer chose the spot, else the server places it by
+       * the map's placement rule next to `near` or as near `around` as it is free, and the map
+       * shows it once the server says where.
+       */
+      addSystem(solarSystemId: number, placement: SystemPlacement, gesture?: Gesture) {
         const now = Date.now();
-        const placeholder: MapSystemDto = {
-          mapId,
-          solarSystemId,
-          position,
-          customName: null,
-          temporaryName: null,
-          tag: null,
-          status: 'unknown',
-          description: '',
-          labelIds: [],
-          systemLabelIds: [],
-          customLabel: null,
-          locked: false,
-          visible: true,
-          createdAt: now,
-          updatedAt: now,
-        };
+        const { position } = placement;
+        const placeholder: MapSystemDto | null = position
+          ? {
+              mapId,
+              solarSystemId,
+              position,
+              customName: null,
+              temporaryName: null,
+              tag: null,
+              status: 'unknown',
+              description: '',
+              labelIds: [],
+              systemLabelIds: [],
+              customLabel: null,
+              locked: false,
+              visible: true,
+              createdAt: now,
+              updatedAt: now,
+            }
+          : null;
         return run({
           apply: (s) =>
-            s.systems.has(solarSystemId)
+            !placeholder || s.systems.has(solarSystemId)
               ? s
               : { ...s, systems: new Map(s.systems).set(solarSystemId, placeholder) },
           confirmedBy: isSystemEvent(['system.added', 'system.updated'], [solarSystemId]),
           request: (headers) =>
             api(buildPath(routes.systems.add.path, { mapId }), {
               method: 'POST',
-              json: { solarSystemId, position },
+              json: { solarSystemId, ...placement },
               headers,
             }),
           failure: 'Could not add the system',

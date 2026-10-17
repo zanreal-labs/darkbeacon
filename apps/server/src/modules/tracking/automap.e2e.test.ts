@@ -175,6 +175,35 @@ describeEachDialect('auto-mapping a tracked pilot’s jumps', (t) => {
     expect((await systems()).has(AMARR)).toBe(false);
   });
 
+  it('lays a scout’s chain out the way mappers do: next to where each system was found', async () => {
+    // Wormhole systems by letter; the pilot starts in J105443 (home).
+    const [A, B, C, D, E, F, G] = [31000110, 31000111, 31000112, 31000113, 31000114, 31000115, 31000116];
+    // Three holes out and back, the second static two deep, a K162 into A, off the middle.
+    for (const id of [A, B, C, B, A, J105443, D, E, D, J105443, A, F, G]) await arrive(id);
+    await vi.waitFor(async () => expect((await systems()).has(G)).toBe(true));
+    const at = await systems();
+    const p = (id: number) => at.get(id)!.position;
+    // Each one column (360 px) right of the system it was reached from, on the map grid.
+    for (const [from, to] of [
+      [J105443, A],
+      [A, B],
+      [B, C],
+      [J105443, D],
+      [D, E],
+      [A, F],
+      [F, G],
+    ] as const) {
+      expect(p(to).x - p(from).x).toBe(360);
+      expect(Number.isInteger(p(to).y / 24)).toBe(true);
+    }
+    // Siblings stack in a column; no two systems share a slot.
+    expect(p(D)).toEqual({ x: p(A).x, y: p(A).y + 144 });
+    const slots = [...at.values()].map((s) => `${s.position.x},${s.position.y}`);
+    expect(new Set(slots).size).toBe(slots.length);
+    // The K162 off A goes where its link crosses no other (above B, not under D's chain).
+    expect(p(F)).toEqual({ x: p(B).x, y: p(B).y - 144 });
+  });
+
   it('brings systems the map hid back next to the jump, locked or not, not where they stood', async () => {
     // A Wanderer import keeps every system ever visited, hidden (often locked), far from today's
     // chain: there, a jump used to bring them back out of sight.

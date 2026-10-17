@@ -11,3 +11,4 @@ export * from './tokens.js';
 export * from './openapi.js';
 export * from './telemetry.js';
 export * from './support.js';
+export * from './placement.js';

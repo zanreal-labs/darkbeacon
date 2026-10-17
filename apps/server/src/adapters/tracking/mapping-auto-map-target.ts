@@ -1,47 +1,11 @@
 import { noAuditScope, type Actor, type AuditScope } from '@darkbeacon/core';
-import {
-  nextPosition,
-  type ConnectionUseCases,
-  type MappingPorts,
-  type MapSystem,
-  type SystemUseCases,
-} from '@darkbeacon/mapping';
-import { SYSTEM_PLACEMENT, type Position } from '@darkbeacon/shared';
+import { type ConnectionUseCases, type MappingPorts, type SystemUseCases } from '@darkbeacon/mapping';
 import {
   DEFAULT_AUTO_MAP_RULES,
   type AutoMapRules,
   type AutoMapTarget,
   type RecordedJump,
 } from '@darkbeacon/tracking';
-
-/** Room a system node needs; a spot closer than this to another system is taken. */
-const GAP = { x: SYSTEM_PLACEMENT.x - 40, y: SYSTEM_PLACEMENT.y - 10 };
-
-/** Next free spot to the right of `anchor`, moving down until it covers no other system. */
-export function spotNear(anchor: Position, taken: Position[]): Position {
-  const spot = { x: anchor.x + SYSTEM_PLACEMENT.x, y: anchor.y };
-  while (taken.some((p) => Math.abs(p.x - spot.x) < GAP.x && Math.abs(p.y - spot.y) < GAP.y))
-    spot.y += SYSTEM_PLACEMENT.y;
-  return spot;
-}
-
-/**
- * Where auto-mapping puts `solarSystemId` when a character arrives there from `near` (null: found
- * there, no jump), as Wanderer's `maybe_add_system` does: next to `near` while that is on the map,
- * else at the next free spot. A system the map hid earlier is restored there too, locked or not,
- * not where it stood back then: maps imported from Wanderer keep every system ever visited,
- * hidden, at coordinates far from today's chain. Null when the map shows it already.
- */
-export function arrivalSpot(
-  all: readonly MapSystem[],
-  solarSystemId: number,
-  near: number | null,
-): { position: Position } | null {
-  if (all.some((s) => s.solarSystemId === solarSystemId && s.visible)) return null;
-  const taken = all.filter((s) => s.visible).map((s) => s.position);
-  const anchor = near === null ? undefined : all.find((s) => s.solarSystemId === near && s.visible);
-  return { position: anchor ? spotNear(anchor.position, taken) : nextPosition(taken) };
-}
 
 /** Tracking's AutoMapTarget over mapping's use cases, acting as the character's owner. */
 export class MappingAutoMapTarget implements AutoMapTarget {
@@ -90,22 +54,24 @@ export class MappingAutoMapTarget implements AutoMapTarget {
     const actor: Actor = { kind: 'account', id: input.accountId, instanceRole: 'user' };
     // Usually the system is on the map already: one row, not the whole chain.
     if ((await this.ports.systems.find(input.mapId, input.solarSystemId))?.visible) return;
-    const spot = arrivalSpot(await this.ports.systems.list(input.mapId), input.solarSystemId, null);
-    if (!spot) return;
+    // Found there without a jump: next to home (or the last system placed), by the map's rule.
     await this.audit.run(
       { channel: { kind: 'system', id: 'auto-mapping' }, characterId: input.characterId },
       () =>
-        this.systems
-          .add(actor, input.mapId, { solarSystemId: input.solarSystemId, ...spot })
-          .then(() => undefined),
+        this.systems.add(actor, input.mapId, { solarSystemId: input.solarSystemId }).then(() => undefined),
     );
   }
 
-  /** Adds (or restores) `solarSystemId` next to `near` unless it is already on the map. */
+  /**
+   * Adds (or restores) `solarSystemId` next to `near`, the system the jump came from, unless it is
+   * already on the map, by the map's placement rule (`placeSystem`), as Wanderer's
+   * `maybe_add_system` does. A system the map hid earlier goes back to its old spot only when that
+   * is free and still next to `near`: maps imported from Wanderer keep every system ever visited,
+   * hidden, at coordinates far from today's chain.
+   */
   private async place(actor: Actor, mapId: string, solarSystemId: number, near: number): Promise<void> {
     // Most jumps are between systems already on the map: one row, not the whole chain.
     if ((await this.ports.systems.find(mapId, solarSystemId))?.visible) return;
-    const spot = arrivalSpot(await this.ports.systems.list(mapId), solarSystemId, near);
-    if (spot) await this.systems.add(actor, mapId, { solarSystemId, ...spot });
+    await this.systems.add(actor, mapId, { solarSystemId, near });
   }
 }

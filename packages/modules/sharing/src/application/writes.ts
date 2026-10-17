@@ -8,6 +8,7 @@ import {
   type AuditMapRef,
 } from '@darkbeacon/core';
 import {
+  findSystemSpot,
   LOCAL_INSTANCE,
   type AddConnectionRequest,
   type AddSignatureRequest,
@@ -33,6 +34,7 @@ import {
   type ChainCommand,
 } from '../domain/commands.js';
 import { connectionGroupOf, pairKey, refId, signatureKey, signatureKeyOf } from '../domain/keys.js';
+import { layoutLinks } from '../domain/layout.js';
 import { passagesShared } from '../domain/passages.js';
 import { objectAllowed } from '../domain/scopes.js';
 import { isLocked, lockOf, SELF, type MergedLock, type SourceInfo } from '../domain/view.js';
@@ -56,6 +58,20 @@ export class ChainWrites {
   async addSystem(actor: Actor | null, mapId: string, request: AddSystemRequest): Promise<void> {
     const { who, map } = await this.open(actor, mapId);
     const ref = refId('system', String(request.solarSystemId));
+    // Placed on this map's own layout by the placement rule, next to `near` or around `around`.
+    if (!request.position && (request.near !== undefined || request.around !== undefined)) {
+      const placed = new Map([...map.layout].filter(([id]) => id !== request.solarSystemId));
+      const links = layoutLinks(placed, (id) => map.merge.neighbours(id));
+      request = {
+        ...request,
+        position: findSystemSpot({
+          nodes: [...placed].map(([id, position]) => ({ id, position })),
+          links,
+          parent: request.near ?? null,
+          around: request.around ?? null,
+        }),
+      };
+    }
     if (map.merge.holders(ref).length === 0) {
       const [target] = this.newObjectTargets(map, 'system');
       if (!target) throw new ForbiddenError('No map this one merges takes new systems');
