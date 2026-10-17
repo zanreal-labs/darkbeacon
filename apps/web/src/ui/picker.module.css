@@ -4,13 +4,12 @@
 }
 
 .list {
-  position: absolute;
-  z-index: 40;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  max-height: 320px;
+  z-index: 60;
+  box-sizing: border-box;
+  width: var(--radix-popper-anchor-width);
+  max-height: min(320px, var(--radix-popper-available-height, 320px));
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: var(--dbk-space-1);
   border: 1px solid var(--dbk-color-border);
   border-radius: var(--dbk-radius-large);
