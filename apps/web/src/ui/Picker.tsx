@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Search, X } from 'lucide-react';
 import { Avatar } from './Avatar';
 import { IconButton, Spinner } from './Button';
@@ -35,8 +35,16 @@ export interface SearchPickerProps<T extends PickerOption> {
   search(text: string): Promise<PickerResults<T>>;
   cacheKey: readonly unknown[];
   placeholder?: string;
-  /** Fewer characters than this are not searched. */
+  /**
+   * Fewer characters than this are not searched. 0: `search('')` answers on focus, before
+   * anything is typed (suggestions, shown in the same rows as results).
+   */
   minLength?: number;
+  /**
+   * How long typing must pause before a search, in ms. 0 for searches that cost nothing (in the
+   * browser): they show no spinner either.
+   */
+  debounce?: number;
   /** What to say when nothing matched. */
   empty?: ReactNode;
   disabled?: boolean;
@@ -54,6 +62,7 @@ export function SearchPicker<T extends PickerOption>({
   cacheKey,
   placeholder,
   minLength = 1,
+  debounce = 250,
   empty = 'Nothing found',
   disabled,
   ...aria
@@ -67,9 +76,9 @@ export function SearchPicker<T extends PickerOption>({
   const [active, setActive] = useState(0);
 
   useEffect(() => {
-    const timer = setTimeout(() => setDebounced(text.trim()), 250);
+    const timer = setTimeout(() => setDebounced(text.trim()), debounce);
     return () => clearTimeout(timer);
-  }, [text]);
+  }, [text, debounce]);
 
   const enabled = debounced.length >= minLength;
   const results = useQuery({
@@ -78,8 +87,11 @@ export function SearchPicker<T extends PickerOption>({
     enabled,
     staleTime: 5 * 60_000,
     retry: false,
+    // The previous answer stays while the next one comes, so the list never blinks empty.
+    placeholderData: keepPreviousData,
   });
   const options = enabled ? (results.data?.options ?? []) : [];
+  const waiting = results.isPending || (results.isPlaceholderData && options.length === 0);
 
   const pick = (option: T) => {
     onChange(option);
@@ -122,7 +134,8 @@ export function SearchPicker<T extends PickerOption>({
       e.preventDefault();
       setActive((i) => Math.max(i - 1, 0));
     } else if (e.key === 'Enter') {
-      if (open && options[active]) {
+      // Not while the list still shows the answer to earlier text.
+      if (open && options[active] && !results.isPlaceholderData) {
         e.preventDefault();
         pick(options[active]);
       }
@@ -131,7 +144,9 @@ export function SearchPicker<T extends PickerOption>({
     }
   };
 
-  const showList = open && text.trim().length >= minLength;
+  // Nothing to suggest before typing: no list at all, rather than "nothing found".
+  const nothingToSuggest = text.trim() === '' && !waiting && options.length === 0 && !results.isError;
+  const showList = open && text.trim().length >= minLength && !nothingToSuggest;
   return (
     <div className={styles.picker}>
       <div className={fieldStyles.control}>
@@ -162,7 +177,7 @@ export function SearchPicker<T extends PickerOption>({
           onBlur={() => setTimeout(() => setOpen(false), 120)}
           onKeyDown={keyDown}
         />
-        {results.isFetching && enabled && <Spinner label="Searching" />}
+        {results.isFetching && enabled && debounce > 0 && <Spinner label="Searching" />}
       </div>
       {showList && (
         <div className={styles.list} id={listId} role="listbox" aria-label="Results">
@@ -185,10 +200,10 @@ export function SearchPicker<T extends PickerOption>({
               {o.detail && <span className={styles.detail}>{o.detail}</span>}
             </div>
           ))}
-          {enabled && results.isSuccess && options.length === 0 && (
+          {enabled && results.isSuccess && !waiting && options.length === 0 && (
             <div className={styles.status}>{empty}</div>
           )}
-          {(!enabled || results.isPending) && <div className={styles.status}>Searching…</div>}
+          {(!enabled || waiting) && <div className={styles.status}>Searching…</div>}
           {results.isError && (
             <div className={styles.status} role="alert">
               {results.error instanceof Error ? results.error.message : 'Search failed. Try again.'}

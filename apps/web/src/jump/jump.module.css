@@ -217,20 +217,25 @@
   transform: translateY(-50%);
 }
 
+/* Half a turn per swap: the values change in place, the icon says that they did. */
+.swap svg {
+  transition: transform 180ms ease;
+}
+
+.swap svg[data-turned] {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .swap svg {
+    transition: none;
+  }
+}
+
 .skills {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--dbk-space-2);
-}
-
-.exits {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px var(--dbk-space-1);
-  margin-top: calc(-1 * var(--dbk-space-1));
-  color: var(--dbk-color-text-muted);
-  font-size: var(--dbk-font-size-small);
 }
 
 .skillsHint {
@@ -322,11 +327,14 @@
   gap: var(--dbk-space-3);
   padding-top: var(--dbk-space-3);
   border-top: 1px solid var(--dbk-color-border);
+  transition: opacity var(--dbk-motion-normal) var(--dbk-motion-easing);
 }
 
+/* The route of the ends before the last change, while the new one comes; an answer that comes
+   at once (a swap whose reverse was fetched on hover) never dims it. */
 .result[aria-busy] {
   opacity: 0.6;
-  transition: opacity var(--dbk-motion-normal) var(--dbk-motion-easing);
+  transition-delay: 150ms;
 }
 
 .totalsMain {

@@ -15,6 +15,8 @@ export interface PlannerSettings {
   avoidRegions: string[];
   ansiblex: string;
   bridgeTonnes: number | null;
+  /** Systems picked as a start or destination, by name, most recent first. */
+  recent: string[];
 }
 
 export const DEFAULT_SETTINGS: PlannerSettings = {
@@ -29,6 +31,7 @@ export const DEFAULT_SETTINGS: PlannerSettings = {
   avoidRegions: [],
   ansiblex: '',
   bridgeTonnes: null,
+  recent: [],
 };
 
 export const SETTINGS_KEY = 'dbk.jump-planner.v1';
@@ -42,6 +45,7 @@ export function loadSettings(): PlannerSettings {
       ...DEFAULT_SETTINGS,
       ...parsed,
       skills: { ...DEFAULT_SETTINGS.skills, ...parsed.skills },
+      recent: Array.isArray(parsed.recent) ? parsed.recent.filter((n) => typeof n === 'string') : [],
     };
   } catch {
     return DEFAULT_SETTINGS;
