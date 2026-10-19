@@ -74,7 +74,7 @@ const alliance = [
     </header>
 
     <section class="detail-section container" id="scan" aria-labelledby="scan-title">
-      <div class="detail-head">
+      <div class="detail-head" data-reveal>
         <p class="eyebrow"><b>01</b> Scan</p>
         <h2 id="scan-title" class="feature-title feature-title--sm">Paste the scanner, read the hole.</h2>
         <p class="feature-lede">
@@ -114,7 +114,7 @@ const alliance = [
     </section>
 
     <section class="detail-section container" id="map" aria-labelledby="map-title">
-      <div class="detail-head">
+      <div class="detail-head" data-reveal>
         <p class="eyebrow"><b>02</b> Map</p>
         <h2 id="map-title" class="feature-title feature-title--sm">Everyone edits the same chain.</h2>
       </div>
@@ -169,7 +169,7 @@ const alliance = [
     </section>
 
     <section class="detail-section container" id="colours" aria-labelledby="colours-title">
-      <div class="detail-head">
+      <div class="detail-head" data-reveal>
         <p class="eyebrow"><b>02</b> Colours and routes</p>
         <h2 id="colours-title" class="feature-title feature-title--sm">Colours mean what they mean in game.</h2>
       </div>
@@ -228,7 +228,7 @@ const alliance = [
     </section>
 
     <section class="detail-section container" id="fight" aria-labelledby="fight-title">
-      <div class="detail-head">
+      <div class="detail-head" data-reveal>
         <p class="eyebrow"><b>03</b> Fight</p>
         <h2 id="fight-title" class="feature-title feature-title--sm">Know who is in the chain before you undock.</h2>
       </div>
@@ -260,7 +260,7 @@ const alliance = [
     </section>
 
     <section class="detail-section container" id="capitals" aria-labelledby="capitals-title">
-      <div class="detail-head">
+      <div class="detail-head" data-reveal>
         <p class="eyebrow"><b>04</b> Move capitals</p>
         <h2 id="capitals-title" class="feature-title feature-title--sm">Plan the jumps on a map of known space.</h2>
       </div>
@@ -289,11 +289,11 @@ const alliance = [
     </section>
 
     <section class="detail-section container" id="alliance" aria-labelledby="alliance-title">
-      <div class="detail-head">
+      <div class="detail-head" data-reveal>
         <p class="eyebrow"><b>05</b> Run it for your alliance</p>
         <h2 id="alliance-title" class="feature-title feature-title--sm">One chain per corp. One map for the alliance.</h2>
       </div>
-        <ul class="cards">
+        <ul class="cards" data-reveal>
           {
             alliance.map(([name, text]) => (
               <li class="card">
@@ -307,7 +307,7 @@ const alliance = [
     </section>
 
     <section class="detail-section container" id="self-host" aria-labelledby="host-title">
-      <div class="detail-head">
+      <div class="detail-head" data-reveal>
         <p class="eyebrow"><b>HS</b> Self-host</p>
         <h2 id="host-title" class="feature-title feature-title--sm">One container. Your data stays on your box.</h2>
       </div>

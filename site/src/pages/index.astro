@@ -277,8 +277,18 @@ const statusLabel: Record<string, string> = { done: 'Done', now: 'In progress', 
             />
           </Frame>
         </figure>
-        <ul class="items items--row">
-          {fightItems.map(([name, text]) => <li><h3>{name}</h3><p set:html={text} /></li>)}
+        <ul class="items items--row" data-reveal>
+          {
+            fightItems.map(([name, text], i) => (
+              <li>
+                <h3>
+                  {i === 0 && <span class="ring-dot" aria-hidden="true" />}
+                  {name}
+                </h3>
+                <p set:html={text} />
+              </li>
+            ))
+          }
         </ul>
         <p class="section-more"><a class="more-link" href="/features#fight">Kills, activity and structures<Fragment set:html={arrow} /></a></p>
       </div>
@@ -310,12 +320,12 @@ const statusLabel: Record<string, string> = { done: 'Done', now: 'In progress', 
     <!-- ───────────── 05 Alliance ───────────── -->
     <section class="feature feature--alliance" id="alliance" aria-labelledby="alliance-title">
       <div class="container">
-        <div class="feature-head feature-head--inline">
+        <div class="feature-head feature-head--inline" data-reveal>
           <p class="eyebrow"><b>05</b> Run it for your alliance</p>
           <h2 id="alliance-title" class="feature-title">One chain per corp.<br /><span>One map for the alliance.</span></h2>
           <p class="feature-lede">Corps keep their own maps and share them, with the other side’s admin agreeing.</p>
         </div>
-        <ul class="items items--row">
+        <ul class="items items--row" data-reveal>
           {allianceItems.map(([name, text]) => <li><h3>{name}</h3><p set:html={text} /></li>)}
         </ul>
         <p class="section-more"><a class="more-link" href="/features#alliance">API keys, webhooks, audit and more<Fragment set:html={arrow} /></a></p>
@@ -330,7 +340,7 @@ const statusLabel: Record<string, string> = { done: 'Done', now: 'In progress', 
           <h2 id="agents-title" class="feature-title">Your assistant reads the chain.<br /><span>You keep flying.</span></h2>
           <p class="feature-lede">Claude, VS Code or any other MCP client can work with your map, with exactly the access of the person who approved it.</p>
         </div>
-        <ul class="items items--row">
+        <ul class="items items--row items--typing" data-reveal>
           {agentItems.map(([name, text]) => <li><h3>{name}</h3><p set:html={text} /></li>)}
         </ul>
         <p class="section-more"><a class="more-link" href="/mcp-setup">Connect Claude, VS Code or Cursor<Fragment set:html={arrow} /></a></p>
@@ -345,7 +355,7 @@ const statusLabel: Record<string, string> = { done: 'Done', now: 'In progress', 
             <p class="eyebrow"><b>K162</b> Coming from Wanderer</p>
             <h2 id="wanderer-title" class="feature-title">Bring the chain with you, <span>intel included.</span></h2>
             <p class="feature-lede">Import from wanderer.ltd, your own Wanderer or the file it exports, into a new map or one you use.</p>
-            <ul class="items">
+            <ul class="items items--check" data-reveal>
               {wandererItems.map(([name, text]) => <li><h3>{name}</h3><p set:html={text} /></li>)}
             </ul>
             <a class="more-link" href="/wanderer">Wanderer and Darkbeacon compared<Fragment set:html={arrow} /></a>
@@ -374,9 +384,9 @@ const statusLabel: Record<string, string> = { done: 'Done', now: 'In progress', 
             </ul>
             <a class="more-link" href="/features#self-host">Backups, scaling and metrics<Fragment set:html={arrow} /></a>
           </div>
-          <figure class="code">
+          <figure class="code code--typing" data-reveal>
             <figcaption>compose.yaml</figcaption>
-            <pre><code>{compose}</code></pre>
+            <pre><code>{compose.split('\n').map((line, i, all) => <span class="code-line" style={`--line:${i}`}>{line}{i < all.length - 1 ? '\n' : ''}</span>)}</code></pre>
             <figcaption>then</figcaption>
             <pre><code>{install}</code></pre>
           </figure>
@@ -392,7 +402,7 @@ const statusLabel: Record<string, string> = { done: 'Done', now: 'In progress', 
           <h2 id="roadmap-title" class="feature-title">Finished, then next.</h2>
           <p class="feature-lede">One thing at a time, finished before the next, so this is an order, not a calendar.</p>
         </div>
-        <ol class="roadmap" aria-label="Roadmap, in order">
+        <ol class="roadmap" aria-label="Roadmap, in order" data-reveal>
           {
             roadmap.map((item) => (
               <li class:list={['roadmap-item', `roadmap-item--${item.status}`]}>
