@@ -4,6 +4,7 @@ import '@fontsource-variable/geist-mono/wght.css';
 import '../styles/global.css';
 import '../styles/site.css';
 import '../styles/sections.css';
+import '../styles/motion.css';
 import sansFont from '@fontsource-variable/geist/files/geist-latin-wght-normal.woff2?url';
 import Analytics from '@vercel/analytics/astro';
 import Footer from '../components/Footer.astro';
@@ -97,6 +98,7 @@ const agentPill = path !== '/mcp-setup';
     <script>
       import '../gpu/boot';
       import '../scripts/warp';
+      import '../scripts/motion';
     </script>
     {analytics && <Analytics />}
   </body>

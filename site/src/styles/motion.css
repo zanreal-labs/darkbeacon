@@ -1,0 +1,213 @@
+/* ────────────────────────── Micro-interactions ──────────────────────────
+ * One quiet interaction per section that has no GPU scene. Transform and opacity only, so
+ * nothing moves the layout. Everything is readable without JavaScript: scripts/motion.ts marks
+ * `[data-reveal]` blocks below the fold as pending and reveals them as they scroll in; blocks
+ * already on screen, browsers without IntersectionObserver and reduced motion get none of it.
+ */
+
+/* Hover and focus: the hairline over an item lights up and the title steps in a little. */
+.items li {
+  transition: border-color var(--dur-medium) var(--ease-out);
+}
+
+.items h3 {
+  transition: transform var(--dur-medium) var(--ease-out), color var(--dur-medium) var(--ease-out);
+}
+
+.items li:hover,
+.items li:focus-within {
+  border-top-color: rgb(95 224 238 / 0.45);
+}
+
+.items li:hover h3,
+.items li:focus-within h3 {
+  transform: translateX(3px);
+}
+
+/* Cards: a soft spotlight that follows the pointer (--mx/--my from scripts/motion.ts). */
+.card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(22rem circle at var(--mx, 50%) var(--my, 0%), rgb(95 224 238 / 0.09), transparent 65%);
+  transition: opacity var(--dur-medium) var(--ease-out);
+}
+
+.card:hover::before,
+.card:focus-within::before {
+  opacity: 1;
+}
+
+.card:focus-within {
+  border-color: var(--line-strong);
+}
+
+/* Detail pages: rows answer the pointer. */
+.specs > div,
+.compare-row:not(.compare-row--head) {
+  transition: background-color var(--dur-short) var(--ease-out);
+}
+
+.specs > div:hover,
+.compare-row:not(.compare-row--head):hover {
+  background: rgb(255 255 255 / 0.02);
+}
+
+/* Fight: a ring on the Kills item, as a new kill rings its node once. */
+.ring-dot {
+  position: relative;
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.55rem;
+  border-radius: 50%;
+  background: var(--scan-red);
+  vertical-align: 0.1em;
+}
+
+.ring-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--scan-red);
+  opacity: 0;
+}
+
+/* Wanderer: each item carries a tick (drawn in place without motion). */
+.items--check h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.items--check h3::before {
+  content: '';
+  flex: none;
+  width: 0.7rem;
+  height: 0.38rem;
+  margin: -0.2rem 0.1rem 0 0.1rem;
+  border-left: 1.5px solid var(--beacon);
+  border-bottom: 1.5px solid var(--beacon);
+  rotate: -45deg;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Reveal: children fade and rise in turn. Hiding is instant (no transition on the pending
+     state), so nothing is seen fading out when the script marks a block at load. */
+  [data-reveal-pending] > * {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  [data-reveal-pending][data-revealed] > * {
+    opacity: 1;
+    transform: none;
+    transition: opacity 600ms var(--ease-out), transform 600ms var(--ease-out);
+    transition-delay: calc(var(--i, 0) * 90ms);
+  }
+
+  [data-reveal-pending] > :nth-child(2) { --i: 1; }
+  [data-reveal-pending] > :nth-child(3) { --i: 2; }
+  [data-reveal-pending] > :nth-child(4) { --i: 3; }
+  [data-reveal-pending] > :nth-child(5) { --i: 4; }
+  [data-reveal-pending] > :nth-child(6) { --i: 5; }
+  [data-reveal-pending] > :nth-child(n + 7) { --i: 6; }
+
+  /* Roadmap: items in order, slower, while the line draws down to where we are. */
+  .roadmap[data-reveal-pending][data-revealed] > * {
+    transition-delay: calc(150ms + var(--i, 0) * 160ms);
+  }
+
+  .roadmap[data-reveal-pending]::before {
+    transform: scaleY(0);
+    transform-origin: top;
+  }
+
+  .roadmap[data-reveal-pending][data-revealed]::before {
+    transform: none;
+    transition: transform 1100ms var(--ease-out);
+  }
+
+  /* Fight: the Kills ring sounds once on reveal and again on hover. */
+  [data-revealed] .ring-dot::after {
+    animation: ring-once 1200ms var(--ease-out) 450ms 1;
+  }
+
+  .items li:hover .ring-dot::after {
+    animation: ring-again 1200ms var(--ease-out) 1;
+  }
+
+  /* AI agents: each question types in, then its answer appears. */
+  .items--typing h3 {
+    width: fit-content;
+  }
+
+  .items--typing[data-reveal-pending] > li {
+    transform: none;
+  }
+
+  .items--typing[data-reveal-pending][data-revealed] > li {
+    transition-delay: calc(var(--i, 0) * 700ms);
+  }
+
+  .items--typing[data-reveal-pending][data-revealed] h3 {
+    animation: type-in 700ms steps(24, end) both;
+    animation-delay: calc(var(--i, 0) * 700ms);
+  }
+
+  .items--typing[data-reveal-pending] p {
+    opacity: 0;
+  }
+
+  .items--typing[data-reveal-pending][data-revealed] p {
+    opacity: 1;
+    transition: opacity 400ms var(--ease-out);
+    transition-delay: calc(var(--i, 0) * 700ms + 650ms);
+  }
+
+  /* Wanderer: the ticks pop in, one per item, like a checklist completing. */
+  .items--check[data-reveal-pending] h3::before {
+    transform: scale(0);
+  }
+
+  .items--check[data-reveal-pending][data-revealed] h3::before {
+    transform: none;
+    transition: transform 360ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition-delay: calc(var(--i, 0) * 90ms + 380ms);
+  }
+
+  /* Self-host: the compose file comes in line by line, as if typed. */
+  .code--typing[data-reveal-pending] > *,
+  .code--typing[data-reveal-pending][data-revealed] > * {
+    transform: none;
+  }
+
+  .code--typing[data-reveal-pending] .code-line {
+    opacity: 0;
+  }
+
+  .code--typing[data-reveal-pending][data-revealed] .code-line {
+    opacity: 1;
+    transition: opacity 120ms linear;
+    transition-delay: calc(250ms + var(--line, 0) * 70ms);
+  }
+}
+
+@keyframes ring-once {
+  0% { opacity: 0.9; transform: scale(1); }
+  100% { opacity: 0; transform: scale(3.2); }
+}
+
+@keyframes ring-again {
+  0% { opacity: 0.9; transform: scale(1); }
+  100% { opacity: 0; transform: scale(3.2); }
+}
+
+@keyframes type-in {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}

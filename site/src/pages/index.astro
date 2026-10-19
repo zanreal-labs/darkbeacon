@@ -7,6 +7,7 @@ import Shot from '../components/Shot.astro';
 import Stage from '../components/Stage.astro';
 import AgentAvatars from '../components/AgentAvatars.astro';
 import { APP_URL, COMPANY_URL, ISSUES_URL, REPO_URL, SELF_HOST_URL, SITE_URL } from '../config';
+import { compose, install } from '../data/snippets';
 
 const title = 'Darkbeacon · the live wormhole mapper for EVE Online';
 const description =
@@ -34,27 +35,6 @@ const steps = [
   { id: 'alliance', n: '05', name: 'Alliance' },
 ];
 
-// Numbered marks on the chain screenshot (fractions of the image), described in the legend.
-const marks = [
-  { n: 1, x: 47.8, y: 37.3, text: 'Home. Class pill, statics with where they lead (D845 HS, U210 LS), the effect as a dot.' },
-  { n: 2, x: 41.6, y: 45.6, text: 'End of life. Time is the outer colour of a connection: purple at EOL, pink under an hour.' },
-  { n: 3, x: 28.6, y: 33.4, text: 'Critical mass, flagged dangerous. Mass is the core colour, danger a red halo.' },
-  { n: 4, x: 54.2, y: 48.8, text: 'Reduced mass: an amber core on a neutral line.' },
-  { n: 5, x: 22.6, y: 43.4, text: 'Frigate hole. Size is a letter on the line, never its width.' },
-  { n: 6, x: 9.4, y: 48.2, text: 'Bubbled on the EC-P8R side.' },
-  { n: 7, x: 56.2, y: 36.6, text: 'Exits name the nearest trade hub and the jumps to it.' },
-  { n: 8, x: 73.2, y: 31.2, text: 'Signatures in the probe scanner’s colours; identified wormholes in their own blue.' },
-  { n: 9, x: 73.2, y: 75.6, text: 'Routes to every trade hub, one square per system in its security colour.' },
-  { n: 10, x: 79.4, y: 7.6, text: 'Who is on the map, then views 1, 2, 3: Scan, PvP, Roll. Alt+1 to Alt+3.' },
-];
-
-// Each label in whichever of black or white reads better on its colour (only 0.1 needs white).
-const security = ['1.0', '0.9', '0.8', '0.7', '0.6', '0.5', '0.4', '0.3', '0.2', '0.1', '0.0'].map((label, i) => [
-  label,
-  `var(--sec-${String(10 - i).padStart(2, '0')})`,
-  label === '0.1' ? '#fff' : '#000',
-]);
-
 // The systems of the demo chain the map scene draws (apps/server/src/modules/demo/demo-chain.ts),
 // labelled by the scene as it assembles.
 const chainNodes = [
@@ -68,87 +48,56 @@ const chainNodes = [
   { name: 'J121158', meta: 'C1 · Black Hole' },
 ];
 
-const copiedRoute = `Thanatos: Amamake > 1DQ1-A (8 jumps, 45.97 ly, 82,754 oxygen isotopes)
-1. Jump 5.41 ly to Fasse (0.4, Sinq Laison), cyno, 9,744 fuel
-2. Jump 5.14 ly to Ahbazon (0.4, Genesis), cyno, 9,259 fuel
-3. Jump 6.80 ly to Noranim (0.3, Genesis), cyno, 12,249 fuel
-…
-8. Jump 6.09 ly to 1DQ1-A (-0.4, Delve), cyno, 10,971 fuel
-Fatigue at the end: 5 h`;
+// Each section of the homepage: a headline, one sentence, a few short items, one picture. The
+// details (and every spec that used to be here) are on /features and /wanderer.
+type Item = [title: string, text: string];
 
-const compose = `services:
-  darkbeacon:
-    build: .
-    restart: unless-stopped
-    env_file: .env
-    ports:
-      - '3000:3000'
-    volumes:
-      - dbk-data:/data
+const scanItems: Item[] = [
+  ['Scan colours', 'As the client draws them, from red under 25 % to green when you can warp.'],
+  ['Wormholes', 'Identified holes in their own blue-violet, with a bar on the row.'],
+  ['Wormhole types', 'All 102, K162 included. Press <kbd>W</kbd>, or click any type code on the map.'],
+];
 
-volumes:
-  dbk-data:`;
+const mapItems: Item[] = [
+  ['Automapping', 'A jump adds the system and the connection, browser open or not.'],
+  ['Undo', '<kbd>Ctrl</kbd>+<kbd>Z</kbd> takes back your last 20 changes; the history reverts any of them.'],
+  ['Views', 'Scan, PvP and Roll ship as views 1, 2 and 3, on <kbd>Alt</kbd>+<kbd>1</kbd> to <kbd>3</kbd>.'],
+];
 
-// Wanderer and Darkbeacon, row by row. Every line was checked against both codebases (Darkbeacon:
-// apps/, packages/, plugins/ and docs/ here; Wanderer: lib/, config/runtime.exs and mix.exs of our
-// fork). `same` marks where the two are equal.
-const comparison = [
-  {
-    topic: 'Running it',
-    wanderer: 'An Elixir/Phoenix app on Postgres. Routes come from a separate route-builder service, kills from the separate wanderer-kills service, Discord from a separate notifier bot.',
-    darkbeacon: 'One container (a NestJS server and the Next.js web app) on SQLite, or Postgres. Routing, kills and Discord run inside it.',
-  },
-  {
-    topic: 'Scaling out',
-    wanderer: 'Erlang clustering.',
-    darkbeacon: 'Optional cluster mode on Postgres: a leader by advisory lock, events over NOTIFY.',
-  },
-  {
-    topic: 'Tracking',
-    wanderer: 'On the server, while someone has the map open; it stops 30 minutes after the last browser leaves.',
-    darkbeacon: 'On the server, every 5 seconds, with every browser closed.',
-  },
-  {
-    topic: 'History',
-    wanderer: 'A user activity log, archived after about 12 weeks; undo in the browser.',
-    darkbeacon: 'Every change in an event log, so a reconnect replays what it missed. A hash-chained audit with field diffs; revert any single change; <kbd>Ctrl</kbd>+<kbd>Z</kbd> undone on the server.',
-  },
-  {
-    topic: 'Alliances',
-    wanderer: 'Access lists shared between maps.',
-    darkbeacon: 'Chains shared map to map, read or read-write, by scope: topology, connection status, signatures, intel, characters, labels. An alliance map merges them field by field.',
-  },
-  {
-    topic: 'API',
-    wanderer: 'A key per map, OpenAPI, an event stream, signed webhooks.',
-    darkbeacon: 'Personal and service keys scoped per resource and action, with expiry, IP allow-list and rate limit. OpenAPI and AsyncAPI, signed webhooks, an MCP endpoint, public read-only links.',
-  },
-  {
-    topic: 'Extending',
-    wanderer: 'No plugin system.',
-    darkbeacon: 'A plugin SDK on the core’s ports. Discord notifications ship as a plugin; themes restyle the map.',
-  },
-  {
-    topic: 'Capitals',
-    wanderer: 'A link to Dotlan’s jump planner.',
-    darkbeacon: 'A jump planner in the app, on a map of known space, with fuel, fatigue and waiting per leg.',
-  },
-  {
-    topic: 'Views',
-    wanderer: 'No saved views.',
-    darkbeacon: 'Saved views on <kbd>Alt</kbd>+<kbd>1</kbd> to <kbd>3</kbd>; managers publish the map’s defaults.',
-  },
-  {
-    topic: 'Backups',
-    wanderer: 'Back up Postgres yourself.',
-    darkbeacon: 'On SQLite, daily backups kept in the volume, restored from Admin.',
-  },
-  {
-    topic: 'Wormhole types, Thera and Turnur, standings',
-    wanderer: 'A wormhole types reference, EVE-Scout routes, sovereignty in standings colours.',
-    darkbeacon: 'The same three.',
-    same: true,
-  },
+const fightItems: Item[] = [
+  ['Kills', 'Killmails from zKillboard, live, on the node and in the Kills widget.'],
+  ['Sovereignty', 'Who holds a null-sec system, in the game’s colour of your standing toward them.'],
+  ['Local', 'Your tracked pilots in the system, with their ships, yours first.'],
+];
+
+const capitalItems: Item[] = [
+  ['Every jump hull', 'Jump freighters, black ops, Rorqual, carriers, dreads, lancers, FAX, supers and titans.'],
+  ['Fatigue', 'Fatigue and waiting per leg; keep it under a limit you pick.'],
+  ['Out', 'Set the waypoints in game, or copy the route for fleet chat.'],
+];
+
+const allianceItems: Item[] = [
+  ['Shared chains', 'Corps share their maps, read or read-write; an alliance map merges them field by field.'],
+  ['Access', 'Rules by character, corporation, alliance, Discord role or account.'],
+  ['Discord', 'New connections, EOL, danger, kills and pings, over a webhook or the bot.'],
+];
+
+const agentItems: Item[] = [
+  ['“Where are we, and what is still open?”', 'Reads the chain, connections most urgent first.'],
+  ['“How do I get to Jita from here?”', 'Finds the route over gates and the chain.'],
+  ['“What changed while I was docked?”', 'Lists the latest changes, and who made them.'],
+];
+
+const wandererItems: Item[] = [
+  ['Everything on the map', 'Systems, connections, signatures, structures, comments, labels, tags and access lists.'],
+  ['A preview first', 'It says what comes over as it is, what comes over close to it, and what is left out.'],
+  ['Keep syncing', 'From Wanderer every 5 to 60 minutes while the corp moves over.'],
+];
+
+const hostItems: Item[] = [
+  ['Setup', 'Set <code>PUBLIC_URL</code> and an EVE application in <code>.env</code>; that is all it needs.'],
+  ['Database', 'SQLite in the volume by default, or Postgres.'],
+  ['Size', 'One container holds a whole alliance: 400 people connected.'],
 ];
 
 // In order. No dates: one thing is finished, then the next is taken.
@@ -180,34 +129,7 @@ const roadmap = [
   },
 ];
 
-// What an assistant can do over MCP (docs/mcp.md, the tool table), in a pilot's words.
-const agentAsks = [
-  ['“Where are we, and what is still open?”', 'Reads the chain: systems with class, statics and effect, connections most urgent first with mass and time left, and which hulls still fit.'],
-  ['“How do I get to Jita from here?”', 'Finds the shortest, safer, high-sec or outlaw route over gates and the chain, and the exits closest to every trade hub.'],
-  ['“Log these signatures.”', 'With a key that may write: records signatures, connections, mass and EOL, and notes, through the same checks as the app.'],
-  ['“What changed while I was docked?”', 'Lists the latest changes on the map: what, who, and whether a pilot or an agent made them.'],
-];
-
-const agentRules = [
-  'Off until an admin turns it on, and each map can stay closed to agents.',
-  'An assistant signs in like a pilot (OAuth) or uses an API key, and you choose its maps and whether it may write.',
-  'It gets exactly the access of the person who approved it, never more.',
-  'Every write lands in the map history as “via MCP” with the client’s name, and can be reverted.',
-];
-
 const statusLabel: Record<string, string> = { done: 'Done', now: 'In progress', next: 'Next', later: 'Later' };
-
-const alliance = [
-  ['Shared chains', 'Corps keep their own maps and share them, read or read-write, with the other side’s admin agreeing. An alliance map merges the shared chains field by field and shows where each system came from.'],
-  ['Access', 'Rules by character, corporation, alliance, Discord role or account. One account holds every character of a pilot. Roles are checked again every minute.'],
-  ['Discord', 'New connections, EOL, danger, kills in the chain, pings, the way home and arrivals, over a webhook or the bot, with role mentions and quiet hours.'],
-  ['API keys', 'Personal tokens and service keys, scoped per resource and action, on one map or all, with expiry, IP allow-list, rate limit and a read-only switch.'],
-  ['OpenAPI and MCP', 'REST under <code>/api/v1</code>, described at <code>/api/openapi.json</code>. An MCP endpoint at <code>/mcp</code> lets an assistant read the chain and find the way out; off until an admin turns it on.'],
-  ['Public maps and webhooks', 'A read-only live view at <code>/p/&lt;token&gt;</code> that shows only what you choose. Webhooks signed with HMAC, each delivery logged.'],
-  ['Audit', 'Every change with who, which character and from where, kept in a hash-chained log with an integrity check.'],
-  ['Support hub', 'Report a problem from the help menu. A ticket belongs to the EVE character you pick and lists every detail it sends before you send it.'],
-];
-
 ---
 
 <Layout title={title} description={description} jsonLd={jsonLd} pillAfterHero>
@@ -280,17 +202,11 @@ const alliance = [
           <div class="feature-copy">
             <p class="eyebrow"><b>01</b> Scan</p>
             <h2 id="scan-title" class="feature-title">Paste the scanner, read the hole.</h2>
-            <p class="feature-lede">
-              Copy the probe scanner, press <kbd>Ctrl</kbd>+<kbd>V</kbd> anywhere on the map, and the results land in the
-              selected system. A toast says what changed, “3 new / 1 updated”. A paste never downgrades a signature someone
-              already scanned further.
-            </p>
-            <dl class="specs">
-              <div><dt>Scan colours</dt><dd>As the client draws them: red under 25 %, orange to 75 %, yellow to 100 %, green when you can warp.</dd></div>
-              <div><dt>Wormholes</dt><dd>Identified holes in their own blue-violet, with a bar on the row.</dd></div>
-              <div><dt>Leads to</dt><dd>Link a signature to its connection; the bookmark code shows above the system.</dd></div>
-              <div><dt>Expiry</dt><dd>Signatures go 24 h after they were added (a switch per map). Untouched ones also go after 14 days, or what the map sets.</dd></div>
-            </dl>
+            <p class="feature-lede">Press <kbd>Ctrl</kbd>+<kbd>V</kbd> anywhere on the map and the probe scanner’s results land in the selected system.</p>
+            <ul class="items">
+              {scanItems.map(([name, text]) => <li><h3>{name}</h3><p set:html={text} /></li>)}
+            </ul>
+            <a class="more-link" href="/features#scan">Scanning in detail<Fragment set:html={arrow} /></a>
           </div>
           <div class="scan-visual">
             <Stage scene="probes" still="/media/probes" widths={[576, 1152]} class="probes-stage" sizes="(min-width: 1024px) 576px, 100vw" />
@@ -309,27 +225,17 @@ const alliance = [
             </Frame>
           </div>
         </div>
-        <figure class="wide-figure">
-          <Frame label="Wormhole types">
-            <Shot
-              name="wormholes"
-              sizes="(min-width: 1248px) 1200px, calc(100vw - 2rem)"
-              alt="The Wormhole types dialog: 102 types with where they spawn, lifetime, total mass, mass per jump, size and respawn."
-            />
-          </Frame>
-          <figcaption>
-            <strong>Wormhole types.</strong> All 102, K162 included: where they spawn, lifetime, total and per-jump mass, the
-            biggest hull that fits, static or wandering. Press <kbd>W</kbd>, or click any type code on the map.
-          </figcaption>
-        </figure>
       </div>
     </section>
 
     <!-- ───────────── 02 Map ───────────── -->
     <section class="feature feature--map" id="map" aria-labelledby="map-title" data-stage-host>
-      <div class="container feature-head">
-        <p class="eyebrow"><b>02</b> Map</p>
-        <h2 id="map-title" class="feature-title">Everyone edits the same chain.<br /><span>Nobody waits for a refresh.</span></h2>
+      <div class="container">
+        <div class="feature-head feature-head--inline">
+          <p class="eyebrow"><b>02</b> Map</p>
+          <h2 id="map-title" class="feature-title">Everyone edits the same chain.<br /><span>Nobody waits for a refresh.</span></h2>
+          <p class="feature-lede">Every change is streamed to everyone on the map, and to Discord.</p>
+        </div>
       </div>
       <Stage scene="chain" still="/media/chain" class="chain-stage">
         <div class="chain-labels">
@@ -344,110 +250,14 @@ const alliance = [
         </div>
       </Stage>
       <div class="container">
-        <div class="map-specs">
-          <dl class="specs">
-            <div><dt>Live</dt><dd>Every change is streamed to everyone on the map, and to Discord.</dd></div>
-            <div><dt>Cursors</dt><dd>Another pilot’s cursor shows only while they move, link, edit or paste, with their name and what they are doing. 2.5 s later it fades. Moving the mouse shows nothing.</dd></div>
-            <div><dt>Automapping</dt><dd>The server reads tracked characters from ESI every 5 s. A jump adds the system and the connection, browser open or not.</dd></div>
-            <div><dt>Undo</dt><dd><kbd>Ctrl</kbd>+<kbd>Z</kbd> takes back your last 20 changes. The map’s history lists who changed what, reverts it, exports CSV or JSON.</dd></div>
-          </dl>
-          <dl class="specs">
-            <div><dt>Views</dt><dd>Lay the widgets out per job. Scan, PvP and Roll ship as views 1, 2 and 3; managers publish a view as the map’s default.</dd></div>
-            <div><dt>Statics</dt><dd>On the node with where they lead, <code>D845 HS</code>. Effects as a dot: Pulsar, Wolf-Rayet, Magnetar, Black Hole, Red Giant, Cataclysmic Variable.</dd></div>
-            <div><dt>Bookmarks</dt><dd>Numbering kept on the server so everyone sees the same codes. Click to copy.</dd></div>
-            <div><dt>Keys</dt><dd><kbd>F</kbd> fit chain, <kbd>C</kbd> centre on me, <kbd>L</kbd> legend, <kbd>W</kbd> wormhole types.</dd></div>
-          </dl>
-        </div>
-
-        <figure class="annotated">
-          <Frame label="Darkbeacon · Demo chain" class="annotated-frame">
-            <div class="annotated-scroll" tabindex="0" role="region" aria-label="Annotated screenshot, scrolls sideways on small screens">
-              <div class="annotated-image">
-                <Shot
-                  name="chain"
-                  sizes="(min-width: 1248px) 1200px, calc(100vw - 2rem)"
-                  alt="The demo chain in Darkbeacon: a C3 home hole linked to a C2, a C5 Pulsar flagged hostile, a null-sec system, a high-sec exit and a low-sec exit. On the right, the System info, Signatures and Routes widgets for the home system."
-                />
-                {
-                  marks.map((m) => (
-                    <span class="pin" style={`left:${m.x}%;top:${m.y}%`} aria-hidden="true">
-                      {m.n}
-                    </span>
-                  ))
-                }
-              </div>
-            </div>
-          </Frame>
-          <figcaption>
-            <p class="swipe">The screenshot scrolls sideways.</p>
-            <ol class="legend">
-              {
-                marks.map((m) => (
-                  <li>
-                    <span class="legend-n" aria-hidden="true">{m.n}</span>
-                    <span>{m.text}</span>
-                  </li>
-                ))
-              }
-            </ol>
-          </figcaption>
-        </figure>
-
-        <div class="map-detail">
-          <div class="card legend-card">
-            <h3>Colours mean what they mean in game</h3>
-            <p class="card-note">Security, exactly as the client draws it:</p>
-            <ol class="sec-scale">
-              {security.map(([label, color, ink]) => <li style={`--c:${color};--ink:${ink}`}><span class="mono">{label}</span></li>)}
-            </ol>
-            <p class="card-note">Standings toward who holds the space, as the client tags them:</p>
-            <ul class="standings">
-              <li style="--c: var(--standing-excellent)">+10</li>
-              <li style="--c: var(--standing-good)">+5</li>
-              <li style="--c: var(--standing-bad)">−5</li>
-              <li style="--c: var(--standing-terrible)">−10</li>
-            </ul>
-            <p class="card-note">One line per connection, read by colour:</p>
-            <ul class="edges">
-              <li><span class="edge" style="--outer: var(--edge); --core: var(--edge)"></span>Fresh</li>
-              <li><span class="edge" style="--outer: var(--edge-eol); --core: var(--edge)"></span>End of life</li>
-              <li><span class="edge" style="--outer: var(--edge-time-critical); --core: var(--edge)"></span>Under an hour</li>
-              <li><span class="edge" style="--outer: var(--edge); --core: var(--edge-reduced)"></span>Reduced mass</li>
-              <li><span class="edge" style="--outer: var(--edge); --core: var(--edge-critical)"></span>Critical mass</li>
-              <li><span class="edge edge--danger" style="--outer: var(--edge); --core: var(--edge)"></span>Dangerous</li>
-              <li><span class="edge edge--bubble" style="--outer: var(--edge); --core: var(--edge)"></span>Bubbled</li>
-              <li><span class="edge edge--size" style="--outer: var(--edge); --core: var(--edge)"><b>S</b></span>Frigate size</li>
-            </ul>
-          </div>
-          <div class="card routes-card">
-            <Frame tilt="right">
-              <Shot
-                name="routes"
-                sizes="(min-width: 1024px) 400px, 90vw"
-                alt="The Routes widget: Jita and Rens 4 jumps, Dodixie 8, Amarr and Hek 9, each route drawn as squares in the security colour of every system on it."
-              />
-            </Frame>
-            <h3>Routes from the chain</h3>
-            <p>
-              Jita, Amarr, Dodixie, Rens and Hek on every map, up to 20 hubs, your own on top. Thera and Turnur holes come
-              from EVE-Scout every five minutes. Shortest, safer, high-sec only or outlaw; skip EOL, critical, frigate or
-              bubbled holes. Set the destination in game for any character whose grant allows it.
-            </p>
-          </div>
-          <figure class="card dialog-card">
-            <Frame tilt="left">
-              <Shot
-                name="edit-system"
-                sizes="(min-width: 1024px) 360px, 80vw"
-                alt="The Edit system dialog for J014348: custom and temporary names, status Home, Labels WH1 to WH3, a preview of the chips above the node, Tags, Markdown notes and the position lock."
-              />
-            </Frame>
-            <figcaption><strong>Edit system.</strong> Double-click a node. Every change saves as you make it.</figcaption>
-          </figure>
-        </div>
+        <ul class="items items--row">
+          {mapItems.map(([name, text]) => <li><h3>{name}</h3><p set:html={text} /></li>)}
+        </ul>
+        <p class="section-more"><a class="more-link" href="/features#map">The map, its colours and routes<Fragment set:html={arrow} /></a></p>
       </div>
     </section>
 
+    <!-- ───────────── 03 Fight ───────────── -->
     <!-- ───────────── 03 Fight ───────────── -->
     <section class="transit transit--fight" aria-labelledby="fight-title" data-stage-host id="fight">
       <Stage scene="transit" mood="fight" still="/media/transit-fight" class="transit-stage" />
@@ -456,20 +266,8 @@ const alliance = [
         <h2 id="fight-title" class="transit-title">Know who is in the chain<br /><span>before you undock.</span></h2>
       </div>
     </section>
-    <section class="feature feature--fight" aria-label="Fight: kills, local, sovereignty and structures">
+    <section class="feature feature--fight" aria-label="Fight: kills, sovereignty and local">
       <div class="container">
-        <div class="fight-grid">
-          <dl class="specs">
-            <div><dt>Kills</dt><dd>Killmails from zKillboard, live, on the node and in the Kills widget: this system or the whole map, the last 4, 12 or 24 hours. A new kill rings the node once.</dd></div>
-            <div><dt>Activity</dt><dd>Kills, NPC kills and jumps for the last hour and day from ESI, the busiest hours, and who kills there most over 7 days.</dd></div>
-            <div><dt>Sovereignty</dt><dd>Who holds a null-sec system, as a ticker under the node, in the game’s colour of your standing toward them.</dd></div>
-          </dl>
-          <dl class="specs">
-            <div><dt>Local</dt><dd>Your tracked pilots in the system, with their ships, yours first.</dd></div>
-            <div><dt>Structures</dt><dd>Paste them from the client: type, owner, status and timer.</dd></div>
-            <div><dt>Comments</dt><dd>A thread per system. “Rolling the D845 after downtime.”</dd></div>
-          </dl>
-        </div>
         <figure class="wide-figure">
           <Frame label="View 2 · PvP">
             <Shot
@@ -478,19 +276,32 @@ const alliance = [
               alt="The PvP view: the chain, and for the home hole System info, Local with two tracked pilots in a Loki and a Sabre, Kills across every system on the map in the last 4 hours, and Comments."
             />
           </Frame>
-          <figcaption>
-            <strong>The PvP view</strong>, one keypress away: <kbd>Alt</kbd>+<kbd>2</kbd>. Kills here are set to every system
-            on the map.
-          </figcaption>
         </figure>
+        <ul class="items items--row" data-reveal>
+          {
+            fightItems.map(([name, text], i) => (
+              <li>
+                <h3>
+                  {i === 0 && <span class="ring-dot" aria-hidden="true" />}
+                  {name}
+                </h3>
+                <p set:html={text} />
+              </li>
+            ))
+          }
+        </ul>
+        <p class="section-more"><a class="more-link" href="/features#fight">Kills, activity and structures<Fragment set:html={arrow} /></a></p>
       </div>
     </section>
 
     <!-- ───────────── 04 Capitals ───────────── -->
     <section class="feature feature--capitals" id="capitals" aria-labelledby="capitals-title" data-stage-host>
-      <div class="container feature-head">
-        <p class="eyebrow"><b>04</b> Move capitals</p>
-        <h2 id="capitals-title" class="feature-title">Plan the jumps<br /><span>on a map of known space.</span></h2>
+      <div class="container">
+        <div class="feature-head feature-head--inline">
+          <p class="eyebrow"><b>04</b> Move capitals</p>
+          <h2 id="capitals-title" class="feature-title">Plan the jumps<br /><span>on a map of known space.</span></h2>
+          <p class="feature-lede">A jump planner in the app, with fuel, fatigue and waiting per leg.</p>
+        </div>
       </div>
       <Stage scene="jump" still="/media/jump" class="jump-stage">
         <div class="jump-labels">
@@ -499,48 +310,25 @@ const alliance = [
         </div>
       </Stage>
       <div class="container">
-        <figure class="wide-figure">
-          <Frame label="Jump planner">
-            <Shot
-              name="jump"
-              sizes="(min-width: 1248px) 1200px, calc(100vw - 2rem)"
-              alt="The jump planner: a Thanatos from Amamake to 1DQ1-A, 8 jumps and 45.97 light years drawn over a top-down map of known space in security colours, with fuel, fatigue and waiting per leg."
-            />
-          </Frame>
-        </figure>
-        <div class="capitals-grid">
-          <dl class="specs">
-            <div><dt>Hulls</dt><dd>Jump freighters, black ops, Rorqual, carriers, dreads, lancers, FAX, supers and titans.</dd></div>
-            <div><dt>Skills</dt><dd>Jump Drive Calibration, Jump Fuel Conservation and Jump Freighters set range and fuel.</dd></div>
-            <div><dt>Fatigue</dt><dd>Fatigue and waiting per leg; keep it under a limit you pick.</dd></div>
-            <div><dt>Options</dt><dd>Finish over stargates, stop at NPC stations, outlaw, avoid systems, Ansiblex bridges.</dd></div>
-            <div><dt>Out</dt><dd>Set the waypoints in game, or copy the route for fleet chat.</dd></div>
-          </dl>
-          <figure class="code">
-            <figcaption>Copy route</figcaption>
-            <pre><code>{copiedRoute}</code></pre>
-          </figure>
-        </div>
+        <ul class="items items--row">
+          {capitalItems.map(([name, text]) => <li><h3>{name}</h3><p set:html={text} /></li>)}
+        </ul>
+        <p class="section-more"><a class="more-link" href="/features#capitals">The jump planner in detail<Fragment set:html={arrow} /></a></p>
       </div>
     </section>
 
     <!-- ───────────── 05 Alliance ───────────── -->
     <section class="feature feature--alliance" id="alliance" aria-labelledby="alliance-title">
       <div class="container">
-        <div class="feature-head feature-head--inline">
+        <div class="feature-head feature-head--inline" data-reveal>
           <p class="eyebrow"><b>05</b> Run it for your alliance</p>
           <h2 id="alliance-title" class="feature-title">One chain per corp.<br /><span>One map for the alliance.</span></h2>
+          <p class="feature-lede">Corps keep their own maps and share them, with the other side’s admin agreeing.</p>
         </div>
-        <ul class="cards">
-          {
-            alliance.map(([name, text]) => (
-              <li class="card">
-                <h3>{name}</h3>
-                <p set:html={text} />
-              </li>
-            ))
-          }
+        <ul class="items items--row" data-reveal>
+          {allianceItems.map(([name, text]) => <li><h3>{name}</h3><p set:html={text} /></li>)}
         </ul>
+        <p class="section-more"><a class="more-link" href="/features#alliance">API keys, webhooks, audit and more<Fragment set:html={arrow} /></a></p>
       </div>
     </section>
 
@@ -550,24 +338,12 @@ const alliance = [
         <div class="feature-head feature-head--inline">
           <p class="eyebrow"><b>MCP</b> Ask the map</p>
           <h2 id="agents-title" class="feature-title">Your assistant reads the chain.<br /><span>You keep flying.</span></h2>
-          <p class="feature-lede">Darkbeacon speaks the Model Context Protocol, so Claude, VS Code or any other MCP client can work with your map. Paste the address <code>/mcp</code> into the client, sign in, approve, and ask.</p>
+          <p class="feature-lede">Claude, VS Code or any other MCP client can work with your map, with exactly the access of the person who approved it.</p>
         </div>
-        <ul class="cards">
-          {
-            agentAsks.map(([ask, text]) => (
-              <li class="card">
-                <h3>{ask}</h3>
-                <p>{text}</p>
-              </li>
-            ))
-          }
+        <ul class="items items--row items--typing" data-reveal>
+          {agentItems.map(([name, text]) => <li><h3>{name}</h3><p set:html={text} /></li>)}
         </ul>
-        <ul class="agent-rules">
-          {agentRules.map((rule) => <li>{rule}</li>)}
-        </ul>
-        <p class="agents-cta">
-          <a class="more-link" href="/mcp-setup">How to connect Claude, Claude Code, VS Code or Cursor<Fragment set:html={arrow} /></a>
-        </p>
+        <p class="section-more"><a class="more-link" href="/mcp-setup">Connect Claude, VS Code or Cursor<Fragment set:html={arrow} /></a></p>
       </div>
     </section>
 
@@ -578,17 +354,11 @@ const alliance = [
           <div class="feature-copy">
             <p class="eyebrow"><b>K162</b> Coming from Wanderer</p>
             <h2 id="wanderer-title" class="feature-title">Bring the chain with you, <span>intel included.</span></h2>
-            <p class="feature-lede">
-              <strong>All maps, Import from Wanderer.</strong> Point it at wanderer.ltd or your own Wanderer with the map’s
-              API key, upload the file Wanderer exports, or, as an instance admin, read your own Wanderer’s database
-              read-only. Read the preview, then import into a new map or merge into one you use.
-            </p>
-            <ul class="ticks">
-              <li>Systems, connections in every state, signatures, structures, comments, labels, tags and access lists.</li>
-              <li>Hidden systems come over hidden, with their notes, signatures and structures, back when the system is.</li>
-              <li>The preview says what comes over as it is, what comes over close to it, and what is left out and why.</li>
-              <li>Keep syncing from Wanderer every 5 to 60 minutes while the corp moves over.</li>
+            <p class="feature-lede">Import from wanderer.ltd, your own Wanderer or the file it exports, into a new map or one you use.</p>
+            <ul class="items items--check" data-reveal>
+              {wandererItems.map(([name, text]) => <li><h3>{name}</h3><p set:html={text} /></li>)}
             </ul>
+            <a class="more-link" href="/wanderer">Wanderer and Darkbeacon compared<Fragment set:html={arrow} /></a>
           </div>
           <Frame tilt="right" label="Import from Wanderer">
             <Shot
@@ -598,79 +368,28 @@ const alliance = [
             />
           </Frame>
         </div>
-        <div class="compare">
-          <div class="compare-head">
-            <h3>What is different, and what is not</h3>
-            <p>
-              We flew our own fork of Wanderer before we built Darkbeacon, and it shaped a lot of what is here. Wanderer
-              is a good mapper; this is an honest list of where the two differ, checked against both codebases.
-            </p>
-          </div>
-          <div class="compare-table" role="table" aria-label="Wanderer and Darkbeacon compared">
-            <div class="compare-row compare-row--head" role="row">
-              <span role="columnheader"><span class="visually-hidden">Topic</span></span>
-              <span role="columnheader">Wanderer</span>
-              <span role="columnheader">Darkbeacon</span>
-            </div>
-            {
-              comparison.map((row) => (
-                <div class:list={['compare-row', row.same && 'compare-row--same']} role="row">
-                  <span role="rowheader">{row.topic}</span>
-                  <span role="cell" data-label="Wanderer" set:html={row.wanderer} />
-                  <span role="cell" data-label="Darkbeacon" set:html={row.darkbeacon} />
-                </div>
-              ))
-            }
-          </div>
-        </div>
-        <div class="parity">
-          <div class="card">
-            <h3>Does not come over</h3>
-            <ul class="ticks ticks--muted">
-              <li>Tracked characters and settings: pilots sign in and link their characters again.</li>
-              <li>Kills: Darkbeacon reads them live from zKillboard.</li>
-              <li>Wanderer subscriptions and licences.</li>
-            </ul>
-          </div>
-          <div class="card">
-            <h3>Tools that talk to Wanderer</h3>
-            <p>
-              A read-only Wanderer-compatible API answers the usual <code>/api/map/systems</code>,
-              <code>/api/map/connections</code> and character calls, plus the map event stream with Wanderer’s event
-              names, so existing scripts keep reading while the corp moves over.
-            </p>
-          </div>
-        </div>
       </div>
     </section>
 
     <!-- ───────────── Self-host ───────────── -->
     <section class="feature feature--host" id="self-host" aria-labelledby="host-title">
       <div class="container">
-        <div class="feature-head feature-head--inline">
-          <p class="eyebrow"><b>HS</b> Self-host</p>
-          <h2 id="host-title" class="feature-title">One container.<br /><span>Your data stays on your box.</span></h2>
-        </div>
         <div class="host-grid">
-          <figure class="code">
+          <div class="feature-copy">
+            <p class="eyebrow"><b>HS</b> Self-host</p>
+            <h2 id="host-title" class="feature-title">One container.<br /><span>Your data stays on your box.</span></h2>
+            <p class="feature-lede">Three commands, one port, and the first account to sign in owns the instance.</p>
+            <ul class="items">
+              {hostItems.map(([name, text]) => <li><h3>{name}</h3><p set:html={text} /></li>)}
+            </ul>
+            <a class="more-link" href="/features#self-host">Backups, scaling and metrics<Fragment set:html={arrow} /></a>
+          </div>
+          <figure class="code code--typing" data-reveal>
             <figcaption>compose.yaml</figcaption>
-            <pre><code>{compose}</code></pre>
+            <pre><code>{compose.split('\n').map((line, i, all) => <span class="code-line" style={`--line:${i}`}>{line}{i < all.length - 1 ? '\n' : ''}</span>)}</code></pre>
             <figcaption>then</figcaption>
-            <pre><code>{`git clone ${REPO_URL}.git && cd darkbeacon
-cp .env.example .env
-docker compose up -d`}</code></pre>
+            <pre><code>{install}</code></pre>
           </figure>
-          <dl class="specs specs--grid">
-            <div><dt>Setup</dt><dd>Set <code>PUBLIC_URL</code> and an EVE application in <code>.env</code>; that is all it needs. The first account to sign in owns the instance.</dd></div>
-            <div><dt>Volume</dt><dd><code>/data</code> holds the SQLite database, backups and the secret key.</dd></div>
-            <div><dt>Database</dt><dd>SQLite in the volume by default; set <code>DATABASE_URL</code> for Postgres.</dd></div>
-            <div><dt>Scale out</dt><dd>On Postgres, <code>CLUSTER=postgres</code> runs several replicas: one leads by advisory lock, events cross over NOTIFY.</dd></div>
-            <div><dt>Backups</dt><dd>On SQLite, daily by default, the 14 newest kept. Restore from Admin, Backups, or the command line.</dd></div>
-            <div><dt>Size</dt><dd>One container holds a whole alliance: thousands of accounts, 600 characters tracked online, 400 people connected.</dd></div>
-            <div><dt>Metrics</dt><dd>OpenTelemetry traces, metrics and logs once an OTLP endpoint is set; Prometheus at <code>/metrics</code>.</dd></div>
-            <div><dt>Telemetry</dt><dd>Anonymous usage counts from production builds, never names or systems. <code>TELEMETRY=off</code> stops it.</dd></div>
-            <div><dt>App</dt><dd>Installs from the browser and runs in its own window next to the client.</dd></div>
-          </dl>
         </div>
       </div>
     </section>
@@ -681,12 +400,9 @@ docker compose up -d`}</code></pre>
         <div class="feature-head">
           <p class="eyebrow"><b>RM</b> Roadmap</p>
           <h2 id="roadmap-title" class="feature-title">Finished, then next.</h2>
-          <p class="feature-lede">
-            We work on one thing at a time and finish it before we take the next. So this is an order, not a calendar:
-            what is done, what we are on, and what comes after it.
-          </p>
+          <p class="feature-lede">One thing at a time, finished before the next, so this is an order, not a calendar.</p>
         </div>
-        <ol class="roadmap" aria-label="Roadmap, in order">
+        <ol class="roadmap" aria-label="Roadmap, in order" data-reveal>
           {
             roadmap.map((item) => (
               <li class:list={['roadmap-item', `roadmap-item--${item.status}`]}>
@@ -743,6 +459,4 @@ docker compose up -d`}</code></pre>
       </div>
     </section>
   </main>
-
-
 </Layout>

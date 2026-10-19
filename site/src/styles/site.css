@@ -387,6 +387,8 @@ html[data-gpu='off'] .stage-still,
 /* ────────────────────────── Transit ────────────────────────── */
 .transit {
   position: relative;
+  /* The scrim under the words reaches 6 % past the sides; keep it from widening the page. */
+  overflow-x: clip;
   display: grid;
   place-items: center;
   min-height: clamp(34rem, 92svh, 56rem);
