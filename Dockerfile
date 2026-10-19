@@ -9,12 +9,12 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store pnpm fetch --store-dir /pnpm-store
 COPY . .
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store \
-    pnpm install --offline --frozen-lockfile --store-dir /pnpm-store
+    pnpm install --prefer-offline --frozen-lockfile --store-dir /pnpm-store
 RUN pnpm build
 # Keep only production dependencies for the runtime image.
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store \
     rm -rf node_modules apps/*/node_modules packages/*/node_modules packages/modules/*/node_modules plugins/*/node_modules \
-    && pnpm install --offline --frozen-lockfile --prod --store-dir /pnpm-store
+    && pnpm install --prefer-offline --frozen-lockfile --prod --store-dir /pnpm-store
 
 # ---- runtime: node, production dependencies and build output only.
 # One process tree, one public port: the API server listens on PORT and starts the web app's

@@ -21,7 +21,7 @@ export class CharacterWallets {
     const cached = this.cache.get(characterId);
     if (cached && now - cached.checkedAt < WALLET_TTL_MS) return cached;
     const scopes = await this.deps.characters.scopes(characterId);
-    if (!scopes.includes(OPTIONAL_EVE_SCOPES.wallet))
+    if (!OPTIONAL_EVE_SCOPES.wallet.every((scope) => scopes.includes(scope)))
       throw new ValidationError('This character has not allowed Darkbeacon to read its wallet');
     const token = await this.deps.characters.accessToken(characterId);
     const balance = token ? await this.deps.wallet.balance(characterId, token) : null;

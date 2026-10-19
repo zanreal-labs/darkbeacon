@@ -59,19 +59,27 @@ export const EVE_SCOPES: readonly string[] = [
  */
 export const UNIVERSE_STRUCTURES_SCOPE = 'esi-universe.read_structures.v1';
 
+/** A character's skills (`GET /characters/{id}/skills`), for the jump planner's skill levels. */
+export const SKILLS_SCOPE = 'esi-skills.read_skills.v1';
+
+/** A character's jump fatigue (`GET /characters/{id}/fatigue`), for the jump planner. */
+export const FATIGUE_SCOPE = 'esi-characters.read_fatigue.v1';
+
 /**
- * Scopes a character only grants when its owner opts in (linking again with `extras`): the
- * assets to weigh the ship actually flown, the wallet balance on the characters page, and the
- * structures it may use, to find the jump bridges it can take.
+ * Scopes a character only grants when its owner opts in (linking again with `extras`), each
+ * extra one or more: the assets to weigh the ship actually flown, the wallet balance on the
+ * characters page, the structures it may use, to find the jump bridges it can take, and its
+ * skills and jump fatigue, which fill the jump planner.
  */
 export const OPTIONAL_EVE_SCOPES = {
-  assets: 'esi-assets.read_assets.v1',
-  wallet: 'esi-wallet.read_character_wallet.v1',
-  structures: UNIVERSE_STRUCTURES_SCOPE,
-} as const;
+  assets: ['esi-assets.read_assets.v1'],
+  wallet: ['esi-wallet.read_character_wallet.v1'],
+  structures: [UNIVERSE_STRUCTURES_SCOPE],
+  jumps: [SKILLS_SCOPE, FATIGUE_SCOPE],
+} as const satisfies Record<string, readonly string[]>;
 export type OptionalEveScope = keyof typeof OPTIONAL_EVE_SCOPES;
 
-/** The extras named in a `?extras=assets,wallet,structures` value; unknown names are ignored. */
+/** The extras named in a `?extras=assets,wallet,structures,jumps` value; unknown names are ignored. */
 export function parseExtras(value: unknown): OptionalEveScope[] {
   if (typeof value !== 'string') return [];
   const names = value.split(',').map((v) => v.trim());
@@ -80,7 +88,7 @@ export function parseExtras(value: unknown): OptionalEveScope[] {
 
 /** What EVE SSO is asked for when linking: every required scope plus the chosen extras. */
 export function linkScopes(extras: readonly OptionalEveScope[] = []): string[] {
-  return [...EVE_SCOPES, ...extras.map((e) => OPTIONAL_EVE_SCOPES[e])];
+  return [...EVE_SCOPES, ...extras.flatMap((e) => OPTIONAL_EVE_SCOPES[e])];
 }
 
 /** Required scopes a grant lacks (characters linked before a scope was added). */
@@ -88,10 +96,10 @@ export function missingScopes(granted: readonly string[]): string[] {
   return EVE_SCOPES.filter((s) => !granted.includes(s));
 }
 
-/** The opt-in extras a grant holds. */
+/** The opt-in extras a grant holds (every scope of each). */
 export function grantedExtras(granted: readonly string[]): OptionalEveScope[] {
   return (Object.keys(OPTIONAL_EVE_SCOPES) as OptionalEveScope[]).filter((k) =>
-    granted.includes(OPTIONAL_EVE_SCOPES[k]),
+    OPTIONAL_EVE_SCOPES[k].every((scope) => granted.includes(scope)),
   );
 }
 

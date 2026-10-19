@@ -1055,6 +1055,15 @@ export const routes = {
       body: dto.JumpPlanRequest,
       response: dto.JumpPlanDto,
     }),
+    /** One of my characters' jump skills and fatigue from ESI (opt-in scopes), to fill the planner. */
+    pilot: route({
+      method: 'GET',
+      path: '/api/jumps/pilots/:characterId',
+      auth: 'account',
+      scope: { resource: 'account', action: 'read' },
+      summary: "One of my characters' jump skills and fatigue from ESI",
+      response: dto.JumpPilotDto,
+    }),
   },
 
   signatures: {

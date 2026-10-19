@@ -24,9 +24,12 @@ const server = setupMockServer(
   ),
   http.get(routes.jumps.universe.path, () => HttpResponse.json(UNIVERSE)),
   // Not what these tests are about: the canvas works without them.
-  ...[routes.auth.providers.path, routes.intel.map.path, routes.intel.standings.path].map((path) =>
-    http.get(path, () => new HttpResponse(null, { status: 404 })),
-  ),
+  ...[
+    routes.auth.providers.path,
+    routes.intel.map.path,
+    routes.intel.standings.path,
+    routes.jumps.pilot.path,
+  ].map((path) => http.get(path, () => new HttpResponse(null, { status: 404 }))),
 );
 
 const universe = new Map<number, UniverseSystemDto>(

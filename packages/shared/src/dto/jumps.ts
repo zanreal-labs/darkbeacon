@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { EveId } from './common.js';
+import { EveId, Timestamp } from './common.js';
 
 /**
  * Jump planner: capital jump routes across known space (docs/decisions.md, "Jump planner").
@@ -204,3 +204,34 @@ export const JumpPlanDto = z.object({
   ignoredAnsiblex: z.array(z.object({ from: EveId, to: EveId, why: z.string() })),
 });
 export type JumpPlanDto = z.infer<typeof JumpPlanDto>;
+
+/**
+ * GET /api/jumps/pilots/:characterId: one of my characters' jump skills and fatigue from ESI, to
+ * fill the planner (the opt-in extra `jumps`: `esi-skills.read_skills.v1` and
+ * `esi-characters.read_fatigue.v1`).
+ */
+export const JumpPilotDto = z.object({
+  characterId: EveId,
+  /** Active levels (an alpha clone's are capped); null without the scope or an answer from ESI. */
+  skills: z.object({ jdc: SkillLevel, jfc: SkillLevel, jf: SkillLevel }).nullable(),
+  /** Fatigue left when this was read (minutes, at most 300); null when it is not known. */
+  fatigueMinutes: z.number().int().min(0).max(300).nullable(),
+  /** When the fatigue runs out (epoch ms); null without fatigue or when it is not known. */
+  fatigueExpiresAt: Timestamp.nullable(),
+  /** Scopes of the extra the character's grant lacks; linking it again with `jumps` adds them. */
+  missingScopes: z.array(z.string()),
+  /** Why ESI gave nothing for a part the grant covers, in one sentence; null when it answered. */
+  problem: z.string().nullable(),
+  checkedAt: Timestamp,
+});
+export type JumpPilotDto = z.infer<typeof JumpPilotDto>;
+
+/**
+ * Whole minutes of fatigue left at `now` for fatigue that runs out at `expiresAt`, rounded up and
+ * capped at the 300 minutes fatigue can reach. Fatigue falls a minute per minute, so it is worked
+ * out when a route is planned, not when ESI was asked.
+ */
+export function fatigueMinutesLeft(expiresAt: number | null, now: number): number {
+  if (expiresAt === null) return 0;
+  return Math.min(300, Math.max(0, Math.ceil((expiresAt - now) / 60_000)));
+}
