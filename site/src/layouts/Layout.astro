@@ -19,6 +19,8 @@ interface Props {
   ogImageAlt?: string;
   /** Structured data for this page, emitted as JSON-LD. */
   jsonLd?: Record<string, unknown>;
+  /** The page has its own agent buttons in rows marked `data-pill-hide` (see AgentPill). */
+  pillAfterHero?: boolean;
 }
 
 const {
@@ -27,6 +29,7 @@ const {
   ogImage: ogPath = '/og.png',
   ogImageAlt = 'The Darkbeacon mark: a beacon leaving a black hole through its glowing ring',
   jsonLd,
+  pillAfterHero = false,
 } = Astro.props;
 // Built as files (sponsor.html) and served without the extension: /sponsor.
 const path = Astro.url.pathname.replace(/(index)?\.html$/, '').replace(/(.)\/$/, '$1') || '/';
@@ -90,7 +93,7 @@ const agentPill = path !== '/mcp-setup';
     <Nav />
     <slot />
     <Footer />
-    {agentPill && <AgentPill />}
+    {agentPill && <AgentPill afterHero={pillAfterHero} />}
     <script>
       import '../gpu/boot';
       import '../scripts/warp';
