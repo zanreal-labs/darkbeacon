@@ -1,0 +1,467 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Stage from '../components/Stage.astro';
+import { arrow, github } from '../components/icons';
+import { APP_URL, REPO_URL, SITE_URL } from '../config';
+
+// Everything on this page follows docs/mcp.md and the app it describes: the endpoint and its OAuth
+// (apps/server/src/mcp, apps/server/src/modules/oauth), the switches in Admin and Map settings
+// (apps/web/src/screens/AdminApiAccess.tsx, AdminAccess.tsx, MapPublicLink.tsx), the consent screen
+// (OAuthConsent.tsx) and API keys (ApiKeyParts.tsx).
+
+const title = 'Set up an AI agent on Darkbeacon (MCP)';
+const description =
+  'Connect Claude, Claude Code, VS Code, Cursor or any other MCP client to your Darkbeacon map: the address, the sign-in, what an agent can do, and a prompt that lets the agent set itself up.';
+
+const DOCS_URL = `${REPO_URL}/blob/main/docs/mcp.md`;
+const PAGE_URL = `${SITE_URL}/mcp-setup`;
+
+// Snippets name the instance as %URL%; the page swaps in a span the address field rewrites.
+const TOKEN = '%URL%';
+
+const prompt = `Set up the Darkbeacon MCP server for me.
+
+Darkbeacon is a wormhole mapper for EVE Online. Its MCP endpoint is:
+${TOKEN}/mcp
+
+1. Add it to this client as a remote MCP server named "darkbeacon": Streamable HTTP transport, the URL above. No local command or bridge is needed.
+2. Sign in with OAuth. When the client opens a browser or gives you a sign-in link, tell me, so I can sign in to Darkbeacon, choose which maps you may use and whether you may change anything, and press Allow. Do not ask me for a password.
+3. Check that it works: call list_maps and tell me which maps you can see, then call get_map on the one I fly in and tell me where the chain is and which connections need attention first.
+4. If the URL answers 404, AI agents are off on this instance and you cannot fix that. Tell me that an instance admin has to open Admin, API access, AI agents (MCP) and choose "API keys only" or "Public maps too". If a map I expect is missing, its admin may have set Map settings, Public link, AI agents to Off.
+5. If this client cannot add a remote MCP server or cannot sign in with OAuth, say so, and point me to ${PAGE_URL} for setting it up with an API key instead.`;
+
+const claudeCode = `claude mcp add --transport http darkbeacon \\
+  ${TOKEN}/mcp`;
+
+const claudeCodeKey = `claude mcp add --transport http darkbeacon \\
+  ${TOKEN}/mcp \\
+  --header "Authorization: Bearer dbk_pat_..."`;
+
+const vscode = `{
+  "servers": {
+    "darkbeacon": {
+      "type": "http",
+      "url": "${TOKEN}/mcp"
+    }
+  }
+}`;
+
+const vscodeKey = `{
+  "servers": {
+    "darkbeacon": {
+      "type": "http",
+      "url": "${TOKEN}/mcp",
+      "headers": { "Authorization": "Bearer \${input:darkbeacon-token}" }
+    }
+  },
+  "inputs": [
+    {
+      "id": "darkbeacon-token",
+      "type": "promptString",
+      "password": true,
+      "description": "Darkbeacon API key"
+    }
+  ]
+}`;
+
+const cursor = `{
+  "mcpServers": {
+    "darkbeacon": {
+      "url": "${TOKEN}/mcp"
+    }
+  }
+}`;
+
+const generic = `URL        ${TOKEN}/mcp
+Transport  Streamable HTTP
+Sign-in    OAuth, found on its own from the 401 answer
+           or the header  Authorization: Bearer dbk_pat_...`;
+
+const parts = (text: string) => text.split(TOKEN);
+
+// The tool table in docs/mcp.md, from apps/server/src/mcp/tools.ts.
+const readTools = [
+  ['list_maps', 'The maps it can read, with your role on each.', 'maps:read'],
+  ['get_map', 'The chain: systems with class, statics, effect and status, connections and exits.', 'maps:read'],
+  ['find_system', 'Finds a system by name, and whether it is on a map.', 'universe:read'],
+  ['get_system_intel', 'Class, region, statics with sizes and effect; on a map also notes, signatures and pilots.', 'maps:read'],
+  ['list_connections', 'Connections most urgent first, with mass and time left and which hulls still fit.', 'connections:read'],
+  ['find_route', 'Shortest, safer, high-sec, outlaw or pilot route over gates and the chain.', 'routes:read'],
+  ['nearest_hub', 'The exits with jumps to the trade hubs, or from one system the jumps to every hub.', 'routes:read'],
+  ['list_signatures', 'The signatures of a system.', 'signatures:read'],
+  ['get_recent_history', 'The latest changes on a map: what, who, and how they were made.', 'audit:read'],
+];
+
+const writeTools = [
+  ['add_signature', 'Records a signature.', 'signatures:write'],
+  ['update_signature', 'Group, type, name, notes, or the connection it leads to.', 'signatures:write'],
+  ['add_connection', 'Connects two systems, adding them when they are missing.', 'connections:write'],
+  ['update_connection', 'Mass, EOL, size, mass saved, danger, bubbles.', 'connections:write'],
+  ['add_note', 'Adds to, or replaces, the notes of a system.', 'systems:write'],
+];
+---
+
+<Layout title={title} description={description} ogImageAlt="Darkbeacon: connect an AI agent to your map over MCP">
+  <main id="main" class="mcp">
+    <section class="sponsor-hero mcp-hero" aria-labelledby="mcp-title" data-stage-host>
+      <Stage scene="transit" mood="enter" still="/media/transit-enter" class="sponsor-stage" eager />
+      <div class="sponsor-hero-inner container">
+        <p class="eyebrow"><b>MCP</b> Set up an agent</p>
+        <h1 id="mcp-title" class="sponsor-title">Point your assistant<br />at the map.</h1>
+        <p class="sponsor-lede">
+          Claude, Claude Code, VS Code, Cursor and other MCP clients connect to Darkbeacon with one address. Add it,
+          sign in as yourself, approve, and ask where the chain is.
+        </p>
+        <form class="instance" id="instance-form" novalidate>
+          <label for="instance-url">Your instance</label>
+          <div class="instance-row">
+            <input
+              id="instance-url"
+              name="instance"
+              type="url"
+              inputmode="url"
+              autocomplete="url"
+              spellcheck="false"
+              value={APP_URL}
+              placeholder={APP_URL}
+              aria-describedby="instance-hint"
+            />
+            <button class="btn" type="submit">Use it</button>
+          </div>
+          <p class="instance-hint" id="instance-hint" aria-live="polite">
+            The hosted instance is filled in. Self-hosting? Put your own address here and every snippet below follows.
+          </p>
+        </form>
+      </div>
+    </section>
+
+    <section class="container mcp-body">
+      <!-- Before you start -->
+      <div class="mcp-section" aria-labelledby="start-title">
+        <div class="feature-head feature-head--inline">
+          <p class="eyebrow"><b>01</b> Before you start</p>
+          <h2 id="start-title" class="feature-title feature-title--sm">One address, two switches.</h2>
+        </div>
+        <ul class="sponsor-facts">
+          <li class="card">
+            <h3>The address</h3>
+            <p>
+              <code class="mcp-url"><span data-instance>{APP_URL}</span>/mcp</code>
+            </p>
+            <p>
+              Every instance has its MCP endpoint at <code>/mcp</code> on its own address. It speaks Streamable HTTP, the
+              transport current clients use for remote servers.
+            </p>
+          </li>
+          <li class="card">
+            <h3>An admin turns it on</h3>
+            <p>
+              AI agents are off until an instance admin opens <strong>Admin, API access</strong> and picks <strong>API keys
+              only</strong> (agents that sign in or carry a key) or <strong>Public maps too</strong> under <strong>AI agents
+              (MCP)</strong>. While it is off, the address answers 404.
+            </p>
+          </li>
+          <li class="card">
+            <h3>Each map decides</h3>
+            <p>
+              A map admin can keep a map away from every agent in <strong>Map settings, Public link, AI agents</strong>: <strong>Off</strong>, <strong>API keys only</strong> (the default) or <strong>Public too</strong>. The
+              switch <strong>API keys and AI agents (MCP)</strong> in <strong>Admin, Instance</strong> stops all of it at
+              once.
+            </p>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Let the agent set it up -->
+      <div class="mcp-section mcp-prompt" id="prompt" aria-labelledby="prompt-title">
+        <div class="feature-head feature-head--inline">
+          <p class="eyebrow"><b>02</b> Let your agent set it up</p>
+          <h2 id="prompt-title" class="feature-title feature-title--sm">Paste this into your agent.</h2>
+          <p class="feature-lede">
+            Agents that can change their own settings, like Claude Code, add the server, ask you to sign in, and check that
+            they can see your maps. Others tell you what to click. Either way, you approve the access yourself.
+          </p>
+        </div>
+        <figure class="code code--copy code--wrap">
+          <figcaption>
+            <span>Prompt</span>
+            <button class="btn btn--sm copy-btn" type="button" data-copy-from="prompt-text" aria-describedby="prompt-status">Copy prompt</button>
+          </figcaption>
+          <pre id="prompt-text"><code>{parts(prompt).map((p, i, all) => <>{p}{i < all.length - 1 && <span data-instance>{APP_URL}</span>}</>)}</code></pre>
+          <span class="visually-hidden" id="prompt-status" role="status" aria-live="polite"></span>
+        </figure>
+      </div>
+
+      <!-- By hand -->
+      <div class="mcp-section" id="clients" aria-labelledby="clients-title">
+        <div class="feature-head feature-head--inline">
+          <p class="eyebrow"><b>03</b> Or add it by hand</p>
+          <h2 id="clients-title" class="feature-title feature-title--sm">Your client, step by step.</h2>
+          <p class="feature-lede">
+            Clients that support MCP sign-in need only the address. They find the sign-in on their own, open Darkbeacon
+            in your browser, and you approve there.
+          </p>
+        </div>
+
+        <div class="clients">
+          <article class="card client" aria-labelledby="c-claude">
+            <h3 id="c-claude">Claude (claude.ai and Claude Desktop)</h3>
+            <ol class="howto">
+              <li><span class="howto-n" aria-hidden="true">1</span><p>Open <strong>Settings, Connectors</strong> and choose <strong>Add custom connector</strong>.</p></li>
+              <li><span class="howto-n" aria-hidden="true">2</span><p>Name it <code>Darkbeacon</code> and paste the address below as the URL.</p></li>
+              <li><span class="howto-n" aria-hidden="true">3</span><p>Choose <strong>Connect</strong>, sign in to Darkbeacon in the window that opens, and approve.</p></li>
+            </ol>
+            <figure class="code code--copy">
+              <figcaption><span>Connector URL</span><button class="btn btn--sm copy-btn" type="button" data-copy-from="snip-claude">Copy</button></figcaption>
+              <pre id="snip-claude"><code><span data-instance>{APP_URL}</span>/mcp</code></pre>
+            </figure>
+            <p class="client-note">claude.ai reaches the server from Anthropic’s side, so a self-hosted instance has to be reachable from the internet.</p>
+          </article>
+
+          <article class="card client" aria-labelledby="c-code">
+            <h3 id="c-code">Claude Code</h3>
+            <ol class="howto">
+              <li><span class="howto-n" aria-hidden="true">1</span><p>Add the server from a terminal.</p></li>
+              <li><span class="howto-n" aria-hidden="true">2</span><p>In Claude Code, run <code>/mcp</code>, pick <code>darkbeacon</code> and sign in when the browser opens.</p></li>
+            </ol>
+            <figure class="code code--copy">
+              <figcaption><span>Terminal</span><button class="btn btn--sm copy-btn" type="button" data-copy-from="snip-code">Copy</button></figcaption>
+              <pre id="snip-code"><code>{parts(claudeCode).map((p, i, all) => <>{p}{i < all.length - 1 && <span data-instance>{APP_URL}</span>}</>)}</code></pre>
+            </figure>
+          </article>
+
+          <article class="card client" aria-labelledby="c-vscode">
+            <h3 id="c-vscode">VS Code</h3>
+            <ol class="howto">
+              <li><span class="howto-n" aria-hidden="true">1</span><p>Put this in <code>.vscode/mcp.json</code> in your workspace, or in your user <code>mcp.json</code>.</p></li>
+              <li><span class="howto-n" aria-hidden="true">2</span><p>Start the server from the file, and allow the sign-in when VS Code asks.</p></li>
+            </ol>
+            <figure class="code code--copy">
+              <figcaption><span>mcp.json</span><button class="btn btn--sm copy-btn" type="button" data-copy-from="snip-vscode">Copy</button></figcaption>
+              <pre id="snip-vscode"><code>{parts(vscode).map((p, i, all) => <>{p}{i < all.length - 1 && <span data-instance>{APP_URL}</span>}</>)}</code></pre>
+            </figure>
+          </article>
+
+          <article class="card client" aria-labelledby="c-cursor">
+            <h3 id="c-cursor">Cursor</h3>
+            <ol class="howto">
+              <li><span class="howto-n" aria-hidden="true">1</span><p>Put this in <code>~/.cursor/mcp.json</code>, or <code>.cursor/mcp.json</code> in a project.</p></li>
+              <li><span class="howto-n" aria-hidden="true">2</span><p>When Cursor asks you to sign in to the server, do it in the browser and approve.</p></li>
+            </ol>
+            <figure class="code code--copy">
+              <figcaption><span>mcp.json</span><button class="btn btn--sm copy-btn" type="button" data-copy-from="snip-cursor">Copy</button></figcaption>
+              <pre id="snip-cursor"><code>{parts(cursor).map((p, i, all) => <>{p}{i < all.length - 1 && <span data-instance>{APP_URL}</span>}</>)}</code></pre>
+            </figure>
+          </article>
+
+          <article class="card client client--wide" aria-labelledby="c-any">
+            <div>
+              <h3 id="c-any">Any other MCP client</h3>
+              <p>
+                Give it the address as a remote server over Streamable HTTP. Without a token the endpoint answers 401 and
+                points the client to Darkbeacon’s own sign-in (OAuth 2.1 with PKCE, dynamic registration or a client
+                metadata document). A client that cannot sign in sends an API key instead.
+              </p>
+            </div>
+            <figure class="code code--copy">
+              <figcaption><span>Settings</span><button class="btn btn--sm copy-btn" type="button" data-copy-from="snip-any">Copy</button></figcaption>
+              <pre id="snip-any"><code>{parts(generic).map((p, i, all) => <>{p}{i < all.length - 1 && <span data-instance>{APP_URL}</span>}</>)}</code></pre>
+            </figure>
+          </article>
+        </div>
+        <span class="visually-hidden" id="copy-status" role="status" aria-live="polite"></span>
+      </div>
+
+      <!-- Sign-in -->
+      <div class="mcp-section" id="sign-in" aria-labelledby="signin-title">
+        <div class="feature-head feature-head--inline">
+          <p class="eyebrow"><b>04</b> Sign-in</p>
+          <h2 id="signin-title" class="feature-title feature-title--sm">It acts as you, <span>never more.</span></h2>
+          <p class="feature-lede">
+            The agent gets exactly the access of the person who approved it, narrowed by what they picked. It never gets
+            administration rights.
+          </p>
+        </div>
+        <div class="signin">
+          <div class="card">
+            <h3>Sign in like a pilot (OAuth)</h3>
+            <p>
+              The client opens Darkbeacon in your browser. You sign in as usual, with Discord or EVE, and see who is asking
+              and what for. Under <strong>Which maps</strong> keep <strong>All maps I can see</strong> or pick <strong>Only these maps</strong>, switch on <strong>Read only</strong> if it should only look, then <strong>Allow</strong>.
+            </p>
+            <p>
+              Every approval is listed in <strong>Account, Connected apps</strong>, where you revoke it. The client
+              refreshes its own sign-in; you do not paste anything.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Or an API key</h3>
+            <p>
+              For scripts and clients without OAuth: <strong>Account, API keys, New key</strong>. For an agent that only
+              reads, pick <strong>Read everything</strong> and switch on <strong>Read only</strong>. For one that logs
+              signatures, pick <strong>Mapper</strong>, or <strong>Custom</strong> with <code>signatures:write</code> (and <code>connections:write</code>, <code>systems:write</code> for connections and notes), ideally on the
+              one map it works on.
+            </p>
+            <p>The key is shown once. Clients send it in the header <code>Authorization: Bearer dbk_pat_...</code>, where <code>dbk_pat_...</code> is the key.</p>
+          </div>
+        </div>
+        <div class="signin-snips">
+          <figure class="code code--copy">
+            <figcaption><span>Claude Code with a key</span><button class="btn btn--sm copy-btn" type="button" data-copy-from="snip-code-key">Copy</button></figcaption>
+            <pre id="snip-code-key"><code>{parts(claudeCodeKey).map((p, i, all) => <>{p}{i < all.length - 1 && <span data-instance>{APP_URL}</span>}</>)}</code></pre>
+          </figure>
+          <figure class="code code--copy">
+            <figcaption><span>VS Code with a key (asks for it once)</span><button class="btn btn--sm copy-btn" type="button" data-copy-from="snip-vscode-key">Copy</button></figcaption>
+            <pre id="snip-vscode-key"><code>{parts(vscodeKey).map((p, i, all) => <>{p}{i < all.length - 1 && <span data-instance>{APP_URL}</span>}</>)}</code></pre>
+          </figure>
+        </div>
+      </div>
+
+      <!-- Tools -->
+      <div class="mcp-section" id="tools" aria-labelledby="tools-title">
+        <div class="feature-head feature-head--inline">
+          <p class="eyebrow"><b>05</b> What it can do</p>
+          <h2 id="tools-title" class="feature-title feature-title--sm">The tools your agent gets.</h2>
+          <p class="feature-lede">
+            Each tool calls the same code the app does, as you, with the same checks. A key needs the scope in the right
+            column; write tools appear only for a key or approval that may write.
+          </p>
+        </div>
+        <div class="tools">
+          <div class="tools-group">
+            <h3>Read</h3>
+            <dl>
+              {
+                readTools.map(([name, text, scope]) => (
+                  <div>
+                    <dt><code>{name}</code></dt>
+                    <dd>{text}</dd>
+                    <dd class="tools-scope">{scope}</dd>
+                  </div>
+                ))
+              }
+            </dl>
+          </div>
+          <div class="tools-group">
+            <h3>Write</h3>
+            <dl>
+              {
+                writeTools.map(([name, text, scope]) => (
+                  <div>
+                    <dt><code>{name}</code></dt>
+                    <dd>{text}</dd>
+                    <dd class="tools-scope">{scope}</dd>
+                  </div>
+                ))
+              }
+            </dl>
+            <p class="tools-more">
+              Also a map snapshot as a resource (<code>darkbeacon://maps/&#123;map&#125;/snapshot</code>) and two prompts, <code>summarise_chain</code> and <code>plan_route_home</code>.
+            </p>
+          </div>
+        </div>
+        <ul class="agent-rules">
+          <li>Every write lands in the map history as made “via MCP” with the client’s or key’s name, and can be undone there like any other change.</li>
+          <li>Requests count toward the key’s rate limit. Agents without a key, on public maps, are limited per address.</li>
+          <li>Agents without a key see only public maps opened to agents, only what the public link shows, and cannot write.</li>
+          <li>Signed-in browsers never authenticate <code>/mcp</code>: only a key or a token from an approval does.</li>
+        </ul>
+      </div>
+
+      <div class="sponsor-cta">
+        <a class="btn btn--primary btn--lg" href={APP_URL} data-warp><span class="warp-label">Open app</span><Fragment set:html={arrow} /></a>
+        <a class="btn btn--lg" href={DOCS_URL}><Fragment set:html={github} />Full MCP reference</a>
+        <a class="btn btn--lg btn--ghost" href="/#agents">Back to AI agents</a>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const DEFAULT = (document.querySelector<HTMLInputElement>('#instance-url')?.defaultValue ?? '').replace(/\/+$/, '');
+
+    // The address field: accepts "map.example.com", "https://map.example.com/" or ".../mcp" and
+    // rewrites every snippet on the page to that origin.
+    const form = document.querySelector<HTMLFormElement>('#instance-form');
+    const input = document.querySelector<HTMLInputElement>('#instance-url');
+    const hint = document.querySelector<HTMLElement>('#instance-hint');
+    const hintText = hint?.textContent ?? '';
+
+    const normalise = (raw: string): string | null => {
+      const text = raw.trim();
+      if (!text) return DEFAULT;
+      try {
+        const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `https://${text}`);
+        if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+        const path = url.pathname.replace(/\/+$/, '').replace(/\/mcp$/, '');
+        return `${url.origin}${path}`;
+      } catch {
+        return null;
+      }
+    };
+
+    const apply = (base: string) => {
+      for (const el of document.querySelectorAll<HTMLElement>('[data-instance]')) el.textContent = base;
+    };
+
+    const update = (announce: boolean) => {
+      if (!input || !hint) return;
+      const base = normalise(input.value);
+      if (!base) {
+        input.setAttribute('aria-invalid', 'true');
+        hint.textContent = 'That does not look like an address. Try https://map.example.com.';
+        return;
+      }
+      input.removeAttribute('aria-invalid');
+      apply(base);
+      hint.textContent = announce ? `Snippets now use ${base}/mcp.` : hintText;
+    };
+
+    form?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      update(true);
+    });
+    input?.addEventListener('input', () => {
+      const base = input && normalise(input.value);
+      if (base) {
+        input?.removeAttribute('aria-invalid');
+        apply(base);
+      }
+    });
+    if (input && input.value !== input.defaultValue) update(false);
+
+    // Copy buttons: copy the text of the block they name, and say so.
+    for (const button of document.querySelectorAll<HTMLButtonElement>('[data-copy-from]')) {
+      const label = button.textContent ?? 'Copy';
+      let timer = 0;
+      button.addEventListener('click', async () => {
+        const source = document.getElementById(button.dataset.copyFrom ?? '');
+        const status =
+          document.getElementById(button.getAttribute('aria-describedby') ?? '') ?? document.getElementById('copy-status');
+        const text = source?.textContent ?? '';
+        let done = false;
+        try {
+          await navigator.clipboard.writeText(text);
+          done = true;
+        } catch {
+          // No clipboard API (or no permission): select the text so Ctrl+C works.
+          if (source) {
+            const range = document.createRange();
+            range.selectNodeContents(source);
+            const selection = getSelection();
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+          }
+        }
+        button.textContent = done ? 'Copied' : 'Selected, press Ctrl+C';
+        button.dataset.state = done ? 'copied' : 'selected';
+        if (status) status.textContent = done ? 'Copied to the clipboard' : 'Text selected. Copy it with Ctrl+C or Cmd+C.';
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => {
+          button.textContent = label;
+          delete button.dataset.state;
+          if (status) status.textContent = '';
+        }, 2200);
+      });
+    }
+  </script>
+</Layout>

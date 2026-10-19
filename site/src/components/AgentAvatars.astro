@@ -1,0 +1,21 @@
+---
+/** Four overlapping marks of MCP clients. Decorative: the link text next to them says it all. */
+import { agentMarks } from './agent-marks';
+
+interface Props {
+  class?: string;
+}
+const { class: className } = Astro.props;
+---
+
+<span class:list={['agent-avatars', className]} aria-hidden="true">
+  {
+    agentMarks.map((m) => (
+      <span class="agent-avatar" style={`--mark-bg:${m.bg};--mark-fg:${m.fg}`}>
+        <svg viewBox="0 0 24 24" focusable="false">
+          <path d={m.d} fill="currentColor" />
+        </svg>
+      </span>
+    ))
+  }
+</span>

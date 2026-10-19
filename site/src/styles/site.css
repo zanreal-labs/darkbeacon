@@ -110,6 +110,18 @@
   }
 }
 
+/* Phones: the GitHub button is the icon alone and Open app drops its arrow, so the bar fits 360px. */
+@media (max-width: 559px) {
+  .nav-github {
+    width: 2.25rem;
+    padding: 0;
+  }
+
+  .nav-actions .btn--primary .arrow {
+    display: none;
+  }
+}
+
 /* ────────────────────────── Stages ────────────────────────── */
 .stage {
   position: relative;
