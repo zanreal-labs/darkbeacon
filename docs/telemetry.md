@@ -201,3 +201,30 @@ typed.
 4. Useful insights: unique `instance_id` of `instance_heartbeat` per day (instances), sum of the latest
    `accounts_mau` per instance (players), feature events broken down by their properties, `demo = false` as a
    filter everywhere.
+5. How many people use one instance, e.g. the hosted app at app.darkbeacon.space: nothing extra is collected
+   for this. Copy the instance id from that instance's **Admin > Instance > Anonymous telemetry** card, then in
+   PostHog (SQL):
+
+   ```sql
+   -- What the instance itself counts, once a day: accounts seen in the last 1 / 7 / 30 days
+   -- (an account is seen when it uses the app; account.last_seen_at), and their characters.
+   SELECT toDate(timestamp) AS day,
+          argMax(properties.accounts_dau, timestamp) AS dau,
+          argMax(properties.accounts_wau, timestamp) AS wau,
+          argMax(properties.accounts_mau, timestamp) AS mau,
+          argMax(properties.characters_mau, timestamp) AS characters_mau,
+          argMax(properties.accounts, timestamp) AS accounts
+   FROM events
+   WHERE event = 'instance_heartbeat' AND properties.instance_id = '<instance id>'
+   GROUP BY day ORDER BY day
+
+   -- Accounts that did something that sends an event (sign-ins, map edits, page views in the app), per day.
+   -- Per-account ids start with u_; the heartbeat's distinct id is the instance id.
+   SELECT toDate(timestamp) AS day, uniq(distinct_id) AS active_accounts
+   FROM events
+   WHERE properties.instance_id = '<instance id>' AND startsWith(distinct_id, 'u_')
+   GROUP BY day ORDER BY day
+   ```
+
+   The heartbeat numbers are the reference (they count every account that opened the app, events or not); the
+   second query is a lower bound that also works for any time window. Neither can say who the people are.
