@@ -1,0 +1,163 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Frame from '../components/Frame.astro';
+import Shot from '../components/Shot.astro';
+import { arrow } from '../components/icons';
+import { APP_URL, REPO_URL } from '../config';
+
+const title = 'Darkbeacon and Wanderer compared';
+const description =
+  'Moving a corp from Wanderer to Darkbeacon: what the import brings over, what stays behind, the Wanderer-compatible API, and an honest comparison checked against both codebases.';
+
+const MIGRATE_URL = `${REPO_URL}/blob/main/docs/migrate-from-wanderer.md`;
+
+// Wanderer and Darkbeacon, row by row. Every line was checked against both codebases (Darkbeacon:
+// apps/, packages/, plugins/ and docs/ here; Wanderer: lib/, config/runtime.exs and mix.exs of our
+// fork). `same` marks where the two are equal.
+const comparison = [
+  {
+    topic: 'Running it',
+    wanderer: 'An Elixir/Phoenix app on Postgres. Routes come from a separate route-builder service, kills from the separate wanderer-kills service, Discord from a separate notifier bot.',
+    darkbeacon: 'One container (a NestJS server and the Next.js web app) on SQLite, or Postgres. Routing, kills and Discord run inside it.',
+  },
+  {
+    topic: 'Scaling out',
+    wanderer: 'Erlang clustering.',
+    darkbeacon: 'Optional cluster mode on Postgres: a leader by advisory lock, events over NOTIFY.',
+  },
+  {
+    topic: 'Tracking',
+    wanderer: 'On the server, while someone has the map open; it stops 30 minutes after the last browser leaves.',
+    darkbeacon: 'On the server, every 5 seconds, with every browser closed.',
+  },
+  {
+    topic: 'History',
+    wanderer: 'A user activity log, archived after about 12 weeks; undo in the browser.',
+    darkbeacon: 'Every change in an event log, so a reconnect replays what it missed. A hash-chained audit with field diffs; revert any single change; <kbd>Ctrl</kbd>+<kbd>Z</kbd> undone on the server.',
+  },
+  {
+    topic: 'Alliances',
+    wanderer: 'Access lists shared between maps.',
+    darkbeacon: 'Chains shared map to map, read or read-write, by scope: topology, connection status, signatures, intel, characters, labels. An alliance map merges them field by field.',
+  },
+  {
+    topic: 'API',
+    wanderer: 'A key per map, OpenAPI, an event stream, signed webhooks.',
+    darkbeacon: 'Personal and service keys scoped per resource and action, with expiry, IP allow-list and rate limit. OpenAPI and AsyncAPI, signed webhooks, an MCP endpoint, public read-only links.',
+  },
+  {
+    topic: 'Extending',
+    wanderer: 'No plugin system.',
+    darkbeacon: 'A plugin SDK on the core’s ports. Discord notifications ship as a plugin; themes restyle the map.',
+  },
+  {
+    topic: 'Capitals',
+    wanderer: 'A link to Dotlan’s jump planner.',
+    darkbeacon: 'A jump planner in the app, on a map of known space, with fuel, fatigue and waiting per leg.',
+  },
+  {
+    topic: 'Views',
+    wanderer: 'No saved views.',
+    darkbeacon: 'Saved views on <kbd>Alt</kbd>+<kbd>1</kbd> to <kbd>3</kbd>; managers publish the map’s defaults.',
+  },
+  {
+    topic: 'Backups',
+    wanderer: 'Back up Postgres yourself.',
+    darkbeacon: 'On SQLite, daily backups kept in the volume, restored from Admin.',
+  },
+  {
+    topic: 'Wormhole types, Thera and Turnur, standings',
+    wanderer: 'A wormhole types reference, EVE-Scout routes, sovereignty in standings colours.',
+    darkbeacon: 'The same three.',
+    same: true,
+  },
+];
+---
+
+<Layout title={title} description={description}>
+  <main id="main" class="detail">
+    <header class="page-head container">
+      <p class="eyebrow"><b>K162</b> Coming from Wanderer</p>
+      <h1 class="page-title">Bring the chain with you, <span>intel included.</span></h1>
+      <p class="page-lede">How the import works, what does not come over, and where the two mappers differ.</p>
+    </header>
+
+    <section class="detail-section container" id="import" aria-labelledby="import-title">
+      <div class="wanderer-grid">
+        <div class="feature-copy">
+          <h2 id="import-title" class="feature-title feature-title--sm">The import</h2>
+            <p class="feature-lede">
+              <strong>All maps, Import from Wanderer.</strong> Point it at wanderer.ltd or your own Wanderer with the map’s
+              API key, upload the file Wanderer exports, or, as an instance admin, read your own Wanderer’s database
+              read-only. Read the preview, then import into a new map or merge into one you use.
+            </p>
+            <ul class="ticks">
+              <li>Systems, connections in every state, signatures, structures, comments, labels, tags and access lists.</li>
+              <li>Hidden systems come over hidden, with their notes, signatures and structures, back when the system is.</li>
+              <li>The preview says what comes over as it is, what comes over close to it, and what is left out and why.</li>
+              <li>Keep syncing from Wanderer every 5 to 60 minutes while the corp moves over.</li>
+            </ul>
+          <p><a class="more-link" href={MIGRATE_URL}>The migration guide on GitHub<Fragment set:html={arrow} /></a></p>
+        </div>
+          <Frame tilt="right" label="Import from Wanderer">
+            <Shot
+              name="import"
+              sizes="(min-width: 1024px) 560px, calc(100vw - 2rem)"
+              alt="Import from Wanderer: choose Wanderer’s API, an export file or Wanderer’s database, then the address, the map and its API key."
+            />
+          </Frame>
+      </div>
+    </section>
+
+    <section class="detail-section container" id="compare" aria-label="Wanderer and Darkbeacon compared">
+        <div class="compare">
+          <div class="compare-head">
+            <h3>What is different, and what is not</h3>
+            <p>
+              We flew our own fork of Wanderer before we built Darkbeacon, and it shaped a lot of what is here. Wanderer
+              is a good mapper; this is an honest list of where the two differ, checked against both codebases.
+            </p>
+          </div>
+          <div class="compare-table" role="table" aria-label="Wanderer and Darkbeacon compared">
+            <div class="compare-row compare-row--head" role="row">
+              <span role="columnheader"><span class="visually-hidden">Topic</span></span>
+              <span role="columnheader">Wanderer</span>
+              <span role="columnheader">Darkbeacon</span>
+            </div>
+            {
+              comparison.map((row) => (
+                <div class:list={['compare-row', row.same && 'compare-row--same']} role="row">
+                  <span role="rowheader">{row.topic}</span>
+                  <span role="cell" data-label="Wanderer" set:html={row.wanderer} />
+                  <span role="cell" data-label="Darkbeacon" set:html={row.darkbeacon} />
+                </div>
+              ))
+            }
+          </div>
+        </div>
+        <div class="parity">
+          <div class="card">
+            <h3>Does not come over</h3>
+            <ul class="ticks ticks--muted">
+              <li>Tracked characters and settings: pilots sign in and link their characters again.</li>
+              <li>Kills: Darkbeacon reads them live from zKillboard.</li>
+              <li>Wanderer subscriptions and licences.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Tools that talk to Wanderer</h3>
+            <p>
+              A read-only Wanderer-compatible API answers the usual <code>/api/map/systems</code>,
+              <code>/api/map/connections</code> and character calls, plus the map event stream with Wanderer’s event
+              names, so existing scripts keep reading while the corp moves over.
+            </p>
+          </div>
+        </div>
+    </section>
+
+    <div class="container detail-cta">
+      <a class="btn btn--primary btn--lg" href={APP_URL} data-warp><span class="warp-label">Open app</span><Fragment set:html={arrow} /></a>
+      <a class="btn btn--lg btn--ghost" href="/">Back to the homepage</a>
+    </div>
+  </main>
+</Layout>

@@ -632,3 +632,145 @@
     --size: 2rem;
   }
 }
+
+/* ────────────────────────── Short feature items (homepage) ────────────────────────── */
+/* A title and one line each; three to a section. The details live on /features and /wanderer. */
+.items {
+  display: grid;
+  gap: var(--space-lg);
+}
+
+.items li {
+  display: grid;
+  gap: 0.3rem;
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--line);
+}
+
+.items h3 {
+  font-size: var(--text-md);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+.items p {
+  max-width: 34rem;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+@media (min-width: 900px) {
+  .items--row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-xl);
+  }
+}
+
+.feature .items--row {
+  margin-top: var(--space-2xl);
+}
+
+.feature-copy .more-link {
+  align-self: flex-start;
+}
+
+.section-more {
+  margin-top: var(--space-xl);
+}
+
+/* ────────────────────────── Detail pages (/features, /wanderer) ────────────────────────── */
+.page-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-lg);
+  padding-top: calc(4rem + var(--space-4xl));
+  padding-bottom: var(--space-2xl);
+}
+
+.page-title {
+  font-size: var(--text-display);
+  letter-spacing: -0.045em;
+}
+
+.page-title span {
+  color: var(--ink-muted);
+}
+
+.page-lede {
+  max-width: 38rem;
+  color: var(--ink-soft);
+  font-size: var(--text-xl);
+}
+
+.page-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.page-toc a {
+  padding: 0.35rem 0.85rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  text-decoration: none;
+}
+
+.page-toc a:hover {
+  border-color: rgb(95 224 238 / 0.4);
+  color: var(--ink);
+}
+
+.detail-section {
+  display: grid;
+  gap: var(--space-2xl);
+  padding-block: var(--space-4xl);
+  border-top: 1px solid var(--line);
+}
+
+.detail-section > * {
+  min-width: 0;
+}
+
+.detail-section .annotated,
+.detail-section .wide-figure,
+.detail-section .capitals-grid,
+.detail-section .compare,
+.detail-section .parity,
+.detail-section .map-specs,
+.detail-section .map-detail {
+  margin-top: 0;
+}
+
+.detail-head {
+  display: grid;
+  gap: var(--space-md);
+  max-width: 48rem;
+}
+
+.detail-grid {
+  display: grid;
+  gap: var(--space-2xl);
+  align-items: start;
+}
+
+@media (min-width: 900px) {
+  .detail-grid {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  }
+}
+
+.detail-grid .frame3d {
+  max-width: 26rem;
+  justify-self: center;
+}
+
+.detail-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding-block: var(--space-2xl) var(--section);
+}
