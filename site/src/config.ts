@@ -36,3 +36,11 @@ export const COMPANY_URL = 'https://zanreal.com';
 /** The in-game character that receives ISK donations, and its id (ESI /universe/ids/). */
 export const DONATION_CHARACTER = 'Z4NR34L';
 export const DONATION_CHARACTER_ID = 2121597908;
+
+/**
+ * Google Analytics 4 measurement id (`G-...`), from PUBLIC_GA_MEASUREMENT_ID at build time (set in
+ * the Vercel project). Unset or malformed: no Google code on the site and no mention of it on
+ * /privacy. Runs under Consent Mode v2 (components/Consent.astro).
+ */
+const gaEnv = (env.PUBLIC_GA_MEASUREMENT_ID ?? '').trim();
+export const GA_MEASUREMENT_ID: string | undefined = /^G-[A-Z0-9]+$/.test(gaEnv) ? gaEnv : undefined;

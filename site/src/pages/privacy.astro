@@ -1,0 +1,251 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { GA_MEASUREMENT_ID, REPO_URL } from '../config';
+
+// Follows what the site actually runs: scripts/analytics.ts (PostHog), scripts/consent.ts (c15t),
+// the Vercel Web Analytics component in layouts/Layout.astro and the /ingest rewrites in
+// vercel.json. The controller is the one named in ZanReal's own privacy policy
+// (https://zanreal.com/legal/privacy). Change this page whenever any of those change.
+
+const title = 'Privacy and cookies';
+const description = `What darkbeacon.space measures, with and without your consent: PostHog analytics (EU)${
+  GA_MEASUREMENT_ID ? ', Google Analytics' : ''
+}, Vercel Web Analytics, the cookies involved and how to change your choice.`;
+const updated = '2026-10-19';
+const TELEMETRY_URL = `${REPO_URL}/blob/main/docs/telemetry.md`;
+
+/** Everything the site can keep in the browser, and when. */
+const storage = [
+  {
+    name: 'c15t',
+    category: 'Necessary',
+    purpose: 'Remembers your cookie choice (cookie and local storage). Written only once you choose.',
+    kept: '1 year',
+  },
+  {
+    name: 'ph_*',
+    category: 'Measurement',
+    purpose: "PostHog's random identifier and session (cookie, local and session storage). Only with your consent.",
+    kept: '1 year',
+  },
+  {
+    name: '__ph_opt_in_out_*',
+    category: 'Measurement',
+    purpose: 'Records in PostHog that you opted in (local storage). Only with your consent.',
+    kept: 'until you withdraw consent',
+  },
+  ...(GA_MEASUREMENT_ID
+    ? [
+        {
+          name: '_ga, _ga_*',
+          category: 'Measurement',
+          purpose: "Google Analytics' random identifier and session state (cookies). Only with your consent.",
+          kept: '2 years',
+        },
+      ]
+    : []),
+];
+---
+
+<Layout title={title} description={description}>
+  <main id="main">
+    <header class="page-head container">
+      <p class="eyebrow"><b>Legal</b> Privacy</p>
+      <h1 class="page-title">Privacy and cookies</h1>
+      <p class="page-lede">
+        What this site measures, what it keeps in your browser, and how to change your mind.{' '}
+        <span>Last updated <time datetime={updated}>19 October 2026</time>.</span>
+      </p>
+    </header>
+
+    <div class="container privacy">
+      <section aria-labelledby="scope">
+        <h2 id="scope">What this covers</h2>
+        <p>
+          This notice covers the website at <span class="mono">darkbeacon.space</span>. The Darkbeacon app (the hosted instance
+          at <span class="mono">app.darkbeacon.space</span> and self-hosted instances) runs no analytics script in your
+          browser; what an instance reports is described in <a href={TELEMETRY_URL}>docs/telemetry.md</a>.
+        </p>
+      </section>
+
+      <section aria-labelledby="controller">
+        <h2 id="controller">Who is responsible</h2>
+        <p>
+          The controller of the personal data processed through this site is ZANREAL Mateusz Janota, 3 Maja 30a, 44-200
+          Rybnik, Poland. For anything about your data, write to <a href="mailto:privacy@zanreal.com">privacy@zanreal.com</a>.
+          ZanReal's general privacy policy is at <a href="https://zanreal.com/legal/privacy">zanreal.com/legal/privacy</a>.
+        </p>
+      </section>
+
+      <section aria-labelledby="analytics">
+        <h2 id="analytics">Analytics with PostHog</h2>
+        <p>
+          We use <a href="https://posthog.com">PostHog</a> to see how many people visit, which pages they read and how fast
+          the pages load. Our PostHog project is in PostHog's EU region (Frankfurt). Requests go to this site's own address
+          (<span class="mono">darkbeacon.space/ingest</span>) and are passed on to PostHog from there. IP addresses are
+          discarded by the project, so they are not stored with the events.
+        </p>
+        <h3>Without your consent</h3>
+        <p>
+          This is what happens until you accept, and after you reject. PostHog counts visits in its cookieless mode: nothing
+          is written to your browser (no cookie, no local or session storage). Each event carries the page address, the
+          referring page, your browser, operating system and screen size, and page load timings (Core Web Vitals). To count
+          unique visitors without an identifier in your browser, PostHog derives a hash on its servers from your IP address,
+          browser and a salt that changes every day; the salt is thrown away, so the same visitor cannot be recognised on a
+          later day and the hash cannot be turned back into an IP address.
+        </p>
+        <h3>With your consent</h3>
+        <p>
+          When you accept measurement, PostHog also stores a random identifier in a first-party cookie and in local storage
+          (names starting with <span class="mono">ph_</span>), kept for up to a year. It lets us count returning visitors
+          and visits made of several pages. We do not link it to your name, e-mail, EVE character or app account, we do not
+          create profiles of people, and we record no clicks, typed text or screen recordings.
+        </p>
+        <p>
+          The legal basis is our legitimate interest in knowing how the site is used, for the cookieless counting, and your
+          consent for the stored identifier (Art. 6(1)(f) and 6(1)(a) GDPR, and the ePrivacy rules on storing data on your
+          device). Events are kept for as long as our PostHog plan retains event data and are deleted with the project.
+          PostHog acts as our processor.
+        </p>
+        <p>
+          If your browser sends Do Not Track or Global Privacy Control, PostHog is not loaded at all.
+        </p>
+      </section>
+
+      {
+        GA_MEASUREMENT_ID && (
+          <section aria-labelledby="google">
+            <h2 id="google">Google Analytics</h2>
+            <p>
+              We also use Google Analytics 4, provided by Google Ireland Limited, under Google Consent Mode. It follows the
+              same choice as PostHog.
+            </p>
+            <p>
+              Without your consent, Google Analytics sets no cookies. It sends cookieless pings (that a page was viewed,
+              with the page address, referrer, browser, device type and approximate location derived from your IP address,
+              which Google does not store) that Google uses to estimate visits in aggregate. With your consent, it stores
+              a random identifier in first-party cookies (<span class="mono">_ga</span> and{' '}
+              <span class="mono">_ga_*</span>, kept for up to 2 years) to count visitors and sessions. Advertising
+              features and signals stay off, and nothing is shared with Google for ads.
+            </p>
+            <p>
+              The legal basis is your consent (Art. 6(1)(a) GDPR) for the cookies and our legitimate interest
+              (Art. 6(1)(f)) for the cookieless pings. Google may process data in the United States under the EU-US Data
+              Privacy Framework. Event data is deleted after the retention period set in our property (at most 14
+              months). As with PostHog, Do Not Track or Global Privacy Control
+              means the Google tag is not loaded at all.
+            </p>
+          </section>
+        )
+      }
+
+      <section aria-labelledby="vercel">
+        <h2 id="vercel">Hosting and Vercel Web Analytics</h2>
+        <p>
+          The site is hosted by <a href="https://vercel.com">Vercel</a>, which processes your IP address to deliver the pages
+          and keeps short-lived server logs. We also use Vercel Web Analytics, which counts page views without cookies or any
+          other storage in your browser: visitors are told apart by a hash of the request that is discarded after 24 hours.
+          It records the page, the referrer, your country and the type of browser, system and device. Because it stores
+          nothing on your device, it is not part of the cookie choice.
+        </p>
+      </section>
+
+      <section aria-labelledby="cookies">
+        <h2 id="cookies">Cookies and storage</h2>
+        <ul class="privacy-storage">
+          {
+            storage.map((item) => (
+              <li>
+                <p class="privacy-storage-name mono">{item.name}</p>
+                <p>{item.purpose}</p>
+                <p class="privacy-storage-meta">
+                  {item.category} · {item.kept}
+                </p>
+              </li>
+            ))
+          }
+        </ul>
+        <p>
+          You can change your choice at any time. Withdrawing consent deletes the analytics cookies and storage and reloads
+          the page, after which only cookieless counting remains.
+        </p>
+        <p><button type="button" class="btn btn--sm" data-cookie-settings>Cookie settings</button></p>
+      </section>
+
+      <section aria-labelledby="rights">
+        <h2 id="rights">Your rights</h2>
+        <p>
+          You can ask for access to, correction or deletion of your data, restrict or object to its processing, and withdraw
+          consent at any time without affecting what happened before. Cookieless events carry no identifier we could look
+          you up by, so they usually cannot be tied back to you. You can also complain to a data protection authority; in
+          Poland that is the President of the Personal Data Protection Office (UODO).
+        </p>
+      </section>
+    </div>
+  </main>
+</Layout>
+
+<style>
+  .privacy {
+    display: grid;
+    gap: var(--space-2xl);
+    padding-bottom: var(--space-4xl);
+  }
+
+  .privacy section {
+    display: grid;
+    max-width: 48rem;
+    min-width: 0;
+    gap: var(--space-md);
+    padding-top: var(--space-xl);
+    border-top: 1px solid var(--line);
+  }
+
+  .privacy h2 {
+    font-size: var(--text-2xl);
+  }
+
+  .privacy h3 {
+    margin-top: var(--space-xs);
+    font-size: var(--text-lg);
+    letter-spacing: -0.02em;
+  }
+
+  .privacy p {
+    color: var(--ink-soft);
+    line-height: 1.65;
+  }
+
+  .privacy a {
+    color: var(--ink);
+  }
+
+  .privacy-storage {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    list-style: none;
+  }
+
+  .privacy-storage li {
+    display: grid;
+    gap: var(--space-2xs);
+    padding: var(--space-md);
+  }
+
+  .privacy-storage li + li {
+    border-top: 1px solid var(--line);
+  }
+
+  .privacy .privacy-storage-name {
+    color: var(--ink);
+    font-size: var(--text-sm);
+  }
+
+  .privacy .privacy-storage-meta {
+    color: var(--ink-subtle);
+    font-size: var(--text-sm);
+  }
+</style>
