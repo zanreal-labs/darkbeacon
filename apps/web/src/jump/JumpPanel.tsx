@@ -340,6 +340,7 @@ function suggestionKey(s: Suggestion): string {
 function optionsSummary(settings: PlannerSettings, props: PanelState): string {
   const parts: string[] = [];
   if (settings.gates === 'never') parts.push('no gates');
+  if (settings.gates === 'shortcut') parts.push('gate shortcuts');
   if (settings.preferStations) parts.push('stations');
   if (settings.outlaw) parts.push('outlaw');
   if (settings.fatigueNow > 0) parts.push(`fatigue now ${formatMinutes(settings.fatigueNow)}`);
@@ -439,7 +440,7 @@ function Options({
   return (
     <div className={styles.options}>
       <Switch
-        checked={settings.gates === 'finish'}
+        checked={settings.gates !== 'never'}
         onCheckedChange={(on) => update({ gates: on ? 'finish' : 'never' })}
         label="Finish over stargates"
         description={
@@ -447,6 +448,13 @@ function Options({
             ? 'Gates after the last jump, only where no jump reaches, e.g. into high-sec.'
             : 'Gates after the last jump, where no cyno can be lit.'
         }
+      />
+      <Switch
+        checked={settings.gates === 'shortcut'}
+        disabled={settings.gates === 'never'}
+        onCheckedChange={(on) => update({ gates: on ? 'shortcut' : 'finish' })}
+        label="Allow jump gates"
+        description="Take a stargate after the last jump when it saves a jump, e.g. into a system one gate on."
       />
       <Switch
         checked={settings.preferStations}

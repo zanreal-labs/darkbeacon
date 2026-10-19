@@ -194,6 +194,28 @@ describe('JumpPage', () => {
     );
   });
 
+  it('lets a stargate save a jump only when allowed', async () => {
+    window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&ship=Ark');
+    const user = userEvent.setup();
+    renderPage();
+    const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+    await screen.findByRole('region', { name: 'Route' });
+    await user.click(within(panel).getByRole('button', { name: /Route options/ }));
+    const allow = within(panel).getByRole('switch', { name: /Allow jump gates/ });
+    expect(allow.getAttribute('aria-checked')).toBe('false');
+    await user.click(allow);
+    await waitFor(() => expect(requests.at(-1)).toMatchObject({ gates: 'shortcut' }));
+    expect(within(panel).getByText(/gate shortcuts/)).toBeTruthy();
+    // No gates at all turns it off with them.
+    await user.click(within(panel).getByRole('switch', { name: /Finish over stargates/ }));
+    await waitFor(() => expect(requests.at(-1)).toMatchObject({ gates: 'never' }));
+    expect(
+      within(panel)
+        .getByRole('switch', { name: /Allow jump gates/ })
+        .hasAttribute('disabled'),
+    ).toBe(true);
+  });
+
   it('swaps start and destination in one step, keeping focus and the sheet', async () => {
     window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&ship=Ark');
     const user = userEvent.setup();

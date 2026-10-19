@@ -114,7 +114,8 @@ export function canJumpFrom(space: JumpSpace, i: number): boolean {
 /**
  * Lexicographic cost: stargates, then legs of any kind, then jumps, then stops without a station,
  * then ly, then fatigue. Gates come first so a hull with a jump drive never gates where it could
- * jump: a gate is only for the end of the trip a cyno cannot reach.
+ * jump: a gate is only for the end of the trip a cyno cannot reach. With `shortcut` gates the
+ * first term stays 0, so a gate that saves a jump wins.
  */
 type Cost = [gates: number, legs: number, jumps: number, misses: number, ly: number, fatigue: number];
 
@@ -173,10 +174,10 @@ const KIND_ANSIBLEX = 2;
 const KINDS: JumpLegKind[] = ['jump', 'gate', 'ansiblex'];
 
 /**
- * Plans a jump route: fewest stargates (only where no jump reaches, e.g. into high-sec), then
- * fewest legs (jumps and Ansiblex bridges), then fewest jumps, then
+ * Plans a jump route: fewest stargates (only where no jump reaches, e.g. into high-sec, unless
+ * `shortcut` lets a gate save a jump), then fewest legs, then fewest jumps, then
  * (when asked) fewest stops without an NPC station, then the fewest light years (fuel), then the
- * least fatigue. Gates are taken only after the last jump (`finish`), e.g. into high-sec, so a
+ * least fatigue. Gates are taken only after the last jump, e.g. into high-sec, so a
  * route is never a long gate trip with jumps sprinkled in. The schedule (waits, fatigue,
  * activation timers) assumes each leg is made as soon as it may be.
  */
@@ -295,10 +296,18 @@ export function planJumpRoute(space: JumpSpace, options: PlanOptions): PlanOutco
         relax(state, v * 2, KIND_ANSIBLEX, [cost[0], cost[1] + 1, cost[2], cost[3], cost[4], cost[5]]);
       }
     }
-    if (gates === 'finish') {
+    if (gates !== 'never') {
+      const gatePenalty = gates === 'shortcut' ? 0 : 1;
       for (const v of space.gateNeighbours(u)) {
         if (!gateOpen(u, v)) continue;
-        relax(state, v * 2 + 1, KIND_GATE, [cost[0] + 1, cost[1] + 1, cost[2], cost[3], cost[4], cost[5]]);
+        relax(state, v * 2 + 1, KIND_GATE, [
+          cost[0] + gatePenalty,
+          cost[1] + 1,
+          cost[2],
+          cost[3],
+          cost[4],
+          cost[5],
+        ]);
       }
     }
   }

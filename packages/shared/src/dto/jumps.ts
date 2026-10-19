@@ -105,8 +105,11 @@ export const JUMP_FLAG_ZARZAKH = 4;
 
 export const JumpUniverseQuery = z.object({ v: z.string().max(64).optional() });
 
-/** How stargates may be used: never, or after the last jump to finish the trip (into high-sec). */
-export const JumpGateUse = z.enum(['never', 'finish']);
+/**
+ * How stargates may be used, always after the last jump: never; `finish`, only where no jump
+ * reaches (into high-sec); `shortcut`, also where a gate saves a jump (a destination one gate on).
+ */
+export const JumpGateUse = z.enum(['never', 'finish', 'shortcut']);
 export type JumpGateUse = z.infer<typeof JumpGateUse>;
 
 export const JumpPlanRequest = z.object({

@@ -280,6 +280,9 @@ describe('planJumpRoute', () => {
     const space = line([{ x: 0 }, { x: 9 }, { x: 18 }], [[1, 2]]);
     const outcome = plan(space, ARK, 0, 2);
     expect(outcome.ok && outcome.route.legs.map((l) => l.kind)).toEqual(['jump', 'jump']);
+    // Unless the pilot lets a gate save a jump.
+    const shortcut = plan(space, ARK, 0, 2, { gates: 'shortcut' });
+    expect(shortcut.ok && shortcut.route.legs.map((l) => l.kind)).toEqual(['jump', 'gate']);
   });
 
   it('never routes outlaws through high-sec on the way', () => {
