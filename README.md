@@ -20,9 +20,20 @@ The engineering contract is [`docs/SPEC.md`](docs/SPEC.md); choices the spec lea
 
 ```sh
 cp .env.example .env        # fill in PUBLIC_URL and the Discord/EVE applications
-docker build -t darkbeacon .
-docker run -p 3000:3000 -v dbk-data:/data --env-file .env darkbeacon
+docker run -d --name darkbeacon --restart unless-stopped \
+  -p 3000:3000 -v dbk-data:/data --env-file .env ghcr.io/zanreal-labs/darkbeacon:edge
 ```
+
+Images for `linux/amd64` and `linux/arm64` are built by CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml))
+and published to the GitHub Container Registry:
+
+| Tag                      | What it is                                                           |
+| ------------------------ | -------------------------------------------------------------------- |
+| `edge`                   | the latest commit on `main` that passed lint, typecheck and tests    |
+| `sha-<commit>`           | one exact commit, to pin a version                                   |
+| `X.Y.Z`, `X.Y`, `latest` | releases (`vX.Y.Z` tags), once there are any; during Beta use `edge` |
+
+To build it yourself instead: `docker build -t darkbeacon .` and run `darkbeacon` in place of the image name.
 
 Open `http://localhost:3000`. The first account to sign in becomes the instance owner. Data lives in the
 `/data` volume (SQLite by default; set `DATABASE_URL=postgres://...` to use Postgres). Without `SECRET_KEY`
