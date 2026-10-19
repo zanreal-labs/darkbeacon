@@ -1,9 +1,25 @@
+import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import sitemap from '@astrojs/sitemap';
 import { wgslVitePlugin } from '@vgpu/wgsl/loader-vite';
 import { defineConfig } from 'astro/config';
+import llms from './integrations/llms';
 import { SITE_URL } from './src/config';
 
 const dev = process.argv.includes('dev');
+
+// Sitemap lastmod: the last commit that changed the page's own file, when git history is there
+// (a shallow clone may not reach it; then the entry simply has no lastmod).
+const lastmod = (url: string): string | undefined => {
+  const path = new URL(url).pathname.replace(/^\/$/, '/index');
+  const file = `src/pages${path}.astro`;
+  if (!existsSync(file)) return undefined;
+  try {
+    return execFileSync('git', ['log', '-1', '--format=%cI', '--', file], { encoding: 'utf8' }).trim() || undefined;
+  } catch {
+    return undefined;
+  }
+};
 
 // Static output: `npm run build` writes plain files to dist/. Vercel detects Astro and serves them.
 export default defineConfig({
@@ -12,7 +28,14 @@ export default defineConfig({
   // Pages are files (sponsor.html) served without extension by Vercel's cleanUrls, so canonical,
   // Open Graph and sitemap URLs are /sponsor, exactly what is served.
   trailingSlash: 'never',
-  integrations: [sitemap()],
+  // llms: the Markdown twins of every page, /llms.txt and /llms-full.txt (integrations/llms.ts).
+  integrations: [
+    sitemap({
+      filter: (page) => !/\/404\/?$/.test(new URL(page).pathname),
+      serialize: (item) => ({ ...item, lastmod: lastmod(item.url) }),
+    }),
+    llms(),
+  ],
   build: { inlineStylesheets: 'always', format: 'file' },
   devToolbar: { enabled: false },
   vite: {

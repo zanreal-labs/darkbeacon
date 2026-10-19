@@ -10,6 +10,8 @@ import Footer from '../components/Footer.astro';
 import Nav from '../components/Nav.astro';
 import AgentPill from '../components/AgentPill.astro';
 import { SITE_URL } from '../config';
+import { markdownPath } from '../seo/llms';
+import { structuredData } from '../seo/structured-data';
 
 interface Props {
   title: string;
@@ -17,8 +19,13 @@ interface Props {
   /** Path of this page's 1200 x 630 Open Graph image, from the site root. */
   ogImage?: string;
   ogImageAlt?: string;
-  /** Structured data for this page, emitted as JSON-LD. */
+  /**
+   * Extra structured data for this page. Layout already emits the site's graph (src/seo/
+   * structured-data.ts) on every page; a node given here is folded into it.
+   */
   jsonLd?: Record<string, unknown>;
+  /** Keep the page out of search results, structured data and the Markdown twins (the 404 page). */
+  noindex?: boolean;
   /** The page has its own agent buttons in rows marked `data-pill-hide` (see AgentPill). */
   pillAfterHero?: boolean;
 }
@@ -29,12 +36,18 @@ const {
   ogImage: ogPath = '/og.png',
   ogImageAlt = 'The Darkbeacon mark: a beacon leaving a black hole through its glowing ring',
   jsonLd,
+  noindex = false,
   pillAfterHero = false,
 } = Astro.props;
 // Built as files (sponsor.html) and served without the extension: /sponsor.
 const path = Astro.url.pathname.replace(/(index)?\.html$/, '').replace(/(.)\/$/, '$1') || '/';
 const canonical = path === '/' ? `${SITE_URL}/` : `${SITE_URL}${path}`;
 const ogImage = new URL(ogPath, SITE_URL + '/').href;
+
+// One JSON-LD graph per page, and the page as Markdown (written after the build by
+// integrations/llms.ts). Neither for a page kept out of search.
+const graph = noindex ? undefined : structuredData({ path, canonical, title, description, ogImage, ogImageAlt }, jsonLd);
+const markdown = noindex ? undefined : `${SITE_URL}${markdownPath(path)}`;
 
 // Web Analytics only reports from Vercel, so it is only on the page in Vercel builds: local dev and
 // local production builds carry no script and make no requests to /_vercel/insights.
@@ -51,8 +64,8 @@ const agentPill = path !== '/mcp-setup';
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
     <meta name="description" content={description} />
-    <link rel="canonical" href={canonical} />
-    <meta name="robots" content="index, follow" />
+    {!noindex && <link rel="canonical" href={canonical} />}
+    <meta name="robots" content={noindex ? 'noindex, follow' : 'index, follow'} />
     {/* Black: the brand cyan tints the whole browser bar over a black page, which reads as a stripe. */}
     <meta name="theme-color" content="#000000" />
     <meta name="color-scheme" content="dark" />
@@ -60,6 +73,7 @@ const agentPill = path !== '/mcp-setup';
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
     <link rel="sitemap" href="/sitemap-index.xml" />
+    {markdown && <link rel="alternate" type="text/markdown" href={markdown} title={`${title} (Markdown)`} />}
     <link rel="preload" href={sansFont} as="font" type="font/woff2" crossorigin />
     {/* Before first paint: does this browser get the live scenes or their pre-rendered stills? */}
     <script is:inline>
@@ -86,7 +100,7 @@ const agentPill = path !== '/mcp-setup';
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
     <meta name="twitter:image:alt" content={ogImageAlt} />
-    {jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}
+    {graph && <script type="application/ld+json" set:html={JSON.stringify(graph).replace(/</g, '\\u003c')} />}
   </head>
   <body class:list={{ 'has-agent-pill': agentPill }}>
     <a class="skip" href="#main">Skip to content</a>
