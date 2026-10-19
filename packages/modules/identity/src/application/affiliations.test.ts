@@ -71,8 +71,14 @@ describe('scopes of a character', () => {
   it('asks for the extras on top of the required scopes and says what a grant lacks', () => {
     expect(parseExtras('wallet, nope,assets')).toEqual(['assets', 'wallet']);
     expect(parseExtras(undefined)).toEqual([]);
-    expect(linkScopes(['wallet'])).toContain(OPTIONAL_EVE_SCOPES.wallet);
-    const old = ['esi-location.read_location.v1', OPTIONAL_EVE_SCOPES.assets];
+    expect(linkScopes(['wallet'])).toContain('esi-wallet.read_character_wallet.v1');
+    // One extra may carry several scopes; it is granted only with all of them.
+    expect(linkScopes(['jumps'])).toEqual(
+      expect.arrayContaining(['esi-skills.read_skills.v1', 'esi-characters.read_fatigue.v1']),
+    );
+    expect(grantedExtras(['esi-skills.read_skills.v1'])).toEqual([]);
+    expect(grantedExtras(linkScopes(['jumps']))).toEqual(['jumps']);
+    const old = ['esi-location.read_location.v1', ...OPTIONAL_EVE_SCOPES.assets];
     expect(missingScopes(old)).toContain('esi-characters.read_contacts.v1');
     expect(missingScopes(linkScopes())).toEqual([]);
     expect(grantedExtras(old)).toEqual(['assets']);

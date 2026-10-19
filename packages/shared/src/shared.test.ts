@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ClientMessage, ServerMessage } from './protocol.js';
 import { buildPath, nestPath, routes } from './routes.js';
 import { CreateAccessRuleRequest } from './dto/access.js';
+import { fatigueMinutesLeft } from './dto/jumps.js';
 import { isMergedCopy, isMergeEvent } from './dto/sharing.js';
 import { shipSizeForJumpMass } from './dto/wormholes.js';
 
@@ -19,6 +20,17 @@ describe('ship size of a wormhole type', () => {
     expect(shipSizeForJumpMass(1_000_000_000)).toBe('xlarge');
     expect(shipSizeForJumpMass(1_350_000_000)).toBe('capital');
     expect(shipSizeForJumpMass(2_000_000_000)).toBe('capital');
+  });
+});
+
+describe('jump fatigue left', () => {
+  it('counts whole minutes up to the 5 hour cap and never below none', () => {
+    const now = Date.UTC(2026, 9, 19, 12);
+    expect(fatigueMinutesLeft(null, now)).toBe(0);
+    expect(fatigueMinutesLeft(now - 1000, now)).toBe(0);
+    expect(fatigueMinutesLeft(now + 30_000, now)).toBe(1);
+    expect(fatigueMinutesLeft(now + 90 * 60_000, now)).toBe(90);
+    expect(fatigueMinutesLeft(now + 8 * 3_600_000, now)).toBe(300);
   });
 });
 

@@ -3,6 +3,7 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  fatigueMinutesLeft,
   routes,
   type JumpMetaDto,
   type JumpPlanDto,
@@ -20,6 +21,7 @@ import { endpointsReducer } from '../jump/endpoints';
 import { JumpPanel } from '../jump/JumpPanel';
 import { SystemCard } from '../jump/SystemCard';
 import { buildStarModel, distanceLy, noCynoReason, type StarModel } from '../jump/model';
+import { useFatigueClock, useJumpPilot } from '../jump/pilot';
 import { loadSettings, parseAnsiblex, saveSettings, type PlannerSettings } from '../jump/settings';
 import { StarMap, type StarMapHandle } from '../jump/StarMap';
 import { pushRecent, suggestionsFor, type CharacterPlace, type SuggestionSources } from '../jump/suggest';
@@ -209,6 +211,20 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
       destination: suggestionsFor('destination', sources, origin),
     };
   }, [characters, exits, mapSystems, recent, origin, destination]);
+  // The pilot's skills and fatigue from ESI win over the remembered ones until edited by hand;
+  // ESI's fatigue counts down while the planner is open.
+  const fill = useJumpPilot(settings.pilot);
+  const fatigueClock = useFatigueClock(
+    fill.fatigueExpiresAt !== undefined && fill.fatigueExpiresAt !== null,
+    fill.answeredAt,
+  );
+  const skills = fill.skills ?? settings.skills;
+  const fatigueNow =
+    fill.fatigueExpiresAt === undefined
+      ? settings.fatigueNow
+      : fatigueMinutesLeft(fill.fatigueExpiresAt, fatigueClock);
+  const shown = useMemo(() => ({ ...settings, skills, fatigueNow }), [settings, skills, fatigueNow]);
+
   const ansiblexText = useDeferredValue(settings.ansiblex);
   const ansiblex = useMemo(() => parseAnsiblex(ansiblexText, model), [ansiblexText, model]);
 
@@ -218,7 +234,7 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
           shipTypeId: ship.typeId,
           origin: model.ids[from]!,
           destination: model.ids[to]!,
-          skills: settings.skills,
+          skills,
           avoidSystems: [...avoidSystems].map((i) => model.ids[i]!),
           avoidRegions: avoidRegions.map((r) => model.regionIds[r]!),
           preferStations: settings.preferStations,
@@ -228,7 +244,7 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
             ? ansiblex.pairs.map(([a, b]) => ({ from: model.ids[a]!, to: model.ids[b]! }))
             : [],
           maxFatigueMinutes: settings.maxFatigue,
-          fatigueNowMinutes: settings.fatigueNow,
+          fatigueNowMinutes: fatigueNow,
           bridgeTonnes: ship.bridges ? settings.bridgeTonnes : null,
         }
       : null;
@@ -265,7 +281,7 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
     [result, model],
   );
 
-  const rangeLy = ship.rangeLy * (1 + meta.rangeBonusPerLevel * settings.skills.jdc);
+  const rangeLy = ship.rangeLy * (1 + meta.rangeBonusPerLevel * skills.jdc);
   const focusLeg = activeLeg !== null && legs?.[activeLeg]?.kind === 'jump' ? legs[activeLeg]! : null;
   // The range around the start until there is a route, then around the leg under the pointer.
   const rangeFrom = focusLeg ? focusLeg.from : legs ? null : origin;
@@ -315,9 +331,14 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
     mapRef.current?.centre(ends.origin);
   }, [ends]);
 
+  const { edited } = fill;
   const update = useCallback(
-    (change: Partial<PlannerSettings>) => setSettings((s) => ({ ...s, ...change })),
-    [],
+    (change: Partial<PlannerSettings>) => {
+      if (change.skills) edited('skills');
+      if (change.fatigueNow !== undefined) edited('fatigue');
+      setSettings((s) => ({ ...s, ...change }));
+    },
+    [edited],
   );
   const toggleAvoid = (i: number) => {
     const name = model.names[i]!;
@@ -402,8 +423,9 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
         meta={meta}
         model={model}
         ship={ship}
-        settings={settings}
+        settings={shown}
         update={update}
+        pilot={fill}
         origin={origin}
         destination={destination}
         setOrigin={setOrigin}
