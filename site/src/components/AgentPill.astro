@@ -2,11 +2,68 @@
 /**
  * The floating "Work with an AI agent" pill at the bottom of every page but /mcp-setup itself.
  * Fixed, so it never moves the layout; the footer leaves room for it at the end of the page.
+ *
+ * It starts hidden and appears only when it repeats nothing and covers nothing: while a row of
+ * calls to action marked `data-pill-hide` (the homepage hero and final call, which carry their own
+ * "Set up an AI agent" button) is on screen it stays away, and on phones it waits for a small
+ * scroll so it never sits on the first screen's text. Without JavaScript it shows on wide screens
+ * of pages that have no such row (`afterHero` false), and never on the homepage.
  */
 import AgentAvatars from './AgentAvatars.astro';
+
+interface Props {
+  /** The page has its own agent buttons in rows marked `data-pill-hide`. */
+  afterHero?: boolean;
+}
+const { afterHero = false } = Astro.props;
 ---
 
-<a class="agent-pill" href="/mcp-setup">
+<a class="agent-pill" href="/mcp-setup" data-state="hidden" data-after-hero={afterHero ? '' : undefined}>
   <AgentAvatars />
   <span class="agent-pill-label">Work with an AI agent</span>
 </a>
+<noscript>
+  <style>
+    @media (min-width: 640px) {
+      .agent-pill:not([data-after-hero])[data-state='hidden'] {
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+        pointer-events: auto;
+      }
+    }
+  </style>
+</noscript>
+
+<script>
+  const pill = document.querySelector<HTMLAnchorElement>('.agent-pill');
+  if (pill) {
+    const rows = [...document.querySelectorAll<HTMLElement>('[data-pill-hide]')];
+    const onScreen = new Set<Element>();
+    const phone = window.matchMedia('(max-width: 639px)');
+
+    const update = () => {
+      // On phones, a little scroll first: the pill would sit on the first screen's text.
+      const scrolled = !phone.matches || window.scrollY > window.innerHeight * 0.35;
+      const show = onScreen.size === 0 && scrolled;
+      pill.dataset.state = show ? 'shown' : 'hidden';
+      pill.toggleAttribute('inert', !show);
+      if (show) pill.removeAttribute('aria-hidden');
+      else pill.setAttribute('aria-hidden', 'true');
+    };
+
+    if (rows.length && 'IntersectionObserver' in window) {
+      const observer = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) onScreen.add(entry.target);
+          else onScreen.delete(entry.target);
+        }
+        update();
+      });
+      rows.forEach((row) => observer.observe(row));
+    }
+    addEventListener('scroll', update, { passive: true });
+    phone.addEventListener('change', update);
+    update();
+  }
+</script>

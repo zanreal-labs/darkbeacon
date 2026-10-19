@@ -592,7 +592,26 @@
   -webkit-backdrop-filter: blur(16px) saturate(140%);
   backdrop-filter: blur(16px) saturate(140%);
   transition: border-color var(--dur-short) var(--ease-out), background-color var(--dur-short) var(--ease-out),
-    box-shadow var(--dur-medium) var(--ease-out);
+    box-shadow var(--dur-medium) var(--ease-out), opacity var(--dur-medium) var(--ease-out),
+    transform var(--dur-medium) var(--ease-out), visibility 0s linear 0s;
+}
+
+/* Hidden until AgentPill's script says otherwise: faded and a little lower, and out of reach. */
+.agent-pill[data-state='hidden'] {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(0.75rem);
+  transition: opacity var(--dur-medium) var(--ease-out), transform var(--dur-medium) var(--ease-out),
+    visibility 0s linear var(--dur-medium);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-pill,
+  .agent-pill[data-state='hidden'] {
+    transition: none;
+    transform: none;
+  }
 }
 
 .agent-pill .agent-avatars {

@@ -210,7 +210,7 @@ const alliance = [
 
 ---
 
-<Layout title={title} description={description} jsonLd={jsonLd}>
+<Layout title={title} description={description} jsonLd={jsonLd} pillAfterHero>
   <main id="main">
     <!-- ───────────── Hero ───────────── -->
     <section class="hero" id="top" aria-labelledby="hero-title" data-stage-host>
@@ -230,7 +230,7 @@ const alliance = [
           Built to replace Wanderer, and it imports from it. Scan, map, fight and plan capital jumps in one app next to
           the client. Every change reaches everyone looking at the map the moment it is made.
         </p>
-        <div class="hero-actions">
+        <div class="hero-actions" data-pill-hide>
           <a class="btn btn--primary btn--lg" href={APP_URL} data-warp><span class="warp-label">Open app</span><Fragment set:html={arrow} /></a>
           <a class="btn btn--lg" href={SELF_HOST_URL}><Fragment set:html={server} />Self-host</a>
           <a class="btn btn--lg btn--agents" href="/mcp-setup"><AgentAvatars class="agent-avatars--sm" />Set up an AI agent</a>
@@ -735,7 +735,7 @@ docker compose up -d`}</code></pre>
         <Logo size={44} class="exit-mark" />
         <h2 id="exit-title" class="transit-title">Light the beacon.</h2>
         <p class="exit-lede">Open the hosted instance, or run your own.</p>
-        <div class="hero-actions">
+        <div class="hero-actions" data-pill-hide>
           <a class="btn btn--primary btn--lg" href={APP_URL} data-warp><span class="warp-label">Open app</span><Fragment set:html={arrow} /></a>
           <a class="btn btn--lg" href={SELF_HOST_URL}><Fragment set:html={server} />Self-host</a>
           <a class="btn btn--lg btn--agents" href="/mcp-setup"><AgentAvatars class="agent-avatars--sm" />Set up an AI agent</a>
