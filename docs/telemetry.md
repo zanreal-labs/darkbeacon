@@ -168,6 +168,14 @@ PostHog project, only when someone sends them (see [docs/support.md](support.md)
 signal that is telemetry is the thumbs up or down (`feedback_rated`): an enum and the kind of page, nothing
 typed.
 
+## The website is separate
+
+The marketing site (`site/`, darkbeacon.space) reports its own web analytics to the same PostHog project,
+with `origin: 'site'` on every event, so filter on `origin` to keep site traffic apart from instance
+telemetry. It runs PostHog in the visitor's browser behind a cookie banner (cookieless until consent), which
+the app never does; see `site/src/scripts/analytics.ts` and the site's /privacy page. Nothing on this page
+changes for instances.
+
 ## Delivery
 
 - Nothing waits on the network: events are queued in memory and sent in batches (20 events or every 30 s) by

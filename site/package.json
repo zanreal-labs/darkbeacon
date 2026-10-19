@@ -14,11 +14,13 @@
   },
   "dependencies": {
     "@astrojs/sitemap": "3.7.4",
+    "@c15t/core": "3.1.0",
     "@fontsource-variable/geist": "5.3.0",
     "@fontsource-variable/geist-mono": "5.3.0",
     "@vercel/analytics": "2.0.1",
     "@vgpu/wgsl": "0.4.0",
     "astro": "7.3.8",
+    "posthog-js": "1.438.12",
     "turndown": "7.2.4",
     "vgpu": "0.4.0"
   },
