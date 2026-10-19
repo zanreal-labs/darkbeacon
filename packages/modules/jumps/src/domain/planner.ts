@@ -111,11 +111,15 @@ export function canJumpFrom(space: JumpSpace, i: number): boolean {
   return !space.zarzakh(i);
 }
 
-/** Lexicographic cost: legs of any kind, then jumps, then stops without a station, then ly, then fatigue. */
-type Cost = [legs: number, jumps: number, misses: number, ly: number, fatigue: number];
+/**
+ * Lexicographic cost: stargates, then legs of any kind, then jumps, then stops without a station,
+ * then ly, then fatigue. Gates come first so a hull with a jump drive never gates where it could
+ * jump: a gate is only for the end of the trip a cyno cannot reach.
+ */
+type Cost = [gates: number, legs: number, jumps: number, misses: number, ly: number, fatigue: number];
 
 function less(a: Cost, b: Cost): boolean {
-  for (let k = 0; k < 5; k++) {
+  for (let k = 0; k < 6; k++) {
     if (a[k]! < b[k]! - 1e-9) return true;
     if (a[k]! > b[k]! + 1e-9) return false;
   }
@@ -169,7 +173,8 @@ const KIND_ANSIBLEX = 2;
 const KINDS: JumpLegKind[] = ['jump', 'gate', 'ansiblex'];
 
 /**
- * Plans a jump route: fewest legs (jumps, gates and Ansiblex bridges), then fewest jumps, then
+ * Plans a jump route: fewest stargates (only where no jump reaches, e.g. into high-sec), then
+ * fewest legs (jumps and Ansiblex bridges), then fewest jumps, then
  * (when asked) fewest stops without an NPC station, then the fewest light years (fuel), then the
  * least fatigue. Gates are taken only after the last jump (`finish`), e.g. into high-sec, so a
  * route is never a long gate trip with jumps sprinkled in. The schedule (waits, fatigue,
@@ -250,7 +255,7 @@ export function planJumpRoute(space: JumpSpace, options: PlanOptions): PlanOutco
   const done = new Uint8Array(states);
   const heap = new Heap();
   const start = origin * 2;
-  best[start] = [0, 0, 0, 0, 0];
+  best[start] = [0, 0, 0, 0, 0, 0];
   heap.push(start, best[start]!);
   const relax = (from: number, to: number, kind: number, cost: Cost) => {
     const current = best[to];
@@ -277,22 +282,23 @@ export function planJumpRoute(space: JumpSpace, options: PlanOptions): PlanOutco
         if (!isCynoTarget(space, v) || avoided(v)) return;
         const miss = options.preferStations && v !== destination && !space.station(v) ? 1 : 0;
         relax(state, v * 2, KIND_JUMP, [
-          cost[0] + 1,
+          cost[0],
           cost[1] + 1,
-          cost[2] + miss,
-          cost[3] + ly,
-          cost[4] + Math.log1p(ly * ship.fatigueMultiplier),
+          cost[2] + 1,
+          cost[3] + miss,
+          cost[4] + ly,
+          cost[5] + Math.log1p(ly * ship.fatigueMultiplier),
         ]);
       });
       for (const v of bridges.get(u) ?? []) {
         if (avoided(v)) continue;
-        relax(state, v * 2, KIND_ANSIBLEX, [cost[0] + 1, cost[1], cost[2], cost[3], cost[4]]);
+        relax(state, v * 2, KIND_ANSIBLEX, [cost[0], cost[1] + 1, cost[2], cost[3], cost[4], cost[5]]);
       }
     }
     if (gates === 'finish') {
       for (const v of space.gateNeighbours(u)) {
         if (!gateOpen(u, v)) continue;
-        relax(state, v * 2 + 1, KIND_GATE, [cost[0] + 1, cost[1], cost[2], cost[3], cost[4]]);
+        relax(state, v * 2 + 1, KIND_GATE, [cost[0] + 1, cost[1] + 1, cost[2], cost[3], cost[4], cost[5]]);
       }
     }
   }

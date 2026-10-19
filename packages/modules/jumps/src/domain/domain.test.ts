@@ -274,6 +274,13 @@ describe('planJumpRoute', () => {
     });
   });
 
+  it('never gates where a cyno can be lit', () => {
+    // S1 to S2 is a gate or a jump: the same number of legs, one jump fewer over the gate.
+    const space = line([{ x: 0 }, { x: 9 }, { x: 18 }], [[1, 2]]);
+    const outcome = plan(space, ARK, 0, 2);
+    expect(outcome.ok && outcome.route.legs.map((l) => l.kind)).toEqual(['jump', 'jump']);
+  });
+
   it('never routes outlaws through high-sec on the way', () => {
     // Black ops without Jump Drive Calibration (4 ly) reach S1, then gate around S2 (high-sec).
     const space = line(

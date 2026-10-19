@@ -362,7 +362,7 @@ function Options({ model, ship, settings, update, ansiblex, avoidSystems, avoidR
         label="Finish over stargates"
         description={
           ship.highSec
-            ? 'Gates after the last jump, e.g. into high-sec.'
+            ? 'Gates after the last jump, only where no jump reaches, e.g. into high-sec.'
             : 'Gates after the last jump, where no cyno can be lit.'
         }
       />
