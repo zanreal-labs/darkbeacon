@@ -4,6 +4,8 @@ import type { StarModel } from './model';
 /** What the planner remembers per browser (a convenience; nothing breaks without it). */
 export interface PlannerSettings {
   ship: string | null;
+  /** The character whose skills and fatigue ESI fills in; null: my main (else the first). */
+  pilot: number | null;
   skills: JumpSkills;
   gates: JumpGateUse;
   preferStations: boolean;
@@ -21,6 +23,7 @@ export interface PlannerSettings {
 
 export const DEFAULT_SETTINGS: PlannerSettings = {
   ship: null,
+  pilot: null,
   skills: { jdc: 5, jfc: 4, jf: 4 },
   gates: 'finish',
   preferStations: false,
@@ -45,6 +48,7 @@ export function loadSettings(): PlannerSettings {
       ...DEFAULT_SETTINGS,
       ...parsed,
       skills: { ...DEFAULT_SETTINGS.skills, ...parsed.skills },
+      pilot: typeof parsed.pilot === 'number' ? parsed.pilot : null,
       recent: Array.isArray(parsed.recent) ? parsed.recent.filter((n) => typeof n === 'string') : [],
     };
   } catch {

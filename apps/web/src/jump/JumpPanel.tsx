@@ -10,6 +10,7 @@ import {
   ChevronUp,
   Copy,
   Navigation,
+  RefreshCw,
   SlidersHorizontal,
   X,
 } from 'lucide-react';
@@ -24,6 +25,7 @@ import {
   type WaypointRequest,
 } from '@darkbeacon/shared';
 import { api, ApiError } from '../lib/api';
+import { hereForReturn, relinkHref } from '../lib/scope-health';
 import { useMe } from '../lib/session';
 import {
   Button,
@@ -54,6 +56,7 @@ import {
   routeText,
 } from './format';
 import { searchSystems, securityColor, securityLabel, type StarModel } from './model';
+import type { PilotFill } from './pilot';
 import type { AnsiblexParse, PlannerSettings } from './settings';
 import { rankSystems, whyLabel, type End, type Suggestion, type SuggestionWhy } from './suggest';
 import styles from './jump.module.css';
@@ -80,8 +83,11 @@ export interface JumpPanelProps {
   meta: JumpMetaDto;
   model: StarModel;
   ship: JumpShipDto;
+  /** The settings as the planner uses them: skills and fatigue from ESI where they win. */
   settings: PlannerSettings;
   update(change: Partial<PlannerSettings>): void;
+  /** The pilot whose skills and fatigue ESI fills in. */
+  pilot: PilotFill;
   origin: number | null;
   destination: number | null;
   setOrigin(i: number | null): void;
@@ -258,6 +264,8 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
             </div>
           </div>
 
+          <Pilot {...props} />
+
           <div className={styles.skills}>
             <Field label="Calibration">
               <Select
@@ -288,9 +296,18 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
           </div>
 
           <p className={styles.skillsHint}>
-            Jump Drive Calibration, Jump Fuel Conservation
-            {ship.hull === 'jump_freighter' ? ' and Jump Freighters' : ''}.
+            {props.pilot.skills && props.pilot.pilot ? (
+              `From ESI · ${props.pilot.pilot.name}`
+            ) : props.pilot.answer?.skills ? (
+              'Set by hand · refresh to read ESI again'
+            ) : (
+              <>
+                Jump Drive Calibration, Jump Fuel Conservation
+                {ship.hull === 'jump_freighter' ? ' and Jump Freighters' : ''}.
+              </>
+            )}
           </p>
+          <PilotHint {...props} />
 
           <button
             type="button"
@@ -325,6 +342,7 @@ function optionsSummary(settings: PlannerSettings, props: PanelState): string {
   if (settings.gates === 'never') parts.push('no gates');
   if (settings.preferStations) parts.push('stations');
   if (settings.outlaw) parts.push('outlaw');
+  if (settings.fatigueNow > 0) parts.push(`fatigue now ${formatMinutes(settings.fatigueNow)}`);
   if (settings.maxFatigue !== null) parts.push(`fatigue ≤ ${formatMinutes(settings.maxFatigue)}`);
   const avoided = props.avoidSystems.size + props.avoidRegions.length;
   if (avoided > 0) parts.push(`${avoided} avoided`);
@@ -338,7 +356,71 @@ interface AvoidOption extends PickerOption {
   name: string;
 }
 
-function Options({ model, ship, settings, update, ansiblex, avoidSystems, avoidRegions }: PanelState) {
+/** Whose skills and fatigue ESI fills in, and a way to read them again. */
+function Pilot({ pilot: fill, update }: PanelState) {
+  const { pilot, characters } = fill;
+  if (!pilot) return null;
+  return (
+    <div className={styles.pilot}>
+      <Field label="Pilot">
+        <Select
+          size="sm"
+          value={String(pilot.id)}
+          onValueChange={(v) => update({ pilot: Number(v) })}
+          options={characters.map((c) => ({ value: String(c.id), label: c.name }))}
+        />
+      </Field>
+      <IconButton
+        size="sm"
+        label="Read skills and fatigue from ESI again"
+        icon={<RefreshCw />}
+        loading={fill.fetching}
+        onClick={fill.refresh}
+      />
+    </div>
+  );
+}
+
+/** Why ESI did not fill the skills and fatigue, with what to do about it. */
+function PilotHint({ pilot: fill }: PanelState) {
+  const { pilot, answer } = fill;
+  if (!pilot) return null;
+  const allow = relinkHref(hereForReturn(), [...new Set([...(pilot.extras ?? []), 'jumps' as const])]);
+  if (!pilot.tokenValid)
+    return (
+      <p className={styles.skillsHint}>
+        The EVE login of {pilot.name} expired. <a href={allow}>Link it again</a> to fill skills and fatigue.
+      </p>
+    );
+  if (answer && answer.missingScopes.length > 0)
+    return (
+      <p className={styles.skillsHint}>
+        <a href={allow}>Allow skills and jump fatigue</a> for {pilot.name} to fill these from EVE.
+      </p>
+    );
+  const problem =
+    answer?.problem ?? (fill.error ? errorText(fill.error, 'Skills and fatigue could not be read') : null);
+  return problem ? (
+    <p className={styles.skillsHint} role="status">
+      {problem}
+    </p>
+  ) : null;
+}
+
+function errorText(error: Error, fallback: string): string {
+  return error instanceof ApiError ? error.message : fallback;
+}
+
+function Options({
+  model,
+  ship,
+  settings,
+  update,
+  ansiblex,
+  avoidSystems,
+  avoidRegions,
+  pilot: fill,
+}: PanelState) {
   const searchAvoid = async (text: string) => {
     const q = text.trim().toLowerCase();
     const regions: AvoidOption[] = model.regionNames
@@ -386,7 +468,14 @@ function Options({ model, ship, settings, update, ansiblex, avoidSystems, avoidR
             options={FATIGUE_CAPS}
           />
         </Field>
-        <Field label="Fatigue now" hint="Minutes">
+        <Field
+          label="Fatigue now"
+          hint={
+            fill.fatigueExpiresAt !== undefined && fill.pilot
+              ? `Minutes, from ESI · ${fill.pilot.name}`
+              : 'Minutes'
+          }
+        >
           <Input
             type="number"
             inputMode="numeric"

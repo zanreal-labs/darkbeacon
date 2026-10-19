@@ -232,6 +232,13 @@
   }
 }
 
+.pilot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--dbk-space-2);
+}
+
 .skills {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
