@@ -1,0 +1,309 @@
+---
+/**
+ * The cookie banner and the cookie settings dialog. Plain markup, hidden until scripts/consent.ts
+ * (c15t) decides a choice is needed, which happens after the first paint. Without JavaScript
+ * nothing optional ever runs, so there is nothing to ask and the banner never shows.
+ *
+ * Bottom left and small, so it stays clear of the "Work with an AI agent" pill at the bottom
+ * centre; on screens too narrow for both side by side, the pill waits until the banner is
+ * answered. Accept, Reject and Customise look the same: no choice is pushed.
+ *
+ * Google Analytics 4, when PUBLIC_GA_MEASUREMENT_ID is set at build time (a `G-...` id; the
+ * Vercel project's environment), runs under Google Consent Mode v2 in advanced mode: the
+ * consent defaults (everything denied) are set before the tag can load, a choice already stored
+ * by c15t is applied right after them, and gtag.js itself loads when the browser is idle after
+ * the first paint. While `analytics_storage` is denied, GA sends cookieless pings only; once
+ * measurement is accepted it sets its `_ga` cookies. The ad signals stay denied: nothing on the
+ * site advertises. Without the variable (or with a malformed one) there is no Google code at all.
+ */
+import { GA_MEASUREMENT_ID as gaId } from '../config';
+
+const tools = gaId ? 'PostHog and Google Analytics' : 'PostHog';
+---
+
+<div class="consent" data-consent>
+  <section class="consent-banner" data-consent-banner hidden aria-labelledby="consent-title">
+    <h2 id="consent-title" class="consent-title">Cookies</h2>
+    <p class="consent-text">
+      We count visits without cookies. With your OK, our analytics ({tools}) also keep an id in your browser, so we can
+      tell returning visitors apart. <a href="/privacy">Privacy notice</a>
+    </p>
+    <div class="consent-actions">
+      <button type="button" class="btn btn--sm" data-consent-action="accept">Accept</button>
+      <button type="button" class="btn btn--sm" data-consent-action="reject">Reject</button>
+      <button type="button" class="btn btn--sm" data-consent-action="customise">Customise</button>
+    </div>
+  </section>
+
+  <dialog class="consent-dialog" data-consent-dialog aria-labelledby="consent-dialog-title">
+    <h2 id="consent-dialog-title" class="consent-title">Cookie settings</h2>
+    <p class="consent-text">
+      Choose what this site may keep in your browser. You can change it any time from "Cookie settings" at the bottom of
+      every page. <a href="/privacy">Privacy notice</a>
+    </p>
+    <ul class="consent-categories">
+      <li>
+        <div class="consent-category-head">
+          <span class="consent-category-name">Necessary</span>
+          <span class="consent-always">Always on</span>
+        </div>
+        <p>Remembers the choice you make here (a <span class="mono">c15t</span> cookie and local storage entry).</p>
+      </li>
+      <li>
+        <label class="consent-category-head">
+          <span class="consent-category-name">Measurement</span>
+          <input type="checkbox" name="measurement" role="switch" class="consent-switch" />
+        </label>
+        <p>
+          {tools} keep a random id (<span class="mono">ph_*</span>{gaId && <>, <span class="mono">_ga*</span></>} cookies and
+          local storage), so visits and returning visitors are counted properly. Off, visits are still counted, without
+          cookies or storage.
+        </p>
+      </li>
+    </ul>
+    <div class="consent-actions">
+      <button type="button" class="btn btn--sm" data-consent-action="reject">Reject all</button>
+      <button type="button" class="btn btn--sm" data-consent-action="accept">Accept all</button>
+      <button type="button" class="btn btn--sm" data-consent-action="save">Save choices</button>
+    </div>
+  </dialog>
+</div>
+
+{
+  gaId && (
+    <script is:inline define:vars={{ gaId }}>
+      // Consent Mode v2 defaults, before anything can measure. Browsers sending Do Not Track or
+      // Global Privacy Control get no Google tag at all (as for PostHog, scripts/analytics.ts).
+      (function () {
+        var n = navigator;
+        var signal = [n.doNotTrack, n.msDoNotTrack, window.doNotTrack, n.globalPrivacyControl].some(function (v) {
+          return v === '1' || v === 'yes' || v === true;
+        });
+        if (signal) return;
+        window.dataLayer = window.dataLayer || [];
+        window.gtag = function () {
+          window.dataLayer.push(arguments);
+        };
+        gtag('consent', 'default', {
+          ad_storage: 'denied',
+          ad_user_data: 'denied',
+          ad_personalization: 'denied',
+          analytics_storage: 'denied',
+          functionality_storage: 'granted',
+          security_storage: 'granted',
+          personalization_storage: 'denied',
+          wait_for_update: 500,
+        });
+        gtag('set', 'ads_data_redaction', true);
+        // A choice c15t already stored (scripts/consent.ts keeps it in step from here on).
+        try {
+          var stored = JSON.parse(localStorage.getItem('c15t') || 'null');
+          var measurement = stored && stored.categories && stored.categories.measurement;
+          if (measurement && measurement.value === true) gtag('consent', 'update', { analytics_storage: 'granted' });
+        } catch (e) {}
+        gtag('js', new Date());
+        gtag('config', gaId);
+        var load = function () {
+          var s = document.createElement('script');
+          s.async = true;
+          s.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(gaId);
+          document.head.appendChild(s);
+        };
+        var idle = function () {
+          if ('requestIdleCallback' in window) requestIdleCallback(load, { timeout: 3000 });
+          else setTimeout(load, 1500);
+        };
+        if (document.readyState === 'complete') idle();
+        else addEventListener('load', idle, { once: true });
+      })();
+    </script>
+  )
+}
+
+<script>
+  import '../scripts/consent';
+</script>
+
+<style>
+  .consent-banner {
+    position: fixed;
+    left: max(1rem, env(safe-area-inset-left));
+    bottom: max(1rem, env(safe-area-inset-bottom));
+    z-index: 40;
+    display: grid;
+    gap: var(--space-sm);
+    width: min(22rem, calc(100vw - 2rem));
+    padding: var(--space-md);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius);
+    background: rgb(10 11 14 / 0.9);
+    box-shadow: 0 12px 40px -12px rgb(0 0 0 / 0.9);
+    color: var(--ink);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    backdrop-filter: blur(16px) saturate(140%);
+  }
+
+  .consent-banner[hidden] {
+    display: none;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .consent-banner:not([hidden]) {
+      animation: consent-in var(--dur-medium) var(--ease-out);
+    }
+  }
+
+  @keyframes consent-in {
+    from {
+      opacity: 0;
+      transform: translateY(0.5rem);
+    }
+  }
+
+  .consent-title {
+    color: var(--ink);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    letter-spacing: -0.005em;
+  }
+
+  .consent-text,
+  .consent-categories p {
+    color: var(--ink-muted);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+  }
+
+  .consent-text a {
+    color: var(--ink);
+    text-underline-offset: 0.2em;
+  }
+
+  .consent-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-xs);
+  }
+
+  .consent-actions .btn {
+    padding-inline: 0.5rem;
+  }
+
+  .consent-dialog {
+    width: min(30rem, calc(100vw - 2rem));
+    max-height: calc(100dvh - 2rem);
+    margin: auto;
+    padding: var(--space-lg);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius);
+    background: var(--bg-raised);
+    box-shadow: 0 24px 80px -20px rgb(0 0 0 / 0.95);
+    color: var(--ink);
+    overflow: auto;
+  }
+
+  .consent-dialog[open] {
+    display: grid;
+    gap: var(--space-md);
+  }
+
+  .consent-dialog::backdrop {
+    background: rgb(0 0 0 / 0.6);
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+  }
+
+  .consent-categories {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    list-style: none;
+  }
+
+  .consent-categories li {
+    display: grid;
+    gap: var(--space-2xs);
+    padding: var(--space-md);
+  }
+
+  .consent-categories li + li {
+    border-top: 1px solid var(--line);
+  }
+
+  .consent-category-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+  }
+
+  label.consent-category-head {
+    cursor: pointer;
+  }
+
+  .consent-category-name {
+    font-size: var(--text-sm);
+    font-weight: 500;
+  }
+
+  .consent-always {
+    color: var(--ink-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .consent-switch {
+    appearance: none;
+    position: relative;
+    flex: none;
+    width: 2.25rem;
+    height: 1.25rem;
+    margin: 0;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-pill);
+    background: rgb(255 255 255 / 0.06);
+    cursor: pointer;
+    transition: background-color var(--dur-short) var(--ease-out), border-color var(--dur-short) var(--ease-out);
+  }
+
+  .consent-switch::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0.1875rem;
+    width: 0.8125rem;
+    height: 0.8125rem;
+    border-radius: 50%;
+    background: var(--ink-muted);
+    translate: 0 -50%;
+    transition: translate var(--dur-short) var(--ease-out), background-color var(--dur-short) var(--ease-out);
+  }
+
+  .consent-switch:checked {
+    border-color: var(--beacon-deep);
+    background: rgb(95 224 238 / 0.25);
+  }
+
+  .consent-switch:checked::after {
+    background: var(--beacon);
+    translate: 1rem -50%;
+  }
+
+  .consent-switch:focus-visible {
+    outline: 2px solid var(--beacon);
+    outline-offset: 2px;
+  }
+
+  /* Where the banner and the centred agent pill would meet, the pill waits for the answer. */
+  @media (max-width: 1099px) {
+    :global(html[data-consent-open] .agent-pill) {
+      visibility: hidden;
+      opacity: 0;
+      pointer-events: none;
+    }
+  }
+</style>

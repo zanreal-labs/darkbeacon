@@ -54,7 +54,9 @@ signatures, bookmark templates, search terms). This is enforced, not just intend
   (EVE ids are all larger, so a character or system id cannot pass even as a number).
 - Browser events never go to PostHog directly: the web app posts them to this instance (`POST /api/telemetry/e`),
   which checks them against the same allow-list and forwards them from the server. No PostHog script, cookie or
-  storage is ever in the browser, and the browser's IP and user agent never reach PostHog.
+  storage is ever in the browser, and the browser's IP and user agent never reach PostHog. (Telemetry never
+  puts third-party code in the browser. The one way an instance does is Google Analytics, which only its
+  operator can turn on: see "Google Analytics, operator opt-in" below.)
 - Events are anonymous in PostHog: `$process_person_profile: false` (no person profiles), `$geoip_disable: true`
   (no GeoIP lookup) and `$ip: null`; a last filter in the sender strips `$ip`, GeoIP and `$set` properties.
 
@@ -166,6 +168,14 @@ PostHog project, only when someone sends them (see [docs/support.md](support.md)
 signal that is telemetry is the thumbs up or down (`feedback_rated`): an enum and the kind of page, nothing
 typed.
 
+## The website is separate
+
+The marketing site (`site/`, darkbeacon.space) reports its own web analytics to the same PostHog project,
+with `origin: 'site'` on every event, so filter on `origin` to keep site traffic apart from instance
+telemetry. It runs PostHog in the visitor's browser behind a cookie banner (cookieless until consent), which
+the app never does; see `site/src/scripts/analytics.ts` and the site's /privacy page. Nothing on this page
+changes for instances.
+
 ## Delivery
 
 - Nothing waits on the network: events are queued in memory and sent in batches (20 events or every 30 s) by
@@ -185,9 +195,34 @@ typed.
 - **Demo instances send, marked `demo: true`**: previews are a large share of first contacts and say which
   features people try; the flag keeps them out of real usage numbers.
 - **Through the server**: browser events are forwarded by the instance, so the allow-list and the stripping are
-  guaranteed in one place, ad blockers do not skew the numbers, and no third-party code runs in the app.
+  guaranteed in one place, ad blockers do not skew the numbers, and telemetry runs no third-party code in the
+  app.
 - **Counts as buckets** where an exact number could single out a group (systems, signatures, webhooks), exact
   only where the number is the point (accounts, characters, maps, actives).
+
+## Google Analytics, operator opt-in
+
+Separate from telemetry, and off on every instance by default: no third-party code runs in the browser unless
+the instance operator sets `GA_MEASUREMENT_ID` (a GA4 measurement id, `G-...`) in the container's environment.
+The hosted app at app.darkbeacon.space does, to count how many people use it; self-hosted instances are
+unaffected unless their operator chooses to.
+
+- It is read at request time (no rebuild; a restart picks up a change). Anything that is not a `G-` id is
+  ignored. Unset, the page has no Google code at all.
+- With it, the app shows a consent banner (c15t) and "Cookie settings" in the help menu. Google Consent Mode v2
+  in advanced mode: every signal starts denied, so until someone accepts measurement Google Analytics sets no
+  cookie and only receives cookieless pings; accepting allows its `_ga` cookies; withdrawing deletes them and
+  reloads. A stored choice is applied before gtag.js loads. The ad signals always stay denied.
+- Browsers sending Do Not Track or Global Privacy Control get no Google tag at all.
+- Page views are sent on every route change with the address reduced to its route: `/m/[map]`, `/p/[link]`,
+  no query strings, no page titles, and another site as a referrer only by its origin. No user ids, character
+  names, map names or anything typed are sent. The code is in `apps/web/src/analytics/`.
+- In the GA4 web stream, turn **Enhanced measurement** off (the app sends its own page views). Its automatic
+  events read the real address and page: site search would send a `q=` value as `search_term`, outbound clicks
+  and file downloads send link addresses, form interactions send form names, and history-based page views
+  would count route changes twice.
+- Operators who turn it on are the controller for it and should say so in their own privacy notice; the
+  maintainers' notice for the hosted app and darkbeacon.space is at https://darkbeacon.space/privacy.
 
 ## For the maintainers: setting up PostHog
 

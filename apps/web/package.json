@@ -11,6 +11,7 @@
     "typecheck": "next typegen && tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
+    "@c15t/core": "3.1.0",
     "@darkbeacon/plugin-sdk": "workspace:*",
     "@darkbeacon/shared": "workspace:*",
     "@darkbeacon/theme-sdk": "workspace:*",

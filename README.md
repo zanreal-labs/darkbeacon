@@ -150,6 +150,10 @@ signatures panel opened). Never names, ids, systems, maps, IPs or anything anyon
 random id and an account an HMAC under a secret that never leaves your database. Browser events go through
 your server, which checks them against the allow-list; PostHog never runs in the browser.
 
+Google Analytics is a separate, opt-in switch for operators: off unless you set `GA_MEASUREMENT_ID`, and then
+behind a consent banner (Consent Mode, cookieless until accepted). The hosted app uses it; see
+[docs/telemetry.md](docs/telemetry.md#google-analytics-operator-opt-in).
+
 Turn it off with `TELEMETRY=off` or `DO_NOT_TRACK=1`, or with the switch in Admin > Instance, where you can
 also see every payload that was sent. Development and test servers never send. The exact field list, the
 reasoning and the PostHog setup are in [docs/telemetry.md](docs/telemetry.md).

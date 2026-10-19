@@ -1,0 +1,87 @@
+/* The consent banner: small, bottom left, clear of the rail on wide screens and of the tab bar
+   on phones; above the map, below dialogs and toasts. */
+.banner {
+  position: fixed;
+  z-index: 60;
+  left: calc(56px + var(--dbk-space-3));
+  bottom: calc(var(--dbk-space-3) + env(safe-area-inset-bottom, 0px));
+  display: grid;
+  gap: var(--dbk-space-2);
+  width: min(360px, calc(100vw - 2 * var(--dbk-space-3)));
+  padding: var(--dbk-space-3);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius-large);
+  background: var(--dbk-color-surface-raised);
+  box-shadow: var(--dbk-shadow-medium);
+  color: var(--dbk-color-text);
+  animation: rise var(--dbk-motion-normal) var(--dbk-motion-easing);
+}
+
+@media (max-width: 767px) {
+  .banner {
+    left: var(--dbk-space-3);
+    /* Above the bottom tab bar. */
+    bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .banner {
+    animation: none;
+  }
+}
+
+.title {
+  margin: 0;
+  font-size: var(--dbk-font-size);
+  font-weight: 600;
+}
+
+.text {
+  margin: 0;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+  line-height: 1.5;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--dbk-space-2);
+}
+
+.categories {
+  display: grid;
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius-large);
+}
+
+.category {
+  display: grid;
+  gap: var(--dbk-space-1);
+  padding: var(--dbk-space-3);
+}
+
+.category + .category {
+  border-top: 1px solid var(--dbk-color-border);
+}
+
+.categoryHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dbk-space-3);
+  font-weight: 500;
+}
+
+.always {
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-small);
+}
