@@ -62,9 +62,16 @@ const storage = [
       <section aria-labelledby="scope">
         <h2 id="scope">What this covers</h2>
         <p>
-          This notice covers the website at <span class="mono">darkbeacon.space</span>. The Darkbeacon app (the hosted instance
-          at <span class="mono">app.darkbeacon.space</span> and self-hosted instances) runs no analytics script in your
-          browser; what an instance reports is described in <a href={TELEMETRY_URL}>docs/telemetry.md</a>.
+          This notice covers the website at <span class="mono">darkbeacon.space</span>. What a Darkbeacon instance reports
+          about its own use, without names or ids, is described in <a href={TELEMETRY_URL}>docs/telemetry.md</a>.
+        </p>
+        <p>
+          The hosted app at <span class="mono">app.darkbeacon.space</span> also uses Google Analytics 4, in a separate
+          property, to count how many people use it. It asks for consent with its own banner and works the same way as
+          described for this site below: cookieless pings until you accept, the <span class="mono">_ga</span> cookies only
+          after, no user ids, character names or other personal details sent to Google, and Do Not Track or Global Privacy
+          Control means no Google tag at all. Self-hosted instances run no analytics in your browser unless their operator
+          turns Google Analytics on.
         </p>
       </section>
 
