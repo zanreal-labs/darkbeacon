@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { bridgeFuel, fatigueAfterJump, jumpFuel, jumpRange, waitForFatigueCap } from './formulas.js';
 import { hullOfGroup } from './hulls.js';
+import { JUMP_SKILL_TYPE_IDS, jumpSkillsFrom } from './pilot.js';
 import { canJumpFrom, isCynoTarget, planJumpRoute, type PlanOptions } from './planner.js';
 import { FLAG_POCHVEN, FLAG_STATION, FLAG_ZARZAKH, JumpSpace, type JumpShipData } from './space.js';
 
@@ -317,5 +318,22 @@ describe('planJumpRoute', () => {
     expect(outcome.ok && outcome.route.legs[0]!.bridgeFuel).toBe(600); // 1e8 * 1e-9 * 3000 * 4 * 0.5
     const none = plan(chain, ARCHON, 0, 1, { bridgeMassKg: 1e8 });
     expect(none.ok && none.route.bridgeFuel).toBeNull();
+  });
+});
+
+describe('jump skills from ESI', () => {
+  it('reads the three skills by type id, untrained as 0 and levels kept within 0-5', () => {
+    expect(JUMP_SKILL_TYPE_IDS).toEqual({ jdc: 21611, jfc: 21610, jf: 29029 });
+    expect(jumpSkillsFrom(new Map())).toEqual({ jdc: 0, jfc: 0, jf: 0 });
+    expect(
+      jumpSkillsFrom(
+        new Map([
+          [21611, 5],
+          [21610, 4],
+          [29029, 9],
+          [3300, 5],
+        ]),
+      ),
+    ).toEqual({ jdc: 5, jfc: 4, jf: 5 });
   });
 });

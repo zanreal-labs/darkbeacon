@@ -38,7 +38,7 @@ export const CharacterDto = z.object({
    * linking it again adds them. Absent when unknown (characters without an EVE grant).
    */
   missingScopes: z.array(z.string()).optional(),
-  /** Opt-in scopes the grant holds (`assets`, `wallet`, `structures`). */
+  /** Opt-in scopes the grant holds (`assets`, `wallet`, `structures`, `jumps`). */
   extras: z.array(OptionalEveScope).optional(),
 });
 export type CharacterDto = z.infer<typeof CharacterDto>;

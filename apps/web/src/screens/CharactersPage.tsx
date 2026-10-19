@@ -11,6 +11,7 @@ import {
   Network,
   Plus,
   RefreshCw,
+  Rocket,
   Star,
   Unlink,
   UserRound,
@@ -347,6 +348,11 @@ function CharactersCard({ me, tracking }: { me: MeDto; tracking: MyTrackingDto |
                               {!extras.includes('structures') && (
                                 <MenuItem icon={<Network />} href={relink(['structures'])}>
                                   Find jump bridges it may use (structures)…
+                                </MenuItem>
+                              )}
+                              {!extras.includes('jumps') && (
+                                <MenuItem icon={<Rocket />} href={relink(['jumps'])}>
+                                  Fill the jump planner (skills and jump fatigue)…
                                 </MenuItem>
                               )}
                               {extras.length > 0 && (
