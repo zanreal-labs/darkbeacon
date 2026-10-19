@@ -1,0 +1,12 @@
+---
+/**
+ * The floating "Work with an AI agent" pill at the bottom of every page but /mcp-setup itself.
+ * Fixed, so it never moves the layout; the footer leaves room for it at the end of the page.
+ */
+import AgentAvatars from './AgentAvatars.astro';
+---
+
+<a class="agent-pill" href="/mcp-setup">
+  <AgentAvatars />
+  <span class="agent-pill-label">Work with an AI agent</span>
+</a>

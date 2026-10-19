@@ -486,18 +486,29 @@
   font-size: var(--text-sm);
 }
 
-/* Homepage: the link from the AI agents section to /mcp-setup. */
+/* Homepage: the secondary link from the AI agents section to /mcp-setup. */
 .agents-cta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-md);
   margin-top: var(--space-xl);
 }
 
-.agents-cta p {
-  color: var(--ink-muted);
+.more-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--beacon);
   font-size: var(--text-sm);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.more-link:hover {
+  text-decoration: underline;
+}
+
+.more-link svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  flex: none;
 }
 
 @media (max-width: 639px) {
@@ -509,5 +520,115 @@
   .mcp .code pre {
     padding: 0.9rem;
     font-size: 0.75rem;
+  }
+}
+
+/* ────────────────────────── AI client marks + floating pill ────────────────────────── */
+.agent-avatars {
+  --size: 2.5rem;
+  --ring: var(--bg);
+  display: inline-flex;
+  flex: none;
+}
+
+.agent-avatar {
+  display: grid;
+  place-items: center;
+  width: var(--size);
+  height: var(--size);
+  border-radius: 50%;
+  /* The ring in the colour behind separates the overlapping circles; the inner hairline keeps a
+     black mark visible on the black page. */
+  box-shadow: 0 0 0 2px var(--ring), inset 0 0 0 1px rgb(255 255 255 / 0.16);
+  background: var(--mark-bg);
+  color: var(--mark-fg);
+}
+
+.agent-avatar + .agent-avatar {
+  margin-left: calc(var(--size) * -0.3);
+}
+
+.agent-avatar svg {
+  width: 52%;
+  height: 52%;
+}
+
+.agent-avatars--sm {
+  --size: 1.75rem;
+  --ring: #15171b;
+  margin-left: -0.6rem;
+}
+
+.btn--agents {
+  padding-left: 1.1rem;
+  gap: 0.7rem;
+}
+
+.btn--agents .agent-avatars--sm {
+  margin-left: 0;
+}
+
+.agent-pill {
+  position: fixed;
+  left: 50%;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: calc(100vw - 2rem);
+  padding: 0.3rem 1.25rem 0.3rem 0.3rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: rgb(10 11 14 / 0.82);
+  box-shadow: 0 12px 40px -12px rgb(0 0 0 / 0.9);
+  color: var(--ink);
+  font-size: var(--text-md);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  white-space: nowrap;
+  translate: -50% 0;
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+  transition: border-color var(--dur-short) var(--ease-out), background-color var(--dur-short) var(--ease-out),
+    box-shadow var(--dur-medium) var(--ease-out);
+}
+
+.agent-pill .agent-avatars {
+  --ring: #0a0b0e;
+}
+
+.agent-pill:hover {
+  border-color: rgb(95 224 238 / 0.45);
+  background: rgb(14 18 22 / 0.9);
+  box-shadow: 0 12px 40px -12px rgb(0 0 0 / 0.9), 0 0 28px -10px rgb(95 224 238 / 0.5);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .agent-pill .agent-avatar {
+    transition: translate var(--dur-medium) var(--ease-out);
+  }
+
+  .agent-pill:hover .agent-avatar:nth-child(1) { translate: -3px 0; }
+  .agent-pill:hover .agent-avatar:nth-child(2) { translate: -1px 0; }
+  .agent-pill:hover .agent-avatar:nth-child(3) { translate: 1px 0; }
+  .agent-pill:hover .agent-avatar:nth-child(4) { translate: 3px 0; }
+}
+
+/* Room at the end of the page so the pill never sits on the last lines of the footer. */
+.has-agent-pill .footer {
+  padding-bottom: calc(var(--space-xl) + 4.5rem + env(safe-area-inset-bottom));
+}
+
+@media (max-width: 639px) {
+  .agent-pill {
+    gap: 0.6rem;
+    padding-right: 1rem;
+    font-size: var(--text-sm);
+  }
+
+  .agent-pill .agent-avatars {
+    --size: 2rem;
   }
 }

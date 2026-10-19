@@ -8,6 +8,7 @@ import sansFont from '@fontsource-variable/geist/files/geist-latin-wght-normal.w
 import Analytics from '@vercel/analytics/astro';
 import Footer from '../components/Footer.astro';
 import Nav from '../components/Nav.astro';
+import AgentPill from '../components/AgentPill.astro';
 import { SITE_URL } from '../config';
 
 interface Props {
@@ -35,6 +36,9 @@ const ogImage = new URL(ogPath, SITE_URL + '/').href;
 // Web Analytics only reports from Vercel, so it is only on the page in Vercel builds: local dev and
 // local production builds carry no script and make no requests to /_vercel/insights.
 const analytics = process.env.VERCEL === '1';
+
+// The agent pill points to /mcp-setup, so that page goes without it.
+const agentPill = path !== '/mcp-setup';
 ---
 
 <!doctype html>
@@ -81,11 +85,12 @@ const analytics = process.env.VERCEL === '1';
     <meta name="twitter:image:alt" content={ogImageAlt} />
     {jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}
   </head>
-  <body>
+  <body class:list={{ 'has-agent-pill': agentPill }}>
     <a class="skip" href="#main">Skip to content</a>
     <Nav />
     <slot />
     <Footer />
+    {agentPill && <AgentPill />}
     <script>
       import '../gpu/boot';
       import '../scripts/warp';

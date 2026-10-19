@@ -5,6 +5,7 @@ import Logo from '../components/Logo.astro';
 import { arrow, github, server } from '../components/icons';
 import Shot from '../components/Shot.astro';
 import Stage from '../components/Stage.astro';
+import AgentAvatars from '../components/AgentAvatars.astro';
 import { APP_URL, COMPANY_URL, ISSUES_URL, REPO_URL, SELF_HOST_URL, SITE_URL } from '../config';
 
 const title = 'Darkbeacon · the live wormhole mapper for EVE Online';
@@ -232,6 +233,7 @@ const alliance = [
         <div class="hero-actions">
           <a class="btn btn--primary btn--lg" href={APP_URL} data-warp><span class="warp-label">Open app</span><Fragment set:html={arrow} /></a>
           <a class="btn btn--lg" href={SELF_HOST_URL}><Fragment set:html={server} />Self-host</a>
+          <a class="btn btn--lg btn--agents" href="/mcp-setup"><AgentAvatars class="agent-avatars--sm" />Set up an AI agent</a>
         </div>
         <p class="hero-beta" id="beta">
           <span class="beta beta--inline">Beta</span>
@@ -563,10 +565,9 @@ const alliance = [
         <ul class="agent-rules">
           {agentRules.map((rule) => <li>{rule}</li>)}
         </ul>
-        <div class="agents-cta">
-          <a class="btn" href="/mcp-setup">Set it up<Fragment set:html={arrow} /></a>
-          <p>Steps for Claude, Claude Code, VS Code and Cursor, and a prompt your agent can follow on its own.</p>
-        </div>
+        <p class="agents-cta">
+          <a class="more-link" href="/mcp-setup">How to connect Claude, Claude Code, VS Code or Cursor<Fragment set:html={arrow} /></a>
+        </p>
       </div>
     </section>
 
@@ -737,6 +738,7 @@ docker compose up -d`}</code></pre>
         <div class="hero-actions">
           <a class="btn btn--primary btn--lg" href={APP_URL} data-warp><span class="warp-label">Open app</span><Fragment set:html={arrow} /></a>
           <a class="btn btn--lg" href={SELF_HOST_URL}><Fragment set:html={server} />Self-host</a>
+          <a class="btn btn--lg btn--agents" href="/mcp-setup"><AgentAvatars class="agent-avatars--sm" />Set up an AI agent</a>
         </div>
       </div>
     </section>
