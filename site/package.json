@@ -19,6 +19,12 @@
     "@vercel/analytics": "2.0.1",
     "@vgpu/wgsl": "0.4.0",
     "astro": "7.3.8",
+    "turndown": "7.2.4",
     "vgpu": "0.4.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.10",
+    "@types/turndown": "5.0.6",
+    "typescript": "6.0.3"
   }
 }

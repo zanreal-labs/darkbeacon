@@ -1,0 +1,69 @@
+---
+/**
+ * Not found. Astro writes it as 404.html, which Vercel serves with status 404 for any path that
+ * matches no file. Kept out of search (noindex), the sitemap, the structured data and the
+ * Markdown twins (Layout's `noindex`, astro.config.ts, src/seo/llms.ts).
+ */
+import Layout from '../layouts/Layout.astro';
+import Stage from '../components/Stage.astro';
+import { arrow, github } from '../components/icons';
+import { APP_URL, REPO_URL } from '../config';
+
+// "Features" goes to its own page where the site has one, otherwise to the homepage section.
+const featuresHref = Object.keys(import.meta.glob('./features.astro')).length ? '/features' : '/#scan';
+
+const title = 'Page not found · Darkbeacon';
+const description = 'This page does not exist, or it moved. Head home, open the app, or find what you need below.';
+---
+
+<Layout title={title} description={description} noindex pillAfterHero>
+  <main id="main" class="lost">
+    <section class="sponsor-hero lost-hero" aria-labelledby="lost-title" data-stage-host>
+      <Stage scene="transit" mood="exit" still="/media/transit-exit" class="sponsor-stage" eager />
+      <div class="sponsor-hero-inner container">
+        <p class="eyebrow"><b>404</b> Signature lost</p>
+        <h1 id="lost-title" class="sponsor-title">This hole collapsed.</h1>
+        <p class="sponsor-lede">
+          The link you followed leads nowhere: it is old, mistyped, or the page moved. Nothing to scan here. Take one
+          of these exits.
+        </p>
+        <p class="lost-sig mono">
+          <span>NOT-404</span><span>Wormhole</span><span>K162</span><span class="lost-sig-dest">Leads nowhere</span>
+        </p>
+        <div class="sponsor-cta" data-pill-hide>
+          <a class="btn btn--primary btn--lg" href={APP_URL} data-warp><span class="warp-label">Open app</span><Fragment set:html={arrow} /></a>
+          <a class="btn btn--lg" href="/">Home</a>
+          <a class="btn btn--lg" href={featuresHref}>Features</a>
+          <a class="btn btn--lg" href="/mcp-setup">Set up an AI agent</a>
+          <a class="btn btn--lg btn--ghost" href={REPO_URL}><Fragment set:html={github} />GitHub</a>
+        </div>
+      </div>
+    </section>
+  </main>
+</Layout>
+
+<style>
+  .lost-hero {
+    min-height: clamp(34rem, 88svh, 52rem);
+  }
+
+  /* One row of the probe scanner: a K162 at the bottom of the red, leading nowhere. */
+  .lost-sig {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.25rem;
+    width: fit-content;
+    max-width: 100%;
+    padding: 0.55rem 0.9rem;
+    border: 1px solid var(--line-strong);
+    border-left: 3px solid var(--scan-red);
+    border-radius: 6px;
+    background: rgb(0 0 0 / 0.55);
+    color: var(--ink-soft);
+    font-size: var(--text-sm);
+  }
+
+  .lost-sig-dest {
+    color: var(--scan-red);
+  }
+</style>
