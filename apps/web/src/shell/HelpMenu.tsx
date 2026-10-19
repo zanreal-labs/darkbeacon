@@ -8,6 +8,7 @@ import {
   BookOpen,
   Bug,
   CircleHelp,
+  Cookie,
   Inbox,
   MessageSquareHeart,
   MonitorDown,
@@ -28,6 +29,7 @@ import {
   type SupportKind,
 } from '../lib/support';
 import { browserOptedOut, track } from '../lib/telemetry';
+import { useCookieSettings } from '../analytics/AnalyticsClient';
 import { InstallRailButton, useInstallApp } from '../pwa/InstallApp';
 import { openWormholeReference } from '../reference/open';
 import { useTheme } from '../theme/ThemeProvider';
@@ -153,8 +155,8 @@ export function SupportMenuItems() {
  * The help menu, at the bottom of the main rail (in the top bar on phones, where the rail is the
  * tab bar): report a problem, send feedback, my tickets (with the unread badge
  * from the hub), a thumbs up or down for the page (anonymous telemetry, when it is on), the
- * wormhole types reference (the phones' way to it), what's new, the documentation and, when this
- * browser can install it, "Install app".
+ * wormhole types reference (the phones' way to it), what's new, the documentation, "Cookie settings"
+ * where the instance runs Google Analytics and, when this browser can install it, "Install app".
  */
 export function HelpMenu({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }) {
   const router = useRouter();
@@ -165,6 +167,7 @@ export function HelpMenu({ placement = 'rail' }: { placement?: 'rail' | 'topbar'
   const telemetry = useQuery<TelemetryClientDto>({ queryKey: telemetryClientKey, enabled: false });
   const canRate = !!telemetry.data?.active && !browserOptedOut();
   const install = useInstallApp();
+  const cookieSettings = useCookieSettings();
 
   useEffect(() => installErrorCapture(), []);
 
@@ -250,6 +253,11 @@ export function HelpMenu({ placement = 'rail' }: { placement?: 'rail' | 'topbar'
           >
             Documentation
           </MenuItem>
+          {cookieSettings && (
+            <MenuItem icon={<Cookie />} onSelect={cookieSettings}>
+              Cookie settings
+            </MenuItem>
+          )}
           {install.option && (
             <>
               <MenuSeparator />

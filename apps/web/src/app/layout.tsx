@@ -3,6 +3,7 @@ import '@fontsource-variable/jetbrains-mono/wght.css';
 import '../styles.css';
 import type { Metadata, Viewport } from 'next';
 import { Suspense, type ReactNode } from 'react';
+import { AnalyticsSlot } from '../analytics/AnalyticsSlot';
 import { PwaSlot } from '../pwa/PwaSlot';
 import { themeHeadScript, themeStyles } from '../theme/head';
 import { Providers } from './providers';
@@ -51,6 +52,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           {/* The app install (manifest, service worker); `PWA=off` is read per request. */}
           <Suspense fallback={null}>
             <PwaSlot />
+          </Suspense>
+          {/* Google Analytics with its consent banner, only where the operator set GA_MEASUREMENT_ID. */}
+          <Suspense fallback={null}>
+            <AnalyticsSlot />
           </Suspense>
         </Providers>
       </body>

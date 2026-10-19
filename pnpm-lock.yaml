@@ -255,6 +255,9 @@ importers:
 
   apps/web:
     devDependencies:
+      '@c15t/core':
+        specifier: 3.1.0
+        version: 3.1.0(typescript@6.0.3)
       '@darkbeacon/plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
@@ -716,6 +719,15 @@ packages:
   '@bramus/specificity@2.4.3':
     resolution: {integrity: sha512-0GEz8qJWokkUVYQYRukmkSHIFNoBH8QTreeHrAFbvz1XFYc3Y+puhMs8PQ5x8GNugiC2l5jvDBXKLbBIByeSBw==}
     hasBin: true
+
+  '@c15t/core@3.1.0':
+    resolution: {integrity: sha512-WmXB1WXIeeZbVHZXoZs1//L+cb0aSYWRkr+qCNPYVnadq/FCFPCy0Z2TrC0BlKrVDrduJelyD+ky/p66CPf65A==}
+
+  '@c15t/schema@3.1.0':
+    resolution: {integrity: sha512-gAOMNlkNSwDZ7igutDWeLvEwPl3VoWIFsNHdgu8yUnNKjkdE64F4udpMbtr6e3JRM3h1CQhLQUG5B/fQbF5eDQ==}
+
+  '@c15t/translations@3.1.0':
+    resolution: {integrity: sha512-oL4Egzd6LPEQYuv5JisnPocsF1c5wYp/1EzjPsMpsYRBlVIXme5d8voGMrCjNFYDH662UHvSlMTHXYYmCjPXNw==}
 
   '@cacheable/memory@2.2.0':
     resolution: {integrity: sha512-CTLKqLItRCEixEAewD3/j9DB3/o96gpTPD4eJ1v+DGOlxZRZncRQkGYqqnAGCscYd6RNeXfGeiuCphsPtqyIfQ==}
@@ -2951,6 +2963,9 @@ packages:
     resolution: {integrity: sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==}
     engines: {node: 18 || 20 || >=22}
 
+  base-x@5.0.1:
+    resolution: {integrity: sha512-M7uio8Zt++eg3jPj+rHMfCC+IuygQHHCOU+IYsVtik6FWjuYpVt/+MRKcgsAMHh8mMFAwnB+Bs+mTrFiXjMzKg==}
+
   baseline-browser-mapping@2.11.28:
     resolution: {integrity: sha512-br0LOmjJqr6Rt4AEkadbcNf67Zpo7EPwKsWbjnRrJIa1QYFHQBqM4C7F2WTbV8ahTEcg1Eo+Y0aWjjORInYFyA==}
     engines: {node: '>=6.0.0'}
@@ -4619,6 +4634,14 @@ packages:
     resolution: {integrity: sha512-Sc5u1VVln93y1Xnz4R+CunOZc7R9LUcTmhj7Rc7Eg3HVcf7rVn2FOoa812fe0W8p3jD7xeoGSYbfqCGGH2B6xw==}
     hasBin: true
 
+  valibot@1.4.2:
+    resolution: {integrity: sha512-gjdCvJ6d3RyHAneqxMYMW9QMCwYMb3jpOO0IyHZV1bnRHFBHrX3VkIILt5XYR0WhwHiH7Mty8ovuPZ/O3gamrg==}
+    peerDependencies:
+      typescript: '>=5'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+
   vfile-location@5.0.3:
     resolution: {integrity: sha512-5yXvWDEgqeiYiBe1lbxYF7UMAIm/IcopxMHrMQDq3nvKcjPKIhZklUKL+AE7J7uApI4kwe2snsK+eI6UTj9EHg==}
 
@@ -5023,6 +5046,23 @@ snapshots:
   '@bramus/specificity@2.4.3':
     dependencies:
       css-tree: 3.2.1
+
+  '@c15t/core@3.1.0(typescript@6.0.3)':
+    dependencies:
+      '@c15t/schema': 3.1.0(typescript@6.0.3)
+      '@c15t/translations': 3.1.0
+    transitivePeerDependencies:
+      - typescript
+
+  '@c15t/schema@3.1.0(typescript@6.0.3)':
+    dependencies:
+      '@c15t/translations': 3.1.0
+      base-x: 5.0.1
+      valibot: 1.4.2(typescript@6.0.3)
+    transitivePeerDependencies:
+      - typescript
+
+  '@c15t/translations@3.1.0': {}
 
   '@cacheable/memory@2.2.0':
     dependencies:
@@ -7632,6 +7672,8 @@ snapshots:
 
   balanced-match@4.0.4: {}
 
+  base-x@5.0.1: {}
+
   baseline-browser-mapping@2.11.28: {}
 
   better-sqlite3@13.0.3:
@@ -9611,6 +9653,10 @@ snapshots:
       react: 19.3.0
 
   uuid@14.0.3: {}
+
+  valibot@1.4.2(typescript@6.0.3):
+    optionalDependencies:
+      typescript: 6.0.3
 
   vfile-location@5.0.3:
     dependencies:
