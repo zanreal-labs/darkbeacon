@@ -64,6 +64,17 @@ export interface MappingPorts {
   clock: Clock;
 }
 
+/** How an update counts for the maps that merge this one. */
+export interface UpdateOptions {
+  /**
+   * Fields of the request that count as changed now even when they already hold that value: a
+   * change made through a merged map must win there over the value it replaced, which may come
+   * from a map it did not reach (a hidden copy, a read-only share). Without it an update that
+   * changes nothing stamps nothing.
+   */
+  written?: readonly string[];
+}
+
 /** Collects the events of one use case; appended together before the transaction commits. */
 export class EventBatch {
   readonly events: NewEvent[] = [];

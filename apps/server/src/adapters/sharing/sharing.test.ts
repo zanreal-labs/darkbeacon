@@ -279,6 +279,34 @@ describeEachDialect('sharing and merged chains', (t) => {
     expect(edge((await view(alliance.id)).connections, c5, c1)).toBeUndefined();
   });
 
+  it('keeps a connection field cleared on the composite cleared over a read-only source’s value', async () => {
+    // Corp B (read) marks C5 - C1; Corp A (read-write) never did.
+    const inB = (await env.ports.connections.findBetween(corpB.id, c5, c1))!;
+    env.clock.advance(1_000);
+    await env.connections.update(bob, corpB.id, inB.id, { note: 'camped', dangerous: true, lifetime: '4h' });
+    const all = [...shareScope.options];
+    await share(corpA, alice, 'read-write', all);
+    await share(corpB, bob, 'read', all);
+    const overlap = async () => edge((await view(alliance.id)).connections, c5, c1)!;
+    expect(await overlap()).toMatchObject({ note: 'camped', dangerous: true, lifetime: { mark: '4h' } });
+
+    // Cleared on the composite: only Corp A takes it, and already holds the empty values.
+    env.clock.advance(1_000);
+    await env.writes.updateConnection(dave, alliance.id, (await overlap()).id, {
+      note: '',
+      dangerous: false,
+      lifetime: null,
+    });
+    await env.settle();
+    const cleared = await overlap();
+    expect(cleared).toMatchObject({ dangerous: false });
+    expect(cleared.note ?? '').toBe('');
+    expect(cleared.lifetime ?? null).toBeNull();
+    await env.merger.rebuild(alliance.id);
+    expect((await overlap()).note ?? '').toBe('');
+    expect((await env.ports.connections.findBetween(corpB.id, c5, c1))!).toMatchObject({ note: 'camped' });
+  });
+
   it('adds new objects to the composite’s first read-write source, and moves only its own layout', async () => {
     await share(corpB, bob, 'read');
     await expect(
@@ -794,6 +822,97 @@ describeEachDialect('sharing and merged chains', (t) => {
       await expect(
         env.writes.updateSignature(dave, alliance.id, `s:${c2}:HID-001`, { name: 'Gone' }),
       ).rejects.toMatchObject({ code: 'forbidden', message: expect.stringMatching(/Corp B/) });
+    });
+
+    it('keeps what is cleared on the composite cleared, though a hidden copy still holds a value', async () => {
+      const { perimeter } = SYSTEMS;
+      await env.maps.setSystemLabels(bob, corpB.id, [{ id: 'b-stg', name: 'Staging', description: '' }]);
+      await env.maps.setSystemLabels(carol, alliance.id, [
+        { id: 'al-stg', name: 'Staging', description: '' },
+      ]);
+      // Corp B keeps Perimeter hidden as an import leaves it: values without field times, so they
+      // count from when the row was made ...
+      const born = env.clock.now();
+      await env.ports.systems.insert({
+        mapId: corpB.id,
+        solarSystemId: perimeter,
+        position: { x: 0, y: 0 },
+        customName: 'Graniczny, Jita 5',
+        temporaryName: 'B9',
+        tag: 'HQ',
+        status: 'hostile',
+        description: 'B intel',
+        labelIds: [],
+        systemLabelIds: ['b-stg'],
+        customLabel: 'S',
+        locked: false,
+        visible: false,
+        createdAt: born,
+        updatedAt: born,
+      });
+      // ... and Corp A, the only map showing it, has nothing set on it.
+      env.clock.advance(1_000);
+      await env.systems.add(alice, corpA.id, { solarSystemId: perimeter });
+      await share(corpA, alice, 'read-write', all);
+      await share(corpB, bob, 'read-write', all);
+      const shown = async () => (await view(alliance.id)).systems.find((s) => s.solarSystemId === perimeter)!;
+      expect(await shown()).toMatchObject({
+        customName: 'Graniczny, Jita 5',
+        temporaryName: 'B9',
+        tag: 'HQ',
+        status: 'hostile',
+        description: 'B intel',
+        systemLabelIds: ['al-stg'],
+        customLabel: 'S',
+      });
+      // A plain edit that changes nothing stamps nothing.
+      const timesOfA = async () =>
+        (await env.ports.stamps.fieldTimes(corpA.id, 'system', [String(perimeter)])).get(String(perimeter));
+      const untouched = await timesOfA();
+      await env.systems.update(alice, corpA.id, perimeter, { customName: null, customLabel: null });
+      expect(await timesOfA()).toEqual(untouched);
+
+      // Cleared on the composite: Corp A already holds the empty values, yet takes them as written now.
+      env.clock.advance(1_000);
+      const cleared = {
+        customName: null,
+        temporaryName: null,
+        tag: null,
+        status: 'unknown' as const,
+        description: '',
+        systemLabelIds: [],
+        customLabel: null,
+      };
+      await env.writes.updateSystem(dave, alliance.id, perimeter, cleared);
+      await env.settle();
+      expect(await shown()).toMatchObject(cleared);
+      expect(await timesOfA()).toMatchObject({ customName: env.clock.now(), customLabel: env.clock.now() });
+      // Corp B's hidden copy takes no writes; it stays cleared when the sources are read again.
+      expect(await env.ports.systems.find(corpB.id, perimeter)).toMatchObject({
+        customName: 'Graniczny, Jita 5',
+        customLabel: 'S',
+      });
+      await env.merger.rebuild(alliance.id);
+      expect(await shown()).toMatchObject(cleared);
+    });
+
+    it('keeps a signature field cleared on the composite cleared over the copy in a hidden system', async () => {
+      // Corp A shows C2 with the same signature, nothing known about it; Corp B's hidden C2 names it.
+      env.clock.advance(1_000);
+      await env.signatures.add(alice, corpA.id, c2, { eveId: 'HID-001' });
+      await share(corpA, alice, 'read-write', all);
+      await share(corpB, bob, 'read', all);
+      const signature = async () =>
+        (await view(alliance.id)).signatures.find((s) => s.solarSystemId === c2 && s.eveId === 'HID-001')!;
+      expect(await signature()).toMatchObject({ group: 'relic', name: 'Ruins' });
+
+      env.clock.advance(1_000);
+      await env.writes.updateSignature(dave, alliance.id, (await signature()).id, { name: null });
+      await env.settle();
+      expect(await signature()).toMatchObject({ group: 'relic', name: null });
+      await env.merger.rebuild(alliance.id);
+      expect(await signature()).toMatchObject({ name: null });
+      expect((await env.ports.signatures.listForSystem(corpB.id, c2))[0]).toMatchObject({ name: 'Ruins' });
     });
 
     it('never shows a system only hidden copies hold, nor publishes anything about it', async () => {

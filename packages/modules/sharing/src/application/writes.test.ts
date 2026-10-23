@@ -151,6 +151,13 @@ describe('merged writes and locks held by sources', () => {
     expect(writes).toEqual([]);
   });
 
+  it('keeps notes cleared on a composite cleared, its own empty notes covering the sources’', async () => {
+    const { chain, writes, calls } = setup({ sourceLock: false });
+    await chain.updateSystem(person('dave'), 'alliance', J1, { description: '' });
+    expect(calls.setLocal).toEqual([{ notes: '' }]);
+    expect(writes).toEqual([]);
+  });
+
   it('keeps a composite’s new lock its own, other fields still going to the sources', async () => {
     const { chain, writes, calls } = setup({ sourceLock: false });
     await chain.updateSystem(person('carol'), 'alliance', J1, { locked: true });

@@ -215,6 +215,65 @@ describeEachDialect('merged chains over HTTP and /ws', (t) => {
     expect(after.sources!.map((s) => s.name)).toEqual(['Alliance chain']);
   });
 
+  it('keeps a name and custom label cleared on the composite cleared over intel a source keeps hidden', async () => {
+    const alice = await signIn('alice'); // Corp A's admin: maps C5 and sets nothing on it
+    const bob = await signIn('bob'); // the intel map's admin: named C5, then hid it
+    const carol = await signIn('carol'); // the alliance chain's admin
+    const dave = await signIn('dave'); // edits the alliance chain only
+    const corp = await alice.call<MapDto>('POST', '/api/maps', { name: 'Corp A' });
+    await alice.call('POST', `/api/maps/${corp.id}/systems`, { solarSystemId: C5 });
+    const intel = await bob.call<MapDto>('POST', '/api/maps', { name: 'Intel' });
+    await bob.call('POST', `/api/maps/${intel.id}/systems`, { solarSystemId: C5 });
+    await bob.call('PATCH', `/api/maps/${intel.id}/systems/${C5}`, {
+      customName: 'Graniczny, Jita 5',
+      customLabel: 'S',
+    });
+    await bob.call('DELETE', `/api/maps/${intel.id}/systems/${C5}`);
+    const alliance = await carol.call<MapDto>('POST', '/api/maps', {
+      name: 'Alliance chain',
+      kind: 'composite',
+    });
+    await carol.call('POST', `/api/maps/${alliance.id}/access-rules`, {
+      subjectKind: 'account',
+      subjectId: dave.me.account.id,
+      role: 'member',
+    });
+    for (const [who, map] of [
+      [alice, corp],
+      [bob, intel],
+    ] as const) {
+      const offered = await who.call<MapShareDto>('POST', `/api/maps/${map.id}/shares`, {
+        targetSlug: alliance.slug,
+        level: 'read-write',
+        scopes: ['topology', 'intel', 'labels'],
+      });
+      await carol.call('POST', `/api/maps/${alliance.id}/shares/${offered.id}/accept`, {});
+    }
+
+    const stream = `map:${alliance.id}`;
+    const shown = async () =>
+      (
+        (await dave.call<StreamSnapshotDto>('GET', `/api/streams/${encodeURIComponent(stream)}/snapshot`))
+          .data as MapSnapshot
+      ).systems!.find((s) => s.solarSystemId === C5);
+    await vi.waitFor(async () =>
+      expect(await shown()).toMatchObject({ customName: 'Graniczny, Jita 5', customLabel: 'S' }),
+    );
+
+    // Cleared on the composite: only Corp A shows C5, and it holds no name already.
+    await dave.call('PATCH', `/api/maps/${alliance.id}/systems/${C5}`, {
+      customName: null,
+      customLabel: null,
+    });
+    await vi.waitFor(async () =>
+      expect(await shown()).toMatchObject({ customName: null, customLabel: null }),
+    );
+    // The intel map shows C5 again with its older name: read again, the newer clearing still wins.
+    await bob.call('POST', `/api/maps/${intel.id}/systems`, { solarSystemId: C5 });
+    await vi.waitFor(async () => expect((await shown())!.provenance!.sources).toHaveLength(2));
+    expect(await shown()).toMatchObject({ customName: null, customLabel: null });
+  });
+
   it('shows a system locked on a source as locked, refuses removing it, and lets only the source’s managers unlock it', async () => {
     const alice = await signIn('alice'); // Corp A's admin
     const carol = await signIn('carol'); // the alliance chain's admin

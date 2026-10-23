@@ -262,7 +262,7 @@ export class KyselySystemRepository extends Repository implements SystemReposito
       .execute();
   }
 
-  async update(system: MapSystem): Promise<void> {
+  async update(system: MapSystem, options: { written?: readonly string[] } = {}): Promise<void> {
     const { map_id, solar_system_id, ...row } = systemToRow(system);
     const current = await this.db
       .selectFrom('map_systems')
@@ -272,7 +272,7 @@ export class KyselySystemRepository extends Repository implements SystemReposito
       .executeTakeFirst();
     await this.db
       .updateTable('map_systems')
-      .set({ ...row, ...stamped(current, systemFromRow, system) })
+      .set({ ...row, ...stamped(current, systemFromRow, system, options.written) })
       .where('map_id', '=', map_id)
       .where('solar_system_id', '=', solar_system_id)
       .execute();
@@ -342,7 +342,7 @@ export class KyselyConnectionRepository extends Repository implements Connection
     return row !== undefined;
   }
 
-  async update(connection: Connection): Promise<void> {
+  async update(connection: Connection, options: { written?: readonly string[] } = {}): Promise<void> {
     const { id, map_id, ...row } = connectionToRow(connection);
     const current = await this.db
       .selectFrom('map_connections')
@@ -352,7 +352,7 @@ export class KyselyConnectionRepository extends Repository implements Connection
       .executeTakeFirst();
     await this.db
       .updateTable('map_connections')
-      .set({ ...row, ...stamped(current, connectionFromRow, connection) })
+      .set({ ...row, ...stamped(current, connectionFromRow, connection, options.written) })
       .where('map_id', '=', map_id)
       .where('id', '=', id)
       .execute();
@@ -458,7 +458,7 @@ export class KyselySignatureRepository extends Repository implements SignatureRe
     return rows.map(signatureFromRow);
   }
 
-  async update(signature: Signature): Promise<void> {
+  async update(signature: Signature, options: { written?: readonly string[] } = {}): Promise<void> {
     const { id, map_id, ...row } = signatureToRow(signature);
     const current = await this.db
       .selectFrom('map_signatures')
@@ -468,7 +468,7 @@ export class KyselySignatureRepository extends Repository implements SignatureRe
       .executeTakeFirst();
     await this.db
       .updateTable('map_signatures')
-      .set({ ...row, ...stamped(current, signatureFromRow, signature) })
+      .set({ ...row, ...stamped(current, signatureFromRow, signature, options.written) })
       .where('map_id', '=', map_id)
       .where('id', '=', id)
       .execute()
@@ -549,17 +549,20 @@ export class KyselyPassageRepository extends Repository implements PassageReposi
 }
 
 /**
- * The `field_times` of a row about to become `next`: fields that change are stamped with
- * `next.updatedAt` (the time of the change), the others keep theirs.
+ * The `field_times` of a row about to become `next`: fields that change, and the `written` ones,
+ * are stamped with `next.updatedAt` (the time of the change), the others keep theirs.
  */
 function stamped<R extends { field_times: string }, T extends { updatedAt: number }>(
   current: R | undefined,
   fromRow: (row: R) => T,
   next: T,
+  written?: readonly string[],
 ): { field_times: string } | Record<string, never> {
   if (!current) return {};
   const times = json.decode<FieldTimes>(current.field_times) ?? {};
-  return { field_times: json.encode(stampChanges(fromRow(current), next, times, next.updatedAt)) };
+  return {
+    field_times: json.encode(stampChanges(fromRow(current), next, times, next.updatedAt, written)),
+  };
 }
 
 const STAMPED_TABLES = {

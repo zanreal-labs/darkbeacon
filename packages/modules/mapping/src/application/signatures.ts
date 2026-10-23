@@ -16,7 +16,7 @@ import { signatureTypeCode } from '../domain/intel.js';
 import { changes, compactSignature, defined } from '../domain/rules.js';
 import { pairKey, signatureKey } from '../domain/stamps.js';
 import { parseSignaturePaste } from '../domain/signature-paste.js';
-import { MappingUseCases, type EventBatch } from './base.js';
+import { MappingUseCases, type EventBatch, type UpdateOptions } from './base.js';
 import { renumberBookmarks } from './bookmark-numbers.js';
 import { patchConnection } from './connections.js';
 import { lastActive } from './sweeper.js';
@@ -112,14 +112,16 @@ export class SignatureUseCases extends MappingUseCases {
     mapId: string,
     signatureId: string,
     request: UpdateSignatureRequest,
+    options: UpdateOptions = {},
   ): Promise<Signature> {
     const who = await this.authorizeEdit(actor, mapId);
     const author = await this.author(who);
     return this.write(who, mapId, async (events) => {
       const current = await this.load(mapId, signatureId);
       const patch = defined(request) as Partial<Signature>;
+      const written = (options.written ?? []).filter((field) => field in patch);
       if (patch.kind === 'signature' && !current.kind) delete patch.kind;
-      if (!changes(current, patch)) return current;
+      if (!changes(current, patch) && written.length === 0) return current;
       // Scanner entries keep scanner ids; only custom entries take free text.
       if (patch.eveId && !current.custom && !isScannerSignatureId(patch.eveId))
         throw new ValidationError('expected ABC-123 (custom entries may use any id)');
@@ -140,7 +142,7 @@ export class SignatureUseCases extends MappingUseCases {
       }
       const linked = patch.connectionId !== undefined && patch.connectionId !== current.connectionId;
       const next: Signature = compactSignature({ ...current, ...patch, updatedAt: now, updatedBy: author });
-      await this.ports.signatures.update(next);
+      await this.ports.signatures.update(next, { written });
       events.add('signature.updated', next, current);
       if (!next.connectionId) return next;
 

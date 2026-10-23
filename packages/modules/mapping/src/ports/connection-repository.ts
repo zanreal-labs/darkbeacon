@@ -8,7 +8,8 @@ export interface ConnectionRepository {
   listForSystem(mapId: string, solarSystemId: number): Promise<Connection[]>;
   /** False when the two systems are already connected (in either direction); nothing is inserted then. */
   insert(connection: Connection): Promise<boolean>;
-  update(connection: Connection): Promise<void>;
+  /** `written`: fields that count as changed now even when their value stays (see `UpdateOptions`). */
+  update(connection: Connection, options?: { written?: readonly string[] }): Promise<void>;
   delete(mapId: string, id: string): Promise<void>;
   /** Maps with a wormhole that has no bookmark number yet (mapped before numbering existed). */
   mapsWithUnnumberedWormholes(): Promise<string[]>;

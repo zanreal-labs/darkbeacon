@@ -46,7 +46,9 @@ export interface ChainSource {
   read(scopes: readonly ShareScope[] | 'all', selectors?: readonly ChainSelector[]): Promise<ChainDelta>;
   /**
    * Applies a change made through a merged map; throws when the source refuses it. Answers what
-   * the change reports (a scanner paste's counts), else nothing.
+   * the change reports (a scanner paste's counts), else nothing. Every field an update names
+   * counts as changed then, even one the source already holds with that value, so the change wins
+   * over what the merged map showed from copies it does not reach.
    */
   write(command: ChainCommand, context: ChainWriteContext): Promise<unknown>;
   /**
@@ -135,7 +137,7 @@ export interface ChainLayoutRepository {
 
 /** What a composite keeps of a system itself, over what its sources say. */
 export interface LocalFields {
-  /** Null: the merged notes show. */
+  /** Null: never written here, the merged notes show; empty: cleared here. */
   notes: string | null;
   /** The system's Tags on the composite. */
   labelIds: string[];

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_SYSTEM_LABELS, SystemLabelDto, UpdateSystemRequest } from '@darkbeacon/shared';
 import { defaultShipSize, slugify, validateLabels, validateSystemLabels } from './rules.js';
 import { parseSignaturePaste, type ScannerLanguage } from './signature-paste.js';
+import { stampChanges } from './stamps.js';
 
 const universe = (whClass: number | null) => ({
   id: 1,
@@ -109,5 +110,23 @@ describe('rules', () => {
     expect(SystemLabelDto.parse({ id: 'a', name: ' A ' })).toEqual({ id: 'a', name: 'A', description: '' });
     expect(UpdateSystemRequest.safeParse({ customLabel: 'x'.repeat(16) }).success).toBe(true);
     expect(UpdateSystemRequest.safeParse({ customLabel: 'x'.repeat(17) }).success).toBe(false);
+  });
+});
+
+describe('change stamps', () => {
+  const before: Record<string, string | number | null> = {
+    customName: null,
+    tag: 'HQ',
+    mapId: 'm',
+    updatedAt: 1,
+  };
+
+  it('stamps the fields that changed, and the written ones even when they stay', () => {
+    const next = { ...before, tag: null, updatedAt: 9 };
+    expect(stampChanges(before, next, { tag: 2, customName: 3 }, 9)).toEqual({ tag: 9, customName: 3 });
+    expect(stampChanges(before, next, { customName: 3 }, 9, ['customName', 'mapId', 'updatedAt'])).toEqual({
+      tag: 9,
+      customName: 9,
+    });
   });
 });

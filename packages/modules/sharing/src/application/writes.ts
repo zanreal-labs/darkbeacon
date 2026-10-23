@@ -145,8 +145,9 @@ export class ChainWrites {
       return;
     }
     if (composite) {
-      // Notes, Tags and locks of a composite are its own, kept over what its sources say.
-      if ('notes' in fields) own.notes = (fields.notes as string) || null;
+      // Notes, Tags and locks of a composite are its own, kept over what its sources say; notes
+      // cleared here stay cleared (empty notes of its own still cover the sources').
+      if ('notes' in fields) own.notes = fields.notes as string;
       if ('labelIds' in fields) own.labelIds = fields.labelIds as string[];
       delete fields.notes;
       delete fields.labelIds;

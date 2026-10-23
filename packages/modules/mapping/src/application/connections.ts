@@ -11,7 +11,7 @@ import type { AddConnectionRequest, UpdateConnectionRequest } from '@darkbeacon/
 import type { Connection, Signature } from '../domain/map.js';
 import { changes, compactConnection, defaultShipSize, defined } from '../domain/rules.js';
 import { pairKey, signatureKey } from '../domain/stamps.js';
-import { MappingUseCases, type EventBatch, type MappingPorts } from './base.js';
+import { MappingUseCases, type EventBatch, type MappingPorts, type UpdateOptions } from './base.js';
 import { renumberBookmarks } from './bookmark-numbers.js';
 import { removeConnection } from './systems.js';
 
@@ -80,23 +80,26 @@ export class ConnectionUseCases extends MappingUseCases {
     mapId: string,
     connectionId: string,
     request: UpdateConnectionRequest,
+    options: UpdateOptions = {},
   ): Promise<Connection> {
     const who = await this.authorizeEdit(actor, mapId);
     return this.write(who, mapId, async (events) => {
       const current = await this.load(mapId, connectionId);
       const now = this.ports.clock.now();
-      const { lifetime, ...rest } = defined(request);
+      const given = defined(request);
+      const written = (options.written ?? []).filter((field) => field in given);
+      const { lifetime, ...rest } = given;
       const patch: Partial<Connection> = { ...rest };
       if (lifetime !== undefined && lifetime !== (current.lifetime?.mark ?? null))
         patch.lifetime = lifetime === null ? null : { mark: lifetime, at: now };
       if (patch.locked === false && !current.locked) delete patch.locked;
       if (patch.note === '' && !current.note) delete patch.note;
-      if (!changes(current, patch)) return current;
+      if (!changes(current, patch) && written.length === 0) return current;
       await this.guardLock(who, mapId, current, patch.locked);
       const next: Connection = compactConnection({ ...current, ...patch, updatedAt: now });
       if (patch.timeStatus) next.eolAt = patch.timeStatus === 'eol' ? (current.eolAt ?? now) : null;
       if (patch.massStatus && patch.massStatus !== current.massStatus) next.massStatusAt = now;
-      await this.ports.connections.update(next);
+      await this.ports.connections.update(next, { written });
       events.add('connection.updated', next, current);
       // Only wormholes are numbered.
       if (next.type !== current.type) {

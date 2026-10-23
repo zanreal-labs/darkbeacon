@@ -10,7 +10,7 @@ import { type AddSystemRequest, type MoveSystemsRequest, type UpdateSystemReques
 import type { Connection, MapSystem } from '../domain/map.js';
 import { placeSystem } from '../domain/placement.js';
 import { changes, defined } from '../domain/rules.js';
-import { MappingUseCases, type EventBatch, type MappingPorts } from './base.js';
+import { MappingUseCases, type EventBatch, type MappingPorts, type UpdateOptions } from './base.js';
 import { renumberBookmarks } from './bookmark-numbers.js';
 import { guardPinged } from './pings.js';
 
@@ -69,6 +69,7 @@ export class SystemUseCases extends MappingUseCases {
     mapId: string,
     solarSystemId: number,
     request: UpdateSystemRequest,
+    options: UpdateOptions = {},
   ): Promise<MapSystem> {
     const who = await this.authorizeEdit(actor, mapId);
     return this.write(who, mapId, async (events) => {
@@ -85,7 +86,8 @@ export class SystemUseCases extends MappingUseCases {
       }
       // An empty custom label is none.
       if (patch.customLabel !== undefined) patch.customLabel = patch.customLabel?.trim() || null;
-      if (!changes(current, patch)) return current;
+      const written = (options.written ?? []).filter((field) => field in patch);
+      if (!changes(current, patch) && written.length === 0) return current;
 
       const staysLocked = current.locked && (patch.locked ?? true);
       if (staysLocked) {
@@ -111,7 +113,7 @@ export class SystemUseCases extends MappingUseCases {
         await renumberBookmarks(this.ports, events, mapId);
         return next;
       }
-      await this.ports.systems.update(next);
+      await this.ports.systems.update(next, { written });
       events.add('system.updated', next, current);
       // A new home turns the chain around it: wormholes may lead out of other systems now.
       if (next.status !== current.status) await renumberBookmarks(this.ports, events, mapId);

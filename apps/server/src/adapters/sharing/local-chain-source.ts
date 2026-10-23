@@ -288,7 +288,9 @@ export class LocalChainSource implements ChainSource {
       }
       case 'system.update': {
         const systemLabels = (await ports.maps.findById(mapId))?.systemLabels ?? [];
-        await systems.update(actor, mapId, Number(command.key), systemRequest(command.fields, systemLabels));
+        // The fields named count as written, unchanged ones too (see `ChainSource.write`).
+        const { request, written } = systemRequest(command.fields, systemLabels);
+        await systems.update(actor, mapId, Number(command.key), request, { written });
         return;
       }
       case 'system.remove':
@@ -308,7 +310,8 @@ export class LocalChainSource implements ChainSource {
       }
       case 'connection.update': {
         const connection = await this.connection(command.key);
-        await connections.update(actor, mapId, connection.id, connectionRequest(command.fields, connection));
+        const request = connectionRequest(command.fields, connection);
+        await connections.update(actor, mapId, connection.id, request, { written: Object.keys(request) });
         return;
       }
       case 'connection.remove':
@@ -334,7 +337,7 @@ export class LocalChainSource implements ChainSource {
       case 'signature.update': {
         const signature = await this.signature(command.key);
         const request = await this.signatureRequest(command.fields);
-        await signatures.update(actor, mapId, signature.id, request);
+        await signatures.update(actor, mapId, signature.id, request, { written: Object.keys(request) });
         return;
       }
       case 'signature.remove':
@@ -647,7 +650,14 @@ function signatureExtras(f: Record<string, unknown>): UpdateSignatureRequest {
   return r;
 }
 
-function systemRequest(f: Record<string, unknown>, systemLabels: LabelList): UpdateSystemRequest {
+/**
+ * A system patch from wire fields, and the fields of it that carry the written value as it is
+ * (Labels this map has none of drop out: that change is not this map's to stamp as written).
+ */
+function systemRequest(
+  f: Record<string, unknown>,
+  systemLabels: LabelList,
+): { request: UpdateSystemRequest; written: string[] } {
   const r: UpdateSystemRequest = {};
   if (typeof f.status === 'string') r.status = f.status as MapSystem['status'];
   if (f.tag !== undefined) r.tag = f.tag as string | null;
@@ -655,11 +665,16 @@ function systemRequest(f: Record<string, unknown>, systemLabels: LabelList): Upd
   if (typeof f.notes === 'string') r.description = f.notes;
   if (f.label !== undefined) r.temporaryName = f.label as string | null;
   // Names this map has no Label of drop out.
-  if (Array.isArray(f.systemLabels)) r.systemLabelIds = labelIdsByName(f.systemLabels, systemLabels);
+  let dropped = false;
+  if (Array.isArray(f.systemLabels)) {
+    r.systemLabelIds = labelIdsByName(f.systemLabels, systemLabels);
+    const named = new Set(f.systemLabels.map((n) => String(n).toLowerCase()));
+    dropped = r.systemLabelIds.length < named.size;
+  }
   if (f.customLabel !== undefined) r.customLabel = f.customLabel as string | null;
   if (Array.isArray(f.labelIds)) r.labelIds = f.labelIds as string[];
   if (typeof f.locked === 'boolean') r.locked = f.locked;
-  return r;
+  return { request: r, written: Object.keys(r).filter((k) => !(dropped && k === 'systemLabelIds')) };
 }
 
 function connectionRequest(f: Record<string, unknown>, current: Connection): UpdateConnectionRequest {

@@ -11,7 +11,8 @@ export interface SignatureRepository {
   insert(signature: Signature, options?: { restoredAt?: number }): Promise<void>;
   /** Several new ones at once (a probe scanner paste): one statement instead of one per signature. */
   insertMany(signatures: readonly Signature[]): Promise<void>;
-  update(signature: Signature): Promise<void>;
+  /** `written`: fields that count as changed now even when their value stays (see `UpdateOptions`). */
+  update(signature: Signature, options?: { written?: readonly string[] }): Promise<void>;
   /** Moves `updatedAt` forward without changing anything else (seen again in a scan). */
   touch(mapId: string, ids: readonly string[], at: number): Promise<void>;
   delete(mapId: string, id: string): Promise<void>;

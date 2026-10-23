@@ -17,15 +17,18 @@ const UNSTAMPED = new Set(['mapId', 'createdAt', 'updatedAt', 'provenance']);
 
 /**
  * The field times after `current` became `next` at `at`: every content field whose value
- * changed is stamped with `at`, the others keep their time.
+ * changed is stamped with `at`, the others keep their time. `written`: fields stamped even when
+ * their value stays (see `UpdateOptions`).
  */
 export function stampChanges<T extends object>(
   current: T,
   next: T,
   times: FieldTimes,
   at: number,
+  written: readonly string[] = [],
 ): FieldTimes {
   const out: FieldTimes = { ...times };
+  for (const key of written) if (!UNSTAMPED.has(key)) out[key] = at;
   for (const key of new Set([...Object.keys(current), ...Object.keys(next)])) {
     if (UNSTAMPED.has(key)) continue;
     const before = (current as Record<string, unknown>)[key];
