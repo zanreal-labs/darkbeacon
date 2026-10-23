@@ -104,9 +104,13 @@
   z-index: 60;
   max-width: 280px;
   padding: 5px var(--dbk-space-2);
+  border: 1px solid var(--dbk-color-border-strong);
   border-radius: var(--dbk-radius);
-  background: var(--dbk-color-text);
-  color: var(--dbk-color-bg);
+  /* The raised surface and the text colour of the theme, like every other floating panel: content
+     (muted times, tickers) uses the same tokens, which only read on a surface of the same theme.
+     Never swap the two for an "inverted" tooltip; it is light in dark themes. */
+  background: var(--dbk-color-surface-raised);
+  color: var(--dbk-color-text);
   font-size: var(--dbk-font-size-small);
   line-height: 1.35;
   box-shadow: var(--dbk-shadow-medium);
