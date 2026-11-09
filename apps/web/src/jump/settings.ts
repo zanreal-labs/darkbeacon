@@ -7,6 +7,8 @@ export interface PlannerSettings {
   /** The character whose skills and fatigue ESI fills in; null: my main (else the first). */
   pilot: number | null;
   skills: JumpSkills;
+  /** The levels were picked by hand (not the defaults): no warning that they are only assumed. */
+  skillsByHand: boolean;
   gates: JumpGateUse;
   preferStations: boolean;
   outlaw: boolean;
@@ -25,6 +27,7 @@ export const DEFAULT_SETTINGS: PlannerSettings = {
   ship: null,
   pilot: null,
   skills: { jdc: 5, jfc: 4, jf: 4 },
+  skillsByHand: false,
   gates: 'finish',
   preferStations: false,
   outlaw: false,
@@ -49,6 +52,7 @@ export function loadSettings(): PlannerSettings {
       ...parsed,
       skills: { ...DEFAULT_SETTINGS.skills, ...parsed.skills },
       pilot: typeof parsed.pilot === 'number' ? parsed.pilot : null,
+      skillsByHand: parsed.skillsByHand === true,
       recent: Array.isArray(parsed.recent) ? parsed.recent.filter((n) => typeof n === 'string') : [],
     };
   } catch {

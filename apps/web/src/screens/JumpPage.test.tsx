@@ -11,6 +11,7 @@ import {
   type MyTrackingDto,
 } from '@darkbeacon/shared';
 import { ARK, META, UNIVERSE } from '../jump/fixtures.test-support';
+import { SETTINGS_KEY } from '../jump/settings';
 import { meFixture } from '../test/fixtures';
 import { installFlowMocks, renderWithProviders, setupMockServer } from '../test/setup';
 import { ToastProvider, TooltipProvider } from '../ui';
@@ -306,6 +307,18 @@ describe('JumpPage', () => {
     expect(within(panel).getByText(/for Ayla Vex to fill these from EVE/)).toBeTruthy();
     // Nothing from ESI: the remembered levels stay, and the summary says they are assumed.
     expect(skills.textContent).toMatch(/JDC V · JFC IV · JF IV · assumed/);
+  });
+
+  it('keeps levels picked by hand without warning that they are assumed', async () => {
+    window.localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({ skills: { jdc: 4, jfc: 3, jf: 2 }, skillsByHand: true }),
+    );
+    renderPage();
+    const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+    const skills = await within(panel).findByRole('button', { name: /Skills/ });
+    expect(skills.textContent).toMatch(/JDC IV · JFC III · JF II · set by hand/);
+    expect(skills.hasAttribute('data-warn')).toBe(false);
   });
 
   it('starts from the address and clears with Escape', async () => {

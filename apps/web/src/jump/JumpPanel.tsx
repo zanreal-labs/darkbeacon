@@ -332,7 +332,8 @@ function PilotSkills(props: PanelState) {
     ...(ship.hull === 'jump_freighter' ? [`JF ${roman(skills.jf)}`] : []),
   ].join(' · ');
   const fromEsi = fill.skills !== null && fill.pilot !== null;
-  const byHand = !fromEsi && fill.answer?.skills != null;
+  // Picked by hand: after an ESI answer (until ESI is asked again), or ever, without one.
+  const byHand = !fromEsi && (fill.answer?.skills != null || settings.skillsByHand);
   const source = fromEsi ? fill.pilot!.name : byHand ? 'set by hand' : 'assumed';
   const needsLink =
     fill.pilot !== null && (!fill.pilot.tokenValid || (fill.answer?.missingScopes.length ?? 0) > 0);
@@ -360,7 +361,7 @@ function PilotSkills(props: PanelState) {
               <Select
                 size="sm"
                 value={String(skills.jdc)}
-                onValueChange={(v) => update({ skills: { ...skills, jdc: Number(v) } })}
+                onValueChange={(v) => update({ skills: { ...skills, jdc: Number(v) }, skillsByHand: true })}
                 options={LEVELS}
               />
             </Field>
@@ -368,7 +369,7 @@ function PilotSkills(props: PanelState) {
               <Select
                 size="sm"
                 value={String(skills.jfc)}
-                onValueChange={(v) => update({ skills: { ...skills, jfc: Number(v) } })}
+                onValueChange={(v) => update({ skills: { ...skills, jfc: Number(v) }, skillsByHand: true })}
                 options={LEVELS}
               />
             </Field>
@@ -377,7 +378,7 @@ function PilotSkills(props: PanelState) {
                 <Select
                   size="sm"
                   value={String(skills.jf)}
-                  onValueChange={(v) => update({ skills: { ...skills, jf: Number(v) } })}
+                  onValueChange={(v) => update({ skills: { ...skills, jf: Number(v) }, skillsByHand: true })}
                   options={LEVELS}
                 />
               </Field>
