@@ -1,4 +1,4 @@
-import type { JumpGateUse, JumpHull, JumpLegKind, JumpProblem } from '@darkbeacon/shared';
+import type { JumpGateUse, JumpHull, JumpLegKind, JumpProblem, JumpRouteBest } from '@darkbeacon/shared';
 import {
   ANSIBLEX_RANGE_LY,
   bridgeFuel,
@@ -32,7 +32,12 @@ export interface PlanOptions {
   fatigueNow?: number;
   /** Mass bridged on every jump (kg), for titan and black ops bridge fuel. */
   bridgeMassKg?: number | null;
+  /** What the route saves first after stargates; `jumps` by default (see `ORDERS`). */
+  objective?: RouteObjective;
 }
+
+/** What a route is planned to save first: jumps (the recommended one), fuel, or fatigue. */
+export type RouteObjective = 'jumps' | 'fuel' | 'fatigue';
 
 export interface PlannedLeg {
   kind: JumpLegKind;
@@ -58,6 +63,8 @@ export interface PlannedRoute {
   fatigueMinutes: number;
   activationMinutes: number;
   notes: string[];
+  /** What this route beats the others of one plan at (`planJumpRoutes`); empty alone. */
+  best: JumpRouteBest[];
 }
 
 export interface IgnoredAnsiblex {
@@ -67,7 +74,14 @@ export interface IgnoredAnsiblex {
 }
 
 export type PlanOutcome =
-  | { ok: true; rangeLy: number; route: PlannedRoute; ignoredAnsiblex: IgnoredAnsiblex[] }
+  | {
+      ok: true;
+      rangeLy: number;
+      route: PlannedRoute;
+      /** Other routes worth a look, each better than `route` at something (`planJumpRoutes`). */
+      alternatives: PlannedRoute[];
+      ignoredAnsiblex: IgnoredAnsiblex[];
+    }
   | {
       ok: false;
       rangeLy: number;
@@ -112,23 +126,60 @@ export function canJumpFrom(space: JumpSpace, i: number): boolean {
 }
 
 /**
- * Lexicographic cost: stargates, then legs of any kind, then jumps, then stops without a station,
- * then ly, then fatigue. Gates come first so a hull with a jump drive never gates where it could
- * jump: a gate is only for the end of the trip a cyno cannot reach. With `shortcut` gates the
- * first term stays 0, so a gate that saves a jump wins.
+ * Stargates a `shortcut` route may take after its last jump to save jumps, as in "a system one
+ * gate on". Gates beyond these count like `finish` gates: only where no cyno reaches.
  */
-type Cost = [gates: number, legs: number, jumps: number, misses: number, ly: number, fatigue: number];
+export const SHORTCUT_GATES = 3;
 
-function less(a: Cost, b: Cost): boolean {
-  for (let k = 0; k < 6; k++) {
-    if (a[k]! < b[k]! - 1e-9) return true;
-    if (a[k]! > b[k]! + 1e-9) return false;
-  }
-  return false;
+/**
+ * Cost of a partial route, compared lexicographically in the order of its objective (`ORDERS`).
+ * For `jumps`: stargates, then jumps, then stops without a station, then ly (fuel), then legs of
+ * any kind, then fatigue. Gates come first in every order so a hull with a jump drive never gates
+ * where it could jump: a gate is only for the end of the trip a cyno cannot reach. With `shortcut`
+ * gates the first `SHORTCUT_GATES` gates are free, so gates that save a jump win.
+ *
+ * Jumps come before legs: a jump costs isotopes, fatigue and a cyno, a gate or an Ansiblex bridge
+ * costs a minute. Counting them as equals let a longer jump range (Jump Drive Calibration V)
+ * trade a few gates for many jumps, a route that cost more fuel and time than the one at IV.
+ * Ly before legs, so a free gate that saves isotopes is taken. More range only adds jumps to
+ * choose from, so a route never gets worse on any order with it.
+ */
+type Cost = [gates: number, jumps: number, misses: number, ly: number, legs: number, fatigue: number];
+
+const G = 0;
+const J = 1;
+const M = 2;
+const L = 3;
+const N = 4;
+const F = 5;
+
+/**
+ * Term order per objective. `fuel` takes the fewest light years (isotopes scale with them), at
+ * the cost of more jumps; `fatigue` the least fatigue at the end (the sum of log(1 + ly) is the
+ * log of how fatigue multiplies), which favours few long jumps.
+ */
+const ORDERS: Record<RouteObjective, readonly number[]> = {
+  jumps: [G, J, M, L, N, F],
+  fuel: [G, L, J, M, N, F],
+  fatigue: [G, F, J, M, L, N],
+};
+
+type Less = (a: Cost, b: Cost) => boolean;
+
+function lessIn(order: readonly number[]): Less {
+  return (a, b) => {
+    for (const k of order) {
+      if (a[k]! < b[k]! - 1e-9) return true;
+      if (a[k]! > b[k]! + 1e-9) return false;
+    }
+    return false;
+  };
 }
 
 class Heap {
   private readonly items: Array<{ state: number; cost: Cost }> = [];
+
+  constructor(private readonly less: Less) {}
 
   get size(): number {
     return this.items.length;
@@ -140,7 +191,7 @@ class Heap {
     let i = items.length - 1;
     while (i > 0) {
       const parent = (i - 1) >> 1;
-      if (!less(items[i]!.cost, items[parent]!.cost)) break;
+      if (!this.less(items[i]!.cost, items[parent]!.cost)) break;
       [items[i], items[parent]] = [items[parent]!, items[i]!];
       i = parent;
     }
@@ -157,8 +208,8 @@ class Heap {
         const l = 2 * i + 1;
         const r = l + 1;
         let m = i;
-        if (l < items.length && less(items[l]!.cost, items[m]!.cost)) m = l;
-        if (r < items.length && less(items[r]!.cost, items[m]!.cost)) m = r;
+        if (l < items.length && this.less(items[l]!.cost, items[m]!.cost)) m = l;
+        if (r < items.length && this.less(items[r]!.cost, items[m]!.cost)) m = r;
         if (m === i) break;
         [items[i], items[m]] = [items[m]!, items[i]!];
         i = m;
@@ -175,9 +226,9 @@ const KINDS: JumpLegKind[] = ['jump', 'gate', 'ansiblex'];
 
 /**
  * Plans a jump route: fewest stargates (only where no jump reaches, e.g. into high-sec, unless
- * `shortcut` lets a gate save a jump), then fewest legs, then fewest jumps, then
+ * `shortcut` lets up to `SHORTCUT_GATES` gates save jumps), then fewest jumps, then
  * (when asked) fewest stops without an NPC station, then the fewest light years (fuel), then the
- * least fatigue. Gates are taken only after the last jump, e.g. into high-sec, so a
+ * fewest legs, then the least fatigue. Gates are taken only after the last jump, e.g. into high-sec, so a
  * route is never a long gate trip with jumps sprinkled in. The schedule (waits, fatigue,
  * activation timers) assumes each leg is made as soon as it may be.
  */
@@ -248,14 +299,17 @@ export function planJumpRoute(space: JumpSpace, options: PlanOptions): PlanOutco
     return !avoided(v);
   };
 
-  // States: system * 2 + phase (0 jumping, 1 finishing over gates).
-  const states = space.size * 2;
+  // States: system * PHASES + phase: 0 jumping, then finishing over gates with 1, 2, ... gates
+  // behind, the last phase standing for more than SHORTCUT_GATES.
+  const PHASES = SHORTCUT_GATES + 2;
+  const states = space.size * PHASES;
   const best: Array<Cost | undefined> = new Array(states);
   const prev = new Int32Array(states).fill(-1);
   const prevKind = new Uint8Array(states);
   const done = new Uint8Array(states);
-  const heap = new Heap();
-  const start = origin * 2;
+  const less = lessIn(ORDERS[options.objective ?? 'jumps']);
+  const heap = new Heap(less);
+  const start = origin * PHASES;
   best[start] = [0, 0, 0, 0, 0, 0];
   heap.push(start, best[start]!);
   const relax = (from: number, to: number, kind: number, cost: Cost) => {
@@ -272,8 +326,8 @@ export function planJumpRoute(space: JumpSpace, options: PlanOptions): PlanOutco
     const { state, cost } = heap.pop();
     if (done[state]) continue;
     done[state] = 1;
-    const u = state >> 1;
-    const phase = state & 1;
+    const u = Math.floor(state / PHASES);
+    const phase = state % PHASES;
     if (u === destination) {
       reached = state;
       break;
@@ -282,30 +336,31 @@ export function planJumpRoute(space: JumpSpace, options: PlanOptions): PlanOutco
       space.within(u, rangeLy, (v, ly) => {
         if (!isCynoTarget(space, v) || avoided(v)) return;
         const miss = options.preferStations && v !== destination && !space.station(v) ? 1 : 0;
-        relax(state, v * 2, KIND_JUMP, [
+        relax(state, v * PHASES, KIND_JUMP, [
           cost[0],
           cost[1] + 1,
-          cost[2] + 1,
-          cost[3] + miss,
-          cost[4] + ly,
+          cost[2] + miss,
+          cost[3] + ly,
+          cost[4] + 1,
           cost[5] + Math.log1p(ly * ship.fatigueMultiplier),
         ]);
       });
       for (const v of bridges.get(u) ?? []) {
         if (avoided(v)) continue;
-        relax(state, v * 2, KIND_ANSIBLEX, [cost[0], cost[1] + 1, cost[2], cost[3], cost[4], cost[5]]);
+        relax(state, v * PHASES, KIND_ANSIBLEX, [cost[0], cost[1], cost[2], cost[3], cost[4] + 1, cost[5]]);
       }
     }
     if (gates !== 'never') {
-      const gatePenalty = gates === 'shortcut' ? 0 : 1;
+      const free = gates === 'shortcut' && phase < SHORTCUT_GATES;
+      const next = Math.min(phase + 1, PHASES - 1);
       for (const v of space.gateNeighbours(u)) {
         if (!gateOpen(u, v)) continue;
-        relax(state, v * 2 + 1, KIND_GATE, [
-          cost[0] + gatePenalty,
-          cost[1] + 1,
+        relax(state, v * PHASES + next, KIND_GATE, [
+          cost[0] + (free ? 0 : 1),
+          cost[1],
           cost[2],
           cost[3],
-          cost[4],
+          cost[4] + 1,
           cost[5],
         ]);
       }
@@ -322,10 +377,72 @@ export function planJumpRoute(space: JumpSpace, options: PlanOptions): PlanOutco
 
   const steps: Array<{ from: number; to: number; kind: JumpLegKind }> = [];
   for (let s = reached; prev[s]! >= 0; s = prev[s]!) {
-    steps.push({ from: prev[s]! >> 1, to: s >> 1, kind: KINDS[prevKind[s]!]! });
+    steps.push({
+      from: Math.floor(prev[s]! / PHASES),
+      to: Math.floor(s / PHASES),
+      kind: KINDS[prevKind[s]!]!,
+    });
   }
   steps.reverse();
-  return { ok: true, rangeLy, route: schedule(space, options, rules, steps), ignoredAnsiblex };
+  return {
+    ok: true,
+    rangeLy,
+    route: schedule(space, options, rules, steps),
+    alternatives: [],
+    ignoredAnsiblex,
+  };
+}
+
+/**
+ * What an alternative must save against the recommended route to be shown, as a maps app hides a
+ * way that is only a minute shorter: 2 % of the isotopes, or 5 minutes of waiting or fatigue.
+ * Fewer jumps than the recommended route there never are.
+ */
+const WORTH: Record<JumpRouteBest, (alt: PlannedRoute, recommended: PlannedRoute) => boolean> = {
+  jumps: () => false,
+  fuel: (alt, rec) => alt.fuel <= rec.fuel * 0.98,
+  fatigue: (alt, rec) => alt.fatigueMinutes <= rec.fatigueMinutes - 5,
+  wait: (alt, rec) => alt.waitMinutes <= rec.waitMinutes - 5,
+};
+
+const BEST_OF: Record<JumpRouteBest, (r: PlannedRoute) => number> = {
+  jumps: (r) => r.jumps,
+  fuel: (r) => r.fuel,
+  fatigue: (r) => r.fatigueMinutes,
+  wait: (r) => r.waitMinutes,
+};
+
+/**
+ * The recommended route (fewest jumps) and, as alternatives, the routes that save fuel or fatigue
+ * instead, as a maps app offers other ways: the same legs only once, each route tagged with what
+ * it beats the others at. The recommended route comes first whatever the tags say.
+ */
+export function planJumpRoutes(space: JumpSpace, options: PlanOptions): PlanOutcome {
+  const first = planJumpRoute(space, { ...options, objective: 'jumps' });
+  if (!first.ok) return first;
+  const routes = [first.route];
+  const key = (r: PlannedRoute) => r.legs.map((l) => `${l.kind}:${l.to}`).join(',');
+  const seen = new Set([key(first.route)]);
+  for (const objective of ['fuel', 'fatigue'] as const) {
+    const other = planJumpRoute(space, { ...options, objective });
+    if (!other.ok || seen.has(key(other.route))) continue;
+    seen.add(key(other.route));
+    routes.push(other.route);
+  }
+  const metrics = Object.entries(BEST_OF) as Array<[JumpRouteBest, (r: PlannedRoute) => number]>;
+  // An alternative that saves nothing worth naming against the recommended route is left out.
+  const shown = [
+    routes[0]!,
+    ...routes.slice(1).filter((r) => metrics.some(([best]) => WORTH[best](r, routes[0]!))),
+  ];
+  for (const [best, of] of metrics) {
+    const least = Math.min(...shown.map(of));
+    // Only a difference is worth naming (one route alone ties with itself).
+    if (shown.every((r) => of(r) <= least + 1e-9)) continue;
+    for (const r of shown) if (of(r) <= least + 1e-9) r.best.push(best);
+  }
+  const alternatives = shown.slice(1);
+  return { ...first, route: routes[0]!, alternatives };
 }
 
 /** Fuel, waits, fatigue and activation timers along the legs, each leg made as soon as it may be. */
@@ -410,5 +527,6 @@ function schedule(
     fatigueMinutes: last?.fatigueMinutes ?? fatigue,
     activationMinutes: last?.activationMinutes ?? 0,
     notes,
+    best: [],
   };
 }

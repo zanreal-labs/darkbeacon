@@ -7,6 +7,7 @@ import {
   routes,
   type JumpMetaDto,
   type JumpPlanDto,
+  type JumpRouteDto,
   type JumpPlanRequest,
   type JumpUniverseDto,
 } from '@darkbeacon/shared';
@@ -270,15 +271,39 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
         retry: false,
       });
   };
-  const result = request !== null ? (plan.data ?? null) : null;
-  const legs: RouteLeg[] | null = useMemo(
-    () =>
-      result?.route?.legs.map((leg) => ({
+  const answer = request !== null ? (plan.data ?? null) : null;
+  // The recommended route, or the alternative the pilot picked for this answer (a new answer
+  // starts on the recommended one again, as a maps app does).
+  const [choice, setChoice] = useState<{ of: JumpPlanDto | null; index: number }>({ of: null, index: 0 });
+  const routeOptions = useMemo(
+    () => (answer?.route ? [answer.route, ...(answer.alternatives ?? [])] : []),
+    [answer],
+  );
+  const chosen = choice.of === answer && choice.index < routeOptions.length ? choice.index : 0;
+  const result: JumpPlanDto | null = useMemo(
+    () => (answer && routeOptions.length > 0 ? { ...answer, route: routeOptions[chosen]! } : answer),
+    [answer, routeOptions, chosen],
+  );
+  const chooseRoute = (index: number) => {
+    setChoice({ of: answer, index });
+    setActiveLeg(null);
+  };
+  const toLegs = useCallback(
+    (route: JumpRouteDto): RouteLeg[] =>
+      route.legs.map((leg) => ({
         from: model.indexById.get(leg.from.id)!,
         to: model.indexById.get(leg.to.id)!,
         kind: leg.kind,
-      })) ?? null,
-    [result, model],
+      })),
+    [model],
+  );
+  const legs: RouteLeg[] | null = useMemo(
+    () => (result?.route ? toLegs(result.route) : null),
+    [result, toLegs],
+  );
+  const otherLegs = useMemo(
+    () => routeOptions.filter((_, n) => n !== chosen).map(toLegs),
+    [routeOptions, chosen, toLegs],
   );
 
   const rangeLy = ship.rangeLy * (1 + meta.rangeBonusPerLevel * skills.jdc);
@@ -303,11 +328,25 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
       rangeLy,
       reachable,
       route: legs,
+      alternatives: otherLegs,
       activeLeg,
       avoided: avoidSystems,
       exits: new Set(exits),
     }),
-    [origin, destination, pinned, hover, rangeFrom, rangeLy, reachable, legs, activeLeg, avoidSystems, exits],
+    [
+      origin,
+      destination,
+      pinned,
+      hover,
+      rangeFrom,
+      rangeLy,
+      reachable,
+      legs,
+      otherLegs,
+      activeLeg,
+      avoidSystems,
+      exits,
+    ],
   );
 
   // Bring what matters into view: the whole route once it arrives, else the start and its range.
@@ -443,6 +482,9 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
         ansiblex={ansiblex}
         rangeLy={rangeLy}
         plan={result}
+        routeOptions={routeOptions}
+        chosenRoute={chosen}
+        onChooseRoute={chooseRoute}
         planning={plan.isFetching}
         planError={plan.error}
         activeLeg={activeLeg}

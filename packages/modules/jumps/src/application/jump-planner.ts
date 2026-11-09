@@ -3,6 +3,7 @@ import type {
   JumpMetaDto,
   JumpPlanDto,
   JumpPlanInput,
+  JumpRouteDto,
   JumpShipDto,
   JumpSystemRefDto,
   JumpUniverseDto,
@@ -11,9 +12,10 @@ import {
   ANSIBLEX_RANGE_LY,
   HULL_RULES,
   JumpSpace,
-  planJumpRoute,
+  planJumpRoutes,
   RANGE_BONUS_PER_LEVEL,
   type JumpShip,
+  type PlannedRoute,
 } from '../domain/index.js';
 import type { JumpSpaceSource } from '../ports/index.js';
 
@@ -83,7 +85,7 @@ export class JumpPlanner {
     const origin = index(request.origin, 'The start');
     const destination = index(request.destination, 'The destination');
     const known = (ids: readonly number[]) => ids.flatMap((id) => space.indexOf(id) ?? []);
-    const outcome = planJumpRoute(space, {
+    const outcome = planJumpRoutes(space, {
       ship,
       origin,
       destination,
@@ -119,37 +121,40 @@ export class JumpPlanner {
         ship: shipDto(ship),
         rangeLy: outcome.rangeLy,
         route: null,
+        alternatives: [],
         problem: { code: outcome.problem, message: outcome.message },
         ignoredAnsiblex,
       };
     }
-    const r = outcome.route;
+    const routeDto = (r: PlannedRoute): JumpRouteDto => ({
+      legs: r.legs.map((leg) => ({
+        kind: leg.kind,
+        from: ref(leg.from),
+        to: ref(leg.to),
+        ly: round(leg.ly, 3),
+        fuel: leg.fuel,
+        bridgeFuel: leg.bridgeFuel,
+        waitMinutes: round(leg.waitMinutes, 1),
+        activationMinutes: round(leg.activationMinutes, 1),
+        fatigueMinutes: round(leg.fatigueMinutes, 1),
+      })),
+      jumps: r.jumps,
+      gates: r.gates,
+      ansiblex: r.ansiblex,
+      ly: round(r.ly, 3),
+      fuel: r.fuel,
+      bridgeFuel: r.bridgeFuel,
+      waitMinutes: round(r.waitMinutes, 1),
+      fatigueMinutes: round(r.fatigueMinutes, 1),
+      activationMinutes: round(r.activationMinutes, 1),
+      notes: r.notes,
+      best: r.best,
+    });
     return {
       ship: shipDto(ship),
       rangeLy: outcome.rangeLy,
-      route: {
-        legs: r.legs.map((leg) => ({
-          kind: leg.kind,
-          from: ref(leg.from),
-          to: ref(leg.to),
-          ly: round(leg.ly, 3),
-          fuel: leg.fuel,
-          bridgeFuel: leg.bridgeFuel,
-          waitMinutes: round(leg.waitMinutes, 1),
-          activationMinutes: round(leg.activationMinutes, 1),
-          fatigueMinutes: round(leg.fatigueMinutes, 1),
-        })),
-        jumps: r.jumps,
-        gates: r.gates,
-        ansiblex: r.ansiblex,
-        ly: round(r.ly, 3),
-        fuel: r.fuel,
-        bridgeFuel: r.bridgeFuel,
-        waitMinutes: round(r.waitMinutes, 1),
-        fatigueMinutes: round(r.fatigueMinutes, 1),
-        activationMinutes: round(r.activationMinutes, 1),
-        notes: r.notes,
-      },
+      route: routeDto(outcome.route),
+      alternatives: outcome.alternatives.map(routeDto),
       problem: null,
       ignoredAnsiblex,
     };

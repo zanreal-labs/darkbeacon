@@ -27,6 +27,8 @@ export interface Overlay {
   /** Systems a jump from `rangeFrom` may land in (1), when the range is shown. */
   reachable: Uint8Array | null;
   route: readonly RouteLeg[] | null;
+  /** The other routes the pilot may pick instead, drawn faint under `route`. */
+  alternatives: ReadonlyArray<readonly RouteLeg[]>;
   /** Leg under the pointer in the legs list. */
   activeLeg: number | null;
   avoided: ReadonlySet<number>;
@@ -64,6 +66,15 @@ export function toWorld(view: View, sx: number, sy: number): [number, number] {
 export const REGION_LABELS_BELOW = 16;
 export const SYSTEM_LABELS_FROM = 22;
 
+/** Control point of the bowed arc a jump is drawn as. */
+function bowControl(ax: number, ay: number, bx: number, by: number): [number, number] {
+  const len = Math.hypot(bx - ax, by - ay);
+  const bow = Math.min(len * 0.18, 60);
+  const nx = len === 0 ? 0 : (-(by - ay) / len) * bow;
+  const ny = len === 0 ? 0 : ((bx - ax) / len) * bow;
+  return [(ax + bx) / 2 + nx, (ay + by) / 2 + ny];
+}
+
 export function dotRadius(scale: number): number {
   return Math.max(1.3, Math.min(4.5, scale * 0.11));
 }
@@ -96,6 +107,7 @@ export function drawStarMap(
   if (route.length > 0) {
     emphasis = new Uint8Array(model.size);
     for (const leg of route) emphasis[leg.from] = emphasis[leg.to] = 1;
+    for (const alt of overlay.alternatives) for (const leg of alt) emphasis[leg.from] = emphasis[leg.to] = 1;
   } else if (overlay.reachable) emphasis = overlay.reachable;
   const quiet = route.length > 0 ? 0.5 : 1;
 
@@ -214,6 +226,32 @@ export function drawStarMap(
     ctx.stroke();
   }
 
+  // Other routes first, faint, so the chosen one reads on top of them.
+  ctx.globalAlpha = 0.4;
+  for (const alt of overlay.alternatives) {
+    for (const leg of alt) {
+      const ax = sx(leg.from);
+      const ay = sy(leg.from);
+      const bx = sx(leg.to);
+      const by = sy(leg.to);
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      if (leg.kind === 'jump') {
+        const [cx, cy] = bowControl(ax, ay, bx, by);
+        ctx.quadraticCurveTo(cx, cy, bx, by);
+        ctx.setLineDash([]);
+      } else {
+        ctx.lineTo(bx, by);
+        ctx.setLineDash([5, 4]);
+      }
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = palette.textMuted;
+      ctx.stroke();
+    }
+  }
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
+
   // The route: bowed arcs for jumps, dashed lines for gates and Ansiblex bridges.
   route.forEach((leg, n) => {
     const ax = sx(leg.from);
@@ -222,19 +260,14 @@ export function drawStarMap(
     const by = sy(leg.to);
     const active = overlay.activeLeg === n;
     if (leg.kind === 'jump') {
-      const mx = (ax + bx) / 2;
-      const my = (ay + by) / 2;
-      const len = Math.hypot(bx - ax, by - ay);
-      const bow = Math.min(len * 0.18, 60);
-      const nx = len === 0 ? 0 : (-(by - ay) / len) * bow;
-      const ny = len === 0 ? 0 : ((bx - ax) / len) * bow;
+      const [cx, cy] = bowControl(ax, ay, bx, by);
       for (const [w, color] of [
         [active ? 8 : 7, palette.canvas],
         [active ? 4 : 3, palette.accent],
       ] as const) {
         ctx.beginPath();
         ctx.moveTo(ax, ay);
-        ctx.quadraticCurveTo(mx + nx, my + ny, bx, by);
+        ctx.quadraticCurveTo(cx, cy, bx, by);
         ctx.lineWidth = w;
         ctx.strokeStyle = color;
         ctx.stroke();

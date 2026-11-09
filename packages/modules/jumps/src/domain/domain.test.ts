@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { bridgeFuel, fatigueAfterJump, jumpFuel, jumpRange, waitForFatigueCap } from './formulas.js';
 import { hullOfGroup } from './hulls.js';
 import { JUMP_SKILL_TYPE_IDS, jumpSkillsFrom } from './pilot.js';
-import { canJumpFrom, isCynoTarget, planJumpRoute, type PlanOptions } from './planner.js';
+import { canJumpFrom, isCynoTarget, planJumpRoute, planJumpRoutes, type PlanOptions } from './planner.js';
 import { FLAG_POCHVEN, FLAG_STATION, FLAG_ZARZAKH, JumpSpace, type JumpShipData } from './space.js';
 
 // Ships as the SDE (build 3586130) has them.
@@ -285,6 +285,56 @@ describe('planJumpRoute', () => {
     expect(shortcut.ok && shortcut.route.legs.map((l) => l.kind)).toEqual(['jump', 'gate']);
   });
 
+  it('lets up to three gates, never more, save a jump', () => {
+    // An Ark (10 ly) reaches only S1 (9 ly); the destination is one more 9 ly jump, or gates on.
+    const far = line(
+      [{ x: 0 }, { x: 9 }, { x: 11 }, { x: 13 }, { x: 15 }, { x: 18 }],
+      [
+        [1, 2],
+        [2, 3],
+        [3, 4],
+        [4, 5],
+      ],
+    );
+    // Four gates do not save the jump; three free gates after a 2 ly second jump save isotopes.
+    expect(plan(far, ARK, 0, 5, { gates: 'shortcut' })).toMatchObject({
+      ok: true,
+      route: { jumps: 2, gates: 3, ly: 11 },
+    });
+    const near = line(
+      [{ x: 0 }, { x: 9 }, { x: 11 }, { x: 13 }, { x: 15 }],
+      [
+        [1, 2],
+        [2, 3],
+        [3, 4],
+      ],
+    );
+    expect(plan(near, ARK, 0, 4, { gates: 'shortcut' })).toMatchObject({
+      ok: true,
+      route: { jumps: 1, gates: 3 },
+    });
+  });
+
+  it('never trades a few gates for many jumps with more Jump Drive Calibration', () => {
+    // Stepping stones every 3.5 ly: an Archon makes 6 jumps at IV (6.3 ly), 3 at V (7 ly). Or one
+    // jump to S1 and three gates through systems far off. Counting a gate as a jump, V took the
+    // three jumps (more fuel and fatigue) while IV took the gates.
+    const stones = Array.from({ length: 7 }, (_, k) => ({ x: 3.5 * k }));
+    const off = Array.from({ length: 2 }, (_, k) => ({ x: 5 * k, y: 100 }));
+    const space = line(
+      [...stones, ...off],
+      [
+        [1, 7],
+        [7, 8],
+        [8, 6],
+      ],
+    );
+    const at = (jdc: number) =>
+      plan(space, ARCHON, 0, 6, { gates: 'shortcut', skills: { jdc, jfc: 5, jf: 0 } });
+    expect(at(4)).toMatchObject({ ok: true, route: { jumps: 1, gates: 3 } });
+    expect(at(5)).toMatchObject({ ok: true, route: { jumps: 1, gates: 3 } });
+  });
+
   it('never routes outlaws through high-sec on the way', () => {
     // Black ops without Jump Drive Calibration (4 ly) reach S1, then gate around S2 (high-sec).
     const space = line(
@@ -321,6 +371,43 @@ describe('planJumpRoute', () => {
     expect(outcome.ok && outcome.route.legs[0]!.bridgeFuel).toBe(600); // 1e8 * 1e-9 * 3000 * 4 * 0.5
     const none = plan(chain, ARCHON, 0, 1, { bridgeMassKg: 1e8 });
     expect(none.ok && none.route.bridgeFuel).toBeNull();
+  });
+});
+
+describe('planJumpRoutes', () => {
+  // Two long jumps over S1 (6.95 ly each), or three short ones over S2 and S3 (4 ly each).
+  const space = line([{ x: 0 }, { x: 6, y: 3.5 }, { x: 4 }, { x: 8 }, { x: 12 }]);
+  const routes = (extra: Partial<PlanOptions> = {}) =>
+    planJumpRoutes(space, {
+      ship: space.ship(ARCHON.typeId)!,
+      origin: 0,
+      destination: 4,
+      skills: { jdc: 5, jfc: 5, jf: 5 },
+      ...extra,
+    });
+
+  it('recommends the fewest jumps and offers the least fuel as an alternative', () => {
+    const outcome = routes();
+    if (!outcome.ok) throw new Error(outcome.message);
+    // Both end at the 5 hour fatigue cap, so neither is named for fatigue.
+    expect(outcome.route).toMatchObject({ jumps: 2, best: ['jumps', 'wait'] });
+    expect(outcome.alternatives).toHaveLength(1);
+    expect(outcome.alternatives[0]).toMatchObject({ jumps: 3, ly: 12, best: ['fuel'] });
+  });
+
+  it('offers nothing else when one route is best at everything', () => {
+    const outcome = planJumpRoutes(line([{ x: 0 }, { x: 4 }, { x: 8 }]), {
+      ship: space.ship(ARCHON.typeId)!,
+      origin: 0,
+      destination: 2,
+      skills: { jdc: 5, jfc: 5, jf: 5 },
+    });
+    expect(outcome.ok && outcome.alternatives).toEqual([]);
+    expect(outcome.ok && outcome.route.best).toEqual([]);
+  });
+
+  it('fails as the single plan does', () => {
+    expect(routes({ destination: 0 })).toMatchObject({ ok: false, problem: 'same_system' });
   });
 });
 

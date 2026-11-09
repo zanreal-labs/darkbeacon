@@ -113,7 +113,9 @@ describe('formatting', () => {
         fatigueMinutes: 36.4,
         activationMinutes: 2,
         notes: [],
+        best: [],
       },
+      alternatives: [],
       problem: null,
       ignoredAnsiblex: [],
     };

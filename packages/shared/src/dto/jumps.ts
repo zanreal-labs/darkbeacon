@@ -180,28 +180,41 @@ export const JumpProblem = z.enum([
 ]);
 export type JumpProblem = z.infer<typeof JumpProblem>;
 
+/** What a route beats the other routes of a plan at. */
+export const JumpRouteBest = z.enum(['jumps', 'fuel', 'fatigue', 'wait']);
+export type JumpRouteBest = z.infer<typeof JumpRouteBest>;
+
+export const JumpRouteDto = z.object({
+  legs: z.array(JumpLegDto),
+  jumps: z.number().int(),
+  gates: z.number().int(),
+  ansiblex: z.number().int(),
+  /** Light years jumped. */
+  ly: z.number(),
+  fuel: z.number().int(),
+  bridgeFuel: z.number().int().nullable(),
+  /** Waiting between legs (minutes); gate travel is not counted. */
+  waitMinutes: z.number(),
+  fatigueMinutes: z.number(),
+  activationMinutes: z.number(),
+  /** Things the pilot should know, one sentence each. */
+  notes: z.array(z.string()),
+  /** What this route beats the plan's other routes at: fewest jumps, least fuel, ... */
+  best: z.array(JumpRouteBest).default([]),
+});
+export type JumpRouteDto = z.infer<typeof JumpRouteDto>;
+
 export const JumpPlanDto = z.object({
   ship: JumpShipDto,
   /** Range with the given Jump Drive Calibration. */
   rangeLy: z.number(),
-  route: z
-    .object({
-      legs: z.array(JumpLegDto),
-      jumps: z.number().int(),
-      gates: z.number().int(),
-      ansiblex: z.number().int(),
-      /** Light years jumped. */
-      ly: z.number(),
-      fuel: z.number().int(),
-      bridgeFuel: z.number().int().nullable(),
-      /** Waiting between legs (minutes); gate travel is not counted. */
-      waitMinutes: z.number(),
-      fatigueMinutes: z.number(),
-      activationMinutes: z.number(),
-      /** Things the pilot should know, one sentence each. */
-      notes: z.array(z.string()),
-    })
-    .nullable(),
+  /** The recommended route: fewest jumps, then fewest light years. */
+  route: JumpRouteDto.nullable(),
+  /**
+   * Other ways, as a maps app offers them: the route with the least fuel or the least fatigue
+   * where it differs from the recommended one. Each says what it is better at (`best`).
+   */
+  alternatives: z.array(JumpRouteDto).default([]),
   problem: z.object({ code: JumpProblem, message: z.string() }).nullable(),
   /** Ansiblex pairs that were left out (too far apart, or not usable by this hull). */
   ignoredAnsiblex: z.array(z.object({ from: EveId, to: EveId, why: z.string() })),

@@ -203,18 +203,25 @@
 }
 
 .endpoints {
-  position: relative;
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--dbk-space-2);
 }
 
-/* Between the two fields, on the right where the second label leaves room. */
+.endpoints > [data-picker] {
+  grid-column: 1;
+}
+
+.endpoints > [data-picker='destination'] {
+  grid-row: 2;
+}
+
+/* A column of its own beside both fields, centred between them: it never covers a field. */
 .swap {
-  position: absolute;
-  z-index: 1;
-  top: 50%;
-  right: 0;
-  transform: translateY(-50%);
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  align-self: center;
+  margin-top: var(--dbk-space-4);
 }
 
 /* Half a turn per swap: the values change in place, the icon says that they did. */
@@ -266,6 +273,10 @@
   font-weight: 500;
   text-align: left;
   cursor: pointer;
+}
+
+.optionsToggle[data-warn] svg:first-child {
+  color: var(--dbk-color-warning);
 }
 
 .optionsToggle:hover {
@@ -342,6 +353,73 @@
 .result[aria-busy] {
   opacity: 0.6;
   transition-delay: 150ms;
+}
+
+.choices {
+  display: grid;
+  gap: var(--dbk-space-1);
+}
+
+.choice {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: var(--dbk-space-2);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.choice:hover {
+  background: var(--dbk-color-surface-hover);
+}
+
+.choice[aria-checked='true'] {
+  border-color: var(--dbk-color-accent);
+  background: var(--dbk-color-accent-subtle);
+}
+
+.choice:focus-visible {
+  outline: 2px solid var(--dbk-color-focus);
+  outline-offset: 1px;
+}
+
+.choiceHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dbk-space-1);
+}
+
+.choiceTitle {
+  font-weight: 600;
+}
+
+.choiceTag {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--dbk-color-surface-raised);
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-xs);
+  line-height: 18px;
+}
+
+.choice[aria-checked='true'] .choiceTag {
+  background: var(--dbk-color-surface);
+  color: var(--dbk-color-accent-text);
+}
+
+.choiceMain {
+  font-weight: 500;
+}
+
+.choiceMeta {
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-xs);
 }
 
 .totalsMain {

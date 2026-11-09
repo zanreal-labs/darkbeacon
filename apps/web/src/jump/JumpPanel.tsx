@@ -12,6 +12,8 @@ import {
   Navigation,
   RefreshCw,
   SlidersHorizontal,
+  TriangleAlert,
+  UserRound,
   X,
 } from 'lucide-react';
 import {
@@ -21,6 +23,8 @@ import {
   type JumpHull,
   type JumpMetaDto,
   type JumpPlanDto,
+  type JumpRouteBest,
+  type JumpRouteDto,
   type JumpShipDto,
   type WaypointRequest,
 } from '@darkbeacon/shared';
@@ -100,7 +104,12 @@ export interface JumpPanelProps {
   avoidRegions: readonly number[];
   ansiblex: AnsiblexParse;
   rangeLy: number;
+  /** The answer with `route` set to the route the pilot looks at. */
   plan: JumpPlanDto | null;
+  /** The recommended route first, then the alternatives; one route when there is no choice. */
+  routeOptions: readonly JumpRouteDto[];
+  chosenRoute: number;
+  onChooseRoute(index: number): void;
   planning: boolean;
   planError: Error | null;
   activeLeg: number | null;
@@ -178,7 +187,6 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
           {open && (
             <div>
               <h1 className={styles.title}>Jump planner</h1>
-              <p className={styles.lede}>Capital jump routes across known space.</p>
             </div>
           )}
           <IconButton
@@ -211,13 +219,6 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
               />
             </Field>
           </div>
-          <p className={styles.shipFacts}>
-            {formatRange(props.rangeLy)} range · {formatNumber(ship.fuelPerLy)}{' '}
-            {ISOTOPE_LABELS[ship.isotope].toLowerCase()} per ly ·{' '}
-            {ship.cyno === 'regular' ? 'normal' : ship.cyno} cyno
-            {ship.fatigueMultiplier < 1 &&
-              ` · ${Math.round((1 - ship.fatigueMultiplier) * 100)} % less fatigue`}
-          </p>
 
           <div className={styles.endpoints}>
             <div data-picker="origin">
@@ -264,51 +265,6 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
             </div>
           </div>
 
-          <Pilot {...props} />
-
-          <div className={styles.skills}>
-            <Field label="Calibration">
-              <Select
-                size="sm"
-                value={String(settings.skills.jdc)}
-                onValueChange={(v) => update({ skills: { ...settings.skills, jdc: Number(v) } })}
-                options={LEVELS}
-              />
-            </Field>
-            <Field label="Conservation">
-              <Select
-                size="sm"
-                value={String(settings.skills.jfc)}
-                onValueChange={(v) => update({ skills: { ...settings.skills, jfc: Number(v) } })}
-                options={LEVELS}
-              />
-            </Field>
-            {ship.hull === 'jump_freighter' && (
-              <Field label="Freighters">
-                <Select
-                  size="sm"
-                  value={String(settings.skills.jf)}
-                  onValueChange={(v) => update({ skills: { ...settings.skills, jf: Number(v) } })}
-                  options={LEVELS}
-                />
-              </Field>
-            )}
-          </div>
-
-          <p className={styles.skillsHint}>
-            {props.pilot.skills && props.pilot.pilot ? (
-              `From ESI · ${props.pilot.pilot.name}`
-            ) : props.pilot.answer?.skills ? (
-              'Set by hand · refresh to read ESI again'
-            ) : (
-              <>
-                Jump Drive Calibration, Jump Fuel Conservation
-                {ship.hull === 'jump_freighter' ? ' and Jump Freighters' : ''}.
-              </>
-            )}
-          </p>
-          <PilotHint {...props} />
-
           <button
             type="button"
             className={styles.optionsToggle}
@@ -321,6 +277,8 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
             {optionsOpen ? <ChevronUp aria-hidden /> : <ChevronDown aria-hidden />}
           </button>
           {optionsOpen && <Options {...props} />}
+
+          <PilotSkills {...props} />
 
           <Result {...props} />
         </div>
@@ -355,6 +313,95 @@ function optionsSummary(settings: PlannerSettings, props: PanelState): string {
 interface AvoidOption extends PickerOption {
   kind: 'system' | 'region';
   name: string;
+}
+
+const roman = (n: number) => LEVELS[n]?.label ?? String(n);
+
+/**
+ * The pilot's skills, folded away: they change rarely and ESI fills them in. The summary says
+ * where the levels come from, and warns when they are only assumed (fuel and range follow them).
+ */
+function PilotSkills(props: PanelState) {
+  const { pilot: fill, settings, update, ship } = props;
+  const [open, setOpen] = useState(false);
+  const { skills } = settings;
+  const levels = [
+    `${formatRange(props.rangeLy)} range`,
+    `JDC ${roman(skills.jdc)}`,
+    `JFC ${roman(skills.jfc)}`,
+    ...(ship.hull === 'jump_freighter' ? [`JF ${roman(skills.jf)}`] : []),
+  ].join(' · ');
+  const fromEsi = fill.skills !== null && fill.pilot !== null;
+  const byHand = !fromEsi && fill.answer?.skills != null;
+  const source = fromEsi ? fill.pilot!.name : byHand ? 'set by hand' : 'assumed';
+  const needsLink =
+    fill.pilot !== null && (!fill.pilot.tokenValid || (fill.answer?.missingScopes.length ?? 0) > 0);
+  return (
+    <>
+      <button
+        type="button"
+        className={styles.optionsToggle}
+        aria-expanded={open}
+        data-warn={(!fromEsi && !byHand) || undefined}
+        onClick={() => setOpen(!open)}
+      >
+        {!fromEsi && !byHand ? <TriangleAlert aria-hidden /> : <UserRound aria-hidden />}
+        <span>Skills</span>
+        <span className={styles.optionsSummary}>
+          {levels} · {source}
+        </span>
+        {open ? <ChevronUp aria-hidden /> : <ChevronDown aria-hidden />}
+      </button>
+      {open && (
+        <div className={styles.options}>
+          <Pilot {...props} />
+          <div className={styles.skills}>
+            <Field label="Calibration">
+              <Select
+                size="sm"
+                value={String(skills.jdc)}
+                onValueChange={(v) => update({ skills: { ...skills, jdc: Number(v) } })}
+                options={LEVELS}
+              />
+            </Field>
+            <Field label="Conservation">
+              <Select
+                size="sm"
+                value={String(skills.jfc)}
+                onValueChange={(v) => update({ skills: { ...skills, jfc: Number(v) } })}
+                options={LEVELS}
+              />
+            </Field>
+            {ship.hull === 'jump_freighter' && (
+              <Field label="Freighters">
+                <Select
+                  size="sm"
+                  value={String(skills.jf)}
+                  onValueChange={(v) => update({ skills: { ...skills, jf: Number(v) } })}
+                  options={LEVELS}
+                />
+              </Field>
+            )}
+          </div>
+          {/* What to do about it when EVE could fill them, else where they come from. */}
+          {needsLink ? (
+            <PilotHint {...props} />
+          ) : (
+            <>
+              <p className={styles.skillsHint}>
+                {fromEsi
+                  ? `From ESI · ${fill.pilot!.name}`
+                  : byHand
+                    ? 'Set by hand · refresh to read ESI again'
+                    : 'Not read from EVE: fuel and range use these levels.'}
+              </p>
+              <PilotHint {...props} />
+            </>
+          )}
+        </div>
+      )}
+    </>
+  );
 }
 
 /** Whose skills and fatigue ESI fills in, and a way to read them again. */
@@ -454,7 +501,7 @@ function Options({
         disabled={settings.gates === 'never'}
         onCheckedChange={(on) => update({ gates: on ? 'shortcut' : 'finish' })}
         label="Allow jump gates"
-        description="Take a stargate after the last jump when it saves a jump, e.g. into a system one gate on."
+        description="Up to three stargates after the last jump when they save jumps, e.g. into a system one gate on."
       />
       <Switch
         checked={settings.preferStations}
@@ -626,36 +673,39 @@ function Result(props: PanelState) {
         </Callout>
       ) : (
         <>
-          <div className={styles.totals}>
-            <div className={styles.totalsMain}>
-              {route.jumps} {route.jumps === 1 ? 'jump' : 'jumps'}
-              {route.gates > 0 && ` + ${route.gates} ${route.gates === 1 ? 'gate' : 'gates'}`}
-              {route.ansiblex > 0 && ` + ${route.ansiblex} Ansiblex`}
-              <span>{formatLy(route.ly)}</span>
-            </div>
-            <dl className={styles.facts}>
-              <div>
-                <dt>Fuel</dt>
-                <dd>
-                  {formatNumber(route.fuel)} {ISOTOPE_LABELS[plan.ship.isotope].toLowerCase()}
-                </dd>
+          <RouteChoices {...props} />
+          {props.routeOptions.length < 2 && (
+            <div className={styles.totals}>
+              <div className={styles.totalsMain}>
+                {route.jumps} {route.jumps === 1 ? 'jump' : 'jumps'}
+                {route.gates > 0 && ` + ${route.gates} ${route.gates === 1 ? 'gate' : 'gates'}`}
+                {route.ansiblex > 0 && ` + ${route.ansiblex} Ansiblex`}
+                <span>{formatLy(route.ly)}</span>
               </div>
-              <div>
-                <dt>Fatigue at the end</dt>
-                <dd>{formatMinutes(route.fatigueMinutes)}</dd>
-              </div>
-              <div>
-                <dt>Waiting</dt>
-                <dd>{formatMinutes(route.waitMinutes)}</dd>
-              </div>
-              {route.bridgeFuel !== null && (
+              <dl className={styles.facts}>
                 <div>
-                  <dt>Bridge fuel</dt>
-                  <dd>{formatNumber(route.bridgeFuel)}</dd>
+                  <dt>Fuel</dt>
+                  <dd>
+                    {formatNumber(route.fuel)} {ISOTOPE_LABELS[plan.ship.isotope].toLowerCase()}
+                  </dd>
                 </div>
-              )}
-            </dl>
-          </div>
+                <div>
+                  <dt>Fatigue at the end</dt>
+                  <dd>{formatMinutes(route.fatigueMinutes)}</dd>
+                </div>
+                <div>
+                  <dt>Waiting</dt>
+                  <dd>{formatMinutes(route.waitMinutes)}</dd>
+                </div>
+                {route.bridgeFuel !== null && (
+                  <div>
+                    <dt>Bridge fuel</dt>
+                    <dd>{formatNumber(route.bridgeFuel)}</dd>
+                  </div>
+                )}
+              </dl>
+            </div>
+          )}
           {route.notes.map((note) => (
             <Callout key={note} tone="warning">
               {note}
@@ -708,6 +758,54 @@ function Result(props: PanelState) {
         </>
       )}
     </section>
+  );
+}
+
+const BEST_LABELS: Record<JumpRouteBest, string> = {
+  jumps: 'Fewest jumps',
+  fuel: 'Least fuel',
+  fatigue: 'Least fatigue',
+  wait: 'Shortest wait',
+};
+
+/** One line per route, as a maps app lists other ways: the recommended one first, picked by default. */
+function RouteChoices({ routeOptions, chosenRoute, onChooseRoute, plan }: PanelState) {
+  if (routeOptions.length < 2 || !plan) return null;
+  const isotope = ISOTOPE_LABELS[plan.ship.isotope].toLowerCase();
+  return (
+    <div className={styles.choices} role="radiogroup" aria-label="Routes">
+      {routeOptions.map((route, n) => (
+        <button
+          key={n}
+          type="button"
+          role="radio"
+          aria-checked={n === chosenRoute}
+          className={styles.choice}
+          onClick={() => onChooseRoute(n)}
+        >
+          <span className={styles.choiceHead}>
+            <span className={styles.choiceTitle}>{n === 0 ? 'Recommended' : 'Alternative'}</span>
+            {route.best.map((b) => (
+              <span key={b} className={styles.choiceTag}>
+                {BEST_LABELS[b]}
+              </span>
+            ))}
+          </span>
+          <span className={styles.choiceMain}>
+            {route.jumps} {route.jumps === 1 ? 'jump' : 'jumps'}
+            {route.gates > 0 && ` + ${route.gates} ${route.gates === 1 ? 'gate' : 'gates'}`}
+            {route.ansiblex > 0 && ` + ${route.ansiblex} Ansiblex`}
+            {' · '}
+            {formatLy(route.ly)}
+          </span>
+          <span className={styles.choiceMeta}>
+            {formatNumber(route.fuel)} {isotope}
+            {route.bridgeFuel !== null && ` · bridge ${formatNumber(route.bridgeFuel)}`} · wait{' '}
+            {formatMinutes(route.waitMinutes)} · fatigue {formatMinutes(route.fatigueMinutes)}
+          </span>
+        </button>
+      ))}
+    </div>
   );
 }
 

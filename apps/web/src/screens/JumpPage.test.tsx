@@ -67,7 +67,9 @@ const plan: JumpPlanDto = {
     fatigueMinutes: 32.2,
     activationMinutes: 2,
     notes: [],
+    best: [],
   },
+  alternatives: [],
   problem: null,
   ignoredAnsiblex: [],
 };
@@ -259,8 +261,11 @@ describe('JumpPage', () => {
     const user = userEvent.setup();
     renderPage();
     const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+    // Folded away: the summary names the range, the levels and where they come from.
+    const skills = await within(panel).findByRole('button', { name: /Skills.*Ayla Vex/ });
+    expect(skills.textContent).toMatch(/9 ly range · JDC IV · JFC V · JF II · Ayla Vex/);
+    await user.click(skills);
     expect(await within(panel).findByText('From ESI · Ayla Vex')).toBeTruthy();
-    expect(within(panel).getByText(/9 ly range/)).toBeTruthy();
     await waitFor(() =>
       expect(requests.at(-1)).toMatchObject({
         skills: { jdc: 4, jfc: 5, jf: 2 },
@@ -286,17 +291,21 @@ describe('JumpPage', () => {
   });
 
   it('offers linking the pilot again with skills and fatigue when the grant lacks them', async () => {
+    const user = userEvent.setup();
     renderPage();
     const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+    // The folded summary warns that the levels are only assumed.
+    const skills = await within(panel).findByRole('button', { name: /Skills.*assumed/ });
+    expect(skills.textContent).toMatch(/10 ly range/);
+    await user.click(skills);
     const link = await within(panel).findByRole('link', { name: 'Allow skills and jump fatigue' });
     const href = new URL(link.getAttribute('href')!, 'http://x');
     expect(href.pathname).toBe(routes.auth.eveLogin.path);
     expect(href.searchParams.get('extras')).toBe('jumps');
     expect(href.searchParams.get('returnTo')).toMatch(/^\/jump/);
     expect(within(panel).getByText(/for Ayla Vex to fill these from EVE/)).toBeTruthy();
-    // Nothing from ESI: the remembered levels stay, and the hint names the skills.
-    expect(within(panel).getByText(/Jump Drive Calibration, Jump Fuel Conservation/)).toBeTruthy();
-    expect(within(panel).getByText(/10 ly range/)).toBeTruthy();
+    // Nothing from ESI: the remembered levels stay, and the summary says they are assumed.
+    expect(skills.textContent).toMatch(/JDC V · JFC IV · JF IV · assumed/);
   });
 
   it('starts from the address and clears with Escape', async () => {
@@ -304,7 +313,7 @@ describe('JumpPage', () => {
     const user = userEvent.setup();
     renderPage();
     const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
-    expect(within(panel).getByText(/6 ly range/)).toBeTruthy();
+    expect(within(panel).getByRole('button', { name: /Skills/ }).textContent).toMatch(/6 ly range/);
     await screen.findByRole('region', { name: 'Route' });
     expect(requests[0]).toMatchObject({ shipTypeId: 11567, origin: 30000142, destination: 30005035 });
     await user.keyboard('{Escape}');

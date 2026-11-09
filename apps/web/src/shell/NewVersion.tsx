@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { RefreshCw, Sparkles } from 'lucide-react';
+import { RefreshCw, Sparkles, X } from 'lucide-react';
 import { routes, type HealthDto } from '@darkbeacon/shared';
 import { api } from '../lib/api';
 import { useConnectionStatus } from '../lib/RealtimeProvider';
 import { reloadForUpdate } from '../pwa/update';
-import { Button } from '../ui';
+import { Button, IconButton } from '../ui';
 import styles from './StatusBits.module.css';
 
 /** The build this page came from (next.config.ts); the server reports the one it serves now. */
@@ -31,6 +31,9 @@ export function isOutdated(
 export function NewVersion() {
   const status = useConnectionStatus();
   const [outdated, setOutdated] = useState(false);
+  // Put away until the next page load: it stands over the page (the jump planner's route list,
+  // the chain), and the idle reload still brings the new version.
+  const [later, setLater] = useState(false);
   const lastInput = useRef(0);
 
   useEffect(() => {
@@ -66,7 +69,7 @@ export function NewVersion() {
     };
   }, [outdated]);
 
-  if (!outdated) return null;
+  if (!outdated || later) return null;
   return (
     <div className={styles.update} role="status">
       <Sparkles className={styles.updateIcon} aria-hidden />
@@ -82,6 +85,7 @@ export function NewVersion() {
       <Button size="sm" variant="primary" icon={<RefreshCw />} onClick={() => void reloadForUpdate()}>
         Reload
       </Button>
+      <IconButton size="sm" label="Later" icon={<X />} onClick={() => setLater(true)} />
     </div>
   );
 }
