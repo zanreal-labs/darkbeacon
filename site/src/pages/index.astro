@@ -7,7 +7,7 @@ import Shot from '../components/Shot.astro';
 import Stage from '../components/Stage.astro';
 import AgentAvatars from '../components/AgentAvatars.astro';
 import { APP_URL, COMPANY_URL, ISSUES_URL, REPO_URL, SELF_HOST_URL, SITE_URL } from '../config';
-import { compose, install } from '../data/snippets';
+import { compose, install, start } from '../data/snippets';
 
 const title = 'Darkbeacon · the live wormhole mapper for EVE Online';
 const description =
@@ -95,7 +95,7 @@ const wandererItems: Item[] = [
 ];
 
 const hostItems: Item[] = [
-  ['Setup', 'Set <code>PUBLIC_URL</code> and an EVE application in <code>.env</code>; that is all it needs.'],
+  ['Setup', 'The installer asks for the address and an EVE application; that is all it needs. Run it again to update.'],
   ['Database', 'SQLite in the volume by default, or Postgres.'],
   ['Size', 'One container holds a whole alliance: 400 people connected.'],
 ];
@@ -108,6 +108,11 @@ const roadmap = [
     text: 'Version 0.1.0: the live map, scanning, kills and sovereignty, routes, the jump planner, sharing between maps, the API and the import from Wanderer.',
   },
   {
+    status: 'done',
+    title: 'Docker image and one-line install',
+    text: 'Images for amd64 and arm64 on <code>ghcr.io/zanreal-labs/darkbeacon</code>, and <code>curl -fsSL https://darkbeacon.space/install.sh | sh</code> to start an instance, or update it.',
+  },
+  {
     status: 'now',
     title: 'Beta: stability and polish',
     text: 'The hosted instance is open. We fix and polish from what pilots report through <strong>Help, Report a problem</strong> in the app.',
@@ -115,7 +120,7 @@ const roadmap = [
   {
     status: 'next',
     title: '1.0',
-    text: 'A stable release, and a published Docker image, so self-hosting starts with a pull instead of a build.',
+    text: 'A stable release: versioned images (<code>latest</code>, <code>1.0</code>) next to <code>edge</code>, so an instance can stay on a version it trusts.',
   },
   {
     status: 'later',
@@ -378,17 +383,19 @@ const statusLabel: Record<string, string> = { done: 'Done', now: 'In progress', 
           <div class="feature-copy">
             <p class="eyebrow"><b>HS</b> Self-host</p>
             <h2 id="host-title" class="feature-title">One container.<br /><span>Your data stays on your box.</span></h2>
-            <p class="feature-lede">Three commands, one port, and the first account to sign in owns the instance.</p>
+            <p class="feature-lede">One line, one port, and the first account to sign in owns the instance.</p>
             <ul class="items">
               {hostItems.map(([name, text]) => <li><h3>{name}</h3><p set:html={text} /></li>)}
             </ul>
             <a class="more-link" href="/features#self-host">Backups, scaling and metrics<Fragment set:html={arrow} /></a>
           </div>
           <figure class="code code--typing" data-reveal>
-            <figcaption>compose.yaml</figcaption>
+            <figcaption>install</figcaption>
+            <pre><code>{install}</code></pre>
+            <figcaption>or by hand: compose.yaml</figcaption>
             <pre><code>{compose.split('\n').map((line, i, all) => <span class="code-line" style={`--line:${i}`}>{line}{i < all.length - 1 ? '\n' : ''}</span>)}</code></pre>
             <figcaption>then</figcaption>
-            <pre><code>{install}</code></pre>
+            <pre><code>{start}</code></pre>
           </figure>
         </div>
       </div>

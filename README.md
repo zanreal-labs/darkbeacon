@@ -19,6 +19,18 @@ The engineering contract is [`docs/SPEC.md`](docs/SPEC.md); choices the spec lea
 ## Quick start
 
 ```sh
+curl -fsSL https://darkbeacon.space/install.sh | sh
+```
+
+The installer checks Docker, makes `~/darkbeacon` with a `compose.yaml` and an `.env` (it asks for
+`PUBLIC_URL` and the EVE application and generates `SECRET_KEY`), pulls the image and starts it. Run it again
+to update: the `.env` is kept and the image pulled again. Without a terminal it reads `DARKBEACON_DIR`,
+`DARKBEACON_VERSION` (an image tag, default `edge`), `DARKBEACON_PORT`, `PUBLIC_URL`, `EVE_CLIENT_ID` and
+`EVE_CLIENT_SECRET` from the environment. The script is [`site/public/install.sh`](site/public/install.sh).
+
+Or by hand:
+
+```sh
 cp .env.example .env        # fill in PUBLIC_URL and the Discord/EVE applications
 docker run -d --name darkbeacon --restart unless-stopped \
   -p 3000:3000 -v dbk-data:/data --env-file .env ghcr.io/zanreal-labs/darkbeacon:edge

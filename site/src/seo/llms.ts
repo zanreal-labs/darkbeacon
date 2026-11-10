@@ -18,7 +18,7 @@ export const summary =
   'Darkbeacon is a live wormhole and chain mapper for EVE Online: a map a whole corporation edits at once, with signatures, routes to the trade hubs, kill intel, a capital jump planner, an import from Wanderer and an MCP endpoint for AI agents. It runs as one Docker container you host yourself, or on the hosted beta.';
 
 export const notes = [
-  `Beta, version 0.1.0. The hosted instance is open at ${APP_URL}; self-hosting is one Docker container (see the README).`,
+  `Beta, version 0.1.0. The hosted instance is open at ${APP_URL}; self-hosting is one Docker container, installed with \`curl -fsSL https://darkbeacon.space/install.sh | sh\` (see the README).`,
   `Made by ZanReal (${COMPANY_URL}). Free to use and to self-host; there are no paid tiers. Not affiliated with or endorsed by CCP.`,
   `Every page below is Markdown made from the page at build time. Any page of ${SITE_URL} is also available as Markdown at its path plus \`.md\` (\`/index.md\` for the homepage).`,
   'AI agents connect over MCP at `<instance>/mcp` (Streamable HTTP, OAuth or an API key); the MCP setup page has the steps per client.',

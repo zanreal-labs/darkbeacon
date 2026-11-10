@@ -4,7 +4,7 @@ import Frame from '../components/Frame.astro';
 import Shot from '../components/Shot.astro';
 import { arrow } from '../components/icons';
 import { APP_URL, SELF_HOST_URL } from '../config';
-import { compose, install } from '../data/snippets';
+import { compose, install, start } from '../data/snippets';
 
 // The details behind each section of the homepage, kept here so the homepage can stay short.
 const title = 'Darkbeacon features in detail';
@@ -313,13 +313,15 @@ const alliance = [
       </div>
       <div class="host-grid">
         <figure class="code">
-          <figcaption>compose.yaml</figcaption>
+          <figcaption>install</figcaption>
+          <pre><code>{install}</code></pre>
+          <figcaption>or by hand: compose.yaml</figcaption>
           <pre><code>{compose}</code></pre>
           <figcaption>then</figcaption>
-          <pre><code>{install}</code></pre>
+          <pre><code>{start}</code></pre>
         </figure>
           <dl class="specs specs--grid">
-            <div><dt>Setup</dt><dd>Set <code>PUBLIC_URL</code> and an EVE application in <code>.env</code>; that is all it needs. The first account to sign in owns the instance.</dd></div>
+            <div><dt>Setup</dt><dd>The installer asks for <code>PUBLIC_URL</code> and an EVE application and writes them to <code>.env</code>; that is all it needs. The first account to sign in owns the instance.</dd></div>
             <div><dt>Volume</dt><dd><code>/data</code> holds the SQLite database, backups and the secret key.</dd></div>
             <div><dt>Database</dt><dd>SQLite in the volume by default; set <code>DATABASE_URL</code> for Postgres.</dd></div>
             <div><dt>Scale out</dt><dd>On Postgres, <code>CLUSTER=postgres</code> runs several replicas: one leads by advisory lock, events cross over NOTIFY.</dd></div>

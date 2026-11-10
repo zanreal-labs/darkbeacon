@@ -1,9 +1,7 @@
-import { REPO_URL } from '../config';
-
-/** The compose file and the three commands that start an instance (README, Self-host). */
+/** The compose file the installer writes (README, Self-host): the published image, one volume. */
 export const compose = `services:
   darkbeacon:
-    build: .
+    image: ghcr.io/zanreal-labs/darkbeacon:edge
     restart: unless-stopped
     env_file: .env
     ports:
@@ -14,6 +12,9 @@ export const compose = `services:
 volumes:
   dbk-data:`;
 
-export const install = `git clone ${REPO_URL}.git && cd darkbeacon
-cp .env.example .env
-docker compose up -d`;
+/** One line: Docker in, an instance out (it asks for the address and the EVE application). */
+export const install = `curl -fsSL https://darkbeacon.space/install.sh | sh`;
+
+
+/** By hand, next to the compose file and an `.env` (PUBLIC_URL, SECRET_KEY, the EVE application). */
+export const start = `docker compose up -d`;
