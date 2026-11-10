@@ -224,27 +224,29 @@ describe('JumpPage', () => {
     ).toBe(true);
   });
 
-  it('swaps start and destination in one step, keeping focus and the sheet', async () => {
+  it('reverses the route by moving the start below the destination; no swap button', async () => {
     window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&ship=Ark');
     const user = userEvent.setup();
     renderPage();
     const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
     await screen.findByRole('region', { name: 'Route' });
-    const swap = within(panel).getByRole('button', { name: 'Swap start and destination' });
-    await user.click(swap);
+    expect(within(panel).queryByRole('button', { name: /Swap/ })).toBeNull();
+    // "Add stop" sits between the start and the destination.
+    const rows = [...panel.querySelectorAll('[data-picker], button')];
+    const add = within(panel).getByRole('button', { name: 'Add stop' });
+    const at = rows.indexOf(add);
+    expect(rows.indexOf(panel.querySelector('[data-picker="origin"]')!)).toBeLessThan(at);
+    expect(rows.indexOf(panel.querySelector('[data-picker="destination"]')!)).toBeGreaterThan(at);
+    within(panel)
+      .getByRole('button', { name: /Move start/ })
+      .focus();
+    await user.keyboard('{ArrowDown}');
     const start = panel.querySelector('[data-picker="origin"]')!;
     const destination = panel.querySelector('[data-picker="destination"]')!;
     expect(start.textContent).toMatch(/Ami/);
     expect(destination.textContent).toMatch(/Ignoitton/);
-    expect(document.activeElement).toBe(swap);
     await waitFor(() => expect(window.location.search).toBe('?from=Ami&to=Ignoitton&ship=Ark'));
     await waitFor(() => expect(requests.at(-1)).toMatchObject({ origin: 30005035, destination: 30002647 }));
-    // With only a destination, a swap makes it the start.
-    await user.click(within(start as HTMLElement).getByRole('button', { name: 'Choose another' }));
-    await user.click(swap);
-    expect(start.textContent).toMatch(/Ignoitton/);
-    expect(destination.querySelector('input')).toBeTruthy();
-    expect(document.activeElement).toBe(swap);
   });
 
   it('fills skills and fatigue from ESI for my main; a manual edit wins until refresh', async () => {

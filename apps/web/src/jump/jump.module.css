@@ -204,12 +204,14 @@
 
 .endpoints {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--dbk-space-2);
 }
 
-.endpoints > [data-picker] {
-  grid-column: 1;
+/* "Add stop" between the last stop and the destination, lined up with the fields. */
+.addStop {
+  display: flex;
+  margin: calc(-1 * var(--dbk-space-1)) 0;
+  padding-left: calc(20px + var(--dbk-space-1));
 }
 
 /* A point of the trip: grip, picker, and × for a stop (a spacer keeps the fields aligned). */
@@ -287,31 +289,9 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
   gap: var(--dbk-space-2);
   margin-top: calc(-1 * var(--dbk-space-1));
-}
-
-/* A column of its own beside both fields, centred between them: it never covers a field. */
-.swap {
-  grid-column: 2;
-  align-self: center;
-  margin-top: var(--dbk-space-4);
-}
-
-/* Half a turn per swap: the values change in place, the icon says that they did. */
-.swap svg {
-  transition: transform 180ms ease;
-}
-
-.swap svg[data-turned] {
-  transform: rotate(180deg);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .swap svg {
-    transition: none;
-  }
+  padding-left: calc(20px + var(--dbk-space-1));
 }
 
 .pilot {
@@ -424,7 +404,7 @@
 }
 
 /* The route of the ends before the last change, while the new one comes; an answer that comes
-   at once (a swap whose reverse was fetched on hover) never dims it. */
+   at once (one already fetched) never dims it. */
 .result[aria-busy] {
   opacity: 0.6;
   transition-delay: 150ms;

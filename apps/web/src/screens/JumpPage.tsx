@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useDeferredValue, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   fatigueMinutesLeft,
   routes,
@@ -111,7 +111,7 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
     const ship = readQuery().get('ship');
     return ship ? { ...stored, ship } : stored;
   });
-  // Start and destination change in one step (a swap is never seen half done).
+  // Start and destination change in one step (a reorder is never seen half done).
   const [ends, dispatch] = useReducer(endpointsReducer, null, () => ({
     origin: find(readQuery().get('from')),
     destination: find(readQuery().get('to')),
@@ -127,7 +127,7 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
   const via = useMemo(() => stops.filter((i): i is number => i !== null), [stops]);
   const addStop = () => setStops((s) => [...s, null]);
   const removeStop = (n: number) => setStops((s) => s.filter((_, k) => k !== n));
-  // A system picked for either end is remembered as a recent pick (swaps and the address are not).
+  // A system picked for either end is remembered as a recent pick (reorders and the address are not).
   const remember = useCallback(
     (system: number | null) => {
       if (system === null) return;
@@ -278,19 +278,6 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
     placeholderData: keepPreviousData,
     retry: false,
   });
-  // Pointer or focus on the swap button: ask for the reverse route already, so the swap shows it
-  // at once instead of the old route while it comes.
-  const queryClient = useQueryClient();
-  const prefetchSwap = () => {
-    const reverse = requestFor(destination, origin, [...via].reverse());
-    if (reverse)
-      void queryClient.prefetchQuery({
-        queryKey: planKey(reverse),
-        queryFn: ({ signal }) => fetchPlan(reverse, signal),
-        staleTime: PLAN_STALE,
-        retry: false,
-      });
-  };
   const answer = request !== null ? (plan.data ?? null) : null;
   // What the isotopes cost at the pilot's hub: read when a route is shown, kept for a while.
   const fuelPrices = useQuery({
@@ -379,7 +366,7 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
   );
 
   // Bring what matters into view: the whole route once it arrives, else the start and its range.
-  // Keyed by the route's systems in any order, so the reverse route (a swap) leaves the view be.
+  // Keyed by the route's systems in any order, so the reverse route (a reorder) leaves the view be.
   const routeKey = legs?.length
     ? routeSystems(legs)
         .sort((a, b) => a - b)
@@ -394,7 +381,7 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
   useEffect(() => {
     const before = lastEnds.current;
     lastEnds.current = ends;
-    // A destination that became the start (a swap) is where the view already is.
+    // A destination that became the start (a reorder) is where the view already is.
     if (ends.origin === null || ends.destination !== null || ends.origin === before.destination) return;
     mapRef.current?.centre(ends.origin);
   }, [ends]);
@@ -501,12 +488,8 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
         setDestination={(i) => {
           pickDestination(i);
           // On phones the answer is the map: fold the sheet once a destination is picked for a
-          // start (a swap keeps it open: the pilot is still at the controls).
+          // start (a reorder keeps it open: the pilot is still at the controls).
           if (phone && i !== null && origin !== null && origin !== i) setPanelOpen(false);
-        }}
-        onSwap={() => {
-          dispatch({ type: 'swap' });
-          setStops((s) => [...s].reverse());
         }}
         stops={stops}
         setStop={(n, system) => {
@@ -536,7 +519,6 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
           });
           return `${window.location.origin}/j/${token}`;
         }}
-        onSwapIntent={prefetchSwap}
         suggestions={suggestions}
         avoidSystems={avoidSystems}
         avoidRegions={avoidRegions}

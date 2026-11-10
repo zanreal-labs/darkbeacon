@@ -123,22 +123,16 @@ describe('recent picks', () => {
 describe('start and destination', () => {
   const both: Endpoints = { origin: JITA, destination: AMI };
 
-  it('swaps in one step', () => {
-    expect(endpointsReducer(both, { type: 'swap' })).toEqual({ origin: AMI, destination: JITA });
-    expect(endpointsReducer({ origin: JITA, destination: null }, { type: 'swap' })).toEqual({
-      origin: null,
+  it('sets both ends at once, as a reorder leaves them', () => {
+    expect(endpointsReducer(both, { type: 'set', origin: AMI, destination: JITA })).toEqual({
+      origin: AMI,
       destination: JITA,
     });
-  });
-
-  it('swapping twice is where it started', () => {
-    const twice = endpointsReducer(endpointsReducer(both, { type: 'swap' }), { type: 'swap' });
-    expect(twice).toEqual(both);
+    expect(endpointsReducer(both, { type: 'set', origin: JITA, destination: AMI })).toBe(both);
   });
 
   it('keeps the same state when nothing changes (no re-render)', () => {
     const empty: Endpoints = { origin: null, destination: null };
-    expect(endpointsReducer(empty, { type: 'swap' })).toBe(empty);
     expect(endpointsReducer(empty, { type: 'clear' })).toBe(empty);
     expect(endpointsReducer(both, { type: 'origin', system: JITA })).toBe(both);
   });

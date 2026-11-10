@@ -10,7 +10,6 @@ import {
   type Ref,
 } from 'react';
 import {
-  ArrowUpDown,
   Ban,
   ChevronDown,
   ChevronLeft,
@@ -113,10 +112,6 @@ export interface JumpPanelProps {
   destination: number | null;
   setOrigin(i: number | null): void;
   setDestination(i: number | null): void;
-  /** Start and destination change places, in one step. */
-  onSwap(): void;
-  /** The pointer or focus is on the swap button: a chance to get the reverse route early. */
-  onSwapIntent(): void;
   avoidSystems: ReadonlySet<number>;
   avoidRegions: readonly number[];
   ansiblex: AnsiblexParse;
@@ -157,8 +152,6 @@ type PanelState = Omit<JumpPanelProps, 'ref'>;
 export function JumpPanel({ ref, ...props }: JumpPanelProps) {
   const { model, ship, settings, update, origin, destination, plan, open, setOpen, phone } = props;
   const [optionsOpen, setOptionsOpen] = useState(false);
-  // Turns the swap icon half a turn per swap (the only motion; the values change in place).
-  const [swaps, setSwaps] = useState(0);
   // Start, stops and destination in one list, reordered by dragging a row's grip (mouse or touch)
   // or with the arrow keys on it, as a maps app does.
   const points = 2 + props.stops.length;
@@ -302,21 +295,6 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
                 empty="No known-space system by that name"
               />
             </PointRow>
-            {/* Always there (disabled with no ends), so nothing moves when it becomes useful. */}
-            <IconButton
-              className={styles.swap}
-              style={{ gridRow: `1 / span ${points}` }}
-              label="Swap start and destination"
-              icon={<ArrowUpDown data-turned={swaps % 2 === 1 || undefined} />}
-              disabled={origin === null && destination === null}
-              onPointerEnter={props.onSwapIntent}
-              onPointerDown={props.onSwapIntent}
-              onFocus={props.onSwapIntent}
-              onClick={() => {
-                setSwaps((n) => n + 1);
-                props.onSwap();
-              }}
-            />
             {props.stops.map((stop, n) => (
               <PointRow
                 key={n}
@@ -338,6 +316,18 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
                 />
               </PointRow>
             ))}
+            {/* Stops go between the ends, so they are added there too. */}
+            <div className={styles.addStop}>
+              <Button
+                size="sm"
+                variant="ghost"
+                icon={<Plus />}
+                disabled={props.stops.length >= 10}
+                onClick={props.addStop}
+              >
+                Add stop
+              </Button>
+            </div>
             <PointRow n={points - 1} label="Destination" drag={drag} grip={grip}>
               <SearchPicker<SystemOption>
                 value={destination === null ? null : option(destination)}
@@ -352,15 +342,6 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
             </PointRow>
           </div>
           <div className={styles.endpointActions}>
-            <Button
-              size="sm"
-              variant="ghost"
-              icon={<Plus />}
-              disabled={props.stops.length >= 10}
-              onClick={props.addStop}
-            >
-              Add stop
-            </Button>
             <Switch
               checked={settings.roundTrip}
               onCheckedChange={(on) => update({ roundTrip: on })}
