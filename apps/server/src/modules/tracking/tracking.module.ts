@@ -43,6 +43,7 @@ import {
 import { KyselyActivityReader } from '../../adapters/tracking/kysely-activity-reader.js';
 import { HttpServerStatus } from '../../adapters/tracking/http-server-status.js';
 import { RoutingBridgeLookup } from '../../adapters/tracking/routing-bridge-lookup.js';
+import { KspaceDrives } from '../../adapters/tracking/kspace-drives.js';
 import { KyselyBridgeRepository } from '../../adapters/routing/kysely-routing-repositories.js';
 import type { AppConfig } from '../../config/config.js';
 import {
@@ -296,8 +297,17 @@ const { version } = JSON.parse(readFileSync(new URL('../../../package.json', imp
         target: AutoMapTarget,
         universe: UniverseLookup,
         bridges: BridgeLookup,
-      ) => new AutoMapper({ tracking, access, target, universe, bridges }),
-      inject: [TRACKING_REPOSITORY, MAP_ACCESS, AUTO_MAP_TARGET, UNIVERSE_CATALOG, BRIDGE_LOOKUP],
+        config: AppConfig,
+      ) =>
+        new AutoMapper({
+          tracking,
+          access,
+          target,
+          universe,
+          bridges,
+          drives: new KspaceDrives(config.dataDir),
+        }),
+      inject: [TRACKING_REPOSITORY, MAP_ACCESS, AUTO_MAP_TARGET, UNIVERSE_CATALOG, BRIDGE_LOOKUP, APP_CONFIG],
     },
     {
       provide: TrackingCleanup,

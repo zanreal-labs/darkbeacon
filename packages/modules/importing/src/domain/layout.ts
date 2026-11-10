@@ -1,4 +1,4 @@
-import { MAP_GRID, SYSTEM_PLACEMENT, type Position } from '@darkbeacon/shared';
+import { findSystemSpot, MAP_GRID, SYSTEM_PLACEMENT, type Position } from '@darkbeacon/shared';
 
 /**
  * Room a Darkbeacon system needs on the canvas, measured in the web app's default theme. Every node
@@ -47,4 +47,45 @@ export function spreadLayout(positions: ReadonlyArray<Position>): { positions: P
     positions: positions.map((p) => placeOnGrid(p, scale)),
     scale,
   };
+}
+
+/** A system already on the map a merge writes into, as the layout check sees it. */
+export interface LaidOutSystem {
+  solarSystemId: number;
+  position: Position;
+  visible: boolean;
+  status: string;
+}
+
+/**
+ * Where a system a merge (or a sync) brings onto an existing map goes. Wanderer's spot is kept
+ * when it is free at Darkbeacon's node size and next to a system it is connected to (or, without
+ * one on the map, next to the chain); otherwise the map's placement rule puts it beside that
+ * system, as auto-mapping would. Wanderer lays its chain out for its own, smaller nodes and
+ * among systems this map may not show, so its spots copied as they are stacked systems on top of
+ * each other and threw others far off the chain.
+ */
+export function fitHere(input: {
+  solarSystemId: number;
+  spot: Position;
+  systems: readonly LaidOutSystem[];
+  links: ReadonlyArray<{ source: number; target: number }>;
+  /** Systems it is connected to, here or in Wanderer, nearest in the chain first. */
+  neighbours: readonly number[];
+}): Position {
+  const nodes = input.systems
+    .filter((s) => s.visible && s.solarSystemId !== input.solarSystemId)
+    .map((s) => ({ id: s.solarSystemId, position: s.position }));
+  const shown = new Set(nodes.map((n) => n.id));
+  const parent = input.neighbours.find((id) => shown.has(id)) ?? null;
+  const home = input.systems.find(
+    (s) => s.visible && s.status === 'home' && s.solarSystemId !== input.solarSystemId,
+  );
+  return findSystemSpot({
+    nodes,
+    links: input.links.filter((l) => shown.has(l.source) && shown.has(l.target)),
+    parent,
+    previous: input.spot,
+    fallback: home?.position ?? null,
+  });
 }

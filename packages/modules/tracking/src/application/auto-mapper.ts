@@ -1,9 +1,17 @@
 import { hasMapRole, parseStream, type DomainEvent } from '@darkbeacon/core';
 import { isEventOfType } from '@darkbeacon/shared';
-import { DEFAULT_AUTO_MAP_RULES, jumpAllowed, locationAllowed, type AutoMapRules } from '../domain/scopes.js';
+import {
+  DEFAULT_AUTO_MAP_RULES,
+  driveOrBridgeJump,
+  jumpAllowed,
+  locationAllowed,
+  scopeOf,
+  type AutoMapRules,
+} from '../domain/scopes.js';
 import type {
   AutoMapTarget,
   BridgeLookup,
+  DriveLookup,
   MapAccess,
   TrackingRepository,
   UniverseLookup,
@@ -11,9 +19,10 @@ import type {
 
 /**
  * Subscriber of `character.jumped`: adds the two systems and the connection between them
- * (a gate when a stargate links them, a bridge when a known Ansiblex does, a wormhole otherwise)
- * to the map the event belongs to, when the map's rules allow the jump (see `jumpAllowed`) and
- * the owner may still edit the map.
+ * (a gate when a stargate links them, a wormhole otherwise) to the map the event belongs to, when
+ * the map's rules allow the jump (see `jumpAllowed`) and the owner may still edit the map. A jump
+ * between known-space systems made on a jump drive or through a bridge (cyno, titan or black ops
+ * bridge, Ansiblex) is no wormhole and is left off the map (see `driveOrBridgeJump`).
  *
  * Where a character is when its place first becomes known (tracking starts, or it is seen for the
  * first time) is added too when it is in scope, as Wanderer does: tracking a character on an
@@ -29,6 +38,7 @@ export class AutoMapper {
       target: AutoMapTarget;
       universe: UniverseLookup;
       bridges?: BridgeLookup;
+      drives?: DriveLookup;
     },
   ) {}
 
@@ -78,15 +88,26 @@ export class AutoMapper {
     const to = { id: jump.to, whClass: universe.getSystem(jump.to)?.whClass };
     // Abyssal pockets, excluded systems and jumps out of scope are skipped quietly.
     if (!jumpAllowed(rules, from, to, gate)) return;
-    const bridge =
-      !gate && rules.typeBridges && this.deps.bridges
-        ? await this.deps.bridges.linked(mapId, jump.from, jump.to).catch(() => false)
+    const known = (s: ReturnType<typeof scopeOf>) => s !== null && s !== 'wormhole';
+    if (!gate && known(scopeOf(from.whClass)) && known(scopeOf(to.whClass))) {
+      const { drives, bridges } = this.deps;
+      const knownBridge = bridges
+        ? await bridges.linked(mapId, jump.from, jump.to).catch(() => false)
         : false;
+      if (
+        driveOrBridgeJump({
+          jumpDriveShip: jump.shipTypeId !== null && (drives?.jumpDriveShip(jump.shipTypeId) ?? false),
+          knownBridge,
+          ly: drives?.distanceLy(jump.from, jump.to) ?? null,
+        })
+      )
+        return;
+    }
     await target.recordJump({
       mapId,
       from: jump.from,
       to: jump.to,
-      type: gate ? 'gate' : bridge ? 'bridge' : 'wormhole',
+      type: gate ? 'gate' : 'wormhole',
       characterId: jump.characterId,
       shipTypeId: jump.shipTypeId,
       accountId: entry.accountId,

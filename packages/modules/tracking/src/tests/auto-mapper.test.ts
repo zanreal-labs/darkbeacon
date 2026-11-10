@@ -23,13 +23,13 @@ const universe: UniverseLookup = {
   gateLinked: (a, b) => (a === JITA && b === PERIMETER) || (a === PERIMETER && b === JITA),
 };
 
-function jumped(mapId: string, from: number, to: number): DomainEvent {
+function jumped(mapId: string, from: number, to: number, shipTypeId = 587): DomainEvent {
   return {
     ...newEvent({
       stream: `map:${mapId}`,
       type: 'character.jumped',
       actor: { kind: 'system', id: 'tracking' },
-      data: { characterId: PILOT, from, to, shipTypeId: 587 },
+      data: { characterId: PILOT, from, to, shipTypeId },
       occurredAt: 0,
     }),
     seq: 1,
@@ -88,7 +88,7 @@ describe('AutoMapper', () => {
     expect(recorded.map((j) => j.type)).toEqual(['gate', 'wormhole']);
   });
 
-  it('maps gate-less known-space jumps, types known bridges and leaves Jita out', async () => {
+  it('maps gate-less known-space jumps as wormholes, skips known bridges and leaves Jita out', async () => {
     mapper = new AutoMapper({
       tracking,
       access: fakeAccess(roles),
@@ -106,9 +106,42 @@ describe('AutoMapper', () => {
     await mapper.handle(jumped('m1', PERIMETER, AMAMAKE));
     await mapper.handle(jumped('m1', AMAMAKE, PERIMETER));
     await mapper.handle(jumped('m1', J_SPACE, REAL_JITA));
-    expect(recorded.map((j) => [j.to, j.type])).toEqual([
-      [AMAMAKE, 'wormhole'],
-      [PERIMETER, 'bridge'],
+    // Back over a known Ansiblex: no wormhole, so not on the chain.
+    expect(recorded.map((j) => [j.to, j.type])).toEqual([[AMAMAKE, 'wormhole']]);
+  });
+
+  it('leaves cyno jumps and bridged jumps between known-space systems off the chain', async () => {
+    const ARCHON = 23757;
+    // Perimeter and Amamake 12 ly apart; Amamake and Jita (New Caldari) 6 ly.
+    const ly: Record<string, number> = { [`${PERIMETER}:${AMAMAKE}`]: 12, [`${AMAMAKE}:${JITA}`]: 6 };
+    mapper = new AutoMapper({
+      tracking,
+      access: fakeAccess(roles),
+      universe,
+      drives: {
+        jumpDriveShip: (type) => type === ARCHON,
+        distanceLy: (a, b) => ly[`${a}:${b}`] ?? ly[`${b}:${a}`] ?? null,
+      },
+      target: {
+        scopes: (mapId) => Promise.resolve(scopes[mapId] ?? null),
+        recordJump: (jump) => {
+          recorded.push(jump);
+          return Promise.resolve();
+        },
+      },
+    });
+    // A carrier lighting a cyno 12 ly away: its own jump drive.
+    await mapper.handle(jumped('m1', PERIMETER, AMAMAKE, ARCHON));
+    // A frigate 6 ly on: a titan or black ops bridge (or an Ansiblex the map does not know).
+    await mapper.handle(jumped('m1', AMAMAKE, JITA));
+    expect(recorded).toEqual([]);
+    // A frigate 12 ly on without a stargate: only a wormhole explains it.
+    await mapper.handle(jumped('m1', PERIMETER, AMAMAKE));
+    // Out of wormhole space, even in a jump drive ship (it cannot jump there): a wormhole.
+    await mapper.handle(jumped('m1', J_SPACE, AMAMAKE, ARCHON));
+    expect(recorded.map((j) => [j.from, j.to, j.type])).toEqual([
+      [PERIMETER, AMAMAKE, 'wormhole'],
+      [J_SPACE, AMAMAKE, 'wormhole'],
     ]);
   });
 

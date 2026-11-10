@@ -16,6 +16,7 @@ import {
   removedHere,
 } from '../domain/decide.js';
 import type { ConnectionWrite, SignatureWrite, SystemWrite } from '../domain/decide.js';
+import { fitHere, type LaidOutSystem } from '../domain/layout.js';
 import { pairKey, translate, type ImportPlan, type PlannedSignature } from '../domain/translate.js';
 import type { ImportJobRecord, ImportLinkRecord, ImportSyncRecord } from '../ports/repositories.js';
 import type { ImportingDeps } from './deps.js';
@@ -253,17 +254,60 @@ export class ImportRunner {
     if (reached('systems')) {
       await job.phase('systems');
       const here = new Map((await deps.target.systems(actor, mapId)).map((s) => [s.solarSystemId, s]));
-      for (const planned of plan.systems) {
+      // Merging into a map that has its own layout: Wanderer's spots only where they fit it.
+      const merging = r.mode !== 'new' && [...here.values()].some((s) => s.visible);
+      const laidOut = new Map<number, LaidOutSystem>(
+        [...here.values()].map((s) => [
+          s.solarSystemId,
+          { solarSystemId: s.solarSystemId, position: s.position, visible: s.visible, status: s.status },
+        ]),
+      );
+      const hereLinks = merging
+        ? (await deps.target.connections(actor, mapId)).map((c) => ({ source: c.source, target: c.target }))
+        : [];
+      const neighbours = (id: number) => [
+        ...new Set(
+          [...hereLinks, ...plan.connections].flatMap((c) =>
+            c.source === id ? [c.target] : c.target === id ? [c.source] : [],
+          ),
+        ),
+      ];
+      // Outwards from what the map shows, so a new system finds the one it hangs off placed first.
+      const ordered = merging ? outwardsFrom(plan.systems, laidOut, neighbours) : plan.systems;
+      for (const planned of ordered) {
         this.check(r.id);
         const link = links.get('system', planned.key);
+        const current = here.get(planned.solarSystemId);
         const decision = decideSystem(
           planned,
-          here.get(planned.solarSystemId),
+          current,
           (link?.written as SystemWrite) ?? null,
           labelIds,
           options,
           systemLabelIds,
         );
+        const shownAfter = decision.write.visible ?? current?.visible ?? false;
+        if (merging && decision.write.position && shownAfter) {
+          decision.write = {
+            ...decision.write,
+            position: fitHere({
+              solarSystemId: planned.solarSystemId,
+              spot: decision.write.position,
+              systems: [...laidOut.values()],
+              links: [...hereLinks, ...plan.connections],
+              neighbours: neighbours(planned.solarSystemId),
+            }),
+          };
+        }
+        if (decision.action === 'create' || decision.action === 'update') {
+          const before = laidOut.get(planned.solarSystemId);
+          laidOut.set(planned.solarSystemId, {
+            solarSystemId: planned.solarSystemId,
+            position: decision.write.position ?? before?.position ?? { x: 0, y: 0 },
+            visible: shownAfter,
+            status: decision.write.status ?? before?.status ?? 'unknown',
+          });
+        }
         await this.item(job, 'systems', planned.name, async () => {
           if (decision.action === 'create' || decision.action === 'update') {
             await deps.uow.transaction(async () => {
@@ -935,4 +979,35 @@ function seenSince(
     Math.min(planned.seenAt, now) > here.updatedAt ||
     (planned.createdAt !== null && Math.min(planned.createdAt, now) > here.createdAt)
   );
+}
+
+/**
+ * Systems in the order a chain grows: the ones the map shows first, then each one after a system
+ * it is connected to; systems connected to nothing come last, in their own order.
+ */
+function outwardsFrom<T extends { solarSystemId: number }>(
+  systems: readonly T[],
+  shown: ReadonlyMap<number, { visible: boolean }>,
+  neighbours: (id: number) => number[],
+): T[] {
+  const byId = new Map(systems.map((s) => [s.solarSystemId, s]));
+  const seen = new Set<number>();
+  const out: T[] = [];
+  const queue = [...shown.entries()].filter(([, s]) => s.visible).map(([id]) => id);
+  for (const id of queue) seen.add(id);
+  for (const s of systems) {
+    if (seen.has(s.solarSystemId)) out.push(s);
+  }
+  for (let i = 0; i < queue.length; i++) {
+    for (const next of neighbours(queue[i]!)) {
+      if (seen.has(next)) continue;
+      seen.add(next);
+      queue.push(next);
+      const s = byId.get(next);
+      if (s) out.push(s);
+    }
+  }
+  const placed = new Set(out);
+  for (const s of systems) if (!placed.has(s)) out.push(s);
+  return out;
 }

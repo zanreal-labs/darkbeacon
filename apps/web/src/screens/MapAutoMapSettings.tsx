@@ -20,7 +20,6 @@ import {
   Field,
   IconButton,
   SearchPicker,
-  Switch,
   useToast,
   type PickerOption,
 } from '../ui';
@@ -123,7 +122,7 @@ export function MapAutoMapSettings({ map }: { map: MapDto }) {
       <Card>
         <CardHeader
           title="Jumps in known space"
-          description="With wormhole space in scope, a jump between two known-space systems that no stargate links went through a wormhole and is always mapped."
+          description="With wormhole space in scope, a jump between two known-space systems that no stargate links went through a wormhole and is mapped. Cyno jumps, titan and black ops bridges and Ansiblex jumps (within 8 ly) never are."
         />
         <CardBody>
           <div className={styles.formStack}>
@@ -144,13 +143,6 @@ export function MapAutoMapSettings({ map }: { map: MapDto }) {
                   description: 'As in Wanderer: a stargate jump is mapped only between systems in scope.',
                 },
               ]}
-            />
-            <Switch
-              checked={rules.typeBridges ?? true}
-              disabled={save.isPending}
-              onCheckedChange={(typeBridges) => change({ typeBridges })}
-              label="Draw jumps through known jump bridges as bridges"
-              description="Uses the map's Ansiblex list (Bridges); otherwise they are drawn as wormholes, as in Wanderer."
             />
           </div>
         </CardBody>

@@ -46,6 +46,14 @@ export interface UniverseLookup {
   gateLinked(a: number, b: number): boolean;
 }
 
+/** Known space as jump drives see it (the k-space dataset): who has one and how far apart. */
+export interface DriveLookup {
+  /** True for a ship type with a jump drive (titans, carriers, black ops, jump freighters, ...). */
+  jumpDriveShip(shipTypeId: number): boolean;
+  /** Light years between two known-space systems; null when either is not in known space. */
+  distanceLy(a: number, b: number): number | null;
+}
+
 /** Provided by routing: the map's known Ansiblex jump bridges. */
 export interface BridgeLookup {
   /** True when a known jump bridge of the map links the two systems. */

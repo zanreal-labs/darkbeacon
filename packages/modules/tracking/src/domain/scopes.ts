@@ -41,7 +41,7 @@ export interface AutoMapRules {
    * while one wormhole end is still enough with the wormhole scope on.
    */
   gateRule: 'either' | 'both';
-  /** A jump between the two ends of a known Ansiblex is recorded as a bridge, not a wormhole. */
+  /** No longer used: jumps through known Ansiblex bridges are never mapped (`driveOrBridgeJump`). */
   typeBridges: boolean;
 }
 
@@ -85,6 +85,29 @@ export function jumpAllowed(
     return inScope(a) && inScope(b);
   }
   return inScope(a) || inScope(b);
+}
+
+/**
+ * The farthest a jump portal carries a fleet: a black ops battleship with Jump Drive Calibration V
+ * (4 ly base, +20 % per level; a titan bridges 6 ly, an Ansiblex links systems 5 ly apart).
+ */
+export const BRIDGE_RANGE_LY = 8;
+
+/**
+ * Whether a jump between two known-space systems that no stargate links went through a jump drive
+ * or a bridge rather than a wormhole, so it has no place on a wormhole chain (as in our Wanderer
+ * fork, which skips jump drive ships and known bridges). It did when the ship has a jump drive
+ * (a cyno jump), when a known Ansiblex links the two systems, or when they lie within reach of
+ * a titan or black ops bridge or an Ansiblex the map does not know (`BRIDGE_RANGE_LY`). A
+ * wormhole between two known-space systems that close is rare; one farther away is still mapped.
+ */
+export function driveOrBridgeJump(jump: {
+  jumpDriveShip: boolean;
+  knownBridge: boolean;
+  /** Light years apart; null when not known. */
+  ly: number | null;
+}): boolean {
+  return jump.jumpDriveShip || jump.knownBridge || (jump.ly !== null && jump.ly <= BRIDGE_RANGE_LY);
 }
 
 /**
