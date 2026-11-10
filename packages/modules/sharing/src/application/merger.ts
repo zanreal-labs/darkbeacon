@@ -7,6 +7,8 @@ import {
   type NewEvent,
 } from '@darkbeacon/core';
 import {
+  groupStart,
+  inWormholeSpace,
   LOCAL_INSTANCE,
   type ChainEntry,
   type ChainOrigin,
@@ -15,11 +17,10 @@ import {
   type Position,
 } from '@darkbeacon/shared';
 import type { FeedSelector } from '../domain/feed.js';
-import { pairKey, parseRefId, refId, sameOrigin } from '../domain/keys.js';
+import { pairKey, parsePair, parseRefId, refId, sameOrigin } from '../domain/keys.js';
 import { mergePassages, passagesShared, type ChainPassage } from '../domain/passages.js';
 import {
   asPosition,
-  besideNeighbour,
   clusterOffset,
   extentOf,
   layoutLinks,
@@ -55,6 +56,11 @@ interface MergedMap {
   offsets: Map<string, Position>;
   /** A composite's own notes, labels and locks of systems. */
   local: Map<number, LocalFields>;
+  /**
+   * Systems placed as a group of their own before any connection of theirs reached the map (kept
+   * in memory only): their first connection moves them beside its other end (`rejoin`).
+   */
+  lone?: Set<number>;
 }
 
 /** What placing systems decided: new positions, and the offsets sources got for the first time. */
@@ -245,6 +251,8 @@ export class ChainMerger {
       });
       if (changed.length === 0) return;
       const refs = new Set(changed.map((p) => refId('system', String(p.solarSystemId))));
+      // Put somewhere by hand: never moved again by the merge.
+      for (const p of changed) map.lone?.delete(p.solarSystemId);
       const placing = this.placing(map);
       for (const { solarSystemId, position } of changed) placing.layout.set(solarSystemId, position);
       placing.placed.push(...changed);
@@ -578,16 +586,14 @@ export class ChainMerger {
   }
 
   /**
-   * Systems new to the map get a position on its own layout: next to a neighbour already placed,
-   * at the offset their source has between them (the map's own systems keep their places that
-   * way), else where their first source has them, shifted by that source's offset; when that spot
-   * is taken, by the map placement rule (`placeFree`), never covering another system. Sources lay
-   * themselves out in coordinate spaces of their own, so the first time a source needs room of its
-   * own its cluster is shifted right of everything shown (the first one keeps its coordinates), and
-   * the shift is kept so its later systems join it.
+   * Systems new to the map get a position on its own layout by the map placement rule, never by
+   * the coordinates their sources have: beside a neighbour already placed (a column further out,
+   * under its siblings), so the merged chain reads as one chain whatever each source drew. A system
+   * with no neighbour placed yet starts a group of its own right of everything shown, homes first,
+   * then wormhole space, so each chain is a group of its own.
    */
   private place(map: MergedMap, refs: Set<string>, placing: Placing): void {
-    const { layout, placed, offsets, newOffsets } = placing;
+    const { layout, placed } = placing;
     const order = new Map(map.merge.sourceIds().map((id, i) => [id, i]));
     const pending: Array<{ id: number; ref: string; holders: string[]; order: number }> = [];
     for (const ref of refs) {
@@ -600,58 +606,63 @@ export class ChainMerger {
       if (holders.length === 0) continue;
       pending.push({ id, ref, holders, order: order.get(holders[0]!) ?? 0 });
     }
+    // A system that stood alone (placed before its first connection came) joins its neighbour.
+    this.rejoin(map, refs, placing);
     if (pending.length === 0) return;
     // The map's own systems first, then by source, then by id.
     pending.sort((a, b) => a.order - b.order || a.id - b.id);
-    const own = (source: string, ref: string) => asPosition(map.merge.sourceField(source, ref, 'pos'));
     const put = (id: number, spot: Position | null, near: number | null = null) => {
       const links = layoutLinks(layout, (n) => map.merge.neighbours(n));
       const position = placeFree(spot, layout, links, near);
       layout.set(id, position);
       placed.push({ solarSystemId: id, position });
     };
-    const offsetOf = (source: string): Position => {
-      const known = offsets.get(source);
-      if (known) return known;
-      // Its cluster: what of it is waiting for a place now.
-      const cluster = extentOf(
-        pending.flatMap((item) => (item.holders[0] === source ? (own(source, item.ref) ?? []) : [])),
-      );
-      const offset = clusterOffset(cluster, extentOf(shownOn(map, layout).map(([, at]) => at)));
-      offsets.set(source, offset);
-      newOffsets.push({ sourceId: source, offset });
-      return offset;
-    };
-    const beside = (item: (typeof pending)[number]): { spot: Position; near: number } | null => {
-      for (const source of item.holders) {
-        const at = own(source, item.ref);
-        if (!at) continue;
-        for (const neighbour of map.merge.neighbours(item.id)) {
-          const placedAt = layout.get(neighbour);
-          const there = own(source, refId('system', String(neighbour)));
-          if (placedAt && there) return { spot: besideNeighbour(at, there, placedAt), near: neighbour };
-        }
-      }
-      return null;
-    };
+    const isHome = (item: (typeof pending)[number]) =>
+      item.holders.some((h) => map.merge.sourceField(h, item.ref, 'status') === 'home');
     while (pending.length > 0) {
       let progressed = false;
       for (const item of [...pending]) {
-        const next = beside(item);
-        if (!next) continue;
-        put(item.id, next.spot, next.near);
+        const near = map.merge.neighbours(item.id).find((n) => layout.has(n));
+        if (near === undefined) continue;
+        put(item.id, null, near);
         pending.splice(pending.indexOf(item), 1);
         progressed = true;
       }
       if (progressed) continue;
-      // Nothing next to a placed neighbour: the first one goes where its first source has it,
-      // in that source's cluster (a system several sources hold: the first one's).
-      const first = pending[0]!;
-      const source = first.holders[0]!;
-      const at = own(source, first.ref);
-      const spot = at ? shifted(at, offsetOf(source)) : null;
-      pending.shift();
-      put(first.id, spot);
+      // Nothing next to a placed neighbour: a new group, from a home if one waits, else from
+      // wormhole space, right of everything shown.
+      const first = pending.find(isHome) ?? pending.find((item) => inWormholeSpace(item.id)) ?? pending[0]!;
+      pending.splice(pending.indexOf(first), 1);
+      put(first.id, groupStart(new Map(shownOn(map, layout))));
+      if (map.merge.neighbours(first.id).length === 0) (map.lone ??= new Set()).add(first.id);
+    }
+  }
+
+  /**
+   * A system placed before its first connection reached the map (auto-mapping adds systems, then
+   * the hole between them) started a group of its own. When a connection gives it a neighbour
+   * placed on the map, it moves beside that neighbour, so the chain stays one group. Only systems
+   * placed that way this run (`lone`), never ones a viewer moved.
+   */
+  private rejoin(map: MergedMap, refs: Set<string>, placing: Placing): void {
+    const lone = map.lone;
+    if (!lone || lone.size === 0) return;
+    const { layout, placed } = placing;
+    for (const ref of [...refs]) {
+      const { kind, key } = parseRefId(ref);
+      if (kind !== 'connection') continue;
+      const pair = parsePair(key);
+      if (!pair) continue;
+      for (const [id, other] of [pair, [pair[1], pair[0]] as const]) {
+        if (!lone.has(id) || !layout.has(other) || lone.has(other)) continue;
+        lone.delete(id);
+        layout.delete(id);
+        const links = layoutLinks(layout, (n) => map.merge.neighbours(n));
+        const position = placeFree(null, layout, links, other);
+        layout.set(id, position);
+        placed.push({ solarSystemId: id, position });
+        refs.add(refId('system', String(id)));
+      }
     }
   }
 

@@ -7,12 +7,10 @@ import {
   type Actor,
 } from '@darkbeacon/core';
 import {
-  chainTree,
-  findSystemSpot,
+  layOutChain,
   wormholeChain,
   type AddSystemRequest,
   type MoveSystemsRequest,
-  type Position,
   type TidyChainDto,
   type UpdateSystemRequest,
 } from '@darkbeacon/shared';
@@ -169,7 +167,8 @@ export class SystemUseCases extends MappingUseCases {
       const staying = visible.filter((s) => !hide.includes(s));
       const ids = new Set(staying.map((s) => s.solarSystemId));
       const links = connections.filter((c) => ids.has(c.source) && ids.has(c.target));
-      return { hide, kept, staying, links, positions: layOut(staying, links) };
+      const locked = new Set(staying.filter((x) => x.locked).map((x) => x.solarSystemId));
+      return { hide, kept, staying, links, positions: layOutChain(staying, links, locked) };
     };
     const { hide, kept, staying, positions } = await plan();
     const moving = staying.filter((s) => {
@@ -279,28 +278,4 @@ export async function removeConnection(
     }
   }
   events.add('connection.removed', { id: connection.id }, connection);
-}
-
-/**
- * The chain laid out afresh: every root (home first) and every locked system where it is, then
- * each system, breadth first, beside the one it hangs off by the map's placement rule
- * (`findSystemSpot`), among the systems already laid out only.
- */
-function layOut(systems: readonly MapSystem[], connections: readonly Connection[]): Map<number, Position> {
-  const { roots, steps } = chainTree(systems, connections);
-  const byId = new Map(systems.map((s) => [s.solarSystemId, s]));
-  const placed = new Map<number, Position>();
-  for (const id of roots) placed.set(id, byId.get(id)!.position);
-  for (const s of systems) if (s.locked) placed.set(s.solarSystemId, s.position);
-  const parentOf = new Map(steps.map((s) => [s.child, s.parent]));
-  for (const step of steps) {
-    if (placed.has(step.child)) continue;
-    const nodes = [...placed].map(([id, position]) => ({ id, position }));
-    const links = connections.filter((c) => placed.has(c.source) && placed.has(c.target));
-    placed.set(
-      step.child,
-      findSystemSpot({ nodes, links, parent: step.parent, upstream: parentOf.get(step.parent) ?? null }),
-    );
-  }
-  return placed;
 }

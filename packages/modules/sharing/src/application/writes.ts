@@ -9,7 +9,10 @@ import {
 } from '@darkbeacon/core';
 import {
   findSystemSpot,
+  layOutChain,
   LOCAL_INSTANCE,
+  wormholeChain,
+  type TidyChainDto,
   type AddConnectionRequest,
   type AddSignatureRequest,
   type AddSystemRequest,
@@ -182,6 +185,50 @@ export class ChainWrites {
       mapId,
       request.positions.map(({ solarSystemId, x, y }) => ({ solarSystemId, position: { x, y } })),
     );
+  }
+
+  /**
+   * Tidies a merged map, map managers only: hides on its sources every system off the wormhole
+   * chain (`wormholeChain`) and lays its own layout out again from home (`layOutChain`), each
+   * chain a group of its own. Locked systems keep their places and stay, and so do systems only
+   * maps shared read-only hold. Without `apply` it only says what it would do.
+   */
+  async tidy(actor: Actor | null, mapId: string, apply: boolean): Promise<TidyChainDto> {
+    await requireMapRole(this.ports.access, actor, mapId, 'manager');
+    const { who, map } = await this.open(actor, mapId);
+    const view = await this.merger.chain(mapId);
+    const visible = (view?.systems ?? []).filter((s) => s.visible);
+    const connections = view?.connections ?? [];
+    const chain = wormholeChain(visible, connections);
+    const locked = new Set(
+      visible.filter((s) => isLocked(this.systemLock(map, s.solarSystemId))).map((s) => s.solarSystemId),
+    );
+    // Only what a writable source holds can be hidden; maps shared read-only keep showing theirs.
+    const writable = new Set(this.writable(map, 'system').map((source) => source.id));
+    const hideable = (id: number) =>
+      !locked.has(id) && map.merge.holders(refId('system', String(id))).some((h) => writable.has(h));
+    const off = visible.filter((s) => !chain.has(s.solarSystemId));
+    const hide = off.filter((s) => hideable(s.solarSystemId));
+    const kept = off.filter((s) => !hideable(s.solarSystemId));
+    const staying = visible.filter((s) => !hide.includes(s));
+    const ids = new Set(staying.map((s) => s.solarSystemId));
+    const links = connections.filter((c) => ids.has(c.source) && ids.has(c.target));
+    const positions = layOutChain(staying, links, locked);
+    const moving = staying.flatMap((s) => {
+      const at = positions.get(s.solarSystemId);
+      return at && !locked.has(s.solarSystemId) && (at.x !== s.position.x || at.y !== s.position.y)
+        ? [{ solarSystemId: s.solarSystemId, position: at }]
+        : [];
+    });
+    if (apply) {
+      for (const s of hide) await this.hideSystem(who, map, s.solarSystemId);
+      if (moving.length > 0) await this.merger.move(who, mapId, moving);
+    }
+    return {
+      hidden: hide.map((s) => s.solarSystemId),
+      kept: kept.map((s) => s.solarSystemId),
+      moved: moving.length,
+    };
   }
 
   /**

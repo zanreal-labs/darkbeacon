@@ -1025,42 +1025,67 @@ describeEachDialect('sharing and merged chains', (t) => {
       await share(corpC, bob, 'read');
     });
 
-    it('keeps the first source’s places and puts the next cluster beside it, on the grid', async () => {
+    it('lays each chain out by the placement rule, a group of its own right of the others', async () => {
       const merged = await view(alliance.id);
-      const ofA = await Promise.all(
-        [c2, c5, c1].map(async (id) => (await env.ports.systems.find(corpA.id, id))!),
-      );
-      for (const system of ofA) expect(await at(system.solarSystemId)).toEqual(system.position);
-      const right = Math.max(...ofA.map((s) => s.position.x));
-      const top = Math.min(...ofA.map((s) => s.position.y));
+      const ofA = await Promise.all([c2, c5, c1].map(at));
+      const right = Math.max(...ofA.map((p) => p.x));
+      const top = Math.min(...merged.systems.map((s) => s.position.y));
       const j = await at(jita);
       const p = await at(perimeter);
-      // Right of Corp A's chain with a free column between, its top on Corp A's top.
+      // Not where the sources drew them: Corp C's chain is a group right of Corp A's, at the top.
       expect(j.x).toBeGreaterThanOrEqual(right + 2 * 360);
       expect(j.y).toBe(top);
       expect(j.x % 24).toBe(0);
       expect(j.y % 24).toBe(0);
-      // The cluster keeps its own shape.
-      expect({ x: p.x - j.x, y: p.y - j.y }).toEqual({ x: 360, y: 144 });
-      const spots = new Set(merged.systems.map((s) => `${s.position.x},${s.position.y}`));
-      expect(spots.size).toBe(merged.systems.length);
+      // Perimeter beside Jita, a column further out, in its row.
+      expect(p).toEqual({ x: j.x + 360, y: j.y });
+      // Nothing on top of anything.
+      const shown = merged.systems.map((s) => s.position);
+      for (let i = 0; i < shown.length; i++)
+        for (let k = i + 1; k < shown.length; k++)
+          expect(
+            Math.abs(shown[i]!.x - shown[k]!.x) >= 240 || Math.abs(shown[i]!.y - shown[k]!.y) >= 130,
+          ).toBe(true);
     });
 
-    it('keeps the offset between rebuilds, so later systems join their cluster', async () => {
+    it('keeps the layout between rebuilds, and a later system joins its chain beside its neighbour', async () => {
       const before = { jita: await at(jita), perimeter: await at(perimeter) };
       const fresh = sharingTestEnv(t.db);
       await fresh.merger.rebuildAll();
       expect(await at(jita)).toEqual(before.jita);
-      // A system Corp C adds later lands in Corp C's cluster, where Corp C has it.
-      await env.systems.add(bob, corpC.id, { solarSystemId: shattered, position: { x: -3504, y: -1200 } });
+      // A system Corp C adds later lands beside the one it hangs off, wherever Corp C draws it.
+      await env.systems.add(bob, corpC.id, { solarSystemId: shattered, position: { x: -9000, y: 9000 } });
+      await env.connections.add(bob, corpC.id, { source: jita, target: shattered });
       await env.settle();
-      expect(await at(shattered)).toEqual({ x: before.jita.x, y: before.jita.y + 1296 });
+      expect(await at(shattered)).toEqual({ x: before.jita.x + 360, y: before.jita.y + 144 });
       // A system moved on the composite stays where it was put.
       await env.writes.moveSystems(dave, alliance.id, {
         positions: [{ solarSystemId: jita, x: 48, y: 960 }],
       });
       await fresh.merger.rebuildAll();
       expect(await at(jita)).toEqual({ x: 48, y: 960 });
+    });
+
+    it('tidies the merged layout into one group per chain, for its managers only', async () => {
+      // Scatter it first, as a copied layout would: Perimeter far off its chain.
+      await env.writes.moveSystems(carol, alliance.id, {
+        positions: [{ solarSystemId: perimeter, x: -4800, y: 3600 }],
+      });
+      await expect(env.writes.tidy(dave, alliance.id, false)).rejects.toThrow();
+      const preview = await env.writes.tidy(carol, alliance.id, false);
+      expect(preview.moved).toBeGreaterThan(0);
+      await env.writes.tidy(carol, alliance.id, true);
+      await env.settle();
+      const j = await at(jita);
+      expect(await at(perimeter)).toEqual({ x: j.x + 360, y: j.y });
+      const shown = (await view(alliance.id)).systems.map((s) => s.position);
+      for (let i = 0; i < shown.length; i++)
+        for (let k = i + 1; k < shown.length; k++)
+          expect(
+            Math.abs(shown[i]!.x - shown[k]!.x) >= 240 || Math.abs(shown[i]!.y - shown[k]!.y) >= 130,
+          ).toBe(true);
+      // Nothing left to do.
+      expect((await env.writes.tidy(carol, alliance.id, false)).moved).toBe(0);
     });
 
     it('moves the clusters of a map laid out before offsets apart once, leaving moved systems', async () => {

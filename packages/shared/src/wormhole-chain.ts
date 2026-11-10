@@ -1,3 +1,7 @@
+import { chainTree, SYSTEM_PLACEMENT } from './dto/bookmarks.js';
+import type { ConnectionDto, MapSystemDto, Position } from './dto/mapping.js';
+import { findSystemSpot } from './placement.js';
+
 /** Wormhole space (J-space, Thera, the Drifter systems): solar system ids 31000000 to 31999999. */
 export function inWormholeSpace(solarSystemId: number): boolean {
   return solarSystemId >= 31_000_000 && solarSystemId < 32_000_000;
@@ -63,4 +67,61 @@ export function wormholeChain(
     for (const next of gates.get(at) ?? []) chain.add(next);
   }
   return chain;
+}
+
+/**
+ * The chain laid out afresh: every root (home first, see `chainTree`) and every system in `fixed`
+ * where it is, then each system, breadth first, beside the one it hangs off by the map's placement
+ * rule (`findSystemSpot`), among the systems already laid out only. A root after the first that
+ * is not fixed starts a group of its own right of everything laid out so far, so separate chains
+ * read as separate groups.
+ */
+export function layOutChain(
+  systems: readonly MapSystemDto[],
+  connections: readonly ConnectionDto[],
+  fixed: ReadonlySet<number> = new Set(),
+): Map<number, Position> {
+  const { roots, steps } = chainTree(systems, connections);
+  const byId = new Map(systems.map((s) => [s.solarSystemId, s]));
+  const placed = new Map<number, Position>();
+  for (const s of systems) if (fixed.has(s.solarSystemId)) placed.set(s.solarSystemId, s.position);
+  const parentOf = new Map(steps.map((s) => [s.child, s.parent]));
+  const childrenOf = new Map<number, typeof steps>();
+  for (const step of steps) childrenOf.set(step.parent, [...(childrenOf.get(step.parent) ?? []), step]);
+  const place = (id: number, parent: number | null, start: Position | null) => {
+    if (placed.has(id)) return;
+    const nodes = [...placed].map(([n, position]) => ({ id: n, position }));
+    const links = connections.filter((c) => placed.has(c.source) && placed.has(c.target));
+    placed.set(
+      id,
+      parent === null
+        ? findSystemSpot({ nodes, links, previous: start, around: start })
+        : findSystemSpot({ nodes, links, parent, upstream: parentOf.get(parent) ?? null }),
+    );
+  };
+  roots.forEach((root, i) => {
+    // The first root keeps its spot; the others open a group right of what is laid out.
+    const start = i === 0 ? byId.get(root)!.position : groupStart(placed);
+    place(root, null, start);
+    const queue = [root];
+    for (let q = 0; q < queue.length; q++) {
+      for (const step of childrenOf.get(queue[q]!) ?? []) {
+        place(step.child, step.parent, null);
+        queue.push(step.child);
+      }
+    }
+  });
+  return placed;
+}
+
+/** Where a new group of systems starts: two columns right of everything placed, at its top. */
+export function groupStart(placed: ReadonlyMap<number, Position>): Position {
+  if (placed.size === 0) return { x: 0, y: 0 };
+  let maxX = -Infinity;
+  let minY = Infinity;
+  for (const p of placed.values()) {
+    maxX = Math.max(maxX, p.x);
+    minY = Math.min(minY, p.y);
+  }
+  return { x: maxX + 2 * SYSTEM_PLACEMENT.x, y: minY };
 }

@@ -663,7 +663,7 @@ export function MapView({
         undoLabel: canUndo ? store.undoLabel : null,
         onUndo: undo,
         ...(clipboard.canPaste ? { onPaste: () => void clipboard.pasteFromClipboard(target.flow) } : {}),
-        ...(can.manage && map.kind !== 'composite' ? { onTidy: () => setTidying(true) } : {}),
+        ...(can.manage ? { onTidy: () => setTidying(true) } : {}),
       }),
     };
   })();

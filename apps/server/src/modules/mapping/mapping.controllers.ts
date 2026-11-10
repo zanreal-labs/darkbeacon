@@ -245,7 +245,11 @@ export class SystemsController {
     @Param('mapId') mapId: string,
     @Body(new ZodPipe(TidyChainRequest)) body: z.output<typeof TidyChainRequest>,
   ): Promise<TidyChainDto> {
-    return this.systems.tidy(actor, mapId, body.apply);
+    return this.merged.route(
+      mapId,
+      (w) => w.tidy(actor, mapId, body.apply),
+      () => this.systems.tidy(actor, mapId, body.apply),
+    ) as Promise<TidyChainDto>;
   }
 
   @Patch(nestPath(routes.systems.update.path))
