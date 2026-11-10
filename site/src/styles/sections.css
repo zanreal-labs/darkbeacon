@@ -591,9 +591,9 @@
   translate: -50% 0;
   -webkit-backdrop-filter: blur(16px) saturate(140%);
   backdrop-filter: blur(16px) saturate(140%);
-  transition: border-color var(--dur-short) var(--ease-out), background-color var(--dur-short) var(--ease-out),
-    box-shadow var(--dur-medium) var(--ease-out), opacity var(--dur-medium) var(--ease-out),
-    transform var(--dur-medium) var(--ease-out), visibility 0s linear 0s;
+  /* Only showing and hiding move; hovering just lights the border, at once. */
+  transition: opacity var(--dur-medium) var(--ease-out), transform var(--dur-medium) var(--ease-out),
+    visibility 0s linear 0s;
 }
 
 /* Hidden until AgentPill's script says otherwise: faded and a little lower, and out of reach. */
@@ -620,19 +620,6 @@
 
 .agent-pill:hover {
   border-color: rgb(95 224 238 / 0.45);
-  background: rgb(14 18 22 / 0.9);
-  box-shadow: 0 12px 40px -12px rgb(0 0 0 / 0.9), 0 0 28px -10px rgb(95 224 238 / 0.5);
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .agent-pill .agent-avatar {
-    transition: translate var(--dur-medium) var(--ease-out);
-  }
-
-  .agent-pill:hover .agent-avatar:nth-child(1) { translate: -3px 0; }
-  .agent-pill:hover .agent-avatar:nth-child(2) { translate: -1px 0; }
-  .agent-pill:hover .agent-avatar:nth-child(3) { translate: 1px 0; }
-  .agent-pill:hover .agent-avatar:nth-child(4) { translate: 3px 0; }
 }
 
 /* Room at the end of the page so the pill never sits on the last lines of the footer. */

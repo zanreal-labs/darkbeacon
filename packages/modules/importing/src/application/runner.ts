@@ -7,7 +7,13 @@ import {
   newId,
   type Actor,
 } from '@darkbeacon/core';
-import type { EventPayloads, EventType, MapRole, SignatureDto } from '@darkbeacon/shared';
+import {
+  wormholeChain,
+  type EventPayloads,
+  type EventType,
+  type MapRole,
+  type SignatureDto,
+} from '@darkbeacon/shared';
 import {
   decideAccess,
   decideConnection,
@@ -263,8 +269,15 @@ export class ImportRunner {
         ]),
       );
       const hereLinks = merging
-        ? (await deps.target.connections(actor, mapId)).map((c) => ({ source: c.source, target: c.target }))
+        ? (await deps.target.connections(actor, mapId)).map((c) => ({
+            source: c.source,
+            target: c.target,
+            type: c.type,
+          }))
         : [];
+      // Into a map with its own chain Wanderer brings the wormhole chain only, not its trips
+      // through known space (cynos, bridges, gates), which Wanderer maps as connections too.
+      const chain = merging ? chainOf([...here.values()], hereLinks, plan) : null;
       const neighbours = (id: number) => [
         ...new Set(
           [...hereLinks, ...plan.connections].flatMap((c) =>
@@ -286,6 +299,10 @@ export class ImportRunner {
           options,
           systemLabelIds,
         );
+        if (chain && !chain.has(planned.solarSystemId) && !current?.visible) {
+          decision.action = 'unchanged';
+          decision.write = {};
+        }
         const shownAfter = decision.write.visible ?? current?.visible ?? false;
         if (merging && decision.write.position && shownAfter) {
           decision.write = {
@@ -349,14 +366,22 @@ export class ImportRunner {
     // Connections -------------------------------------------------------------------------------
     if (reached('connections')) {
       await job.phase('connections');
-      const visible = new Set(
-        (await deps.target.systems(actor, mapId)).filter((s) => s.visible).map((s) => s.solarSystemId),
-      );
-      const here = new Map(
-        (await deps.target.connections(actor, mapId)).map((c) => [pairKey(c.source, c.target), c]),
-      );
+      const shown = (await deps.target.systems(actor, mapId)).filter((s) => s.visible);
+      const visible = new Set(shown.map((s) => s.solarSystemId));
+      const hereConnections = await deps.target.connections(actor, mapId);
+      const here = new Map(hereConnections.map((c) => [pairKey(c.source, c.target), c]));
+      const chain = r.mode !== 'new' ? chainOf(shown, hereConnections, plan) : null;
       for (const planned of plan.connections) {
         this.check(r.id);
+        if (
+          chain &&
+          !here.has(planned.key) &&
+          (planned.fields.type !== 'wormhole' || !chain.has(planned.source) || !chain.has(planned.target))
+        ) {
+          step('connections', 'skipped');
+          await job.step();
+          continue;
+        }
         if (!visible.has(planned.source) || !visible.has(planned.target)) {
           step('connections', 'skipped');
           job.warn(`${planned.name}: a system is not shown on the map`);
@@ -1010,4 +1035,24 @@ function outwardsFrom<T extends { solarSystemId: number }>(
   const placed = new Set(out);
   for (const s of systems) if (!placed.has(s)) out.push(s);
   return out;
+}
+
+/** The wormhole chain over what the map shows and what Wanderer shows (`wormholeChain`). */
+function chainOf(
+  here: ReadonlyArray<{ solarSystemId: number; status: string; visible: boolean }>,
+  hereLinks: ReadonlyArray<{ source: number; target: number; type: string }>,
+  plan: ImportPlan,
+): Set<number> {
+  return wormholeChain(
+    [
+      ...here.filter((s) => s.visible),
+      ...plan.systems
+        .filter((s) => s.fields.visible)
+        .map((s) => ({ solarSystemId: s.solarSystemId, status: s.fields.status })),
+    ],
+    [
+      ...hereLinks,
+      ...plan.connections.map((c) => ({ source: c.source, target: c.target, type: c.fields.type })),
+    ],
+  );
 }
