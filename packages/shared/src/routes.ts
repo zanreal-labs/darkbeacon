@@ -691,6 +691,17 @@ export const routes = {
       mapRole: 'member',
       body: dto.MoveSystemsRequest,
     }),
+    /** Hides what is off the wormhole chain and lays the chain out again; `apply: false` previews. */
+    tidy: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/systems/tidy',
+      auth: 'account',
+      scope: { resource: 'systems', action: 'write' },
+      mapRole: 'manager',
+      status: 200,
+      body: dto.TidyChainRequest,
+      response: dto.TidyChainDto,
+    }),
     remove: route({
       method: 'DELETE',
       path: '/api/maps/:mapId/systems/:solarSystemId',

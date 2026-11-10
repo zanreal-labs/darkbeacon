@@ -21,9 +21,10 @@ import { cssVar } from '@darkbeacon/theme-sdk';
 import {
   CircleDashed,
   CircleDot,
+  ClipboardPaste,
   Clock,
-  Hourglass,
   EyeOff,
+  Hourglass,
   LocateFixed,
   Lock,
   LockOpen,
@@ -35,11 +36,11 @@ import {
   Puzzle,
   Route,
   Ship,
+  Sparkles,
   Tags,
   Trash2,
   TriangleAlert,
   Type,
-  ClipboardPaste,
   Undo2,
   Weight,
 } from 'lucide-react';
@@ -579,6 +580,8 @@ export interface PaneMenuContext {
   onUndo?(): void;
   /** Pastes copied systems at the pointer; absent when the viewer may not paste here. */
   onPaste?(): void;
+  /** Opens "Tidy the chain"; absent when the viewer may not (map managers, own maps). */
+  onTidy?(): void;
 }
 
 export function paneMenu(ctx: PaneMenuContext): MenuItem[] {
@@ -614,6 +617,9 @@ export function paneMenu(ctx: PaneMenuContext): MenuItem[] {
     ],
     [
       { kind: 'action', label: 'Fit chain', icon: <Maximize />, shortcut: 'F', onSelect: ctx.onFitChain },
+      ...(ctx.onTidy
+        ? [{ kind: 'action', label: 'Tidy the chain…', icon: <Sparkles />, onSelect: ctx.onTidy } as const]
+        : []),
       {
         kind: 'action',
         label: 'Center on me',

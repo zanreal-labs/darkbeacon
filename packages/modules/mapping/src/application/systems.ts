@@ -6,7 +6,16 @@ import {
   hasMapRole,
   type Actor,
 } from '@darkbeacon/core';
-import { type AddSystemRequest, type MoveSystemsRequest, type UpdateSystemRequest } from '@darkbeacon/shared';
+import {
+  chainTree,
+  findSystemSpot,
+  wormholeChain,
+  type AddSystemRequest,
+  type MoveSystemsRequest,
+  type Position,
+  type TidyChainDto,
+  type UpdateSystemRequest,
+} from '@darkbeacon/shared';
 import type { Connection, MapSystem } from '../domain/map.js';
 import { placeSystem } from '../domain/placement.js';
 import { changes, defined } from '../domain/rules.js';
@@ -137,6 +146,57 @@ export class SystemUseCases extends MappingUseCases {
     });
   }
 
+  /**
+   * Puts the chain back in order, map managers only: hides every system off the wormhole chain
+   * (`wormholeChain`: trips through known space by cyno, bridge or gate that tracking or a sync
+   * brought along), locked ones included, and lays the chain out again from home with the map's
+   * placement rule, each system beside the one it hangs off, as if every system had been added
+   * in order. Home, other roots and locked systems keep their spots. A system an active ping
+   * points at stays. Without `apply` it only says what it would do.
+   */
+  async tidy(actor: Actor | null, mapId: string, apply: boolean): Promise<TidyChainDto> {
+    const who = await this.authorize(actor, mapId, 'manager');
+    if ((await this.ports.maps.findById(mapId))?.kind === 'composite')
+      throw new ConflictError('This map merges other maps; tidy each of them');
+    const plan = async () => {
+      const visible = (await this.ports.systems.list(mapId)).filter((s) => s.visible);
+      const connections = await this.ports.connections.list(mapId);
+      const chain = wormholeChain(visible, connections);
+      const pinged = new Set(((await this.ports.pings?.list(mapId)) ?? []).map((p) => p.solarSystemId));
+      const off = visible.filter((s) => !chain.has(s.solarSystemId));
+      const hide = off.filter((s) => !pinged.has(s.solarSystemId));
+      const kept = off.filter((s) => pinged.has(s.solarSystemId));
+      const staying = visible.filter((s) => !hide.includes(s));
+      const ids = new Set(staying.map((s) => s.solarSystemId));
+      const links = connections.filter((c) => ids.has(c.source) && ids.has(c.target));
+      return { hide, kept, staying, links, positions: layOut(staying, links) };
+    };
+    const { hide, kept, staying, positions } = await plan();
+    const moving = staying.filter((s) => {
+      const p = positions.get(s.solarSystemId);
+      return p && (p.x !== s.position.x || p.y !== s.position.y);
+    });
+    const result: TidyChainDto = {
+      hidden: hide.map((s) => s.solarSystemId),
+      kept: kept.map((s) => s.solarSystemId),
+      moved: moving.length,
+    };
+    if (!apply || (hide.length === 0 && moving.length === 0)) return result;
+    await this.write(who, mapId, async (events) => {
+      const now = this.ports.clock.now();
+      for (const system of hide) {
+        await this.hide(events, { ...system, visible: false, locked: false, updatedAt: now }, system);
+      }
+      for (const system of moving) {
+        const next = { ...system, position: positions.get(system.solarSystemId)!, updatedAt: now };
+        await this.ports.systems.update(next);
+        events.add('system.updated', next, system);
+      }
+      if (hide.length > 0) await renumberBookmarks(this.ports, events, mapId);
+    });
+    return result;
+  }
+
   /** Hides the system, keeping its intel. Locked systems stay. */
   async remove(actor: Actor | null, mapId: string, solarSystemId: number): Promise<void> {
     const who = await this.authorizeEdit(actor, mapId);
@@ -219,4 +279,28 @@ export async function removeConnection(
     }
   }
   events.add('connection.removed', { id: connection.id }, connection);
+}
+
+/**
+ * The chain laid out afresh: every root (home first) and every locked system where it is, then
+ * each system, breadth first, beside the one it hangs off by the map's placement rule
+ * (`findSystemSpot`), among the systems already laid out only.
+ */
+function layOut(systems: readonly MapSystem[], connections: readonly Connection[]): Map<number, Position> {
+  const { roots, steps } = chainTree(systems, connections);
+  const byId = new Map(systems.map((s) => [s.solarSystemId, s]));
+  const placed = new Map<number, Position>();
+  for (const id of roots) placed.set(id, byId.get(id)!.position);
+  for (const s of systems) if (s.locked) placed.set(s.solarSystemId, s.position);
+  const parentOf = new Map(steps.map((s) => [s.child, s.parent]));
+  for (const step of steps) {
+    if (placed.has(step.child)) continue;
+    const nodes = [...placed].map(([id, position]) => ({ id, position }));
+    const links = connections.filter((c) => placed.has(c.source) && placed.has(c.target));
+    placed.set(
+      step.child,
+      findSystemSpot({ nodes, links, parent: step.parent, upstream: parentOf.get(step.parent) ?? null }),
+    );
+  }
+  return placed;
 }

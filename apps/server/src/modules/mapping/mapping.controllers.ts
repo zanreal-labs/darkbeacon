@@ -31,6 +31,8 @@ import {
   EveId,
   LogPassagesRequest,
   MoveSystemsRequest,
+  TidyChainRequest,
+  type TidyChainDto,
   nestPath,
   PasteSignaturesRequest,
   RemoveSignaturesRequest,
@@ -234,6 +236,16 @@ export class SystemsController {
       (w) => w.moveSystems(actor, mapId, body),
       () => this.systems.move(actor, mapId, body),
     );
+  }
+
+  @Post(nestPath(routes.systems.tidy.path))
+  @HttpCode(200)
+  tidy(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Body(new ZodPipe(TidyChainRequest)) body: z.output<typeof TidyChainRequest>,
+  ): Promise<TidyChainDto> {
+    return this.systems.tidy(actor, mapId, body.apply);
   }
 
   @Patch(nestPath(routes.systems.update.path))

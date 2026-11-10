@@ -18,10 +18,11 @@ export interface ChainLink {
  * The systems on the wormhole chain: walked over wormhole connections from every home and every
  * system in wormhole space, taking in the known-space systems those wormholes lead out to (the
  * exits) but going on from a known-space system only through a wormhole back into wormhole space.
- * Stargate and jump bridge connections are not followed, nor wormhole connections between two
- * known-space systems away from home: those are trips through known space (a cyno, a titan or
- * black ops bridge, an Ansiblex, gates), not the chain. A home in known space is a root as well
- * and may lead out over any wormhole connection.
+ * An exit keeps the systems one stargate on (where the way out leads), nothing further. Jump bridge
+ * connections are not followed, nor wormhole connections between two known-space systems away
+ * from home: those are trips through known space (a cyno, a titan or black ops bridge, an
+ * Ansiblex, gates), not the chain. A home in known space is a root as well and may lead out over
+ * any wormhole connection.
  */
 export function wormholeChain(
   systems: readonly ChainSystem[],
@@ -30,10 +31,13 @@ export function wormholeChain(
   const present = new Set(systems.map((s) => s.solarSystemId));
   const homes = new Set(systems.filter((s) => s.status === 'home').map((s) => s.solarSystemId));
   const links = new Map<number, number[]>();
+  const gates = new Map<number, number[]>();
   for (const c of connections) {
-    if (c.type !== 'wormhole' || !present.has(c.source) || !present.has(c.target)) continue;
-    links.set(c.source, [...(links.get(c.source) ?? []), c.target]);
-    links.set(c.target, [...(links.get(c.target) ?? []), c.source]);
+    if (!present.has(c.source) || !present.has(c.target)) continue;
+    const into = c.type === 'wormhole' ? links : c.type === 'gate' ? gates : null;
+    if (!into) continue;
+    into.set(c.source, [...(into.get(c.source) ?? []), c.target]);
+    into.set(c.target, [...(into.get(c.target) ?? []), c.source]);
   }
   const chain = new Set<number>();
   const queue: number[] = [];
@@ -52,6 +56,11 @@ export function wormholeChain(
       chain.add(next);
       queue.push(next);
     }
+  }
+  // One stargate on from every exit (a known-space system the chain reached).
+  for (const at of [...chain]) {
+    if (inWormholeSpace(at)) continue;
+    for (const next of gates.get(at) ?? []) chain.add(next);
   }
   return chain;
 }

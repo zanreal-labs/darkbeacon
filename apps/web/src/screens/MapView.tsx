@@ -46,6 +46,7 @@ import { useSignatureUndoBridge } from '../map/undo/signatureBridge';
 import { useSystemsClipboard } from '../map/clipboard/useSystemsClipboard';
 import { useCanvasPrefs } from '../map/canvas/prefs';
 import { RallyCard } from '../map/pings/RallyCard';
+import { TidyChainDialog } from '../map/TidyChainDialog';
 import { useLinkedMaps } from '../map/linked/api';
 import { LinkedMapPreview } from '../map/linked/LinkedMapPreview';
 import { usePingCommands, usePings } from '../map/pings/api';
@@ -207,6 +208,7 @@ export function MapView({
   // The connection panel belongs to a selected connection: shown with each newly selected one;
   // the top bar's toggle hides it while the selection stays.
   const [panel, setPanel] = useState(true);
+  const [tidying, setTidying] = useState(false);
   const [cover, setCover] = useState({ right: 0, bottom: 0 });
   const onCover = useCallback(
     (next: { right: number; bottom: number }) =>
@@ -661,6 +663,7 @@ export function MapView({
         undoLabel: canUndo ? store.undoLabel : null,
         onUndo: undo,
         ...(clipboard.canPaste ? { onPaste: () => void clipboard.pasteFromClipboard(target.flow) } : {}),
+        ...(can.manage && map.kind !== 'composite' ? { onTidy: () => setTidying(true) } : {}),
       }),
     };
   })();
@@ -921,6 +924,10 @@ export function MapView({
             merged={merged}
             onClose={() => setConnectionDialog(null)}
           />
+        )}
+
+        {tidying && (
+          <TidyChainDialog mapId={map.id} open={tidying} onOpenChange={setTidying} nameOf={endName} />
         )}
 
         {rally && state.systems.has(rally.solarSystemId) && (

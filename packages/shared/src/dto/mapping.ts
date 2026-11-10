@@ -308,6 +308,19 @@ export const MoveSystemsRequest = z.object({
 });
 export type MoveSystemsRequest = z.infer<typeof MoveSystemsRequest>;
 
+/** Tidying the chain: `apply: false` only says what it would do. */
+export const TidyChainRequest = z.object({ apply: z.boolean().default(false) });
+export type TidyChainRequest = z.input<typeof TidyChainRequest>;
+
+/** What tidying the chain hides (systems off the wormhole chain) and how many systems it moves. */
+export const TidyChainDto = z.object({
+  hidden: z.array(EveId),
+  /** Off the chain but kept: an active ping points at them. */
+  kept: z.array(EveId),
+  moved: z.number().int(),
+});
+export type TidyChainDto = z.infer<typeof TidyChainDto>;
+
 export const ConnectionType = z.enum(['wormhole', 'gate', 'bridge']);
 export type ConnectionType = z.infer<typeof ConnectionType>;
 /** `eol`: less than 4 hours of life left. */

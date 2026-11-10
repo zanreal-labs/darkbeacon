@@ -17,7 +17,7 @@ describe('the wormhole chain', () => {
     expect(inWormholeSpace(32000001)).toBe(false); // Abyssal
   });
 
-  it('keeps home, the holes and the exits, and leaves trips through known space out', () => {
+  it('keeps home, the holes, the exits and one gate on, and leaves trips through known space out', () => {
     const chain = wormholeChain(
       [
         { solarSystemId: HOME, status: 'home' },
@@ -27,12 +27,14 @@ describe('the wormhole chain', () => {
         { source: HOME, target: WH, type: 'wormhole' },
         { source: WH, target: EXIT, type: 'wormhole' },
         { source: EXIT, target: NEXT, type: 'gate' },
+        { source: NEXT, target: STAGING, type: 'gate' },
         // Wanderer maps a cyno jump between known-space systems as a wormhole.
         { source: STAGING, target: CYNO, type: 'wormhole' },
         { source: BRIDGE_A, target: BRIDGE_B, type: 'bridge' },
       ],
     );
-    expect([...chain].sort()).toEqual([EXIT, HOME, WH].sort());
+    // One gate on from the exit stays; the next gate does not.
+    expect([...chain].sort()).toEqual([EXIT, HOME, NEXT, WH].sort());
   });
 
   it('goes back into wormhole space from an exit, and out of a home in known space', () => {
