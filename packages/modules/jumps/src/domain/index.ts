@@ -1,4 +1,5 @@
 export * from './formulas.js';
+export * from './fuel.js';
 export * from './hulls.js';
 export * from './pilot.js';
 export * from './planner.js';

@@ -116,6 +116,10 @@ export const JumpPlanRequest = z.object({
   shipTypeId: EveId,
   origin: EveId,
   destination: EveId,
+  /** Systems to stop at on the way, in order. */
+  via: z.array(EveId).max(10).default([]),
+  /** Back to the origin after the destination. */
+  roundTrip: z.boolean().default(false),
   skills: JumpSkills.default({ jdc: 5, jfc: 4, jf: 4 }),
   avoidSystems: z.array(EveId).max(500).default([]),
   avoidRegions: z.array(EveId).max(100).default([]),
@@ -155,6 +159,8 @@ export const JumpLegDto = z.object({
   kind: JumpLegKind,
   from: JumpSystemRefDto,
   to: JumpSystemRefDto,
+  /** The leg ends at a stop the pilot asked for (not the end of the trip). */
+  stop: z.boolean().default(false),
   /** Straight-line distance in light years. */
   ly: z.number(),
   /** Isotopes for this leg (0 for gates and Ansiblex). */
@@ -251,3 +257,49 @@ export function fatigueMinutesLeft(expiresAt: number | null, now: number): numbe
   if (expiresAt === null) return 0;
   return Math.min(300, Math.max(0, Math.ceil((expiresAt - now) / 60_000)));
 }
+
+/** Trade hubs whose fuel prices the planner can show: the lowest sell order at the hub station. */
+export const JumpFuelHub = z.enum(['jita', 'amarr', 'dodixie', 'rens', 'hek']);
+export type JumpFuelHub = z.infer<typeof JumpFuelHub>;
+
+export const JumpFuelPricesQuery = z.object({ hub: JumpFuelHub.default('jita') });
+
+/** GET /api/jumps/fuel-prices: ISK per unit of each isotope at a hub; null with no sell order. */
+export const JumpFuelPricesDto = z.object({
+  hub: JumpFuelHub,
+  /** The hub station's name, e.g. "Jita IV - Moon 4 - Caldari Navy Assembly Plant". */
+  station: z.string(),
+  prices: z.object({
+    helium: z.number().nullable(),
+    hydrogen: z.number().nullable(),
+    nitrogen: z.number().nullable(),
+    oxygen: z.number().nullable(),
+  }),
+  /** When ESI's answer was read (epoch ms). */
+  fetchedAt: Timestamp,
+});
+export type JumpFuelPricesDto = z.infer<typeof JumpFuelPricesDto>;
+
+/** POST /api/jumps/shares: share a planned route as a link anyone can open. */
+export const JumpShareRequest = z.object({
+  plan: JumpPlanRequest,
+  fuelHub: JumpFuelHub.default('jita'),
+});
+export type JumpShareRequest = z.input<typeof JumpShareRequest>;
+
+export const JumpShareCreatedDto = z.object({
+  /** The link is `/j/<token>`. */
+  token: z.string(),
+});
+export type JumpShareCreatedDto = z.infer<typeof JumpShareCreatedDto>;
+
+/** GET /api/public/jumps/:token: a shared route as anyone sees it, planned again now. */
+export const JumpShareViewDto = z.object({
+  request: JumpPlanRequest,
+  plan: JumpPlanDto,
+  fuelPrices: JumpFuelPricesDto.nullable(),
+  /** The k-space dataset the route was planned on (for the map data). */
+  universeVersion: z.string(),
+  sharedAt: Timestamp,
+});
+export type JumpShareViewDto = z.infer<typeof JumpShareViewDto>;

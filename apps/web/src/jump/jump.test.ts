@@ -93,7 +93,7 @@ describe('formatting', () => {
       region: i < 2 ? 'The Forge' : 'Domain',
       station: false,
     });
-    const leg = { bridgeFuel: null, waitMinutes: 0, activationMinutes: 2, fatigueMinutes: 20 };
+    const leg = { bridgeFuel: null, waitMinutes: 0, activationMinutes: 2, fatigueMinutes: 20, stop: false };
     const plan: JumpPlanDto = {
       ship: ARK,
       rangeLy: 10,

@@ -6,9 +6,12 @@ import {
   fatigueMinutesLeft,
   routes,
   type JumpMetaDto,
+  type JumpFuelPricesDto,
   type JumpPlanDto,
   type JumpRouteDto,
   type JumpPlanRequest,
+  type JumpShareCreatedDto,
+  type JumpShareRequest,
   type JumpUniverseDto,
 } from '@darkbeacon/shared';
 import { api } from '../lib/api';
@@ -114,6 +117,16 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
     destination: find(readQuery().get('to')),
   }));
   const { origin, destination } = ends;
+  // Stops on the way, in order; an empty picker (null) until a system is chosen for it.
+  const [stops, setStops] = useState<Array<number | null>>(() =>
+    (readQuery().get('via') ?? '')
+      .split(',')
+      .map((name) => find(name.trim()))
+      .filter((i): i is number => i !== null),
+  );
+  const via = useMemo(() => stops.filter((i): i is number => i !== null), [stops]);
+  const addStop = () => setStops((s) => [...s, null]);
+  const removeStop = (n: number) => setStops((s) => s.filter((_, k) => k !== n));
   // A system picked for either end is remembered as a recent pick (swaps and the address are not).
   const remember = useCallback(
     (system: number | null) => {
@@ -161,6 +174,7 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
     const set = (key: string, value: string | null) => (value ? query.set(key, value) : query.delete(key));
     set('from', origin === null ? null : model.names[origin]!);
     set('to', destination === null ? null : model.names[destination]!);
+    set('via', via.length > 0 ? via.map((i) => model.names[i]!).join(',') : null);
     set('ship', ship.name);
     const search = query.toString();
     window.history.replaceState(
@@ -168,7 +182,7 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
       '',
       `${window.location.pathname}${search ? `?${search}` : ''}`,
     );
-  }, [origin, destination, ship.name, model]);
+  }, [origin, destination, via, ship.name, model]);
 
   const avoidSystems = useMemo(
     () => new Set(settings.avoidSystems.flatMap((name) => find(name) ?? [])),
@@ -229,12 +243,18 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
   const ansiblexText = useDeferredValue(settings.ansiblex);
   const ansiblex = useMemo(() => parseAnsiblex(ansiblexText, model), [ansiblexText, model]);
 
-  const requestFor = (from: number | null, to: number | null): JumpPlanRequest | null =>
-    from !== null && to !== null && from !== to
+  const requestFor = (
+    from: number | null,
+    to: number | null,
+    stopsOn: readonly number[],
+  ): JumpPlanRequest | null =>
+    from !== null && to !== null && (from !== to || stopsOn.length > 0)
       ? {
           shipTypeId: ship.typeId,
           origin: model.ids[from]!,
           destination: model.ids[to]!,
+          via: stopsOn.map((i) => model.ids[i]!),
+          roundTrip: settings.roundTrip,
           skills,
           avoidSystems: [...avoidSystems].map((i) => model.ids[i]!),
           avoidRegions: avoidRegions.map((r) => model.regionIds[r]!),
@@ -249,7 +269,7 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
           bridgeTonnes: ship.bridges ? settings.bridgeTonnes : null,
         }
       : null;
-  const request = requestFor(origin, destination);
+  const request = requestFor(origin, destination, via);
   const plan = useQuery({
     queryKey: planKey(request),
     queryFn: ({ signal }) => fetchPlan(request!, signal),
@@ -262,7 +282,7 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
   // at once instead of the old route while it comes.
   const queryClient = useQueryClient();
   const prefetchSwap = () => {
-    const reverse = requestFor(destination, origin);
+    const reverse = requestFor(destination, origin, [...via].reverse());
     if (reverse)
       void queryClient.prefetchQuery({
         queryKey: planKey(reverse),
@@ -272,6 +292,15 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
       });
   };
   const answer = request !== null ? (plan.data ?? null) : null;
+  // What the isotopes cost at the pilot's hub: read when a route is shown, kept for a while.
+  const fuelPrices = useQuery({
+    queryKey: ['jumps', 'fuel-prices', settings.fuelHub],
+    queryFn: ({ signal }) =>
+      api<JumpFuelPricesDto>(`${routes.jumps.fuelPrices.path}?hub=${settings.fuelHub}`, { signal }),
+    enabled: answer?.route != null,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
   // The recommended route, or the alternative the pilot picked for this answer (a new answer
   // starts on the recommended one again, as a maps app does).
   const [choice, setChoice] = useState<{ of: JumpPlanDto | null; index: number }>({ of: null, index: 0 });
@@ -410,6 +439,7 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
         if (pinned) setPinned(null);
         else {
           dispatch({ type: 'clear' });
+          setStops([]);
           setActiveLeg(null);
         }
       }
@@ -474,7 +504,38 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
           // start (a swap keeps it open: the pilot is still at the controls).
           if (phone && i !== null && origin !== null && origin !== i) setPanelOpen(false);
         }}
-        onSwap={() => dispatch({ type: 'swap' })}
+        onSwap={() => {
+          dispatch({ type: 'swap' });
+          setStops((s) => [...s].reverse());
+        }}
+        stops={stops}
+        setStop={(n, system) => {
+          setStops((s) => s.map((x, k) => (k === n ? system : x)));
+          remember(system);
+        }}
+        addStop={addStop}
+        movePoint={(from, to) => {
+          const points = [origin, ...stops, destination];
+          const [moved] = points.splice(from, 1);
+          points.splice(to, 0, moved ?? null);
+          dispatch({
+            type: 'set',
+            origin: points[0] ?? null,
+            destination: points[points.length - 1] ?? null,
+          });
+          setStops(points.slice(1, -1));
+          setActiveLeg(null);
+        }}
+        removeStop={removeStop}
+        fuelPrices={fuelPrices.data ?? null}
+        onShare={async () => {
+          if (!request) throw new Error('No route to share');
+          const { token } = await api<JumpShareCreatedDto>(routes.jumps.share.path, {
+            method: 'POST',
+            json: { plan: request, fuelHub: settings.fuelHub } satisfies JumpShareRequest,
+          });
+          return `${window.location.origin}/j/${token}`;
+        }}
         onSwapIntent={prefetchSwap}
         suggestions={suggestions}
         avoidSystems={avoidSystems}

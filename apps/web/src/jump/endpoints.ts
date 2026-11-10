@@ -8,6 +8,8 @@ export type EndpointsAction =
   | { type: 'origin'; system: number | null }
   | { type: 'destination'; system: number | null }
   | { type: 'swap' }
+  /** Both ends at once, as a reorder of the trip's points leaves them. */
+  | { type: 'set'; origin: number | null; destination: number | null }
   | { type: 'clear' };
 
 /**
@@ -31,6 +33,10 @@ export function endpointsReducer(state: Endpoints, action: EndpointsAction): End
     case 'swap':
       if (state.origin === state.destination) return state;
       return { origin: state.destination, destination: state.origin };
+    case 'set':
+      return action.origin === state.origin && action.destination === state.destination
+        ? state
+        : { origin: action.origin, destination: action.destination };
     case 'clear':
       return state.origin === null && state.destination === null
         ? state

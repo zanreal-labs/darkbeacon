@@ -34,6 +34,10 @@ export interface PlanOptions {
   bridgeMassKg?: number | null;
   /** What the route saves first after stargates; `jumps` by default (see `ORDERS`). */
   objective?: RouteObjective;
+  /** Systems to stop at on the way, in order (indexes), between the origin and the destination. */
+  via?: readonly number[];
+  /** Back to the origin after the destination, as one more part of the trip. */
+  roundTrip?: boolean;
 }
 
 /** What a route is planned to save first: jumps (the recommended one), fuel, or fatigue. */
@@ -43,6 +47,8 @@ export interface PlannedLeg {
   kind: JumpLegKind;
   from: number;
   to: number;
+  /** The leg ends at a stop the pilot asked for (not the last system of the trip). */
+  stop: boolean;
   ly: number;
   fuel: number;
   bridgeFuel: number | null;
@@ -219,6 +225,13 @@ class Heap {
   }
 }
 
+interface Step {
+  from: number;
+  to: number;
+  kind: JumpLegKind;
+  stop: boolean;
+}
+
 const KIND_JUMP = 0;
 const KIND_GATE = 1;
 const KIND_ANSIBLEX = 2;
@@ -271,7 +284,16 @@ export function planJumpRoute(space: JumpSpace, options: PlanOptions): PlanOutco
     }
   }
 
-  if (origin === destination) return fail('same_system', 'Start and destination are the same system');
+  // The trip in parts: origin, the stops, the destination and, for a round trip, the origin again.
+  const points = [origin, ...(options.via ?? []), destination, ...(options.roundTrip ? [origin] : [])];
+  for (let k = 1; k < points.length; k++)
+    if (points[k] === points[k - 1])
+      return fail(
+        'same_system',
+        points.length === 2
+          ? 'Start and destination are the same system'
+          : `${space.name(points[k]!)} comes twice in a row`,
+      );
   if (!hullMayBeIn(space, rules, origin))
     return fail(
       'origin_not_allowed',
@@ -279,18 +301,22 @@ export function planJumpRoute(space: JumpSpace, options: PlanOptions): PlanOutco
         ? `${HULL_NAMES[ship.hull]} cannot be in Zarzakh`
         : `${HULL_NAMES[ship.hull]} cannot be in high-sec`,
     );
-  if (!hullMayBeIn(space, rules, destination) || (outlaw && space.highSec(destination)))
+  for (const [k, p] of points.entries()) {
+    if (k === 0 || (hullMayBeIn(space, rules, p) && !(outlaw && space.highSec(p)))) continue;
+    const what = p === destination ? 'The destination' : `The stop ${space.name(p)}`;
     return fail(
       'destination_not_allowed',
-      space.zarzakh(destination)
+      space.zarzakh(p)
         ? `${HULL_NAMES[ship.hull]} cannot enter Zarzakh`
         : outlaw && rules.highSec
-          ? 'The destination is in high-sec, which outlaw routes never enter'
+          ? `${what} is in high-sec, which outlaw routes never enter`
           : `${HULL_NAMES[ship.hull]} cannot enter high-sec`,
     );
+  }
 
-  const avoided = (i: number) =>
-    i !== destination && (avoidSystems.has(i) || avoidRegions.has(space.regionId(i)));
+  // Stops and ends are never avoided: the pilot asked to be there.
+  const ends = new Set(points);
+  const avoided = (i: number) => !ends.has(i) && (avoidSystems.has(i) || avoidRegions.has(space.regionId(i)));
   const gateOpen = (u: number, v: number) => {
     if (!hullMayBeIn(space, rules, v)) return false;
     if (outlaw && space.highSec(v)) return false;
@@ -299,91 +325,105 @@ export function planJumpRoute(space: JumpSpace, options: PlanOptions): PlanOutco
     return !avoided(v);
   };
 
+  const less = lessIn(ORDERS[options.objective ?? 'jumps']);
   // States: system * PHASES + phase: 0 jumping, then finishing over gates with 1, 2, ... gates
   // behind, the last phase standing for more than SHORTCUT_GATES.
   const PHASES = SHORTCUT_GATES + 2;
-  const states = space.size * PHASES;
-  const best: Array<Cost | undefined> = new Array(states);
-  const prev = new Int32Array(states).fill(-1);
-  const prevKind = new Uint8Array(states);
-  const done = new Uint8Array(states);
-  const less = lessIn(ORDERS[options.objective ?? 'jumps']);
-  const heap = new Heap(less);
-  const start = origin * PHASES;
-  best[start] = [0, 0, 0, 0, 0, 0];
-  heap.push(start, best[start]!);
-  const relax = (from: number, to: number, kind: number, cost: Cost) => {
-    const current = best[to];
-    if (current && !less(cost, current)) return;
-    best[to] = cost;
-    prev[to] = from;
-    prevKind[to] = kind;
-    heap.push(to, cost);
+  /** The best legs from one part's start to its end, each part starting with the jump drive ready. */
+  const search = (from: number, to: number): Step[] | null => {
+    const states = space.size * PHASES;
+    const best: Array<Cost | undefined> = new Array(states);
+    const prev = new Int32Array(states).fill(-1);
+    const prevKind = new Uint8Array(states);
+    const done = new Uint8Array(states);
+    const heap = new Heap(less);
+    const start = from * PHASES;
+    best[start] = [0, 0, 0, 0, 0, 0];
+    heap.push(start, best[start]!);
+    const relax = (fromState: number, toState: number, kind: number, cost: Cost) => {
+      const current = best[toState];
+      if (current && !less(cost, current)) return;
+      best[toState] = cost;
+      prev[toState] = fromState;
+      prevKind[toState] = kind;
+      heap.push(toState, cost);
+    };
+
+    let reached = -1;
+    while (heap.size > 0) {
+      const { state, cost } = heap.pop();
+      if (done[state]) continue;
+      done[state] = 1;
+      const u = Math.floor(state / PHASES);
+      const phase = state % PHASES;
+      if (u === to) {
+        reached = state;
+        break;
+      }
+      if (phase === 0 && canJumpFrom(space, u)) {
+        space.within(u, rangeLy, (v, ly) => {
+          if (!isCynoTarget(space, v) || avoided(v)) return;
+          const miss = options.preferStations && v !== to && !space.station(v) ? 1 : 0;
+          relax(state, v * PHASES, KIND_JUMP, [
+            cost[0],
+            cost[1] + 1,
+            cost[2] + miss,
+            cost[3] + ly,
+            cost[4] + 1,
+            cost[5] + Math.log1p(ly * ship.fatigueMultiplier),
+          ]);
+        });
+        for (const v of bridges.get(u) ?? []) {
+          if (avoided(v)) continue;
+          relax(state, v * PHASES, KIND_ANSIBLEX, [cost[0], cost[1], cost[2], cost[3], cost[4] + 1, cost[5]]);
+        }
+      }
+      if (gates !== 'never') {
+        const free = gates === 'shortcut' && phase < SHORTCUT_GATES;
+        const next = Math.min(phase + 1, PHASES - 1);
+        for (const v of space.gateNeighbours(u)) {
+          if (!gateOpen(u, v)) continue;
+          relax(state, v * PHASES + next, KIND_GATE, [
+            cost[0] + (free ? 0 : 1),
+            cost[1],
+            cost[2],
+            cost[3],
+            cost[4] + 1,
+            cost[5],
+          ]);
+        }
+      }
+    }
+
+    if (reached < 0) return null;
+    const steps: Step[] = [];
+    for (let s = reached; prev[s]! >= 0; s = prev[s]!) {
+      steps.push({
+        from: Math.floor(prev[s]! / PHASES),
+        to: Math.floor(s / PHASES),
+        kind: KINDS[prevKind[s]!]!,
+        stop: false,
+      });
+    }
+    return steps.reverse();
   };
 
-  let reached = -1;
-  while (heap.size > 0) {
-    const { state, cost } = heap.pop();
-    if (done[state]) continue;
-    done[state] = 1;
-    const u = Math.floor(state / PHASES);
-    const phase = state % PHASES;
-    if (u === destination) {
-      reached = state;
-      break;
+  const steps: Step[] = [];
+  for (let k = 1; k < points.length; k++) {
+    const from = points[k - 1]!;
+    const to = points[k]!;
+    const part = search(from, to);
+    if (!part) {
+      const why =
+        !isCynoTarget(space, to) && gates === 'never'
+          ? `No cyno can be lit in ${points.length === 2 ? 'the destination' : space.name(to)}; allow gates to finish the trip`
+          : `No route within ${rangeLy.toFixed(2)} ly per jump`;
+      return fail('no_route', points.length === 2 ? why : `${space.name(from)} to ${space.name(to)}: ${why}`);
     }
-    if (phase === 0 && canJumpFrom(space, u)) {
-      space.within(u, rangeLy, (v, ly) => {
-        if (!isCynoTarget(space, v) || avoided(v)) return;
-        const miss = options.preferStations && v !== destination && !space.station(v) ? 1 : 0;
-        relax(state, v * PHASES, KIND_JUMP, [
-          cost[0],
-          cost[1] + 1,
-          cost[2] + miss,
-          cost[3] + ly,
-          cost[4] + 1,
-          cost[5] + Math.log1p(ly * ship.fatigueMultiplier),
-        ]);
-      });
-      for (const v of bridges.get(u) ?? []) {
-        if (avoided(v)) continue;
-        relax(state, v * PHASES, KIND_ANSIBLEX, [cost[0], cost[1], cost[2], cost[3], cost[4] + 1, cost[5]]);
-      }
-    }
-    if (gates !== 'never') {
-      const free = gates === 'shortcut' && phase < SHORTCUT_GATES;
-      const next = Math.min(phase + 1, PHASES - 1);
-      for (const v of space.gateNeighbours(u)) {
-        if (!gateOpen(u, v)) continue;
-        relax(state, v * PHASES + next, KIND_GATE, [
-          cost[0] + (free ? 0 : 1),
-          cost[1],
-          cost[2],
-          cost[3],
-          cost[4] + 1,
-          cost[5],
-        ]);
-      }
-    }
+    // The last leg of every part but the last ends at a stop.
+    part[part.length - 1]!.stop = k < points.length - 1;
+    steps.push(...part);
   }
-
-  if (reached < 0) {
-    const why =
-      !isCynoTarget(space, destination) && gates === 'never'
-        ? 'No cyno can be lit in the destination; allow gates to finish the trip'
-        : `No route within ${rangeLy.toFixed(2)} ly per jump`;
-    return fail('no_route', why);
-  }
-
-  const steps: Array<{ from: number; to: number; kind: JumpLegKind }> = [];
-  for (let s = reached; prev[s]! >= 0; s = prev[s]!) {
-    steps.push({
-      from: Math.floor(prev[s]! / PHASES),
-      to: Math.floor(s / PHASES),
-      kind: KINDS[prevKind[s]!]!,
-    });
-  }
-  steps.reverse();
   return {
     ok: true,
     rangeLy,
@@ -450,7 +490,7 @@ function schedule(
   space: JumpSpace,
   options: PlanOptions,
   rules: HullRules,
-  steps: ReadonlyArray<{ from: number; to: number; kind: JumpLegKind }>,
+  steps: readonly Step[],
 ): PlannedRoute {
   const { ship, skills } = options;
   const cap = options.maxFatigue ?? null;

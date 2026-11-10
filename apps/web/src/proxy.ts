@@ -25,10 +25,11 @@ const PAGE =
   /^\/(?:account|admin|maps|import|jump|characters|changelog|dev\/components|oauth\/authorize)?\/?$|^\/m\/[^/]+\/?$/;
 
 /**
- * Public maps (`/p/<token>`): for anyone, signed in or not. Never a demo sign-in, never a redirect
- * to the sign-in page, and the address (the secret) never leaves as a referrer.
+ * Public maps (`/p/<token>`) and shared jump routes (`/j/<token>`): for anyone, signed in or not.
+ * Never a demo sign-in, never a redirect to the sign-in page, and the address (the secret) never
+ * leaves as a referrer.
  */
-const PUBLIC_PAGE = /^\/p\/[^/]+\/?$/;
+const PUBLIC_PAGE = /^\/[pj]\/[^/]+\/?$/;
 
 /**
  * The support hub's page: it reads the app's session, but a signed-out visit is neither signed in

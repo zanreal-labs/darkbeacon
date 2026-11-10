@@ -1055,6 +1055,26 @@ export const routes = {
       body: dto.JumpPlanRequest,
       response: dto.JumpPlanDto,
     }),
+    /** Share a planned route as a link (`/j/<token>`) anyone can open without signing in. */
+    share: route({
+      method: 'POST',
+      path: '/api/jumps/shares',
+      auth: 'account',
+      scope: 'session',
+      status: 200,
+      body: dto.JumpShareRequest,
+      response: dto.JumpShareCreatedDto,
+    }),
+    /** Isotope prices at a trade hub (lowest sell at the hub station), to price a route's fuel. */
+    fuelPrices: route({
+      method: 'GET',
+      path: '/api/jumps/fuel-prices',
+      auth: 'account',
+      scope: { resource: 'universe', action: 'read' },
+      summary: 'Isotope prices at a trade hub, for the fuel of a jump route',
+      query: dto.JumpFuelPricesQuery,
+      response: dto.JumpFuelPricesDto,
+    }),
     /** One of my characters' jump skills and fatigue from ESI (opt-in scopes), to fill the planner. */
     pilot: route({
       method: 'GET',
@@ -1983,6 +2003,25 @@ export const routes = {
 
   /** Read without a session; rate limited per client address. */
   public: {
+    /** A shared jump route (`/j/<token>`), planned again now; rate-limited per address. */
+    jumpShare: route({
+      method: 'GET',
+      path: '/api/public/jumps/:token',
+      auth: 'public',
+      scope: 'none',
+      summary: 'A shared jump route, read-only, for anyone with the link',
+      response: dto.JumpShareViewDto,
+    }),
+    /** Known space for a shared route's map (as `jumps.universe`, without signing in). */
+    jumpUniverse: route({
+      method: 'GET',
+      path: '/api/public/jumps/universe',
+      auth: 'public',
+      scope: 'none',
+      summary: 'Known space for a shared jump route map (columnar)',
+      query: dto.JumpUniverseQuery,
+      response: dto.JumpUniverseDto,
+    }),
     map: route({
       method: 'GET',
       path: '/api/public/maps/:token',

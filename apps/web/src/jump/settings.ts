@@ -1,4 +1,5 @@
-import type { JumpGateUse, JumpSkills } from '@darkbeacon/shared';
+import type { JumpFuelHub, JumpGateUse, JumpSkills } from '@darkbeacon/shared';
+import { DEFAULT_FREIGHT, freightTermsFrom, type FreightTerms } from './freight';
 import type { StarModel } from './model';
 
 /** What the planner remembers per browser (a convenience; nothing breaks without it). */
@@ -10,6 +11,12 @@ export interface PlannerSettings {
   /** The levels were picked by hand (not the defaults): no warning that they are only assumed. */
   skillsByHand: boolean;
   gates: JumpGateUse;
+  /** Back to the start after the destination. */
+  roundTrip: boolean;
+  /** Where fuel is priced (lowest sell at the hub station). */
+  fuelHub: JumpFuelHub;
+  /** The pilot's freight pricing, for the quote under a jump freighter's route. */
+  freight: FreightTerms;
   preferStations: boolean;
   outlaw: boolean;
   maxFatigue: number | null;
@@ -23,12 +30,17 @@ export interface PlannerSettings {
   recent: string[];
 }
 
+const FUEL_HUBS: readonly JumpFuelHub[] = ['jita', 'amarr', 'dodixie', 'rens', 'hek'];
+
 export const DEFAULT_SETTINGS: PlannerSettings = {
   ship: null,
   pilot: null,
   skills: { jdc: 5, jfc: 4, jf: 4 },
   skillsByHand: false,
   gates: 'finish',
+  roundTrip: false,
+  fuelHub: 'jita',
+  freight: DEFAULT_FREIGHT,
   preferStations: false,
   outlaw: false,
   maxFatigue: null,
@@ -53,6 +65,9 @@ export function loadSettings(): PlannerSettings {
       skills: { ...DEFAULT_SETTINGS.skills, ...parsed.skills },
       pilot: typeof parsed.pilot === 'number' ? parsed.pilot : null,
       skillsByHand: parsed.skillsByHand === true,
+      roundTrip: parsed.roundTrip === true,
+      freight: freightTermsFrom(parsed.freight),
+      fuelHub: FUEL_HUBS.includes(parsed.fuelHub as JumpFuelHub) ? (parsed.fuelHub as JumpFuelHub) : 'jita',
       recent: Array.isArray(parsed.recent) ? parsed.recent.filter((n) => typeof n === 'string') : [],
     };
   } catch {

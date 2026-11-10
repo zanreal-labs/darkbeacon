@@ -27,6 +27,18 @@ export function formatNumber(n: number): string {
   return thousands.format(Math.round(n));
 }
 
+/** "950 ISK", "12.3k ISK", "50.1M ISK", "1.23B ISK". */
+export function formatIsk(isk: number): string {
+  const units: Array<[number, string, number]> = [
+    [1e9, 'B', 2],
+    [1e6, 'M', 1],
+    [1e3, 'k', 1],
+  ];
+  for (const [size, suffix, digits] of units)
+    if (isk >= size) return `${Number((isk / size).toFixed(digits))}${suffix} ISK`;
+  return `${Math.round(isk)} ISK`;
+}
+
 export function formatLy(ly: number): string {
   return `${ly.toFixed(2)} ly`;
 }
@@ -67,7 +79,7 @@ export function routeText(plan: JumpPlanDto): string {
   const cyno = plan.ship.cyno === 'regular' ? 'cyno' : `${plan.ship.cyno} cyno`;
   const lines = [`${plan.ship.name}: ${first.name} > ${last.name} (${parts.join(', ')})`];
   route.legs.forEach((leg, n) => {
-    const where = `${leg.to.name} (${securityLabel(leg.to.security)}, ${leg.to.region})`;
+    const where = `${leg.to.name} (${securityLabel(leg.to.security)}, ${leg.to.region})${leg.stop ? ', stop' : ''}`;
     if (leg.kind === 'jump')
       lines.push(`${n + 1}. Jump ${formatLy(leg.ly)} to ${where}, ${cyno}, ${formatNumber(leg.fuel)} fuel`);
     else if (leg.kind === 'gate') lines.push(`${n + 1}. Gate to ${where}`);

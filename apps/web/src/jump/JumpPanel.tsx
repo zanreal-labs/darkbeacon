@@ -1,6 +1,14 @@
 'use client';
 
-import { useState, type Ref } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactNode,
+  type Ref,
+} from 'react';
 import {
   ArrowUpDown,
   Ban,
@@ -8,7 +16,11 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  Coins,
+  GripVertical,
   Copy,
+  Link2,
+  Plus,
   Navigation,
   RefreshCw,
   SlidersHorizontal,
@@ -20,12 +32,15 @@ import {
   buildPath,
   JUMP_HULLS,
   routes,
+  type JumpFuelHub,
+  type JumpFuelPricesDto,
   type JumpHull,
   type JumpMetaDto,
   type JumpPlanDto,
   type JumpRouteBest,
   type JumpRouteDto,
   type JumpShipDto,
+  type OptionalEveScope,
   type WaypointRequest,
 } from '@darkbeacon/shared';
 import { api, ApiError } from '../lib/api';
@@ -54,6 +69,7 @@ import {
   formatLy,
   formatMinutes,
   formatNumber,
+  formatIsk,
   formatRange,
   HULL_LABELS,
   ISOTOPE_LABELS,
@@ -63,6 +79,7 @@ import { searchSystems, securityColor, securityLabel, type StarModel } from './m
 import type { PilotFill } from './pilot';
 import type { AnsiblexParse, PlannerSettings } from './settings';
 import { rankSystems, whyLabel, type End, type Suggestion, type SuggestionWhy } from './suggest';
+import { freightQuote, parseIsk, type FreightTerms } from './freight';
 import styles from './jump.module.css';
 
 interface SystemOption extends PickerOption {
@@ -106,6 +123,17 @@ export interface JumpPanelProps {
   rangeLy: number;
   /** The answer with `route` set to the route the pilot looks at. */
   plan: JumpPlanDto | null;
+  /** Stops on the way, in order; null for a picker with no system yet. */
+  stops: ReadonlyArray<number | null>;
+  setStop(n: number, system: number | null): void;
+  addStop(): void;
+  removeStop(n: number): void;
+  /** Moves a point of the trip (0 the start, then the stops, last the destination) to `to`. */
+  movePoint(from: number, to: number): void;
+  /** Isotope prices at the pilot's hub; null until they come (or when they cannot). */
+  fuelPrices: JumpFuelPricesDto | null;
+  /** Shares the route on screen as a link anyone can open; resolves to its address. */
+  onShare(): Promise<string>;
   /** The recommended route first, then the alternatives; one route when there is no choice. */
   routeOptions: readonly JumpRouteDto[];
   chosenRoute: number;
@@ -131,6 +159,47 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
   const [optionsOpen, setOptionsOpen] = useState(false);
   // Turns the swap icon half a turn per swap (the only motion; the values change in place).
   const [swaps, setSwaps] = useState(0);
+  // Start, stops and destination in one list, reordered by dragging a row's grip (mouse or touch)
+  // or with the arrow keys on it, as a maps app does.
+  const points = 2 + props.stops.length;
+  const [drag, setDrag] = useState<Drag | null>(null);
+  const refocus = useRef<number | null>(null);
+  useEffect(() => {
+    if (refocus.current === null) return;
+    document.querySelector<HTMLElement>(`[data-point="${refocus.current}"] [data-grip]`)?.focus();
+    refocus.current = null;
+  });
+  const grip = (n: number): GripHandlers => ({
+    onPointerDown: (e) => {
+      if (e.button !== 0) return;
+      // No text selection while dragging; the grip keeps the pointer until it is let go.
+      e.preventDefault();
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        // A pointer the browser does not track (synthetic): the move events still come here.
+      }
+      setDrag({ from: n, to: n });
+    },
+    onPointerMove: (e) => {
+      if (!drag) return;
+      const row = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-point]');
+      const to = row ? Number(row.getAttribute('data-point')) : null;
+      if (to !== null && to !== drag.to) setDrag({ ...drag, to });
+    },
+    onPointerUp: () => {
+      if (drag && drag.to !== drag.from) props.movePoint(drag.from, drag.to);
+      setDrag(null);
+    },
+    onPointerCancel: () => setDrag(null),
+    onKeyDown: (e) => {
+      const to = e.key === 'ArrowUp' ? n - 1 : e.key === 'ArrowDown' ? n + 1 : null;
+      if (to === null || to < 0 || to >= points) return;
+      e.preventDefault();
+      refocus.current = to;
+      props.movePoint(n, to);
+    },
+  });
   const option = (i: number, why: SuggestionWhy | null = null): SystemOption => {
     const place = `${securityLabel(model.security[i]!)} · ${model.regionNames[model.regionOf[i]!]}`;
     return {
@@ -221,23 +290,22 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
           </div>
 
           <div className={styles.endpoints}>
-            <div data-picker="origin">
-              <Field label="Start">
-                <SearchPicker<SystemOption>
-                  value={origin === null ? null : option(origin)}
-                  onChange={(o) => props.setOrigin(o?.index ?? null)}
-                  search={searchFor('origin')}
-                  cacheKey={['jump-systems', 'origin', suggestionsKey('origin')]}
-                  minLength={0}
-                  debounce={0}
-                  placeholder="System name ( / )"
-                  empty="No known-space system by that name"
-                />
-              </Field>
-            </div>
+            <PointRow n={0} label="Start" drag={drag} grip={grip}>
+              <SearchPicker<SystemOption>
+                value={origin === null ? null : option(origin)}
+                onChange={(o) => props.setOrigin(o?.index ?? null)}
+                search={searchFor('origin')}
+                cacheKey={['jump-systems', 'origin', suggestionsKey('origin')]}
+                minLength={0}
+                debounce={0}
+                placeholder="System name ( / )"
+                empty="No known-space system by that name"
+              />
+            </PointRow>
             {/* Always there (disabled with no ends), so nothing moves when it becomes useful. */}
             <IconButton
               className={styles.swap}
+              style={{ gridRow: `1 / span ${points}` }}
               label="Swap start and destination"
               icon={<ArrowUpDown data-turned={swaps % 2 === 1 || undefined} />}
               disabled={origin === null && destination === null}
@@ -249,20 +317,55 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
                 props.onSwap();
               }}
             />
-            <div data-picker="destination">
-              <Field label="Destination">
+            {props.stops.map((stop, n) => (
+              <PointRow
+                key={n}
+                n={n + 1}
+                label={`Stop ${n + 1}`}
+                drag={drag}
+                grip={grip}
+                remove={() => props.removeStop(n)}
+              >
                 <SearchPicker<SystemOption>
-                  value={destination === null ? null : option(destination)}
-                  onChange={(o) => props.setDestination(o?.index ?? null)}
+                  value={stop === null ? null : option(stop)}
+                  onChange={(o) => props.setStop(n, o?.index ?? null)}
                   search={searchFor('destination')}
-                  cacheKey={['jump-systems', 'destination', suggestionsKey('destination')]}
+                  cacheKey={['jump-systems', 'stop', suggestionsKey('destination')]}
                   minLength={0}
                   debounce={0}
                   placeholder="System name"
                   empty="No known-space system by that name"
                 />
-              </Field>
-            </div>
+              </PointRow>
+            ))}
+            <PointRow n={points - 1} label="Destination" drag={drag} grip={grip}>
+              <SearchPicker<SystemOption>
+                value={destination === null ? null : option(destination)}
+                onChange={(o) => props.setDestination(o?.index ?? null)}
+                search={searchFor('destination')}
+                cacheKey={['jump-systems', 'destination', suggestionsKey('destination')]}
+                minLength={0}
+                debounce={0}
+                placeholder="System name"
+                empty="No known-space system by that name"
+              />
+            </PointRow>
+          </div>
+          <div className={styles.endpointActions}>
+            <Button
+              size="sm"
+              variant="ghost"
+              icon={<Plus />}
+              disabled={props.stops.length >= 10}
+              onClick={props.addStop}
+            >
+              Add stop
+            </Button>
+            <Switch
+              checked={settings.roundTrip}
+              onCheckedChange={(on) => update({ roundTrip: on })}
+              label="Return to start"
+            />
           </div>
 
           <button
@@ -284,6 +387,65 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
         </div>
       )}
     </aside>
+  );
+}
+
+interface Drag {
+  from: number;
+  to: number;
+}
+
+interface GripHandlers {
+  onPointerDown(e: PointerEvent<HTMLButtonElement>): void;
+  onPointerMove(e: PointerEvent<HTMLButtonElement>): void;
+  onPointerUp(): void;
+  onPointerCancel(): void;
+  onKeyDown(e: KeyboardEvent<HTMLButtonElement>): void;
+}
+
+/** One point of the trip: a grip to reorder it, its picker, and × for a stop. */
+function PointRow({
+  n,
+  label,
+  drag,
+  grip,
+  remove,
+  children,
+}: {
+  n: number;
+  label: string;
+  drag: Drag | null;
+  grip(n: number): GripHandlers;
+  remove?(): void;
+  children: ReactNode;
+}) {
+  const target =
+    drag && drag.from !== n && drag.to === n ? (drag.to < drag.from ? 'before' : 'after') : undefined;
+  return (
+    <div
+      className={styles.point}
+      data-picker={label === 'Start' ? 'origin' : label === 'Destination' ? 'destination' : 'stop'}
+      data-point={n}
+      data-drop={target}
+      data-dragging={drag?.from === n || undefined}
+    >
+      <button
+        type="button"
+        data-grip
+        className={styles.grip}
+        aria-label={`Move ${label.toLowerCase()} (drag, or arrow keys)`}
+        title="Drag to reorder"
+        {...grip(n)}
+      >
+        <GripVertical aria-hidden />
+      </button>
+      <Field label={label}>{children}</Field>
+      {remove ? (
+        <IconButton size="sm" label={`Remove ${label.toLowerCase()}`} icon={<X />} onClick={remove} />
+      ) : (
+        <span className={styles.pointSpacer} aria-hidden />
+      )}
+    </div>
   );
 }
 
@@ -335,8 +497,8 @@ function PilotSkills(props: PanelState) {
   // Picked by hand: after an ESI answer (until ESI is asked again), or ever, without one.
   const byHand = !fromEsi && (fill.answer?.skills != null || settings.skillsByHand);
   const source = fromEsi ? fill.pilot!.name : byHand ? 'set by hand' : 'assumed';
-  const needsLink =
-    fill.pilot !== null && (!fill.pilot.tokenValid || (fill.answer?.missingScopes.length ?? 0) > 0);
+  // Only missing skills (or an expired login) call for linking again; fatigue is a quiet extra.
+  const needsLink = skillsNeedLink(fill);
   return (
     <>
       <button
@@ -431,27 +593,51 @@ function Pilot({ pilot: fill, update }: PanelState) {
 }
 
 /** Why ESI did not fill the skills and fatigue, with what to do about it. */
+/** ESI scopes the planner reads with: skills (extra `jumps`) and jump fatigue (extra `fatigue`). */
+const SKILLS_SCOPE = 'esi-skills.read_skills.v1';
+const FATIGUE_SCOPE = 'esi-characters.read_fatigue.v1';
+
+/** The skills scope is missing or the login expired: the levels cannot come from EVE. */
+function skillsNeedLink(fill: PilotFill): boolean {
+  if (!fill.pilot) return false;
+  return !fill.pilot.tokenValid || (fill.answer?.missingScopes.includes(SKILLS_SCOPE) ?? false);
+}
+
+/**
+ * What to do when ESI did not fill the skills and fatigue: link again for skills (extra `jumps`),
+ * or, with skills in, a quiet offer to read jump fatigue too (extra `fatigue`, asked apart since an
+ * EVE application without that scope refuses the whole sign-in).
+ */
 function PilotHint({ pilot: fill }: PanelState) {
   const { pilot, answer } = fill;
   if (!pilot) return null;
-  const allow = relinkHref(hereForReturn(), [...new Set([...(pilot.extras ?? []), 'jumps' as const])]);
+  const linkWith = (extra: OptionalEveScope) =>
+    relinkHref(hereForReturn(), [...new Set([...(pilot.extras ?? []), extra])]);
   if (!pilot.tokenValid)
     return (
       <p className={styles.skillsHint}>
-        The EVE login of {pilot.name} expired. <a href={allow}>Link it again</a> to fill skills and fatigue.
+        The EVE login of {pilot.name} expired. <a href={linkWith('jumps')}>Link it again</a> to fill the
+        skills.
       </p>
     );
-  if (answer && answer.missingScopes.length > 0)
+  const missing = answer?.missingScopes ?? [];
+  if (missing.includes(SKILLS_SCOPE))
     return (
       <p className={styles.skillsHint}>
-        <a href={allow}>Allow skills and jump fatigue</a> for {pilot.name} to fill these from EVE.
+        <a href={linkWith('jumps')}>Allow skills for {pilot.name}</a> to fill these from EVE.
       </p>
     );
   const problem =
     answer?.problem ?? (fill.error ? errorText(fill.error, 'Skills and fatigue could not be read') : null);
-  return problem ? (
-    <p className={styles.skillsHint} role="status">
-      {problem}
+  if (problem)
+    return (
+      <p className={styles.skillsHint} role="status">
+        {problem}
+      </p>
+    );
+  return missing.includes(FATIGUE_SCOPE) ? (
+    <p className={styles.skillsHint}>
+      <a href={linkWith('fatigue')}>Read jump fatigue too</a>
     </p>
   ) : null;
 }
@@ -504,6 +690,17 @@ function Options({
         label="Allow jump gates"
         description="Up to three stargates after the last jump when they save jumps, e.g. into a system one gate on."
       />
+      <Field label="Fuel prices" hint="Lowest sell order at the hub's main station.">
+        <Select
+          size="sm"
+          value={settings.fuelHub}
+          onValueChange={(hub) => update({ fuelHub: hub as JumpFuelHub })}
+          options={(Object.keys(HUB_LABELS) as JumpFuelHub[]).map((h) => ({
+            value: h,
+            label: HUB_LABELS[h],
+          }))}
+        />
+      </Field>
       <Switch
         checked={settings.preferStations}
         onCheckedChange={(on) => update({ preferStations: on })}
@@ -683,28 +880,6 @@ function Result(props: PanelState) {
                 {route.ansiblex > 0 && ` + ${route.ansiblex} Ansiblex`}
                 <span>{formatLy(route.ly)}</span>
               </div>
-              <dl className={styles.facts}>
-                <div>
-                  <dt>Fuel</dt>
-                  <dd>
-                    {formatNumber(route.fuel)} {ISOTOPE_LABELS[plan.ship.isotope].toLowerCase()}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Fatigue at the end</dt>
-                  <dd>{formatMinutes(route.fatigueMinutes)}</dd>
-                </div>
-                <div>
-                  <dt>Waiting</dt>
-                  <dd>{formatMinutes(route.waitMinutes)}</dd>
-                </div>
-                {route.bridgeFuel !== null && (
-                  <div>
-                    <dt>Bridge fuel</dt>
-                    <dd>{formatNumber(route.bridgeFuel)}</dd>
-                  </div>
-                )}
-              </dl>
             </div>
           )}
           {route.notes.map((note) => (
@@ -720,45 +895,208 @@ function Result(props: PanelState) {
                 .join('. ')}
             </Callout>
           )}
-          <ol className={styles.legs}>
-            {route.legs.map((leg, n) => (
-              <li
-                key={`${leg.from.id}-${leg.to.id}-${n}`}
-                data-active={activeLeg === n || undefined}
-                data-kind={leg.kind}
-                onMouseEnter={() => setActiveLeg(n)}
-                onMouseLeave={() => setActiveLeg(null)}
-              >
-                <button type="button" className={styles.leg} onClick={() => onShowLeg(n)}>
-                  <span className={styles.legNumber}>{n + 1}</span>
-                  <span className={styles.legMain}>
-                    <span className={styles.legTitle}>
-                      <span className={styles.secPill} style={{ background: securityColor(leg.to.security) }}>
-                        {securityLabel(leg.to.security)}
-                      </span>
-                      {leg.to.name}
-                      {leg.kind !== 'jump' && <em>{leg.kind === 'gate' ? 'gate' : 'Ansiblex'}</em>}
-                    </span>
-                    <span className={styles.legMeta}>
-                      {leg.kind === 'jump'
-                        ? [
-                            formatLy(leg.ly),
-                            `${formatNumber(leg.fuel)} fuel`,
-                            ...(leg.bridgeFuel !== null ? [`bridge ${formatNumber(leg.bridgeFuel)}`] : []),
-                            ...(leg.waitMinutes > 0 ? [`wait ${formatMinutes(leg.waitMinutes)}`] : []),
-                            `fatigue ${formatMinutes(leg.fatigueMinutes)}`,
-                          ].join(' · ')
-                        : `${leg.to.region}${leg.waitMinutes > 0 ? ` · wait ${formatMinutes(leg.waitMinutes)}` : ''}`}
-                    </span>
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ol>
+          <RouteLegs route={route} activeLeg={activeLeg} setActiveLeg={setActiveLeg} onShowLeg={onShowLeg} />
+          <RouteSummary {...props} />
+          <FreightQuoteFold {...props} />
           <RouteActions {...props} />
         </>
       )}
     </section>
+  );
+}
+
+const HUB_LABELS: Record<JumpFuelHub, string> = {
+  jita: 'Jita',
+  amarr: 'Amarr',
+  dodixie: 'Dodixie',
+  rens: 'Rens',
+  hek: 'Hek',
+};
+
+/** What `units` of the ship's isotope cost at the pilot's hub; null without a price. */
+function iskOf(units: number, plan: JumpPlanDto, prices: JumpFuelPricesDto | null): number | null {
+  const price = prices?.prices[plan.ship.isotope];
+  return price == null ? null : units * price;
+}
+
+/** The trip in numbers, under its legs: fuel (and what it costs at the hub), fatigue, waiting. */
+export function RouteSummary({ plan, fuelPrices }: Pick<PanelState, 'plan' | 'fuelPrices'>) {
+  const route = plan?.route;
+  if (!plan || !route) return null;
+  const isotope = ISOTOPE_LABELS[plan.ship.isotope].toLowerCase();
+  const hub = fuelPrices ? HUB_LABELS[fuelPrices.hub] : null;
+  const fuelIsk = iskOf(route.fuel, plan, fuelPrices);
+  const bridgeIsk = route.bridgeFuel === null ? null : iskOf(route.bridgeFuel, plan, fuelPrices);
+  return (
+    <section className={styles.summary} aria-label="Route summary">
+      <dl className={styles.facts}>
+        <div>
+          <dt>Fuel</dt>
+          <dd>
+            {formatNumber(route.fuel)} {isotope}
+            {fuelIsk !== null && (
+              <small>
+                ≈ {formatIsk(fuelIsk)} · {hub}
+              </small>
+            )}
+          </dd>
+        </div>
+        {route.bridgeFuel !== null && (
+          <div>
+            <dt>Bridge fuel</dt>
+            <dd>
+              {formatNumber(route.bridgeFuel)}
+              {bridgeIsk !== null && <small>≈ {formatIsk(bridgeIsk)}</small>}
+            </dd>
+          </div>
+        )}
+        <div>
+          <dt>Fatigue at the end</dt>
+          <dd>{formatMinutes(route.fatigueMinutes)}</dd>
+        </div>
+        <div>
+          <dt>Waiting</dt>
+          <dd>{formatMinutes(route.waitMinutes)}</dd>
+        </div>
+      </dl>
+    </section>
+  );
+}
+
+/** A number field that keeps what the pilot types and saves it once it reads as a number. */
+function AmountField({
+  label,
+  value,
+  onValue,
+  isk,
+}: {
+  label: string;
+  value: number;
+  onValue(n: number): void;
+  /** Reads "1.5b", "250m", "40k" too. */
+  isk?: boolean;
+}) {
+  const [text, setText] = useState(value === 0 ? '' : String(value));
+  const parse = (t: string) => (t.trim() === '' ? 0 : isk ? parseIsk(t) : Number(t.replace(',', '.')));
+  const parsed = parse(text);
+  const invalid = parsed === null || !Number.isFinite(parsed) || parsed < 0;
+  return (
+    <Field label={label} error={invalid ? 'Not a number' : undefined}>
+      <Input
+        size="sm"
+        inputMode="decimal"
+        value={text}
+        placeholder="0"
+        onChange={(e) => {
+          setText(e.target.value);
+          const n = parse(e.target.value);
+          if (n !== null && Number.isFinite(n) && n >= 0) onValue(n);
+        }}
+        onBlur={() => !invalid && parsed !== null && isk && parsed >= 1e3 && setText(formatIskShort(parsed))}
+      />
+    </Field>
+  );
+}
+
+/** "1.5b", "250m", "40k": how a pilot would type it again. */
+function formatIskShort(isk: number): string {
+  return formatIsk(isk)
+    .replace(/ ISK$/, '')
+    .replace(/[kMB]$/, (u) => u.toLowerCase());
+}
+
+/**
+ * What to ask for carrying a contract along this route, folded under the summary: the fuel at the
+ * hub price with a markup and the pilot's other terms (remembered), as their freight calculator does.
+ */
+function FreightQuoteFold({ plan, ship, settings, update, fuelPrices }: PanelState) {
+  const [open, setOpen] = useState(false);
+  const route = plan?.route;
+  if (!plan || !route || ship.hull !== 'jump_freighter') return null;
+  const terms = settings.freight;
+  const set = (change: Partial<FreightTerms>) => update({ freight: { ...terms, ...change } });
+  const price = fuelPrices?.prices[plan.ship.isotope] ?? null;
+  const quote = price === null ? null : freightQuote(route, price, terms);
+  return (
+    <>
+      <button
+        type="button"
+        className={styles.optionsToggle}
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        <Coins aria-hidden />
+        <span>Freight quote</span>
+        <span className={styles.optionsSummary}>
+          {quote ? `≈ ${formatIsk(quote.charge)}` : 'No fuel price yet'}
+        </span>
+        {open ? <ChevronUp aria-hidden /> : <ChevronDown aria-hidden />}
+      </button>
+      {open && (
+        <div className={styles.options}>
+          <div className={styles.row2}>
+            <AmountField label="Cargo (m³)" value={terms.cargoM3} onValue={(cargoM3) => set({ cargoM3 })} />
+            <AmountField
+              label="Collateral"
+              isk
+              value={terms.collateral}
+              onValue={(collateral) => set({ collateral })}
+            />
+            <AmountField
+              label="Fuel markup (%)"
+              value={terms.markupPct}
+              onValue={(markupPct) => set({ markupPct })}
+            />
+            <AmountField
+              label="Collateral fee (%)"
+              value={terms.collateralPct}
+              onValue={(collateralPct) => set({ collateralPct })}
+            />
+            <AmountField
+              label="Base reward"
+              isk
+              value={terms.baseReward}
+              onValue={(baseReward) => set({ baseReward })}
+            />
+            <AmountField label="Per m³" isk value={terms.perM3} onValue={(perM3) => set({ perM3 })} />
+            <AmountField label="Per jump" isk value={terms.perJump} onValue={(perJump) => set({ perJump })} />
+            <AmountField
+              label="Minimum"
+              isk
+              value={terms.minReward}
+              onValue={(minReward) => set({ minReward })}
+            />
+          </div>
+          {quote ? (
+            <dl className={styles.facts} aria-label="Freight quote">
+              <div>
+                <dt>Charge</dt>
+                <dd>
+                  {formatIsk(quote.charge)}
+                  {quote.atMinimum && <small>the minimum</small>}
+                </dd>
+              </div>
+              <div>
+                <dt>Margin</dt>
+                <dd>{formatIsk(quote.margin)}</dd>
+              </div>
+              <div>
+                <dt>Fuel</dt>
+                <dd>
+                  {formatIsk(quote.fuelCost)}
+                  <small>
+                    {formatNumber(quote.fuelM3)} m³ · {formatNumber(price!)} ISK/u ·{' '}
+                    {HUB_LABELS[fuelPrices!.hub]}
+                  </small>
+                </dd>
+              </div>
+            </dl>
+          ) : (
+            <p className={styles.skillsHint}>The fuel price could not be read from the market yet.</p>
+          )}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -770,7 +1108,7 @@ const BEST_LABELS: Record<JumpRouteBest, string> = {
 };
 
 /** One line per route, as a maps app lists other ways: the recommended one first, picked by default. */
-function RouteChoices({ routeOptions, chosenRoute, onChooseRoute, plan }: PanelState) {
+function RouteChoices({ routeOptions, chosenRoute, onChooseRoute, plan, fuelPrices }: PanelState) {
   if (routeOptions.length < 2 || !plan) return null;
   const isotope = ISOTOPE_LABELS[plan.ship.isotope].toLowerCase();
   return (
@@ -801,6 +1139,8 @@ function RouteChoices({ routeOptions, chosenRoute, onChooseRoute, plan }: PanelS
           </span>
           <span className={styles.choiceMeta}>
             {formatNumber(route.fuel)} {isotope}
+            {iskOf(route.fuel, plan, fuelPrices) !== null &&
+              ` (≈ ${formatIsk(iskOf(route.fuel, plan, fuelPrices)!)})`}
             {route.bridgeFuel !== null && ` · bridge ${formatNumber(route.bridgeFuel)}`} · wait{' '}
             {formatMinutes(route.waitMinutes)} · fatigue {formatMinutes(route.fatigueMinutes)}
           </span>
@@ -810,15 +1150,68 @@ function RouteChoices({ routeOptions, chosenRoute, onChooseRoute, plan }: PanelS
   );
 }
 
+/** The legs of a route, one row each; the row under the pointer is drawn bold on the map. */
+export function RouteLegs({
+  route,
+  activeLeg,
+  setActiveLeg,
+  onShowLeg,
+}: {
+  route: JumpRouteDto;
+  activeLeg: number | null;
+  setActiveLeg(n: number | null): void;
+  onShowLeg(n: number): void;
+}) {
+  return (
+    <ol className={styles.legs}>
+      {route.legs.map((leg, n) => (
+        <li
+          key={`${leg.from.id}-${leg.to.id}-${n}`}
+          data-active={activeLeg === n || undefined}
+          data-kind={leg.kind}
+          onMouseEnter={() => setActiveLeg(n)}
+          onMouseLeave={() => setActiveLeg(null)}
+        >
+          <button type="button" className={styles.leg} onClick={() => onShowLeg(n)}>
+            <span className={styles.legNumber}>{n + 1}</span>
+            <span className={styles.legMain}>
+              <span className={styles.legTitle}>
+                <span className={styles.secPill} style={{ background: securityColor(leg.to.security) }}>
+                  {securityLabel(leg.to.security)}
+                </span>
+                {leg.to.name}
+                {leg.kind !== 'jump' && <em>{leg.kind === 'gate' ? 'gate' : 'Ansiblex'}</em>}
+                {leg.stop && <em data-stop>stop</em>}
+              </span>
+              <span className={styles.legMeta}>
+                {leg.kind === 'jump'
+                  ? [
+                      formatLy(leg.ly),
+                      `${formatNumber(leg.fuel)} fuel`,
+                      ...(leg.bridgeFuel !== null ? [`bridge ${formatNumber(leg.bridgeFuel)}`] : []),
+                      ...(leg.waitMinutes > 0 ? [`wait ${formatMinutes(leg.waitMinutes)}`] : []),
+                      `fatigue ${formatMinutes(leg.fatigueMinutes)}`,
+                    ].join(' · ')
+                  : `${leg.to.region}${leg.waitMinutes > 0 ? ` · wait ${formatMinutes(leg.waitMinutes)}` : ''}`}
+              </span>
+            </span>
+          </button>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function nameOf(model: StarModel, id: number): string {
   const i = model.indexById.get(id);
   return i === undefined ? 'Unknown system' : model.names[i]!;
 }
 
-function RouteActions({ plan }: PanelState) {
+function RouteActions({ plan, onShare }: PanelState) {
   const toast = useToast();
   const me = useMe();
   const [busy, setBusy] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const pilots = (me.data?.characters ?? []).filter((c) => c.canSetWaypoints && c.tokenValid);
   const route = plan?.route;
   if (!plan || !route) return null;
@@ -833,6 +1226,27 @@ function RouteActions({ plan }: PanelState) {
         title: 'Could not copy',
         description: 'The browser did not allow the clipboard.',
       });
+    }
+  };
+
+  const share = async () => {
+    setSharing(true);
+    try {
+      const url = await onShare();
+      await navigator.clipboard.writeText(url).catch(() => undefined);
+      toast({
+        tone: 'success',
+        title: 'Share link copied',
+        description: `Anyone with ${url} sees this route, without signing in.`,
+      });
+    } catch (error) {
+      toast({
+        tone: 'danger',
+        title: 'Could not share the route',
+        description: error instanceof ApiError ? error.message : undefined,
+      });
+    } finally {
+      setSharing(false);
     }
   };
 
@@ -868,6 +1282,9 @@ function RouteActions({ plan }: PanelState) {
     <div className={styles.actions}>
       <Button icon={<Copy />} onClick={() => void copy()}>
         Copy route
+      </Button>
+      <Button icon={<Link2 />} loading={sharing} onClick={() => void share()}>
+        Share link
       </Button>
       {pilots.length > 0 ? (
         <Menu>

@@ -374,6 +374,44 @@ describe('planJumpRoute', () => {
   });
 });
 
+describe('stops', () => {
+  // Every 4 ly a system: an Archon (7 ly) makes one hop at a time.
+  const chain = line([{ x: 0 }, { x: 4 }, { x: 8 }, { x: 12 }, { x: 0, y: 4 }]);
+
+  it('goes through the stops in order and marks where each part ends', () => {
+    const outcome = plan(chain, ARCHON, 0, 2, { via: [4] });
+    if (!outcome.ok) throw new Error(outcome.message);
+    // S4 is 4 ly off the start; from there S1 (5.7 ly), then S2.
+    expect(path(outcome)).toEqual([0, 4, 1, 2]);
+    expect(outcome.route.legs.map((l) => l.stop)).toEqual([true, false, false]);
+  });
+
+  it('comes back to the start on a round trip, fatigue carried over', () => {
+    const outcome = plan(chain, ARCHON, 0, 1, { roundTrip: true });
+    if (!outcome.ok) throw new Error(outcome.message);
+    expect(path(outcome)).toEqual([0, 1, 0]);
+    expect(outcome.route.legs.map((l) => l.stop)).toEqual([true, false]);
+    // The way back starts with the fatigue of the way out: 50 minutes, less the 5 minute timer.
+    expect(outcome.route.legs[1]).toMatchObject({ waitMinutes: 5, fatigueMinutes: 225 });
+  });
+
+  it('refuses a stop twice in a row, and names a stop no route reaches', () => {
+    expect(plan(chain, ARCHON, 0, 2, { via: [2] })).toMatchObject({ ok: false, problem: 'same_system' });
+    const far = line([{ x: 0 }, { x: 4 }, { x: 40 }]);
+    const outcome = plan(far, ARCHON, 0, 1, { via: [2] });
+    expect(outcome).toMatchObject({ ok: false, problem: 'no_route' });
+    expect(!outcome.ok && outcome.message).toMatch(/^S0 to S2: /);
+  });
+
+  it('keeps capitals out of a high-sec stop', () => {
+    const space = line([{ x: 0 }, { x: 4, security: 0.9 }, { x: 8 }]);
+    expect(plan(space, ARCHON, 0, 2, { via: [1] })).toMatchObject({
+      ok: false,
+      problem: 'destination_not_allowed',
+    });
+  });
+});
+
 describe('planJumpRoutes', () => {
   // Two long jumps over S1 (6.95 ly each), or three short ones over S2 and S3 (4 ly each).
   const space = line([{ x: 0 }, { x: 6, y: 3.5 }, { x: 4 }, { x: 8 }, { x: 12 }]);

@@ -53,6 +53,11 @@ export class JumpPlanner {
   /** The map's data: the dataset without its ships (they are in `meta`). */
   universe(actor: Actor | null): JumpUniverseDto {
     requireAccount(actor);
+    return this.universeData();
+  }
+
+  /** The map's data for anyone (a shared route's page); the same dataset as `universe`. */
+  universeData(): JumpUniverseDto {
     this.universeDto ??= {
       version: this.source.version,
       source: this.source.data.source,
@@ -74,6 +79,11 @@ export class JumpPlanner {
 
   plan(actor: Actor | null, request: JumpPlanInput): JumpPlanDto {
     requireAccount(actor);
+    return this.planRequest(request);
+  }
+
+  /** A plan without an actor: for a shared route, whose request was checked when it was shared. */
+  planRequest(request: JumpPlanInput): JumpPlanDto {
     const space = this.space;
     const ship = space.ship(request.shipTypeId);
     if (!ship) throw new ValidationError('That ship has no jump drive');
@@ -84,11 +94,14 @@ export class JumpPlanner {
     };
     const origin = index(request.origin, 'The start');
     const destination = index(request.destination, 'The destination');
+    const via = request.via.map((id) => index(id, 'A stop'));
     const known = (ids: readonly number[]) => ids.flatMap((id) => space.indexOf(id) ?? []);
     const outcome = planJumpRoutes(space, {
       ship,
       origin,
       destination,
+      via,
+      roundTrip: request.roundTrip,
       skills: request.skills,
       avoidSystems: new Set(known(request.avoidSystems)),
       avoidRegions: new Set(request.avoidRegions),
@@ -131,6 +144,7 @@ export class JumpPlanner {
         kind: leg.kind,
         from: ref(leg.from),
         to: ref(leg.to),
+        stop: leg.stop,
         ly: round(leg.ly, 3),
         fuel: leg.fuel,
         bridgeFuel: leg.bridgeFuel,

@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw/http';
 import {
   routes,
+  type JumpFuelPricesDto,
   type JumpPilotDto,
   type JumpPlanDto,
   type JumpPlanRequest,
@@ -37,6 +38,7 @@ const plan: JumpPlanDto = {
     legs: [
       {
         kind: 'jump',
+        stop: false,
         from: ref(1),
         to: ref(2),
         ly: 9.95,
@@ -48,6 +50,7 @@ const plan: JumpPlanDto = {
       },
       {
         kind: 'jump',
+        stop: false,
         from: ref(2),
         to: ref(3),
         ly: 8.17,
@@ -95,6 +98,8 @@ const server = setupMockServer(
     return HttpResponse.json(plan);
   }),
   http.get(routes.accounts.me.path, () => HttpResponse.json(meFixture())),
+  // No price unless a test says otherwise: the summary shows the isotopes alone.
+  http.get(routes.jumps.fuelPrices.path, () => new HttpResponse(null, { status: 503 })),
   // Ayla Vex (online) sits in Ignoitton.
   http.get(routes.characters.myTracking.path, () =>
     HttpResponse.json({
@@ -291,7 +296,7 @@ describe('JumpPage', () => {
     expect((within(panel).getByLabelText('Fatigue now') as HTMLInputElement).value).toBe('42');
   });
 
-  it('offers linking the pilot again with skills and fatigue when the grant lacks them', async () => {
+  it('offers linking the pilot again for skills when the grant lacks them', async () => {
     const user = userEvent.setup();
     renderPage();
     const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
@@ -299,14 +304,42 @@ describe('JumpPage', () => {
     const skills = await within(panel).findByRole('button', { name: /Skills.*assumed/ });
     expect(skills.textContent).toMatch(/10 ly range/);
     await user.click(skills);
-    const link = await within(panel).findByRole('link', { name: 'Allow skills and jump fatigue' });
+    const link = await within(panel).findByRole('link', { name: 'Allow skills for Ayla Vex' });
     const href = new URL(link.getAttribute('href')!, 'http://x');
     expect(href.pathname).toBe(routes.auth.eveLogin.path);
     expect(href.searchParams.get('extras')).toBe('jumps');
     expect(href.searchParams.get('returnTo')).toMatch(/^\/jump/);
-    expect(within(panel).getByText(/for Ayla Vex to fill these from EVE/)).toBeTruthy();
+    expect(within(panel).getByText(/to fill these from EVE/)).toBeTruthy();
     // Nothing from ESI: the remembered levels stay, and the summary says they are assumed.
     expect(skills.textContent).toMatch(/JDC V · JFC IV · JF IV · assumed/);
+  });
+
+  it('reads the skills when only jump fatigue is missing, and offers fatigue as a quiet extra', async () => {
+    server.use(
+      http.get(routes.jumps.pilot.path, ({ params }) =>
+        HttpResponse.json({
+          characterId: Number(params.characterId),
+          skills: { jdc: 4, jfc: 5, jf: 2 },
+          fatigueMinutes: null,
+          fatigueExpiresAt: null,
+          missingScopes: ['esi-characters.read_fatigue.v1'],
+          problem: null,
+          checkedAt: Date.now(),
+        } satisfies JumpPilotDto),
+      ),
+    );
+    window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&ship=Ark');
+    const user = userEvent.setup();
+    renderPage();
+    const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+    // No warning: the levels come from EVE.
+    const skills = await within(panel).findByRole('button', { name: /Skills.*Ayla Vex/ });
+    expect(skills.hasAttribute('data-warn')).toBe(false);
+    await user.click(skills);
+    expect(within(panel).getByText('From ESI · Ayla Vex')).toBeTruthy();
+    const fatigue = within(panel).getByRole('link', { name: 'Read jump fatigue too' });
+    expect(new URL(fatigue.getAttribute('href')!, 'http://x').searchParams.get('extras')).toMatch(/fatigue/);
+    expect(within(panel).queryByRole('link', { name: /Allow skills/ })).toBeNull();
   });
 
   it('keeps levels picked by hand without warning that they are assumed', async () => {
@@ -319,6 +352,88 @@ describe('JumpPage', () => {
     const skills = await within(panel).findByRole('button', { name: /Skills/ });
     expect(skills.textContent).toMatch(/JDC IV · JFC III · JF II · set by hand/);
     expect(skills.hasAttribute('data-warn')).toBe(false);
+  });
+
+  it('plans through stops from the address, back to the start on request, and prices the fuel', async () => {
+    server.use(
+      http.get(routes.jumps.fuelPrices.path, () =>
+        HttpResponse.json({
+          hub: 'jita',
+          station: 'Jita IV - Moon 4 - Caldari Navy Assembly Plant',
+          prices: { helium: 700, hydrogen: 616, nitrogen: 650, oxygen: 690 },
+          fetchedAt: Date.now(),
+        } satisfies JumpFuelPricesDto),
+      ),
+    );
+    window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&via=Jita&ship=Ark');
+    const user = userEvent.setup();
+    renderPage();
+    const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+    await screen.findByRole('region', { name: 'Route' });
+    expect(requests.at(-1)).toMatchObject({ via: [30000142], roundTrip: false });
+    expect(within(panel).getByText('Stop 1')).toBeTruthy();
+    // 57,408 helium at 700 ISK.
+    const summary = await within(panel).findByRole('region', { name: 'Route summary' });
+    expect(await within(summary).findByText(/≈ 40.2M ISK · Jita/)).toBeTruthy();
+
+    // A jump freighter gets a freight quote: the fuel with 20 % markup and 1 % of the collateral.
+    await user.click(within(panel).getByRole('button', { name: /Freight quote/ }));
+    await user.type(within(panel).getByLabelText('Collateral'), '1b');
+    expect(await within(panel).findByText('58.2M ISK')).toBeTruthy();
+    expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEY)!).freight).toMatchObject({ collateral: 1e9 });
+
+    await user.click(within(panel).getByRole('switch', { name: 'Return to start' }));
+    await waitFor(() => expect(requests.at(-1)).toMatchObject({ via: [30000142], roundTrip: true }));
+    await user.click(within(panel).getByRole('button', { name: 'Remove stop 1' }));
+    await waitFor(() => expect(requests.at(-1)).toMatchObject({ via: [] }));
+    expect(window.location.search).not.toMatch(/via=/);
+  });
+
+  it('reorders the trip like a maps app: a stop dragged or moved with the keys changes the route', async () => {
+    window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&via=Jita&ship=Ark');
+    const user = userEvent.setup();
+    renderPage();
+    const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+    await screen.findByRole('region', { name: 'Route' });
+    expect(requests.at(-1)).toMatchObject({ origin: 30002647, via: [30000142], destination: 30005035 });
+    // The stop moves up past the start with the arrow key on its grip: Jita becomes the start.
+    within(panel)
+      .getByRole('button', { name: /Move stop 1/ })
+      .focus();
+    await user.keyboard('{ArrowUp}');
+    await waitFor(() =>
+      expect(requests.at(-1)).toMatchObject({ origin: 30000142, via: [30002647], destination: 30005035 }),
+    );
+    expect(window.location.search).toMatch(/from=Jita&to=Ami&via=Ignoitton/);
+    // The grip of the moved point keeps the focus, so it can move on.
+    expect(document.activeElement?.getAttribute('aria-label')).toMatch(/Move start/);
+    await user.keyboard('{ArrowDown}{ArrowDown}');
+    await waitFor(() =>
+      expect(requests.at(-1)).toMatchObject({ origin: 30002647, via: [30005035], destination: 30000142 }),
+    );
+  });
+
+  it('shares the route on screen as a link and copies it', async () => {
+    const shared: unknown[] = [];
+    server.use(
+      http.post(routes.jumps.share.path, async ({ request }) => {
+        shared.push(await request.json());
+        return HttpResponse.json({ token: 'AbCdEfGhIjKlMnOpQrStUv' });
+      }),
+    );
+    window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&ship=Ark');
+    const user = userEvent.setup();
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    renderPage();
+    const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+    await screen.findByRole('region', { name: 'Route' });
+    await user.click(within(panel).getByRole('button', { name: 'Share link' }));
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/j/AbCdEfGhIjKlMnOpQrStUv`),
+    );
+    expect(shared[0]).toMatchObject({ plan: { origin: 30002647, destination: 30005035 }, fuelHub: 'jita' });
+    expect(await screen.findByText('Share link copied')).toBeTruthy();
   });
 
   it('starts from the address and clears with Escape', async () => {

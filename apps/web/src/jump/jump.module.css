@@ -212,13 +212,88 @@
   grid-column: 1;
 }
 
-.endpoints > [data-picker='destination'] {
-  grid-row: 2;
+/* A point of the trip: grip, picker, and × for a stop (a spacer keeps the fields aligned). */
+.point {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--dbk-space-1);
+  border-radius: var(--dbk-radius);
+}
+
+.point[data-dragging] {
+  opacity: 0.55;
+}
+
+/* Where a dragged point lands: a line above or below the row. */
+.point[data-drop]::after {
+  position: absolute;
+  right: 0;
+  left: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--dbk-color-accent);
+  content: '';
+}
+
+.point[data-drop='before']::after {
+  top: calc(-1 * var(--dbk-space-1) - 1px);
+}
+
+.point[data-drop='after']::after {
+  bottom: calc(-1 * var(--dbk-space-1) - 1px);
+}
+
+.grip {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dbk-radius);
+  background: none;
+  color: var(--dbk-color-text-subtle);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.grip:hover {
+  color: var(--dbk-color-text);
+  background: var(--dbk-color-surface-hover);
+}
+
+.grip:active {
+  cursor: grabbing;
+}
+
+.grip:focus-visible {
+  outline: 2px solid var(--dbk-color-focus);
+  outline-offset: 1px;
+}
+
+.grip svg {
+  width: 14px;
+  height: 14px;
+}
+
+.pointSpacer {
+  width: 28px;
+}
+
+.endpointActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dbk-space-2);
+  margin-top: calc(-1 * var(--dbk-space-1));
 }
 
 /* A column of its own beside both fields, centred between them: it never covers a field. */
 .swap {
-  grid-row: 1 / span 2;
   grid-column: 2;
   align-self: center;
   margin-top: var(--dbk-space-4);
@@ -454,6 +529,23 @@
   font-weight: 500;
 }
 
+.facts dd small {
+  display: block;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-xs);
+  font-weight: 400;
+}
+
+/* The trip in numbers, after its legs. */
+.summary {
+  padding-top: var(--dbk-space-3);
+  border-top: 1px solid var(--dbk-color-border);
+}
+
+.summary .facts {
+  margin: 0;
+}
+
 .legs {
   display: grid;
   gap: 2px;
@@ -520,6 +612,15 @@
   font-size: var(--dbk-font-size-small);
   font-style: normal;
   font-weight: 400;
+}
+
+/* A stop the pilot asked for, between the start and the destination. */
+.legTitle em[data-stop] {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--dbk-color-accent-subtle);
+  color: var(--dbk-color-accent-text);
+  font-size: var(--dbk-font-size-xs);
 }
 
 .legMeta {
@@ -621,5 +722,22 @@
     left: var(--dbk-space-2) !important;
     width: auto;
     max-width: none;
+  }
+}
+
+/* A shared route: the panel is as tall as what it shows. */
+.panel[data-shared] {
+  bottom: auto;
+}
+
+/* A shared route on a phone: the panel is a sheet over the lower part of the map. */
+@media (max-width: 767px) {
+  .panel[data-shared] {
+    top: auto;
+    right: var(--dbk-space-2);
+    bottom: var(--dbk-space-2);
+    left: var(--dbk-space-2);
+    width: auto;
+    max-height: 45%;
   }
 }
