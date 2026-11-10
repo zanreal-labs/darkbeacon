@@ -69,17 +69,20 @@ export const FATIGUE_SCOPE = 'esi-characters.read_fatigue.v1';
  * Scopes a character only grants when its owner opts in (linking again with `extras`), each
  * extra one or more: the assets to weigh the ship actually flown, the wallet balance on the
  * characters page, the structures it may use, to find the jump bridges it can take, and its
- * skills and jump fatigue, which fill the jump planner.
+ * skills and its jump fatigue, which fill the jump planner. Skills and fatigue are two extras:
+ * EVE refuses the whole sign-in (`invalid_scope`) when the instance's EVE application lacks a
+ * scope asked for, and an application made before the planner may have skills but not fatigue.
  */
 export const OPTIONAL_EVE_SCOPES = {
   assets: ['esi-assets.read_assets.v1'],
   wallet: ['esi-wallet.read_character_wallet.v1'],
   structures: [UNIVERSE_STRUCTURES_SCOPE],
-  jumps: [SKILLS_SCOPE, FATIGUE_SCOPE],
+  jumps: [SKILLS_SCOPE],
+  fatigue: [FATIGUE_SCOPE],
 } as const satisfies Record<string, readonly string[]>;
 export type OptionalEveScope = keyof typeof OPTIONAL_EVE_SCOPES;
 
-/** The extras named in a `?extras=assets,wallet,structures,jumps` value; unknown names are ignored. */
+/** The extras named in a `?extras=assets,wallet,structures,jumps,fatigue` value; unknown ones are ignored. */
 export function parseExtras(value: unknown): OptionalEveScope[] {
   if (typeof value !== 'string') return [];
   const names = value.split(',').map((v) => v.trim());

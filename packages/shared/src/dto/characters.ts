@@ -6,7 +6,7 @@ import { EveId, Id, Timestamp } from './common.js';
  * structures (the structures it may use, to find jump bridges) and jumps (its skills and jump
  * fatigue, for the jump planner).
  */
-export const OptionalEveScope = z.enum(['assets', 'wallet', 'structures', 'jumps']);
+export const OptionalEveScope = z.enum(['assets', 'wallet', 'structures', 'jumps', 'fatigue']);
 export type OptionalEveScope = z.infer<typeof OptionalEveScope>;
 
 /** What each ESI scope Darkbeacon asks for is used for, in words people recognise. */

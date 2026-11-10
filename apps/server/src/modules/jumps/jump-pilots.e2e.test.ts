@@ -84,11 +84,16 @@ describeEachDialect('jump pilots over HTTP', (t) => {
     return browser;
   };
 
-  it('asks for skills and fatigue with the jumps extra, and names what a grant lacks', async () => {
+  it('asks for skills with the jumps extra and fatigue with its own, and names what a grant lacks', async () => {
     const alice = await signIn('1001', 'alice');
-    const begin = await alice.request('/api/auth/eve/login?extras=jumps');
-    const scopes = new URL(begin.headers.get('location')!).searchParams.get('scope')!.split(' ');
-    expect(scopes).toEqual(expect.arrayContaining([SKILLS_SCOPE, FATIGUE_SCOPE]));
+    const scopesOf = async (extras: string) => {
+      const begin = await alice.request(`/api/auth/eve/login?extras=${extras}`);
+      return new URL(begin.headers.get('location')!).searchParams.get('scope')!.split(' ');
+    };
+    // Apart, so an EVE application without the fatigue scope still lets skills through.
+    expect(await scopesOf('jumps')).toContain(SKILLS_SCOPE);
+    expect(await scopesOf('jumps')).not.toContain(FATIGUE_SCOPE);
+    expect(await scopesOf('jumps,fatigue')).toEqual(expect.arrayContaining([SKILLS_SCOPE, FATIGUE_SCOPE]));
 
     // Linked without the extra: nothing is read, and the planner can say what to allow.
     await alice.oauth('/api/auth/eve/login', (challenge) => network.approveEve(PILOT, challenge));
@@ -109,10 +114,10 @@ describeEachDialect('jump pilots over HTTP', (t) => {
     network.eveScopes = [...network.eveScopes, SKILLS_SCOPE, FATIGUE_SCOPE];
     fatigueExpires = new Date(Date.now() + 90 * 60_000).toISOString();
     const alice = await signIn('1001', 'alice');
-    await alice.oauth('/api/auth/eve/login?extras=jumps', (challenge) =>
+    await alice.oauth('/api/auth/eve/login?extras=jumps,fatigue', (challenge) =>
       network.approveEve(PILOT, challenge),
     );
-    expect((await alice.json<MeDto>('/api/accounts/me')).characters[0]?.extras).toEqual(['jumps']);
+    expect((await alice.json<MeDto>('/api/accounts/me')).characters[0]?.extras).toEqual(['jumps', 'fatigue']);
 
     const pilot = await alice.json<JumpPilotDto>(`/api/jumps/pilots/${PILOT.id}`);
     expect(pilot).toMatchObject({

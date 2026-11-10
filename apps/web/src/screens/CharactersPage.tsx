@@ -352,7 +352,12 @@ function CharactersCard({ me, tracking }: { me: MeDto; tracking: MyTrackingDto |
                               )}
                               {!extras.includes('jumps') && (
                                 <MenuItem icon={<Rocket />} href={relink(['jumps'])}>
-                                  Fill the jump planner (skills and jump fatigue)…
+                                  Fill the jump planner with its skills…
+                                </MenuItem>
+                              )}
+                              {extras.includes('jumps') && !extras.includes('fatigue') && (
+                                <MenuItem icon={<Rocket />} href={relink(['fatigue'])}>
+                                  Read its jump fatigue too…
                                 </MenuItem>
                               )}
                               {extras.length > 0 && (

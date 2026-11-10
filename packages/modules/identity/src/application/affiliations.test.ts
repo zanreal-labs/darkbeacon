@@ -72,12 +72,12 @@ describe('scopes of a character', () => {
     expect(parseExtras('wallet, nope,assets')).toEqual(['assets', 'wallet']);
     expect(parseExtras(undefined)).toEqual([]);
     expect(linkScopes(['wallet'])).toContain('esi-wallet.read_character_wallet.v1');
-    // One extra may carry several scopes; it is granted only with all of them.
-    expect(linkScopes(['jumps'])).toEqual(
-      expect.arrayContaining(['esi-skills.read_skills.v1', 'esi-characters.read_fatigue.v1']),
-    );
-    expect(grantedExtras(['esi-skills.read_skills.v1'])).toEqual([]);
-    expect(grantedExtras(linkScopes(['jumps']))).toEqual(['jumps']);
+    // Skills and fatigue are apart: an EVE application without one still grants the other.
+    expect(linkScopes(['jumps'])).toContain('esi-skills.read_skills.v1');
+    expect(linkScopes(['jumps'])).not.toContain('esi-characters.read_fatigue.v1');
+    expect(linkScopes(['fatigue'])).toContain('esi-characters.read_fatigue.v1');
+    expect(grantedExtras(['esi-skills.read_skills.v1'])).toEqual(['jumps']);
+    expect(grantedExtras(linkScopes(['jumps', 'fatigue']))).toEqual(['jumps', 'fatigue']);
     const old = ['esi-location.read_location.v1', ...OPTIONAL_EVE_SCOPES.assets];
     expect(missingScopes(old)).toContain('esi-characters.read_contacts.v1');
     expect(missingScopes(linkScopes())).toEqual([]);
