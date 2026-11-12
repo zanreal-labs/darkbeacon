@@ -442,7 +442,9 @@
 
 .choicesBubble .choice {
   flex: 0 0 auto;
-  width: 212px;
+  width: auto;
+  min-width: 150px;
+  white-space: nowrap;
 }
 
 .choice {
@@ -473,33 +475,17 @@
   outline-offset: 1px;
 }
 
-.choiceHead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--dbk-space-1);
-}
-
 .choiceTitle {
-  font-weight: 600;
-}
-
-.choiceTag {
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--dbk-color-surface-raised);
   color: var(--dbk-color-text-muted);
   font-size: var(--dbk-font-size-xs);
-  line-height: 18px;
 }
 
-.choice[aria-checked='true'] .choiceTag {
-  background: var(--dbk-color-surface);
+.choice[aria-checked='true'] .choiceTitle {
   color: var(--dbk-color-accent-text);
 }
 
 .choiceMain {
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .choiceMeta {

@@ -1117,29 +1117,19 @@ export function RouteChoices({
           className={styles.choice}
           onClick={() => onChooseRoute(n)}
         >
-          <span className={styles.choiceHead}>
-            <span className={styles.choiceTitle}>{n === 0 ? 'Recommended' : 'Alternative'}</span>
-            {route.best.map((b) => (
-              <span key={b} className={styles.choiceTag}>
-                {BEST_LABELS[b]}
-              </span>
-            ))}
+          {/* Glanceable: why this one, how many jumps, what it costs; the legs are in the panel. */}
+          <span className={styles.choiceTitle}>
+            {n === 0 ? 'Recommended' : route.best[0] ? BEST_LABELS[route.best[0]] : 'Alternative'}
           </span>
           <span className={styles.choiceMain}>
             {route.jumps} {route.jumps === 1 ? 'jump' : 'jumps'}
             {route.gates > 0 && ` + ${route.gates} ${route.gates === 1 ? 'gate' : 'gates'}`}
-            {route.ansiblex > 0 && ` + ${route.ansiblex} Ansiblex`}
-            {' · '}
-            {formatLy(route.ly)}
           </span>
           <span className={styles.choiceMeta}>
-            {formatNumber(route.fuel)} {isotope}
-            {iskOf(route.fuel, plan, fuelPrices) !== null &&
-              ` (≈ ${formatIsk(iskOf(route.fuel, plan, fuelPrices)!)})`}
-            {route.bridgeFuel !== null && ` · bridge ${formatNumber(route.bridgeFuel)}`}
-          </span>
-          <span className={styles.choiceMeta}>
-            wait {formatMinutes(route.waitMinutes)} · fatigue {formatMinutes(route.fatigueMinutes)}
+            {iskOf(route.fuel, plan, fuelPrices) !== null
+              ? formatIsk(iskOf(route.fuel, plan, fuelPrices)!)
+              : `${formatNumber(route.fuel)} ${isotope}`}
+            {' · '}fatigue {formatMinutes(route.fatigueMinutes)}
           </span>
         </button>
       ))}
