@@ -22,7 +22,7 @@ import { useBreadcrumbs } from '../shell/breadcrumbs';
 import { ErrorState } from '../ui';
 import type { Overlay, RouteLeg } from '../jump/draw';
 import { endpointsReducer } from '../jump/endpoints';
-import { JumpPanel } from '../jump/JumpPanel';
+import { JumpPanel, RouteChoices } from '../jump/JumpPanel';
 import { SystemCard } from '../jump/SystemCard';
 import { buildStarModel, distanceLy, noCynoReason, type StarModel } from '../jump/model';
 import { useFatigueClock, useJumpPilot } from '../jump/pilot';
@@ -226,14 +226,14 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
       destination: suggestionsFor('destination', sources, origin),
     };
   }, [characters, exits, mapSystems, recent, origin, destination]);
-  // The pilot's skills and fatigue from ESI win over the remembered ones until edited by hand;
-  // ESI's fatigue counts down while the planner is open.
+  // Skills set by hand win over ESI's until ESI is asked again or the pilot changes (a training
+  // level can be planned ahead); ESI's fatigue wins until edited, and counts down while open.
   const fill = useJumpPilot(settings.pilot);
   const fatigueClock = useFatigueClock(
     fill.fatigueExpiresAt !== undefined && fill.fatigueExpiresAt !== null,
     fill.answeredAt,
   );
-  const skills = fill.skills ?? settings.skills;
+  const skills = settings.skillsByHand ? settings.skills : (fill.skills ?? settings.skills);
   const fatigueNow =
     fill.fatigueExpiresAt === undefined
       ? settings.fatigueNow
@@ -389,7 +389,6 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
   const { edited } = fill;
   const update = useCallback(
     (change: Partial<PlannerSettings>) => {
-      if (change.skills) edited('skills');
       if (change.fatigueNow !== undefined) edited('fatigue');
       setSettings((s) => ({ ...s, ...change }));
     },
@@ -540,6 +539,18 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
         setOpen={setPanelOpen}
         phone={phone}
       />
+      {!phone && (
+        <div className={styles.choicesDock} style={{ left: insets.left }}>
+          <RouteChoices
+            floating
+            routeOptions={routeOptions}
+            chosenRoute={chosen}
+            onChooseRoute={chooseRoute}
+            plan={result}
+            fuelPrices={fuelPrices.data ?? null}
+          />
+        </div>
+      )}
     </div>
   );
 }

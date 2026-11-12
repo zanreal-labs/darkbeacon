@@ -415,6 +415,36 @@
   gap: var(--dbk-space-1);
 }
 
+.choicesDock {
+  position: absolute;
+  z-index: 7;
+  right: 0;
+  bottom: var(--dbk-space-3);
+  display: flex;
+  justify-content: center;
+  padding: 0 56px; /* clear of the zoom buttons, centred in the free map */
+  pointer-events: none;
+}
+
+/* The routes to choose from, side by side in a bubble over the free map: as on a maps app. */
+.choicesBubble {
+  display: flex;
+  gap: var(--dbk-space-1);
+  max-width: 100%;
+  overflow-x: auto;
+  padding: var(--dbk-space-1);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius-large);
+  background: var(--dbk-color-surface);
+  box-shadow: var(--dbk-shadow-medium);
+  pointer-events: auto;
+}
+
+.choicesBubble .choice {
+  flex: 0 0 auto;
+  width: 212px;
+}
+
 .choice {
   display: grid;
   gap: 2px;

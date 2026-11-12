@@ -18,7 +18,7 @@ export interface PilotFill {
   answer: JumpPilotDto | null;
   fetching: boolean;
   error: Error | null;
-  /** Skill levels from ESI while no manual edit came after them; null: the planner's own. */
+  /** Skill levels from ESI; null: none read. Levels set by hand win over them (see the planner). */
   skills: JumpSkills | null;
   /**
    * When ESI's fatigue runs out (null: none) while no manual edit came after it; undefined: the
@@ -27,10 +27,10 @@ export interface PilotFill {
   fatigueExpiresAt: number | null | undefined;
   /** When the answer came (epoch ms); fatigue is never counted from before it. */
   answeredAt: number;
-  /** Asks ESI again; its answer wins over manual edits. */
+  /** Asks ESI again; its fatigue wins over a manual edit. */
   refresh(): void;
-  /** A level or the fatigue was changed by hand: it stays until ESI is asked again. */
-  edited(part: 'skills' | 'fatigue'): void;
+  /** The fatigue was changed by hand: it stays until ESI answers again. */
+  edited(part: 'fatigue'): void;
 }
 
 /**
@@ -59,22 +59,21 @@ export function useJumpPilot(chosen: number | null): PilotFill {
   const answer = query.data?.characterId === id ? query.data : null;
   const answeredAt = answer ? query.dataUpdatedAt : 0;
   // The answer (by when it came) each part was last edited after; a newer answer wins again.
-  const [editedAfter, setEditedAfter] = useState({ skills: -1, fatigue: -1 });
+  const [editedAfter, setEditedAfter] = useState({ fatigue: -1 });
   const { refetch } = query;
   const refresh = useCallback(() => void refetch(), [refetch]);
   const edited = useCallback(
-    (part: 'skills' | 'fatigue') =>
-      setEditedAfter((e) => (e[part] === answeredAt ? e : { ...e, [part]: answeredAt })),
+    (part: 'fatigue') => setEditedAfter((e) => (e[part] === answeredAt ? e : { ...e, [part]: answeredAt })),
     [answeredAt],
   );
-  const fresh = (part: 'skills' | 'fatigue') => answer !== null && editedAfter[part] !== answeredAt;
+  const fresh = (part: 'fatigue') => answer !== null && editedAfter[part] !== answeredAt;
   return {
     characters,
     pilot,
     answer,
     fetching: query.isFetching,
     error: query.error,
-    skills: fresh('skills') ? (answer!.skills ?? null) : null,
+    skills: answer?.skills ?? null,
     fatigueExpiresAt:
       fresh('fatigue') && answer!.fatigueMinutes !== null ? answer!.fatigueExpiresAt : undefined,
     answeredAt,

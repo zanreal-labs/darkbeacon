@@ -474,9 +474,9 @@ function PilotSkills(props: PanelState) {
     `JFC ${roman(skills.jfc)}`,
     ...(ship.hull === 'jump_freighter' ? [`JF ${roman(skills.jf)}`] : []),
   ].join(' · ');
-  const fromEsi = fill.skills !== null && fill.pilot !== null;
-  // Picked by hand: after an ESI answer (until ESI is asked again), or ever, without one.
-  const byHand = !fromEsi && (fill.answer?.skills != null || settings.skillsByHand);
+  // Picked by hand wins over ESI until ESI is asked again or the pilot changes.
+  const byHand = settings.skillsByHand;
+  const fromEsi = !byHand && fill.skills !== null && fill.pilot !== null;
   const source = fromEsi ? fill.pilot!.name : byHand ? 'set by hand' : 'assumed';
   // Only missing skills (or an expired login) call for linking again; fatigue is a quiet extra.
   const needsLink = skillsNeedLink(fill);
@@ -558,7 +558,7 @@ function Pilot({ pilot: fill, update }: PanelState) {
         <Select
           size="sm"
           value={String(pilot.id)}
-          onValueChange={(v) => update({ pilot: Number(v) })}
+          onValueChange={(v) => update({ pilot: Number(v), skillsByHand: false })}
           options={characters.map((c) => ({ value: String(c.id), label: c.name }))}
         />
       </Field>
@@ -567,7 +567,10 @@ function Pilot({ pilot: fill, update }: PanelState) {
         label="Read skills and fatigue from ESI again"
         icon={<RefreshCw />}
         loading={fill.fetching}
-        onClick={fill.refresh}
+        onClick={() => {
+          update({ skillsByHand: false });
+          fill.refresh();
+        }}
       />
     </div>
   );
@@ -852,8 +855,9 @@ function Result(props: PanelState) {
         </Callout>
       ) : (
         <>
-          <RouteChoices {...props} />
-          {props.routeOptions.length < 2 && (
+          {/* On a phone the routes to choose from are in the sheet; else over the map. */}
+          {props.phone && <RouteChoices {...props} />}
+          {(!props.phone || props.routeOptions.length < 2) && (
             <div className={styles.totals}>
               <div className={styles.totalsMain}>
                 {route.jumps} {route.jumps === 1 ? 'jump' : 'jumps'}
@@ -1089,11 +1093,21 @@ const BEST_LABELS: Record<JumpRouteBest, string> = {
 };
 
 /** One line per route, as a maps app lists other ways: the recommended one first, picked by default. */
-function RouteChoices({ routeOptions, chosenRoute, onChooseRoute, plan, fuelPrices }: PanelState) {
-  if (routeOptions.length < 2 || !plan) return null;
+export function RouteChoices({
+  routeOptions,
+  chosenRoute,
+  onChooseRoute,
+  plan,
+  fuelPrices,
+  floating = false,
+}: Pick<PanelState, 'routeOptions' | 'chosenRoute' | 'onChooseRoute' | 'plan' | 'fuelPrices'> & {
+  /** A bubble over the map (the free space beside the panel) rather than a list in the panel. */
+  floating?: boolean;
+}) {
+  if (routeOptions.length < 2 || !plan?.route) return null;
   const isotope = ISOTOPE_LABELS[plan.ship.isotope].toLowerCase();
   return (
-    <div className={styles.choices} role="radiogroup" aria-label="Routes">
+    <div className={floating ? styles.choicesBubble : styles.choices} role="radiogroup" aria-label="Routes">
       {routeOptions.map((route, n) => (
         <button
           key={n}
@@ -1122,8 +1136,10 @@ function RouteChoices({ routeOptions, chosenRoute, onChooseRoute, plan, fuelPric
             {formatNumber(route.fuel)} {isotope}
             {iskOf(route.fuel, plan, fuelPrices) !== null &&
               ` (≈ ${formatIsk(iskOf(route.fuel, plan, fuelPrices)!)})`}
-            {route.bridgeFuel !== null && ` · bridge ${formatNumber(route.bridgeFuel)}`} · wait{' '}
-            {formatMinutes(route.waitMinutes)} · fatigue {formatMinutes(route.fatigueMinutes)}
+            {route.bridgeFuel !== null && ` · bridge ${formatNumber(route.bridgeFuel)}`}
+          </span>
+          <span className={styles.choiceMeta}>
+            wait {formatMinutes(route.waitMinutes)} · fatigue {formatMinutes(route.fatigueMinutes)}
           </span>
         </button>
       ))}

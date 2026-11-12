@@ -356,6 +356,38 @@ describe('JumpPage', () => {
     expect(skills.hasAttribute('data-warn')).toBe(false);
   });
 
+  it('plans with a level set by hand over the one ESI reads, until ESI is asked again', async () => {
+    server.use(
+      http.get(routes.jumps.pilot.path, ({ params }) =>
+        HttpResponse.json({
+          characterId: Number(params.characterId),
+          skills: { jdc: 4, jfc: 3, jf: 3 },
+          fatigueMinutes: null,
+          fatigueExpiresAt: null,
+          missingScopes: [],
+          problem: null,
+          checkedAt: Date.now(),
+        } satisfies JumpPilotDto),
+      ),
+    );
+    // Calibration V set by hand while it still trains: ESI answers IV, the planner keeps V.
+    window.localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({ skills: { jdc: 5, jfc: 3, jf: 3 }, skillsByHand: true }),
+    );
+    window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&ship=Ark');
+    const user = userEvent.setup();
+    renderPage();
+    const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+    const skills = await within(panel).findByRole('button', { name: /Skills.*set by hand/ });
+    await waitFor(() => expect(requests.at(-1)).toMatchObject({ skills: { jdc: 5, jfc: 3, jf: 3 } }));
+
+    await user.click(skills);
+    await user.click(within(panel).getByRole('button', { name: 'Read skills and fatigue from ESI again' }));
+    expect(await within(panel).findByText('From ESI · Ayla Vex')).toBeTruthy();
+    await waitFor(() => expect(requests.at(-1)).toMatchObject({ skills: { jdc: 4, jfc: 3, jf: 3 } }));
+  });
+
   it('plans through stops from the address, back to the start on request, and prices the fuel', async () => {
     server.use(
       http.get(routes.jumps.fuelPrices.path, () =>
