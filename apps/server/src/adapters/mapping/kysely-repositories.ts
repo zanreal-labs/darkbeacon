@@ -1,3 +1,4 @@
+import type { Generated, Selectable } from 'kysely';
 import { ConflictError } from '@darkbeacon/core';
 import { bool, isUniqueViolation, json, type Database } from '@darkbeacon/db';
 import type { AuthorDto } from '@darkbeacon/shared';
@@ -60,6 +61,8 @@ export interface MappingTables {
     updated_at: number;
     /** JSON field -> when it last changed; see `ChangeStamps`. */
     field_times: string;
+    /** Put there by hand (dragged): the map never moves it by itself. */
+    by_hand: Generated<number>;
   };
   map_connections: {
     id: string;
@@ -145,7 +148,7 @@ export interface MappingTables {
 }
 
 type MapRow = MappingTables['maps'];
-type SystemRow = MappingTables['map_systems'];
+type SystemRow = Selectable<MappingTables['map_systems']>;
 type ConnectionRow = MappingTables['map_connections'];
 type SignatureRow = MappingTables['map_signatures'];
 type PassageRow = MappingTables['map_connection_passages'];
@@ -283,6 +286,26 @@ export class KyselySystemRepository extends Repository implements SystemReposito
       .deleteFrom('map_systems')
       .where('map_id', '=', mapId)
       .where('solar_system_id', '=', solarSystemId)
+      .execute();
+  }
+
+  async byHand(mapId: string): Promise<Set<number>> {
+    const rows = await this.db
+      .selectFrom('map_systems')
+      .select('solar_system_id')
+      .where('map_id', '=', mapId)
+      .where('by_hand', '=', bool.encode(true))
+      .execute();
+    return new Set(rows.map((r) => Number(r.solar_system_id)));
+  }
+
+  async setByHand(mapId: string, solarSystemIds: readonly number[], byHand: boolean): Promise<void> {
+    if (solarSystemIds.length === 0) return;
+    await this.db
+      .updateTable('map_systems')
+      .set({ by_hand: bool.encode(byHand) })
+      .where('map_id', '=', mapId)
+      .where('solar_system_id', 'in', [...solarSystemIds])
       .execute();
   }
 }
@@ -745,7 +768,7 @@ function mapFromRow(row: MapRow): ChainMap {
   };
 }
 
-function systemToRow(s: MapSystem): Omit<SystemRow, 'field_times'> {
+function systemToRow(s: MapSystem): Omit<SystemRow, 'field_times' | 'by_hand'> {
   return {
     map_id: s.mapId,
     solar_system_id: s.solarSystemId,

@@ -10,6 +10,7 @@ import {
   groupStart,
   inWormholeSpace,
   LOCAL_INSTANCE,
+  strayRepairs,
   type ChainEntry,
   type ChainOrigin,
   type MapSourceDto,
@@ -52,6 +53,8 @@ interface MergedMap {
   merge: ChainMerge;
   view: ViewState;
   layout: Map<number, Position>;
+  /** Systems a viewer dragged where they are: never moved by the map itself. */
+  hand: Set<number>;
   /** How far each source's own coordinates are shifted on the layout (fixed once, by source id). */
   offsets: Map<string, Position>;
   /** A composite's own notes, labels and locks of systems. */
@@ -66,7 +69,8 @@ interface MergedMap {
 /** What placing systems decided: new positions, and the offsets sources got for the first time. */
 interface Placing {
   layout: Map<number, Position>;
-  placed: Array<{ solarSystemId: number; position: Position }>;
+  /** `byHand`: a viewer put it there (a drag); without, the map's rule did. */
+  placed: Array<{ solarSystemId: number; position: Position; byHand?: boolean }>;
   offsets: Map<string, Position>;
   newOffsets: Array<{ sourceId: string; offset: Position }>;
 }
@@ -236,11 +240,15 @@ export class ChainMerger {
     for (const id of ids) await this.rebuild(id);
   }
 
-  /** Places systems on a merged map's own layout (a viewer dragged them). */
+  /**
+   * Places systems on a merged map's own layout: a viewer dragged them (`byHand`, the default:
+   * the map never moves them by itself), or a tidy laid them out by the rule.
+   */
   async move(
     actor: Actor,
     mapId: string,
     positions: ReadonlyArray<{ solarSystemId: number; position: Position }>,
+    { byHand = true }: { byHand?: boolean } = {},
   ): Promise<void> {
     await this.serial(mapId, async () => {
       const map = await this.ensure(mapId);
@@ -255,7 +263,7 @@ export class ChainMerger {
       for (const p of changed) map.lone?.delete(p.solarSystemId);
       const placing = this.placing(map);
       for (const { solarSystemId, position } of changed) placing.layout.set(solarSystemId, position);
-      placing.placed.push(...changed);
+      placing.placed.push(...changed.map((p) => ({ ...p, byHand })));
       await this.publish(map, refs, actor, {}, { placing });
     });
   }
@@ -457,6 +465,7 @@ export class ChainMerger {
       merge,
       view: new ViewState(stored.entities),
       layout: await layout.list(mapId),
+      hand: await layout.byHand(mapId),
       offsets: await layout.offsets(mapId),
       local: info.kind === 'composite' ? await this.ports.local.list(mapId) : new Map(),
     };
@@ -512,6 +521,7 @@ export class ChainMerger {
     const local = extra.local ?? map.local;
     const placing = extra.placing ?? this.placing(map);
     this.place(map, refs, placing);
+    this.heal(map, refs, placing);
     const { layout, placed, offsets, newOffsets } = placing;
     const ctx: ViewContext = {
       mapId: map.mapId,
@@ -576,8 +586,48 @@ export class ChainMerger {
     );
     map.view.apply(changes);
     map.layout = layout;
+    for (const p of placed) {
+      if (p.byHand) map.hand.add(p.solarSystemId);
+      else map.hand.delete(p.solarSystemId);
+    }
     map.offsets = offsets;
     map.local = local;
+  }
+
+  /**
+   * Moves systems that stand far off the one they hang off back beside it by the placement rule
+   * (`strayRepairs`): spots from old layouts or a source's coordinates, so the merged chain lays
+   * itself out without a tidy. Ones a viewer dragged (or placed this run by hand) and locked ones
+   * keep their spots.
+   */
+  private heal(map: MergedMap, refs: Set<string>, placing: Placing): void {
+    const { layout, placed } = placing;
+    const shown = shownOn(map, layout);
+    if (shown.length < 2) return;
+    const keep = new Set(map.hand);
+    for (const p of placed) if (p.byHand) keep.add(p.solarSystemId);
+    const isHome = (id: number) => {
+      const ref = refId('system', String(id));
+      return map.merge.holders(ref).some((h) => map.merge.sourceField(h, ref, 'status') === 'home');
+    };
+    for (const [id] of shown) {
+      const dto = map.view.get('system', String(id))?.dto as { locked?: boolean } | undefined;
+      if (dto?.locked || map.local.get(id)?.locked) keep.add(id);
+    }
+    const nodes = shown.map(([id, position]) => ({ id, position, home: isHome(id) }));
+    const ids = new Map(shown);
+    const moves = strayRepairs(
+      nodes,
+      layoutLinks(ids, (n) => map.merge.neighbours(n)),
+      keep,
+    );
+    for (const [id, position] of moves) {
+      layout.set(id, position);
+      const i = placed.findIndex((p) => p.solarSystemId === id);
+      if (i >= 0) placed.splice(i, 1);
+      placed.push({ solarSystemId: id, position });
+      refs.add(refId('system', String(id)));
+    }
   }
 
   /** A draft of the map's layout to place systems on (committed with the publish). */

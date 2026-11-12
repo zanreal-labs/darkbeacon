@@ -1089,6 +1089,32 @@ describeEachDialect('sharing and merged chains', (t) => {
       expect(Math.abs(back.y - j.y)).toBeLessThanOrEqual(3 * 144);
     });
 
+    it('moves a system its layout keeps far off its neighbour back beside it, never a dragged one', async () => {
+      await env.systems.add(bob, corpC.id, { solarSystemId: shattered });
+      await env.connections.add(bob, corpC.id, { source: jita, target: shattered });
+      await env.settle();
+      const j = await at(jita);
+      // Stored far below Jita, as an old layout left it: the map heals itself when built again.
+      const far = { x: j.x + 360, y: j.y + 2448 };
+      await env.sharingPorts.layout.put(
+        alliance.id,
+        [{ solarSystemId: shattered, position: far }],
+        env.clock.now(),
+      );
+      await env.merger.rebuildAll();
+      await env.settle();
+      const healed = await at(shattered);
+      expect(healed.x).toBe(j.x + 360);
+      expect(Math.abs(healed.y - j.y)).toBeLessThanOrEqual(3 * 144);
+      // Dragged there by a viewer: it stays, a rebuild included.
+      await env.writes.moveSystems(carol, alliance.id, {
+        positions: [{ solarSystemId: shattered, x: far.x, y: far.y }],
+      });
+      await env.merger.rebuildAll();
+      await env.settle();
+      expect(await at(shattered)).toEqual(far);
+    });
+
     it('tidies the merged layout into one group per chain, for its managers only', async () => {
       // Scatter it first, as a copied layout would: Perimeter far off its chain.
       await env.writes.moveSystems(carol, alliance.id, {
@@ -1121,7 +1147,7 @@ describeEachDialect('sharing and merged chains', (t) => {
         [
           { solarSystemId: c2, position: await ownOf(corpA.id, c2) },
           { solarSystemId: c5, position: await ownOf(corpA.id, c5) },
-          { solarSystemId: c1, position: { x: 1200, y: 1200 } },
+          { solarSystemId: c1, position: { x: 1200, y: 1200 }, byHand: true },
           { solarSystemId: jita, position: await ownOf(corpC.id, jita) },
           { solarSystemId: perimeter, position: { x: -3144, y: -2352 + 144 } },
         ],

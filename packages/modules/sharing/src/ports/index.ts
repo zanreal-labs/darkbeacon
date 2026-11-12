@@ -116,9 +116,12 @@ export interface ChainViewRepository {
 /** Where systems sit on a merged map: its own layout, never written back to sources. */
 export interface ChainLayoutRepository {
   list(mapId: string): Promise<Map<number, Position>>;
+  /** Systems a viewer dragged where they are: the map never moves them by itself. */
+  byHand(mapId: string): Promise<Set<number>>;
+  /** `byHand`: a viewer put it there; without, the map's rule did (and may move it on). */
   put(
     mapId: string,
-    positions: ReadonlyArray<{ solarSystemId: number; position: Position }>,
+    positions: ReadonlyArray<{ solarSystemId: number; position: Position; byHand?: boolean }>,
     at: number,
   ): Promise<void>;
   /**

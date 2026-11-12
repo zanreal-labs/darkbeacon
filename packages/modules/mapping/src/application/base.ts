@@ -13,7 +13,7 @@ import {
   type NewEvent,
   type UnitOfWork,
 } from '@darkbeacon/core';
-import type { EventPayloads, EventType } from '@darkbeacon/shared';
+import { strayRepairs, type EventPayloads, type EventType } from '@darkbeacon/shared';
 import type { MapSystem } from '../domain/map.js';
 import type {
   AuthorDirectory,
@@ -135,15 +135,49 @@ export abstract class MappingUseCases {
 
   /**
    * Runs `work` in one transaction and appends the events it collected in the same transaction,
-   * so state and events commit (or roll back) together.
+   * so state and events commit (or roll back) together. When systems or connections changed, the
+   * map heals its layout in the same go (`healLayout`).
    */
   protected write<T>(actor: Actor, mapId: string, work: (events: EventBatch) => Promise<T>): Promise<T> {
     return this.ports.uow.transaction(async () => {
       const batch = new EventBatch(actor, mapId, this.ports.clock.now());
       const result = await work(batch);
+      if (batch.events.some((e) => e.type.startsWith('system.') || e.type.startsWith('connection.')))
+        await this.healLayout(batch, mapId);
       await this.ports.events.append(batch.events);
       return result;
     });
+  }
+
+  /**
+   * Moves systems that stand far off the one they hang off back beside it by the placement rule
+   * (`strayRepairs`): spots from old layouts or other tools, so the chain lays itself out without
+   * a tidy. Locked systems and ones someone dragged keep their spots.
+   */
+  private async healLayout(events: EventBatch, mapId: string): Promise<void> {
+    const systems = (await this.ports.systems.list(mapId))
+      .filter((s) => s.visible)
+      .sort((a, b) => a.createdAt - b.createdAt || a.solarSystemId - b.solarSystemId);
+    if (systems.length < 2) return;
+    const connections = [...(await this.ports.connections.list(mapId))].sort(
+      (a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id),
+    );
+    const keep = await this.ports.systems.byHand(mapId);
+    for (const s of systems) if (s.locked) keep.add(s.solarSystemId);
+    const moves = strayRepairs(
+      systems.map((s) => ({ id: s.solarSystemId, position: s.position, home: s.status === 'home' })),
+      connections.map((c) => ({ source: c.source, target: c.target })),
+      keep,
+    );
+    if (moves.size === 0) return;
+    const now = this.ports.clock.now();
+    for (const system of systems) {
+      const position = moves.get(system.solarSystemId);
+      if (!position) continue;
+      const next = { ...system, position, updatedAt: now };
+      await this.ports.systems.update(next);
+      events.add('system.updated', next, system);
+    }
   }
 
   /** A system on the map that is not hidden. Hidden systems are invisible to every command. */

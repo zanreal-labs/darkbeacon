@@ -261,14 +261,20 @@ function besideParent(board: Board, parent: number, at: Position, upstream: numb
     if (sides.length > 0 && sides.every((dx) => dx < 0)) direction = -1;
   }
   const column = onMapGrid({ x: at.x + direction * SYSTEM_PLACEMENT.x, y: 0 }).x;
-  // Siblings: the parent's other children already in that column; the new one goes under them.
-  const siblings = neighbours
+  // Siblings: the parent's other children stacked in that column from its row down; the new one
+  // goes under them. One that strayed far below is no stack to join.
+  const start = onMapGrid(at).y;
+  const stacked = neighbours
     .map((id) => board.position(id)!)
-    .filter((p) => Math.abs(p.x - column) < SYSTEM_PLACEMENT.x / 2);
-  const row =
-    siblings.length > 0
-      ? onMapGrid({ x: 0, y: Math.max(...siblings.map((p) => p.y)) + SYSTEM_PLACEMENT.y }).y
-      : onMapGrid(at).y;
+    .filter((p) => Math.abs(p.x - column) < SYSTEM_PLACEMENT.x / 2 && p.y >= start - NEAR.y)
+    .map((p) => p.y)
+    .sort((a, b) => a - b);
+  let bottom: number | null = null;
+  for (const y of stacked) {
+    if (y > (bottom ?? start) + 2 * SYSTEM_PLACEMENT.y) break;
+    bottom = y;
+  }
+  const row = bottom === null ? start : onMapGrid({ x: 0, y: bottom + SYSTEM_PLACEMENT.y }).y;
 
   const best = new Cheapest();
   for (let reach = 0; reach < SEARCH_LIMIT && !best.beats(reach); reach++) {
@@ -313,4 +319,96 @@ class Cheapest {
   beats(bound: number): boolean {
     return this.cost <= bound;
   }
+}
+
+/** A system for `strayRepairs`: home systems root the chain. */
+export interface ChainNode extends PlacementNode {
+  home?: boolean;
+}
+
+/**
+ * Whether `spot` is far off where the rule puts a child of the system at `parent`: more than two
+ * columns aside, more than three rows above, or more than three rows below the stack of its
+ * `children` (all the parent's children, so a column of siblings never counts as far).
+ */
+export function strayedFrom(spot: Position, parent: Position, children = 1): boolean {
+  const below = NEAR.y + Math.max(0, children - 1) * SYSTEM_PLACEMENT.y;
+  const dy = spot.y - parent.y;
+  return Math.abs(spot.x - parent.x) > NEAR.x || dy < -NEAR.y || dy > below;
+}
+
+const farness = (spot: Position, parent: Position) =>
+  Math.abs(spot.x - parent.x) / SYSTEM_PLACEMENT.x + Math.abs(spot.y - parent.y) / SYSTEM_PLACEMENT.y;
+
+/**
+ * Systems that stand far off the system they hang off (`strayedFrom`), moved back by the rule
+ * (`findSystemSpot`) beside it, as a map heals itself: a spot left from an old layout, a source's
+ * coordinates, a sibling stacked under one of those. The chain is walked from its roots (homes
+ * first, then `nodes` in order; `links` in order decide which system another hangs off), so a
+ * moved system's children follow it. Roots and systems in `keep` (locked, or put there by hand)
+ * stay; a move happens only where it lands nearer. Returns the new spots.
+ */
+export function strayRepairs(
+  nodes: readonly ChainNode[],
+  links: readonly PlacementLink[],
+  keep: ReadonlySet<number> = new Set(),
+): Map<number, Position> {
+  const at = new Map(nodes.map((n) => [n.id, n.position]));
+  const adjacent = new Map<number, number[]>();
+  const shown = links.filter((l) => at.has(l.source) && at.has(l.target) && l.source !== l.target);
+  for (const l of shown) {
+    adjacent.set(l.source, [...(adjacent.get(l.source) ?? []), l.target]);
+    adjacent.set(l.target, [...(adjacent.get(l.target) ?? []), l.source]);
+  }
+  const parentOf = new Map<number, number>();
+  const children = new Map<number, number>();
+  const order: number[] = [];
+  const seen = new Set<number>();
+  for (const root of [...nodes.filter((n) => n.home), ...nodes]) {
+    if (seen.has(root.id)) continue;
+    seen.add(root.id);
+    const queue = [root.id];
+    for (let q = 0; q < queue.length; q++) {
+      const id = queue[q]!;
+      for (const next of adjacent.get(id) ?? []) {
+        if (seen.has(next)) continue;
+        seen.add(next);
+        parentOf.set(next, id);
+        children.set(id, (children.get(id) ?? 0) + 1);
+        order.push(next);
+        queue.push(next);
+      }
+    }
+  }
+
+  const strays = (id: number) => {
+    const parent = parentOf.get(id)!;
+    return !keep.has(id) && strayedFrom(at.get(id)!, at.get(parent)!, children.get(parent) ?? 1);
+  };
+  // Strayed systems not moved yet stand nowhere: neither they nor their lines block a slot.
+  const waiting = new Set(order.filter(strays));
+  const moved = new Map<number, Position>();
+  for (const id of order) {
+    if (!strays(id)) {
+      waiting.delete(id);
+      continue;
+    }
+    waiting.add(id);
+    const parent = parentOf.get(id)!;
+    const parentAt = at.get(parent)!;
+    const spot = at.get(id)!;
+    const count = children.get(parent) ?? 1;
+    const out = (n: number) => waiting.has(n);
+    const next = findSystemSpot({
+      nodes: [...at].filter(([n]) => !out(n)).map(([n, position]) => ({ id: n, position })),
+      links: shown.filter((l) => !out(l.source) && !out(l.target)),
+      parent,
+      upstream: parentOf.get(parent) ?? null,
+    });
+    waiting.delete(id);
+    if (strayedFrom(next, parentAt, count) && farness(next, parentAt) >= farness(spot, parentAt)) continue;
+    at.set(id, next);
+    moved.set(id, next);
+  }
+  return moved;
 }

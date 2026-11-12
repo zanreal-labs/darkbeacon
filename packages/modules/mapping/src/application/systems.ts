@@ -41,7 +41,11 @@ export class SystemUseCases extends MappingUseCases {
           around: request.around ?? null,
           previous: existing?.position ?? null,
         });
-      if (existing) return this.restore(events, { ...existing, position }, existing);
+      // Put where someone asked, it stays there; placed by the rule, the map may move it on.
+      if (existing) {
+        await this.ports.systems.setByHand(mapId, [existing.solarSystemId], request.position !== undefined);
+        return this.restore(events, { ...existing, position }, existing);
+      }
 
       const now = this.ports.clock.now();
       const system: MapSystem = {
@@ -62,6 +66,7 @@ export class SystemUseCases extends MappingUseCases {
         updatedAt: now,
       };
       await this.ports.systems.insert(system);
+      if (request.position) await this.ports.systems.setByHand(mapId, [system.solarSystemId], true);
       events.add('system.added', system);
       return system;
     });
@@ -111,6 +116,7 @@ export class SystemUseCases extends MappingUseCases {
           const connections = await this.ports.connections.list(mapId);
           next.position = placeSystem(systems, connections, { previous: current.position });
         }
+        await this.ports.systems.setByHand(mapId, [solarSystemId], patch.position !== undefined);
         return this.restore(events, next, current);
       }
       if (!next.visible) {
@@ -121,6 +127,8 @@ export class SystemUseCases extends MappingUseCases {
         return next;
       }
       await this.ports.systems.update(next, { written });
+      if (patch.position && changes(current, { position: patch.position }))
+        await this.ports.systems.setByHand(mapId, [solarSystemId], true);
       events.add('system.updated', next, current);
       // A new home turns the chain around it: wormholes may lead out of other systems now.
       if (next.status !== current.status) await renumberBookmarks(this.ports, events, mapId);
@@ -141,6 +149,12 @@ export class SystemUseCases extends MappingUseCases {
         await this.ports.systems.update(next);
         events.add('system.updated', next, current);
       }
+      // Dragged there: the map never moves them by itself.
+      await this.ports.systems.setByHand(
+        mapId,
+        request.positions.map((p) => p.solarSystemId),
+        true,
+      );
     });
   }
 
@@ -191,6 +205,12 @@ export class SystemUseCases extends MappingUseCases {
         await this.ports.systems.update(next);
         events.add('system.updated', next, system);
       }
+      // Laid out by the rule now, dragged ones included.
+      await this.ports.systems.setByHand(
+        mapId,
+        moving.map((s) => s.solarSystemId),
+        false,
+      );
       if (hide.length > 0) await renumberBookmarks(this.ports, events, mapId);
     });
     return result;

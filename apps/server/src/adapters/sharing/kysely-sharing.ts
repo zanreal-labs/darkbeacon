@@ -1,3 +1,4 @@
+import type { Generated } from 'kysely';
 import { bool, json, type Database } from '@darkbeacon/db';
 import type { ChainOrigin, Position, ShareScope } from '@darkbeacon/shared';
 import type {
@@ -43,7 +44,14 @@ export interface SharingTables {
     locked: number;
     updated_at: number;
   };
-  chain_layout: { map_id: string; solar_system_id: number; x: number; y: number; updated_at: number };
+  chain_layout: {
+    map_id: string;
+    solar_system_id: number;
+    x: number;
+    y: number;
+    updated_at: number;
+    by_hand: Generated<number>;
+  };
   chain_source_offsets: { map_id: string; source_id: string; x: number; y: number; updated_at: number };
   /** Mapping's table, read for the map kind only. */
   maps: { id: string; kind: string };
@@ -261,9 +269,19 @@ export class KyselyChainLayoutRepository extends Repository implements ChainLayo
     return new Map(rows.map((r) => [Number(r.solar_system_id), { x: Number(r.x), y: Number(r.y) }]));
   }
 
+  async byHand(mapId: string): Promise<Set<number>> {
+    const rows = await this.db
+      .selectFrom('chain_layout')
+      .select('solar_system_id')
+      .where('map_id', '=', mapId)
+      .where('by_hand', '=', bool.encode(true))
+      .execute();
+    return new Set(rows.map((r) => Number(r.solar_system_id)));
+  }
+
   async put(
     mapId: string,
-    positions: ReadonlyArray<{ solarSystemId: number; position: Position }>,
+    positions: ReadonlyArray<{ solarSystemId: number; position: Position; byHand?: boolean }>,
     at: number,
   ): Promise<void> {
     for (let i = 0; i < positions.length; i += PAGE) {
@@ -273,6 +291,7 @@ export class KyselyChainLayoutRepository extends Repository implements ChainLayo
         x: p.position.x,
         y: p.position.y,
         updated_at: at,
+        by_hand: bool.encode(p.byHand ?? false),
       }));
       await this.db
         .insertInto('chain_layout')
@@ -282,6 +301,7 @@ export class KyselyChainLayoutRepository extends Repository implements ChainLayo
             x: eb.ref('excluded.x'),
             y: eb.ref('excluded.y'),
             updated_at: eb.ref('excluded.updated_at'),
+            by_hand: eb.ref('excluded.by_hand'),
           })),
         )
         .execute();

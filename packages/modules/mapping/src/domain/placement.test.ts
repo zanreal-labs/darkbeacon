@@ -7,6 +7,7 @@ import {
   SYSTEM_PLACEMENT,
   segmentHitsRect,
   segmentsCross,
+  strayRepairs,
   type Position,
 } from '@darkbeacon/shared';
 import type { Connection, MapSystem } from './map.js';
@@ -151,6 +152,16 @@ describe('placing a system nobody dragged', () => {
       { x: COLUMN, y: ROW },
       { x: COLUMN, y: 2 * ROW },
     ]);
+  });
+
+  it('never stacks a sibling under one that strayed far below', () => {
+    const chain = new Chain()
+      .put(1, { x: 0, y: 0 }, { status: 'home' })
+      .put(2, { x: COLUMN, y: 17 * ROW })
+      .link(1, 2);
+    expect(chain.place({ near: 1 })).toEqual({ x: COLUMN, y: 0 });
+    chain.put(3, { x: COLUMN, y: 0 }).link(1, 3);
+    expect(chain.place({ near: 1 })).toEqual({ x: COLUMN, y: ROW });
   });
 
   it('tries the slot below, then above, when the next one is taken', () => {
@@ -304,5 +315,70 @@ describe('placing a system nobody dragged', () => {
         expect(Math.abs(chain.at(c.target).y - chain.at(c.source).y)).toBeLessThanOrEqual(5 * ROW);
       }
     });
+  });
+});
+
+describe('a map healing its layout', () => {
+  const heal = (chain: Chain, keep: number[] = []) =>
+    strayRepairs(
+      chain.systems.map((s) => ({ id: s.solarSystemId, position: s.position, home: s.status === 'home' })),
+      chain.connections.map((c) => ({ source: c.source, target: c.target })),
+      new Set(keep),
+    );
+
+  /** Home with three children stacked far below it, as an old layout left them. */
+  const strayed = () =>
+    new Chain()
+      .put(1, { x: 0, y: 0 }, { status: 'home' })
+      .put(2, { x: COLUMN, y: 17 * ROW })
+      .put(3, { x: COLUMN, y: 18 * ROW })
+      .put(4, { x: COLUMN, y: 19 * ROW })
+      .link(1, 2)
+      .link(1, 3)
+      .link(1, 4);
+
+  it('moves systems far below the one they hang off back beside it, stacked', () => {
+    expect(heal(strayed())).toEqual(
+      new Map([
+        [2, { x: COLUMN, y: 0 }],
+        [3, { x: COLUMN, y: ROW }],
+        [4, { x: COLUMN, y: 2 * ROW }],
+      ]),
+    );
+  });
+
+  it('keeps systems dragged there (or locked), and leaves a tidy chain alone', () => {
+    expect([...heal(strayed(), [3]).keys()]).toEqual([2, 4]);
+    const tidy = new Chain().put(1, { x: 0, y: 0 }, { status: 'home' });
+    for (const id of [2, 3, 4, 5, 6]) tidy.jump(1, id);
+    tidy.jump(6, 7);
+    expect(heal(tidy).size).toBe(0);
+  });
+
+  it('brings a strayed system’s own children along', () => {
+    const chain = new Chain()
+      .put(1, { x: 0, y: 0 }, { status: 'home' })
+      .put(2, { x: 4 * COLUMN, y: 20 * ROW })
+      .put(3, { x: 5 * COLUMN, y: 20 * ROW })
+      .link(1, 2)
+      .link(2, 3);
+    expect(heal(chain)).toEqual(
+      new Map([
+        [2, { x: COLUMN, y: 0 }],
+        [3, { x: 2 * COLUMN, y: 0 }],
+      ]),
+    );
+  });
+
+  it('moves one far above its parent, or columns away, too', () => {
+    const chain = new Chain()
+      .put(1, { x: 0, y: 0 }, { status: 'home' })
+      .put(2, { x: 0, y: -8 * ROW })
+      .put(3, { x: 4 * COLUMN, y: 0 })
+      .link(1, 2)
+      .link(1, 3);
+    const moved = heal(chain);
+    expect(moved.get(2)).toEqual({ x: COLUMN, y: 0 });
+    expect(moved.get(3)).toEqual({ x: COLUMN, y: ROW });
   });
 });

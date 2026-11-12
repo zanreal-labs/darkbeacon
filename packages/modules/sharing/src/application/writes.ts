@@ -222,7 +222,7 @@ export class ChainWrites {
     });
     if (apply) {
       for (const s of hide) await this.hideSystem(who, map, s.solarSystemId);
-      if (moving.length > 0) await this.merger.move(who, mapId, moving);
+      if (moving.length > 0) await this.merger.move(who, mapId, moving, { byHand: false });
     }
     return {
       hidden: hide.map((s) => s.solarSystemId),

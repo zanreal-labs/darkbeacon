@@ -10,4 +10,8 @@ export interface SystemRepository {
   delete(mapId: string, solarSystemId: number): Promise<void>;
   /** Visible systems per map (the admins' inventory). */
   countVisibleByMap(): Promise<Map<string, number>>;
+  /** Systems someone put where they are (dragged), which the map never moves by itself. */
+  byHand(mapId: string): Promise<Set<number>>;
+  /** Marks systems as put there by hand, or as placed by the map's rule again. */
+  setByHand(mapId: string, solarSystemIds: readonly number[], byHand: boolean): Promise<void>;
 }
