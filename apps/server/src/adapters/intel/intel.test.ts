@@ -1,5 +1,5 @@
 import { beforeEach, expect, it } from 'vitest';
-import { mapStream, NotFoundError, type DomainEvent } from '@darkbeacon/core';
+import { mapStream, NotFoundError, UnauthenticatedError, type DomainEvent } from '@darkbeacon/core';
 import { describeEachDialect } from '@darkbeacon/db/testing';
 import {
   groupAttackers,
@@ -403,6 +403,11 @@ describeEachDialect('intel jobs and queries', (ctx) => {
     await expect(queries.systemActivity(bob, map.id, S.hole)).rejects.toBeInstanceOf(NotFoundError);
     await expect(queries.systemActivity(alice, map.id, 30002187)).rejects.toBeInstanceOf(NotFoundError);
     await expect(queries.mapIntel(bob, map.id)).rejects.toBeInstanceOf(NotFoundError);
+    // Any system for a signed-in account (a jump route's), off any map too; never signed out.
+    expect((await queries.systemsIntel(bob, [S.hole, 30002187])).systems.map((x) => x.solarSystemId)).toEqual(
+      [S.hole, 30002187],
+    );
+    await expect(queries.systemsIntel(null, [S.hole])).rejects.toBeInstanceOf(UnauthenticatedError);
 
     const kills = await queries.mapKills(alice, map.id, { hours: 24, limit: 50, wormholes: true });
     expect(kills.kills.map((k) => k.id)).toEqual([1, 2]);

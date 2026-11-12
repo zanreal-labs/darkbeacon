@@ -162,8 +162,11 @@ export class IntelController {
   }
 
   @Get(nestPath(routes.intel.systems.path))
-  systems(@Query(new ZodPipe(SystemsIntelQuery)) query: SystemsIntelQuery) {
-    return this.queries.publicIntel(query.ids);
+  systems(
+    @CurrentActor() actor: Actor | null,
+    @Query(new ZodPipe(SystemsIntelQuery)) query: SystemsIntelQuery,
+  ) {
+    return this.queries.systemsIntel(actor, query.ids);
   }
 
   @Get(nestPath(routes.intel.map.path))

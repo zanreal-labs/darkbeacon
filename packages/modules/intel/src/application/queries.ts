@@ -1,4 +1,11 @@
-import { NotFoundError, requireMapRole, type Actor, type Clock, type MapAccess } from '@darkbeacon/core';
+import {
+  NotFoundError,
+  requireAccount,
+  requireMapRole,
+  type Actor,
+  type Clock,
+  type MapAccess,
+} from '@darkbeacon/core';
 import type {
   ActiveGroupDto,
   MapKillsDto,
@@ -153,6 +160,12 @@ export class IntelQueries {
     const kills = await this.deps.repo.kills(systemId, this.deps.clock.now() - hours * HOUR, limit);
     const book = await this.deps.names.lookup(kills.flatMap(killmailIds), kills.flatMap(tickerIds));
     return kills.map((k) => killDto(k, book));
+  }
+
+  /** Who holds any systems and their last hour (public game data), for a signed-in account. */
+  async systemsIntel(actor: Actor | null, systemIds: readonly number[]): Promise<MapIntelDto> {
+    requireAccount(actor);
+    return this.publicIntel(systemIds);
   }
 
   /** Intel of systems a public link shows (public game data; the caller resolved the link). */
