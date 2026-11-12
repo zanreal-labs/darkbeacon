@@ -16,6 +16,8 @@ export interface PlannerSettings {
   /** The pilot's freight pricing, for the quote under a jump freighter's route. */
   freight: FreightTerms;
   preferStations: boolean;
+  /** Take the maps' Ansiblex bridges (ships that may). Off unless the pilot turns it on. */
+  ansiblex: boolean;
   outlaw: boolean;
   maxFatigue: number | null;
   fatigueNow: number;
@@ -38,6 +40,7 @@ export const DEFAULT_SETTINGS: PlannerSettings = {
   fuelHub: 'jita',
   freight: DEFAULT_FREIGHT,
   preferStations: true,
+  ansiblex: false,
   outlaw: false,
   maxFatigue: null,
   fatigueNow: 0,
@@ -60,6 +63,7 @@ export function loadSettings(): PlannerSettings {
       version: 3,
       // Saved before landing at stations was the default: it was off only because it was.
       preferStations: (parsed.version ?? 1) >= 2 ? parsed.preferStations !== false : true,
+      ansiblex: parsed.ansiblex === true,
       skills: { ...DEFAULT_SETTINGS.skills, ...parsed.skills },
       pilot: typeof parsed.pilot === 'number' ? parsed.pilot : null,
       skillsByHand: parsed.skillsByHand === true,

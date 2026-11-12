@@ -120,8 +120,6 @@ export interface JumpPanelProps {
   setDestination(i: number | null): void;
   avoidSystems: ReadonlySet<number>;
   avoidRegions: readonly number[];
-  /** Ansiblex bridges from the maps I can see, for ships that may use them. */
-  ansiblexCount: number;
   rangeLy: number;
   /** The answer with `route` set to the route the pilot looks at. */
   plan: JumpPlanDto | null;
@@ -616,7 +614,7 @@ function optionsSummary(settings: PlannerSettings, props: PanelState): string {
   if (settings.maxFatigue !== null) parts.push(`fatigue ≤ ${formatMinutes(settings.maxFatigue)}`);
   const avoided = props.avoidSystems.size + props.avoidRegions.length;
   if (avoided > 0) parts.push(`${avoided} avoided`);
-  if (props.ship.ansiblex && props.ansiblexCount > 0) parts.push(`${props.ansiblexCount} Ansiblex`);
+  if (props.ship.ansiblex && settings.ansiblex) parts.push('Ansiblex');
   return parts.join(' · ');
 }
 
@@ -801,6 +799,13 @@ function Options({ model, ship, settings, update, avoidSystems, avoidRegions, pi
         onCheckedChange={(on) => update({ outlaw: on })}
         label="Never enter high-sec"
       />
+      {ship.ansiblex && (
+        <Switch
+          checked={settings.ansiblex}
+          onCheckedChange={(on) => update({ ansiblex: on })}
+          label="Use Ansiblex bridges"
+        />
+      )}
       <div className={styles.row2}>
         <Field label="Keep fatigue under">
           <Select

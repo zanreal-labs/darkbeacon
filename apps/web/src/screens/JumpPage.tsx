@@ -267,8 +267,9 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
       : fatigueMinutesLeft(fill.fatigueExpiresAt, fatigueClock);
   const shown = useMemo(() => ({ ...settings, skills, fatigueNow }), [settings, skills, fatigueNow]);
 
-  // Ansiblex bridges come from the maps I can see (their routing settings), for ships that use them.
-  const ansiblex = useMapBridges(ship.ansiblex);
+  // Ansiblex bridges come from the maps I can see, only when the pilot turned them on.
+  const bridgesOn = ship.ansiblex && settings.ansiblex;
+  const ansiblex = useMapBridges(bridgesOn);
 
   const requestFor = (
     from: number | null,
@@ -288,7 +289,7 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
           // Stargates only where a cyno cannot be lit: into high-sec, after the last jump.
           gates: [from, ...stopsOn, to].some((i) => isHighSec(model, i)) ? 'finish' : 'never',
           outlaw: settings.outlaw,
-          ansiblex: ship.ansiblex ? ansiblex : [],
+          ansiblex: bridgesOn ? ansiblex : [],
           maxFatigueMinutes: settings.maxFatigue,
           fatigueNowMinutes: fatigueNow,
           bridgeTonnes: ship.bridges ? settings.bridgeTonnes : null,
@@ -594,7 +595,6 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
         suggestions={suggestions}
         avoidSystems={avoidSystems}
         avoidRegions={avoidRegions}
-        ansiblexCount={ansiblex.length}
         heldBy={heldBy}
         rangeLy={rangeLy}
         plan={result}

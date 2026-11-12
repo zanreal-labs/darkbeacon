@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw/http';
 import {
   routes,
+  type BridgeDto,
   type JumpFuelPricesDto,
   type JumpPilotDto,
   type JumpPlanDto,
@@ -267,6 +268,46 @@ describe('JumpPage', () => {
     window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Jita&ship=Ark');
     renderPage();
     await waitFor(() => expect(requests.at(-1)).toMatchObject({ destination: 30000142, gates: 'finish' }));
+  });
+
+  it('takes no Ansiblex bridges unless the pilot turns them on', async () => {
+    const end = (solarSystemId: number, name: string) => ({
+      solarSystemId,
+      name,
+      security: -0.2,
+      regionName: 'Delve',
+    });
+    const bridge: BridgeDto = {
+      id: 'b1',
+      a: end(30004759, '1DQ1-A'),
+      b: end(30004760, 'T5ZI-S'),
+      dangerous: false,
+      source: 'esi',
+      structureName: null,
+      structureId: null,
+      ownerCorporationId: null,
+      ownerAllianceId: null,
+      createdAt: 0,
+    };
+    server.use(
+      http.get(routes.maps.list.path, () =>
+        HttpResponse.json([{ id: 'm-home', slug: 'home', name: 'Home chain', role: 'admin' }]),
+      ),
+      http.get(routes.bridges.list.path, () => HttpResponse.json([bridge])),
+    );
+    const user = userEvent.setup();
+    window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&ship=Ark');
+    renderPage();
+    await screen.findByRole('region', { name: 'Route' });
+    expect(requests.at(-1)).toMatchObject({ ansiblex: [] });
+
+    await user.click(screen.getByRole('button', { name: 'Route options' }));
+    const use = screen.getByRole('switch', { name: 'Use Ansiblex bridges' });
+    expect(use.getAttribute('aria-checked')).toBe('false');
+    await user.click(use);
+    await waitFor(() =>
+      expect(requests.at(-1)).toMatchObject({ ansiblex: [{ from: 30004759, to: 30004760 }] }),
+    );
   });
 
   it('adds the next destination at the bottom, and may end where it started', async () => {
