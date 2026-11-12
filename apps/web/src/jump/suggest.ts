@@ -1,3 +1,4 @@
+import { nameMatch } from '@darkbeacon/shared';
 import { searchSystems, type StarModel } from './model';
 
 /** Why a system is offered before anything is typed. */
@@ -110,9 +111,9 @@ export function rankSystems(
   const prefix: Ranked[] = [];
   const inside: Ranked[] = [];
   for (const s of suggestions) {
-    const key = model.keys[s.index]!;
-    if (key.startsWith(q)) prefix.push(s);
-    else if (key.includes(q)) inside.push(s);
+    const at = nameMatch(model.keys[s.index]!, q);
+    if (at === 0) prefix.push(s);
+    else if (at > 0) inside.push(s);
   }
   const mine = [...prefix, ...inside];
   const taken = new Set(mine.map((s) => s.index));

@@ -4,6 +4,7 @@ import type { FitItem, UniverseCatalog, UniverseSystem } from '@darkbeacon/mappi
 import {
   destinationOfClass,
   HULL_CLASS_LABEL,
+  nameMatch,
   shipSizeForJumpMass,
   WORMHOLE_TYPES,
   WormholeEffect,
@@ -166,7 +167,7 @@ export class StaticUniverseCatalog implements UniverseCatalog {
     const prefix: UniverseSystem[] = [];
     const contains: UniverseSystem[] = [];
     for (const { key, system } of this.byName) {
-      const at = key.indexOf(q);
+      const at = nameMatch(key, q);
       if (at === 0) prefix.push(system);
       else if (at > 0 && contains.length < limit) contains.push(system);
     }

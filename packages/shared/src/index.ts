@@ -13,3 +13,4 @@ export * from './telemetry.js';
 export * from './support.js';
 export * from './placement.js';
 export * from './wormhole-chain.js';
+export * from './name-search.js';

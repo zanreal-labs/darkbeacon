@@ -2,6 +2,7 @@ import {
   JUMP_FLAG_POCHVEN,
   JUMP_FLAG_STATION,
   JUMP_FLAG_ZARZAKH,
+  nameMatch,
   type JumpUniverseDto,
 } from '@darkbeacon/shared';
 import { SECURITY_COLORS, shownSecurity } from '../map/nodeFacts';
@@ -171,9 +172,9 @@ export function searchSystems(model: StarModel, text: string, limit = 8): number
   const prefix: number[] = [];
   const inside: number[] = [];
   for (let i = 0; i < model.size; i++) {
-    const key = model.keys[i]!;
-    if (key.startsWith(q)) prefix.push(i);
-    else if (key.includes(q)) inside.push(i);
+    const at = nameMatch(model.keys[i]!, q);
+    if (at === 0) prefix.push(i);
+    else if (at > 0) inside.push(i);
   }
   const byName = (a: number, b: number) => model.keys[a]!.localeCompare(model.keys[b]!);
   return [...prefix.sort(byName), ...inside.sort(byName)].slice(0, limit);
