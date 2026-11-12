@@ -442,7 +442,7 @@ function optionsSummary(settings: PlannerSettings, props: PanelState): string {
   const parts: string[] = [];
   if (settings.gates === 'never') parts.push('no gates');
   if (settings.gates === 'shortcut') parts.push('gate shortcuts');
-  if (settings.preferStations) parts.push('stations');
+  if (!settings.preferStations) parts.push('any landing');
   if (settings.outlaw) parts.push('outlaw');
   if (settings.fatigueNow > 0) parts.push(`fatigue now ${formatMinutes(settings.fatigueNow)}`);
   if (settings.maxFatigue !== null) parts.push(`fatigue ≤ ${formatMinutes(settings.maxFatigue)}`);
@@ -688,8 +688,8 @@ function Options({
       <Switch
         checked={settings.preferStations}
         onCheckedChange={(on) => update({ preferStations: on })}
-        label="Stop at NPC stations"
-        description="Even when it costs more fuel."
+        label="Land at NPC stations"
+        description="Cyno in systems with a station to dock in, even when it costs more fuel."
       />
       <Switch
         checked={settings.outlaw}
@@ -1168,6 +1168,7 @@ export function RouteLegs({
                 </span>
                 {leg.to.name}
                 {leg.kind !== 'jump' && <em>{leg.kind === 'gate' ? 'gate' : 'Ansiblex'}</em>}
+                {leg.kind === 'jump' && !leg.to.station && <em>no station</em>}
                 {leg.stop && <em data-stop>stop</em>}
               </span>
               <span className={styles.legMeta}>

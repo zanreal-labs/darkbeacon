@@ -4,6 +4,8 @@ import type { StarModel } from './model';
 
 /** What the planner remembers per browser (a convenience; nothing breaks without it). */
 export interface PlannerSettings {
+  /** 2: landing at stations became the default (older saves had it off without asking). */
+  version: 2;
   ship: string | null;
   /** The character whose skills and fatigue ESI fills in; null: my main (else the first). */
   pilot: number | null;
@@ -33,6 +35,7 @@ export interface PlannerSettings {
 const FUEL_HUBS: readonly JumpFuelHub[] = ['jita', 'amarr', 'dodixie', 'rens', 'hek'];
 
 export const DEFAULT_SETTINGS: PlannerSettings = {
+  version: 2,
   ship: null,
   pilot: null,
   skills: { jdc: 5, jfc: 4, jf: 4 },
@@ -41,7 +44,7 @@ export const DEFAULT_SETTINGS: PlannerSettings = {
   roundTrip: false,
   fuelHub: 'jita',
   freight: DEFAULT_FREIGHT,
-  preferStations: false,
+  preferStations: true,
   outlaw: false,
   maxFatigue: null,
   fatigueNow: 0,
@@ -62,6 +65,9 @@ export function loadSettings(): PlannerSettings {
     return {
       ...DEFAULT_SETTINGS,
       ...parsed,
+      version: 2,
+      // Saved before landing at stations was the default: it was off only because it was.
+      preferStations: parsed.version === 2 ? parsed.preferStations !== false : true,
       skills: { ...DEFAULT_SETTINGS.skills, ...parsed.skills },
       pilot: typeof parsed.pilot === 'number' ? parsed.pilot : null,
       skillsByHand: parsed.skillsByHand === true,

@@ -123,8 +123,8 @@ export const JumpPlanRequest = z.object({
   skills: JumpSkills.default({ jdc: 5, jfc: 4, jf: 4 }),
   avoidSystems: z.array(EveId).max(500).default([]),
   avoidRegions: z.array(EveId).max(100).default([]),
-  /** Rather stop in systems with an NPC station, even at the cost of more fuel. */
-  preferStations: z.boolean().default(false),
+  /** Land (light the cyno) in systems with an NPC station to dock in, even at the cost of more fuel. */
+  preferStations: z.boolean().default(true),
   gates: JumpGateUse.default('finish'),
   /** Never enter high-sec, as the `outlaw` route mode. */
   outlaw: z.boolean().default(false),
