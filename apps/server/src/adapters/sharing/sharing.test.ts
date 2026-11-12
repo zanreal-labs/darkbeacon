@@ -1066,6 +1066,29 @@ describeEachDialect('sharing and merged chains', (t) => {
       expect(await at(jita)).toEqual({ x: 48, y: 960 });
     });
 
+    it('places a system that comes back to the chain beside its neighbour, not where it stood once', async () => {
+      await env.systems.add(bob, corpC.id, { solarSystemId: shattered });
+      await env.connections.add(bob, corpC.id, { source: jita, target: shattered });
+      await env.settle();
+      const j = await at(jita);
+      // It leaves the chain (the hole closed); its spot is remembered far off, as an old layout has it.
+      await env.systems.remove(bob, corpC.id, shattered);
+      await env.settle();
+      await env.sharingPorts.layout.put(
+        alliance.id,
+        [{ solarSystemId: shattered, position: { x: j.x + 360, y: j.y + 1800 } }],
+        env.clock.now(),
+      );
+      await env.merger.rebuildAll();
+      // A hole to it again: next to Jita, not 1800 px below.
+      await env.systems.add(bob, corpC.id, { solarSystemId: shattered });
+      await env.connections.add(bob, corpC.id, { source: jita, target: shattered });
+      await env.settle();
+      const back = (await view(alliance.id)).systems.find((s) => s.solarSystemId === shattered)!.position;
+      expect(back.x).toBe(j.x + 360);
+      expect(Math.abs(back.y - j.y)).toBeLessThanOrEqual(3 * 144);
+    });
+
     it('tidies the merged layout into one group per chain, for its managers only', async () => {
       // Scatter it first, as a copied layout would: Perimeter far off its chain.
       await env.writes.moveSystems(carol, alliance.id, {

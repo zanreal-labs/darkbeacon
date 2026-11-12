@@ -80,6 +80,18 @@ describe('fitting a merged system into the map', () => {
     expect(placed.x).toBe(2640 + 360);
   });
 
+  it('never keeps a spot Wanderer has above its neighbour in the same column', () => {
+    // Seen on a live map: Proundly Snoring above home, in home's column (here two rows up, one is taken).
+    const placed = fitHere({
+      solarSystemId: EXIT,
+      spot: { x: 2640, y: -3600 },
+      systems,
+      links: [],
+      neighbours: [HOME],
+    });
+    expect(placed).toEqual({ x: 2640 + 360, y: -3312 });
+  });
+
   it('brings a system Wanderer put far off the chain back next to it', () => {
     const placed = fitHere({
       solarSystemId: EXIT,

@@ -596,15 +596,34 @@ export class ChainMerger {
     const { layout, placed } = placing;
     const order = new Map(map.merge.sourceIds().map((id, i) => [id, i]));
     const pending: Array<{ id: number; ref: string; holders: string[]; order: number }> = [];
+    const back: number[] = [];
     for (const ref of refs) {
       const { kind, key } = parseRefId(ref);
       if (kind !== 'system') continue;
       const id = Number(key);
-      if (layout.has(id)) continue;
       // Only shown systems: hidden copies never show (and are thousands on an intel library).
       const holders = map.merge.holders(ref);
       if (holders.length === 0) continue;
+      if (layout.has(id)) {
+        // Back on the map (a hole to it again): its remembered spot counts only if it still fits.
+        if (!map.view.get('system', key)) back.push(id);
+        continue;
+      }
       pending.push({ id, ref, holders, order: order.get(holders[0]!) ?? 0 });
+    }
+    for (const id of back) {
+      const near = map.merge.neighbours(id).find((n) => n !== id && layout.has(n) && !back.includes(n));
+      // No hole to it yet (auto-mapping adds the system first): it joins its neighbour when one comes.
+      if (near === undefined) {
+        (map.lone ??= new Set()).add(id);
+        continue;
+      }
+      const old = layout.get(id)!;
+      layout.delete(id);
+      const links = layoutLinks(layout, (n) => map.merge.neighbours(n));
+      const position = placeFree(old, layout, links, near);
+      layout.set(id, position);
+      if (position.x !== old.x || position.y !== old.y) placed.push({ solarSystemId: id, position });
     }
     // A system that stood alone (placed before its first connection came) joins its neighbour.
     this.rejoin(map, refs, placing);

@@ -209,14 +209,18 @@ function inLine(p: Position, nodes: readonly PlacementNode[]): Position {
 
 const near = (a: Position, b: Position) => Math.abs(a.x - b.x) <= NEAR.x && Math.abs(a.y - b.y) <= NEAR.y;
 
+/** In the column one step left or right of `parent` (where the rule puts its children). */
+const besideColumn = (spot: Position, parent: Position) =>
+  Math.abs(Math.abs(spot.x - parent.x) - SYSTEM_PLACEMENT.x) < SYSTEM_PLACEMENT.x / 2;
+
 /**
  * Where a system goes that nobody dragged, the way mappers lay a chain out by hand (see
  * docs/decisions.md, "One placement rule"). Never on another node (label row and chips included),
  * on the map grid, and preferably neither on a connection nor with its own connection crossing or
  * running under anything:
  *
- * - a restored system goes back to its old spot when that is free and still near its parent (or,
- *   without a parent, near the chain);
+ * - a restored system goes back to its old spot when that is free and in a column next to its
+ *   parent, within a few rows (or, without a parent, near the chain);
  * - with a parent: one column further in the chain's growth direction (right unless the chain grows
  *   left), in the parent's row, or under the parent's children already in that column; when that
  *   slot is taken, the nearest free one below, then above, in that column;
@@ -231,10 +235,13 @@ export function findSystemSpot(request: SpotRequest): Position {
 
   const previous = request.previous;
   if (previous) {
-    const reference = parentAt ?? request.around ?? null;
-    const stillNear = reference
-      ? near(previous, reference)
-      : board.empty || request.nodes.some((n) => near(previous, n.position));
+    // With a parent, only where the rule itself could have put it: in a column next to the
+    // parent, within a few rows (never above it in its own column, nor columns away).
+    const stillNear = parentAt
+      ? besideColumn(previous, parentAt) && near(previous, parentAt)
+      : request.around
+        ? near(previous, request.around)
+        : board.empty || request.nodes.some((n) => near(previous, n.position));
     if (stillNear && board.free(previous) && board.penalty(previous, parent) === 0) return previous;
   }
 

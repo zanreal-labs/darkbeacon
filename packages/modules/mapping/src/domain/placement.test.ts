@@ -232,6 +232,17 @@ describe('placing a system nobody dragged', () => {
       expect(chain().place({ near: 2, previous: { x: 24000, y: 24000 } })).toEqual({ x: 2 * COLUMN, y: 0 });
     });
 
+    it('never keeps an old spot above its parent in its column, nor two columns out', () => {
+      // A Wanderer sync's coordinates: one row above the parent, in the parent's own column.
+      expect(chain().place({ near: 2, previous: { x: COLUMN, y: -ROW } })).toEqual({ x: 2 * COLUMN, y: 0 });
+      expect(chain().place({ near: 2, previous: { x: 3 * COLUMN, y: 0 } })).toEqual({ x: 2 * COLUMN, y: 0 });
+      // Under its siblings in the next column is where the rule puts it: kept.
+      expect(chain().place({ near: 2, previous: { x: 2 * COLUMN, y: 2 * ROW } })).toEqual({
+        x: 2 * COLUMN,
+        y: 2 * ROW,
+      });
+    });
+
     it('without a parent, keeps an old spot near the chain only', () => {
       expect(chain().place({ previous: { x: 0, y: 2 * ROW } })).toEqual({ x: 0, y: 2 * ROW });
       expect(chain().place({ previous: { x: 24000, y: 9000 } })).toEqual({ x: 0, y: ROW });
