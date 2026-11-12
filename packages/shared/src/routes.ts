@@ -2625,6 +2625,15 @@ export const routes = {
       query: dto.MapKillsQuery,
       response: dto.MapKillsDto,
     }),
+    /** Sovereignty and the last hour of any systems (public game data), e.g. a jump route's. */
+    systems: route({
+      method: 'GET',
+      path: '/api/intel/systems',
+      auth: 'account',
+      scope: { resource: 'universe', action: 'read' },
+      query: dto.SystemsIntelQuery,
+      response: dto.MapIntelDto,
+    }),
     /** The signed-in account's standings (contacts of its characters). */
     standings: route({
       method: 'GET',

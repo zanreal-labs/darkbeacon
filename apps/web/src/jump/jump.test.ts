@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { JumpPlanDto } from '@darkbeacon/shared';
-import { dotRadius, toScreen, toWorld } from './draw';
+import { alternativeAt, dotRadius, toScreen, toWorld, type Overlay } from './draw';
 import { ARK, UNIVERSE } from './fixtures.test-support';
 import { formatMinutes, routeText } from './format';
 import {
@@ -60,6 +60,15 @@ describe('star model', () => {
     expect(toWorld(view, sx, sy)).toEqual([7, -1]);
     expect(dotRadius(1)).toBeGreaterThan(1);
     expect(dotRadius(1000)).toBeLessThanOrEqual(4.5);
+  });
+
+  it('finds the other route drawn under the pointer, to pick it', () => {
+    const view = { scale: 40, cx: model.px[1]!, cy: model.py[1]!, width: 800, height: 600 };
+    const overlay = { alternatives: [[{ from: 1, to: 3, kind: 'gate' as const }]] } as unknown as Overlay;
+    const [ax, ay] = toScreen(view, model.px[1]!, model.py[1]!);
+    const [bx, by] = toScreen(view, model.px[3]!, model.py[3]!);
+    expect(alternativeAt(model, view, overlay, { x: (ax + bx) / 2, y: (ay + by) / 2 + 3 })).toBe(0);
+    expect(alternativeAt(model, view, overlay, { x: ax + 200, y: ay - 200 })).toBeNull();
   });
 });
 

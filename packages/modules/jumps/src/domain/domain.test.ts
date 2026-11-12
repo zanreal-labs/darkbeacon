@@ -447,6 +447,29 @@ describe('planJumpRoutes', () => {
   it('fails as the single plan does', () => {
     expect(routes({ destination: 0 })).toMatchObject({ ok: false, problem: 'same_system' });
   });
+
+  it('recommends the fewest jumps among the routes left', () => {
+    const outcome = routes({ preferStations: true });
+    if (!outcome.ok) throw new Error(outcome.message);
+    expect(outcome.route.jumps).toBe(
+      Math.min(outcome.route.jumps, ...outcome.alternatives.map((r) => r.jumps)),
+    );
+  });
+
+  it('never recommends a route another beats, even to land at a station', () => {
+    // Over the station S2 is as many jumps but longer: more fuel and more fatigue than over S1.
+    const stations = line([{ x: 0 }, { x: 5 }, { x: 4, y: 3, flags: FLAG_STATION }, { x: 9 }]);
+    const outcome = planJumpRoutes(stations, {
+      ship: stations.ship(ARCHON.typeId)!,
+      origin: 0,
+      destination: 3,
+      skills: { jdc: 5, jfc: 5, jf: 5 },
+      preferStations: true,
+    });
+    if (!outcome.ok) throw new Error(outcome.message);
+    expect(outcome.route.legs.map((l) => l.to)).toEqual([1, 3]);
+    expect(outcome.alternatives).toEqual([]);
+  });
 });
 
 describe('jump skills from ESI', () => {

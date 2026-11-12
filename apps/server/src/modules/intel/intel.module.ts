@@ -44,6 +44,7 @@ import { MapPublishing } from '@darkbeacon/publishing';
 import {
   EveId,
   MapKillsQuery,
+  SystemsIntelQuery,
   nestPath,
   routes,
   SetStandingRequest,
@@ -158,6 +159,11 @@ export class IntelController {
     @Body(new ZodPipe(SetStandingRequest)) body: SetStandingRequest,
   ) {
     return this.standings.set(actor, entityId, body.standing);
+  }
+
+  @Get(nestPath(routes.intel.systems.path))
+  systems(@Query(new ZodPipe(SystemsIntelQuery)) query: SystemsIntelQuery) {
+    return this.queries.publicIntel(query.ids);
   }
 
   @Get(nestPath(routes.intel.map.path))

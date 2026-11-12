@@ -3,7 +3,15 @@
 import { useCallback, useEffect, useImperativeHandle, useRef, type Ref } from 'react';
 import { Maximize, Minus, Plus } from 'lucide-react';
 import { IconButton } from '../ui';
-import { drawStarMap, dotRadius, toWorld, type Overlay, type Palette, type View } from './draw';
+import {
+  alternativeAt,
+  drawStarMap,
+  dotRadius,
+  toWorld,
+  type Overlay,
+  type Palette,
+  type View,
+} from './draw';
 import { systemAt, type StarModel } from './model';
 import styles from './jump.module.css';
 
@@ -23,6 +31,8 @@ export interface StarMapProps {
   onHover(system: number | null, at: { x: number; y: number } | null): void;
   /** A click (or tap) on a system, or on empty space (null). */
   onPick(system: number | null, at: { x: number; y: number }): void;
+  /** A click on one of the other routes drawn faintly (its index in `overlay.alternatives`). */
+  onPickAlternative?(index: number): void;
   ref?: Ref<StarMapHandle>;
 }
 
@@ -63,7 +73,7 @@ function isDark(color: string): boolean {
  * The star map: all of known space on a 2D canvas, panned by dragging, zoomed by the wheel or a
  * pinch. It redraws only when something changed, one frame at a time.
  */
-export function StarMap({ model, overlay, insets, onHover, onPick, ref }: StarMapProps) {
+export function StarMap({ model, overlay, insets, onHover, onPick, onPickAlternative, ref }: StarMapProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const view = useRef<View>({ scale: 6, cx: 0, cy: 0, width: 0, height: 0 });
@@ -72,9 +82,9 @@ export function StarMap({ model, overlay, insets, onHover, onPick, ref }: StarMa
   const frame = useRef(0);
   const flight = useRef(0);
   const insetsRef = useRef(insets);
-  const callbacks = useRef({ onHover, onPick });
+  const callbacks = useRef({ onHover, onPick, onPickAlternative });
   useEffect(() => {
-    callbacks.current = { onHover, onPick };
+    callbacks.current = { onHover, onPick, onPickAlternative };
     insetsRef.current = insets;
   });
 
@@ -239,6 +249,7 @@ export function StarMap({ model, overlay, insets, onHover, onPick, ref }: StarMa
       const i = systemAt(model, wx, wy, radius);
       return i < 0 ? null : i;
     };
+    const altAt = (p: { x: number; y: number }) => alternativeAt(model, view.current, overlayRef.current, p);
     const zoomAt = (p: { x: number; y: number }, factor: number) => {
       const v = view.current;
       const scale = clampScale(v.scale * factor);
@@ -274,7 +285,8 @@ export function StarMap({ model, overlay, insets, onHover, onPick, ref }: StarMa
         if (e.pointerType === 'mouse') {
           const i = hit(p);
           callbacks.current.onHover(i, i === null ? null : p);
-          canvas.style.cursor = i === null ? 'grab' : 'pointer';
+          const onAlternative = i === null && altAt(p) !== null;
+          canvas.style.cursor = i === null && !onAlternative ? 'grab' : 'pointer';
         }
         return;
       }
@@ -300,7 +312,13 @@ export function StarMap({ model, overlay, insets, onHover, onPick, ref }: StarMa
       if (pointers.size < 2) pinch = null;
       if (!was || pointers.size > 0) return;
       canvas.style.cursor = 'grab';
-      if (!moved) callbacks.current.onPick(hit(p), p);
+      if (!moved) {
+        // A system wins; off any system, a click on another route picks that route.
+        const i = hit(p);
+        const alt = i === null ? altAt(p) : null;
+        if (alt !== null && callbacks.current.onPickAlternative) callbacks.current.onPickAlternative(alt);
+        else callbacks.current.onPick(i, p);
+      }
       downAt = null;
     };
     const wheel = (e: WheelEvent) => {

@@ -504,8 +504,6 @@
 .result {
   display: grid;
   gap: var(--dbk-space-3);
-  padding-top: var(--dbk-space-3);
-  border-top: 1px solid var(--dbk-color-border);
   transition: opacity var(--dbk-motion-normal) var(--dbk-motion-easing);
 }
 
@@ -544,6 +542,10 @@
   background: var(--dbk-color-surface);
   box-shadow: var(--dbk-shadow-medium);
   pointer-events: auto;
+}
+
+.choice .facts {
+  margin: var(--dbk-space-1) 0 0;
 }
 
 .choicesBubble .choice {
@@ -600,11 +602,6 @@
   font-weight: 400;
 }
 
-.choiceMeta {
-  color: var(--dbk-color-text-muted);
-  font-size: var(--dbk-font-size-xs);
-}
-
 .totalsMain {
   display: flex;
   align-items: baseline;
@@ -637,6 +634,18 @@
   font-weight: 500;
 }
 
+.facts dd[data-tone] {
+  color: var(--dbk-standing-neutral);
+}
+
+.facts dd[data-tone='bad'] {
+  color: var(--dbk-standing-bad);
+}
+
+.facts dd[data-tone='terrible'] {
+  color: var(--dbk-standing-terrible);
+}
+
 .facts dd small {
   display: block;
   color: var(--dbk-color-text-muted);
@@ -645,11 +654,6 @@
 }
 
 /* The trip in numbers, after its legs. */
-.summary {
-  padding-top: var(--dbk-space-3);
-  border-top: 1px solid var(--dbk-color-border);
-}
-
 .summary .facts {
   margin: 0;
 }

@@ -455,7 +455,8 @@ const BEST_OF: Record<JumpRouteBest, (r: PlannedRoute) => number> = {
 /**
  * The recommended route (fewest jumps) and, as alternatives, the routes that save fuel or fatigue
  * instead, as a maps app offers other ways: the same legs only once, each route tagged with what
- * it beats the others at. The recommended route comes first whatever the tags say.
+ * it beats the others at. Only optimal routes: one another route matches or beats everywhere is
+ * dropped, so the recommended route (the first left: fewest jumps, then fuel) is never beaten.
  */
 export function planJumpRoutes(space: JumpSpace, options: PlanOptions): PlanOutcome {
   const first = planJumpRoute(space, { ...options, objective: 'jumps' });
@@ -470,10 +471,28 @@ export function planJumpRoutes(space: JumpSpace, options: PlanOptions): PlanOutc
     routes.push(other.route);
   }
   const metrics = Object.entries(BEST_OF) as Array<[JumpRouteBest, (r: PlannedRoute) => number]>;
+  // Only optimal routes: one that another beats or ties at everything (stargates too) is never
+  // offered, so a preference such as landing at stations cannot recommend a worse route.
+  const costs = (r: PlannedRoute) => [r.gates, ...metrics.map(([, of]) => of(r))];
+  const beats = (q: PlannedRoute, r: PlannedRoute) => {
+    const a = costs(q);
+    const b = costs(r);
+    return a.every((v, k) => v <= b[k]! + 1e-9) && a.some((v, k) => v < b[k]! - 1e-9);
+  };
+  // Fewest jumps first (then fuel, fatigue, wait): the recommended route is the first left.
+  const optimal = routes
+    .filter((r) => !routes.some((q) => q !== r && beats(q, r)))
+    .sort((a, b) => {
+      const x = costs(a);
+      const y = costs(b);
+      const k = x.findIndex((v, i) => Math.abs(v - y[i]!) > 1e-9);
+      return k < 0 ? 0 : x[k]! - y[k]!;
+    });
+  const recommended = optimal[0]!;
   // An alternative that saves nothing worth naming against the recommended route is left out.
   const shown = [
-    routes[0]!,
-    ...routes.slice(1).filter((r) => metrics.some(([best]) => WORTH[best](r, routes[0]!))),
+    recommended,
+    ...optimal.slice(1).filter((r) => metrics.some(([best]) => WORTH[best](r, recommended))),
   ];
   for (const [best, of] of metrics) {
     const least = Math.min(...shown.map(of));
@@ -482,7 +501,7 @@ export function planJumpRoutes(space: JumpSpace, options: PlanOptions): PlanOutc
     for (const r of shown) if (of(r) <= least + 1e-9) r.best.push(best);
   }
   const alternatives = shown.slice(1);
-  return { ...first, route: routes[0]!, alternatives };
+  return { ...first, route: recommended, alternatives };
 }
 
 /** Fuel, waits, fatigue and activation timers along the legs, each leg made as soon as it may be. */

@@ -1,12 +1,9 @@
-import type { JumpFuelHub, JumpGateUse, JumpSkills } from '@darkbeacon/shared';
+import type { JumpFuelHub, JumpSkills } from '@darkbeacon/shared';
 import { DEFAULT_FREIGHT, freightTermsFrom, type FreightTerms } from './freight';
 
 /** What the planner remembers per browser (a convenience; nothing breaks without it). */
 export interface PlannerSettings {
-  /**
-   * 3: no stargates by default (older saves had gates after the last jump without asking);
-   * 2: landing at stations became the default.
-   */
+  /** 3: stargates are no setting any more; 2: landing at stations became the default. */
   version: 3;
   ship: string | null;
   /** The character whose skills and fatigue ESI fills in; null: my main (else the first). */
@@ -14,7 +11,6 @@ export interface PlannerSettings {
   skills: JumpSkills;
   /** The levels were picked by hand (not the defaults): no warning that they are only assumed. */
   skillsByHand: boolean;
-  gates: JumpGateUse;
   /** Where fuel is priced (lowest sell at the hub station). */
   fuelHub: JumpFuelHub;
   /** The pilot's freight pricing, for the quote under a jump freighter's route. */
@@ -39,7 +35,6 @@ export const DEFAULT_SETTINGS: PlannerSettings = {
   pilot: null,
   skills: { jdc: 5, jfc: 4, jf: 4 },
   skillsByHand: false,
-  gates: 'never',
   fuelHub: 'jita',
   freight: DEFAULT_FREIGHT,
   preferStations: true,
@@ -65,8 +60,6 @@ export function loadSettings(): PlannerSettings {
       version: 3,
       // Saved before landing at stations was the default: it was off only because it was.
       preferStations: (parsed.version ?? 1) >= 2 ? parsed.preferStations !== false : true,
-      // Saved before no gates was the default: gates after the last jump only because it was.
-      gates: (parsed.version ?? 1) >= 3 && parsed.gates ? parsed.gates : 'never',
       skills: { ...DEFAULT_SETTINGS.skills, ...parsed.skills },
       pilot: typeof parsed.pilot === 'number' ? parsed.pilot : null,
       skillsByHand: parsed.skillsByHand === true,

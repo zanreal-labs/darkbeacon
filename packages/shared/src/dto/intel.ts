@@ -172,6 +172,16 @@ export const MapKillsQuery = z.object({
 });
 export type MapKillsQuery = z.infer<typeof MapKillsQuery>;
 
+/** `GET /api/intel/systems?ids=…`: who holds these systems (public game data), e.g. a route's stops. */
+export const SystemsIntelQuery = z.object({
+  ids: z
+    .string()
+    .regex(/^\d+(,\d+)*$/)
+    .transform((v) => [...new Set(v.split(',').map(Number))])
+    .pipe(z.array(EveId).min(1).max(100)),
+});
+export type SystemsIntelQuery = z.infer<typeof SystemsIntelQuery>;
+
 export const MapKillsDto = z.object({ kills: z.array(KillmailDto) });
 export type MapKillsDto = z.infer<typeof MapKillsDto>;
 

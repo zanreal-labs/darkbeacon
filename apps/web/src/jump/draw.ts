@@ -75,6 +75,39 @@ function bowControl(ax: number, ay: number, bx: number, by: number): [number, nu
   return [(ax + bx) / 2 + nx, (ay + by) / 2 + ny];
 }
 
+/**
+ * Which of the other routes (index into `overlay.alternatives`) is drawn within `tolerance` px of
+ * the point, the nearest one; null for none. Jumps are tested along their bowed arc.
+ */
+export function alternativeAt(
+  model: StarModel,
+  view: View,
+  overlay: Overlay,
+  p: { x: number; y: number },
+  tolerance = 8,
+): number | null {
+  let best: number | null = null;
+  let bestDistance = tolerance;
+  overlay.alternatives.forEach((alt, k) => {
+    for (const leg of alt) {
+      const [ax, ay] = toScreen(view, model.px[leg.from]!, model.py[leg.from]!);
+      const [bx, by] = toScreen(view, model.px[leg.to]!, model.py[leg.to]!);
+      const [cx, cy] = leg.kind === 'jump' ? bowControl(ax, ay, bx, by) : [(ax + bx) / 2, (ay + by) / 2];
+      for (let t = 0; t <= 1; t += 1 / 24) {
+        const u = 1 - t;
+        const x = u * u * ax + 2 * u * t * cx + t * t * bx;
+        const y = u * u * ay + 2 * u * t * cy + t * t * by;
+        const d = Math.hypot(x - p.x, y - p.y);
+        if (d < bestDistance) {
+          bestDistance = d;
+          best = k;
+        }
+      }
+    }
+  });
+  return best;
+}
+
 export function dotRadius(scale: number): number {
   return Math.max(1.3, Math.min(4.5, scale * 0.11));
 }

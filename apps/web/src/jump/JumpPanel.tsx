@@ -31,7 +31,6 @@ import {
   JUMP_HULLS,
   routes,
   type JumpFuelHub,
-  type JumpGateUse,
   type JumpFuelPricesDto,
   type JumpHull,
   type JumpLegDto,
@@ -39,6 +38,7 @@ import {
   type JumpPlanDto,
   type JumpRouteBest,
   type JumpRouteDto,
+  type StandingTone,
   type JumpShipDto,
   type OptionalEveScope,
   type WaypointRequest,
@@ -96,13 +96,6 @@ const FATIGUE_CAPS = [
   { value: '240', label: '4 hours' },
 ];
 
-/** How the route may use stargates: never by default (a capital lights its way, gates are slow). */
-const GATE_USES: Array<{ value: JumpGateUse; label: string }> = [
-  { value: 'never', label: 'Never' },
-  { value: 'finish', label: 'After the last jump' },
-  { value: 'shortcut', label: 'To save jumps' },
-];
-
 const LEVELS = [0, 1, 2, 3, 4, 5].map((n) => ({
   value: String(n),
   label: ['0', 'I', 'II', 'III', 'IV', 'V'][n]!,
@@ -151,12 +144,20 @@ export interface JumpPanelProps {
   open: boolean;
   setOpen(open: boolean): void;
   phone: boolean;
+  /** Systems on the route held by someone neither mine nor blue (by EVE id). */
+  heldBy: ReadonlyMap<number, ForeignSpace>;
   /** What each picker offers on focus and ranks first while typing. */
   suggestions: Readonly<Record<End, readonly Suggestion[]>>;
   ref?: Ref<HTMLDivElement>;
 }
 
 type PanelState = Omit<JumpPanelProps, 'ref'>;
+
+/** Who holds a system the route reaches, when that is neither my alliance nor blue. */
+export interface ForeignSpace {
+  holder: string;
+  tone: StandingTone;
+}
 
 /** The planner's controls: ship, start and destination, skills, options, and the route found. */
 export function JumpPanel({ ref, ...props }: JumpPanelProps) {
@@ -205,12 +206,13 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
     },
   });
   const option = (i: number, why: SuggestionWhy | null = null): SystemOption => {
-    const place = `${securityLabel(model.security[i]!)} · ${model.regionNames[model.regionOf[i]!]}`;
+    const region = model.regionNames[model.regionOf[i]!]!;
     return {
       key: String(model.ids[i]),
       index: i,
       label: model.names[i]!,
-      detail: why ? `${whyLabel(why)} · ${place}` : place,
+      leading: <SecPill security={model.security[i]!} />,
+      detail: why ? `${region}, ${whyLabel(why)}` : region,
     };
   };
   // Suggestions and search share one list: the same rows, suggestions first.
@@ -231,6 +233,7 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
     active: props.activeLeg,
     setActive: props.setActiveLeg,
     show: props.onShowLeg,
+    held: props.heldBy,
   };
   const pointRow = (k: number, arrival?: { leg: JumpLegDto; n: number }) => {
     const last = k === points - 1;
@@ -395,6 +398,8 @@ interface LegHover {
   active: number | null;
   setActive(n: number | null): void;
   show(n: number): void;
+  /** Systems held by someone neither mine nor blue. */
+  held?: ReadonlyMap<number, ForeignSpace>;
 }
 
 /**
@@ -410,6 +415,7 @@ function PointRow({
   active,
   setActive,
   show,
+  held,
   children,
 }: {
   n: number;
@@ -449,27 +455,40 @@ function PointRow({
         <Field label={label} hideLabel>
           {children}
         </Field>
-        {arrival?.leg.kind === 'jump' && <LegStats leg={arrival.leg} onShow={() => show(arrival.n)} />}
+        {arrival?.leg.kind === 'jump' && (
+          <LegStats leg={arrival.leg} held={held?.get(arrival.leg.to.id)} onShow={() => show(arrival.n)} />
+        )}
       </div>
     </div>
   );
 }
 
-/** How the route gets to a system: distance, fuel and fatigue for a jump; for a gate, only that. */
-function LegStats({ leg, onShow }: { leg: JumpLegDto; onShow(): void }) {
-  const facts: Array<[string, string]> = [
+/** A system's security in the map's colours, as the chain shows it. */
+function SecPill({ security }: { security: number }) {
+  return (
+    <span className={styles.secPill} style={{ background: securityColor(security) }}>
+      {securityLabel(security)}
+    </span>
+  );
+}
+
+/** How a jump gets to a system: distance, fuel, fatigue (and the wait before it, if any). */
+function LegStats({ leg, held, onShow }: { leg: JumpLegDto; held?: ForeignSpace; onShow(): void }) {
+  const facts: Array<[string, string, StandingTone?]> = [
     ['Distance', formatLy(leg.ly)],
     ['Fuel', formatNumber(leg.fuel + (leg.bridgeFuel ?? 0))],
     ['Fatigue', formatMinutes(leg.fatigueMinutes)],
     ...(leg.waitMinutes > 0 ? ([['Wait', formatMinutes(leg.waitMinutes)]] as Array<[string, string]>) : []),
+    // Landing in space that is neither mine nor blue: who holds it, in its standing colour.
+    ...(held ? ([['Held by', held.holder, held.tone]] as Array<[string, string, StandingTone]>) : []),
   ];
   return (
     <button type="button" className={styles.legStats} onClick={onShow} aria-label="Show this jump on the map">
       <dl className={styles.facts}>
-        {facts.map(([term, value]) => (
+        {facts.map(([term, value, tone]) => (
           <div key={term}>
             <dt>{term}</dt>
-            <dd>{value}</dd>
+            <dd data-tone={tone}>{value}</dd>
           </div>
         ))}
       </dl>
@@ -478,7 +497,7 @@ function LegStats({ leg, onShow }: { leg: JumpLegDto; onShow(): void }) {
 }
 
 /** A system the route passes between two points: a card with its name and how the route gets there. */
-function LegRow({ leg, n, active, setActive, show }: { leg: JumpLegDto; n: number } & LegHover) {
+function LegRow({ leg, n, active, setActive, show, held }: { leg: JumpLegDto; n: number } & LegHover) {
   return (
     <div
       className={styles.systemCard}
@@ -489,16 +508,14 @@ function LegRow({ leg, n, active, setActive, show }: { leg: JumpLegDto; n: numbe
       onMouseLeave={() => setActive(null)}
     >
       <div className={styles.systemName}>
-        <span className={styles.secPill} style={{ background: securityColor(leg.to.security) }}>
-          {securityLabel(leg.to.security)}
-        </span>
+        <SecPill security={leg.to.security} />
         <strong>{leg.to.name}</strong>
         <span className={styles.systemRegion}>{leg.to.region}</span>
         {leg.kind !== 'jump' && <em>{leg.kind === 'gate' ? 'gate' : 'Ansiblex'}</em>}
         {leg.kind === 'jump' && !leg.to.station && !leg.stop && <em>no station</em>}
         {leg.stop && <em>stop</em>}
       </div>
-      {leg.kind === 'jump' && <LegStats leg={leg} onShow={() => show(n)} />}
+      {leg.kind === 'jump' && <LegStats leg={leg} held={held?.get(leg.to.id)} onShow={() => show(n)} />}
     </div>
   );
 }
@@ -522,9 +539,7 @@ export function RouteSystems({
     <div className={styles.endpoints}>
       <div className={styles.systemCard}>
         <div className={styles.systemName}>
-          <span className={styles.secPill} style={{ background: securityColor(start.security) }}>
-            {securityLabel(start.security)}
-          </span>
+          <SecPill security={start.security} />
           <strong>{start.name}</strong>
           <span className={styles.systemRegion}>{start.region}</span>
         </div>
@@ -568,8 +583,6 @@ function suggestionKey(s: Suggestion): string {
 
 function optionsSummary(settings: PlannerSettings, props: PanelState): string {
   const parts: string[] = [];
-  if (settings.gates === 'finish') parts.push('gates after jumps');
-  if (settings.gates === 'shortcut') parts.push('gate shortcuts');
   if (!settings.preferStations) parts.push('any landing');
   if (settings.outlaw) parts.push('outlaw');
   if (settings.fatigueNow > 0) parts.push(`fatigue now ${formatMinutes(settings.fatigueNow)}`);
@@ -733,33 +746,24 @@ function Options({ model, ship, settings, update, avoidSystems, avoidRegions, pi
       kind: 'system',
       name: model.names[i]!,
       label: model.names[i]!,
-      detail: `${securityLabel(model.security[i]!)} · ${model.regionNames[model.regionOf[i]!]}`,
+      leading: <SecPill security={model.security[i]!} />,
+      detail: model.regionNames[model.regionOf[i]!],
     }));
     return { options: [...regions, ...systems] };
   };
   return (
     <div className={styles.options}>
-      <div className={styles.row2}>
-        <Field label="Stargates">
-          <Select
-            size="sm"
-            value={settings.gates}
-            onValueChange={(gates) => update({ gates: gates as JumpGateUse })}
-            options={GATE_USES}
-          />
-        </Field>
-        <Field label="Fuel prices">
-          <Select
-            size="sm"
-            value={settings.fuelHub}
-            onValueChange={(hub) => update({ fuelHub: hub as JumpFuelHub })}
-            options={(Object.keys(HUB_LABELS) as JumpFuelHub[]).map((h) => ({
-              value: h,
-              label: HUB_LABELS[h],
-            }))}
-          />
-        </Field>
-      </div>
+      <Field label="Fuel prices">
+        <Select
+          size="sm"
+          value={settings.fuelHub}
+          onValueChange={(hub) => update({ fuelHub: hub as JumpFuelHub })}
+          options={(Object.keys(HUB_LABELS) as JumpFuelHub[]).map((h) => ({
+            value: h,
+            label: HUB_LABELS[h],
+          }))}
+        />
+      </Field>
       <Switch
         checked={settings.preferStations}
         onCheckedChange={(on) => update({ preferStations: on })}
@@ -1184,10 +1188,18 @@ export function RouteChoices({
           {route.gates > 0 && ` + ${route.gates} ${route.gates === 1 ? 'gate' : 'gates'}`}
           <span className={styles.choiceLy}>{formatLy(route.ly)}</span>
         </span>
-        <span className={styles.choiceMeta} title={`${formatNumber(route.fuel)} ${isotope}`}>
-          {isk !== null ? formatIsk(isk) : `${formatNumber(route.fuel)} ${isotope}`}
-          {' · '}fatigue {formatMinutes(route.fatigueMinutes)}
-        </span>
+        <dl className={styles.facts}>
+          <div>
+            <dt>Fuel</dt>
+            <dd title={`${formatNumber(route.fuel)} ${isotope}`}>
+              {isk !== null ? formatIsk(isk) : `${formatNumber(route.fuel)} ${isotope}`}
+            </dd>
+          </div>
+          <div>
+            <dt>Fatigue</dt>
+            <dd>{formatMinutes(route.fatigueMinutes)}</dd>
+          </div>
+        </dl>
       </>
     );
   };

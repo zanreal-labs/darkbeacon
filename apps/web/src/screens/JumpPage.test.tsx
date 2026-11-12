@@ -9,7 +9,10 @@ import {
   type JumpPilotDto,
   type JumpPlanDto,
   type JumpPlanRequest,
+  type MapIntelDto,
   type MyTrackingDto,
+  type StandingsDto,
+  type SystemIntelDto,
 } from '@darkbeacon/shared';
 import { ARK, META, UNIVERSE } from '../jump/fixtures.test-support';
 import { SETTINGS_KEY } from '../jump/settings';
@@ -98,6 +101,14 @@ const server = setupMockServer(
     return HttpResponse.json(plan);
   }),
   http.get(routes.accounts.me.path, () => HttpResponse.json(meFixture())),
+  // No maps (so no Ansiblex), no standings and nobody holding the route's systems by default.
+  http.get(routes.maps.list.path, () => HttpResponse.json([])),
+  http.get(routes.intel.standings.path, () =>
+    HttpResponse.json({ standings: [], missingScopes: false, overrides: [] } satisfies StandingsDto),
+  ),
+  http.get(routes.intel.systems.path, () =>
+    HttpResponse.json({ systems: [], live: false } satisfies MapIntelDto),
+  ),
   // No price unless a test says otherwise: the summary shows the isotopes alone.
   http.get(routes.jumps.fuelPrices.path, () => new HttpResponse(null, { status: 503 })),
   // Ayla Vex (online) sits in Ignoitton.
@@ -180,11 +191,11 @@ describe('JumpPage', () => {
     const [start, destination] = within(panel).getAllByRole('combobox').slice(2);
 
     await user.click(start!);
-    await waitFor(() => expect(optionNames()[0]).toMatch(/^Ignoitton.*Ayla Vex/));
+    await waitFor(() => expect(optionNames()[0]).toMatch(/Ignoitton.*Ayla Vex/));
     expect(optionNames()).toEqual([
-      expect.stringMatching(/^Ignoitton.*Ayla Vex/),
-      expect.stringMatching(/^Ahbazon.*Chain exit/),
-      expect.stringMatching(/^Ami.*On the map/),
+      expect.stringMatching(/Ignoitton.*Ayla Vex/),
+      expect.stringMatching(/Ahbazon.*Chain exit/),
+      expect.stringMatching(/Ami.*On the map/),
     ]);
     await user.click(screen.getByRole('option', { name: /Ignoitton/ }));
 
@@ -192,36 +203,70 @@ describe('JumpPage', () => {
     await user.click(destination!);
     await waitFor(() =>
       expect(optionNames()).toEqual([
-        expect.stringMatching(/^Ahbazon.*Chain exit/),
-        expect.stringMatching(/^Ami.*On the map/),
+        expect.stringMatching(/Ahbazon.*Chain exit/),
+        expect.stringMatching(/Ami.*On the map/),
       ]),
     );
     await user.type(destination!, 'a');
     // The suggestions stay listed until the answer for "a" replaces them.
     await waitFor(() =>
       expect(optionNames()).toEqual([
-        expect.stringMatching(/^Ahbazon.*Chain exit/),
-        expect.stringMatching(/^Ami.*On the map/),
-        expect.stringMatching(/^Jita/),
+        expect.stringMatching(/Ahbazon.*Chain exit/),
+        expect.stringMatching(/Ami.*On the map/),
+        expect.stringMatching(/Jita/),
       ]),
     );
   });
 
-  it('plans without stargates unless asked, and moves older saves to that default', async () => {
-    // Saved before "no gates" was the default: gates after the last jump only because it was.
-    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify({ gates: 'finish' }));
+  it('marks systems held by someone neither mine nor blue', async () => {
+    const held = (solarSystemId: number, id: number, ticker: string): SystemIntelDto => ({
+      solarSystemId,
+      sovereignty: { kind: 'alliance', holder: { id, name: ticker, ticker }, corporation: null },
+      regionHolder: null,
+      kills1h: 0,
+      npcKills1h: null,
+      jumps1h: null,
+      lastKillAt: null,
+    });
+    server.use(
+      // Ahbazon (between) is held by a red alliance, Ami (the destination) by a blue one.
+      http.get(routes.intel.systems.path, () =>
+        HttpResponse.json({
+          systems: [held(30005196, 99_000_001, 'RED'), held(30005035, 99_000_002, 'BLUE')],
+          live: false,
+        } satisfies MapIntelDto),
+      ),
+      http.get(routes.intel.standings.path, () =>
+        HttpResponse.json({
+          standings: [
+            { id: 99_000_001, standing: -10 },
+            { id: 99_000_002, standing: 10 },
+          ],
+          missingScopes: false,
+          overrides: [],
+        } satisfies StandingsDto),
+      ),
+    );
+    window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&ship=Ark');
+    renderPage();
+    const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+    const red = await within(panel).findByText('RED');
+    expect(red.getAttribute('data-tone')).toBe('terrible');
+    expect(within(panel).queryByText('BLUE')).toBeNull();
+  });
+
+  it('takes stargates only into high-sec, where no cyno can be lit', async () => {
+    // Old saves that asked for gates do not matter any more.
+    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify({ gates: 'shortcut' }));
     window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&ship=Ark');
     const { unmount } = renderPage();
     await screen.findByRole('region', { name: 'Route' });
     expect(requests.at(-1)).toMatchObject({ gates: 'never' });
     unmount();
 
-    // Asked for: the options card says so while folded.
-    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify({ version: 3, gates: 'shortcut' }));
+    window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Jita&ship=Ark');
     renderPage();
-    const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
-    await waitFor(() => expect(requests.at(-1)).toMatchObject({ gates: 'shortcut' }));
-    expect(within(panel).getByRole('button', { name: /Route options.*gate shortcuts/ })).toBeTruthy();
+    await waitFor(() => expect(requests.at(-1)).toMatchObject({ destination: 30000142, gates: 'finish' }));
   });
 
   it('reverses the route by moving the start below the destination; no swap button', async () => {

@@ -18,6 +18,8 @@ export interface PickerOption {
   /** A ticker, a server name, a second line. */
   detail?: string | null;
   imageUrl?: string | null;
+  /** Shown before the label, e.g. a system's security pill. */
+  leading?: ReactNode;
   /** Rounded square images (logos), circles otherwise (people). */
   shape?: 'circle' | 'rounded';
 }
@@ -127,6 +129,7 @@ export function SearchPicker<T extends PickerOption>({
         {value.imageUrl !== undefined && (
           <Avatar src={value.imageUrl} name={value.label} size={22} shape={value.shape ?? 'circle'} />
         )}
+        {value.leading}
         <span className={styles.chosenLabel} id={field?.id}>
           {value.label}
           {value.detail && <span className={styles.detail}>{value.detail}</span>}
@@ -236,6 +239,7 @@ export function SearchPicker<T extends PickerOption>({
               {o.imageUrl !== undefined && (
                 <Avatar src={o.imageUrl} name={o.label} size={24} shape={o.shape ?? 'circle'} />
               )}
+              {o.leading}
               <span className={styles.optionLabel}>{o.label}</span>
               {o.detail && <span className={styles.detail}>{o.detail}</span>}
             </div>

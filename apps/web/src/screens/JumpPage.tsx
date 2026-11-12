@@ -5,6 +5,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   fatigueMinutesLeft,
   routes,
+  standingTone,
   type JumpMetaDto,
   type JumpFuelPricesDto,
   type JumpPlanDto,
@@ -13,6 +14,7 @@ import {
   type JumpShareCreatedDto,
   type JumpShareRequest,
   type JumpUniverseDto,
+  type MapIntelDto,
 } from '@darkbeacon/shared';
 import { api } from '../lib/api';
 import { useMyTracking } from '../lib/characters';
@@ -22,9 +24,10 @@ import { useBreadcrumbs } from '../shell/breadcrumbs';
 import { ErrorState } from '../ui';
 import type { Overlay, RouteLeg } from '../jump/draw';
 import { endpointsReducer } from '../jump/endpoints';
-import { FreightPanel, JumpPanel, RouteChoices } from '../jump/JumpPanel';
+import { FreightPanel, JumpPanel, RouteChoices, type ForeignSpace } from '../jump/JumpPanel';
+import { holderStanding, useStandings } from '../lib/intel';
 import { SystemCard } from '../jump/SystemCard';
-import { buildStarModel, distanceLy, noCynoReason, type StarModel } from '../jump/model';
+import { buildStarModel, distanceLy, isHighSec, noCynoReason, type StarModel } from '../jump/model';
 import { useFatigueClock, useJumpPilot } from '../jump/pilot';
 import { loadSettings, saveSettings, type PlannerSettings } from '../jump/settings';
 import { useMapBridges } from '../jump/bridges';
@@ -259,7 +262,8 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
           avoidSystems: [...avoidSystems].map((i) => model.ids[i]!),
           avoidRegions: avoidRegions.map((r) => model.regionIds[r]!),
           preferStations: settings.preferStations,
-          gates: settings.gates,
+          // Stargates only where a cyno cannot be lit: into high-sec, after the last jump.
+          gates: [from, ...stopsOn, to].some((i) => isHighSec(model, i)) ? 'finish' : 'never',
           outlaw: settings.outlaw,
           ansiblex: ship.ansiblex ? ansiblex : [],
           maxFatigueMinutes: settings.maxFatigue,
@@ -302,6 +306,34 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
     setChoice({ of: answer, index });
     setActiveLeg(null);
   };
+  // Who holds the systems the route reaches; those neither mine nor blue are marked on their cards.
+  const reached = useMemo(
+    () => [...new Set((result?.route?.legs ?? []).map((l) => l.to.id))].sort((a, b) => a - b),
+    [result],
+  );
+  const standings = useStandings();
+  const routeIntel = useQuery({
+    queryKey: ['intel', 'systems', reached.join(',')],
+    queryFn: ({ signal }) =>
+      api<MapIntelDto>(`${routes.intel.systems.path}?ids=${reached.join(',')}`, { signal }),
+    enabled: reached.length > 0,
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
+  const heldBy = useMemo(() => {
+    const foreign = new Map<number, ForeignSpace>();
+    for (const intel of routeIntel.data?.systems ?? []) {
+      const sov = intel.sovereignty;
+      if (sov?.kind !== 'alliance') continue;
+      const standing = holderStanding(intel, standings);
+      if (standing !== null && standing > 0) continue;
+      foreign.set(intel.solarSystemId, {
+        holder: sov.holder.ticker ?? sov.holder.name ?? 'Unknown alliance',
+        tone: standingTone(standing),
+      });
+    }
+    return foreign;
+  }, [routeIntel.data, standings]);
   const toLegs = useCallback(
     (route: JumpRouteDto): RouteLeg[] =>
       route.legs.map((leg) => ({
@@ -315,9 +347,14 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
     () => (result?.route ? toLegs(result.route) : null),
     [result, toLegs],
   );
+  // The other routes, drawn faintly; a click on one picks it (by its place among the options).
+  const others = useMemo(
+    () => routeOptions.map((_, n) => n).filter((n) => n !== chosen),
+    [routeOptions, chosen],
+  );
   const otherLegs = useMemo(
-    () => routeOptions.filter((_, n) => n !== chosen).map(toLegs),
-    [routeOptions, chosen, toLegs],
+    () => others.map((n) => toLegs(routeOptions[n]!)),
+    [others, routeOptions, toLegs],
   );
 
   const rangeLy = ship.rangeLy * (1 + meta.rangeBonusPerLevel * skills.jdc);
@@ -447,6 +484,10 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
         insets={insets}
         onHover={(system, at) => setHover(system === null || at === null ? null : { system, at })}
         onPick={(system, at) => setPinned(system === null ? null : { system, at })}
+        onPickAlternative={(k) => {
+          const n = others[k];
+          if (n !== undefined) chooseRoute(n);
+        }}
       />
       {card && (
         <SystemCard
@@ -522,6 +563,7 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
         avoidSystems={avoidSystems}
         avoidRegions={avoidRegions}
         ansiblexCount={ansiblex.length}
+        heldBy={heldBy}
         rangeLy={rangeLy}
         plan={result}
         routeOptions={routeOptions}
