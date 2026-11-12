@@ -23,7 +23,7 @@ import {
   type PushMetricExporter,
 } from '@opentelemetry/sdk-metrics';
 import { NodeSDK } from '@opentelemetry/sdk-node';
-import { BatchSpanProcessor, ConsoleSpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
+import { BatchSpanProcessor, ConsoleSpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace';
 import { METRICS_PATH, type OtlpProtocol, type TelemetrySettings } from '@darkbeacon/observability';
 import { OtelInstruments, OtelSpanTracer } from './otel-instruments.js';
 import { otelQueryTracer } from './otel-query-tracer.js';
@@ -91,8 +91,8 @@ export async function startOtel(settings: TelemetrySettings): Promise<TelemetryR
     traces === null
       ? []
       : traces.exporter === 'console'
-        ? [new SimpleSpanProcessor(new ConsoleSpanExporter())]
-        : [new BatchSpanProcessor(await spanExporter(traces.protocol))];
+        ? [new SimpleSpanProcessor({ exporter: new ConsoleSpanExporter() })]
+        : [new BatchSpanProcessor({ exporter: await spanExporter(traces.protocol) })];
 
   const metricReaders: IMetricReader[] = [];
   const { intervalMs, timeoutMs } = settings.metricExport;
