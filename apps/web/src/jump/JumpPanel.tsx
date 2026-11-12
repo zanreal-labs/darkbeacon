@@ -1233,7 +1233,7 @@ function nameOf(model: StarModel, id: number): string {
 }
 
 /** Makes a link anyone can open without signing in, and copies it. */
-function ShareButton({ onShare, size = 'sm' }: Pick<PanelState, 'onShare'> & { size?: 'sm' | 'md' }) {
+function ShareButton({ onShare, wide = false }: Pick<PanelState, 'onShare'> & { wide?: boolean }) {
   const toast = useToast();
   const [sharing, setSharing] = useState(false);
   const share = async () => {
@@ -1257,9 +1257,21 @@ function ShareButton({ onShare, size = 'sm' }: Pick<PanelState, 'onShare'> & { s
     }
   };
   return (
-    <Button size={size} icon={<Link2 />} loading={sharing} onClick={() => void share()}>
-      Share
-    </Button>
+    // In the panel's header the three actions are alike: icons, named by their tooltips.
+    wide ? (
+      <Button icon={<Link2 />} loading={sharing} onClick={() => void share()}>
+        Share
+      </Button>
+    ) : (
+      <IconButton
+        size="sm"
+        variant="secondary"
+        label="Share"
+        icon={<Link2 />}
+        loading={sharing}
+        onClick={() => void share()}
+      />
+    )
   );
 }
 
@@ -1322,15 +1334,35 @@ function RouteActions({
 
   return (
     <div className={wide ? styles.actions : styles.headActions}>
-      <Button size={wide ? 'md' : 'sm'} icon={<Copy />} onClick={() => void copy()}>
-        Copy
-      </Button>
+      {wide ? (
+        <Button icon={<Copy />} onClick={() => void copy()}>
+          Copy
+        </Button>
+      ) : (
+        <IconButton
+          size="sm"
+          variant="secondary"
+          label="Copy route"
+          icon={<Copy />}
+          onClick={() => void copy()}
+        />
+      )}
       {pilots.length > 0 && (
         <Menu>
           <MenuTrigger asChild>
-            <Button size={wide ? 'md' : 'sm'} icon={<Navigation />} loading={busy}>
-              Waypoints
-            </Button>
+            {wide ? (
+              <Button icon={<Navigation />} loading={busy}>
+                Waypoints
+              </Button>
+            ) : (
+              <IconButton
+                size="sm"
+                variant="secondary"
+                label="Set in-game waypoints"
+                icon={<Navigation />}
+                loading={busy}
+              />
+            )}
           </MenuTrigger>
           <MenuContent align="end">
             <MenuLabel>In-game waypoints for</MenuLabel>
@@ -1342,7 +1374,7 @@ function RouteActions({
           </MenuContent>
         </Menu>
       )}
-      <ShareButton onShare={onShare} size={wide ? 'md' : 'sm'} />
+      <ShareButton onShare={onShare} wide={wide} />
     </div>
   );
 }
