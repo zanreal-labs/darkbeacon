@@ -269,6 +269,26 @@ describe('JumpPage', () => {
     await waitFor(() => expect(requests.at(-1)).toMatchObject({ destination: 30000142, gates: 'finish' }));
   });
 
+  it('adds the next destination at the bottom, and may end where it started', async () => {
+    window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&ship=Ark');
+    const user = userEvent.setup();
+    renderPage();
+    const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+    await screen.findByRole('region', { name: 'Route' });
+    // Ami becomes the stop; an empty destination waits under it.
+    await user.click(within(panel).getByRole('button', { name: 'Add stop' }));
+    expect(panel.querySelector('[data-picker="stop"]')!.textContent).toMatch(/Ami/);
+    const destination = panel.querySelector<HTMLInputElement>('[data-picker="destination"] input')!;
+    expect(destination.value).toBe('');
+    // Back to the start: Ignoitton > Ami > Ignoitton.
+    await user.type(destination, 'Ignoi');
+    await user.click(await screen.findByRole('option', { name: /Ignoitton/ }));
+    await waitFor(() =>
+      expect(requests.at(-1)).toMatchObject({ origin: 30002647, via: [30005035], destination: 30002647 }),
+    );
+    expect(panel.querySelector('[data-picker="origin"]')!.textContent).toMatch(/Ignoitton/);
+  });
+
   it('reverses the route by moving the start below the destination; no swap button', async () => {
     window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&ship=Ark');
     const user = userEvent.setup();

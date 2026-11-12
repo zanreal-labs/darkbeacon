@@ -130,7 +130,25 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
       .filter((i): i is number => i !== null),
   );
   const via = useMemo(() => stops.filter((i): i is number => i !== null), [stops]);
-  const addStop = () => setStops((s) => [...s, null]);
+  // A trip through stops may end where it started (C-J6MT > Amamake > C-J6MT): then the ends may
+  // be one system; without a stop, picking the other end's system swaps them as before.
+  const looping = stops.some((s) => s !== null);
+  // The destination emptied by "Add stop" is no reason to move the view (see the effect below).
+  const addingStop = useRef(false);
+  // "Add stop" adds the next destination at the bottom: the destination so far becomes the last
+  // stop, and an empty destination waits to be picked.
+  const addStop = () => {
+    if (destination === null) {
+      document.querySelector<HTMLInputElement>('[data-picker="destination"] input')?.focus();
+      return;
+    }
+    setStops((s) => [...s, destination]);
+    addingStop.current = true;
+    dispatch({ type: 'set', origin, destination: null });
+    requestAnimationFrame(() =>
+      document.querySelector<HTMLInputElement>('[data-picker="destination"] input')?.focus(),
+    );
+  };
   const removeStop = (n: number) => setStops((s) => s.filter((_, k) => k !== n));
   // A system picked for either end is remembered as a recent pick (reorders and the address are not).
   const remember = useCallback(
@@ -143,13 +161,17 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
   );
   const setOrigin = useCallback(
     (system: number | null) => {
-      dispatch({ type: 'origin', system });
+      if (looping && system !== null && system === destination)
+        dispatch({ type: 'set', origin: system, destination });
+      else dispatch({ type: 'origin', system });
       remember(system);
     },
-    [remember],
+    [remember, looping, destination],
   );
   const pickDestination = (system: number | null) => {
-    dispatch({ type: 'destination', system });
+    if (looping && system !== null && system === origin)
+      dispatch({ type: 'set', origin, destination: system });
+    else dispatch({ type: 'destination', system });
     remember(system);
   };
   const [hover, setHover] = useState<Pinned | null>(null);
@@ -227,10 +249,10 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
   const suggestions = useMemo(() => {
     const sources: SuggestionSources = { characters, exits, mapSystems, recent };
     return {
-      origin: suggestionsFor('origin', sources, destination),
-      destination: suggestionsFor('destination', sources, origin),
+      origin: suggestionsFor('origin', sources, looping ? null : destination),
+      destination: suggestionsFor('destination', sources, looping ? null : origin),
     };
-  }, [characters, exits, mapSystems, recent, origin, destination]);
+  }, [characters, exits, mapSystems, recent, origin, destination, looping]);
   // Skills set by hand win over ESI's until ESI is asked again or the pilot changes (a training
   // level can be planned ahead); ESI's fatigue wins until edited, and counts down while open.
   const fill = useJumpPilot(settings.pilot);
@@ -418,7 +440,10 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
     const before = lastEnds.current;
     lastEnds.current = ends;
     // A destination that became the start (a reorder) is where the view already is.
-    if (ends.origin === null || ends.destination !== null || ends.origin === before.destination) return;
+    const added = addingStop.current;
+    addingStop.current = false;
+    if (added || ends.origin === null || ends.destination !== null || ends.origin === before.destination)
+      return;
     mapRef.current?.centre(ends.origin);
   }, [ends]);
 
