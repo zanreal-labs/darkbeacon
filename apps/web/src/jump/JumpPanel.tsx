@@ -273,88 +273,85 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
             </Field>
           </div>
 
-          <div className={styles.endpoints}>
-            <PointRow n={0} label="Start" drag={drag} grip={grip}>
-              <SearchPicker<SystemOption>
-                value={origin === null ? null : option(origin)}
-                onChange={(o) => props.setOrigin(o?.index ?? null)}
-                search={searchFor('origin')}
-                cacheKey={['jump-systems', 'origin', suggestionsKey('origin')]}
-                minLength={0}
-                debounce={0}
-                placeholder="Start ( / )"
-                empty="No known-space system by that name"
-              />
-            </PointRow>
-            {props.stops.map((stop, n) => (
-              <PointRow
-                key={n}
-                n={n + 1}
-                label={`Stop ${n + 1}`}
-                drag={drag}
-                grip={grip}
-                remove={() => props.removeStop(n)}
-              >
+          {/* The trip: its points, then its legs; the settings that shape it wait at the bottom. */}
+          <div className={styles.routeSection}>
+            <h2 className={styles.sectionLabel}>Route</h2>
+            <div className={styles.endpoints}>
+              <PointRow n={0} label="Start" drag={drag} grip={grip}>
                 <SearchPicker<SystemOption>
-                  value={stop === null ? null : option(stop)}
-                  onChange={(o) => props.setStop(n, o?.index ?? null)}
-                  search={searchFor('destination')}
-                  cacheKey={['jump-systems', 'stop', suggestionsKey('destination')]}
+                  value={origin === null ? null : option(origin)}
+                  onChange={(o) => props.setOrigin(o?.index ?? null)}
+                  search={searchFor('origin')}
+                  cacheKey={['jump-systems', 'origin', suggestionsKey('origin')]}
                   minLength={0}
                   debounce={0}
-                  placeholder={`Stop ${n + 1}`}
+                  placeholder="Start ( / )"
                   empty="No known-space system by that name"
                 />
               </PointRow>
-            ))}
-            {/* Stops go between the ends, so they are added there too. */}
-            {props.stops.length < 10 && (
-              <div className={styles.point}>
-                <span className={styles.gripSpacer} aria-hidden />
-                <button type="button" className={styles.addStop} onClick={props.addStop}>
-                  <Plus aria-hidden />
-                  Add stop
-                </button>
-                <span className={styles.pointSpacer} aria-hidden />
-              </div>
-            )}
-            <PointRow n={points - 1} label="Destination" drag={drag} grip={grip}>
-              <SearchPicker<SystemOption>
-                value={destination === null ? null : option(destination)}
-                onChange={(o) => props.setDestination(o?.index ?? null)}
-                search={searchFor('destination')}
-                cacheKey={['jump-systems', 'destination', suggestionsKey('destination')]}
-                minLength={0}
-                debounce={0}
-                placeholder="Destination"
-                empty="No known-space system by that name"
-              />
-            </PointRow>
+              {props.stops.map((stop, n) => (
+                <PointRow
+                  key={n}
+                  n={n + 1}
+                  label={`Stop ${n + 1}`}
+                  drag={drag}
+                  grip={grip}
+                  remove={() => props.removeStop(n)}
+                >
+                  <SearchPicker<SystemOption>
+                    value={stop === null ? null : option(stop)}
+                    onChange={(o) => props.setStop(n, o?.index ?? null)}
+                    search={searchFor('destination')}
+                    cacheKey={['jump-systems', 'stop', suggestionsKey('destination')]}
+                    minLength={0}
+                    debounce={0}
+                    placeholder={`Stop ${n + 1}`}
+                    empty="No known-space system by that name"
+                  />
+                </PointRow>
+              ))}
+              {/* Stops go between the ends, so they are added there too. */}
+              {props.stops.length < 10 && (
+                <div className={styles.point}>
+                  <span className={styles.gripSpacer} aria-hidden />
+                  <button type="button" className={styles.addStop} onClick={props.addStop}>
+                    <Plus aria-hidden />
+                    Add stop
+                  </button>
+                  <span className={styles.pointSpacer} aria-hidden />
+                </div>
+              )}
+              <PointRow n={points - 1} label="Destination" drag={drag} grip={grip}>
+                <SearchPicker<SystemOption>
+                  value={destination === null ? null : option(destination)}
+                  onChange={(o) => props.setDestination(o?.index ?? null)}
+                  search={searchFor('destination')}
+                  cacheKey={['jump-systems', 'destination', suggestionsKey('destination')]}
+                  minLength={0}
+                  debounce={0}
+                  placeholder="Destination"
+                  empty="No known-space system by that name"
+                />
+              </PointRow>
+            </div>
+            <Result {...props} />
           </div>
-          <div className={styles.endpointActions}>
-            <Switch
-              checked={settings.roundTrip}
-              onCheckedChange={(on) => update({ roundTrip: on })}
-              label="Return to start"
-            />
+
+          <div className={styles.settingsFoot}>
+            <button
+              type="button"
+              className={styles.optionsToggle}
+              aria-expanded={optionsOpen}
+              onClick={() => setOptionsOpen(!optionsOpen)}
+            >
+              <SlidersHorizontal aria-hidden />
+              <span>Route options</span>
+              <span className={styles.optionsSummary}>{optionsSummary(settings, props)}</span>
+              {optionsOpen ? <ChevronUp aria-hidden /> : <ChevronDown aria-hidden />}
+            </button>
+            {optionsOpen && <Options {...props} />}
+            <PilotSkills {...props} />
           </div>
-
-          <button
-            type="button"
-            className={styles.optionsToggle}
-            aria-expanded={optionsOpen}
-            onClick={() => setOptionsOpen(!optionsOpen)}
-          >
-            <SlidersHorizontal aria-hidden />
-            <span>Route options</span>
-            <span className={styles.optionsSummary}>{optionsSummary(settings, props)}</span>
-            {optionsOpen ? <ChevronUp aria-hidden /> : <ChevronDown aria-hidden />}
-          </button>
-          {optionsOpen && <Options {...props} />}
-
-          <PilotSkills {...props} />
-
-          <Result {...props} />
         </div>
       )}
     </aside>
@@ -816,13 +813,8 @@ function clamp(n: number, min: number, max: number): number {
 
 function Result(props: PanelState) {
   const { plan, planning, planError, origin, destination, model, activeLeg, setActiveLeg, onShowLeg } = props;
-  if (origin === null || destination === null) {
-    const hint =
-      origin === null
-        ? 'Search for a start, or click a system on the map.'
-        : 'Now a destination: search, or click a system on the map.';
-    return <p className={styles.hint}>{hint}</p>;
-  }
+  // Nothing to say until both ends are picked: the fields say what goes in them.
+  if (origin === null || destination === null) return null;
   if (planError) {
     const message = planError instanceof ApiError ? planError.message : 'The server did not answer';
     return (

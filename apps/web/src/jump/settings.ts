@@ -13,8 +13,6 @@ export interface PlannerSettings {
   /** The levels were picked by hand (not the defaults): no warning that they are only assumed. */
   skillsByHand: boolean;
   gates: JumpGateUse;
-  /** Back to the start after the destination. */
-  roundTrip: boolean;
   /** Where fuel is priced (lowest sell at the hub station). */
   fuelHub: JumpFuelHub;
   /** The pilot's freight pricing, for the quote under a jump freighter's route. */
@@ -41,7 +39,6 @@ export const DEFAULT_SETTINGS: PlannerSettings = {
   skills: { jdc: 5, jfc: 4, jf: 4 },
   skillsByHand: false,
   gates: 'finish',
-  roundTrip: false,
   fuelHub: 'jita',
   freight: DEFAULT_FREIGHT,
   preferStations: true,
@@ -71,7 +68,6 @@ export function loadSettings(): PlannerSettings {
       skills: { ...DEFAULT_SETTINGS.skills, ...parsed.skills },
       pilot: typeof parsed.pilot === 'number' ? parsed.pilot : null,
       skillsByHand: parsed.skillsByHand === true,
-      roundTrip: parsed.roundTrip === true,
       freight: freightTermsFrom(parsed.freight),
       fuelHub: FUEL_HUBS.includes(parsed.fuelHub as JumpFuelHub) ? (parsed.fuelHub as JumpFuelHub) : 'jita',
       recent: Array.isArray(parsed.recent) ? parsed.recent.filter((n) => typeof n === 'string') : [],

@@ -183,12 +183,40 @@
 
 .panelBody {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: var(--dbk-space-3);
   min-height: 0;
+  overflow-x: hidden;
   padding: var(--dbk-space-2) var(--dbk-space-4) var(--dbk-space-4);
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+/* The trip, set apart from the ship above it under a label of its own. */
+.routeSection {
+  display: grid;
+  gap: var(--dbk-space-3);
+  margin-top: var(--dbk-space-3);
+  padding-top: var(--dbk-space-4);
+  border-top: 1px solid var(--dbk-color-border);
+}
+
+.sectionLabel {
+  margin: 0;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Route options and skills: shape every route, changed rarely, so at the bottom. */
+.settingsFoot {
+  display: grid;
+  gap: var(--dbk-space-2);
+  margin-top: auto;
+  padding-top: var(--dbk-space-4);
 }
 
 .row2 {
@@ -312,15 +340,6 @@
 
 .pointSpacer {
   width: 28px;
-}
-
-.endpointActions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--dbk-space-2);
-  margin-top: calc(-1 * var(--dbk-space-1));
-  padding-left: calc(20px + var(--dbk-space-1));
 }
 
 .pilot {

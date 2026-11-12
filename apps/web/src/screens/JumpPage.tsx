@@ -254,7 +254,6 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
           origin: model.ids[from]!,
           destination: model.ids[to]!,
           via: stopsOn.map((i) => model.ids[i]!),
-          roundTrip: settings.roundTrip,
           skills,
           avoidSystems: [...avoidSystems].map((i) => model.ids[i]!),
           avoidRegions: avoidRegions.map((r) => model.regionIds[r]!),

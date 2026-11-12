@@ -148,7 +148,7 @@ describe('JumpPage', () => {
     expect(await screen.findByRole('img', { name: /Star map of known space/ })).toBeTruthy();
     const panel = screen.getByRole('complementary', { name: 'Jump planner' });
     expect(within(panel).getByText(/10 ly range/)).toBeTruthy();
-    expect(within(panel).getByText('Search for a start, or click a system on the map.')).toBeTruthy();
+    expect(within(panel).queryByRole('region', { name: 'Route' })).toBeNull();
 
     await user.type(within(panel).getAllByRole('combobox')[2]!, 'Ignoi');
     await user.click(await screen.findByRole('option', { name: /Ignoitton/ }));
@@ -391,7 +391,7 @@ describe('JumpPage', () => {
     await waitFor(() => expect(requests.at(-1)).toMatchObject({ skills: { jdc: 4, jfc: 3, jf: 3 } }));
   });
 
-  it('plans through stops from the address, back to the start on request, and prices the fuel', async () => {
+  it('plans through stops from the address and prices the fuel', async () => {
     server.use(
       http.get(routes.jumps.fuelPrices.path, () =>
         HttpResponse.json({
@@ -407,7 +407,7 @@ describe('JumpPage', () => {
     renderPage();
     const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
     await screen.findByRole('region', { name: 'Route' });
-    expect(requests.at(-1)).toMatchObject({ via: [30000142], roundTrip: false });
+    expect(requests.at(-1)).toMatchObject({ via: [30000142] });
     expect(within(panel).getByText('Stop 1')).toBeTruthy();
     // 57,408 helium at 700 ISK.
     // The totals are in the bubble over the map, not in the panel.
@@ -421,8 +421,6 @@ describe('JumpPage', () => {
     expect(await within(panel).findByText('58.2M ISK')).toBeTruthy();
     expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEY)!).freight).toMatchObject({ collateral: 1e9 });
 
-    await user.click(within(panel).getByRole('switch', { name: 'Return to start' }));
-    await waitFor(() => expect(requests.at(-1)).toMatchObject({ via: [30000142], roundTrip: true }));
     await user.click(within(panel).getByRole('button', { name: 'Remove stop 1' }));
     await waitFor(() => expect(requests.at(-1)).toMatchObject({ via: [] }));
     expect(window.location.search).not.toMatch(/via=/);
@@ -484,6 +482,6 @@ describe('JumpPage', () => {
     await screen.findByRole('region', { name: 'Route' });
     expect(requests[0]).toMatchObject({ shipTypeId: 11567, origin: 30000142, destination: 30005035 });
     await user.keyboard('{Escape}');
-    expect(await within(panel).findByText('Search for a start, or click a system on the map.')).toBeTruthy();
+    await waitFor(() => expect(within(panel).queryByRole('region', { name: 'Route' })).toBeNull());
   });
 });
