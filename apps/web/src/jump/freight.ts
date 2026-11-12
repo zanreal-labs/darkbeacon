@@ -20,6 +20,8 @@ export interface FreightTerms {
   perJump: number;
   /** The quote is never lower than this (ISK). */
   minReward: number;
+  /** Added once when the route lands in or passes through low-sec (ISK). */
+  lowSecFee: number;
 }
 
 export const DEFAULT_FREIGHT: FreightTerms = {
@@ -31,6 +33,7 @@ export const DEFAULT_FREIGHT: FreightTerms = {
   perM3: 0,
   perJump: 0,
   minReward: 0,
+  lowSecFee: 0,
 };
 
 /** One unit of any isotope takes 0.03 m³ of cargo (or fuel bay). */
@@ -46,16 +49,34 @@ export interface FreightQuote {
   margin: number;
   /** The minimum reward set the charge. */
   atMinimum: boolean;
+  /** The route touches low-sec, so the low-sec fee is in the charge (when there is one). */
+  lowSec: boolean;
+}
+
+/** Low-sec as the game shows it: 0.1 to 0.4. */
+const isLowSec = (security: number) => security > 0 && security < 0.45;
+
+/** Whether a route starts in, lands in or passes through low-sec. */
+export function touchesLowSec(route: {
+  legs?: ReadonlyArray<{ from: { security: number }; to: { security: number } }>;
+}) {
+  return (route.legs ?? []).some((leg) => isLowSec(leg.from.security) || isLowSec(leg.to.security));
 }
 
 export function freightQuote(
-  route: { fuel: number; jumps: number },
+  route: {
+    fuel: number;
+    jumps: number;
+    legs?: ReadonlyArray<{ from: { security: number }; to: { security: number } }>;
+  },
   pricePerUnit: number,
   terms: FreightTerms,
 ): FreightQuote {
   const fuelCost = route.fuel * pricePerUnit;
+  const lowSec = touchesLowSec(route);
   const priced =
     terms.baseReward +
+    (lowSec ? terms.lowSecFee : 0) +
     terms.perM3 * terms.cargoM3 +
     fuelCost * (1 + terms.markupPct / 100) +
     terms.collateral * (terms.collateralPct / 100) +
@@ -67,6 +88,7 @@ export function freightQuote(
     charge,
     margin: charge - fuelCost,
     atMinimum: terms.minReward > priced,
+    lowSec,
   };
 }
 

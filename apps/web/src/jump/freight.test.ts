@@ -29,6 +29,28 @@ describe('freightQuote', () => {
     const floor = freightQuote({ fuel: 0, jumps: 3 }, 600, { ...terms, minReward: 1e7 });
     expect(floor).toMatchObject({ charge: 1e7, atMinimum: true });
   });
+
+  it('adds the low-sec fee once when the route lands in or passes through low-sec', () => {
+    const at = (security: number) => ({ security });
+    const terms = { ...DEFAULT_FREIGHT, markupPct: 0, collateralPct: 0, lowSecFee: 2e7 };
+    const nullSec = {
+      fuel: 0,
+      jumps: 2,
+      legs: [
+        { from: at(-0.3), to: at(-0.1) },
+        { from: at(-0.1), to: at(-0.5) },
+      ],
+    };
+    const viaLow = {
+      ...nullSec,
+      legs: [
+        { from: at(-0.3), to: at(0.3) },
+        { from: at(0.3), to: at(0.4) },
+      ],
+    };
+    expect(freightQuote(nullSec, 600, terms)).toMatchObject({ charge: 0, lowSec: false });
+    expect(freightQuote(viaLow, 600, terms)).toMatchObject({ charge: 2e7, lowSec: true });
+  });
 });
 
 describe('parseIsk', () => {

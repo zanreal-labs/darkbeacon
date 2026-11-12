@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Eye, Route, UserRound } from 'lucide-react';
 import {
   routes,
+  type JumpRouteDto,
   type JumpShareFreight,
   type JumpShareViewDto,
   type JumpUniverseDto,
@@ -13,8 +14,8 @@ import { api } from '../lib/api';
 import { LogoMark } from '../shell/Logo';
 import { Badge, Button, Disclosure, ErrorState, FieldGroup } from '../ui';
 import type { Overlay, RouteLeg } from './draw';
-import { formatIsk, formatNumber, formatRange } from './format';
-import { RouteChoices, RouteSystems } from './JumpPanel';
+import { formatIsk, formatLy, formatMinutes, formatNumber, formatRange, ISOTOPE_LABELS } from './format';
+import { RouteSystems } from './JumpPanel';
 import { buildStarModel, type StarModel } from './model';
 import { StarMap, type StarMapHandle } from './StarMap';
 import { JumpLoading } from '../screens/JumpLoading';
@@ -122,21 +123,14 @@ function Shared({ view, model }: { view: JumpShareViewDto; model: StarModel }) {
     const leg = legs[n];
     if (leg) mapRef.current?.fit([leg.from, leg.to]);
   };
-  // What the bubble over the map says: the client's price, or the route's totals for pilots.
-  const totals = freight ? (
-    route ? (
+  // The trip in numbers, first in the sidebar: the client's price, or the totals for pilots.
+  const totals = route ? (
+    freight ? (
       <FreightTotals freight={freight} jumps={route.jumps} gates={route.gates} />
-    ) : null
-  ) : (
-    <RouteChoices
-      floating
-      routeOptions={route ? [route] : []}
-      chosenRoute={0}
-      onChooseRoute={() => {}}
-      plan={plan}
-      fuelPrices={view.fuelPrices}
-    />
-  );
+    ) : (
+      <PilotTotals route={route} plan={plan} fuelPrices={view.fuelPrices} />
+    )
+  ) : null;
 
   return (
     <div className={publicStyles.page}>
@@ -176,8 +170,7 @@ function Shared({ view, model }: { view: JumpShareViewDto; model: StarModel }) {
             )}
           </div>
           <div className={styles.panelBody}>
-            {/* On a phone the bubble's numbers lead the sheet. */}
-            {phone && totals}
+            {totals}
             {route ? (
               <FieldGroup label="Route" className={styles.routeGroup}>
                 <section aria-label="Route">
@@ -222,11 +215,6 @@ function Shared({ view, model }: { view: JumpShareViewDto; model: StarModel }) {
             )}
           </div>
         </aside>
-        {!phone && (
-          <div className={styles.choicesDock} style={{ left: 392, right: 56 }}>
-            {totals}
-          </div>
-        )}
       </div>
     </div>
   );
@@ -243,10 +231,10 @@ function FreightTotals({
   gates: number;
 }) {
   return (
-    <section className={styles.choicesBubble} aria-label="Price">
-      <div className={styles.choice}>
+    <section className={styles.totalsCard} aria-label="Price">
+      <div>
         <span className={styles.choiceTitle}>Price</span>
-        <span className={styles.choiceMain}>{formatIsk(freight.price)}</span>
+        <span className={styles.totalsValue}>{formatIsk(freight.price)}</span>
         <dl className={styles.facts}>
           <div>
             <dt>Jumps</dt>
@@ -269,6 +257,49 @@ function FreightTotals({
           )}
         </dl>
       </div>
+    </section>
+  );
+}
+
+/** A pilots' link at a glance: how many jumps and how far, the fuel (priced at the hub) and fatigue. */
+function PilotTotals({
+  route,
+  plan,
+  fuelPrices,
+}: {
+  route: JumpRouteDto;
+  plan: JumpShareViewDto['plan'];
+  fuelPrices: JumpShareViewDto['fuelPrices'];
+}) {
+  const price = fuelPrices?.prices[plan.ship.isotope] ?? null;
+  const isotope = ISOTOPE_LABELS[plan.ship.isotope].toLowerCase();
+  return (
+    <section className={styles.totalsCard} aria-label="Route totals">
+      <div>
+        <span className={styles.totalsValue}>
+          {route.jumps} {route.jumps === 1 ? 'jump' : 'jumps'}
+          {route.gates > 0 && ` + ${route.gates} ${route.gates === 1 ? 'gate' : 'gates'}`}
+          <span className={styles.choiceLy}>{formatLy(route.ly)}</span>
+        </span>
+      </div>
+      <dl className={styles.facts}>
+        <div>
+          <dt>Fuel</dt>
+          <dd title={`${formatNumber(route.fuel)} ${isotope}`}>
+            {price !== null ? formatIsk(route.fuel * price) : `${formatNumber(route.fuel)} ${isotope}`}
+          </dd>
+        </div>
+        <div>
+          <dt>Fatigue</dt>
+          <dd>{formatMinutes(route.fatigueMinutes)}</dd>
+        </div>
+        {route.waitMinutes > 0 && (
+          <div>
+            <dt>Wait</dt>
+            <dd>{formatMinutes(route.waitMinutes)}</dd>
+          </div>
+        )}
+      </dl>
     </section>
   );
 }

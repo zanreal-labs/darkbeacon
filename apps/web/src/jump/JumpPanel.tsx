@@ -1116,6 +1116,12 @@ function FreightFields({
           value={terms.minReward}
           onValue={(minReward) => set({ minReward })}
         />
+        <AmountField
+          label="Low-sec fee"
+          isk
+          value={terms.lowSecFee}
+          onValue={(lowSecFee) => set({ lowSecFee })}
+        />
       </div>
       {quote ? (
         <dl className={styles.facts} aria-label="Freight quote">
@@ -1130,6 +1136,12 @@ function FreightFields({
             <dt>Margin</dt>
             <dd>{formatIsk(quote.margin)}</dd>
           </div>
+          {quote.lowSec && terms.lowSecFee > 0 && (
+            <div>
+              <dt>Low-sec fee</dt>
+              <dd>{formatIsk(terms.lowSecFee)}</dd>
+            </div>
+          )}
           <div>
             <dt>Fuel</dt>
             <dd>{formatIsk(quote.fuelCost)}</dd>
