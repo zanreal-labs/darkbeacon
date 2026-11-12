@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useDeferredValue, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   fatigueMinutesLeft,
@@ -22,11 +22,12 @@ import { useBreadcrumbs } from '../shell/breadcrumbs';
 import { ErrorState } from '../ui';
 import type { Overlay, RouteLeg } from '../jump/draw';
 import { endpointsReducer } from '../jump/endpoints';
-import { JumpPanel, RouteChoices } from '../jump/JumpPanel';
+import { FreightPanel, JumpPanel, RouteChoices } from '../jump/JumpPanel';
 import { SystemCard } from '../jump/SystemCard';
 import { buildStarModel, distanceLy, noCynoReason, type StarModel } from '../jump/model';
 import { useFatigueClock, useJumpPilot } from '../jump/pilot';
-import { loadSettings, parseAnsiblex, saveSettings, type PlannerSettings } from '../jump/settings';
+import { loadSettings, saveSettings, type PlannerSettings } from '../jump/settings';
+import { useMapBridges } from '../jump/bridges';
 import { StarMap, type StarMapHandle } from '../jump/StarMap';
 import { pushRecent, suggestionsFor, type CharacterPlace, type SuggestionSources } from '../jump/suggest';
 import styles from '../jump/jump.module.css';
@@ -240,8 +241,8 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
       : fatigueMinutesLeft(fill.fatigueExpiresAt, fatigueClock);
   const shown = useMemo(() => ({ ...settings, skills, fatigueNow }), [settings, skills, fatigueNow]);
 
-  const ansiblexText = useDeferredValue(settings.ansiblex);
-  const ansiblex = useMemo(() => parseAnsiblex(ansiblexText, model), [ansiblexText, model]);
+  // Ansiblex bridges come from the maps I can see (their routing settings), for ships that use them.
+  const ansiblex = useMapBridges(ship.ansiblex);
 
   const requestFor = (
     from: number | null,
@@ -260,9 +261,7 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
           preferStations: settings.preferStations,
           gates: settings.gates,
           outlaw: settings.outlaw,
-          ansiblex: ship.ansiblex
-            ? ansiblex.pairs.map(([a, b]) => ({ from: model.ids[a]!, to: model.ids[b]! }))
-            : [],
+          ansiblex: ship.ansiblex ? ansiblex : [],
           maxFatigueMinutes: settings.maxFatigue,
           fatigueNowMinutes: fatigueNow,
           bridgeTonnes: ship.bridges ? settings.bridgeTonnes : null,
@@ -434,7 +433,9 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
   }, [origin, pinned]);
 
   // Room the controls take: the docked panel on the left, or the sheet's peek on phones.
-  const insets = phone ? { left: 0, bottom: 140 } : { left: 392, bottom: 0 };
+  // A jump freighter's route gets its freight quote as a folded card at the map's top right.
+  const freight = !phone && ship.hull === 'jump_freighter' && result?.route != null;
+  const insets = phone ? { left: 0, bottom: 140 } : { left: 392, right: 0, bottom: 0 };
   const card = pinned ?? hover;
 
   return (
@@ -520,7 +521,7 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
         suggestions={suggestions}
         avoidSystems={avoidSystems}
         avoidRegions={avoidRegions}
-        ansiblex={ansiblex}
+        ansiblexCount={ansiblex.length}
         rangeLy={rangeLy}
         plan={result}
         routeOptions={routeOptions}
@@ -538,8 +539,11 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
         setOpen={setPanelOpen}
         phone={phone}
       />
+      {freight && (
+        <FreightPanel plan={result} settings={shown} update={update} fuelPrices={fuelPrices.data ?? null} />
+      )}
       {!phone && (
-        <div className={styles.choicesDock} style={{ left: insets.left }}>
+        <div className={styles.choicesDock} style={{ left: insets.left, right: insets.right || 56 }}>
           <RouteChoices
             floating
             routeOptions={routeOptions}

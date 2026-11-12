@@ -56,3 +56,22 @@ export function Field({ label, hint, error, optional, hideLabel, children, class
     </FieldContext.Provider>
   );
 }
+
+export interface FieldGroupProps {
+  label: ReactNode;
+  children: ReactNode;
+  className?: string;
+}
+
+/** Several controls under one label, spaced and labelled as a <Field> is. */
+export function FieldGroup({ label, children, className }: FieldGroupProps) {
+  const id = useId();
+  return (
+    <div className={cx(styles.field, className)} role="group" aria-labelledby={id}>
+      <span id={id} className={styles.label}>
+        {label}
+      </span>
+      {children}
+    </div>
+  );
+}

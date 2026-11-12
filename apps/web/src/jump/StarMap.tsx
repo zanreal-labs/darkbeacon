@@ -18,7 +18,8 @@ export interface StarMapProps {
   model: StarModel;
   overlay: Overlay;
   /** Space covered by the controls (CSS px), so fitting keeps clear of them. */
-  insets: { left: number; bottom: number };
+  /** What the controls cover: the panel at the left, a sidebar at the right, a sheet below. */
+  insets: { left: number; right?: number; bottom: number };
   onHover(system: number | null, at: { x: number; y: number } | null): void;
   /** A click (or tap) on a system, or on empty space (null). */
   onPick(system: number | null, at: { x: number; y: number }): void;
@@ -99,12 +100,12 @@ export function StarMap({ model, overlay, insets, onHover, onPick, ref }: StarMa
   /** The view that shows these projected bounds inside the area the controls leave free. */
   const fitted = useCallback((minX: number, maxX: number, minY: number, maxY: number, pad = 48): View => {
     const v = view.current;
-    const { left, bottom } = insetsRef.current;
-    const w = Math.max(80, v.width - left - pad * 2);
+    const { left, right = 0, bottom } = insetsRef.current;
+    const w = Math.max(80, v.width - left - right - pad * 2);
     const h = Math.max(80, v.height - bottom - pad * 2);
     const scale = clampScale(Math.min(w / Math.max(maxX - minX, 0.5), h / Math.max(maxY - minY, 0.5), 60));
     // Centre the bounds in the free area, which is offset by the insets.
-    const cx = (minX + maxX) / 2 - left / 2 / scale;
+    const cx = (minX + maxX) / 2 - (left - right) / 2 / scale;
     const cy = (minY + maxY) / 2 + bottom / 2 / scale;
     return { ...v, scale, cx, cy };
   }, []);
@@ -159,11 +160,11 @@ export function StarMap({ model, overlay, insets, onHover, onPick, ref }: StarMa
       },
       centre(system) {
         const scale = Math.max(view.current.scale, 28);
-        const { left, bottom } = insetsRef.current;
+        const { left, right = 0, bottom } = insetsRef.current;
         fly({
           ...view.current,
           scale,
-          cx: model.px[system]! - left / 2 / scale,
+          cx: model.px[system]! - (left - right) / 2 / scale,
           cy: model.py[system]! + bottom / 2 / scale,
         });
       },
@@ -336,10 +337,10 @@ export function StarMap({ model, overlay, insets, onHover, onPick, ref }: StarMa
   const zoomBy = useCallback(
     (factor: number) => {
       const v = view.current;
-      const { left, bottom } = insetsRef.current;
+      const { left, right = 0, bottom } = insetsRef.current;
       const scale = clampScale(v.scale * factor);
       // Zoom around the middle of the free area.
-      const mx = left + (v.width - left) / 2;
+      const mx = left + (v.width - left - right) / 2;
       const my = (v.height - bottom) / 2;
       const [wx, wy] = toWorld(v, mx, my);
       fly({ ...v, scale, cx: wx - (mx - v.width / 2) / scale, cy: wy - (my - v.height / 2) / scale });

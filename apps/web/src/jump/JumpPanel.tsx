@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Fragment,
   useEffect,
   useRef,
   useState,
@@ -30,8 +31,10 @@ import {
   JUMP_HULLS,
   routes,
   type JumpFuelHub,
+  type JumpGateUse,
   type JumpFuelPricesDto,
   type JumpHull,
+  type JumpLegDto,
   type JumpMetaDto,
   type JumpPlanDto,
   type JumpRouteBest,
@@ -46,7 +49,9 @@ import { useMe } from '../lib/session';
 import {
   Button,
   Callout,
+  Disclosure,
   Field,
+  FieldGroup,
   IconButton,
   Input,
   Menu,
@@ -58,7 +63,6 @@ import {
   Select,
   Spinner,
   Switch,
-  Textarea,
   useToast,
   type PickerOption,
 } from '../ui';
@@ -74,7 +78,7 @@ import {
 } from './format';
 import { searchSystems, securityColor, securityLabel, type StarModel } from './model';
 import type { PilotFill } from './pilot';
-import type { AnsiblexParse, PlannerSettings } from './settings';
+import type { PlannerSettings } from './settings';
 import { rankSystems, whyLabel, type End, type Suggestion, type SuggestionWhy } from './suggest';
 import { freightQuote, parseIsk, type FreightTerms } from './freight';
 import styles from './jump.module.css';
@@ -90,6 +94,13 @@ const FATIGUE_CAPS = [
   { value: '120', label: '2 hours' },
   { value: '180', label: '3 hours' },
   { value: '240', label: '4 hours' },
+];
+
+/** How the route may use stargates: never by default (a capital lights its way, gates are slow). */
+const GATE_USES: Array<{ value: JumpGateUse; label: string }> = [
+  { value: 'never', label: 'Never' },
+  { value: 'finish', label: 'After the last jump' },
+  { value: 'shortcut', label: 'To save jumps' },
 ];
 
 const LEVELS = [0, 1, 2, 3, 4, 5].map((n) => ({
@@ -112,7 +123,8 @@ export interface JumpPanelProps {
   setDestination(i: number | null): void;
   avoidSystems: ReadonlySet<number>;
   avoidRegions: readonly number[];
-  ansiblex: AnsiblexParse;
+  /** Ansiblex bridges from the maps I can see, for ships that may use them. */
+  ansiblexCount: number;
   rangeLy: number;
   /** The answer with `route` set to the route the pilot looks at. */
   plan: JumpPlanDto | null;
@@ -151,7 +163,6 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
   const { model, ship, settings, update, origin, destination, plan, setOpen, phone } = props;
   // Folds away only as a sheet on a phone; beside the map it always shows.
   const open = phone ? props.open : true;
-  const [optionsOpen, setOptionsOpen] = useState(false);
   // Start, stops and destination in one list, reordered by dragging a row's grip (mouse or touch)
   // or with the arrow keys on it, as a maps app does.
   const points = 2 + props.stops.length;
@@ -211,6 +222,61 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
   const shipsOfHull = props.meta.ships.filter((s) => s.hull === ship.hull);
   const route = plan?.route ?? null;
 
+  // The legs between each two points of the trip (a leg ending at a stop closes one), when the
+  // route on screen is the one for these points; else the points show alone.
+  const points_ = [origin, ...props.stops, destination];
+  const stopsInPlan = points_.slice(1);
+  const segments = route ? segmentsOf(route, points_, model) : null;
+  const legHover = {
+    active: props.activeLeg,
+    setActive: props.setActiveLeg,
+    show: props.onShowLeg,
+  };
+  const pointRow = (k: number, arrival?: { leg: JumpLegDto; n: number }) => {
+    const last = k === points - 1;
+    const stop = k > 0 && !last ? k - 1 : null;
+    const value = points_[k] ?? null;
+    const label = k === 0 ? 'Start' : last ? 'Destination' : `Stop ${k}`;
+    return (
+      <PointRow key={`p${k}`} n={k} label={label} drag={drag} grip={grip} arrival={arrival} {...legHover}>
+        <SearchPicker<SystemOption>
+          value={value === null ? null : option(value)}
+          onChange={(o) => {
+            const i = o?.index ?? null;
+            if (k === 0) props.setOrigin(i);
+            else if (last) props.setDestination(i);
+            // Clearing a stop takes it off the trip, as a maps app does.
+            else if (i === null) props.removeStop(stop!);
+            else props.setStop(stop!, i);
+          }}
+          search={searchFor(k === 0 ? 'origin' : 'destination')}
+          cacheKey={[
+            'jump-systems',
+            k === 0 ? 'origin' : last ? 'destination' : 'stop',
+            suggestionsKey(k === 0 ? 'origin' : 'destination'),
+          ]}
+          minLength={0}
+          debounce={0}
+          placeholder={k === 0 ? 'Start ( / )' : label}
+          bare
+          clearLabel={stop !== null ? `Remove stop ${k}` : undefined}
+          empty="No known-space system by that name"
+          trailing={
+            stop !== null ? (
+              <IconButton
+                size="sm"
+                label={`Remove stop ${k}`}
+                icon={<X />}
+                tooltip={false}
+                onClick={() => props.removeStop(stop)}
+              />
+            ) : undefined
+          }
+        />
+      </PointRow>
+    );
+  };
+
   const summary =
     origin !== null && destination !== null
       ? `${model.names[origin]} to ${model.names[destination]}`
@@ -247,7 +313,7 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
       ) : (
         <div className={styles.panelHead}>
           <h1 className={styles.title}>Jump planner</h1>
-          {route && <ShareButton onShare={props.onShare} />}
+          {plan && route && <RouteActions plan={plan} onShare={props.onShare} />}
         </div>
       )}
 
@@ -273,83 +339,37 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
             </Field>
           </div>
 
-          {/* The trip: its points, then its legs; the settings that shape it wait at the bottom. */}
-          <div className={styles.routeSection}>
-            <h2 className={styles.sectionLabel}>Route</h2>
+          {/* The trip as a maps app shows it: the points set here, the systems between them. */}
+          <FieldGroup label="Route" className={styles.routeGroup}>
             <div className={styles.endpoints}>
-              <PointRow n={0} label="Start" drag={drag} grip={grip}>
-                <SearchPicker<SystemOption>
-                  value={origin === null ? null : option(origin)}
-                  onChange={(o) => props.setOrigin(o?.index ?? null)}
-                  search={searchFor('origin')}
-                  cacheKey={['jump-systems', 'origin', suggestionsKey('origin')]}
-                  minLength={0}
-                  debounce={0}
-                  placeholder="Start ( / )"
-                  empty="No known-space system by that name"
-                />
-              </PointRow>
-              {props.stops.map((stop, n) => (
-                <PointRow
-                  key={n}
-                  n={n + 1}
-                  label={`Stop ${n + 1}`}
-                  drag={drag}
-                  grip={grip}
-                  remove={() => props.removeStop(n)}
-                >
-                  <SearchPicker<SystemOption>
-                    value={stop === null ? null : option(stop)}
-                    onChange={(o) => props.setStop(n, o?.index ?? null)}
-                    search={searchFor('destination')}
-                    cacheKey={['jump-systems', 'stop', suggestionsKey('destination')]}
-                    minLength={0}
-                    debounce={0}
-                    placeholder={`Stop ${n + 1}`}
-                    empty="No known-space system by that name"
-                  />
-                </PointRow>
+              {pointRow(0)}
+              {stopsInPlan.map((_, k) => (
+                <Fragment key={k}>
+                  {(segments?.[k] ?? []).slice(0, -1).map(({ leg, n }) => (
+                    <LegRow key={n} leg={leg} n={n} {...legHover} />
+                  ))}
+                  {pointRow(k + 1, segments?.[k]?.at(-1))}
+                </Fragment>
               ))}
-              {/* Stops go between the ends, so they are added there too. */}
+              {/* A stop goes before the destination, as a maps app adds it. */}
               {props.stops.length < 10 && (
-                <div className={styles.point}>
-                  <span className={styles.gripSpacer} aria-hidden />
-                  <button type="button" className={styles.addStop} onClick={props.addStop}>
-                    <Plus aria-hidden />
-                    Add stop
-                  </button>
-                  <span className={styles.pointSpacer} aria-hidden />
-                </div>
+                <button type="button" className={styles.addStop} onClick={props.addStop}>
+                  <Plus aria-hidden />
+                  Add stop
+                </button>
               )}
-              <PointRow n={points - 1} label="Destination" drag={drag} grip={grip}>
-                <SearchPicker<SystemOption>
-                  value={destination === null ? null : option(destination)}
-                  onChange={(o) => props.setDestination(o?.index ?? null)}
-                  search={searchFor('destination')}
-                  cacheKey={['jump-systems', 'destination', suggestionsKey('destination')]}
-                  minLength={0}
-                  debounce={0}
-                  placeholder="Destination"
-                  empty="No known-space system by that name"
-                />
-              </PointRow>
             </div>
-            <Result {...props} />
-          </div>
+          </FieldGroup>
+          <Result {...props} />
 
           <div className={styles.settingsFoot}>
-            <button
-              type="button"
-              className={styles.optionsToggle}
-              aria-expanded={optionsOpen}
-              onClick={() => setOptionsOpen(!optionsOpen)}
+            <Disclosure
+              icon={<SlidersHorizontal aria-hidden />}
+              title="Route options"
+              summary={optionsSummary(settings, props)}
             >
-              <SlidersHorizontal aria-hidden />
-              <span>Route options</span>
-              <span className={styles.optionsSummary}>{optionsSummary(settings, props)}</span>
-              {optionsOpen ? <ChevronUp aria-hidden /> : <ChevronDown aria-hidden />}
-            </button>
-            {optionsOpen && <Options {...props} />}
+              <Options {...props} />
+            </Disclosure>
             <PilotSkills {...props} />
           </div>
         </div>
@@ -371,22 +391,34 @@ interface GripHandlers {
   onKeyDown(e: KeyboardEvent<HTMLButtonElement>): void;
 }
 
-/** One point of the trip: a grip to reorder it, its picker, and × for a stop. */
+interface LegHover {
+  active: number | null;
+  setActive(n: number | null): void;
+  show(n: number): void;
+}
+
+/**
+ * One point of the trip: its picker as wide as the panel, a grip in the margin to reorder it,
+ * and under it how the route arrives there (the leg that ends at it).
+ */
 function PointRow({
   n,
   label,
   drag,
   grip,
-  remove,
+  arrival,
+  active,
+  setActive,
+  show,
   children,
 }: {
   n: number;
   label: string;
   drag: Drag | null;
   grip(n: number): GripHandlers;
-  remove?(): void;
+  arrival?: { leg: JumpLegDto; n: number };
   children: ReactNode;
-}) {
+} & LegHover) {
   const target =
     drag && drag.from !== n && drag.to === n ? (drag.to < drag.from ? 'before' : 'after') : undefined;
   return (
@@ -407,16 +439,123 @@ function PointRow({
       >
         <GripVertical aria-hidden />
       </button>
-      <Field label={label} hideLabel>
-        {children}
-      </Field>
-      {remove ? (
-        <IconButton size="sm" label={`Remove ${label.toLowerCase()}`} icon={<X />} onClick={remove} />
-      ) : (
-        <span className={styles.pointSpacer} aria-hidden />
-      )}
+      <div
+        className={styles.systemCard}
+        data-leg={arrival?.n}
+        data-active={(arrival && active === arrival.n) || undefined}
+        onMouseEnter={arrival ? () => setActive(arrival.n) : undefined}
+        onMouseLeave={arrival ? () => setActive(null) : undefined}
+      >
+        <Field label={label} hideLabel>
+          {children}
+        </Field>
+        {arrival?.leg.kind === 'jump' && <LegStats leg={arrival.leg} onShow={() => show(arrival.n)} />}
+      </div>
     </div>
   );
+}
+
+/** How the route gets to a system: distance, fuel and fatigue for a jump; for a gate, only that. */
+function LegStats({ leg, onShow }: { leg: JumpLegDto; onShow(): void }) {
+  const facts: Array<[string, string]> = [
+    ['Distance', formatLy(leg.ly)],
+    ['Fuel', formatNumber(leg.fuel + (leg.bridgeFuel ?? 0))],
+    ['Fatigue', formatMinutes(leg.fatigueMinutes)],
+    ...(leg.waitMinutes > 0 ? ([['Wait', formatMinutes(leg.waitMinutes)]] as Array<[string, string]>) : []),
+  ];
+  return (
+    <button type="button" className={styles.legStats} onClick={onShow} aria-label="Show this jump on the map">
+      <dl className={styles.facts}>
+        {facts.map(([term, value]) => (
+          <div key={term}>
+            <dt>{term}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </button>
+  );
+}
+
+/** A system the route passes between two points: a card with its name and how the route gets there. */
+function LegRow({ leg, n, active, setActive, show }: { leg: JumpLegDto; n: number } & LegHover) {
+  return (
+    <div
+      className={styles.systemCard}
+      data-kind={leg.kind}
+      data-leg={n}
+      data-active={active === n || undefined}
+      onMouseEnter={() => setActive(n)}
+      onMouseLeave={() => setActive(null)}
+    >
+      <div className={styles.systemName}>
+        <span className={styles.secPill} style={{ background: securityColor(leg.to.security) }}>
+          {securityLabel(leg.to.security)}
+        </span>
+        <strong>{leg.to.name}</strong>
+        <span className={styles.systemRegion}>{leg.to.region}</span>
+        {leg.kind !== 'jump' && <em>{leg.kind === 'gate' ? 'gate' : 'Ansiblex'}</em>}
+        {leg.kind === 'jump' && !leg.to.station && !leg.stop && <em>no station</em>}
+        {leg.stop && <em>stop</em>}
+      </div>
+      {leg.kind === 'jump' && <LegStats leg={leg} onShow={() => show(n)} />}
+    </div>
+  );
+}
+
+/** A route read only (a shared link): its start, then every system it reaches, as cards. */
+export function RouteSystems({
+  route,
+  activeLeg,
+  setActiveLeg,
+  onShowLeg,
+}: {
+  route: JumpRouteDto;
+  activeLeg: number | null;
+  setActiveLeg(n: number | null): void;
+  onShowLeg(n: number): void;
+}) {
+  const start = route.legs[0]?.from;
+  if (!start) return null;
+  const hover = { active: activeLeg, setActive: setActiveLeg, show: onShowLeg };
+  return (
+    <div className={styles.endpoints}>
+      <div className={styles.systemCard}>
+        <div className={styles.systemName}>
+          <span className={styles.secPill} style={{ background: securityColor(start.security) }}>
+            {securityLabel(start.security)}
+          </span>
+          <strong>{start.name}</strong>
+          <span className={styles.systemRegion}>{start.region}</span>
+        </div>
+      </div>
+      {route.legs.map((leg, n) => (
+        <LegRow key={n} leg={leg} n={n} {...hover} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The route's legs cut at the points of the trip (start, stops, destination), or null when the
+ * route on screen is not for these points (still planning, or a stop without a system yet).
+ */
+function segmentsOf(
+  route: JumpRouteDto,
+  points: ReadonlyArray<number | null>,
+  model: StarModel,
+): Array<Array<{ leg: JumpLegDto; n: number }>> | null {
+  if (points.some((p) => p === null) || route.legs.length === 0) return null;
+  const ids = points.map((p) => model.ids[p!]!);
+  if (route.legs[0]!.from.id !== ids[0]) return null;
+  const segments: Array<Array<{ leg: JumpLegDto; n: number }>> = [[]];
+  route.legs.forEach((leg, n) => {
+    segments.at(-1)!.push({ leg, n });
+    if (leg.stop && n < route.legs.length - 1) segments.push([]);
+  });
+  if (segments.length !== ids.length - 1) return null;
+  for (let k = 0; k < segments.length; k++) if (segments[k]!.at(-1)!.leg.to.id !== ids[k + 1]) return null;
+  return segments;
 }
 
 /** Identifies a suggestion and what its row says, for the picker's cache. */
@@ -429,7 +568,7 @@ function suggestionKey(s: Suggestion): string {
 
 function optionsSummary(settings: PlannerSettings, props: PanelState): string {
   const parts: string[] = [];
-  if (settings.gates === 'never') parts.push('no gates');
+  if (settings.gates === 'finish') parts.push('gates after jumps');
   if (settings.gates === 'shortcut') parts.push('gate shortcuts');
   if (!settings.preferStations) parts.push('any landing');
   if (settings.outlaw) parts.push('outlaw');
@@ -437,8 +576,7 @@ function optionsSummary(settings: PlannerSettings, props: PanelState): string {
   if (settings.maxFatigue !== null) parts.push(`fatigue ≤ ${formatMinutes(settings.maxFatigue)}`);
   const avoided = props.avoidSystems.size + props.avoidRegions.length;
   if (avoided > 0) parts.push(`${avoided} avoided`);
-  if (props.ship.ansiblex && props.ansiblex.pairs.length > 0)
-    parts.push(`${props.ansiblex.pairs.length} Ansiblex`);
+  if (props.ship.ansiblex && props.ansiblexCount > 0) parts.push(`${props.ansiblexCount} Ansiblex`);
   return parts.join(' · ');
 }
 
@@ -447,93 +585,63 @@ interface AvoidOption extends PickerOption {
   name: string;
 }
 
-const roman = (n: number) => LEVELS[n]?.label ?? String(n);
-
 /**
  * The pilot's skills, folded away: they change rarely and ESI fills them in. The summary says
  * where the levels come from, and warns when they are only assumed (fuel and range follow them).
  */
 function PilotSkills(props: PanelState) {
   const { pilot: fill, settings, update, ship } = props;
-  const [open, setOpen] = useState(false);
   const { skills } = settings;
-  const levels = [
-    `${formatRange(props.rangeLy)} range`,
-    `JDC ${roman(skills.jdc)}`,
-    `JFC ${roman(skills.jfc)}`,
-    ...(ship.hull === 'jump_freighter' ? [`JF ${roman(skills.jf)}`] : []),
-  ].join(' · ');
   // Picked by hand wins over ESI until ESI is asked again or the pilot changes.
   const byHand = settings.skillsByHand;
   const fromEsi = !byHand && fill.skills !== null && fill.pilot !== null;
-  const source = fromEsi ? fill.pilot!.name : byHand ? 'set by hand' : 'assumed';
-  // Only missing skills (or an expired login) call for linking again; fatigue is a quiet extra.
-  const needsLink = skillsNeedLink(fill);
   return (
-    <>
-      <button
-        type="button"
-        className={styles.optionsToggle}
-        aria-expanded={open}
-        data-warn={(!fromEsi && !byHand) || undefined}
-        onClick={() => setOpen(!open)}
-      >
-        {!fromEsi && !byHand ? <TriangleAlert aria-hidden /> : <UserRound aria-hidden />}
-        <span>Skills</span>
-        <span className={styles.optionsSummary}>
-          {levels} · {source}
-        </span>
-        {open ? <ChevronUp aria-hidden /> : <ChevronDown aria-hidden />}
-      </button>
-      {open && (
-        <div className={styles.options}>
-          <Pilot {...props} />
-          <div className={styles.skills}>
-            <Field label="Calibration">
-              <Select
-                size="sm"
-                value={String(skills.jdc)}
-                onValueChange={(v) => update({ skills: { ...skills, jdc: Number(v) }, skillsByHand: true })}
-                options={LEVELS}
-              />
-            </Field>
-            <Field label="Conservation">
-              <Select
-                size="sm"
-                value={String(skills.jfc)}
-                onValueChange={(v) => update({ skills: { ...skills, jfc: Number(v) }, skillsByHand: true })}
-                options={LEVELS}
-              />
-            </Field>
-            {ship.hull === 'jump_freighter' && (
-              <Field label="Freighters">
-                <Select
-                  size="sm"
-                  value={String(skills.jf)}
-                  onValueChange={(v) => update({ skills: { ...skills, jf: Number(v) }, skillsByHand: true })}
-                  options={LEVELS}
-                />
-              </Field>
-            )}
-          </div>
-          {/* What to do about it when EVE could fill them, else where they come from. */}
-          {needsLink ? (
-            <PilotHint {...props} />
-          ) : (
-            <>
-              <p className={styles.skillsHint}>
-                {fromEsi
-                  ? `From ESI · ${fill.pilot!.name}`
-                  : byHand
-                    ? 'Set by hand · refresh to read ESI again'
-                    : 'Not read from EVE: fuel and range use these levels.'}
-              </p>
-              <PilotHint {...props} />
-            </>
-          )}
-        </div>
-      )}
-    </>
+    // Folded, it says only that the levels are guessed; open, what they are and where they come from.
+    <Disclosure
+      icon={!fromEsi && !byHand ? <TriangleAlert aria-hidden /> : <UserRound aria-hidden />}
+      title="Skills"
+      warn={!fromEsi && !byHand}
+    >
+      <Pilot {...props} />
+      <div className={styles.skills}>
+        <Field label="Calibration">
+          <Select
+            size="sm"
+            value={String(skills.jdc)}
+            onValueChange={(v) => update({ skills: { ...skills, jdc: Number(v) }, skillsByHand: true })}
+            options={LEVELS}
+          />
+        </Field>
+        <Field label="Conservation">
+          <Select
+            size="sm"
+            value={String(skills.jfc)}
+            onValueChange={(v) => update({ skills: { ...skills, jfc: Number(v) }, skillsByHand: true })}
+            options={LEVELS}
+          />
+        </Field>
+        {ship.hull === 'jump_freighter' && (
+          <Field label="Freighters">
+            <Select
+              size="sm"
+              value={String(skills.jf)}
+              onValueChange={(v) => update({ skills: { ...skills, jf: Number(v) }, skillsByHand: true })}
+              options={LEVELS}
+            />
+          </Field>
+        )}
+      </div>
+      {/* The range they give and where they come from, then what to do when EVE could fill them. */}
+      <p className={styles.skillsHint}>
+        {formatRange(props.rangeLy)} range ·{' '}
+        {fromEsi
+          ? `From ESI · ${fill.pilot!.name}`
+          : byHand
+            ? 'Set by hand · refresh to read ESI again'
+            : 'Assumed, not read from EVE'}
+      </p>
+      <PilotHint {...props} />
+    </Disclosure>
   );
 }
 
@@ -569,12 +677,6 @@ function Pilot({ pilot: fill, update }: PanelState) {
 /** ESI scopes the planner reads with: skills (extra `jumps`) and jump fatigue (extra `fatigue`). */
 const SKILLS_SCOPE = 'esi-skills.read_skills.v1';
 const FATIGUE_SCOPE = 'esi-characters.read_fatigue.v1';
-
-/** The skills scope is missing or the login expired: the levels cannot come from EVE. */
-function skillsNeedLink(fill: PilotFill): boolean {
-  if (!fill.pilot) return false;
-  return !fill.pilot.tokenValid || (fill.answer?.missingScopes.includes(SKILLS_SCOPE) ?? false);
-}
 
 /**
  * What to do when ESI did not fill the skills and fatigue: link again for skills (extra `jumps`),
@@ -619,16 +721,7 @@ function errorText(error: Error, fallback: string): string {
   return error instanceof ApiError ? error.message : fallback;
 }
 
-function Options({
-  model,
-  ship,
-  settings,
-  update,
-  ansiblex,
-  avoidSystems,
-  avoidRegions,
-  pilot: fill,
-}: PanelState) {
+function Options({ model, ship, settings, update, avoidSystems, avoidRegions, pilot: fill }: PanelState) {
   const searchAvoid = async (text: string) => {
     const q = text.trim().toLowerCase();
     const regions: AvoidOption[] = model.regionNames
@@ -646,45 +739,36 @@ function Options({
   };
   return (
     <div className={styles.options}>
-      <Switch
-        checked={settings.gates !== 'never'}
-        onCheckedChange={(on) => update({ gates: on ? 'finish' : 'never' })}
-        label="Finish over stargates"
-        description={
-          ship.highSec
-            ? 'Gates after the last jump, only where no jump reaches, e.g. into high-sec.'
-            : 'Gates after the last jump, where no cyno can be lit.'
-        }
-      />
-      <Switch
-        checked={settings.gates === 'shortcut'}
-        disabled={settings.gates === 'never'}
-        onCheckedChange={(on) => update({ gates: on ? 'shortcut' : 'finish' })}
-        label="Allow jump gates"
-        description="Up to three stargates after the last jump when they save jumps, e.g. into a system one gate on."
-      />
-      <Field label="Fuel prices" hint="Lowest sell order at the hub's main station.">
-        <Select
-          size="sm"
-          value={settings.fuelHub}
-          onValueChange={(hub) => update({ fuelHub: hub as JumpFuelHub })}
-          options={(Object.keys(HUB_LABELS) as JumpFuelHub[]).map((h) => ({
-            value: h,
-            label: HUB_LABELS[h],
-          }))}
-        />
-      </Field>
+      <div className={styles.row2}>
+        <Field label="Stargates">
+          <Select
+            size="sm"
+            value={settings.gates}
+            onValueChange={(gates) => update({ gates: gates as JumpGateUse })}
+            options={GATE_USES}
+          />
+        </Field>
+        <Field label="Fuel prices">
+          <Select
+            size="sm"
+            value={settings.fuelHub}
+            onValueChange={(hub) => update({ fuelHub: hub as JumpFuelHub })}
+            options={(Object.keys(HUB_LABELS) as JumpFuelHub[]).map((h) => ({
+              value: h,
+              label: HUB_LABELS[h],
+            }))}
+          />
+        </Field>
+      </div>
       <Switch
         checked={settings.preferStations}
         onCheckedChange={(on) => update({ preferStations: on })}
         label="Land at NPC stations"
-        description="Cyno in systems with a station to dock in, even when it costs more fuel."
       />
       <Switch
         checked={settings.outlaw}
         onCheckedChange={(on) => update({ outlaw: on })}
-        label="Outlaw"
-        description="Never enter high-sec."
+        label="Never enter high-sec"
       />
       <div className={styles.row2}>
         <Field label="Keep fatigue under">
@@ -695,11 +779,9 @@ function Options({
           />
         </Field>
         <Field
-          label="Fatigue now"
+          label="Fatigue now (min)"
           hint={
-            fill.fatigueExpiresAt !== undefined && fill.pilot
-              ? `Minutes, from ESI · ${fill.pilot.name}`
-              : 'Minutes'
+            fill.fatigueExpiresAt !== undefined && fill.pilot ? `From ESI · ${fill.pilot.name}` : undefined
           }
         >
           <Input
@@ -712,7 +794,7 @@ function Options({
           />
         </Field>
       </div>
-      <Field label="Avoid" hint="Systems and regions the route never stops in or passes.">
+      <Field label="Avoid">
         <SearchPicker<AvoidOption>
           value={null}
           onChange={(o) => {
@@ -768,29 +850,8 @@ function Options({
             ))}
         </ul>
       )}
-      {ship.ansiblex && (
-        <Field
-          label="Ansiblex bridges"
-          hint="One per line, e.g. 1DQ1-A > T5ZI-S. Your alliance's own, at most 5 ly apart."
-          error={
-            ansiblex.problems.length > 0
-              ? `Not understood: ${ansiblex.problems.slice(0, 2).join('; ')}`
-              : undefined
-          }
-        >
-          <Textarea
-            rows={3}
-            value={settings.ansiblex}
-            onChange={(e) => update({ ansiblex: e.target.value })}
-            spellCheck={false}
-          />
-        </Field>
-      )}
       {ship.bridges && (
-        <Field
-          label={ship.hull === 'titan' ? 'Bridged mass' : 'Mass bridged (covert ships)'}
-          hint="Tonnes per bridge, for the bridge fuel of each leg."
-        >
+        <Field label={ship.hull === 'titan' ? 'Bridged mass (t)' : 'Covert mass bridged (t)'}>
           <Input
             type="number"
             inputMode="numeric"
@@ -812,7 +873,7 @@ function clamp(n: number, min: number, max: number): number {
 }
 
 function Result(props: PanelState) {
-  const { plan, planning, planError, origin, destination, model, activeLeg, setActiveLeg, onShowLeg } = props;
+  const { plan, planning, planError, origin, destination, model } = props;
   // Nothing to say until both ends are picked: the fields say what goes in them.
   if (origin === null || destination === null) return null;
   if (planError) {
@@ -864,10 +925,9 @@ function Result(props: PanelState) {
                 .join('. ')}
             </Callout>
           )}
-          <RouteLegs route={route} activeLeg={activeLeg} setActiveLeg={setActiveLeg} onShowLeg={onShowLeg} />
           {props.phone && <RouteSummary {...props} />}
-          <FreightQuoteFold {...props} />
-          <RouteActions {...props} />
+          {props.phone && <FreightQuoteFold {...props} />}
+          {props.phone && plan && <RouteActions plan={plan} onShare={props.onShare} wide />}
         </>
       )}
     </section>
@@ -974,98 +1034,116 @@ function formatIskShort(isk: number): string {
     .replace(/[kMB]$/, (u) => u.toLowerCase());
 }
 
-/**
- * What to ask for carrying a contract along this route, folded under the summary: the fuel at the
- * hub price with a markup and the pilot's other terms (remembered), as their freight calculator does.
- */
-function FreightQuoteFold({ plan, ship, settings, update, fuelPrices }: PanelState) {
-  const [open, setOpen] = useState(false);
+/** The terms of a freight contract (remembered) and what to ask for it along this route. */
+function FreightFields({
+  plan,
+  settings,
+  update,
+  fuelPrices,
+}: Pick<PanelState, 'plan' | 'settings' | 'update' | 'fuelPrices'>) {
   const route = plan?.route;
-  if (!plan || !route || ship.hull !== 'jump_freighter') return null;
+  if (!plan || !route) return null;
   const terms = settings.freight;
   const set = (change: Partial<FreightTerms>) => update({ freight: { ...terms, ...change } });
   const price = fuelPrices?.prices[plan.ship.isotope] ?? null;
   const quote = price === null ? null : freightQuote(route, price, terms);
   return (
     <>
-      <button
-        type="button"
-        className={styles.optionsToggle}
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-      >
-        <Coins aria-hidden />
-        <span>Freight quote</span>
-        <span className={styles.optionsSummary}>
-          {quote ? `≈ ${formatIsk(quote.charge)}` : 'No fuel price yet'}
-        </span>
-        {open ? <ChevronUp aria-hidden /> : <ChevronDown aria-hidden />}
-      </button>
-      {open && (
-        <div className={styles.options}>
-          <div className={styles.row2}>
-            <AmountField label="Cargo (m³)" value={terms.cargoM3} onValue={(cargoM3) => set({ cargoM3 })} />
-            <AmountField
-              label="Collateral"
-              isk
-              value={terms.collateral}
-              onValue={(collateral) => set({ collateral })}
-            />
-            <AmountField
-              label="Fuel markup (%)"
-              value={terms.markupPct}
-              onValue={(markupPct) => set({ markupPct })}
-            />
-            <AmountField
-              label="Collateral fee (%)"
-              value={terms.collateralPct}
-              onValue={(collateralPct) => set({ collateralPct })}
-            />
-            <AmountField
-              label="Base reward"
-              isk
-              value={terms.baseReward}
-              onValue={(baseReward) => set({ baseReward })}
-            />
-            <AmountField label="Per m³" isk value={terms.perM3} onValue={(perM3) => set({ perM3 })} />
-            <AmountField label="Per jump" isk value={terms.perJump} onValue={(perJump) => set({ perJump })} />
-            <AmountField
-              label="Minimum"
-              isk
-              value={terms.minReward}
-              onValue={(minReward) => set({ minReward })}
-            />
+      <div className={styles.row2}>
+        <AmountField label="Cargo (m³)" value={terms.cargoM3} onValue={(cargoM3) => set({ cargoM3 })} />
+        <AmountField
+          label="Collateral"
+          isk
+          value={terms.collateral}
+          onValue={(collateral) => set({ collateral })}
+        />
+        <AmountField
+          label="Fuel markup (%)"
+          value={terms.markupPct}
+          onValue={(markupPct) => set({ markupPct })}
+        />
+        <AmountField
+          label="Collateral fee (%)"
+          value={terms.collateralPct}
+          onValue={(collateralPct) => set({ collateralPct })}
+        />
+        <AmountField
+          label="Base reward"
+          isk
+          value={terms.baseReward}
+          onValue={(baseReward) => set({ baseReward })}
+        />
+        <AmountField label="Per m³" isk value={terms.perM3} onValue={(perM3) => set({ perM3 })} />
+        <AmountField label="Per jump" isk value={terms.perJump} onValue={(perJump) => set({ perJump })} />
+        <AmountField
+          label="Minimum"
+          isk
+          value={terms.minReward}
+          onValue={(minReward) => set({ minReward })}
+        />
+      </div>
+      {quote ? (
+        <dl className={styles.facts} aria-label="Freight quote">
+          <div>
+            <dt>Charge</dt>
+            <dd>
+              {formatIsk(quote.charge)}
+              {quote.atMinimum && <small>the minimum</small>}
+            </dd>
           </div>
-          {quote ? (
-            <dl className={styles.facts} aria-label="Freight quote">
-              <div>
-                <dt>Charge</dt>
-                <dd>
-                  {formatIsk(quote.charge)}
-                  {quote.atMinimum && <small>the minimum</small>}
-                </dd>
-              </div>
-              <div>
-                <dt>Margin</dt>
-                <dd>{formatIsk(quote.margin)}</dd>
-              </div>
-              <div>
-                <dt>Fuel</dt>
-                <dd>
-                  {formatIsk(quote.fuelCost)}
-                  <small>
-                    {formatNumber(quote.fuelM3)} m³ · {formatNumber(price!)} ISK/u ·{' '}
-                    {HUB_LABELS[fuelPrices!.hub]}
-                  </small>
-                </dd>
-              </div>
-            </dl>
-          ) : (
-            <p className={styles.skillsHint}>The fuel price could not be read from the market yet.</p>
-          )}
-        </div>
+          <div>
+            <dt>Margin</dt>
+            <dd>{formatIsk(quote.margin)}</dd>
+          </div>
+          <div>
+            <dt>Fuel</dt>
+            <dd>{formatIsk(quote.fuelCost)}</dd>
+          </div>
+        </dl>
+      ) : (
+        <p className={styles.skillsHint}>The fuel price could not be read from the market yet.</p>
       )}
     </>
+  );
+}
+
+/** The freight quote's charge for the head of its card or sidebar. */
+function freightCharge({
+  plan,
+  settings,
+  fuelPrices,
+}: Pick<PanelState, 'plan' | 'settings' | 'fuelPrices'>): string {
+  const route = plan?.route;
+  const price = plan && fuelPrices ? (fuelPrices.prices[plan.ship.isotope] ?? null) : null;
+  if (!route || price === null) return 'No fuel price yet';
+  return `≈ ${formatIsk(freightQuote(route, price, settings.freight).charge)}`;
+}
+
+/**
+ * What to ask for carrying a contract along this route (jump freighters): the fuel at the hub
+ * price with a markup and the pilot's other terms, as their freight calculator does. A card in
+ * a phone's sheet.
+ */
+function FreightQuoteFold(props: PanelState) {
+  if (!props.plan?.route || props.ship.hull !== 'jump_freighter') return null;
+  return (
+    <Disclosure icon={<Coins aria-hidden />} title="Freight quote" summary={freightCharge(props)}>
+      <FreightFields {...props} />
+    </Disclosure>
+  );
+}
+
+/** The freight quote beside the map: a card of its own at the right, folded until opened. */
+export function FreightPanel(props: Pick<PanelState, 'plan' | 'settings' | 'update' | 'fuelPrices'>) {
+  return (
+    <Disclosure
+      className={styles.sidePanel}
+      icon={<Coins aria-hidden />}
+      title="Freight quote"
+      summary={freightCharge(props)}
+    >
+      <FreightFields {...props} />
+    </Disclosure>
   );
 }
 
@@ -1109,7 +1187,6 @@ export function RouteChoices({
         <span className={styles.choiceMeta} title={`${formatNumber(route.fuel)} ${isotope}`}>
           {isk !== null ? formatIsk(isk) : `${formatNumber(route.fuel)} ${isotope}`}
           {' · '}fatigue {formatMinutes(route.fatigueMinutes)}
-          {route.waitMinutes > 0 && ` · wait ${formatMinutes(route.waitMinutes)}`}
         </span>
       </>
     );
@@ -1138,68 +1215,13 @@ export function RouteChoices({
   );
 }
 
-/** The legs of a route, one row each; the row under the pointer is drawn bold on the map. */
-export function RouteLegs({
-  route,
-  activeLeg,
-  setActiveLeg,
-  onShowLeg,
-}: {
-  route: JumpRouteDto;
-  activeLeg: number | null;
-  setActiveLeg(n: number | null): void;
-  onShowLeg(n: number): void;
-}) {
-  return (
-    <ol className={styles.legs}>
-      {route.legs.map((leg, n) => (
-        <li
-          key={`${leg.from.id}-${leg.to.id}-${n}`}
-          data-active={activeLeg === n || undefined}
-          data-kind={leg.kind}
-          onMouseEnter={() => setActiveLeg(n)}
-          onMouseLeave={() => setActiveLeg(null)}
-        >
-          <button type="button" className={styles.leg} onClick={() => onShowLeg(n)}>
-            <span className={styles.legNumber}>{n + 1}</span>
-            <span className={styles.legMain}>
-              <span className={styles.legTitle}>
-                <span className={styles.secPill} style={{ background: securityColor(leg.to.security) }}>
-                  {securityLabel(leg.to.security)}
-                </span>
-                {leg.to.name}
-                {leg.kind !== 'jump' && <em>{leg.kind === 'gate' ? 'gate' : 'Ansiblex'}</em>}
-                {leg.kind === 'jump' && !leg.to.station && !leg.stop && n < route.legs.length - 1 && (
-                  <em>no station</em>
-                )}
-                {leg.stop && <em data-stop>stop</em>}
-              </span>
-              <span className={styles.legMeta}>
-                {leg.kind === 'jump'
-                  ? [
-                      formatLy(leg.ly),
-                      `${formatNumber(leg.fuel)} fuel`,
-                      ...(leg.bridgeFuel !== null ? [`bridge ${formatNumber(leg.bridgeFuel)}`] : []),
-                      ...(leg.waitMinutes > 0 ? [`wait ${formatMinutes(leg.waitMinutes)}`] : []),
-                      `fatigue ${formatMinutes(leg.fatigueMinutes)}`,
-                    ].join(' · ')
-                  : `${leg.to.region}${leg.waitMinutes > 0 ? ` · wait ${formatMinutes(leg.waitMinutes)}` : ''}`}
-              </span>
-            </span>
-          </button>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
 function nameOf(model: StarModel, id: number): string {
   const i = model.indexById.get(id);
   return i === undefined ? 'Unknown system' : model.names[i]!;
 }
 
 /** Makes a link anyone can open without signing in, and copies it. */
-function ShareButton({ onShare }: Pick<PanelState, 'onShare'>) {
+function ShareButton({ onShare, size = 'sm' }: Pick<PanelState, 'onShare'> & { size?: 'sm' | 'md' }) {
   const toast = useToast();
   const [sharing, setSharing] = useState(false);
   const share = async () => {
@@ -1223,19 +1245,27 @@ function ShareButton({ onShare }: Pick<PanelState, 'onShare'>) {
     }
   };
   return (
-    <Button size="sm" icon={<Link2 />} loading={sharing} onClick={() => void share()}>
+    <Button size={size} icon={<Link2 />} loading={sharing} onClick={() => void share()}>
       Share
     </Button>
   );
 }
 
-function RouteActions({ plan, onShare, phone }: PanelState) {
+/**
+ * What to do with the route: copy it, set it as in-game waypoints, share it. Small, in the
+ * panel's header beside the map; `wide` for a phone's sheet, with words on every button.
+ */
+function RouteActions({
+  plan,
+  onShare,
+  wide = false,
+}: Pick<PanelState, 'onShare'> & { plan: JumpPlanDto; wide?: boolean }) {
   const toast = useToast();
   const me = useMe();
   const [busy, setBusy] = useState(false);
   const pilots = (me.data?.characters ?? []).filter((c) => c.canSetWaypoints && c.tokenValid);
-  const route = plan?.route;
-  if (!plan || !route) return null;
+  const route = plan.route;
+  if (!route) return null;
 
   const copy = async () => {
     try {
@@ -1279,19 +1309,18 @@ function RouteActions({ plan, onShare, phone }: PanelState) {
   };
 
   return (
-    <div className={styles.actions}>
-      <Button icon={<Copy />} onClick={() => void copy()}>
-        Copy route
+    <div className={wide ? styles.actions : styles.headActions}>
+      <Button size={wide ? 'md' : 'sm'} icon={<Copy />} onClick={() => void copy()}>
+        Copy
       </Button>
-      {phone && <ShareButton onShare={onShare} />}
-      {pilots.length > 0 ? (
+      {pilots.length > 0 && (
         <Menu>
           <MenuTrigger asChild>
-            <Button icon={<Navigation />} loading={busy}>
-              Set waypoints
+            <Button size={wide ? 'md' : 'sm'} icon={<Navigation />} loading={busy}>
+              Waypoints
             </Button>
           </MenuTrigger>
-          <MenuContent align="start">
+          <MenuContent align="end">
             <MenuLabel>In-game waypoints for</MenuLabel>
             {pilots.map((c) => (
               <MenuItem key={c.id} onSelect={() => void waypoints(c.id, c.name)}>
@@ -1300,11 +1329,8 @@ function RouteActions({ plan, onShare, phone }: PanelState) {
             ))}
           </MenuContent>
         </Menu>
-      ) : (
-        <span className={styles.actionsHint}>
-          To set waypoints in game, link a character on the <a href="/account">account page</a>.
-        </span>
       )}
+      <ShareButton onShare={onShare} size={wide ? 'md' : 'sm'} />
     </div>
   );
 }

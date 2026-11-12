@@ -12,7 +12,6 @@ import {
   securityBucket,
   systemAt,
 } from './model';
-import { parseAnsiblex } from './settings';
 
 const model = buildStarModel(UNIVERSE);
 
@@ -61,18 +60,6 @@ describe('star model', () => {
     expect(toWorld(view, sx, sy)).toEqual([7, -1]);
     expect(dotRadius(1)).toBeGreaterThan(1);
     expect(dotRadius(1000)).toBeLessThanOrEqual(4.5);
-  });
-});
-
-describe('Ansiblex list', () => {
-  it('reads one bridge per line with any common separator', () => {
-    const parsed = parseAnsiblex('Jita > Ami\nignoitton » ahbazon\nAmi - Jita\nNowhere > Jita\n\n', model);
-    expect(parsed.pairs).toEqual([
-      [0, 3],
-      [1, 2],
-      [3, 0],
-    ]);
-    expect(parsed.problems).toEqual(['Nowhere > Jita']);
   });
 });
 

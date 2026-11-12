@@ -147,7 +147,7 @@ describe('JumpPage', () => {
     renderPage();
     expect(await screen.findByRole('img', { name: /Star map of known space/ })).toBeTruthy();
     const panel = screen.getByRole('complementary', { name: 'Jump planner' });
-    expect(within(panel).getByText(/10 ly range/)).toBeTruthy();
+    expect(within(panel).getByRole('button', { name: 'Skills' })).toBeTruthy();
     expect(within(panel).queryByRole('region', { name: 'Route' })).toBeNull();
 
     await user.type(within(panel).getAllByRole('combobox')[2]!, 'Ignoi');
@@ -160,13 +160,15 @@ describe('JumpPage', () => {
     expect(
       within(screen.getByRole('region', { name: 'Route totals' })).getByText(/57,408 helium/),
     ).toBeTruthy();
-    expect(within(route).getAllByRole('listitem')).toHaveLength(2);
+    // Every leg shows in the trip's own list: the system between, then the destination's card.
+    expect(route).toBeTruthy();
+    expect(panel.querySelectorAll('[data-leg]')).toHaveLength(2);
     expect(requests[0]).toMatchObject({
       shipTypeId: ARK.typeId,
       origin: 30002647,
       destination: 30005035,
       skills: { jdc: 5, jfc: 4, jf: 4 },
-      gates: 'finish',
+      gates: 'never',
     });
     await waitFor(() => expect(window.location.search).toBe('?from=Ignoitton&to=Ami&ship=Ark'));
   });
@@ -205,26 +207,21 @@ describe('JumpPage', () => {
     );
   });
 
-  it('lets a stargate save a jump only when allowed', async () => {
+  it('plans without stargates unless asked, and moves older saves to that default', async () => {
+    // Saved before "no gates" was the default: gates after the last jump only because it was.
+    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify({ gates: 'finish' }));
     window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&ship=Ark');
-    const user = userEvent.setup();
+    const { unmount } = renderPage();
+    await screen.findByRole('region', { name: 'Route' });
+    expect(requests.at(-1)).toMatchObject({ gates: 'never' });
+    unmount();
+
+    // Asked for: the options card says so while folded.
+    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify({ version: 3, gates: 'shortcut' }));
     renderPage();
     const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
-    await screen.findByRole('region', { name: 'Route' });
-    await user.click(within(panel).getByRole('button', { name: /Route options/ }));
-    const allow = within(panel).getByRole('switch', { name: /Allow jump gates/ });
-    expect(allow.getAttribute('aria-checked')).toBe('false');
-    await user.click(allow);
     await waitFor(() => expect(requests.at(-1)).toMatchObject({ gates: 'shortcut' }));
-    expect(within(panel).getByText(/gate shortcuts/)).toBeTruthy();
-    // No gates at all turns it off with them.
-    await user.click(within(panel).getByRole('switch', { name: /Finish over stargates/ }));
-    await waitFor(() => expect(requests.at(-1)).toMatchObject({ gates: 'never' }));
-    expect(
-      within(panel)
-        .getByRole('switch', { name: /Allow jump gates/ })
-        .hasAttribute('disabled'),
-    ).toBe(true);
+    expect(within(panel).getByRole('button', { name: /Route options.*gate shortcuts/ })).toBeTruthy();
   });
 
   it('reverses the route by moving the start below the destination; no swap button', async () => {
@@ -234,12 +231,10 @@ describe('JumpPage', () => {
     const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
     await screen.findByRole('region', { name: 'Route' });
     expect(within(panel).queryByRole('button', { name: /Swap/ })).toBeNull();
-    // "Add stop" sits between the start and the destination.
+    // "Add stop" sits under the trip (its stop goes before the destination).
     const rows = [...panel.querySelectorAll('[data-picker], button')];
     const add = within(panel).getByRole('button', { name: 'Add stop' });
-    const at = rows.indexOf(add);
-    expect(rows.indexOf(panel.querySelector('[data-picker="origin"]')!)).toBeLessThan(at);
-    expect(rows.indexOf(panel.querySelector('[data-picker="destination"]')!)).toBeGreaterThan(at);
+    expect(rows.indexOf(panel.querySelector('[data-picker="destination"]')!)).toBeLessThan(rows.indexOf(add));
     within(panel)
       .getByRole('button', { name: /Move start/ })
       .focus();
@@ -272,11 +267,10 @@ describe('JumpPage', () => {
     const user = userEvent.setup();
     renderPage();
     const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
-    // Folded away: the summary names the range, the levels and where they come from.
-    const skills = await within(panel).findByRole('button', { name: /Skills.*Ayla Vex/ });
-    expect(skills.textContent).toMatch(/9 ly range · JDC IV · JFC V · JF II · Ayla Vex/);
+    // Folded away under its name; open, the range and where the levels come from.
+    const skills = await within(panel).findByRole('button', { name: 'Skills' });
     await user.click(skills);
-    expect(await within(panel).findByText('From ESI · Ayla Vex')).toBeTruthy();
+    expect(await within(panel).findByText('9 ly range · From ESI · Ayla Vex')).toBeTruthy();
     await waitFor(() =>
       expect(requests.at(-1)).toMatchObject({
         skills: { jdc: 4, jfc: 5, jf: 2 },
@@ -285,29 +279,29 @@ describe('JumpPage', () => {
     );
 
     await user.click(within(panel).getByRole('button', { name: /Route options/ }));
-    expect(within(panel).getByText('Minutes, from ESI · Ayla Vex')).toBeTruthy();
-    const fatigue = within(panel).getByLabelText('Fatigue now');
+    expect(within(panel).getByText('From ESI · Ayla Vex')).toBeTruthy();
+    const fatigue = within(panel).getByLabelText('Fatigue now (min)');
     await user.clear(fatigue);
     await user.type(fatigue, '10');
-    expect(within(panel).getByText('Minutes')).toBeTruthy();
+    expect(within(panel).queryByText('From ESI · Ayla Vex')).toBeNull();
     await waitFor(() => expect(requests.at(-1)).toMatchObject({ fatigueNowMinutes: 10 }));
     // The skills still come from ESI: only the fatigue was edited.
     expect(requests.at(-1)).toMatchObject({ skills: { jdc: 4, jfc: 5, jf: 2 } });
 
     await user.click(within(panel).getByRole('button', { name: 'Read skills and fatigue from ESI again' }));
     await waitFor(() => expect(asked).toBe(2));
-    expect(await within(panel).findByText('Minutes, from ESI · Ayla Vex')).toBeTruthy();
+    expect(await within(panel).findByText('From ESI · Ayla Vex')).toBeTruthy();
     // The route for 42 minutes was planned before, so it comes from the cache.
-    expect((within(panel).getByLabelText('Fatigue now') as HTMLInputElement).value).toBe('42');
+    expect((within(panel).getByLabelText('Fatigue now (min)') as HTMLInputElement).value).toBe('42');
   });
 
   it('offers linking the pilot again for skills when the grant lacks them', async () => {
     const user = userEvent.setup();
     renderPage();
     const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
-    // The folded summary warns that the levels are only assumed.
-    const skills = await within(panel).findByRole('button', { name: /Skills.*assumed/ });
-    expect(skills.textContent).toMatch(/10 ly range/);
+    // The folded card warns that the levels are only assumed.
+    const skills = await within(panel).findByRole('button', { name: 'Skills' });
+    expect(skills.hasAttribute('data-warn')).toBe(true);
     await user.click(skills);
     const link = await within(panel).findByRole('link', { name: 'Allow skills for Ayla Vex' });
     const href = new URL(link.getAttribute('href')!, 'http://x');
@@ -315,8 +309,8 @@ describe('JumpPage', () => {
     expect(href.searchParams.get('extras')).toBe('jumps');
     expect(href.searchParams.get('returnTo')).toMatch(/^\/jump/);
     expect(within(panel).getByText(/to fill these from EVE/)).toBeTruthy();
-    // Nothing from ESI: the remembered levels stay, and the summary says they are assumed.
-    expect(skills.textContent).toMatch(/JDC V · JFC IV · JF IV · assumed/);
+    // Nothing from ESI: the remembered levels stay, and the card says they are assumed.
+    expect(within(panel).getByText('10 ly range · Assumed, not read from EVE')).toBeTruthy();
   });
 
   it('reads the skills when only jump fatigue is missing, and offers fatigue as a quiet extra', async () => {
@@ -338,10 +332,10 @@ describe('JumpPage', () => {
     renderPage();
     const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
     // No warning: the levels come from EVE.
-    const skills = await within(panel).findByRole('button', { name: /Skills.*Ayla Vex/ });
-    expect(skills.hasAttribute('data-warn')).toBe(false);
+    const skills = await within(panel).findByRole('button', { name: 'Skills' });
+    await waitFor(() => expect(skills.hasAttribute('data-warn')).toBe(false));
     await user.click(skills);
-    expect(within(panel).getByText('From ESI · Ayla Vex')).toBeTruthy();
+    expect(within(panel).getByText(/From ESI · Ayla Vex/)).toBeTruthy();
     const fatigue = within(panel).getByRole('link', { name: 'Read jump fatigue too' });
     expect(new URL(fatigue.getAttribute('href')!, 'http://x').searchParams.get('extras')).toMatch(/fatigue/);
     expect(within(panel).queryByRole('link', { name: /Allow skills/ })).toBeNull();
@@ -354,9 +348,10 @@ describe('JumpPage', () => {
     );
     renderPage();
     const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
-    const skills = await within(panel).findByRole('button', { name: /Skills/ });
-    expect(skills.textContent).toMatch(/JDC IV · JFC III · JF II · set by hand/);
+    const skills = await within(panel).findByRole('button', { name: 'Skills' });
     expect(skills.hasAttribute('data-warn')).toBe(false);
+    await userEvent.setup().click(skills);
+    expect(within(panel).getByText(/Set by hand/)).toBeTruthy();
   });
 
   it('plans with a level set by hand over the one ESI reads, until ESI is asked again', async () => {
@@ -382,12 +377,12 @@ describe('JumpPage', () => {
     const user = userEvent.setup();
     renderPage();
     const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
-    const skills = await within(panel).findByRole('button', { name: /Skills.*set by hand/ });
+    const skills = await within(panel).findByRole('button', { name: 'Skills' });
     await waitFor(() => expect(requests.at(-1)).toMatchObject({ skills: { jdc: 5, jfc: 3, jf: 3 } }));
 
     await user.click(skills);
     await user.click(within(panel).getByRole('button', { name: 'Read skills and fatigue from ESI again' }));
-    expect(await within(panel).findByText('From ESI · Ayla Vex')).toBeTruthy();
+    expect(await within(panel).findByText(/From ESI · Ayla Vex/)).toBeTruthy();
     await waitFor(() => expect(requests.at(-1)).toMatchObject({ skills: { jdc: 4, jfc: 3, jf: 3 } }));
   });
 
@@ -416,9 +411,12 @@ describe('JumpPage', () => {
     expect(within(panel).queryByRole('region', { name: 'Route summary' })).toBeNull();
 
     // A jump freighter gets a freight quote: the fuel with 20 % markup and 1 % of the collateral.
-    await user.click(within(panel).getByRole('button', { name: /Freight quote/ }));
-    await user.type(within(panel).getByLabelText('Collateral'), '1b');
-    expect(await within(panel).findByText('58.2M ISK')).toBeTruthy();
+    // Its own card at the map's right, folded until opened.
+    const freight = screen.getByRole('button', { name: /Freight quote/ });
+    expect(freight.getAttribute('aria-expanded')).toBe('false');
+    await user.click(freight);
+    await user.type(screen.getByLabelText('Collateral'), '1b');
+    expect(await screen.findByText('58.2M ISK')).toBeTruthy();
     expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEY)!).freight).toMatchObject({ collateral: 1e9 });
 
     await user.click(within(panel).getByRole('button', { name: 'Remove stop 1' }));
@@ -478,7 +476,8 @@ describe('JumpPage', () => {
     const user = userEvent.setup();
     renderPage();
     const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
-    expect(within(panel).getByRole('button', { name: /Skills/ }).textContent).toMatch(/6 ly range/);
+    await user.click(within(panel).getByRole('button', { name: 'Skills' }));
+    expect(within(panel).getByText(/^6 ly range/)).toBeTruthy();
     await screen.findByRole('region', { name: 'Route' });
     expect(requests[0]).toMatchObject({ shipTypeId: 11567, origin: 30000142, destination: 30005035 });
     await user.keyboard('{Escape}');

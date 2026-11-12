@@ -1,11 +1,13 @@
 import type { JumpFuelHub, JumpGateUse, JumpSkills } from '@darkbeacon/shared';
 import { DEFAULT_FREIGHT, freightTermsFrom, type FreightTerms } from './freight';
-import type { StarModel } from './model';
 
 /** What the planner remembers per browser (a convenience; nothing breaks without it). */
 export interface PlannerSettings {
-  /** 2: landing at stations became the default (older saves had it off without asking). */
-  version: 2;
+  /**
+   * 3: no stargates by default (older saves had gates after the last jump without asking);
+   * 2: landing at stations became the default.
+   */
+  version: 3;
   ship: string | null;
   /** The character whose skills and fatigue ESI fills in; null: my main (else the first). */
   pilot: number | null;
@@ -24,7 +26,6 @@ export interface PlannerSettings {
   /** Avoided systems and regions by name. */
   avoidSystems: string[];
   avoidRegions: string[];
-  ansiblex: string;
   bridgeTonnes: number | null;
   /** Systems picked as a start or destination, by name, most recent first. */
   recent: string[];
@@ -33,12 +34,12 @@ export interface PlannerSettings {
 const FUEL_HUBS: readonly JumpFuelHub[] = ['jita', 'amarr', 'dodixie', 'rens', 'hek'];
 
 export const DEFAULT_SETTINGS: PlannerSettings = {
-  version: 2,
+  version: 3,
   ship: null,
   pilot: null,
   skills: { jdc: 5, jfc: 4, jf: 4 },
   skillsByHand: false,
-  gates: 'finish',
+  gates: 'never',
   fuelHub: 'jita',
   freight: DEFAULT_FREIGHT,
   preferStations: true,
@@ -47,7 +48,6 @@ export const DEFAULT_SETTINGS: PlannerSettings = {
   fatigueNow: 0,
   avoidSystems: [],
   avoidRegions: [],
-  ansiblex: '',
   bridgeTonnes: null,
   recent: [],
 };
@@ -62,9 +62,11 @@ export function loadSettings(): PlannerSettings {
     return {
       ...DEFAULT_SETTINGS,
       ...parsed,
-      version: 2,
+      version: 3,
       // Saved before landing at stations was the default: it was off only because it was.
-      preferStations: parsed.version === 2 ? parsed.preferStations !== false : true,
+      preferStations: (parsed.version ?? 1) >= 2 ? parsed.preferStations !== false : true,
+      // Saved before no gates was the default: gates after the last jump only because it was.
+      gates: (parsed.version ?? 1) >= 3 && parsed.gates ? parsed.gates : 'never',
       skills: { ...DEFAULT_SETTINGS.skills, ...parsed.skills },
       pilot: typeof parsed.pilot === 'number' ? parsed.pilot : null,
       skillsByHand: parsed.skillsByHand === true,
@@ -83,34 +85,4 @@ export function saveSettings(settings: PlannerSettings): void {
   } catch {
     // Private windows and blocked storage: the planner just forgets.
   }
-}
-
-export interface AnsiblexParse {
-  pairs: Array<[number, number]>;
-  /** Lines that did not name two known systems. */
-  problems: string[];
-}
-
-/**
- * Ansiblex bridges, one per line: two system names with `>`, `»`, `<>`, `->`, `→`, `↔`, a dash
- * or a comma between them (as people paste them from notes and Dotlan lists).
- */
-export function parseAnsiblex(text: string, model: StarModel): AnsiblexParse {
-  const byName = new Map<string, number>();
-  for (let i = 0; i < model.size; i++) byName.set(model.keys[i]!, i);
-  const pairs: Array<[number, number]> = [];
-  const problems: string[] = [];
-  for (const raw of text.split('\n')) {
-    const line = raw.trim();
-    if (!line) continue;
-    const parts = line
-      .split(/\s*(?:<->|<>|->|=>|»|›|→|↔|>|,|\t|\s[-–—]\s)\s*/)
-      .map((p) => p.trim().toLowerCase())
-      .filter(Boolean);
-    const a = parts.length === 2 ? byName.get(parts[0]!) : undefined;
-    const b = parts.length === 2 ? byName.get(parts[1]!) : undefined;
-    if (a === undefined || b === undefined) problems.push(line);
-    else pairs.push([a, b]);
-  }
-  return { pairs, problems };
 }

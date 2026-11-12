@@ -193,27 +193,10 @@
   overscroll-behavior: contain;
 }
 
-/* The trip, set apart from the ship above it under a label of its own. */
-.routeSection {
-  display: grid;
-  gap: var(--dbk-space-3);
-  margin-top: var(--dbk-space-3);
-  padding-top: var(--dbk-space-4);
-  border-top: 1px solid var(--dbk-color-border);
-}
-
-.sectionLabel {
-  margin: 0;
-  color: var(--dbk-color-text-muted);
-  font-size: var(--dbk-font-size-xs);
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
 /* Route options and skills: shape every route, changed rarely, so at the bottom. */
 .settingsFoot {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--dbk-space-2);
   margin-top: auto;
   padding-top: var(--dbk-space-4);
@@ -233,7 +216,91 @@
 
 .endpoints {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--dbk-space-2);
+}
+
+.routeGroup {
+  margin-top: var(--dbk-space-3);
+}
+
+/* A system of the trip as a card: the picker (or its name) and how the route gets there. */
+.systemCard {
+  display: grid;
+  min-width: 0;
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+  background: var(--dbk-color-surface);
+  box-shadow: var(--dbk-shadow-small);
+  transition: border-color var(--dbk-motion-fast) var(--dbk-motion-easing);
+}
+
+.systemCard:focus-within {
+  border-color: var(--dbk-color-focus);
+  box-shadow: 0 0 0 3px var(--dbk-color-accent-subtle);
+}
+
+.systemCard[data-active] {
+  border-color: var(--dbk-color-accent);
+}
+
+/* A system the route only passes: its name where a picker would be. */
+.systemName {
+  display: flex;
+  align-items: center;
+  gap: var(--dbk-space-2);
+  min-width: 0;
+  height: var(--dbk-control-height);
+  padding: 0 var(--dbk-space-3);
+  white-space: nowrap;
+}
+
+.systemName strong {
+  font-weight: 600;
+}
+
+.systemRegion,
+.systemName em {
+  overflow: hidden;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+  font-style: normal;
+  text-overflow: ellipsis;
+}
+
+.legStats {
+  display: block;
+  width: 100%;
+  padding: 0 var(--dbk-space-3) var(--dbk-space-2);
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.legStats .facts {
+  margin: 0;
+}
+
+.headActions {
+  display: flex;
+  align-items: center;
+  gap: var(--dbk-space-1);
+}
+
+/* The freight quote beside the map, at the right: a card folded until opened. */
+.sidePanel {
+  position: absolute;
+  z-index: 8;
+  top: var(--dbk-space-3);
+  right: var(--dbk-space-3);
+  width: 320px;
+  max-height: calc(100% - 2 * var(--dbk-space-3) - 136px);
+  overflow-y: auto;
+  border-radius: var(--dbk-radius-large);
+  box-shadow: var(--dbk-shadow-medium);
 }
 
 /* "Add stop" between the last stop and the destination: a row the size of a point. */
@@ -267,18 +334,10 @@
   height: 16px;
 }
 
-.gripSpacer {
-  width: 20px;
-}
-
 /* A point of the trip: grip, picker, and × for a stop (a spacer keeps the fields aligned). */
+/* A point of the trip: its card as wide as the panel, the grip in the panel's margin. */
 .point {
   position: relative;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--dbk-space-1);
-  border-radius: var(--dbk-radius);
 }
 
 .point[data-dragging] {
@@ -305,10 +364,13 @@
 }
 
 .grip {
+  position: absolute;
+  top: 0;
+  left: calc(-1 * var(--dbk-space-4));
   display: inline-grid;
   place-items: center;
-  width: 20px;
-  height: 32px;
+  width: var(--dbk-space-4);
+  height: var(--dbk-control-height);
   padding: 0;
   border: 0;
   border-radius: var(--dbk-radius);
@@ -336,10 +398,6 @@
 .grip svg {
   width: 14px;
   height: 14px;
-}
-
-.pointSpacer {
-  width: 28px;
 }
 
 .pilot {
@@ -470,7 +528,7 @@
   bottom: var(--dbk-space-3);
   display: flex;
   justify-content: center;
-  padding: 0 56px; /* clear of the zoom buttons, centred in the free map */
+  padding: 0 var(--dbk-space-3);
   pointer-events: none;
 }
 
@@ -596,98 +654,11 @@
   margin: 0;
 }
 
-.legs {
-  display: grid;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.leg {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--dbk-space-2);
-  width: 100%;
-  padding: var(--dbk-space-1) var(--dbk-space-2);
-  border: 0;
-  border-radius: var(--dbk-radius);
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.legs li[data-active] .leg,
-.leg:hover {
-  background: var(--dbk-color-surface-hover);
-}
-
-.legNumber {
-  display: inline-grid;
-  flex: none;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  margin-top: 1px;
-  border-radius: 50%;
-  background: var(--dbk-color-accent);
-  color: var(--dbk-color-accent-contrast);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.legs li[data-kind='gate'] .legNumber,
-.legs li[data-kind='ansiblex'] .legNumber {
-  border: 1.5px solid var(--dbk-color-text-muted);
-  background: none;
-  color: var(--dbk-color-text);
-}
-
-.legMain {
-  display: grid;
-  min-width: 0;
-}
-
-.legTitle {
-  display: flex;
-  align-items: center;
-  gap: var(--dbk-space-2);
-  font-weight: 600;
-}
-
-.legTitle em {
-  color: var(--dbk-color-text-muted);
-  font-size: var(--dbk-font-size-small);
-  font-style: normal;
-  font-weight: 400;
-}
-
-/* A stop the pilot asked for, between the start and the destination. */
-.legTitle em[data-stop] {
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--dbk-color-accent-subtle);
-  color: var(--dbk-color-accent-text);
-  font-size: var(--dbk-font-size-xs);
-}
-
-.legMeta {
-  color: var(--dbk-color-text-muted);
-  font-size: var(--dbk-font-size-small);
-}
-
 .actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--dbk-space-2);
-}
-
-.actionsHint {
-  color: var(--dbk-color-text-muted);
-  font-size: var(--dbk-font-size-small);
 }
 
 .sheetHandle {

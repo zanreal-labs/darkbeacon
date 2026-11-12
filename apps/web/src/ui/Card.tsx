@@ -1,6 +1,7 @@
 'use client';
 
-import type { HTMLAttributes, ReactNode } from 'react';
+import { ChevronDown } from 'lucide-react';
+import { useState, type HTMLAttributes, type ReactNode } from 'react';
 import { cx } from './cx';
 import styles from './display.module.css';
 
@@ -71,5 +72,48 @@ export function Row({
       </div>
       {actions}
     </li>
+  );
+}
+
+export interface DisclosureProps {
+  /** An icon before the title (16 px). */
+  icon?: ReactNode;
+  title: ReactNode;
+  /** A short note at the end of the closed head, only when it says what the body would not. */
+  summary?: ReactNode;
+  /** Tints the icon: something in the body wants attention. */
+  warn?: boolean;
+  defaultOpen?: boolean;
+  children: ReactNode;
+  className?: string;
+}
+
+/** A card that folds its body away: the head opens it, and the body opens inside the card. */
+export function Disclosure({
+  icon,
+  title,
+  summary,
+  warn,
+  defaultOpen = false,
+  children,
+  className,
+}: DisclosureProps) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section className={cx(styles.disclosure, className)} data-open={open || undefined}>
+      <button
+        type="button"
+        className={styles.disclosureHead}
+        aria-expanded={open}
+        data-warn={warn || undefined}
+        onClick={() => setOpen(!open)}
+      >
+        {icon}
+        <span className={styles.disclosureTitle}>{title}</span>
+        {summary && <span className={styles.disclosureSummary}>{summary}</span>}
+        <ChevronDown aria-hidden className={styles.disclosureChevron} />
+      </button>
+      {open && <div className={styles.disclosureBody}>{children}</div>}
+    </section>
   );
 }

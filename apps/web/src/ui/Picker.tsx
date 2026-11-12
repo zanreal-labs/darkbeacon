@@ -49,6 +49,12 @@ export interface SearchPickerProps<T extends PickerOption> {
   /** What to say when nothing matched. */
   empty?: ReactNode;
   disabled?: boolean;
+  /** A control at the end of the empty field (e.g. removing a row), where × sits once picked. */
+  trailing?: ReactNode;
+  /** No border or fill of its own: the field is part of a card that draws them. */
+  bare?: boolean;
+  /** What × on a picked value does, for screen readers and tests (default "Choose another"). */
+  clearLabel?: string;
   'aria-label'?: string;
 }
 
@@ -66,6 +72,9 @@ export function SearchPicker<T extends PickerOption>({
   debounce = 250,
   empty = 'Nothing found',
   disabled,
+  trailing,
+  bare,
+  clearLabel = 'Choose another',
   ...aria
 }: SearchPickerProps<T>) {
   const field = useFieldControl();
@@ -110,7 +119,11 @@ export function SearchPicker<T extends PickerOption>({
 
   if (value) {
     return (
-      <div className={cx(fieldStyles.control, styles.chosen)} data-disabled={disabled || undefined}>
+      <div
+        className={cx(fieldStyles.control, styles.chosen)}
+        data-disabled={disabled || undefined}
+        data-bare={bare || undefined}
+      >
         {value.imageUrl !== undefined && (
           <Avatar src={value.imageUrl} name={value.label} size={22} shape={value.shape ?? 'circle'} />
         )}
@@ -120,7 +133,7 @@ export function SearchPicker<T extends PickerOption>({
         </span>
         <IconButton
           size="sm"
-          label="Choose another"
+          label={clearLabel}
           icon={<X />}
           disabled={disabled}
           tooltip={false}
@@ -161,7 +174,7 @@ export function SearchPicker<T extends PickerOption>({
     <P.Root open={showList}>
       <div className={styles.picker} ref={placeIn}>
         <P.Anchor asChild>
-          <div className={fieldStyles.control}>
+          <div className={fieldStyles.control} data-bare={bare || undefined}>
             <Search aria-hidden />
             <input
               ref={inputRef}
@@ -190,6 +203,7 @@ export function SearchPicker<T extends PickerOption>({
               onKeyDown={keyDown}
             />
             {results.isFetching && enabled && debounce > 0 && <Spinner label="Searching" />}
+            {trailing}
           </div>
         </P.Anchor>
       </div>

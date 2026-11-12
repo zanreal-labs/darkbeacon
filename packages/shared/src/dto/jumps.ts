@@ -125,13 +125,14 @@ export const JumpPlanRequest = z.object({
   avoidRegions: z.array(EveId).max(100).default([]),
   /** Land (light the cyno) in systems with an NPC station to dock in, even at the cost of more fuel. */
   preferStations: z.boolean().default(true),
-  gates: JumpGateUse.default('finish'),
+  /** Stargates: none by default (capitals light their way). */
+  gates: JumpGateUse.default('never'),
   /** Never enter high-sec, as the `outlaw` route mode. */
   outlaw: z.boolean().default(false),
-  /** The pilot's own Ansiblex jump bridges. */
+  /** Ansiblex jump bridges the pilot may take (the maps' own), each used both ways. */
   ansiblex: z
     .array(z.object({ from: EveId, to: EveId }))
-    .max(200)
+    .max(2000)
     .default([]),
   /** Wait between jumps so fatigue stays at or under this (minutes). */
   maxFatigueMinutes: z.number().int().min(10).max(300).nullable().default(null),

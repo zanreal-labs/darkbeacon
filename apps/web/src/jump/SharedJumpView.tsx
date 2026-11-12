@@ -9,7 +9,7 @@ import { LogoMark } from '../shell/Logo';
 import { Badge, Button, ErrorState } from '../ui';
 import type { Overlay, RouteLeg } from './draw';
 import { formatLy, formatRange } from './format';
-import { RouteLegs, RouteSummary } from './JumpPanel';
+import { RouteSummary, RouteSystems } from './JumpPanel';
 import { buildStarModel, type StarModel } from './model';
 import { StarMap, type StarMapHandle } from './StarMap';
 import { JumpLoading } from '../screens/JumpLoading';
@@ -158,7 +158,7 @@ function Shared({ view, model }: { view: JumpShareViewDto; model: StarModel }) {
                   {route.ansiblex > 0 && ` + ${route.ansiblex} Ansiblex`}
                   <span>{formatLy(route.ly)}</span>
                 </div>
-                <RouteLegs
+                <RouteSystems
                   route={route}
                   activeLeg={activeLeg}
                   setActiveLeg={setActiveLeg}

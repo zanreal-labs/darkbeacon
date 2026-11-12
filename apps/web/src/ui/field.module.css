@@ -82,6 +82,14 @@
   font-size: var(--dbk-font-size-small);
 }
 
+/* A control inside a card that draws the border and fill (the card shows focus itself). */
+.control[data-bare],
+.control[data-bare]:focus-within {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
 .bare {
   flex: 1;
   min-width: 0;

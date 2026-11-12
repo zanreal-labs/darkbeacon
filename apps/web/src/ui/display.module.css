@@ -124,6 +124,76 @@
   box-shadow: var(--dbk-shadow-small);
 }
 
+/* A card that folds its body away; the head is the whole first row. */
+.disclosure {
+  min-width: 0;
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius);
+  background: var(--dbk-color-surface);
+}
+
+.disclosureHead {
+  display: flex;
+  align-items: center;
+  gap: var(--dbk-space-2);
+  width: 100%;
+  min-width: 0;
+  min-height: var(--dbk-control-height);
+  padding: 0 var(--dbk-space-3);
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  color: var(--dbk-color-text);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.disclosureHead:hover {
+  background: var(--dbk-color-surface-hover);
+}
+
+.disclosureHead:focus-visible {
+  outline: 2px solid var(--dbk-color-focus);
+  outline-offset: -2px;
+}
+
+.disclosureHead svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--dbk-color-text-muted);
+}
+
+.disclosureHead[data-warn] svg:first-child {
+  color: var(--dbk-color-warning);
+}
+
+.disclosureTitle {
+  flex: 1;
+  min-width: 0;
+}
+
+.disclosureSummary {
+  overflow: hidden;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.disclosure[data-open] .disclosureChevron {
+  transform: rotate(180deg);
+}
+
+.disclosureBody {
+  display: grid;
+  gap: var(--dbk-space-3);
+  padding: var(--dbk-space-1) var(--dbk-space-3) var(--dbk-space-3);
+}
+
 .cardHeader {
   display: flex;
   flex-wrap: wrap;

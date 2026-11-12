@@ -135,8 +135,11 @@ describeEachDialect('jump planner over HTTP', (t) => {
     expect(route.fatigueMinutes).toBeLessThan(120);
   });
 
-  it('finishes a jump freighter trip into Amarr over stargates', async () => {
-    const route = (await plan({ shipTypeId: ARK, origin: JITA, destination: AMARR })).route!;
+  it('uses no stargates unless asked, and finishes a trip into Amarr over them when asked', async () => {
+    const plain = await plan({ shipTypeId: ARK, origin: JITA, destination: AMARR });
+    expect(plain.route).toBeNull();
+    expect(plain.problem?.code).toBe('no_route');
+    const route = (await plan({ shipTypeId: ARK, origin: JITA, destination: AMARR, gates: 'finish' })).route!;
     expect(route.legs[route.legs.length - 1]!.to.name).toBe('Amarr');
     expect(route.jumps).toBeLessThanOrEqual(3);
     expect(route.gates).toBeGreaterThan(0);
