@@ -156,7 +156,10 @@ describe('JumpPage', () => {
     await user.click(await screen.findByRole('option', { name: /Ami/ }));
 
     const route = await screen.findByRole('region', { name: 'Route' });
-    expect(within(route).getByText('57,408 helium')).toBeTruthy();
+    // Without a fuel price the totals over the map count the isotopes.
+    expect(
+      within(screen.getByRole('region', { name: 'Route totals' })).getByText(/57,408 helium/),
+    ).toBeTruthy();
     expect(within(route).getAllByRole('listitem')).toHaveLength(2);
     expect(requests[0]).toMatchObject({
       shipTypeId: ARK.typeId,
@@ -407,8 +410,10 @@ describe('JumpPage', () => {
     expect(requests.at(-1)).toMatchObject({ via: [30000142], roundTrip: false });
     expect(within(panel).getByText('Stop 1')).toBeTruthy();
     // 57,408 helium at 700 ISK.
-    const summary = await within(panel).findByRole('region', { name: 'Route summary' });
-    expect(await within(summary).findByText(/≈ 40.2M ISK · Jita/)).toBeTruthy();
+    // The totals are in the bubble over the map, not in the panel.
+    const totals = await screen.findByRole('region', { name: 'Route totals' });
+    expect(await within(totals).findByText(/40.2M ISK/)).toBeTruthy();
+    expect(within(panel).queryByRole('region', { name: 'Route summary' })).toBeNull();
 
     // A jump freighter gets a freight quote: the fuel with 20 % markup and 1 % of the collateral.
     await user.click(within(panel).getByRole('button', { name: /Freight quote/ }));
@@ -462,7 +467,7 @@ describe('JumpPage', () => {
     renderPage();
     const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
     await screen.findByRole('region', { name: 'Route' });
-    await user.click(within(panel).getByRole('button', { name: 'Share link' }));
+    await user.click(within(panel).getByRole('button', { name: 'Share' }));
     await waitFor(() =>
       expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/j/AbCdEfGhIjKlMnOpQrStUv`),
     );

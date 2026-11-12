@@ -435,7 +435,7 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
   }, [origin, pinned]);
 
   // Room the controls take: the docked panel on the left, or the sheet's peek on phones.
-  const insets = phone ? { left: 0, bottom: 140 } : { left: panelOpen ? 392 : 0, bottom: 0 };
+  const insets = phone ? { left: 0, bottom: 140 } : { left: 392, bottom: 0 };
   const card = pinned ?? hover;
 
   return (

@@ -12,8 +12,6 @@ import {
 import {
   Ban,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   ChevronUp,
   Coins,
   GripVertical,
@@ -150,7 +148,9 @@ type PanelState = Omit<JumpPanelProps, 'ref'>;
 
 /** The planner's controls: ship, start and destination, skills, options, and the route found. */
 export function JumpPanel({ ref, ...props }: JumpPanelProps) {
-  const { model, ship, settings, update, origin, destination, plan, open, setOpen, phone } = props;
+  const { model, ship, settings, update, origin, destination, plan, setOpen, phone } = props;
+  // Folds away only as a sheet on a phone; beside the map it always shows.
+  const open = phone ? props.open : true;
   const [optionsOpen, setOptionsOpen] = useState(false);
   // Start, stops and destination in one list, reordered by dragging a row's grip (mouse or touch)
   // or with the arrow keys on it, as a maps app does.
@@ -246,17 +246,8 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
         </button>
       ) : (
         <div className={styles.panelHead}>
-          {open && (
-            <div>
-              <h1 className={styles.title}>Jump planner</h1>
-            </div>
-          )}
-          <IconButton
-            label={open ? 'Hide the controls' : 'Show the controls'}
-            icon={open ? <ChevronLeft /> : <ChevronRight />}
-            tooltipSide="right"
-            onClick={() => setOpen(!open)}
-          />
+          <h1 className={styles.title}>Jump planner</h1>
+          {route && <ShareButton onShare={props.onShare} />}
         </div>
       )}
 
@@ -291,7 +282,7 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
                 cacheKey={['jump-systems', 'origin', suggestionsKey('origin')]}
                 minLength={0}
                 debounce={0}
-                placeholder="System name ( / )"
+                placeholder="Start ( / )"
                 empty="No known-space system by that name"
               />
             </PointRow>
@@ -311,23 +302,22 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
                   cacheKey={['jump-systems', 'stop', suggestionsKey('destination')]}
                   minLength={0}
                   debounce={0}
-                  placeholder="System name"
+                  placeholder={`Stop ${n + 1}`}
                   empty="No known-space system by that name"
                 />
               </PointRow>
             ))}
             {/* Stops go between the ends, so they are added there too. */}
-            <div className={styles.addStop}>
-              <Button
-                size="sm"
-                variant="ghost"
-                icon={<Plus />}
-                disabled={props.stops.length >= 10}
-                onClick={props.addStop}
-              >
-                Add stop
-              </Button>
-            </div>
+            {props.stops.length < 10 && (
+              <div className={styles.point}>
+                <span className={styles.gripSpacer} aria-hidden />
+                <button type="button" className={styles.addStop} onClick={props.addStop}>
+                  <Plus aria-hidden />
+                  Add stop
+                </button>
+                <span className={styles.pointSpacer} aria-hidden />
+              </div>
+            )}
             <PointRow n={points - 1} label="Destination" drag={drag} grip={grip}>
               <SearchPicker<SystemOption>
                 value={destination === null ? null : option(destination)}
@@ -336,7 +326,7 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
                 cacheKey={['jump-systems', 'destination', suggestionsKey('destination')]}
                 minLength={0}
                 debounce={0}
-                placeholder="System name"
+                placeholder="Destination"
                 empty="No known-space system by that name"
               />
             </PointRow>
@@ -420,7 +410,9 @@ function PointRow({
       >
         <GripVertical aria-hidden />
       </button>
-      <Field label={label}>{children}</Field>
+      <Field label={label} hideLabel>
+        {children}
+      </Field>
       {remove ? (
         <IconButton size="sm" label={`Remove ${label.toLowerCase()}`} icon={<X />} onClick={remove} />
       ) : (
@@ -855,9 +847,9 @@ function Result(props: PanelState) {
         </Callout>
       ) : (
         <>
-          {/* On a phone the routes to choose from are in the sheet; else over the map. */}
+          {/* On a phone the route's totals are in the sheet; else in the bubble over the map. */}
           {props.phone && <RouteChoices {...props} />}
-          {(!props.phone || props.routeOptions.length < 2) && (
+          {props.phone && props.routeOptions.length < 2 && (
             <div className={styles.totals}>
               <div className={styles.totalsMain}>
                 {route.jumps} {route.jumps === 1 ? 'jump' : 'jumps'}
@@ -881,7 +873,7 @@ function Result(props: PanelState) {
             </Callout>
           )}
           <RouteLegs route={route} activeLeg={activeLeg} setActiveLeg={setActiveLeg} onShowLeg={onShowLeg} />
-          <RouteSummary {...props} />
+          {props.phone && <RouteSummary {...props} />}
           <FreightQuoteFold {...props} />
           <RouteActions {...props} />
         </>
@@ -1101,11 +1093,41 @@ export function RouteChoices({
   fuelPrices,
   floating = false,
 }: Pick<PanelState, 'routeOptions' | 'chosenRoute' | 'onChooseRoute' | 'plan' | 'fuelPrices'> & {
-  /** A bubble over the map (the free space beside the panel) rather than a list in the panel. */
+  /** The bubble over the map: the route's totals even when there is no other to choose. */
   floating?: boolean;
 }) {
-  if (routeOptions.length < 2 || !plan?.route) return null;
+  if (!plan?.route || routeOptions.length < (floating ? 1 : 2)) return null;
   const isotope = ISOTOPE_LABELS[plan.ship.isotope].toLowerCase();
+  const choosing = routeOptions.length > 1;
+  const card = (route: JumpRouteDto, n: number) => {
+    const isk = iskOf(route.fuel, plan, fuelPrices);
+    return (
+      <>
+        {/* Glanceable: why this one, how far, what it costs; the legs are in the panel. */}
+        {choosing && (
+          <span className={styles.choiceTitle}>
+            {n === 0 ? 'Recommended' : route.best[0] ? BEST_LABELS[route.best[0]] : 'Alternative'}
+          </span>
+        )}
+        <span className={styles.choiceMain}>
+          {route.jumps} {route.jumps === 1 ? 'jump' : 'jumps'}
+          {route.gates > 0 && ` + ${route.gates} ${route.gates === 1 ? 'gate' : 'gates'}`}
+          <span className={styles.choiceLy}>{formatLy(route.ly)}</span>
+        </span>
+        <span className={styles.choiceMeta} title={`${formatNumber(route.fuel)} ${isotope}`}>
+          {isk !== null ? formatIsk(isk) : `${formatNumber(route.fuel)} ${isotope}`}
+          {' · '}fatigue {formatMinutes(route.fatigueMinutes)}
+          {route.waitMinutes > 0 && ` · wait ${formatMinutes(route.waitMinutes)}`}
+        </span>
+      </>
+    );
+  };
+  if (!choosing)
+    return (
+      <section className={styles.choicesBubble} aria-label="Route totals">
+        <div className={styles.choice}>{card(plan.route, 0)}</div>
+      </section>
+    );
   return (
     <div className={floating ? styles.choicesBubble : styles.choices} role="radiogroup" aria-label="Routes">
       {routeOptions.map((route, n) => (
@@ -1117,20 +1139,7 @@ export function RouteChoices({
           className={styles.choice}
           onClick={() => onChooseRoute(n)}
         >
-          {/* Glanceable: why this one, how many jumps, what it costs; the legs are in the panel. */}
-          <span className={styles.choiceTitle}>
-            {n === 0 ? 'Recommended' : route.best[0] ? BEST_LABELS[route.best[0]] : 'Alternative'}
-          </span>
-          <span className={styles.choiceMain}>
-            {route.jumps} {route.jumps === 1 ? 'jump' : 'jumps'}
-            {route.gates > 0 && ` + ${route.gates} ${route.gates === 1 ? 'gate' : 'gates'}`}
-          </span>
-          <span className={styles.choiceMeta}>
-            {iskOf(route.fuel, plan, fuelPrices) !== null
-              ? formatIsk(iskOf(route.fuel, plan, fuelPrices)!)
-              : `${formatNumber(route.fuel)} ${isotope}`}
-            {' · '}fatigue {formatMinutes(route.fatigueMinutes)}
-          </span>
+          {card(route, n)}
         </button>
       ))}
     </div>
@@ -1168,7 +1177,9 @@ export function RouteLegs({
                 </span>
                 {leg.to.name}
                 {leg.kind !== 'jump' && <em>{leg.kind === 'gate' ? 'gate' : 'Ansiblex'}</em>}
-                {leg.kind === 'jump' && !leg.to.station && <em>no station</em>}
+                {leg.kind === 'jump' && !leg.to.station && !leg.stop && n < route.legs.length - 1 && (
+                  <em>no station</em>
+                )}
                 {leg.stop && <em data-stop>stop</em>}
               </span>
               <span className={styles.legMeta}>
@@ -1195,28 +1206,10 @@ function nameOf(model: StarModel, id: number): string {
   return i === undefined ? 'Unknown system' : model.names[i]!;
 }
 
-function RouteActions({ plan, onShare }: PanelState) {
+/** Makes a link anyone can open without signing in, and copies it. */
+function ShareButton({ onShare }: Pick<PanelState, 'onShare'>) {
   const toast = useToast();
-  const me = useMe();
-  const [busy, setBusy] = useState(false);
   const [sharing, setSharing] = useState(false);
-  const pilots = (me.data?.characters ?? []).filter((c) => c.canSetWaypoints && c.tokenValid);
-  const route = plan?.route;
-  if (!plan || !route) return null;
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(routeText(plan));
-      toast({ tone: 'success', title: 'Route copied' });
-    } catch {
-      toast({
-        tone: 'danger',
-        title: 'Could not copy',
-        description: 'The browser did not allow the clipboard.',
-      });
-    }
-  };
-
   const share = async () => {
     setSharing(true);
     try {
@@ -1235,6 +1228,33 @@ function RouteActions({ plan, onShare }: PanelState) {
       });
     } finally {
       setSharing(false);
+    }
+  };
+  return (
+    <Button size="sm" icon={<Link2 />} loading={sharing} onClick={() => void share()}>
+      Share
+    </Button>
+  );
+}
+
+function RouteActions({ plan, onShare, phone }: PanelState) {
+  const toast = useToast();
+  const me = useMe();
+  const [busy, setBusy] = useState(false);
+  const pilots = (me.data?.characters ?? []).filter((c) => c.canSetWaypoints && c.tokenValid);
+  const route = plan?.route;
+  if (!plan || !route) return null;
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(routeText(plan));
+      toast({ tone: 'success', title: 'Route copied' });
+    } catch {
+      toast({
+        tone: 'danger',
+        title: 'Could not copy',
+        description: 'The browser did not allow the clipboard.',
+      });
     }
   };
 
@@ -1271,9 +1291,7 @@ function RouteActions({ plan, onShare }: PanelState) {
       <Button icon={<Copy />} onClick={() => void copy()}>
         Copy route
       </Button>
-      <Button icon={<Link2 />} loading={sharing} onClick={() => void share()}>
-        Share link
-      </Button>
+      {phone && <ShareButton onShare={onShare} />}
       {pilots.length > 0 ? (
         <Menu>
           <MenuTrigger asChild>

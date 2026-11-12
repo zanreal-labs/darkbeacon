@@ -165,7 +165,8 @@
 }
 
 .panel[data-open] .panelHead {
-  padding: var(--dbk-space-3) var(--dbk-space-2) var(--dbk-space-1) var(--dbk-space-4);
+  align-items: center;
+  padding: var(--dbk-space-3) var(--dbk-space-3) var(--dbk-space-1) var(--dbk-space-4);
 }
 
 .title {
@@ -207,11 +208,39 @@
   gap: var(--dbk-space-2);
 }
 
-/* "Add stop" between the last stop and the destination, lined up with the fields. */
+/* "Add stop" between the last stop and the destination: a row the size of a point. */
 .addStop {
   display: flex;
-  margin: calc(-1 * var(--dbk-space-1)) 0;
-  padding-left: calc(20px + var(--dbk-space-1));
+  align-items: center;
+  gap: var(--dbk-space-2);
+  height: var(--dbk-control-height);
+  padding: 0 var(--dbk-space-3);
+  border: 1px dashed var(--dbk-color-border-strong);
+  border-radius: var(--dbk-radius);
+  background: none;
+  color: var(--dbk-color-accent-text);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.addStop:hover {
+  border-color: var(--dbk-color-accent);
+  background: var(--dbk-color-accent-subtle);
+}
+
+.addStop:focus-visible {
+  outline: 2px solid var(--dbk-color-focus);
+  outline-offset: 1px;
+}
+
+.addStop svg {
+  width: 16px;
+  height: 16px;
+}
+
+.gripSpacer {
+  width: 20px;
 }
 
 /* A point of the trip: grip, picker, and × for a stop (a spacer keeps the fields aligned). */
@@ -219,7 +248,7 @@
   position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: end;
+  align-items: center;
   gap: var(--dbk-space-1);
   border-radius: var(--dbk-radius);
 }
@@ -486,6 +515,12 @@
 
 .choiceMain {
   font-weight: 600;
+}
+
+.choiceLy {
+  margin-left: var(--dbk-space-2);
+  color: var(--dbk-color-text-muted);
+  font-weight: 400;
 }
 
 .choiceMeta {
