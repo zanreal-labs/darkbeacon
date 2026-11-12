@@ -508,12 +508,31 @@ describe('JumpPage', () => {
     renderPage();
     const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
     await screen.findByRole('region', { name: 'Route' });
+    // A jump freighter's route goes to pilots, or to a client as a freight quote.
     await user.click(within(panel).getByRole('button', { name: 'Share' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Route for pilots' }));
     await waitFor(() =>
       expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/j/AbCdEfGhIjKlMnOpQrStUv`),
     );
-    expect(shared[0]).toMatchObject({ plan: { origin: 30002647, destination: 30005035 }, fuelHub: 'jita' });
+    expect(shared[0]).toMatchObject({
+      plan: { origin: 30002647, destination: 30005035 },
+      fuelHub: 'jita',
+      route: 'jump:30005196,jump:30005035',
+      freight: null,
+    });
     expect(await screen.findByText('Share link copied')).toBeTruthy();
+
+    // The client's quote: the price set by hand over the planner's.
+    await user.click(within(panel).getByRole('button', { name: 'Share' }));
+    await user.click(await screen.findByRole('menuitem', { name: /Freight quote for a client/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'Freight quote for a client' });
+    const price = within(dialog).getByLabelText('Price (ISK)');
+    await user.clear(price);
+    await user.type(price, '150m');
+    await user.click(within(dialog).getByRole('button', { name: 'Copy link' }));
+    await waitFor(() => expect(shared).toHaveLength(2));
+    expect(shared[1]).toMatchObject({ freight: { price: 150_000_000 } });
+    expect(await screen.findByText('Freight quote link copied')).toBeTruthy();
   });
 
   it('starts from the address and clears with Escape', async () => {

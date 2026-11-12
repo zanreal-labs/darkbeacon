@@ -38,6 +38,7 @@ import {
   type JumpPlanDto,
   type JumpRouteBest,
   type JumpRouteDto,
+  type JumpShareFreight,
   type StandingTone,
   type JumpShipDto,
   type OptionalEveScope,
@@ -49,6 +50,9 @@ import { useMe } from '../lib/session';
 import {
   Button,
   Callout,
+  Dialog,
+  DialogClose,
+  DialogContent,
   Disclosure,
   Field,
   FieldGroup,
@@ -131,7 +135,7 @@ export interface JumpPanelProps {
   /** Isotope prices at the pilot's hub; null until they come (or when they cannot). */
   fuelPrices: JumpFuelPricesDto | null;
   /** Shares the route on screen as a link anyone can open; resolves to its address. */
-  onShare(): Promise<string>;
+  onShare(freight?: JumpShareFreight | null): Promise<string>;
   /** The recommended route first, then the alternatives; one route when there is no choice. */
   routeOptions: readonly JumpRouteDto[];
   chosenRoute: number;
@@ -316,7 +320,9 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
       ) : (
         <div className={styles.panelHead}>
           <h1 className={styles.title}>Jump planner</h1>
-          {plan && route && <RouteActions plan={plan} onShare={props.onShare} />}
+          {plan && route && (
+            <RouteActions plan={plan} onShare={props.onShare} freight={freightDefaults(props)} />
+          )}
         </div>
       )}
 
@@ -400,6 +406,8 @@ interface LegHover {
   show(n: number): void;
   /** Systems held by someone neither mine nor blue. */
   held?: ReadonlyMap<number, ForeignSpace>;
+  /** Only the distance under each system (a client's freight quote shows no fuel or fatigue). */
+  brief?: boolean;
 }
 
 /**
@@ -473,15 +481,29 @@ function SecPill({ security }: { security: number }) {
 }
 
 /** How a jump gets to a system: distance, fuel, fatigue (and the wait before it, if any). */
-function LegStats({ leg, held, onShow }: { leg: JumpLegDto; held?: ForeignSpace; onShow(): void }) {
-  const facts: Array<[string, string, StandingTone?]> = [
-    ['Distance', formatLy(leg.ly)],
-    ['Fuel', formatNumber(leg.fuel + (leg.bridgeFuel ?? 0))],
-    ['Fatigue', formatMinutes(leg.fatigueMinutes)],
-    ...(leg.waitMinutes > 0 ? ([['Wait', formatMinutes(leg.waitMinutes)]] as Array<[string, string]>) : []),
-    // Landing in space that is neither mine nor blue: who holds it, in its standing colour.
-    ...(held ? ([['Held by', held.holder, held.tone]] as Array<[string, string, StandingTone]>) : []),
-  ];
+function LegStats({
+  leg,
+  held,
+  brief,
+  onShow,
+}: {
+  leg: JumpLegDto;
+  held?: ForeignSpace;
+  brief?: boolean;
+  onShow(): void;
+}) {
+  const facts: Array<[string, string, StandingTone?]> = brief
+    ? [['Distance', formatLy(leg.ly)]]
+    : [
+        ['Distance', formatLy(leg.ly)],
+        ['Fuel', formatNumber(leg.fuel + (leg.bridgeFuel ?? 0))],
+        ['Fatigue', formatMinutes(leg.fatigueMinutes)],
+        ...(leg.waitMinutes > 0
+          ? ([['Wait', formatMinutes(leg.waitMinutes)]] as Array<[string, string]>)
+          : []),
+        // Landing in space that is neither mine nor blue: who holds it, in its standing colour.
+        ...(held ? ([['Held by', held.holder, held.tone]] as Array<[string, string, StandingTone]>) : []),
+      ];
   return (
     <button type="button" className={styles.legStats} onClick={onShow} aria-label="Show this jump on the map">
       <dl className={styles.facts}>
@@ -497,7 +519,7 @@ function LegStats({ leg, held, onShow }: { leg: JumpLegDto; held?: ForeignSpace;
 }
 
 /** A system the route passes between two points: a card with its name and how the route gets there. */
-function LegRow({ leg, n, active, setActive, show, held }: { leg: JumpLegDto; n: number } & LegHover) {
+function LegRow({ leg, n, active, setActive, show, held, brief }: { leg: JumpLegDto; n: number } & LegHover) {
   return (
     <div
       className={styles.systemCard}
@@ -512,10 +534,12 @@ function LegRow({ leg, n, active, setActive, show, held }: { leg: JumpLegDto; n:
         <strong>{leg.to.name}</strong>
         <span className={styles.systemRegion}>{leg.to.region}</span>
         {leg.kind !== 'jump' && <em>{leg.kind === 'gate' ? 'gate' : 'Ansiblex'}</em>}
-        {leg.kind === 'jump' && !leg.to.station && !leg.stop && <em>no station</em>}
+        {leg.kind === 'jump' && !leg.to.station && !leg.stop && !brief && <em>no station</em>}
         {leg.stop && <em>stop</em>}
       </div>
-      {leg.kind === 'jump' && <LegStats leg={leg} held={held?.get(leg.to.id)} onShow={() => show(n)} />}
+      {leg.kind === 'jump' && (
+        <LegStats leg={leg} held={held?.get(leg.to.id)} brief={brief} onShow={() => show(n)} />
+      )}
     </div>
   );
 }
@@ -526,15 +550,18 @@ export function RouteSystems({
   activeLeg,
   setActiveLeg,
   onShowLeg,
+  brief = false,
 }: {
   route: JumpRouteDto;
   activeLeg: number | null;
   setActiveLeg(n: number | null): void;
   onShowLeg(n: number): void;
+  /** Distances only, no fuel or fatigue (a client's freight quote). */
+  brief?: boolean;
 }) {
   const start = route.legs[0]?.from;
   if (!start) return null;
-  const hover = { active: activeLeg, setActive: setActiveLeg, show: onShowLeg };
+  const hover = { active: activeLeg, setActive: setActiveLeg, show: onShowLeg, brief };
   return (
     <div className={styles.endpoints}>
       <div className={styles.systemCard}>
@@ -931,7 +958,9 @@ function Result(props: PanelState) {
           )}
           {props.phone && <RouteSummary {...props} />}
           {props.phone && <FreightQuoteFold {...props} />}
-          {props.phone && plan && <RouteActions plan={plan} onShare={props.onShare} wide />}
+          {props.phone && plan && (
+            <RouteActions plan={plan} onShare={props.onShare} freight={freightDefaults(props)} wide />
+          )}
         </>
       )}
     </section>
@@ -1009,7 +1038,9 @@ function AmountField({
   /** Reads "1.5b", "250m", "40k" too. */
   isk?: boolean;
 }) {
-  const [text, setText] = useState(value === 0 ? '' : String(value));
+  const [text, setText] = useState(
+    value === 0 ? '' : isk && value >= 1e3 ? formatIskShort(value) : String(value),
+  );
   const parse = (t: string) => (t.trim() === '' ? 0 : isk ? parseIsk(t) : Number(t.replace(',', '.')));
   const parsed = parse(text);
   const invalid = parsed === null || !Number.isFinite(parsed) || parsed < 0;
@@ -1233,33 +1264,42 @@ function nameOf(model: StarModel, id: number): string {
 }
 
 /** Makes a link anyone can open without signing in, and copies it. */
-function ShareButton({ onShare, wide = false }: Pick<PanelState, 'onShare'> & { wide?: boolean }) {
+function ShareButton({
+  onShare,
+  freight,
+  wide = false,
+}: Pick<PanelState, 'onShare'> & { freight: JumpShareFreight | null; wide?: boolean }) {
   const toast = useToast();
   const [sharing, setSharing] = useState(false);
-  const share = async () => {
+  const [quoting, setQuoting] = useState(false);
+  const share = async (forClient: JumpShareFreight | null = null) => {
     setSharing(true);
     try {
-      const url = await onShare();
+      const url = await onShare(forClient);
       await navigator.clipboard.writeText(url).catch(() => undefined);
       toast({
         tone: 'success',
-        title: 'Share link copied',
-        description: `Anyone with ${url} sees this route, without signing in.`,
+        title: forClient ? 'Freight quote link copied' : 'Share link copied',
+        description: forClient
+          ? `${url} shows the route and ${formatIsk(forClient.price)}, never the fuel.`
+          : `Anyone with ${url} sees this route, without signing in.`,
       });
+      return true;
     } catch (error) {
       toast({
         tone: 'danger',
         title: 'Could not share the route',
         description: error instanceof ApiError ? error.message : undefined,
       });
+      return false;
     } finally {
       setSharing(false);
     }
   };
-  return (
-    // In the panel's header the three actions are alike: icons, named by their tooltips.
+  // In the panel's header the actions are alike: icons, named by their tooltips.
+  const trigger = (onClick?: () => void) =>
     wide ? (
-      <Button icon={<Link2 />} loading={sharing} onClick={() => void share()}>
+      <Button icon={<Link2 />} loading={sharing} onClick={onClick}>
         Share
       </Button>
     ) : (
@@ -1269,10 +1309,121 @@ function ShareButton({ onShare, wide = false }: Pick<PanelState, 'onShare'> & { 
         label="Share"
         icon={<Link2 />}
         loading={sharing}
-        onClick={() => void share()}
+        onClick={onClick}
       />
-    )
+    );
+  // A jump freighter's route can also go to a client as a freight quote.
+  if (!freight) return trigger(() => void share());
+  return (
+    <>
+      <Menu>
+        <MenuTrigger asChild>{trigger()}</MenuTrigger>
+        <MenuContent align="end">
+          <MenuItem onSelect={() => void share()}>Route for pilots</MenuItem>
+          <MenuItem onSelect={() => setQuoting(true)}>Freight quote for a client…</MenuItem>
+        </MenuContent>
+      </Menu>
+      <FreightShareDialog
+        open={quoting}
+        onOpenChange={setQuoting}
+        defaults={freight}
+        onShare={async (quote) => {
+          if (await share(quote)) setQuoting(false);
+        }}
+      />
+    </>
   );
+}
+
+/**
+ * The client's link: the route and what to pay, the quote unless set by hand, with the cargo and
+ * collateral it is for. Nothing about fuel goes out with it.
+ */
+function FreightShareDialog({
+  open,
+  onOpenChange,
+  defaults,
+  onShare,
+}: {
+  open: boolean;
+  onOpenChange(open: boolean): void;
+  defaults: JumpShareFreight;
+  onShare(freight: JumpShareFreight): Promise<void>;
+}) {
+  // The form starts again from the quote of the moment each time it opens.
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {open && <FreightShareForm defaults={defaults} onShare={onShare} />}
+    </Dialog>
+  );
+}
+
+function FreightShareForm({
+  defaults,
+  onShare,
+}: {
+  defaults: JumpShareFreight;
+  onShare(freight: JumpShareFreight): Promise<void>;
+}) {
+  const [price, setPrice] = useState(defaults.price);
+  const [cargoM3, setCargo] = useState(defaults.cargoM3 ?? 0);
+  const [collateral, setCollateral] = useState(defaults.collateral ?? 0);
+  const [busy, setBusy] = useState(false);
+  return (
+    <DialogContent
+      title="Freight quote for a client"
+      description="A link with the route and this price. It shows no fuel, fatigue or skills."
+      width={420}
+      footer={
+        <>
+          <DialogClose asChild>
+            <Button variant="ghost">Cancel</Button>
+          </DialogClose>
+          <Button
+            variant="primary"
+            icon={<Link2 />}
+            loading={busy}
+            disabled={price <= 0}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await onShare({
+                  price,
+                  cargoM3: cargoM3 > 0 ? cargoM3 : null,
+                  collateral: collateral > 0 ? collateral : null,
+                });
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Copy link
+          </Button>
+        </>
+      }
+    >
+      <div className={styles.options}>
+        <AmountField label="Price (ISK)" isk value={price} onValue={setPrice} />
+        <div className={styles.row2}>
+          <AmountField label="Cargo (m³)" value={cargoM3} onValue={setCargo} />
+          <AmountField label="Collateral" isk value={collateral} onValue={setCollateral} />
+        </div>
+      </div>
+    </DialogContent>
+  );
+}
+
+/** What a client's freight quote starts from: the planner's quote and the pilot's terms. */
+function freightDefaults({ plan, ship, settings, fuelPrices }: PanelState): JumpShareFreight | null {
+  const route = plan?.route;
+  if (!plan || !route || ship.hull !== 'jump_freighter') return null;
+  const price = fuelPrices?.prices[plan.ship.isotope] ?? null;
+  const quote = price === null ? null : freightQuote(route, price, settings.freight);
+  return {
+    price: quote ? Math.round(quote.charge) : 0,
+    cargoM3: settings.freight.cargoM3 || null,
+    collateral: settings.freight.collateral || null,
+  };
 }
 
 /**
@@ -1282,8 +1433,9 @@ function ShareButton({ onShare, wide = false }: Pick<PanelState, 'onShare'> & { 
 function RouteActions({
   plan,
   onShare,
+  freight,
   wide = false,
-}: Pick<PanelState, 'onShare'> & { plan: JumpPlanDto; wide?: boolean }) {
+}: Pick<PanelState, 'onShare'> & { plan: JumpPlanDto; freight: JumpShareFreight | null; wide?: boolean }) {
   const toast = useToast();
   const me = useMe();
   const [busy, setBusy] = useState(false);
@@ -1374,7 +1526,7 @@ function RouteActions({
           </MenuContent>
         </Menu>
       )}
-      <ShareButton onShare={onShare} wide={wide} />
+      <ShareButton onShare={onShare} freight={freight} wide={wide} />
     </div>
   );
 }

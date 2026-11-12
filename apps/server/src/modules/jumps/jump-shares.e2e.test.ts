@@ -1,6 +1,12 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { describeEachDialect } from '@darkbeacon/db/testing';
-import type { JumpShareCreatedDto, JumpShareViewDto, MeDto } from '@darkbeacon/shared';
+import {
+  jumpRouteKey,
+  type JumpPlanDto,
+  type JumpShareCreatedDto,
+  type JumpShareViewDto,
+  type MeDto,
+} from '@darkbeacon/shared';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import type { FetchLike } from '../../adapters/identity/oauth-http.js';
 import { createApp } from '../../app.js';
@@ -97,6 +103,31 @@ describeEachDialect('shared jump routes over HTTP', (t) => {
     });
     expect(map.statusCode).toBe(200);
     expect(map.headers['cache-control']).toMatch(/immutable/);
+  });
+
+  it('shares a freight quote for a client: the route and the price, never the fuel', async () => {
+    const plan = { shipTypeId: ARK, origin: IGNOITTON, destination: AMI, via: [DQ1] };
+    const planned = JSON.parse((await inject('POST', '/api/jumps/plan', { body: plan })).body) as JumpPlanDto;
+    // The route the sharer looked at: an alternative if there is one.
+    const looked = planned.alternatives[0] ?? planned.route!;
+    const shared = await inject('POST', '/api/jumps/shares', {
+      body: {
+        plan,
+        route: jumpRouteKey(looked),
+        freight: { price: 125_000_000, cargoM3: 300_000, collateral: 2_000_000_000 },
+      },
+    });
+    expect(shared.statusCode).toBe(200);
+    const { token } = JSON.parse(shared.body) as JumpShareCreatedDto;
+    const view = JSON.parse(
+      (await inject('GET', `/api/public/jumps/${token}`, { signedIn: false })).body,
+    ) as JumpShareViewDto;
+    expect(view.freight).toEqual({ price: 125_000_000, cargoM3: 300_000, collateral: 2_000_000_000 });
+    expect(jumpRouteKey(view.plan.route!)).toBe(jumpRouteKey(looked));
+    expect(view.plan.alternatives).toEqual([]);
+    expect(view.fuelPrices).toBeNull();
+    expect(view.plan.route!.fuel).toBe(0);
+    expect(view.plan.route!.legs.every((l) => l.fuel === 0)).toBe(true);
   });
 
   it('answers 404 for a token nobody shared, and lets only accounts share', async () => {

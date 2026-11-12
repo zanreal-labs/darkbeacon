@@ -103,7 +103,7 @@ export class JumpsController {
     @CurrentActor() actor: Actor | null,
     @Body(new ZodPipe(JumpShareRequest)) body: z.output<typeof JumpShareRequest>,
   ): Promise<JumpShareCreatedDto> {
-    return this.shares.share(actor, body.plan, body.fuelHub);
+    return this.shares.share(actor, body.plan, body.fuelHub, { route: body.route, freight: body.freight });
   }
 
   @Get(nestPath(routes.jumps.pilot.path))

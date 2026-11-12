@@ -1,4 +1,4 @@
-import type { JumpFuelHub, JumpPlanInput } from '@darkbeacon/shared';
+import type { JumpFuelHub, JumpPlanInput, JumpShareFreight } from '@darkbeacon/shared';
 import type { JumpSpaceData } from '../domain/index.js';
 
 /** The k-space dataset (packages/sde `data/kspace.json`, or an operator's copy in DATA_DIR). */
@@ -44,6 +44,10 @@ export interface JumpShare {
   token: string;
   request: JumpPlanInput;
   fuelHub: JumpFuelHub;
+  /** The route the sharer looked at (`jumpRouteKey`); null: the recommended one. */
+  route: string | null;
+  /** A freight quote for a client (route and price, no fuel); null: a route for pilots. */
+  freight: JumpShareFreight | null;
   /** Account id of whoever shared it (never shown to visitors). */
   createdBy: string;
   createdAt: number;

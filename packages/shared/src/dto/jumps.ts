@@ -282,9 +282,30 @@ export const JumpFuelPricesDto = z.object({
 export type JumpFuelPricesDto = z.infer<typeof JumpFuelPricesDto>;
 
 /** POST /api/jumps/shares: share a planned route as a link anyone can open. */
+/**
+ * A freight quote shared with a client: what the carrier asks for the trip (the quote or a price
+ * set by hand) and the contract's terms. Such a link shows the route and this, never fuel.
+ */
+export const JumpShareFreight = z.object({
+  /** ISK the carrier asks. */
+  price: z.number().min(0).max(1e13),
+  cargoM3: z.number().min(0).max(10_000_000).nullable(),
+  collateral: z.number().min(0).max(1e13).nullable(),
+});
+export type JumpShareFreight = z.infer<typeof JumpShareFreight>;
+
+/** The legs of a route as one key (`kind:system,…`): which of the routes planned is meant. */
+export function jumpRouteKey(route: Pick<JumpRouteDto, 'legs'>): string {
+  return route.legs.map((leg) => `${leg.kind}:${leg.to.id}`).join(',');
+}
+
 export const JumpShareRequest = z.object({
   plan: JumpPlanRequest,
   fuelHub: JumpFuelHub.default('jita'),
+  /** The route the sharer looked at (`jumpRouteKey`); null: the recommended one. */
+  route: z.string().max(4000).nullable().default(null),
+  /** Share as a freight quote for a client instead of a route for pilots. */
+  freight: JumpShareFreight.nullable().default(null),
 });
 export type JumpShareRequest = z.input<typeof JumpShareRequest>;
 
@@ -297,7 +318,10 @@ export type JumpShareCreatedDto = z.infer<typeof JumpShareCreatedDto>;
 /** GET /api/public/jumps/:token: a shared route as anyone sees it, planned again now. */
 export const JumpShareViewDto = z.object({
   request: JumpPlanRequest,
+  /** The route the sharer looked at; no alternatives. Without fuel for a freight quote. */
   plan: JumpPlanDto,
+  /** Set for a freight quote shared with a client. */
+  freight: JumpShareFreight.nullable(),
   fuelPrices: JumpFuelPricesDto.nullable(),
   /** The k-space dataset the route was planned on (for the map data). */
   universeVersion: z.string(),

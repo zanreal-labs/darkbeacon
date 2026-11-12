@@ -2,14 +2,19 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Eye, Route } from 'lucide-react';
-import { routes, type JumpShareViewDto, type JumpUniverseDto } from '@darkbeacon/shared';
+import { Eye, Route, UserRound } from 'lucide-react';
+import {
+  routes,
+  type JumpShareFreight,
+  type JumpShareViewDto,
+  type JumpUniverseDto,
+} from '@darkbeacon/shared';
 import { api } from '../lib/api';
 import { LogoMark } from '../shell/Logo';
-import { Badge, Button, ErrorState } from '../ui';
+import { Badge, Button, Disclosure, ErrorState, FieldGroup } from '../ui';
 import type { Overlay, RouteLeg } from './draw';
-import { formatLy, formatRange } from './format';
-import { RouteSummary, RouteSystems } from './JumpPanel';
+import { formatIsk, formatNumber, formatRange } from './format';
+import { RouteChoices, RouteSystems } from './JumpPanel';
 import { buildStarModel, type StarModel } from './model';
 import { StarMap, type StarMapHandle } from './StarMap';
 import { JumpLoading } from '../screens/JumpLoading';
@@ -20,9 +25,10 @@ const PHONE = '(max-width: 767px)';
 const ROMAN = ['0', 'I', 'II', 'III', 'IV', 'V'];
 
 /**
- * A shared jump route, read-only: the star map with the route on it and the route's legs and
- * numbers beside it, as the sharer planned it (ship, stops, skill levels, options). Anyone with
- * the link sees it; nothing here edits, and nothing about the sharer is shown.
+ * A shared jump route, read-only, laid out as the planner is: the route's systems as cards beside
+ * the map, its totals in a bubble over it. For pilots, as the sharer planned it (ship, stops,
+ * levels); for a client's freight quote, the route and the price only, no fuel or skills.
+ * Anyone with the link sees it; nothing here edits, and nothing about the sharer is shown.
  */
 export function SharedJumpView({ view }: { view: JumpShareViewDto }) {
   const universe = useQuery({
@@ -105,17 +111,32 @@ function Shared({ view, model }: { view: JumpShareViewDto; model: StarModel }) {
     request.destination,
     ...(request.roundTrip ? [request.origin] : []),
   ].map(name);
-  const skills = [
-    `JDC ${ROMAN[request.skills?.jdc ?? 5]}`,
-    `JFC ${ROMAN[request.skills?.jfc ?? 4]}`,
-    ...(plan.ship.hull === 'jump_freighter' ? [`JF ${ROMAN[request.skills?.jf ?? 4]}`] : []),
-  ].join(' · ');
   const planner = new URLSearchParams({
     from: name(request.origin),
     to: name(request.destination),
     ship: plan.ship.name,
   });
   if (request.via?.length) planner.set('via', request.via.map(name).join(','));
+  const freight = view.freight;
+  const showLeg = (n: number) => {
+    const leg = legs[n];
+    if (leg) mapRef.current?.fit([leg.from, leg.to]);
+  };
+  // What the bubble over the map says: the client's price, or the route's totals for pilots.
+  const totals = freight ? (
+    route ? (
+      <FreightTotals freight={freight} jumps={route.jumps} gates={route.gates} />
+    ) : null
+  ) : (
+    <RouteChoices
+      floating
+      routeOptions={route ? [route] : []}
+      chosenRoute={0}
+      onChooseRoute={() => {}}
+      plan={plan}
+      fuelPrices={view.fuelPrices}
+    />
+  );
 
   return (
     <div className={publicStyles.page}>
@@ -128,7 +149,7 @@ function Shared({ view, model }: { view: JumpShareViewDto; model: StarModel }) {
           {stops.join(' > ')}
         </h1>
         <Badge variant="outline" icon={<Eye />}>
-          Shared jump route
+          {freight ? 'Freight quote' : 'Shared jump route'}
         </Badge>
       </header>
       <div className={styles.page}>
@@ -140,44 +161,114 @@ function Shared({ view, model }: { view: JumpShareViewDto; model: StarModel }) {
           onHover={() => {}}
           onPick={() => {}}
         />
-        <aside className={styles.panel} data-open data-shared aria-label="Shared jump route">
+        <aside
+          className={styles.panel}
+          data-open
+          data-shared
+          aria-label={freight ? 'Freight quote' : 'Shared jump route'}
+        >
           <div className={styles.panelHead}>
-            <div>
-              <h2 className={styles.title}>{plan.ship.name}</h2>
-              <p className={styles.lede}>
-                {formatRange(plan.rangeLy)} range · {skills}
-              </p>
-            </div>
+            <h2 className={styles.title}>{freight ? 'Freight quote' : plan.ship.name}</h2>
+            {!freight && (
+              <Button asChild size="sm" icon={<Route />}>
+                <a href={`/jump?${planner}`}>Open in planner</a>
+              </Button>
+            )}
           </div>
           <div className={styles.panelBody}>
+            {/* On a phone the bubble's numbers lead the sheet. */}
+            {phone && totals}
             {route ? (
-              <section className={styles.result} aria-label="Route">
-                <div className={styles.totalsMain}>
-                  {route.jumps} {route.jumps === 1 ? 'jump' : 'jumps'}
-                  {route.gates > 0 && ` + ${route.gates} ${route.gates === 1 ? 'gate' : 'gates'}`}
-                  {route.ansiblex > 0 && ` + ${route.ansiblex} Ansiblex`}
-                  <span>{formatLy(route.ly)}</span>
-                </div>
-                <RouteSystems
-                  route={route}
-                  activeLeg={activeLeg}
-                  setActiveLeg={setActiveLeg}
-                  onShowLeg={(n) => {
-                    const leg = legs[n];
-                    if (leg) mapRef.current?.fit([leg.from, leg.to]);
-                  }}
-                />
-                <RouteSummary plan={plan} fuelPrices={view.fuelPrices} />
-              </section>
+              <FieldGroup label="Route" className={styles.routeGroup}>
+                <section aria-label="Route">
+                  <RouteSystems
+                    route={route}
+                    activeLeg={activeLeg}
+                    setActiveLeg={setActiveLeg}
+                    onShowLeg={showLeg}
+                    brief={freight !== null}
+                  />
+                </section>
+              </FieldGroup>
             ) : (
               <p className={styles.hint}>{plan.problem?.message ?? 'No route any more.'}</p>
             )}
-            <Button asChild icon={<Route />}>
-              <a href={`/jump?${planner}`}>Open in the planner</a>
-            </Button>
+            {/* The levels the pilot planned with: for pilots, never for a client. */}
+            {!freight && (
+              <div className={styles.settingsFoot}>
+                <Disclosure icon={<UserRound aria-hidden />} title="Pilot">
+                  <dl className={styles.facts}>
+                    <div>
+                      <dt>Range</dt>
+                      <dd>{formatRange(plan.rangeLy)}</dd>
+                    </div>
+                    <div>
+                      <dt>Calibration</dt>
+                      <dd>{ROMAN[request.skills?.jdc ?? 5]}</dd>
+                    </div>
+                    <div>
+                      <dt>Conservation</dt>
+                      <dd>{ROMAN[request.skills?.jfc ?? 4]}</dd>
+                    </div>
+                    {plan.ship.hull === 'jump_freighter' && (
+                      <div>
+                        <dt>Freighters</dt>
+                        <dd>{ROMAN[request.skills?.jf ?? 4]}</dd>
+                      </div>
+                    )}
+                  </dl>
+                </Disclosure>
+              </div>
+            )}
           </div>
         </aside>
+        {!phone && (
+          <div className={styles.choicesDock} style={{ left: 392, right: 56 }}>
+            {totals}
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+/** A client's freight quote at a glance: what to pay, and what for. */
+function FreightTotals({
+  freight,
+  jumps,
+  gates,
+}: {
+  freight: JumpShareFreight;
+  jumps: number;
+  gates: number;
+}) {
+  return (
+    <section className={styles.choicesBubble} aria-label="Price">
+      <div className={styles.choice}>
+        <span className={styles.choiceTitle}>Price</span>
+        <span className={styles.choiceMain}>{formatIsk(freight.price)}</span>
+        <dl className={styles.facts}>
+          <div>
+            <dt>Jumps</dt>
+            <dd>
+              {jumps}
+              {gates > 0 && ` + ${gates} ${gates === 1 ? 'gate' : 'gates'}`}
+            </dd>
+          </div>
+          {freight.cargoM3 !== null && (
+            <div>
+              <dt>Cargo</dt>
+              <dd>{formatNumber(freight.cargoM3)} m³</dd>
+            </div>
+          )}
+          {freight.collateral !== null && (
+            <div>
+              <dt>Collateral</dt>
+              <dd>{formatIsk(freight.collateral)}</dd>
+            </div>
+          )}
+        </dl>
+      </div>
+    </section>
   );
 }

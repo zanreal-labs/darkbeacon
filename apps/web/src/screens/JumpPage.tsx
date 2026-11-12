@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   fatigueMinutesLeft,
+  jumpRouteKey,
   routes,
   standingTone,
   type JumpMetaDto,
@@ -551,11 +552,17 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
         }}
         removeStop={removeStop}
         fuelPrices={fuelPrices.data ?? null}
-        onShare={async () => {
+        onShare={async (freight) => {
           if (!request) throw new Error('No route to share');
           const { token } = await api<JumpShareCreatedDto>(routes.jumps.share.path, {
             method: 'POST',
-            json: { plan: request, fuelHub: settings.fuelHub } satisfies JumpShareRequest,
+            json: {
+              plan: request,
+              fuelHub: settings.fuelHub,
+              // The route on screen (an alternative if one was picked), as a pilot or a client.
+              route: result?.route ? jumpRouteKey(result.route) : null,
+              freight: freight ?? null,
+            } satisfies JumpShareRequest,
           });
           return `${window.location.origin}/j/${token}`;
         }}

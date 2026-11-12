@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw/http';
 import { routes, type JumpPlanDto, type JumpShareViewDto } from '@darkbeacon/shared';
 import { installFlowMocks, renderWithProviders, setupMockServer } from '../test/setup';
@@ -71,6 +72,7 @@ const view: JumpShareViewDto = {
     bridgeTonnes: null,
   },
   plan,
+  freight: null,
   fuelPrices: {
     hub: 'jita',
     station: 'Jita IV - Moon 4 - Caldari Navy Assembly Plant',
@@ -83,23 +85,47 @@ const view: JumpShareViewDto = {
 
 setupMockServer(http.get(routes.public.jumpUniverse.path, () => HttpResponse.json(UNIVERSE)));
 
+const render = (shared: JumpShareViewDto) =>
+  renderWithProviders(
+    <TooltipProvider>
+      <ToastProvider>
+        <SharedJumpView view={shared} />
+      </ToastProvider>
+    </TooltipProvider>,
+  );
+
 describe('SharedJumpView', () => {
-  it('shows the shared route read-only: stops, legs, levels and the fuel at the hub', async () => {
-    renderWithProviders(
-      <TooltipProvider>
-        <ToastProvider>
-          <SharedJumpView view={view} />
-        </ToastProvider>
-      </TooltipProvider>,
-    );
+  it('shows the shared route read-only as the planner does: systems, levels and the fuel at the hub', async () => {
+    const user = userEvent.setup();
+    render(view);
     expect(await screen.findByRole('heading', { name: 'Ignoitton > Ahbazon > Ami' })).toBeTruthy();
     const panel = screen.getByRole('complementary', { name: 'Shared jump route' });
-    expect(within(panel).getByText(/JDC IV · JFC III · JF II/)).toBeTruthy();
     expect(within(panel).getByText('stop')).toBeTruthy();
-    expect(within(panel).getByText(/≈ 42M ISK · Jita/)).toBeTruthy();
+    // The totals sit in the bubble over the map, priced at the hub.
+    const totals = screen.getByRole('region', { name: 'Route totals' });
+    expect(within(totals).getByText(/42M ISK/)).toBeTruthy();
+    // The levels fold away under the pilot.
+    await user.click(within(panel).getByRole('button', { name: 'Pilot' }));
+    expect(within(panel).getByText('IV')).toBeTruthy();
     // Nothing edits here; the planner is a link away (with the stops in the address).
     expect(within(panel).queryByRole('combobox')).toBeNull();
-    const open = within(panel).getByRole('link', { name: 'Open in the planner' });
+    const open = within(panel).getByRole('link', { name: 'Open in planner' });
     expect(open.getAttribute('href')).toBe('/jump?from=Ignoitton&to=Ami&ship=Ark&via=Ahbazon');
+  });
+
+  it('shows a client the route and the price, without fuel, fatigue or the pilot', async () => {
+    render({
+      ...view,
+      freight: { price: 125_000_000, cargoM3: 300_000, collateral: 2_000_000_000 },
+      fuelPrices: null,
+    });
+    const panel = await screen.findByRole('complementary', { name: 'Freight quote' });
+    const price = screen.getByRole('region', { name: 'Price' });
+    expect(within(price).getByText('125M ISK')).toBeTruthy();
+    expect(within(price).getByText('300,000 m³')).toBeTruthy();
+    expect(within(panel).queryByText('Fuel')).toBeNull();
+    expect(within(panel).queryByText('Fatigue')).toBeNull();
+    expect(within(panel).queryByRole('button', { name: 'Pilot' })).toBeNull();
+    expect(within(panel).queryByRole('link', { name: 'Open in planner' })).toBeNull();
   });
 });
