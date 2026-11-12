@@ -84,6 +84,7 @@
 
 /* A control inside a card that draws the border and fill (the card shows focus itself). */
 .control[data-bare],
+.control[data-bare]:hover,
 .control[data-bare]:focus-within {
   border-color: transparent;
   background: transparent;
