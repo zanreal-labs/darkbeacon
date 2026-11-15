@@ -15,6 +15,7 @@ import type { Actor } from '@darkbeacon/core';
 import {
   BridgeAdmin,
   HubAdmin,
+  KnownStructures,
   RouteQueries,
   RoutingSettings,
   TheraFeed,
@@ -26,6 +27,7 @@ import {
   ExitsQuery,
   HubDistancesQuery,
   HubRoutesQuery,
+  KnownStructuresQuery,
   nestPath,
   PasteBridgesRequest,
   ReadBridgesFromEsiRequest,
@@ -54,6 +56,7 @@ export class RoutingController {
     @Inject(RoutingSettings) private readonly settings: RoutingSettings,
     @Inject(TheraFeed) private readonly thera: TheraFeed,
     @Inject(ROUTING_STATIONS) private readonly stations: StationCatalog,
+    @Inject(KnownStructures) private readonly structures: KnownStructures,
   ) {}
 
   @Get(nestPath(routes.routing.route.path))
@@ -168,6 +171,14 @@ export class RoutingController {
   @Get(nestPath(routes.routing.stations.path))
   stationsIn(@Param('solarSystemId', new ZodPipe(z.coerce.number().pipe(EveId))) solarSystemId: number) {
     return this.stations.stationsIn(solarSystemId);
+  }
+
+  @Get(nestPath(routes.routing.structures.path))
+  knownStructures(
+    @CurrentActor() actor: Actor | null,
+    @Query(new ZodPipe(KnownStructuresQuery)) query: KnownStructuresQuery,
+  ) {
+    return this.structures.list(actor, query.systems);
   }
 
   @Post(nestPath(routes.routing.waypoint.path))

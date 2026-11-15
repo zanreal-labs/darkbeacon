@@ -12,6 +12,7 @@ import {
 } from '@darkbeacon/core';
 import { Database } from '@darkbeacon/db';
 import { AccountService, CharacterService } from '@darkbeacon/identity';
+import { IntelNames } from '@darkbeacon/intel';
 import { PingUseCases, type MappingPorts } from '@darkbeacon/mapping';
 import {
   BridgeAdmin,
@@ -19,6 +20,8 @@ import {
   EVE_SCOUT_POLL_MS,
   ExitsPublisher,
   HubAdmin,
+  KnownStructures,
+  PublicStructureCatalog,
   RouteQueries,
   Router,
   RoutingSettings,
@@ -31,8 +34,10 @@ import {
   type CharacterStructureSearch,
   type CorporationAlliances,
   type CorporationStructures,
+  type CorporationNames,
   type HubRepository,
   type PilotDirectory,
+  type PublicStructureRepository,
   type RoutingSettingsRepository,
   type RoutingUniverse,
   type StationCatalog,
@@ -44,6 +49,12 @@ import {
   HttpWaypointGateway,
   MappingChainSource,
 } from '../../adapters/routing/esi-adapters.js';
+import {
+  EsiAccessStructureSearch,
+  EsiErrorLimit,
+  EsiPublicStructures,
+  EsiStructureReader,
+} from '../../adapters/routing/esi-structures.js';
 import {
   AccountAlliances,
   EsiAnsiblexSearch,
@@ -58,6 +69,7 @@ import {
 import { KyselyHubRepository } from '../../adapters/routing/kysely-hub-repository.js';
 import {
   KyselyBridgeRepository,
+  KyselyPublicStructureRepository,
   KyselyRoutingSettingsRepository,
 } from '../../adapters/routing/kysely-routing-repositories.js';
 import type { AppConfig } from '../../config/config.js';
@@ -74,6 +86,7 @@ import {
   UNIVERSE_CATALOG,
 } from '../../platform/tokens.js';
 import { RealtimeRegistry } from '../../realtime/realtime.registry.js';
+import { IntelModule } from '../intel/intel.module.js';
 import { MappingModule } from '../mapping/mapping.module.js';
 import { MAPPING_PORTS } from '../mapping/mapping.tokens.js';
 import { RoutingController } from './routing.controller.js';
@@ -89,6 +102,9 @@ const STRUCTURE_SEARCH = 'CharacterStructureSearch';
 const CORPORATION_ALLIANCES = 'CorporationAlliances';
 const ALLIANCES = 'AllianceDirectory';
 const STATIONS = ROUTING_STATIONS;
+const PUBLIC_STRUCTURES = 'PublicStructureRepository';
+const STRUCTURE_READER = 'EsiStructureReader';
+const CORPORATION_NAMES = 'CorporationNames';
 
 const { version } = JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')) as {
   version: string;
@@ -100,6 +116,8 @@ const DEBOUNCE_MS = 250;
 const PRECOMPUTED: readonly RouteMode[] = ['safer', 'highsec', 'outlaw'];
 /** The sovereignty map is looked at this often (and read again when an hour old). */
 const SOVEREIGNTY_CHECK_MS = 10 * 60_000;
+/** Whether the public structures are due is looked at this often (they are read about daily). */
+const PUBLIC_STRUCTURES_CHECK_MS = 60 * 60_000;
 
 const userAgent = (config: AppConfig) => `Darkbeacon/${version} (+${config.publicUrl})`;
 
@@ -107,7 +125,8 @@ const userAgent = (config: AppConfig) => `Darkbeacon/${version} (+${config.publi
  * Keeps routing current: drops a map's routing state when its chain, bridges or settings change,
  * recomputes and publishes its exits and way home (debounced), fills the hub tables of the other
  * modes in the background, adds `exits` to map snapshots, reads EVE-Scout's Thera and Turnur
- * holes and the sovereignty map on timers (not in tests), and forgets deleted maps.
+ * holes and the sovereignty map on timers (not in tests), refreshes the public structures about
+ * daily on the leader, and forgets deleted maps.
  */
 @Injectable()
 export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
@@ -126,6 +145,7 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
     @Inject(RoutingSettings) private readonly settings: RoutingSettings,
     @Inject(TheraFeed) private readonly thera: TheraFeed,
     @Inject(EsiSovereignty) private readonly sovereignty: EsiSovereignty,
+    @Inject(PublicStructureCatalog) private readonly publicStructures: PublicStructureCatalog,
     @Inject(RealtimeRegistry) private readonly registry: RealtimeRegistry,
     @Inject(EventConsumers) private readonly consumers: EventConsumers,
     @Inject(EVENT_BUS) private readonly bus: EventBus,
@@ -216,11 +236,28 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
         this.logger.warn(`sovereignty map: ${error instanceof Error ? error.message : String(error)}`);
       }
     };
+    // One process reads the shared catalogue; when it was read is in the database, so restarts
+    // and a new leader do not read it again before it is due.
+    const readPublicStructures = async () => {
+      if (!this.leadership.isLeader()) return;
+      try {
+        const done = await this.publicStructures.refresh();
+        if (done)
+          this.logger.log(
+            `public structures: ${done.listed} listed, ${done.read} read, ${done.removed} dropped` +
+              (done.failed > 0 ? `, ${done.failed} not answered` : ''),
+          );
+      } catch (error) {
+        this.logger.warn(`public structures: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    };
     setTimeout(() => void readEveScout(), 2_000).unref();
     setTimeout(() => void readSovereignty(), 5_000).unref();
+    setTimeout(() => void readPublicStructures(), 30_000).unref();
     this.pollers.push(
       setInterval(() => void readEveScout(), EVE_SCOUT_POLL_MS).unref(),
       setInterval(() => void readSovereignty(), SOVEREIGNTY_CHECK_MS).unref(),
+      setInterval(() => void readPublicStructures(), PUBLIC_STRUCTURES_CHECK_MS).unref(),
     );
   }
 
@@ -262,7 +299,7 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
 
 /** Routes over stargates, the chain, jump bridges and Thera, hubs, exits, the way home and in-game waypoints. */
 @Module({
-  imports: [MappingModule],
+  imports: [MappingModule, IntelModule],
   controllers: [RoutingController],
   providers: [
     {
@@ -312,7 +349,13 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
     },
     {
       provide: STRUCTURE_SEARCH,
-      useFactory: (config: AppConfig, characters: CharacterService, clock: Clock, fetchFn: typeof fetch) =>
+      useFactory: (
+        config: AppConfig,
+        characters: CharacterService,
+        clock: Clock,
+        fetchFn: typeof fetch,
+        reader: EsiStructureReader,
+      ) =>
         new EsiAnsiblexSearch({
           fetch: fetchFn,
           userAgent: userAgent(config),
@@ -320,8 +363,9 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
           clock,
           scopes: (id) => characters.scopes(id),
           accessToken: (id) => characters.accessToken(id),
+          limit: reader.limit,
         }),
-      inject: [APP_CONFIG, CharacterService, CLOCK, HTTP_FETCH],
+      inject: [APP_CONFIG, CharacterService, CLOCK, HTTP_FETCH, STRUCTURE_READER],
     },
     {
       provide: CORPORATION_ALLIANCES,
@@ -345,6 +389,92 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
       inject: [CharacterService, AccountService],
     },
     { provide: STATIONS, useFactory: () => StaticStationCatalog.load() },
+    {
+      provide: PUBLIC_STRUCTURES,
+      useFactory: (database: Database) => new KyselyPublicStructureRepository(database),
+      inject: [Database],
+    },
+    {
+      // Every structure read of the server shares one error window.
+      provide: STRUCTURE_READER,
+      useFactory: (config: AppConfig, clock: Clock, fetchFn: typeof fetch) =>
+        new EsiStructureReader({
+          fetch: fetchFn,
+          userAgent: userAgent(config),
+          baseUrl: config.esiBaseUrl,
+          limit: new EsiErrorLimit({ clock }),
+        }),
+      inject: [APP_CONFIG, CLOCK, HTTP_FETCH],
+    },
+    {
+      // Corporation names and tickers as intel keeps them (stored, a week fresh).
+      provide: CORPORATION_NAMES,
+      useFactory: (names: IntelNames): CorporationNames => ({
+        corporations: async (ids) => {
+          const book = await names.lookup(ids, ids);
+          return new Map(
+            ids.flatMap((id) => {
+              const known = book.get(id);
+              return known ? [[id, { name: known.name, ticker: known.ticker ?? null }] as const] : [];
+            }),
+          );
+        },
+      }),
+      inject: [IntelNames],
+    },
+    {
+      provide: PublicStructureCatalog,
+      useFactory: (
+        repo: PublicStructureRepository,
+        reader: EsiStructureReader,
+        characters: CharacterService,
+        clock: Clock,
+      ) =>
+        new PublicStructureCatalog({
+          repo,
+          source: new EsiPublicStructures(reader),
+          characters,
+          tokens: characters,
+          clock,
+        }),
+      inject: [PUBLIC_STRUCTURES, STRUCTURE_READER, CharacterService, CLOCK],
+    },
+    {
+      provide: KnownStructures,
+      useFactory: (
+        stations: StationCatalog,
+        universe: RoutingUniverse,
+        publicStructures: PublicStructureRepository,
+        reader: EsiStructureReader,
+        characters: CharacterService,
+        pilots: PilotDirectory,
+        owners: CorporationNames,
+        clock: Clock,
+      ) =>
+        new KnownStructures({
+          stations,
+          universe,
+          publicStructures,
+          search: new EsiAccessStructureSearch({
+            reader,
+            clock,
+            scopes: (id) => characters.scopes(id),
+            accessToken: (id) => characters.accessToken(id),
+          }),
+          pilots,
+          owners,
+        }),
+      inject: [
+        STATIONS,
+        UNIVERSE_CATALOG,
+        PUBLIC_STRUCTURES,
+        STRUCTURE_READER,
+        CharacterService,
+        PILOT_DIRECTORY,
+        CORPORATION_NAMES,
+        CLOCK,
+      ],
+    },
     {
       provide: EsiSovereignty,
       useFactory: (config: AppConfig, clock: Clock, fetchFn: typeof fetch) =>
@@ -516,6 +646,6 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
     },
     RoutingRuntime,
   ],
-  exports: [Router, HubAdmin, RouteQueries],
+  exports: [Router, HubAdmin, RouteQueries, KnownStructures],
 })
 export class RoutingModule {}

@@ -979,6 +979,15 @@ export const routes = {
       scope: { resource: 'universe', action: 'read' },
       response: dto.StationsDto,
     }),
+    /** Stations and Upwell structures of systems: NPC, public, and those my characters may use. */
+    structures: route({
+      method: 'GET',
+      path: '/api/universe/structures',
+      auth: 'account',
+      scope: { resource: 'universe', action: 'read' },
+      query: dto.KnownStructuresQuery,
+      response: dto.KnownStructuresDto,
+    }),
   },
 
   /** Ansiblex jump bridges a map routes over. */

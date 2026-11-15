@@ -500,7 +500,7 @@ function SystemWidgets({
       )}
       {show('kills') && <KillsWidget mapId={mapId} solarSystemId={id} name={name} universe={universe} />}
       {show('structures') && (
-        <StructuresSection key={`structures:${id}`} mapId={mapId} solarSystemId={id} can={can} />
+        <StructuresSection key={`structures:${id}`} mapId={mapId} solarSystemId={id} name={name} can={can} />
       )}
       {show('comments') && (
         <CommentsSection key={`comments:${id}`} mapId={mapId} solarSystemId={id} can={can} />

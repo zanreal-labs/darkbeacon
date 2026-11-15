@@ -115,6 +115,41 @@
   color: var(--dbk-color-warning);
 }
 
+.cardDocks {
+  display: grid;
+  gap: 2px;
+  margin: var(--dbk-space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cardDocks li {
+  display: flex;
+  align-items: center;
+  gap: var(--dbk-space-2);
+  min-width: 0;
+  min-height: 18px;
+}
+
+.cardDocks li > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardDocks li > svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--dbk-color-text-muted);
+}
+
+.cardDocks em,
+.cardDocks [data-more] {
+  color: var(--dbk-color-text-muted);
+  font-style: normal;
+}
+
 .cardActions {
   display: flex;
   flex-wrap: wrap;

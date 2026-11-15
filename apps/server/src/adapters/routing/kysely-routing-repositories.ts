@@ -3,7 +3,9 @@ import type {
   BridgeRecord,
   BridgeRepository,
   NewBridge,
+  PublicStructureRepository,
   RoutingSettingsRepository,
+  UpwellStructure,
 } from '@darkbeacon/routing';
 import type { MapRoutingSettingsDto, RoutePreferencesDto } from '@darkbeacon/shared';
 
@@ -25,6 +27,15 @@ export interface RoutingSettingsTables {
   routing_bridges: BridgeRow;
   routing_preferences: { account_id: string; settings: string; updated_at: number };
   routing_map_settings: { map_id: string; settings: string; updated_at: number };
+  routing_public_structures: {
+    structure_id: number;
+    name: string;
+    solar_system_id: number;
+    type_id: number | null;
+    owner_id: number | null;
+    read_at: number;
+    listed_at: number;
+  };
 }
 
 const toRecord = (r: BridgeRow): BridgeRecord => ({
@@ -211,5 +222,96 @@ export class KyselyRoutingSettingsRepository implements RoutingSettingsRepositor
 
   async forgetMap(mapId: string): Promise<void> {
     await this.db.deleteFrom('routing_map_settings').where('map_id', '=', mapId).execute();
+  }
+}
+
+/** Rows per statement: well under SQLite's variable limit (seven columns a row). */
+const CHUNK = 400;
+
+function chunks<T>(items: readonly T[], size = CHUNK): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/** The shared catalogue of public Upwell structures (`routing_public_structures`). */
+export class KyselyPublicStructureRepository implements PublicStructureRepository {
+  constructor(private readonly database: Database) {}
+
+  private get db() {
+    return this.database.db<RoutingSettingsTables>();
+  }
+
+  async inSystems(solarSystemIds: readonly number[]): Promise<UpwellStructure[]> {
+    if (solarSystemIds.length === 0) return [];
+    const rows = await this.db
+      .selectFrom('routing_public_structures')
+      .select(['structure_id', 'name', 'solar_system_id', 'type_id', 'owner_id'])
+      .where('solar_system_id', 'in', [...solarSystemIds])
+      .execute();
+    return rows.map((r) => ({
+      structureId: Number(r.structure_id),
+      name: r.name,
+      solarSystemId: Number(r.solar_system_id),
+      typeId: r.type_id === null ? null : Number(r.type_id),
+      ownerCorporationId: r.owner_id === null ? null : Number(r.owner_id),
+    }));
+  }
+
+  async readTimes(): Promise<Map<number, number>> {
+    const rows = await this.db
+      .selectFrom('routing_public_structures')
+      .select(['structure_id', 'read_at'])
+      .execute();
+    return new Map(rows.map((r) => [Number(r.structure_id), Number(r.read_at)]));
+  }
+
+  async save(structures: readonly UpwellStructure[], readAt: number): Promise<void> {
+    if (structures.length === 0) return;
+    await this.database.transaction(async () => {
+      for (const part of chunks(structures)) {
+        await this.db
+          .insertInto('routing_public_structures')
+          .values(
+            part.map((s) => ({
+              structure_id: s.structureId,
+              name: s.name,
+              solar_system_id: s.solarSystemId,
+              type_id: s.typeId,
+              owner_id: s.ownerCorporationId,
+              read_at: readAt,
+              listed_at: readAt,
+            })),
+          )
+          .onConflict((oc) =>
+            oc.column('structure_id').doUpdateSet((eb) => ({
+              name: eb.ref('excluded.name'),
+              solar_system_id: eb.ref('excluded.solar_system_id'),
+              type_id: eb.ref('excluded.type_id'),
+              owner_id: eb.ref('excluded.owner_id'),
+              read_at: eb.ref('excluded.read_at'),
+            })),
+          )
+          .execute();
+      }
+    });
+  }
+
+  async remove(structureIds: readonly number[]): Promise<void> {
+    for (const part of chunks(structureIds)) {
+      await this.db.deleteFrom('routing_public_structures').where('structure_id', 'in', part).execute();
+    }
+  }
+
+  async markListed(now: number): Promise<void> {
+    await this.db.updateTable('routing_public_structures').set({ listed_at: now }).execute();
+  }
+
+  async listedAt(): Promise<number | null> {
+    const row = await this.db
+      .selectFrom('routing_public_structures')
+      .select((eb) => eb.fn.max('listed_at').as('at'))
+      .executeTakeFirst();
+    return row?.at === null || row?.at === undefined ? null : Number(row.at);
   }
 }

@@ -19,6 +19,7 @@ import {
 } from '@darkbeacon/shared';
 import { api } from '../lib/api';
 import { useMyTracking } from '../lib/characters';
+import { useKnownStructures } from '../lib/known-structures';
 import { useMe } from '../lib/session';
 import { usePageView } from '../lib/useTelemetry';
 import { useBreadcrumbs } from '../shell/breadcrumbs';
@@ -358,6 +359,8 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
     }
     return foreign;
   }, [routeIntel.data, standings]);
+  // Where one can dock in the systems the route reaches.
+  const docks = useKnownStructures(reached);
   const toLegs = useCallback(
     (route: JumpRouteDto): RouteLeg[] =>
       route.legs.map((leg) => ({
@@ -596,6 +599,7 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
         avoidSystems={avoidSystems}
         avoidRegions={avoidRegions}
         heldBy={heldBy}
+        docksIn={docks.bySystem}
         rangeLy={rangeLy}
         plan={result}
         routeOptions={routeOptions}

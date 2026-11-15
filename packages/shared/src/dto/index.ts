@@ -25,6 +25,7 @@ export * from './authors.js';
 export * from './comments.js';
 export * from './wormhole-spawns.js';
 export * from './structures.js';
+export * from './known-structures.js';
 export * from './route-options.js';
 export * from './route-panel.js';
 export * from './bridges.js';

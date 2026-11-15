@@ -41,6 +41,7 @@ import {
   type JumpShareFreight,
   type StandingTone,
   type JumpShipDto,
+  type KnownStructureDto,
   type OptionalEveScope,
   type WaypointRequest,
 } from '@darkbeacon/shared';
@@ -80,6 +81,7 @@ import {
   ISOTOPE_LABELS,
   routeText,
 } from './format';
+import { structureLabel } from '../lib/known-structures';
 import { searchSystems, securityColor, securityLabel, type StarModel } from './model';
 import type { PilotFill } from './pilot';
 import type { PlannerSettings } from './settings';
@@ -148,6 +150,8 @@ export interface JumpPanelProps {
   phone: boolean;
   /** Systems on the route held by someone neither mine nor blue (by EVE id). */
   heldBy: ReadonlyMap<number, ForeignSpace>;
+  /** Stations and structures EVE knows in the route's systems (by EVE id). */
+  docksIn: ReadonlyMap<number, readonly KnownStructureDto[]>;
   /** What each picker offers on focus and ranks first while typing. */
   suggestions: Readonly<Record<End, readonly Suggestion[]>>;
   ref?: Ref<HTMLDivElement>;
@@ -236,6 +240,7 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
     setActive: props.setActiveLeg,
     show: props.onShowLeg,
     held: props.heldBy,
+    docks: props.docksIn,
   };
   const pointRow = (k: number, arrival?: { leg: JumpLegDto; n: number }) => {
     const last = k === points - 1;
@@ -404,6 +409,8 @@ interface LegHover {
   show(n: number): void;
   /** Systems held by someone neither mine nor blue. */
   held?: ReadonlyMap<number, ForeignSpace>;
+  /** Stations and structures of the systems, to say where one can dock. */
+  docks?: ReadonlyMap<number, readonly KnownStructureDto[]>;
   /** Only the distance under each system (a client's freight quote shows no fuel or fatigue). */
   brief?: boolean;
 }
@@ -422,6 +429,7 @@ function PointRow({
   setActive,
   show,
   held,
+  docks,
   children,
 }: {
   n: number;
@@ -462,7 +470,12 @@ function PointRow({
           {children}
         </Field>
         {arrival?.leg.kind === 'jump' && (
-          <LegStats leg={arrival.leg} held={held?.get(arrival.leg.to.id)} onShow={() => show(arrival.n)} />
+          <LegStats
+            leg={arrival.leg}
+            held={held?.get(arrival.leg.to.id)}
+            docks={docks?.get(arrival.leg.to.id)}
+            onShow={() => show(arrival.n)}
+          />
         )}
       </div>
     </div>
@@ -482,15 +495,17 @@ function SecPill({ security }: { security: number }) {
 function LegStats({
   leg,
   held,
+  docks,
   brief,
   onShow,
 }: {
   leg: JumpLegDto;
   held?: ForeignSpace;
+  docks?: readonly KnownStructureDto[];
   brief?: boolean;
   onShow(): void;
 }) {
-  const facts: Array<[string, string, StandingTone?]> = brief
+  const facts: Array<[string, string, StandingTone?, string?]> = brief
     ? [['Distance', formatLy(leg.ly)]]
     : [
         ['Distance', formatLy(leg.ly)],
@@ -501,12 +516,23 @@ function LegStats({
           : []),
         // Landing in space that is neither mine nor blue: who holds it, in its standing colour.
         ...(held ? ([['Held by', held.holder, held.tone]] as Array<[string, string, StandingTone]>) : []),
+        // Where one can dock: NPC stations, public structures and those my characters may use.
+        ...(docks && docks.length > 0
+          ? ([
+              [
+                'Docks',
+                String(docks.length),
+                undefined,
+                docks.map((d) => structureLabel(d, leg.to.name)).join('\n'),
+              ],
+            ] as Array<[string, string, undefined, string]>)
+          : []),
       ];
   return (
     <button type="button" className={styles.legStats} onClick={onShow} aria-label="Show this jump on the map">
       <dl className={styles.facts}>
-        {facts.map(([term, value, tone]) => (
-          <div key={term}>
+        {facts.map(([term, value, tone, title]) => (
+          <div key={term} title={title}>
             <dt>{term}</dt>
             <dd data-tone={tone}>{value}</dd>
           </div>
@@ -517,7 +543,16 @@ function LegStats({
 }
 
 /** A system the route passes between two points: a card with its name and how the route gets there. */
-function LegRow({ leg, n, active, setActive, show, held, brief }: { leg: JumpLegDto; n: number } & LegHover) {
+function LegRow({
+  leg,
+  n,
+  active,
+  setActive,
+  show,
+  held,
+  docks,
+  brief,
+}: { leg: JumpLegDto; n: number } & LegHover) {
   return (
     <div
       className={styles.systemCard}
@@ -536,7 +571,13 @@ function LegRow({ leg, n, active, setActive, show, held, brief }: { leg: JumpLeg
         {leg.stop && <em>stop</em>}
       </div>
       {leg.kind === 'jump' && (
-        <LegStats leg={leg} held={held?.get(leg.to.id)} brief={brief} onShow={() => show(n)} />
+        <LegStats
+          leg={leg}
+          held={held?.get(leg.to.id)}
+          docks={docks?.get(leg.to.id)}
+          brief={brief}
+          onShow={() => show(n)}
+        />
       )}
     </div>
   );

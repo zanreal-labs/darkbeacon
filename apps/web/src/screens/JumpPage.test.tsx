@@ -7,6 +7,7 @@ import {
   routes,
   type BridgeDto,
   type JumpFuelPricesDto,
+  type KnownStructuresDto,
   type JumpPilotDto,
   type JumpPlanDto,
   type JumpPlanRequest,
@@ -104,6 +105,23 @@ const server = setupMockServer(
   http.get(routes.accounts.me.path, () => HttpResponse.json(meFixture())),
   // No maps (so no Ansiblex), no standings and nobody holding the route's systems by default.
   http.get(routes.maps.list.path, () => HttpResponse.json([])),
+  // NPC stations and structures of the route's systems: Ami has one public Astrahus.
+  http.get(routes.routing.structures.path, () =>
+    HttpResponse.json({
+      structures: [
+        {
+          id: 1_035_000_000_001,
+          name: 'Ami - Haulers Rest',
+          solarSystemId: 30005035,
+          typeId: 35832,
+          typeName: 'Astrahus',
+          owner: { id: 98_000_001, name: 'Freight Co', ticker: 'FRGT' },
+          source: 'public',
+        },
+      ],
+      access: null,
+    } satisfies KnownStructuresDto),
+  ),
   http.get(routes.intel.standings.path, () =>
     HttpResponse.json({ standings: [], missingScopes: false, overrides: [] } satisfies StandingsDto),
   ),
@@ -175,6 +193,9 @@ describe('JumpPage', () => {
     // Every leg shows in the trip's own list: the system between, then the destination's card.
     expect(route).toBeTruthy();
     expect(panel.querySelectorAll('[data-leg]')).toHaveLength(2);
+    // Where one can dock: Ami's card counts its public Astrahus and names it on hover.
+    const ami = await within(panel).findByTitle('Haulers Rest', undefined, { timeout: 3000 });
+    expect(ami.textContent).toBe('Docks1');
     expect(requests[0]).toMatchObject({
       shipTypeId: ARK.typeId,
       origin: 30002647,

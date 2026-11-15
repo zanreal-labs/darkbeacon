@@ -486,6 +486,6 @@ export class IntelRuntime implements OnModuleInit, OnModuleDestroy {
     },
     IntelRuntime,
   ],
-  exports: [IntelQueries, IntelJobs],
+  exports: [IntelQueries, IntelJobs, IntelNames],
 })
 export class IntelModule {}

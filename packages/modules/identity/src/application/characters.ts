@@ -305,6 +305,18 @@ export class CharacterService {
     return character ? { name: character.name, accountId: character.accountId } : null;
   }
 
+  /**
+   * Linked characters of the whole instance with a working token whose grant holds every one of
+   * `scopes`, for reads any such character may make for everyone (public structures).
+   */
+  async withScopes(scopes: readonly string[]): Promise<number[]> {
+    const characters = (await this.deps.characters.listAll()).filter((c) => c.tokenValid);
+    const granted = await this.deps.characters.scopesOf(characters.map((c) => c.id));
+    return characters
+      .filter((c) => scopes.every((scope) => granted.get(c.id)?.includes(scope)))
+      .map((c) => c.id);
+  }
+
   /** ESI scopes the character's stored grant holds; empty without a working token. */
   async scopes(characterId: number): Promise<string[]> {
     const character = await this.deps.characters.findById(characterId);

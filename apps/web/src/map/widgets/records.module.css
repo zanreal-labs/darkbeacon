@@ -129,6 +129,13 @@
   user-select: none;
 }
 
+.stationIcon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--dbk-color-text-muted);
+}
+
 .structureTable th:nth-child(2) {
   width: 66px;
 }

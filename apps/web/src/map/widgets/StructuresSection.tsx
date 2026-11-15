@@ -8,9 +8,11 @@ import {
   STRUCTURE_STATUS_LABEL,
   TIMED_STRUCTURE_STATUSES,
   type PasteStructuresResult,
+  type KnownStructureDto,
   type StructureDto,
 } from '@darkbeacon/shared';
 import { EvePicker, type EveOption } from '../../components/pickers';
+import { structureLabel, useKnownStructures } from '../../lib/known-structures';
 import { api, ApiError } from '../../lib/api';
 import type { MapPermissions } from '../../lib/roles';
 import {
@@ -49,19 +51,25 @@ function useNow() {
   return now;
 }
 
+/** Known space: systems below this id (wormhole systems start at 31 000 000). */
+const WORMHOLE_IDS = 31_000_000;
+
 /**
  * Structures in the system: paste d-scan rows (one structure each) or a structure's timer (its
  * three lines) into the section; type, name, owner, status and a live countdown in EVE time.
  * Double click (or the pencil) edits; Delete removes the selected one; one owner can be set for
- * all of them.
+ * all of them. In known space, the stations and structures EVE knows there follow (NPC stations,
+ * public structures, those my characters may use), read-only.
  */
 export function StructuresSection({
   mapId,
   solarSystemId,
+  name,
   can,
 }: {
   mapId: string;
   solarSystemId: number;
+  name: string;
   can: MapPermissions;
 }) {
   const toast = useToast();
@@ -79,6 +87,8 @@ export function StructuresSection({
   const [owners, setOwners] = useState(false);
   const [busy, setBusy] = useState(false);
   const list = structures.data ?? [];
+  const inEve = useKnownStructures([solarSystemId], solarSystemId < WORMHOLE_IDS);
+  const known = inEve.bySystem.get(solarSystemId) ?? [];
   // The timer that runs out first, for the title bar.
   const next = list
     .filter((s) => TIMED_STRUCTURE_STATUSES.includes(s.status) && s.endsAt !== null && s.endsAt > now)
@@ -154,7 +164,7 @@ export function StructuresSection({
     <WidgetWindow
       id="structures"
       title="Structures"
-      count={structures.data ? list.length : undefined}
+      count={structures.data ? list.length + known.length : undefined}
       summary={next ? `${STRUCTURE_STATUS_LABEL[next.status]} ${countdown(next.endsAt!, now)}` : undefined}
       alert={!!next}
       actions={
@@ -202,10 +212,13 @@ export function StructuresSection({
         {structures.isLoading ? (
           <Skeleton height={14} width="70%" />
         ) : list.length === 0 ? (
-          <p className={styles.empty}>
-            <Building2 aria-hidden />
-            No structures noted here.
-          </p>
+          known.length === 0 &&
+          !inEve.isLoading && (
+            <p className={styles.empty}>
+              <Building2 aria-hidden />
+              No structures noted here.
+            </p>
+          )
         ) : (
           <table className={`${styles.table} ${own.structureTable}`}>
             <thead>
@@ -305,6 +318,7 @@ export function StructuresSection({
             </tbody>
           </table>
         )}
+        {known.length > 0 && <KnownStructures structures={known} systemName={name} />}
       </div>
       {editing && (
         <StructureEditor
@@ -380,5 +394,72 @@ function OwnersDialog({
         </Field>
       </DialogContent>
     </Dialog>
+  );
+}
+
+const SOURCE_LABEL: Record<KnownStructureDto['source'], string> = {
+  npc: 'NPC station',
+  public: 'Public',
+  access: 'You have access',
+};
+
+/** What EVE says is in the system: read-only, owner by ticker, where the row comes from on hover. */
+function KnownStructures({
+  structures,
+  systemName,
+}: {
+  structures: readonly KnownStructureDto[];
+  systemName: string;
+}) {
+  return (
+    <table className={`${styles.table} ${own.structureTable}`}>
+      <thead>
+        <tr>
+          <th scope="col">In EVE</th>
+          <th scope="col">Owner</th>
+        </tr>
+      </thead>
+      <tbody>
+        {structures.map((s) => (
+          <tr key={s.id} data-source={s.source}>
+            <td>
+              <span
+                className={own.structureName}
+                title={[s.typeName, s.name, SOURCE_LABEL[s.source]].filter(Boolean).join('\n')}
+              >
+                {s.typeId ? (
+                  <Avatar
+                    src={`https://images.evetech.net/types/${s.typeId}/icon?size=32`}
+                    name={s.typeName ?? s.name}
+                    size={18}
+                    shape="rounded"
+                  />
+                ) : (
+                  <Building2 aria-hidden className={own.stationIcon} />
+                )}
+                <span className={styles.ellipsis}>{structureLabel(s, systemName)}</span>
+              </span>
+            </td>
+            <td>
+              {s.owner ? (
+                <span className={own.owner} title={s.owner.name ?? undefined}>
+                  <Avatar
+                    src={corporationLogoUrl(s.owner.id, 32)}
+                    name={s.owner.name ?? ''}
+                    size={16}
+                    shape="rounded"
+                  />
+                  <span className={styles.ellipsis}>
+                    {s.owner.ticker ? `[${s.owner.ticker}]` : (s.owner.name ?? '')}
+                  </span>
+                </span>
+              ) : (
+                <span className="subtle">NPC</span>
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }

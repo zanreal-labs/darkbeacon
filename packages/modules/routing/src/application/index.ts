@@ -6,3 +6,4 @@ export * from './waypoints.js';
 export * from './bridges.js';
 export * from './eve-scout.js';
 export * from './settings.js';
+export * from './known-structures.js';

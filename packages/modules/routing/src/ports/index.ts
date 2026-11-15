@@ -9,6 +9,7 @@ import type {
 import type { BridgePilot } from '../domain/bridges.js';
 import type { Invasion } from '../domain/modes.js';
 import type { RoutedEdge } from '../domain/options.js';
+import type { CorporationBook, UpwellStructure } from '../domain/structures.js';
 
 export type { Clock, EventLog, MapAccess, UnitOfWork } from '@darkbeacon/core';
 
@@ -205,4 +206,60 @@ export interface RoutingSettingsRepository {
   mapSettings(mapId: string): Promise<MapRoutingSettingsDto | null>;
   setMapSettings(mapId: string, settings: MapRoutingSettingsDto, now: number): Promise<void>;
   forgetMap(mapId: string): Promise<void>;
+}
+
+/**
+ * The catalogue of public Upwell structures, shared by every account (one row per structure;
+ * `listedAt` is when ESI's list was last read).
+ */
+export interface PublicStructureRepository {
+  inSystems(solarSystemIds: readonly number[]): Promise<UpwellStructure[]>;
+  /** When each stored structure's details were read. */
+  readTimes(): Promise<Map<number, number>>;
+  /** Adds or replaces structures, their details read at `readAt`. */
+  save(structures: readonly UpwellStructure[], readAt: number): Promise<void>;
+  remove(structureIds: readonly number[]): Promise<void>;
+  /** Stamps every stored structure as listed at `now`. */
+  markListed(now: number): Promise<void>;
+  /** When ESI's list was last read; null before the first time. */
+  listedAt(): Promise<number | null>;
+}
+
+/** What reading structures' details through ESI gave. */
+export interface StructureReads {
+  found: UpwellStructure[];
+  /** Refused (403) or gone (404): not readable with that token. */
+  refused: number[];
+  /** EVE did not answer for these (try again later). */
+  failed: number[];
+}
+
+/**
+ * ESI's public structures: `GET /universe/structures` (no login; ids only) and
+ * `GET /universe/structures/{id}` (scope `esi-universe.read_structures.v1`). Throws
+ * `EsiStructuresError` when the list cannot be read.
+ */
+export interface PublicStructureSource {
+  publicIds(): Promise<number[]>;
+  read(structureIds: readonly number[], accessToken: string): Promise<StructureReads>;
+}
+
+/**
+ * The structures in a system a character may use, public or not: its structure search for the
+ * system's name (structures are named "<System> - <Name>"), then each hit's details, keeping
+ * those standing in that system. Throws `EsiStructuresError` (domain); `no-scope` when the grant
+ * lacks the search or the structure reads.
+ */
+export interface AccessStructureSearch {
+  structuresIn(characterId: number, system: { id: number; name: string }): Promise<UpwellStructure[]>;
+}
+
+/** Linked characters of the whole instance whose grant holds every one of `scopes`. */
+export interface ScopedCharacters {
+  withScopes(scopes: readonly string[]): Promise<number[]>;
+}
+
+/** Names and tickers of corporations (cached); unknown or unreadable ones are left out. */
+export interface CorporationNames {
+  corporations(corporationIds: readonly number[]): Promise<CorporationBook>;
 }
