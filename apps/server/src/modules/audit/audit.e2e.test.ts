@@ -140,6 +140,8 @@ describeEachDialect('audit trail over HTTP', (t) => {
       'system.added',
       'system.added',
       'connection.added',
+      // The link lays Perimeter out beside Jita, in the same go.
+      'system.updated',
       'system.updated',
       'system.updated',
       'signature.added',
@@ -194,6 +196,7 @@ describeEachDialect('audit trail over HTTP', (t) => {
     expect(perimeter.map((e) => e.type).reverse()).toEqual([
       'system.added',
       'connection.added',
+      'system.updated',
       'system.updated',
       'connection.updated',
       'connection.removed',

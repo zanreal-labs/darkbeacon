@@ -321,93 +321,156 @@ class Cheapest {
   }
 }
 
-/** A system for `strayRepairs`: home systems root the chain. */
+/** A system for `layOutTree`: home systems root the chain. */
 export interface ChainNode extends PlacementNode {
   home?: boolean;
 }
 
 /**
- * Whether `spot` is far off where the rule puts a child of the system at `parent`: more than two
- * columns aside, more than three rows above, or more than three rows below the stack of its
- * `children` (all the parent's children, so a column of siblings never counts as far).
+ * The whole chain laid out as a tree, the way mappers lay one out by hand (see docs/decisions.md,
+ * "Maps lay themselves out"): every system one column right of the one it hangs off, its first
+ * child in its own row and each further child under everything the child before it brought along,
+ * so branches never share rows, links never cross and no system sits on another. The chain grows
+ * from its home, else from the first of `nodes` (the oldest); a further chain from its hub (the
+ * system with the most connections, the oldest of those); who hangs off whom is
+ * walked breadth first over `links` in order, so a new system joins at the bottom of its parent's
+ * children. The first root stays where it is, and so does a further chain (one not linked to
+ * the first, a lone system, one a closed wormhole cut off) while it fits there whole, every system
+ * in the row it belongs in, among what is laid out before it; else it opens a group of its own
+ * two columns right of everything laid out, at the top.
+ * Systems in `keep` (locked, or put there by hand) stay, their own children laid out beside them;
+ * a slot one of them covers moves the system meant for it down. Returns every system's spot.
  */
-export function strayedFrom(spot: Position, parent: Position, children = 1): boolean {
-  const below = NEAR.y + Math.max(0, children - 1) * SYSTEM_PLACEMENT.y;
-  const dy = spot.y - parent.y;
-  return Math.abs(spot.x - parent.x) > NEAR.x || dy < -NEAR.y || dy > below;
-}
-
-const farness = (spot: Position, parent: Position) =>
-  Math.abs(spot.x - parent.x) / SYSTEM_PLACEMENT.x + Math.abs(spot.y - parent.y) / SYSTEM_PLACEMENT.y;
-
-/**
- * Systems that stand far off the system they hang off (`strayedFrom`), moved back by the rule
- * (`findSystemSpot`) beside it, as a map heals itself: a spot left from an old layout, a source's
- * coordinates, a sibling stacked under one of those. The chain is walked from its roots (homes
- * first, then `nodes` in order; `links` in order decide which system another hangs off), so a
- * moved system's children follow it. Roots and systems in `keep` (locked, or put there by hand)
- * stay; a move happens only where it lands nearer. Returns the new spots.
- */
-export function strayRepairs(
+export function layOutTree(
   nodes: readonly ChainNode[],
   links: readonly PlacementLink[],
   keep: ReadonlySet<number> = new Set(),
 ): Map<number, Position> {
   const at = new Map(nodes.map((n) => [n.id, n.position]));
   const adjacent = new Map<number, number[]>();
-  const shown = links.filter((l) => at.has(l.source) && at.has(l.target) && l.source !== l.target);
-  for (const l of shown) {
+  for (const l of links) {
+    if (!at.has(l.source) || !at.has(l.target) || l.source === l.target) continue;
     adjacent.set(l.source, [...(adjacent.get(l.source) ?? []), l.target]);
     adjacent.set(l.target, [...(adjacent.get(l.target) ?? []), l.source]);
   }
-  const parentOf = new Map<number, number>();
-  const children = new Map<number, number>();
-  const order: number[] = [];
+  const childrenOf = new Map<number, number[]>();
+  const roots: number[] = [];
   const seen = new Set<number>();
-  for (const root of [...nodes.filter((n) => n.home), ...nodes]) {
+  const degree = (id: number) => adjacent.get(id)?.length ?? 0;
+  const hubs = nodes
+    .map((n, i) => ({ n, i }))
+    .sort((a, b) => degree(b.n.id) - degree(a.n.id) || a.i - b.i)
+    .map(({ n }) => n);
+  const homes = nodes.filter((n) => n.home);
+  for (const root of [...(homes.length > 0 ? homes : nodes.slice(0, 1)), ...hubs]) {
     if (seen.has(root.id)) continue;
     seen.add(root.id);
+    roots.push(root.id);
     const queue = [root.id];
     for (let q = 0; q < queue.length; q++) {
       const id = queue[q]!;
       for (const next of adjacent.get(id) ?? []) {
         if (seen.has(next)) continue;
         seen.add(next);
-        parentOf.set(next, id);
-        children.set(id, (children.get(id) ?? 0) + 1);
-        order.push(next);
+        childrenOf.set(id, [...(childrenOf.get(id) ?? []), next]);
         queue.push(next);
       }
     }
   }
 
-  const strays = (id: number) => {
-    const parent = parentOf.get(id)!;
-    return !keep.has(id) && strayedFrom(at.get(id)!, at.get(parent)!, children.get(parent) ?? 1);
+  const placed = new Map<number, Position>();
+  const taken: Rect[] = [];
+  /** Systems put since the group being tried started (`undefined`: no trial). */
+  let trial: number[] | undefined;
+  /** Whether a system of the group being tried had to go below its row. */
+  let crowded = false;
+  const put = (id: number, p: Position) => {
+    placed.set(id, p);
+    taken.push(footprint(p, CLEARANCE));
+    trial?.push(id);
   };
-  // Strayed systems not moved yet stand nowhere: neither they nor their lines block a slot.
-  const waiting = new Set(order.filter(strays));
-  const moved = new Map<number, Position>();
-  for (const id of order) {
-    if (!strays(id)) {
-      waiting.delete(id);
-      continue;
+  for (const id of keep) {
+    const p = at.get(id);
+    if (p) put(id, p);
+  }
+  const free = (p: Position) => {
+    const own = footprint(p, CLEARANCE);
+    return !taken.some((r) => overlaps(own, r));
+  };
+  /** The first free slot in column `x` from row `y` down. */
+  const slot = (x: number, y: number): Position => {
+    for (let i = 0; i < SEARCH_LIMIT; i++) {
+      const p = { x, y: y + i * SYSTEM_PLACEMENT.y };
+      if (!free(p)) continue;
+      if (i > 0) crowded = true;
+      return p;
     }
-    waiting.add(id);
-    const parent = parentOf.get(id)!;
-    const parentAt = at.get(parent)!;
-    const spot = at.get(id)!;
-    const count = children.get(parent) ?? 1;
-    const out = (n: number) => waiting.has(n);
-    const next = findSystemSpot({
-      nodes: [...at].filter(([n]) => !out(n)).map(([n, position]) => ({ id: n, position })),
-      links: shown.filter((l) => !out(l.source) && !out(l.target)),
-      parent,
-      upstream: parentOf.get(parent) ?? null,
-    });
-    waiting.delete(id);
-    if (strayedFrom(next, parentAt, count) && farness(next, parentAt) >= farness(spot, parentAt)) continue;
-    at.set(id, next);
+    return { x, y };
+  };
+  /** Lays out `id`'s children from its row down; returns the row under the last of them. */
+  const children = (id: number, own: Position): number => {
+    let row = own.y;
+    for (const child of childrenOf.get(id) ?? []) row = lay(child, own.x + SYSTEM_PLACEMENT.x, row);
+    return row;
+  };
+  /** Lays out `id` and what hangs off it from row `y` of column `x`; returns the row under them. */
+  const lay = (id: number, x: number, y: number): number => {
+    if (keep.has(id)) {
+      children(id, placed.get(id)!);
+      return y;
+    }
+    const own = slot(x, y);
+    put(id, own);
+    return Math.max(children(id, own), own.y + SYSTEM_PLACEMENT.y);
+  };
+
+  roots.forEach((root, i) => {
+    if (keep.has(root)) {
+      children(root, placed.get(root)!);
+      return;
+    }
+    const own = at.get(root)!;
+    if (i === 0 || placed.size === 0) {
+      lay(root, own.x, own.y);
+      return;
+    }
+    // A further chain stays where it stands when it fits there whole, every system in its row.
+    if (free(own)) {
+      const before = taken.length;
+      [trial, crowded] = [[], false];
+      lay(root, own.x, own.y);
+      const tried = trial;
+      trial = undefined;
+      if (!crowded) return;
+      for (const id of tried) placed.delete(id);
+      taken.length = before;
+    }
+    let maxX = -Infinity;
+    let minY = Infinity;
+    for (const p of placed.values()) {
+      maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y);
+    }
+    const start = onMapGrid({ x: maxX + 2 * SYSTEM_PLACEMENT.x, y: minY });
+    lay(root, start.x, start.y);
+  });
+  return placed;
+}
+
+/**
+ * The systems `layOutTree` puts somewhere else than they stand, with their new spots: how a map
+ * lays itself out on every change. Systems in `keep` never move.
+ */
+export function layoutRepairs(
+  nodes: readonly ChainNode[],
+  links: readonly PlacementLink[],
+  keep: ReadonlySet<number> = new Set(),
+): Map<number, Position> {
+  const laid = layOutTree(nodes, links, keep);
+  const moved = new Map<number, Position>();
+  for (const { id, position } of nodes) {
+    const next = laid.get(id);
+    if (!next || keep.has(id) || (next.x === position.x && next.y === position.y)) continue;
     moved.set(id, next);
   }
   return moved;

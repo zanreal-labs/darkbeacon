@@ -67,7 +67,8 @@ describeEachDialect('bookmark numbers', (t) => {
     expect(a).toMatchObject({ bookmarkNumber: 1, bookmarkParent: c2 });
     // Drawn towards home, still counted out of home.
     expect(b).toMatchObject({ bookmarkNumber: 2, bookmarkParent: c2 });
-    expect(await eventsSince(seq)).toEqual([
+    // (Linking systems lays them out too, as `system.updated`.)
+    expect((await eventsSince(seq)).filter(([type]) => type !== 'system.updated')).toEqual([
       ['connection.added', a],
       ['connection.added', b],
     ]);
@@ -91,7 +92,9 @@ describeEachDialect('bookmark numbers', (t) => {
     await connect(c2, c5);
     const seq = await head();
     await connections.remove(bob, map.id, middle.id);
-    expect((await eventsSince(seq)).map(([type]) => type)).toEqual(['connection.removed']);
+    expect((await eventsSince(seq)).map(([type]) => type).filter((t) => t !== 'system.updated')).toEqual([
+      'connection.removed',
+    ]);
     expect(await numbering()).toEqual({ [`${c2}-${c1}`]: `${c2}#1`, [`${c2}-${c5}`]: `${c2}#3` });
 
     await connect(c2, jita);
@@ -231,7 +234,7 @@ describeEachDialect('bookmark numbers', (t) => {
       [`${c2}-${shattered}`]: `${c2}#3`,
     });
     const events = await env.ports.events.readSince(mapStream(map.id), seq);
-    expect(events.map((e) => [e.type, e.actor])).toEqual([
+    expect(events.filter((e) => e.type !== 'system.updated').map((e) => [e.type, e.actor])).toEqual([
       ['connection.updated', { kind: 'system', id: 'bookmark-numbers' }],
       ['connection.updated', { kind: 'system', id: 'bookmark-numbers' }],
     ]);

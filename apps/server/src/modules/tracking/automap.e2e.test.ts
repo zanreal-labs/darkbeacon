@@ -196,12 +196,12 @@ describeEachDialect('auto-mapping a tracked pilot’s jumps', (t) => {
       expect(p(to).x - p(from).x).toBe(360);
       expect(Number.isInteger(p(to).y / 24)).toBe(true);
     }
-    // Siblings stack in a column; no two systems share a slot.
-    expect(p(D)).toEqual({ x: p(A).x, y: p(A).y + 144 });
+    // A tree: every branch has rows of its own. A's two (B-C, and the K162 F-G under it) come
+    // before its sibling D; no two systems share a slot.
+    expect(p(F)).toEqual({ x: p(B).x, y: p(B).y + 144 });
+    expect(p(D)).toEqual({ x: p(A).x, y: p(A).y + 288 });
     const slots = [...at.values()].map((s) => `${s.position.x},${s.position.y}`);
     expect(new Set(slots).size).toBe(slots.length);
-    // The K162 off A goes where its link crosses no other (above B, not under D's chain).
-    expect(p(F)).toEqual({ x: p(B).x, y: p(B).y - 144 });
   });
 
   it('brings systems the map hid back next to the jump, locked or not, not where they stood', async () => {

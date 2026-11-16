@@ -13,7 +13,7 @@ import {
   type NewEvent,
   type UnitOfWork,
 } from '@darkbeacon/core';
-import { strayRepairs, type EventPayloads, type EventType } from '@darkbeacon/shared';
+import { layoutRepairs, type EventPayloads, type EventType } from '@darkbeacon/shared';
 import type { MapSystem } from '../domain/map.js';
 import type {
   AuthorDirectory,
@@ -150,9 +150,9 @@ export abstract class MappingUseCases {
   }
 
   /**
-   * Moves systems that stand far off the one they hang off back beside it by the placement rule
-   * (`strayRepairs`): spots from old layouts or other tools, so the chain lays itself out without
-   * a tidy. Locked systems and ones someone dragged keep their spots.
+   * Lays the chain out again as a tree (`layoutRepairs`) and moves every system that stands
+   * elsewhere, so the map lays itself out without a tidy. Locked systems and ones someone dragged
+   * keep their spots; what hangs off them follows them.
    */
   private async healLayout(events: EventBatch, mapId: string): Promise<void> {
     const systems = (await this.ports.systems.list(mapId))
@@ -164,7 +164,7 @@ export abstract class MappingUseCases {
     );
     const keep = await this.ports.systems.byHand(mapId);
     for (const s of systems) if (s.locked) keep.add(s.solarSystemId);
-    const moves = strayRepairs(
+    const moves = layoutRepairs(
       systems.map((s) => ({ id: s.solarSystemId, position: s.position, home: s.status === 'home' })),
       connections.map((c) => ({ source: c.source, target: c.target })),
       keep,

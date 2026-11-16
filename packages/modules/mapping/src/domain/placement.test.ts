@@ -7,7 +7,8 @@ import {
   SYSTEM_PLACEMENT,
   segmentHitsRect,
   segmentsCross,
-  strayRepairs,
+  layoutRepairs,
+  layOutTree,
   type Position,
 } from '@darkbeacon/shared';
 import type { Connection, MapSystem } from './map.js';
@@ -320,7 +321,7 @@ describe('placing a system nobody dragged', () => {
 
 describe('a map healing its layout', () => {
   const heal = (chain: Chain, keep: number[] = []) =>
-    strayRepairs(
+    layoutRepairs(
       chain.systems.map((s) => ({ id: s.solarSystemId, position: s.position, home: s.status === 'home' })),
       chain.connections.map((c) => ({ source: c.source, target: c.target })),
       new Set(keep),
@@ -380,5 +381,108 @@ describe('a map healing its layout', () => {
     const moved = heal(chain);
     expect(moved.get(2)).toEqual({ x: COLUMN, y: 0 });
     expect(moved.get(3)).toEqual({ x: COLUMN, y: ROW });
+  });
+
+  it('gives every branch rows of its own, grandchildren right of their parent', () => {
+    // A merged map as it stood: home's children spread over seven rows, a grandchild left of its
+    // parent, two chains not linked to home standing in home's column.
+    const chain = new Chain()
+      .put(1, { x: 0, y: 0 }, { status: 'home', locked: true })
+      .put(2, { x: COLUMN, y: 3 * ROW })
+      .put(3, { x: COLUMN, y: 10 * ROW })
+      .put(4, { x: 2 * COLUMN, y: 6 * ROW })
+      .put(5, { x: COLUMN, y: 7 * ROW })
+      .put(6, { x: COLUMN, y: ROW })
+      .put(7, { x: COLUMN, y: 4 * ROW })
+      .put(8, { x: 2 * COLUMN, y: 9 * ROW })
+      .put(9, { x: COLUMN, y: 11 * ROW })
+      .put(10, { x: COLUMN, y: 0 })
+      .put(11, { x: 2 * COLUMN, y: 0 })
+      .put(12, { x: 2 * COLUMN, y: -ROW })
+      .put(13, { x: 3 * COLUMN, y: -ROW })
+      .link(1, 2)
+      .link(1, 3)
+      .link(4, 3)
+      .link(1, 5)
+      .link(1, 6)
+      .link(3, 7)
+      .link(7, 8)
+      .link(9, 1)
+      .link(11, 10)
+      .link(1, 12)
+      .link(13, 12);
+    const laid = layOutTree(
+      chain.systems.map((s) => ({ id: s.solarSystemId, position: s.position, home: s.status === 'home' })),
+      chain.connections.map((c) => ({ source: c.source, target: c.target })),
+      new Set([1]),
+    );
+    expect(Object.fromEntries(laid)).toEqual({
+      1: { x: 0, y: 0 },
+      2: { x: COLUMN, y: 0 },
+      3: { x: COLUMN, y: ROW },
+      4: { x: 2 * COLUMN, y: ROW },
+      7: { x: 2 * COLUMN, y: 2 * ROW },
+      8: { x: 3 * COLUMN, y: 2 * ROW },
+      5: { x: COLUMN, y: 3 * ROW },
+      6: { x: COLUMN, y: 4 * ROW },
+      9: { x: COLUMN, y: 5 * ROW },
+      12: { x: COLUMN, y: 6 * ROW },
+      13: { x: 2 * COLUMN, y: 6 * ROW },
+      // Not linked to home: a group of its own, two columns right of everything, at the top.
+      10: { x: 5 * COLUMN, y: 0 },
+      11: { x: 6 * COLUMN, y: 0 },
+    });
+  });
+
+  it('puts a new system under its siblings and moves the branches below it down', () => {
+    const chain = new Chain().put(1, { x: 0, y: 0 }, { status: 'home' });
+    chain.jump(1, 2);
+    chain.jump(1, 3);
+    chain.jump(2, 4);
+    chain.put(5, { x: 9 * COLUMN, y: 9 * ROW }).link(2, 5);
+    expect(heal(chain)).toEqual(
+      new Map([
+        [5, { x: 2 * COLUMN, y: ROW }],
+        [3, { x: COLUMN, y: 2 * ROW }],
+      ]),
+    );
+  });
+
+  it('lays what hangs off a dragged system out beside it', () => {
+    const chain = new Chain()
+      .put(1, { x: 0, y: 0 }, { status: 'home' })
+      .put(2, { x: 5 * COLUMN, y: 5 * ROW })
+      .put(3, { x: 0, y: 0 })
+      .put(4, { x: 2 * COLUMN, y: 0 })
+      .link(1, 2)
+      .link(2, 3)
+      .link(1, 4);
+    expect(heal(chain, [2])).toEqual(
+      new Map([
+        [3, { x: 6 * COLUMN, y: 5 * ROW }],
+        [4, { x: COLUMN, y: 0 }],
+      ]),
+    );
+  });
+
+  it('keeps a chain not linked to home where it stands only while it fits there whole', () => {
+    const chain = new Chain().put(1, { x: 0, y: 0 }, { status: 'home' });
+    chain.jump(1, 2);
+    chain.jump(1, 3);
+    chain.jump(1, 4);
+    // A lone system and a cut-off pair, clear of the chain: they stay.
+    chain.put(5, { x: 0, y: 6 * ROW }).put(6, { x: 3 * COLUMN, y: -3 * ROW });
+    chain.put(7, { x: 4 * COLUMN, y: -3 * ROW }).link(6, 7);
+    // A free spot left of home's children, its own children would land among them: it moves.
+    chain
+      .put(8, { x: 0, y: 2 * ROW })
+      .put(9, { x: COLUMN, y: 5 * ROW })
+      .link(8, 9);
+    expect(heal(chain)).toEqual(
+      new Map([
+        [8, { x: 6 * COLUMN, y: -3 * ROW }],
+        [9, { x: 7 * COLUMN, y: -3 * ROW }],
+      ]),
+    );
   });
 });

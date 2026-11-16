@@ -1159,7 +1159,8 @@ describeEachDialect('sharing and merged chains', (t) => {
       expect(await at(c1)).toEqual({ x: 1200, y: 1200 });
       const j = await at(jita);
       expect(j.x).toBeGreaterThanOrEqual(1200 + 2 * 360);
-      expect(await at(perimeter)).toEqual({ x: j.x + 360, y: j.y + 288 });
+      // Laid out as a tree: beside Jita, in its row.
+      expect(await at(perimeter)).toEqual({ x: j.x + 360, y: j.y });
       // Once: the next rebuild changes nothing.
       const head = await env.ports.events.headSeq(mapStream(alliance.id));
       await sharingTestEnv(t.db).merger.rebuildAll();

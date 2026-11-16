@@ -311,7 +311,8 @@ describeEachDialect('mapping use cases', (t) => {
       visible: true,
       position: { x: 7, y: 8 },
     });
-    expect(await eventsSince(restoredAt)).toEqual([
+    // (Systems its spot covers make room: the map lays itself out around it.)
+    expect((await eventsSince(restoredAt)).filter(([type]) => type !== 'system.updated')).toEqual([
       ['system.added', restored],
       ['signature.added', expect.objectContaining({ id: here.id, eveId: 'ABC-123', connectionId: null })],
     ]);
@@ -434,7 +435,10 @@ describeEachDialect('mapping use cases', (t) => {
       connections.add(bob, map.id, { source: SYSTEMS.c1, target: SYSTEMS.c2 }),
     ]);
     expect(new Set(added.map((c) => c.id)).size).toBe(1);
-    expect((await eventsSince(seq)).map(([type]) => type)).toEqual(['connection.added']);
+    // Linking them lays them out (`system.updated`); the connection is added once.
+    expect((await eventsSince(seq)).map(([type]) => type).filter((t) => t !== 'system.updated')).toEqual([
+      'connection.added',
+    ]);
     // The database itself refuses a second row for the pair, in either direction.
     const reversed = { ...added[0]!, id: 'other', source: SYSTEMS.c2, target: SYSTEMS.c1 };
     expect(await env.ports.connections.insert(reversed)).toBe(false);

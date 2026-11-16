@@ -10,7 +10,7 @@ import {
   groupStart,
   inWormholeSpace,
   LOCAL_INSTANCE,
-  strayRepairs,
+  layoutRepairs,
   type ChainEntry,
   type ChainOrigin,
   type MapSourceDto,
@@ -595,10 +595,9 @@ export class ChainMerger {
   }
 
   /**
-   * Moves systems that stand far off the one they hang off back beside it by the placement rule
-   * (`strayRepairs`): spots from old layouts or a source's coordinates, so the merged chain lays
-   * itself out without a tidy. Ones a viewer dragged (or placed this run by hand) and locked ones
-   * keep their spots.
+   * Lays the merged chain out again as a tree (`layoutRepairs`) and moves every system that
+   * stands elsewhere, so the map lays itself out without a tidy. Ones a viewer dragged (or placed
+   * this run by hand) and locked ones keep their spots; what hangs off them follows them.
    */
   private heal(map: MergedMap, refs: Set<string>, placing: Placing): void {
     const { layout, placed } = placing;
@@ -610,13 +609,18 @@ export class ChainMerger {
       const ref = refId('system', String(id));
       return map.merge.holders(ref).some((h) => map.merge.sourceField(h, ref, 'status') === 'home');
     };
+    const added = new Map<number, number>();
     for (const [id] of shown) {
-      const dto = map.view.get('system', String(id))?.dto as { locked?: boolean } | undefined;
+      const dto = map.view.get('system', String(id))?.dto as
+        { locked?: boolean; createdAt?: number } | undefined;
       if (dto?.locked || map.local.get(id)?.locked) keep.add(id);
+      added.set(id, dto?.createdAt ?? Infinity);
     }
-    const nodes = shown.map(([id, position]) => ({ id, position, home: isHome(id) }));
-    const ids = new Map(shown);
-    const moves = strayRepairs(
+    // In the order the systems were added (the chain grows from the oldest without a home).
+    const ordered = [...shown].sort(([a], [b]) => added.get(a)! - added.get(b)! || a - b);
+    const nodes = ordered.map(([id, position]) => ({ id, position, home: isHome(id) }));
+    const ids = new Map(ordered);
+    const moves = layoutRepairs(
       nodes,
       layoutLinks(ids, (n) => map.merge.neighbours(n)),
       keep,

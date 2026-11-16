@@ -213,7 +213,8 @@ describeEachDialect('public maps', (t) => {
           .filter((x) => x.op === 'event')
           .map((x) => (x.op === 'event' ? x.event.type : ''))
           .filter((type) => type !== 'routes.exits_changed'),
-      ).toEqual(['system.updated', 'system.updated']),
+        // Perimeter's note, Jita's move and Perimeter following Jita (it hangs off it).
+      ).toEqual(['system.updated', 'system.updated', 'system.updated']),
     );
     const events = messages.flatMap((x) => (x.op === 'event' ? [x.event] : []));
     expect(events.every((e) => e.stream === initial.stream && e.actor.kind === 'system')).toBe(true);

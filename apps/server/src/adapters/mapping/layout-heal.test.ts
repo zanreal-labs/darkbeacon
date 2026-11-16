@@ -45,13 +45,13 @@ describeEachDialect('a map healing its layout', (t) => {
     await strand();
     await systems.add(alice, map.id, { solarSystemId: TAMA, near: HOME });
     await connections.add(alice, map.id, { source: HOME, target: TAMA, type: 'wormhole' });
-    // The new system took the free slot beside home; the strayed one stacks under it.
-    expect(await at(TAMA)).toEqual({ x: COLUMN, y: 0 });
-    expect(await at(C2)).toEqual({ x: COLUMN, y: ROW });
+    // The strayed one is back beside home, in its row; the new one under it.
+    expect(await at(C2)).toEqual({ x: COLUMN, y: 0 });
+    expect(await at(TAMA)).toEqual({ x: COLUMN, y: ROW });
     const healed = (await env.ports.events.readSince(mapStream(map.id), 0)).filter(
       (e) => e.type === 'system.updated' && (e.data as { solarSystemId: number }).solarSystemId === C2,
     );
-    expect(healed.at(-1)?.data).toMatchObject({ position: { x: COLUMN, y: ROW } });
+    expect(healed.at(-1)?.data).toMatchObject({ position: { x: COLUMN, y: 0 } });
   });
 
   it('never moves a system someone dragged, until a tidy lays it out again', async () => {
