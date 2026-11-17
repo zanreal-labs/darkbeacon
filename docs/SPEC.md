@@ -13,7 +13,7 @@ taste disagree, follow this file; when something is missing, choose the simplest
 
 ## Runtime and tooling
 
-- Node 24 LTS, TypeScript (strict, ESM everywhere), pnpm 10 workspaces with `node-linker=hoisted`.
+- Node 26 LTS, TypeScript (strict, ESM everywhere), pnpm 10 workspaces with `node-linker=hoisted`.
 - Server: NestJS 12 on the Fastify adapter, WebSockets through `@nestjs/platform-ws` (plain `ws`, no socket.io).
   It is the one front door: REST under `/api`, WebSocket at `/ws`, everything else proxied (streaming) to the
   web app's Next.js server, which it starts on a loopback port in the same container.
@@ -29,7 +29,7 @@ taste disagree, follow this file; when something is missing, choose the simplest
 - Tests: Vitest. Every repository/integration test runs against SQLite AND Postgres (`TEST_DATABASE_URL`).
 - Never install or run Node tooling on the host. Use the dev container:
   `docker compose -f docker-compose.dev.yml run --rm dev <cmd>` (e.g. `pnpm install`, `pnpm test`).
-  The dev compose file defines `dev` (node:24, corepack pnpm, repo bind-mounted at /workspace, root
+  The dev compose file defines `dev` (node:26, npm-installed pnpm, repo bind-mounted at /workspace, root
   `node_modules` and the pnpm store in named volumes) and `postgres` (postgres:17) for tests.
 - Commits: plain `git commit` with the repo's own voice. No AI/assistant mentions or co-author trailers anywhere.
 

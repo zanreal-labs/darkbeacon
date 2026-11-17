@@ -49,7 +49,7 @@ map's Import settings, and fails on any page error. Screenshots go to `OUT`.
 ```sh
 docker network create dbk-imp
 docker run -d --rm --name dbk-wanderer --network dbk-imp -v "$PWD/tools/fake-wanderer":/fake:ro \
-  node:24-bookworm-slim node /fake/server.mjs
+  node:26-bookworm-slim node /fake/server.mjs
 docker run -d --rm --name dbk-imp-app --network dbk-imp -e DEMO_MODE=true -e ALLOW_DEMO_MODE=true darkbeacon:dev
 
 docker run --rm --network dbk-imp --ipc=host -v "$PWD":/work:ro -v "$PWD/out":/out -w /tmp \

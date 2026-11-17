@@ -6,7 +6,7 @@
 #   docker compose -f docker-compose.dev.yml up app
 #   docker compose -f docker-compose.dev.yml port app 3000
 x-node: &node
-  image: node:24-bookworm
+  image: node:26-bookworm
   working_dir: /workspace
   init: true
   volumes:
@@ -15,12 +15,12 @@ x-node: &node
     - pnpm_store:/pnpm-store
     - data:/data
   environment:
-    COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+    PNPM_VERSION: 10.34.6
     npm_config_store_dir: /pnpm-store
     DATA_DIR: /data
     TEST_DATABASE_URL: postgres://darkbeacon:darkbeacon@postgres:5432/darkbeacon
     DEMO_MODE: 'true'
-  entrypoint: ['sh', '-c', 'corepack enable pnpm >/dev/null 2>&1; exec "$$@"', '--']
+  entrypoint: ['sh', '-c', 'command -v pnpm >/dev/null 2>&1 || npm install -g pnpm@$$PNPM_VERSION >/dev/null 2>&1; exec "$$@"', '--']
   depends_on:
     postgres:
       condition: service_healthy
@@ -34,7 +34,7 @@ services:
     <<: *node
     command: ['pnpm', 'dev']
     environment:
-      COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+      PNPM_VERSION: 10.34.6
       npm_config_store_dir: /pnpm-store
       DATA_DIR: /data
       DEMO_MODE: 'true'

@@ -4,7 +4,7 @@
   "type": "module",
   "description": "The Darkbeacon marketing site. Not part of the pnpm workspace; built on its own (Vercel Root Directory: site).",
   "engines": {
-    "node": ">=22.22"
+    "node": ">=26"
   },
   "scripts": {
     "dev": "astro dev",

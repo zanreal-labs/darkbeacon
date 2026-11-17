@@ -5,7 +5,7 @@
   "runServices": ["dev", "postgres"],
   "workspaceFolder": "/workspace",
   "overrideCommand": true,
-  "postCreateCommand": "corepack enable pnpm && pnpm install",
+  "postCreateCommand": "command -v pnpm >/dev/null || npm install -g pnpm@10.34.6; pnpm install",
   "customizations": {
     "vscode": {
       "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode", "vitest.explorer"]
