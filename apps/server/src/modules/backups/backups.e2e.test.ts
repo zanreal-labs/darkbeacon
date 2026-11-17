@@ -63,7 +63,7 @@ describe('backups over HTTP [sqlite file]', () => {
   const upload = (browser: Browser, bytes: Uint8Array, confirm = 'RESTORE') => {
     const form = new FormData();
     form.append('confirm', confirm);
-    form.append('file', new Blob([bytes]), 'backup.db.gz');
+    form.append('file', new Blob([new Uint8Array(bytes)]), 'backup.db.gz');
     return browser.request(`${B}/restore-upload`, { method: 'POST', body: form });
   };
 
