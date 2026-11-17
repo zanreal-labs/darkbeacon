@@ -1,9 +1,11 @@
 # syntax=docker/dockerfile:1
 
 # ---- build: install everything, compile server and packages, build the web app (Next.js standalone)
-FROM node:24-bookworm AS build
-ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0 CI=true NEXT_TELEMETRY_DISABLED=1
-RUN corepack enable pnpm
+FROM node:26-bookworm AS build
+ENV CI=true NEXT_TELEMETRY_DISABLED=1
+# Node 26 no longer ships Corepack: install the pinned pnpm (package.json packageManager) directly.
+ARG PNPM_VERSION=10.34.6
+RUN npm install -g pnpm@${PNPM_VERSION}
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store pnpm fetch --store-dir /pnpm-store
@@ -19,7 +21,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store \
 # ---- runtime: node, production dependencies and build output only.
 # One process tree, one public port: the API server listens on PORT and starts the web app's
 # server (Next.js standalone, with its own traced node_modules) on a loopback port behind it.
-FROM node:24-bookworm-slim AS runtime
+FROM node:26-bookworm-slim AS runtime
 ENV NODE_ENV=production PORT=3000 DATA_DIR=/data NEXT_TELEMETRY_DISABLED=1
 # The commit the image was built from (optional): a support ticket may name it.
 ARG DBK_COMMIT=

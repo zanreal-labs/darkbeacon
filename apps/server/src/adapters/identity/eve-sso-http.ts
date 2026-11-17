@@ -1,4 +1,4 @@
-import { createPublicKey, verify, type JsonWebKey, type KeyObject } from 'node:crypto';
+import { createPublicKey, verify, type KeyObject, type webcrypto } from 'node:crypto';
 import type { Clock } from '@darkbeacon/core';
 import { ExternalAuthError, type EveIdentity, type EveSso, type EveTokenSet } from '@darkbeacon/identity';
 import { requestToken, type FetchLike, type OAuthClient } from './oauth-http.js';
@@ -20,7 +20,7 @@ interface Metadata {
   jwks_uri: string;
 }
 
-interface Jwk extends JsonWebKey {
+interface Jwk extends webcrypto.JsonWebKey {
   kid?: string;
   alg?: string;
 }

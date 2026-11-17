@@ -18,9 +18,7 @@ export const KnownStructureDto = z.object({
   typeId: EveId.nullable(),
   typeName: z.string().nullable(),
   /** The owning corporation; null for NPC stations. */
-  owner: z
-    .object({ id: EveId, name: z.string().nullable(), ticker: z.string().nullable() })
-    .nullable(),
+  owner: z.object({ id: EveId, name: z.string().nullable(), ticker: z.string().nullable() }).nullable(),
   source: KnownStructureSource,
 });
 export type KnownStructureDto = z.infer<typeof KnownStructureDto>;
