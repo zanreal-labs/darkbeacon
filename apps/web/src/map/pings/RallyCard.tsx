@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { CharacterDto, MapPingDto } from '@darkbeacon/shared';
-import { ChevronDown, Megaphone, Navigation, X } from 'lucide-react';
+import { ChevronDown, MapPinPlus, Megaphone, Navigation, UserRound, Users, X } from 'lucide-react';
 import { relativeTime } from '../../lib/time';
 import {
   Avatar,
@@ -13,6 +13,10 @@ import {
   Menu,
   MenuContent,
   MenuItem,
+  MenuSeparator,
+  MenuSub,
+  MenuSubContent,
+  MenuSubTrigger,
   MenuTrigger,
 } from '../../ui';
 import type { Corner } from '../canvas/prefs';
@@ -40,11 +44,33 @@ interface Props {
   onCancel(): void;
 }
 
-const WAYS: Array<{ mode: WaypointMode; label: string }> = [
-  { mode: 'destination', label: 'Set destination' },
+const WAYPOINTS: Array<{ mode: WaypointMode; label: string }> = [
   { mode: 'waypoint', label: 'Add waypoint' },
   { mode: 'front', label: 'Add waypoint first' },
 ];
+
+/** "All characters", then each character: picking one sends the route at once. */
+function PilotItems({
+  pilots,
+  send,
+}: {
+  pilots: readonly CharacterDto[];
+  send(who: CharacterDto | 'all'): void;
+}) {
+  return (
+    <>
+      <MenuItem icon={<Users />} onSelect={() => send('all')}>
+        All characters
+      </MenuItem>
+      <MenuSeparator />
+      {pilots.map((c) => (
+        <MenuItem key={c.id} icon={<UserRound />} onSelect={() => send(c)}>
+          {c.name}
+        </MenuItem>
+      ))}
+    </>
+  );
+}
 
 /**
  * The map's rally ping, in the corner the viewer chose: where, the message, who called it and
@@ -131,25 +157,57 @@ export function RallyCard({
       )}
       {here && <p className={styles.routeText}>{from?.name} is the rally point.</p>}
       <footer className={styles.actions}>
-        {pilots.length > 0 && (
+        {pilots.length === 1 && (
+          <Button
+            size="sm"
+            icon={<Navigation />}
+            title={`For ${pilots[0]!.name}`}
+            onClick={() => void sendWaypoint(pilots[0]!, target, 'destination', notify)}
+          >
+            Set destination
+          </Button>
+        )}
+        {pilots.length > 1 && (
           <Menu>
             <MenuTrigger asChild>
               <Button size="sm" icon={<Navigation />} trailingIcon={<ChevronDown />}>
-                Route
+                Set destination
               </Button>
             </MenuTrigger>
             <MenuContent align="start">
-              {WAYS.map((way) => (
-                <MenuItem
-                  key={way.mode}
-                  onSelect={() =>
-                    void sendWaypoint(pilots.length === 1 ? pilots[0]! : 'all', target, way.mode, notify)
-                  }
-                >
-                  {way.label}
-                  {pilots.length > 1 ? ' (all characters)' : ''}
-                </MenuItem>
-              ))}
+              <PilotItems
+                pilots={pilots}
+                send={(who) => void sendWaypoint(who, target, 'destination', notify)}
+              />
+            </MenuContent>
+          </Menu>
+        )}
+        {pilots.length > 0 && (
+          <Menu>
+            <MenuTrigger asChild>
+              <IconButton size="sm" label="Add as a waypoint" icon={<MapPinPlus />} tooltip={false} />
+            </MenuTrigger>
+            <MenuContent align="start">
+              {WAYPOINTS.map((way) =>
+                pilots.length === 1 ? (
+                  <MenuItem
+                    key={way.mode}
+                    onSelect={() => void sendWaypoint(pilots[0]!, target, way.mode, notify)}
+                  >
+                    {way.label}
+                  </MenuItem>
+                ) : (
+                  <MenuSub key={way.mode}>
+                    <MenuSubTrigger>{way.label}</MenuSubTrigger>
+                    <MenuSubContent>
+                      <PilotItems
+                        pilots={pilots}
+                        send={(who) => void sendWaypoint(who, target, way.mode, notify)}
+                      />
+                    </MenuSubContent>
+                  </MenuSub>
+                ),
+              )}
             </MenuContent>
           </Menu>
         )}

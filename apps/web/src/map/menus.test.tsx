@@ -72,12 +72,10 @@ describe('system menu', () => {
     expect(rows(system('viewer').items)).toEqual(['Links']);
     const withPilot = system('viewer', {}, { characters: [pilot(1, 'Ayla Vex')] }).items;
     expect(rows(withPilot)).toEqual(['Route', 'Links']);
-    expect(rows(sub(withPilot, 'Route'))).toEqual(['Set destination']);
-    expect(rows(sub(sub(withPilot, 'Route'), 'Set destination'))).toEqual([
-      'Set destination',
-      'Add waypoint',
-      'Add waypoint first',
-    ]);
+    // One character: each way is one click.
+    const route = sub(withPilot, 'Route');
+    expect(rows(route)).toEqual(['Set destination', 'Add waypoint', 'Add waypoint first']);
+    expect(route.every((item) => item.kind === 'action')).toBe(true);
   });
 
   it('toggles map hubs for members and own hubs for everyone', () => {
@@ -290,12 +288,14 @@ describe('system menu', () => {
       },
     );
     const route = sub(items, 'Route');
-    expect(rows(sub(route, 'Set destination'))).toEqual(['All characters', '—', 'Ayla Vex', 'Bren Tal']);
-    expect(rows(sub(sub(route, 'Set destination'), 'Bren Tal'))).toEqual([
-      'Set destination',
-      'Add waypoint',
-      'Add waypoint first',
-    ]);
+    expect(rows(route).slice(0, 3)).toEqual(['Set destination', 'Add waypoint', 'Add waypoint first']);
+    // Several: the way first, then all or one of them, which sends at once.
+    const destination = sub(route, 'Set destination');
+    expect(rows(destination)).toEqual(['All characters', '—', 'Ayla Vex', 'Bren Tal']);
+    expect(
+      destination.filter((item) => item.kind !== 'separator').every((item) => item.kind === 'action'),
+    ).toBe(true);
+    expect(rows(sub(route, 'Add waypoint first'))).toEqual(['All characters', '—', 'Ayla Vex', 'Bren Tal']);
   });
 
   it('puts plugin items into one "More" submenu at the bottom', () => {

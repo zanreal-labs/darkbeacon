@@ -29,13 +29,41 @@ const MODES: ReadonlyArray<{ mode: WaypointMode; label: string; icon: typeof Nav
   { mode: 'front', label: 'Add waypoint first', icon: MapPin },
 ];
 
-function modeItems(character: CharacterDto | 'all', target: WaypointTarget, notify?: Notify): MenuItem[] {
-  return MODES.map(({ mode, label, icon: Icon }) => ({
-    kind: 'action',
-    label,
-    icon: icon(Icon),
-    onSelect: () => void sendWaypoint(character, target, mode, notify),
-  }));
+/**
+ * The three ways to route there, each one click away: with one character they act at once; with
+ * several each opens "All characters" and every character by name, and picking one sends it.
+ */
+function routeItems(pilots: readonly CharacterDto[], target: WaypointTarget, notify?: Notify): MenuItem[] {
+  return MODES.map(({ mode, label, icon: Icon }): MenuItem => {
+    if (pilots.length === 1)
+      return {
+        kind: 'action',
+        label,
+        icon: icon(Icon),
+        title: `For ${pilots[0]!.name}`,
+        onSelect: () => void sendWaypoint(pilots[0]!, target, mode, notify),
+      };
+    return {
+      kind: 'submenu',
+      label,
+      icon: icon(Icon),
+      items: [
+        {
+          kind: 'action',
+          label: 'All characters',
+          icon: icon(Users),
+          onSelect: () => void sendWaypoint('all', target, mode, notify),
+        },
+        { kind: 'separator' },
+        ...pilots.map((c): MenuItem => ({
+          kind: 'action',
+          label: c.name,
+          icon: icon(UserRound),
+          onSelect: () => void sendWaypoint(c, target, mode, notify),
+        })),
+      ],
+    };
+  });
 }
 
 /** The characters whose EVE grant lets them have a route set. */
@@ -43,10 +71,7 @@ export function waypointPilots(characters: readonly CharacterDto[] | undefined):
   return (characters ?? []).filter((c) => c.canSetWaypoints && c.tokenValid);
 }
 
-/**
- * "Set destination" with its three ways for one character, or for all of them and each one
- * apart when the viewer has several.
- */
+/** "Set destination", "Add waypoint" and "Add waypoint first" for the viewer's characters. */
 export function waypointMenu(
   characters: readonly CharacterDto[] | undefined,
   target: WaypointTarget,
@@ -54,31 +79,7 @@ export function waypointMenu(
 ): MenuItem[] {
   const pilots = waypointPilots(characters);
   if (pilots.length === 0 || target.wormhole) return [];
-  return [
-    {
-      kind: 'submenu',
-      label: 'Set destination',
-      icon: icon(Navigation),
-      items:
-        pilots.length === 1
-          ? modeItems(pilots[0]!, target, notify)
-          : [
-              {
-                kind: 'submenu',
-                label: 'All characters',
-                icon: icon(Users),
-                items: modeItems('all', target, notify),
-              },
-              { kind: 'separator' },
-              ...pilots.map((c): MenuItem => ({
-                kind: 'submenu',
-                label: c.name,
-                icon: icon(UserRound),
-                items: modeItems(c, target, notify),
-              })),
-            ],
-    },
-  ];
+  return routeItems(pilots, target, notify);
 }
 
 /** The stations of a system, each a destination of its own (the main one of a trade hub first). */
@@ -100,26 +101,15 @@ export function stationsMenu(
       items:
         pilots.length === 0
           ? [{ kind: 'label', label: 'No character may have a route set' }]
-          : sorted.map((s) => {
-              const target = { solarSystemId: system.solarSystemId, stationId: s.id, name: s.name };
-              return {
-                kind: 'submenu',
-                label: s.main ? `★ ${s.name}` : s.name,
-                items:
-                  pilots.length === 1
-                    ? modeItems(pilots[0]!, target, notify)
-                    : [
-                        ...modeItems('all', target, notify),
-                        { kind: 'separator' },
-                        ...pilots.map((c): MenuItem => ({
-                          kind: 'submenu',
-                          label: c.name,
-                          icon: icon(UserRound),
-                          items: modeItems(c, target, notify),
-                        })),
-                      ],
-              } satisfies MenuItem;
-            }),
+          : sorted.map((s): MenuItem => ({
+              kind: 'submenu',
+              label: s.main ? `★ ${s.name}` : s.name,
+              items: routeItems(
+                pilots,
+                { solarSystemId: system.solarSystemId, stationId: s.id, name: s.name },
+                notify,
+              ),
+            })),
     },
   ];
 }
