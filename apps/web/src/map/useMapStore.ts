@@ -109,6 +109,10 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto, options:
       : emptyMapState(),
   );
   const [pending, setPending] = useState<PendingChange[]>([]);
+  const pendingNow = useRef(pending);
+  useEffect(() => {
+    pendingNow.current = pending;
+  });
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loaded, setLoaded] = useState(initial !== undefined);
   const [streamError, setStreamError] = useState<string | null>(null);
@@ -199,7 +203,12 @@ export function useMapStore(mapId: string, initial?: StreamSnapshotDto, options:
         await sent;
         if (gesture) gesture.succeeded = true;
         setPending((p) => settlePending(p, id));
-        later(CONFIRM_GRACE_MS, () => setPending((p) => dropPending(p, id)));
+        later(CONFIRM_GRACE_MS, () => {
+          // Its event never came (the live connection is down or cut): read the map again rather
+          // than fall back to the state from before the change.
+          if (!pendingNow.current.some((c) => c.id === id)) return;
+          void reloadSnapshot(mapId, setConfirmed).then(() => setPending((p) => dropPending(p, id)));
+        });
         return true;
       } catch (error) {
         if (entry !== null) undoStack.forget(entry);

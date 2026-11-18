@@ -164,4 +164,94 @@ describe('RealtimeClient', () => {
     expect(seen.map((m) => (m.op === 'event' ? m.event.seq : m.op))).toEqual([5]);
     client.stop();
   });
+
+  it('reads streams over Server-Sent Events when no WebSocket gets through', () => {
+    vi.useFakeTimers();
+    FakeSocket.all = [];
+    const sources: FakeSource[] = [];
+    const client = new RealtimeClient({
+      url: 'ws://x/ws',
+      createSocket: () => new FakeSocket(),
+      createEventSource: (url) => {
+        const source = new FakeSource(url);
+        sources.push(source);
+        return source;
+      },
+      backoff: () => 100,
+    });
+    const seen: StreamMessage[] = [];
+    client.subscribe('map:1', (m) => seen.push(m), 4);
+    client.start();
+    // The first upgrade hangs (a proxy holds it): given up after the timeout; the second is refused.
+    vi.advanceTimersByTime(6_000);
+    vi.advanceTimersByTime(100);
+    expect(FakeSocket.all).toHaveLength(2);
+    FakeSocket.all[1]!.close();
+    expect(client.transport).toBe('sse');
+    expect(sources.map((s) => s.url)).toEqual(['/api/streams/map%3A1/sse?format=messages&sinceSeq=4']);
+    sources[0]!.open();
+    expect(client.status).toBe('open');
+    sources[0]!.push(event(5));
+    sources[0]!.push(event(5));
+    expect(seen.map((m) => (m.op === 'event' ? m.event.seq : null))).toEqual([5]);
+    // A stream the browser gave up on is opened again from the last seq.
+    sources[0]!.fail();
+    vi.advanceTimersByTime(3_000);
+    expect(sources[1]!.url).toBe('/api/streams/map%3A1/sse?format=messages&sinceSeq=5');
+    // A new stream without state starts from a snapshot; leaving it closes its request.
+    const stop = client.subscribe('map:2', () => undefined);
+    expect(sources[2]!.url).toBe('/api/streams/map%3A2/sse?format=messages&snapshot=true');
+    stop();
+    expect(sources[2]!.closed).toBe(true);
+    client.stop();
+    expect(sources[1]!.closed).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it('stays on the WebSocket when it opened once, however often it drops later', () => {
+    vi.useFakeTimers();
+    FakeSocket.all = [];
+    const client = new RealtimeClient({
+      url: 'ws://x/ws',
+      createSocket: () => new FakeSocket(),
+      createEventSource: () => {
+        throw new Error('no SSE expected');
+      },
+      backoff: () => 100,
+    });
+    client.start();
+    FakeSocket.all[0]!.open();
+    for (let i = 0; i < 4; i++) {
+      FakeSocket.all.at(-1)!.close();
+      vi.advanceTimersByTime(100);
+    }
+    expect(client.transport).toBe('ws');
+    expect(FakeSocket.all).toHaveLength(5);
+    client.stop();
+    vi.useRealTimers();
+  });
 });
+
+class FakeSource {
+  readyState = 0;
+  closed = false;
+  onopen: ((ev: unknown) => void) | null = null;
+  onerror: ((ev: unknown) => void) | null = null;
+  onmessage: ((ev: { data: unknown }) => void) | null = null;
+  constructor(readonly url: string) {}
+  close() {
+    this.closed = true;
+    this.readyState = 2;
+  }
+  open() {
+    this.readyState = 1;
+    this.onopen?.({});
+  }
+  push(message: object) {
+    this.onmessage?.({ data: JSON.stringify(message) });
+  }
+  fail() {
+    this.readyState = 2;
+    this.onerror?.({});
+  }
+}

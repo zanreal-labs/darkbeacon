@@ -139,6 +139,21 @@ describeEachDialect('map integration API over HTTP', (t) => {
     expect(resumed.events('system.added').map((f) => f.id)).toEqual(['3', '4']);
     await resumed.close();
 
+    // As the WebSocket's messages, for the web app when no WebSocket gets through.
+    const messages = new SseReader(
+      `http://${s.base}/api/streams/map:${map.id}/sse?format=messages&snapshot=true`,
+      { 'x-test-actor': 'alice' },
+    );
+    const snapshot = await messages.waitFor((f) => (f.data as { op?: string }).op === 'snapshot');
+    expect(snapshot.event).toBe('message');
+    await messages.waitFor((f) => (f.data as { op?: string }).op === 'subscribed');
+    await s.call('PATCH', `${base}/systems/${SYSTEMS.c5}`, 'alice', { tag: 'Y' });
+    const pushed = await messages.waitFor((f) => (f.data as { op?: string }).op === 'event');
+    expect(pushed.event).toBe('message');
+    expect(pushed.data).toMatchObject({ op: 'event', event: { type: 'system.updated', data: { tag: 'Y' } } });
+    expect(pushed.id).toBe(String((pushed.data as { event: { seq: number } }).event.seq));
+    await messages.close();
+
     // Someone who cannot see the map gets no stream.
     const denied = await fetch(`http://${s.base}/api/streams/map:${map.id}/sse`, {
       headers: { 'x-test-actor': 'mallory' },

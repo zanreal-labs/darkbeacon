@@ -100,7 +100,7 @@ export class EventsController {
       ip,
       sinceSeq,
       resolveActor: () => this.resolve(request, ip),
-      frame: (message) => nativeFrame(message, types),
+      frame: (message) => (query.format === 'messages' ? messageFrame(message) : nativeFrame(message, types)),
     });
   }
 
@@ -116,6 +116,15 @@ export class EventsController {
     if (denied?.code === 'unauthenticated') throw new UnauthenticatedError();
     if (denied) throw new NotFoundError('Stream');
   }
+}
+
+/**
+ * Hub messages as the WebSocket carries them, each a `message` frame (events with their seq as
+ * id): the web app's stream when no WebSocket gets through to the server.
+ */
+function messageFrame(message: ServerMessage): string | null {
+  if (message.op === 'pong') return null;
+  return sseFrame('message', message, message.op === 'event' ? message.event.seq : undefined);
 }
 
 /** Hub messages as native SSE frames: events by type with the seq as id. */

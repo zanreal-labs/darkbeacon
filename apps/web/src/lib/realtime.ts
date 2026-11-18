@@ -17,9 +17,23 @@ interface MinimalSocket {
   onmessage: ((ev: { data: unknown }) => void) | null;
 }
 
+/** What the client needs of an EventSource (injectable for tests). */
+export interface MinimalEventSource {
+  readonly readyState: number;
+  close(): void;
+  onopen: ((ev: unknown) => void) | null;
+  onerror: ((ev: unknown) => void) | null;
+  onmessage: ((ev: { data: unknown }) => void) | null;
+}
+
 export interface RealtimeClientOptions {
   url: string;
   createSocket?: (url: string) => MinimalSocket;
+  createEventSource?: (url: string) => MinimalEventSource;
+  /** Where a stream's Server-Sent Events are read when no WebSocket gets through. */
+  sseUrl?: (stream: string, sinceSeq: number | undefined) => string;
+  /** How long a WebSocket may stay connecting before it counts as failed. */
+  connectTimeoutMs?: number;
   /** Delay before reconnect attempt n (1-based). */
   backoff?: (attempt: number) => number;
 }
@@ -31,10 +45,19 @@ interface StreamState {
 }
 
 const OPEN = 1;
+/** EventSource.CLOSED: it gave up and will not reconnect on its own. */
+const SOURCE_CLOSED = 2;
+/** WebSockets that never opened before the client reads streams over Server-Sent Events. */
+const FAILURES_BEFORE_SSE = 2;
 
 /**
  * The single WebSocket of the app. Keeps the last seq per stream and, after a reconnect,
  * re-subscribes with `sinceSeq` so the server only replays what was missed.
+ *
+ * Where no WebSocket gets through (a proxy, VPN or filter that cuts or hangs the upgrade), it
+ * reads every stream it follows over Server-Sent Events instead, one plain HTTPS request per
+ * stream carrying the same messages. Changes still arrive live; presence and the round trip are
+ * not shared that way.
  */
 export class RealtimeClient {
   private socket: MinimalSocket | null = null;
@@ -54,6 +77,14 @@ export class RealtimeClient {
   private attempt = 0;
   private stopped = true;
   private timer: ReturnType<typeof setTimeout> | undefined;
+  private connectTimer: ReturnType<typeof setTimeout> | undefined;
+  /** How streams arrive: the WebSocket, or Server-Sent Events once it never got through. */
+  transport: 'ws' | 'sse' = 'ws';
+  /** WebSockets that failed without ever opening on this page. */
+  private failures = 0;
+  private everOpened = false;
+  private readonly sources = new Map<string, MinimalEventSource>();
+  private readonly sourceTimers = new Map<string, ReturnType<typeof setTimeout>>();
   status: ConnectionStatus = 'closed';
 
   constructor(private readonly options: RealtimeClientOptions) {}
@@ -67,14 +98,20 @@ export class RealtimeClient {
   stop(): void {
     this.stopped = true;
     clearTimeout(this.timer);
+    clearTimeout(this.connectTimer);
     this.socket?.close();
     this.socket = null;
+    for (const stream of [...this.sources.keys()]) this.closeSource(stream);
     this.setStatus('closed');
   }
 
   /** Opens a fresh socket, e.g. after sign in, so the server sees the new session cookie. */
   reconnect(): void {
     if (this.stopped) return;
+    if (this.transport === 'sse') {
+      for (const stream of this.streams.keys()) this.openSource(stream);
+      return;
+    }
     clearTimeout(this.timer);
     const old = this.socket;
     this.socket = null;
@@ -93,7 +130,8 @@ export class RealtimeClient {
     if (!state) {
       state = { lastSeq: sinceSeq, listeners: new Set() };
       this.streams.set(stream, state);
-      this.sendSubscribe(stream, state);
+      if (this.transport === 'sse') this.openSource(stream);
+      else this.sendSubscribe(stream, state);
     }
     state.listeners.add(listener);
     return () => {
@@ -103,7 +141,8 @@ export class RealtimeClient {
       if (current.listeners.size === 0) {
         this.streams.delete(stream);
         this.presence.delete(stream);
-        this.send({ op: 'unsubscribe', stream });
+        if (this.transport === 'sse') this.closeSource(stream);
+        else this.send({ op: 'unsubscribe', stream });
       }
     };
   }
@@ -188,8 +227,19 @@ export class RealtimeClient {
     const socket = create(this.options.url);
     this.socket = socket;
     this.setStatus('connecting');
+    // An upgrade a proxy holds open forever never closes either: give up on it after a while.
+    clearTimeout(this.connectTimer);
+    this.connectTimer = setTimeout(() => {
+      if (this.socket !== socket || socket.readyState === OPEN) return;
+      this.socket = null;
+      socket.onclose = null;
+      socket.close();
+      this.failed();
+    }, this.options.connectTimeoutMs ?? 6_000);
     socket.onopen = () => {
+      clearTimeout(this.connectTimer);
       this.attempt = 0;
+      this.everOpened = true;
       this.setStatus('open');
       for (const [stream, state] of this.streams) this.sendSubscribe(stream, state);
       // After the subscribes, so the server knows the streams: join again with the last state.
@@ -198,6 +248,7 @@ export class RealtimeClient {
     socket.onmessage = (event) => this.receive(String(event.data));
     socket.onclose = (event) => {
       if (this.socket !== socket) return;
+      clearTimeout(this.connectTimer);
       this.socket = null;
       this.pingSentAt = null;
       this.setLatency(null);
@@ -206,11 +257,61 @@ export class RealtimeClient {
         for (const state of this.streams.values()) state.lastSeq = undefined;
         for (const listener of this.resetListeners) listener();
       }
-      this.setStatus('closed');
-      if (this.stopped) return;
-      const delay = (this.options.backoff ?? defaultBackoff)(++this.attempt);
-      this.timer = setTimeout(() => this.open(), delay);
+      this.failed();
     };
+  }
+
+  /** The socket closed (or never opened): try again, or read streams over SSE when none gets through. */
+  private failed(): void {
+    this.setStatus('closed');
+    if (this.stopped) return;
+    if (!this.everOpened && ++this.failures >= FAILURES_BEFORE_SSE) {
+      this.useSse();
+      return;
+    }
+    const delay = (this.options.backoff ?? defaultBackoff)(++this.attempt);
+    this.timer = setTimeout(() => this.open(), delay);
+  }
+
+  private useSse(): void {
+    this.transport = 'sse';
+    this.setStatus(this.streams.size === 0 ? 'open' : 'connecting');
+    for (const stream of this.streams.keys()) this.openSource(stream);
+  }
+
+  /** Reads one stream over Server-Sent Events, from the last seq seen (else from a snapshot). */
+  private openSource(stream: string): void {
+    this.closeSource(stream);
+    const state = this.streams.get(stream);
+    if (!state || this.stopped) return;
+    const url = (this.options.sseUrl ?? defaultSseUrl)(stream, state.lastSeq);
+    const create =
+      this.options.createEventSource ?? ((u: string) => new EventSource(u) as unknown as MinimalEventSource);
+    const source = create(url);
+    this.sources.set(stream, source);
+    source.onopen = () => this.setStatus('open');
+    source.onmessage = (event) => this.receive(String(event.data));
+    source.onerror = () => {
+      if (this.sources.get(stream) !== source) return;
+      // The browser retries a dropped stream itself; one it gave up on is opened again from here.
+      if (source.readyState !== SOURCE_CLOSED) return;
+      this.sources.delete(stream);
+      if (this.sources.size === 0) this.setStatus('closed');
+      this.sourceTimers.set(
+        stream,
+        setTimeout(() => this.openSource(stream), 3_000),
+      );
+    };
+  }
+
+  private closeSource(stream: string): void {
+    clearTimeout(this.sourceTimers.get(stream));
+    this.sourceTimers.delete(stream);
+    const source = this.sources.get(stream);
+    if (!source) return;
+    this.sources.delete(stream);
+    source.onopen = source.onmessage = source.onerror = null;
+    source.close();
   }
 
   private receive(raw: string): void {
@@ -268,6 +369,12 @@ export class RealtimeClient {
 
 function defaultBackoff(attempt: number): number {
   return Math.min(30_000, 500 * 2 ** (attempt - 1)) * (0.75 + Math.random() * 0.5);
+}
+
+/** A stream's Server-Sent Events, as the WebSocket's messages, from `sinceSeq` or a snapshot. */
+export function defaultSseUrl(stream: string, sinceSeq: number | undefined): string {
+  const from = sinceSeq === undefined ? 'snapshot=true' : `sinceSeq=${sinceSeq}`;
+  return `/api/streams/${encodeURIComponent(stream)}/sse?format=messages&${from}`;
 }
 
 export function defaultRealtimeUrl(location: Pick<Location, 'protocol' | 'host'>): string {

@@ -107,5 +107,10 @@ export const SseQuery = z.object({
     .optional()
     .transform((v) => v === 'true'),
   types: EventsQuery.shape.types,
+  /**
+   * `native` (default): events by type, as integrations read them. `messages`: every frame a
+   * `message` with the WebSocket's message as data, for the web app when no WebSocket gets through.
+   */
+  format: z.enum(['native', 'messages']).optional(),
 });
 export type SseQuery = z.infer<typeof SseQuery>;
