@@ -187,18 +187,29 @@ export function useRoute(
   preferences: RoutePreferencesDto,
   enabled = true,
 ) {
-  const params = new URLSearchParams({
-    from: String(from ?? 0),
-    to: String(to ?? 0),
-    ...routeParams(preferences),
-  }).toString();
   return useQuery({
-    queryKey: [...routeKeys.all(mapId), 'route', params] as const,
-    queryFn: () => api<RouteDto>(`${buildPath(routes.routing.route.path, { mapId })}?${params}`),
+    ...routeQuery(mapId, from ?? 0, to ?? 0, preferences),
     placeholderData: keepPreviousData,
-    staleTime: 30_000,
     enabled: enabled && from !== null && to !== null && from !== to,
   });
+}
+
+/**
+ * The query of one route between two systems with the viewer's options: key, fetch and freshness,
+ * shared by the rally card and the planner's trips over gates and wormholes (one cache).
+ */
+export function routeQuery(mapId: string, from: number, to: number, preferences: RoutePreferencesDto) {
+  const params = new URLSearchParams({
+    from: String(from),
+    to: String(to),
+    ...routeParams(preferences),
+  }).toString();
+  return {
+    queryKey: [...routeKeys.all(mapId), 'route', params] as const,
+    queryFn: ({ signal }: { signal: AbortSignal }) =>
+      api<RouteDto>(`${buildPath(routes.routing.route.path, { mapId })}?${params}`, { signal }),
+    staleTime: 30_000,
+  };
 }
 
 /**

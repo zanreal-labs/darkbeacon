@@ -46,7 +46,8 @@ async function Planner() {
 
 /**
  * The viewer's map (the one `/` opens) as far as it touches known space: the systems on it and
- * the exits of its chain, for the pickers' suggestions. Nothing when there is no such map; never
+ * the exits of its chain, for the pickers' suggestions, and its id, for trips routed through its
+ * chain. Nothing when there is no such map; never
  * an error for the page.
  */
 async function plannerMap(): Promise<PlannerMap | null> {
@@ -70,6 +71,7 @@ async function plannerMap(): Promise<PlannerMap | null> {
       )?.exits ??
       [];
     return {
+      id: map.id,
       map: map.name,
       exits: exits.filter((e) => e.kind === 'connected').map((e) => e.solarSystemId),
       // Wormholes too: the planner keeps the known-space systems it has on its star map.

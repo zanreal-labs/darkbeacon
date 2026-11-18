@@ -13,7 +13,16 @@ export interface View {
 export interface RouteLeg {
   from: number;
   to: number;
-  kind: 'jump' | 'gate' | 'ansiblex';
+  /** A jump drive's jump; a stargate; an Ansiblex bridge; a wormhole; a Thera or Turnur hole. */
+  kind: 'jump' | 'gate' | 'ansiblex' | 'wormhole' | 'thera' | 'turnur';
+}
+
+/** Dashes and colour of a leg drawn as a straight line (everything but a jump drive's jump). */
+function lineStyle(kind: RouteLeg['kind'], palette: Palette): { dash: number[]; color: string } {
+  if (kind === 'gate') return { dash: [5, 4], color: palette.text };
+  if (kind === 'ansiblex') return { dash: [2, 4], color: palette.success };
+  // Through a hole: the stretch between the systems is flown by hand, through space not drawn here.
+  return { dash: [9, 4, 2, 4], color: palette.special };
 }
 
 /** Everything drawn on top of the stars. */
@@ -285,7 +294,7 @@ export function drawStarMap(
   ctx.setLineDash([]);
   ctx.globalAlpha = 1;
 
-  // The route: bowed arcs for jumps, dashed lines for gates and Ansiblex bridges.
+  // The route: bowed arcs for jumps, dashed lines for gates, Ansiblex bridges and holes.
   route.forEach((leg, n) => {
     const ax = sx(leg.from);
     const ay = sy(leg.from);
@@ -309,9 +318,10 @@ export function drawStarMap(
       ctx.beginPath();
       ctx.moveTo(ax, ay);
       ctx.lineTo(bx, by);
+      const { dash, color } = lineStyle(leg.kind, palette);
       ctx.lineWidth = active ? 3.5 : 2.5;
-      ctx.setLineDash(leg.kind === 'gate' ? [5, 4] : [2, 4]);
-      ctx.strokeStyle = leg.kind === 'gate' ? palette.text : palette.success;
+      ctx.setLineDash(dash);
+      ctx.strokeStyle = color;
       ctx.stroke();
       ctx.setLineDash([]);
     }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQueries, useQuery, type UseQueryResult } from '@tanstack/react-query';
 import {
   fatigueMinutesLeft,
   jumpRouteKey,
@@ -16,6 +16,7 @@ import {
   type JumpShareRequest,
   type JumpUniverseDto,
   type MapIntelDto,
+  type RouteDto,
 } from '@darkbeacon/shared';
 import { api } from '../lib/api';
 import { useMyTracking } from '../lib/characters';
@@ -26,7 +27,13 @@ import { useBreadcrumbs } from '../shell/breadcrumbs';
 import { ErrorState } from '../ui';
 import type { Overlay, RouteLeg } from '../jump/draw';
 import { endpointsReducer } from '../jump/endpoints';
-import { FreightPanel, JumpPanel, RouteChoices, type ForeignSpace } from '../jump/JumpPanel';
+import {
+  FreightPanel,
+  JumpPanel,
+  RouteChoices,
+  TravelTotalsBubble,
+  type ForeignSpace,
+} from '../jump/JumpPanel';
 import { holderStanding, useStandings } from '../lib/intel';
 import { SystemCard } from '../jump/SystemCard';
 import { buildStarModel, distanceLy, isHighSec, noCynoReason, type StarModel } from '../jump/model';
@@ -34,6 +41,8 @@ import { useFatigueClock, useJumpPilot } from '../jump/pilot';
 import { loadSettings, saveSettings, type PlannerSettings } from '../jump/settings';
 import { useMapBridges } from '../jump/bridges';
 import { StarMap, type StarMapHandle } from '../jump/StarMap';
+import { mapLegs, travelPlan } from '../jump/travel';
+import { routeQuery, useRoutePreferences } from '../map/routes/api';
 import { pushRecent, suggestionsFor, type CharacterPlace, type SuggestionSources } from '../jump/suggest';
 import styles from '../jump/jump.module.css';
 import { JumpLoading } from './JumpLoading';
@@ -42,7 +51,9 @@ import type { PlannerMap } from './JumpPlannerClient';
 /**
  * `/jump`: the jump planner. A map of all known space where a capital's jump route is planned
  * from A to B; the route comes from the server (`POST /api/jumps/plan`), the map data once per
- * dataset version (cached by the browser for good).
+ * dataset version (cached by the browser for good). Its travel mode plans a trip for any ship
+ * over stargates, the viewer's map's chain and the Thera and Turnur holes, through the map's
+ * routing (`GET /api/maps/:mapId/route`, one request per two points of the trip).
  */
 export function JumpPage({ meta, chain = null }: { meta: JumpMetaDto; chain?: PlannerMap | null }) {
   useBreadcrumbs([{ label: 'Jump planner' }]);
@@ -80,6 +91,11 @@ function fetchPlan(request: JumpPlanRequest, signal: AbortSignal): Promise<JumpP
   return api<JumpPlanDto>(routes.jumps.plan.path, { method: 'POST', json: request, signal });
 }
 
+/** What the planner keeps of each route request of a trip (only what changes with the answer). */
+function tripAnswers(results: Array<UseQueryResult<RouteDto>>) {
+  return results.map((r) => ({ data: r.data, error: r.error }));
+}
+
 /** The systems of a route in order: where it starts, then where each leg ends. */
 function routeSystems(legs: readonly RouteLeg[]): number[] {
   return [legs[0]!.from, ...legs.map((l) => l.to)];
@@ -112,11 +128,15 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
 
   // The planner renders in the browser only, so remembered settings and the address
   // (?from=&to=&ship=) are read straight away.
+  // An address with `mode=travel` opens the travel mode; one with a ship, that ship's jump mode.
   const [settings, setSettings] = useState<PlannerSettings>(() => {
     const stored = loadSettings();
-    const ship = readQuery().get('ship');
-    return ship ? { ...stored, ship } : stored;
+    const query = readQuery();
+    if (query.get('mode') === 'travel') return { ...stored, mode: 'travel' };
+    const ship = query.get('ship');
+    return ship ? { ...stored, ship, mode: 'jump' } : stored;
   });
+  const travel = settings.mode === 'travel';
   // Start and destination change in one step (a reorder is never seen half done).
   const [ends, dispatch] = useReducer(endpointsReducer, null, () => ({
     origin: find(readQuery().get('from')),
@@ -203,14 +223,15 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
     set('from', origin === null ? null : model.names[origin]!);
     set('to', destination === null ? null : model.names[destination]!);
     set('via', via.length > 0 ? via.map((i) => model.names[i]!).join(',') : null);
-    set('ship', ship.name);
+    set('ship', travel ? null : ship.name);
+    set('mode', travel ? 'travel' : null);
     const search = query.toString();
     window.history.replaceState(
       window.history.state,
       '',
       `${window.location.pathname}${search ? `?${search}` : ''}`,
     );
-  }, [origin, destination, via, ship.name, model]);
+  }, [origin, destination, via, ship.name, travel, model]);
 
   const avoidSystems = useMemo(
     () => new Set(settings.avoidSystems.flatMap((name) => find(name) ?? [])),
@@ -269,7 +290,7 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
   const shown = useMemo(() => ({ ...settings, skills, fatigueNow }), [settings, skills, fatigueNow]);
 
   // Ansiblex bridges come from the maps I can see, only when the pilot turned them on.
-  const bridgesOn = ship.ansiblex && settings.ansiblex;
+  const bridgesOn = !travel && ship.ansiblex && settings.ansiblex;
   const ansiblex = useMapBridges(bridgesOn);
 
   const requestFor = (
@@ -296,7 +317,8 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
           bridgeTonnes: ship.bridges ? settings.bridgeTonnes : null,
         }
       : null;
-  const request = requestFor(origin, destination, via);
+  // The travel mode asks the map's routing instead of the jump planner.
+  const request = travel ? null : requestFor(origin, destination, via);
   const plan = useQuery({
     queryKey: planKey(request),
     queryFn: ({ signal }) => fetchPlan(request!, signal),
@@ -306,6 +328,38 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
     retry: false,
   });
   const answer = request !== null ? (plan.data ?? null) : null;
+
+  // Travel mode: the route between each two points of the trip, with the viewer's route options
+  // (as the map's Routes, Routes By and the rally card ask, so they share one cache).
+  const mapId = chain?.id ?? null;
+  const routing = useRoutePreferences(travel && mapId !== null);
+  const tripPoints = useMemo(
+    () =>
+      travel && origin !== null && destination !== null && (origin !== destination || via.length > 0)
+        ? [origin, ...via, destination]
+        : [],
+    [travel, origin, destination, via],
+  );
+  const answers = useQueries({
+    queries: tripPoints.slice(1).map((to, k) => {
+      const from = tripPoints[k]!;
+      return {
+        ...routeQuery(mapId ?? '', model.ids[from]!, model.ids[to]!, routing.preferences),
+        enabled: mapId !== null && routing.loaded && from !== to,
+        retry: false,
+      };
+    }),
+    combine: tripAnswers,
+  });
+  const trip = useMemo(
+    () =>
+      tripPoints.length > 0 && mapId !== null
+        ? travelPlan(answers.map((a, k) => ({ ...a, same: tripPoints[k] === tripPoints[k + 1] })))
+        : null,
+    [answers, tripPoints, mapId],
+  );
+  // The trip as the star map draws it (known space), and which drawn leg each leg of the trip is.
+  const tripDrawn = useMemo(() => (trip?.legs ? mapLegs(trip.legs, model) : null), [trip, model]);
   // What the isotopes cost at the pilot's hub: read when a route is shown, kept for a while.
   const fuelPrices = useQuery({
     queryKey: ['jumps', 'fuel-prices', settings.fuelHub],
@@ -371,9 +425,11 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
     [model],
   );
   const legs: RouteLeg[] | null = useMemo(
-    () => (result?.route ? toLegs(result.route) : null),
-    [result, toLegs],
+    () => (travel ? (tripDrawn?.legs ?? null) : result?.route ? toLegs(result.route) : null),
+    [travel, tripDrawn, result, toLegs],
   );
+  // The leg under the pointer in the panel, as the map draws it.
+  const drawnLeg = (n: number | null) => (n === null ? null : travel ? (tripDrawn?.index[n] ?? null) : n);
   // The other routes, drawn faintly; a click on one picks it (by its place among the options).
   const others = useMemo(
     () => routeOptions.map((_, n) => n).filter((n) => n !== chosen),
@@ -387,7 +443,7 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
   const rangeLy = ship.rangeLy * (1 + meta.rangeBonusPerLevel * skills.jdc);
   const focusLeg = activeLeg !== null && legs?.[activeLeg]?.kind === 'jump' ? legs[activeLeg]! : null;
   // The range around the start until there is a route, then around the leg under the pointer.
-  const rangeFrom = focusLeg ? focusLeg.from : legs ? null : origin;
+  const rangeFrom = travel ? null : focusLeg ? focusLeg.from : legs ? null : origin;
   const reachable = useMemo(() => {
     if (rangeFrom === null) return null;
     const out = new Uint8Array(model.size);
@@ -403,14 +459,15 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
       destination,
       hover: pinned?.system ?? hover?.system ?? null,
       rangeFrom,
-      rangeLy,
+      rangeLy: travel ? null : rangeLy,
       reachable,
       route: legs,
       alternatives: otherLegs,
-      activeLeg,
-      avoided: avoidSystems,
+      activeLeg: drawnLeg(activeLeg),
+      avoided: travel ? new Set<number>() : avoidSystems,
       exits: new Set(exits),
     }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- drawnLeg reads travel and tripDrawn
     [
       origin,
       destination,
@@ -424,6 +481,8 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
       activeLeg,
       avoidSystems,
       exits,
+      travel,
+      tripDrawn,
     ],
   );
 
@@ -501,7 +560,7 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
 
   // Room the controls take: the docked panel on the left, or the sheet's peek on phones.
   // A jump freighter's route gets its freight quote as a folded card at the map's top right.
-  const freight = !phone && ship.hull === 'jump_freighter' && result?.route != null;
+  const freight = !travel && !phone && ship.hull === 'jump_freighter' && result?.route != null;
   const insets = phone ? { left: 0, bottom: 140 } : { left: 392, right: 0, bottom: 0 };
   const card = pinned ?? hover;
 
@@ -529,6 +588,7 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
           rangeLy={rangeLy}
           avoided={avoidSystems.has(card.system)}
           chainName={exits.includes(card.system) ? (chain?.map ?? null) : null}
+          travel={travel}
           onClose={() => setPinned(null)}
           onOrigin={() => {
             setOrigin(card.system);
@@ -609,8 +669,11 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
         planError={plan.error}
         activeLeg={activeLeg}
         setActiveLeg={setActiveLeg}
+        trip={trip}
+        tripMap={chain?.map ?? null}
         onShowLeg={(n) => {
-          const leg = legs?.[n];
+          const drawn = drawnLeg(n);
+          const leg = drawn === null ? undefined : legs?.[drawn];
           if (leg) mapRef.current?.fit([leg.from, leg.to]);
         }}
         open={panelOpen}
@@ -622,6 +685,7 @@ function Planner({ meta, model, chain }: { meta: JumpMetaDto; model: StarModel; 
       )}
       {!phone && (
         <div className={styles.choicesDock} style={{ left: insets.left, right: insets.right || 56 }}>
+          {travel && <TravelTotalsBubble trip={trip} />}
           <RouteChoices
             floating
             routeOptions={routeOptions}

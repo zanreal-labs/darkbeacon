@@ -10,8 +10,10 @@ const JumpPage = dynamic(() => import('./JumpPage').then((m) => m.JumpPage), {
   loading: () => <JumpLoading />,
 });
 
-/** The viewer's map as far as the planner cares: its name, its chain's exits and its systems. */
+/** The viewer's map as far as the planner cares: its id and name, its chain's exits and its systems. */
 export interface PlannerMap {
+  /** Trips over gates and wormholes are routed through this map (`GET /api/maps/:mapId/route`). */
+  id: string;
   map: string;
   /** Known-space systems the chain reaches through a wormhole. */
   exits: number[];

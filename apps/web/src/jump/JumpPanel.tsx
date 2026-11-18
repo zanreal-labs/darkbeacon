@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import {
   buildPath,
+  inWormholeSpace,
   JUMP_HULLS,
   routes,
   type JumpFuelHub,
@@ -42,9 +43,11 @@ import {
   type StandingTone,
   type JumpShipDto,
   type KnownStructureDto,
+  type CharacterDto,
   type OptionalEveScope,
   type WaypointRequest,
 } from '@darkbeacon/shared';
+import { cssVar } from '@darkbeacon/theme-sdk';
 import { api, ApiError } from '../lib/api';
 import { hereForReturn, relinkHref } from '../lib/scope-health';
 import { useMe } from '../lib/session';
@@ -82,9 +85,18 @@ import {
   routeText,
 } from './format';
 import { structureLabel } from '../lib/known-structures';
+import { classPill } from '../map/nodeFacts';
 import { searchSystems, securityColor, securityLabel, type StarModel } from './model';
 import type { PilotFill } from './pilot';
 import type { PlannerSettings } from './settings';
+import {
+  LEG_TAGS,
+  travelTotals,
+  travelWaypoints,
+  type TravelLeg,
+  type TravelPlan,
+  type TravelSegment,
+} from './travel';
 import { rankSystems, whyLabel, type End, type Suggestion, type SuggestionWhy } from './suggest';
 import { freightQuote, parseIsk, type FreightTerms } from './freight';
 import styles from './jump.module.css';
@@ -106,6 +118,13 @@ const LEVELS = [0, 1, 2, 3, 4, 5].map((n) => ({
   value: String(n),
   label: ['0', 'I', 'II', 'III', 'IV', 'V'][n]!,
 }));
+
+/** The Hull select's first choice: any ship without a jump drive, over gates and wormholes. */
+const TRAVEL = 'travel';
+const TRAVEL_LABEL = 'Gates & wormholes';
+
+/** A leg of either mode: a jump-drive route's, or a trip's over gates and wormholes. */
+export type PlannerLeg = JumpLegDto | TravelLeg;
 
 export interface JumpPanelProps {
   meta: JumpMetaDto;
@@ -145,6 +164,10 @@ export interface JumpPanelProps {
   activeLeg: number | null;
   setActiveLeg(n: number | null): void;
   onShowLeg(n: number): void;
+  /** Travel mode: the trip between the points so far; null without a map or two points. */
+  trip: TravelPlan | null;
+  /** Travel mode: the map whose chain the trip is routed through; null without one. */
+  tripMap: string | null;
   open: boolean;
   setOpen(open: boolean): void;
   phone: boolean;
@@ -167,7 +190,8 @@ export interface ForeignSpace {
 
 /** The planner's controls: ship, start and destination, skills, options, and the route found. */
 export function JumpPanel({ ref, ...props }: JumpPanelProps) {
-  const { model, ship, settings, update, origin, destination, plan, setOpen, phone } = props;
+  const { model, ship, settings, update, origin, destination, plan, setOpen, phone, trip } = props;
+  const travel = settings.mode === 'travel';
   // Folds away only as a sheet on a phone; beside the map it always shows.
   const open = phone ? props.open : true;
   // Start, stops and destination in one list, reordered by dragging a row's grip (mouse or touch)
@@ -228,13 +252,23 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
   const suggestionsKey = (end: End) => props.suggestions[end].map(suggestionKey).join(',');
   const hulls = JUMP_HULLS.filter((h) => props.meta.ships.some((s) => s.hull === h));
   const shipsOfHull = props.meta.ships.filter((s) => s.hull === ship.hull);
-  const route = plan?.route ?? null;
+  const route = travel ? null : (plan?.route ?? null);
 
   // The legs between each two points of the trip (a leg ending at a stop closes one), when the
   // route on screen is the one for these points; else the points show alone.
   const points_ = [origin, ...props.stops, destination];
   const stopsInPlan = points_.slice(1);
-  const segments = route ? segmentsOf(route, points_, model) : null;
+  // A trip's segments are the points' own, when every stop has its system.
+  const tripSegments =
+    travel && trip && props.stops.every((s) => s !== null) && trip.segments.length === stopsInPlan.length
+      ? trip.segments
+      : null;
+  const segments: Segments | null = travel
+    ? tripSegments && numbered(tripSegments)
+    : route
+      ? segmentsOf(route, points_, model)
+      : null;
+  const tripTargets = travel && trip?.legs ? travelWaypoints(trip.legs) : null;
   const legHover = {
     active: props.activeLeg,
     setActive: props.setActiveLeg,
@@ -242,7 +276,7 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
     held: props.heldBy,
     docks: props.docksIn,
   };
-  const pointRow = (k: number, arrival?: { leg: JumpLegDto; n: number }) => {
+  const pointRow = (k: number, arrival?: { leg: PlannerLeg; n: number }) => {
     const last = k === points - 1;
     const stop = k > 0 && !last ? k - 1 : null;
     const value = points_[k] ?? null;
@@ -311,11 +345,13 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
         >
           <span className={styles.grabber} aria-hidden />
           <span className={styles.sheetTitle}>
-            <strong>{ship.name}</strong>
+            <strong>{travel ? TRAVEL_LABEL : ship.name}</strong>
             <span>
               {route
                 ? `${route.jumps} ${route.jumps === 1 ? 'jump' : 'jumps'} · ${formatLy(route.ly)} · ${formatNumber(route.fuel)} fuel`
-                : summary}
+                : trip?.legs
+                  ? jumpsText(trip.legs.length)
+                  : summary}
             </span>
           </span>
           {open ? <ChevronDown aria-hidden /> : <ChevronUp aria-hidden />}
@@ -326,29 +362,38 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
           {plan && route && (
             <RouteActions plan={plan} onShare={props.onShare} freight={freightDefaults(props)} />
           )}
+          {tripTargets && <TripActions trip={trip!} targets={tripTargets} />}
         </div>
       )}
 
       {open && (
         <div className={styles.panelBody}>
-          <div className={styles.row2}>
+          <div className={travel ? undefined : styles.row2}>
             <Field label="Hull">
               <Select
-                value={ship.hull}
+                value={travel ? TRAVEL : ship.hull}
                 onValueChange={(hull) => {
-                  const first = props.meta.ships.find((s) => s.hull === (hull as JumpHull));
-                  if (first) update({ ship: first.name });
+                  if (hull === TRAVEL) return update({ mode: 'travel' });
+                  // The ship flown before comes back with its hull.
+                  const first =
+                    ship.hull === hull ? ship : props.meta.ships.find((s) => s.hull === (hull as JumpHull));
+                  if (first) update({ mode: 'jump', ship: first.name });
                 }}
-                options={hulls.map((h) => ({ value: h, label: HULL_LABELS[h] }))}
+                options={[
+                  { value: TRAVEL, label: TRAVEL_LABEL },
+                  ...hulls.map((h) => ({ value: h, label: HULL_LABELS[h] })),
+                ]}
               />
             </Field>
-            <Field label="Ship">
-              <Select
-                value={ship.name}
-                onValueChange={(name) => update({ ship: name })}
-                options={shipsOfHull.map((s) => ({ value: s.name, label: s.name }))}
-              />
-            </Field>
+            {!travel && (
+              <Field label="Ship">
+                <Select
+                  value={ship.name}
+                  onValueChange={(name) => update({ ship: name })}
+                  options={shipsOfHull.map((s) => ({ value: s.name, label: s.name }))}
+                />
+              </Field>
+            )}
           </div>
 
           {/* The trip as a maps app shows it: the points set here, the systems between them. */}
@@ -360,6 +405,7 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
                   {(segments?.[k] ?? []).slice(0, -1).map(({ leg, n }) => (
                     <LegRow key={n} leg={leg} n={n} {...legHover} />
                   ))}
+                  {tripSegments && <SegmentState segment={tripSegments[k]!} />}
                   {pointRow(k + 1, segments?.[k]?.at(-1))}
                 </Fragment>
               ))}
@@ -372,18 +418,25 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
               )}
             </div>
           </FieldGroup>
-          <Result {...props} />
+          {travel ? <TripResult {...props} targets={tripTargets} /> : <Result {...props} />}
 
-          <div className={styles.settingsFoot}>
-            <Disclosure
-              icon={<SlidersHorizontal aria-hidden />}
-              title="Route options"
-              summary={optionsSummary(settings, props)}
-            >
-              <Options {...props} />
-            </Disclosure>
-            <PilotSkills {...props} />
-          </div>
+          {travel ? (
+            <p className={styles.skillsHint}>
+              Routed with your route options from the map&apos;s Routes: mode, skipped holes, avoided systems,
+              Thera and Turnur, Ansiblex bridges.
+            </p>
+          ) : (
+            <div className={styles.settingsFoot}>
+              <Disclosure
+                icon={<SlidersHorizontal aria-hidden />}
+                title="Route options"
+                summary={optionsSummary(settings, props)}
+              >
+                <Options {...props} />
+              </Disclosure>
+              <PilotSkills {...props} />
+            </div>
+          )}
         </div>
       )}
     </aside>
@@ -436,7 +489,7 @@ function PointRow({
   label: string;
   drag: Drag | null;
   grip(n: number): GripHandlers;
-  arrival?: { leg: JumpLegDto; n: number };
+  arrival?: { leg: PlannerLeg; n: number };
   children: ReactNode;
 } & LegHover) {
   const target =
@@ -489,6 +542,25 @@ function SecPill({ security }: { security: number }) {
       {securityLabel(security)}
     </span>
   );
+}
+
+/**
+ * A system's pill on a leg: its security in known space; in wormhole space its class ("C3",
+ * "Thera") in the map's colours.
+ */
+function SystemPill({ system }: { system: PlannerLeg['to'] }) {
+  if ('whClass' in system && inWormholeSpace(system.id)) {
+    const pill = classPill(system);
+    return (
+      <span
+        className={styles.secPill}
+        style={pill.kind === 'class' ? { background: cssVar(pill.token) } : undefined}
+      >
+        {system.classLabel ?? pill.label}
+      </span>
+    );
+  }
+  return <SecPill security={system.security} />;
 }
 
 /** How a jump gets to a system: distance, fuel, fatigue (and the wait before it, if any). */
@@ -552,7 +624,7 @@ function LegRow({
   held,
   docks,
   brief,
-}: { leg: JumpLegDto; n: number } & LegHover) {
+}: { leg: PlannerLeg; n: number } & LegHover) {
   return (
     <div
       className={styles.systemCard}
@@ -563,10 +635,10 @@ function LegRow({
       onMouseLeave={() => setActive(null)}
     >
       <div className={styles.systemName}>
-        <SecPill security={leg.to.security} />
+        <SystemPill system={leg.to} />
         <strong>{leg.to.name}</strong>
         <span className={styles.systemRegion}>{leg.to.region}</span>
-        {leg.kind !== 'jump' && <em>{leg.kind === 'gate' ? 'gate' : 'Ansiblex'}</em>}
+        {leg.kind !== 'jump' && <em>{LEG_TAGS[leg.kind]}</em>}
         {leg.kind === 'jump' && !leg.to.station && !leg.stop && !brief && <em>no station</em>}
         {leg.stop && <em>stop</em>}
       </div>
@@ -621,11 +693,13 @@ export function RouteSystems({
  * The route's legs cut at the points of the trip (start, stops, destination), or null when the
  * route on screen is not for these points (still planning, or a stop without a system yet).
  */
+type Segments = Array<Array<{ leg: PlannerLeg; n: number }>>;
+
 function segmentsOf(
   route: JumpRouteDto,
   points: ReadonlyArray<number | null>,
   model: StarModel,
-): Array<Array<{ leg: JumpLegDto; n: number }>> | null {
+): Segments | null {
   if (points.some((p) => p === null) || route.legs.length === 0) return null;
   const ids = points.map((p) => model.ids[p!]!);
   if (route.legs[0]!.from.id !== ids[0]) return null;
@@ -637,6 +711,117 @@ function segmentsOf(
   if (segments.length !== ids.length - 1) return null;
   for (let k = 0; k < segments.length; k++) if (segments[k]!.at(-1)!.leg.to.id !== ids[k + 1]) return null;
   return segments;
+}
+
+/** A trip's legs per segment, numbered across the whole trip; a segment without its way has none. */
+function numbered(segments: readonly TravelSegment[]): Segments {
+  let n = 0;
+  return segments.map((s) => (s.status === 'ok' ? s.legs.map((leg) => ({ leg, n: n++ })) : []));
+}
+
+function jumpsText(jumps: number): string {
+  return `${jumps} ${jumps === 1 ? 'jump' : 'jumps'}`;
+}
+
+/** Between two points of a trip: that its way is still asked for, or that there is none. */
+function SegmentState({ segment }: { segment: TravelSegment }) {
+  if (segment.status === 'pending')
+    return (
+      <p className={styles.hint} role="status">
+        <Spinner label="Planning" /> Finding the way…
+      </p>
+    );
+  if (segment.status === 'none')
+    return (
+      <Callout tone="warning" title="No route">
+        No way between these systems with your route options.
+      </Callout>
+    );
+  if (segment.status === 'error')
+    return (
+      <Callout tone="danger" title="No route">
+        {errorText(segment.error, 'The server did not answer')}
+      </Callout>
+    );
+  return null;
+}
+
+/** Travel mode under the trip: why nothing is planned without a map; on a phone, totals and actions. */
+function TripResult(props: PanelState & { targets: number[] | null }) {
+  const { trip, origin, destination, targets } = props;
+  if (origin === null || destination === null) return null;
+  if (props.tripMap === null)
+    return (
+      <Callout tone="neutral" title="No map to route through">
+        Trips over gates and wormholes take your map&apos;s chain and the Thera and Turnur holes. Open or join
+        a map first.
+      </Callout>
+    );
+  if (!trip?.legs || !targets) return null;
+  return (
+    <section className={styles.result} aria-label="Route">
+      {props.phone && (
+        <>
+          <TravelTotalsBubble trip={trip} />
+          <TripActions trip={trip} targets={targets} wide />
+        </>
+      )}
+    </section>
+  );
+}
+
+/** A trip's totals: its jumps, and how many of them are not stargates. */
+export function TravelTotalsBubble({ trip }: { trip: TravelPlan | null }) {
+  if (!trip?.legs) return null;
+  const totals = travelTotals(trip.legs);
+  const facts: Array<[string, number]> = (
+    [
+      ['Gates', totals.gates],
+      ['Wormholes', totals.wormholes],
+      ['Thera', totals.thera],
+      ['Turnur', totals.turnur],
+      ['Ansiblex', totals.ansiblex],
+    ] as Array<[string, number]>
+  ).filter(([term, n]) => n > 0 || term === 'Gates');
+  return (
+    <section className={styles.choicesBubble} aria-label="Route totals">
+      <div className={styles.choice}>
+        <span className={styles.choiceMain}>{jumpsText(totals.jumps)}</span>
+        <dl className={styles.facts}>
+          {facts.map(([term, n]) => (
+            <div key={term}>
+              <dt>{term}</dt>
+              <dd>{n}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </section>
+  );
+}
+
+/** What to do with a trip: send it to a character as in-game waypoints. */
+function TripActions({
+  trip,
+  targets,
+  wide = false,
+}: {
+  trip: TravelPlan;
+  targets: number[];
+  wide?: boolean;
+}) {
+  const byHand = (trip.legs ?? []).some((leg) => leg.kind !== 'gate');
+  return (
+    <div className={wide ? styles.actions : styles.headActions}>
+      <WaypointsControl
+        targets={targets}
+        description={`${targets.length} ${targets.length === 1 ? 'system' : 'systems'}, in order.${
+          byHand ? ' Take the wormholes, holes and bridges yourself: the autopilot does not.' : ''
+        }`}
+        wide={wide}
+      />
+    </div>
+  );
 }
 
 /** Identifies a suggestion and what its row says, for the picker's cache. */
@@ -1495,9 +1680,6 @@ function RouteActions({
   wide = false,
 }: Pick<PanelState, 'onShare'> & { plan: JumpPlanDto; freight: JumpShareFreight | null; wide?: boolean }) {
   const toast = useToast();
-  const me = useMe();
-  const [busy, setBusy] = useState(false);
-  const pilots = (me.data?.characters ?? []).filter((c) => c.canSetWaypoints && c.tokenValid);
   const route = plan.route;
   if (!route) return null;
 
@@ -1511,34 +1693,6 @@ function RouteActions({
         title: 'Could not copy',
         description: 'The browser did not allow the clipboard.',
       });
-    }
-  };
-
-  const waypoints = async (characterId: number, name: string) => {
-    setBusy(true);
-    try {
-      for (const [n, leg] of route.legs.entries()) {
-        await api<void>(buildPath(routes.routing.waypoint.path, { characterId: String(characterId) }), {
-          method: 'POST',
-          json: {
-            solarSystemId: leg.to.id,
-            mode: n === 0 ? 'destination' : 'waypoint',
-          } satisfies WaypointRequest,
-        });
-      }
-      toast({
-        tone: 'success',
-        title: `Waypoints set for ${name}`,
-        description: `${route.legs.length} stops, in order.`,
-      });
-    } catch (error) {
-      toast({
-        tone: 'danger',
-        title: 'Could not set the waypoints',
-        description: error instanceof ApiError ? error.message : undefined,
-      });
-    } finally {
-      setBusy(false);
     }
   };
 
@@ -1557,34 +1711,125 @@ function RouteActions({
           onClick={() => void copy()}
         />
       )}
-      {pilots.length > 0 && (
-        <Menu>
-          <MenuTrigger asChild>
-            {wide ? (
-              <Button icon={<Navigation />} loading={busy}>
-                Waypoints
-              </Button>
-            ) : (
-              <IconButton
-                size="sm"
-                variant="secondary"
-                label="Set in-game waypoints"
-                icon={<Navigation />}
-                loading={busy}
-              />
-            )}
-          </MenuTrigger>
-          <MenuContent align="end">
-            <MenuLabel>In-game waypoints for</MenuLabel>
-            {pilots.map((c) => (
-              <MenuItem key={c.id} onSelect={() => void waypoints(c.id, c.name)}>
-                {c.name}
-              </MenuItem>
-            ))}
-          </MenuContent>
-        </Menu>
-      )}
+      <WaypointsControl
+        targets={route.legs.map((leg) => leg.to.id)}
+        description={`${route.legs.length} stops, in order.`}
+        wide={wide}
+      />
       <ShareButton onShare={onShare} freight={freight} wide={wide} />
     </div>
+  );
+}
+
+/** Sends the systems to one character in order: the first as the destination, then waypoints. */
+async function sendRoute(characterId: number, targets: readonly number[]): Promise<void> {
+  for (const [n, solarSystemId] of targets.entries()) {
+    await api<void>(buildPath(routes.routing.waypoint.path, { characterId: String(characterId) }), {
+      method: 'POST',
+      json: { solarSystemId, mode: n === 0 ? 'destination' : 'waypoint' } satisfies WaypointRequest,
+    });
+  }
+}
+
+/**
+ * Sends the route as in-game waypoints in one click: straight to the one character that may set
+ * them, or from a menu of every such character with "All characters" first. Nothing without one.
+ */
+function WaypointsControl({
+  targets,
+  description,
+  wide,
+}: {
+  targets: readonly number[];
+  description: string;
+  wide: boolean;
+}) {
+  const toast = useToast();
+  const me = useMe();
+  const [busy, setBusy] = useState(false);
+  const pilots = (me.data?.characters ?? []).filter((c) => c.canSetWaypoints && c.tokenValid);
+  if (pilots.length === 0) return null;
+
+  const send = async (to: readonly CharacterDto[]) => {
+    setBusy(true);
+    try {
+      // Each character's waypoints in order; the characters side by side.
+      const results = await Promise.allSettled(to.map((c) => sendRoute(c.id, targets)));
+      const failed = to.flatMap((c, k) => {
+        const r = results[k]!;
+        return r.status === 'rejected' ? [{ name: c.name, error: r.reason as unknown }] : [];
+      });
+      const done = to.length - failed.length;
+      if (failed.length === 0)
+        toast({
+          tone: 'success',
+          title: `Waypoints set for ${to.length === 1 ? to[0]!.name : `${to.length} characters`}`,
+          description,
+        });
+      else
+        toast({
+          tone: done === 0 ? 'danger' : 'success',
+          title:
+            done === 0
+              ? 'Could not set the waypoints'
+              : `Waypoints set for ${done} of ${to.length} characters`,
+          description:
+            to.length === 1
+              ? failed[0]!.error instanceof ApiError
+                ? failed[0]!.error.message
+                : undefined
+              : `Not for ${failed.map((f) => f.name).join(', ')}${
+                  failed[0]!.error instanceof ApiError ? `: ${failed[0]!.error.message}` : ''
+                }`,
+        });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (pilots.length === 1) {
+    const pilot = pilots[0]!;
+    return wide ? (
+      <Button icon={<Navigation />} loading={busy} onClick={() => void send([pilot])}>
+        Send to {pilot.name}
+      </Button>
+    ) : (
+      <IconButton
+        size="sm"
+        variant="secondary"
+        label={`Send waypoints to ${pilot.name}`}
+        icon={<Navigation />}
+        loading={busy}
+        onClick={() => void send([pilot])}
+      />
+    );
+  }
+  return (
+    <Menu>
+      <MenuTrigger asChild>
+        {wide ? (
+          <Button icon={<Navigation />} loading={busy}>
+            Waypoints
+          </Button>
+        ) : (
+          <IconButton
+            size="sm"
+            variant="secondary"
+            label="Set in-game waypoints"
+            icon={<Navigation />}
+            loading={busy}
+          />
+        )}
+      </MenuTrigger>
+      <MenuContent align="end">
+        <MenuLabel>In-game waypoints for</MenuLabel>
+        <MenuItem onSelect={() => void send(pilots)}>All characters</MenuItem>
+        {pilots.map((c) => (
+          <MenuItem key={c.id} onSelect={() => void send([c])}>
+            {c.name}
+          </MenuItem>
+        ))}
+      </MenuContent>
+    </Menu>
   );
 }

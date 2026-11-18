@@ -23,6 +23,7 @@ export function SystemCard({
   rangeLy,
   avoided,
   chainName,
+  travel = false,
   onClose,
   onOrigin,
   onDestination,
@@ -37,14 +38,16 @@ export function SystemCard({
   avoided: boolean;
   /** The viewer's chain reaches this system through a wormhole. */
   chainName: string | null;
+  /** Planning a trip without a jump drive: no range, cynos or avoid list (those are the jump mode's). */
+  travel?: boolean;
   onClose(): void;
   onOrigin(): void;
   onDestination(): void;
   onAvoid(): void;
 }) {
   const security = model.security[system]!;
-  const noCyno = noCynoReason(model, system);
-  const distance = origin !== null && origin !== system ? distanceLy(model, origin, system) : null;
+  const noCyno = travel ? null : noCynoReason(model, system);
+  const distance = !travel && origin !== null && origin !== system ? distanceLy(model, origin, system) : null;
   // Where one can dock, once the card is pinned (a passing pointer asks nothing).
   const name = model.names[system]!;
   const known = useKnownStructures([model.ids[system]!], pinned).bySystem.get(model.ids[system]!) ?? [];
@@ -122,9 +125,11 @@ export function SystemCard({
           <Button size="sm" icon={<Flag />} onClick={onDestination}>
             Destination
           </Button>
-          <Button size="sm" variant="ghost" icon={<Ban />} onClick={onAvoid}>
-            {avoided ? 'Stop avoiding' : 'Avoid'}
-          </Button>
+          {!travel && (
+            <Button size="sm" variant="ghost" icon={<Ban />} onClick={onAvoid}>
+              {avoided ? 'Stop avoiding' : 'Avoid'}
+            </Button>
+          )}
         </div>
       )}
     </div>

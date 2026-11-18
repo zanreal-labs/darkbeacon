@@ -3,8 +3,14 @@ import { DEFAULT_FREIGHT, freightTermsFrom, type FreightTerms } from './freight'
 
 /** What the planner remembers per browser (a convenience; nothing breaks without it). */
 export interface PlannerSettings {
-  /** 3: stargates are no setting any more; 2: landing at stations became the default. */
-  version: 3;
+  /**
+   * 4: the travel mode (any ship over gates and wormholes) came; 3: stargates are no setting any
+   * more; 2: landing at stations became the default.
+   */
+  version: 4;
+  /** `jump`: a ship with a jump drive (`ship`); `travel`: any ship, over gates, wormholes and holes. */
+  mode: PlannerMode;
+  /** The jump-drive ship, kept while travelling so it comes back with the jump mode. */
   ship: string | null;
   /** The character whose skills and fatigue ESI fills in; null: my main (else the first). */
   pilot: number | null;
@@ -29,10 +35,13 @@ export interface PlannerSettings {
   recent: string[];
 }
 
+export type PlannerMode = 'jump' | 'travel';
+
 const FUEL_HUBS: readonly JumpFuelHub[] = ['jita', 'amarr', 'dodixie', 'rens', 'hek'];
 
 export const DEFAULT_SETTINGS: PlannerSettings = {
-  version: 3,
+  version: 4,
+  mode: 'jump',
   ship: null,
   pilot: null,
   skills: { jdc: 5, jfc: 4, jf: 4 },
@@ -60,7 +69,9 @@ export function loadSettings(): PlannerSettings {
     return {
       ...DEFAULT_SETTINGS,
       ...parsed,
-      version: 3,
+      version: 4,
+      // Saved before the travel mode came: a jump-drive ship was all there was.
+      mode: (parsed.version ?? 1) >= 4 && parsed.mode === 'travel' ? 'travel' : 'jump',
       // Saved before landing at stations was the default: it was off only because it was.
       preferStations: (parsed.version ?? 1) >= 2 ? parsed.preferStations !== false : true,
       ansiblex: parsed.ansiblex === true,

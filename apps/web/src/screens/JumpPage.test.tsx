@@ -4,8 +4,10 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw/http';
 import {
+  DEFAULT_ROUTE_PREFERENCES,
   routes,
   type BridgeDto,
+  type CharacterDto,
   type JumpFuelPricesDto,
   type KnownStructuresDto,
   type JumpPilotDto,
@@ -13,8 +15,11 @@ import {
   type JumpPlanRequest,
   type MapIntelDto,
   type MyTrackingDto,
+  type RouteDto,
+  type RouteStepDto,
   type StandingsDto,
   type SystemIntelDto,
+  type WaypointRequest,
 } from '@darkbeacon/shared';
 import { ARK, META, UNIVERSE } from '../jump/fixtures.test-support';
 import { SETTINGS_KEY } from '../jump/settings';
@@ -27,6 +32,10 @@ import type { PlannerMap } from './JumpPlannerClient';
 installFlowMocks({ width: 1200, height: 800 });
 // jsdom has no canvas: the map draws nothing, the controls still work.
 HTMLCanvasElement.prototype.getContext = (() => null) as unknown as HTMLCanvasElement['getContext'];
+// Radix measures, scrolls and captures the pointer in selects, which jsdom cannot.
+Element.prototype.scrollIntoView ??= () => {};
+Element.prototype.hasPointerCapture ??= () => false;
+Element.prototype.releasePointerCapture ??= () => {};
 
 const requests: JumpPlanRequest[] = [];
 const ref = (i: number) => ({
@@ -151,7 +160,12 @@ const server = setupMockServer(
 );
 
 /** The demo chain: Ahbazon is an exit, Ami a known-space system on it (and a wormhole). */
-const CHAIN: PlannerMap = { map: 'Home chain', exits: [30005196], systems: [31002531, 30005196, 30005035] };
+const CHAIN: PlannerMap = {
+  id: 'm-home',
+  map: 'Home chain',
+  exits: [30005196],
+  systems: [31002531, 30005196, 30005035],
+};
 
 function renderPage(chain: PlannerMap | null = null) {
   return renderWithProviders(
@@ -628,5 +642,271 @@ describe('JumpPage', () => {
     expect(requests[0]).toMatchObject({ shipTypeId: 11567, origin: 30000142, destination: 30005035 });
     await user.keyboard('{Escape}');
     await waitFor(() => expect(within(panel).queryByRole('region', { name: 'Route' })).toBeNull());
+  });
+
+  describe('waypoints', () => {
+    const sent: Array<{ characterId: number } & WaypointRequest> = [];
+    const pilot = (id: number, name: string): CharacterDto => ({
+      ...meFixture().characters[0]!,
+      id,
+      name,
+      canSetWaypoints: true,
+    });
+    const withPilots = (...characters: CharacterDto[]) =>
+      server.use(
+        http.get(routes.accounts.me.path, () => HttpResponse.json({ ...meFixture(), characters })),
+        http.post(routes.routing.waypoint.path, async ({ request, params }) => {
+          sent.push({
+            characterId: Number(params.characterId),
+            ...((await request.json()) as WaypointRequest),
+          });
+          return new HttpResponse(null, { status: 204 });
+        }),
+      );
+    beforeEach(() => {
+      sent.length = 0;
+    });
+
+    it('sends the jump route to my one character in one click', async () => {
+      withPilots(pilot(AYLA, 'Ayla Vex'));
+      window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&ship=Ark');
+      const user = userEvent.setup();
+      renderPage();
+      const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+      await screen.findByRole('region', { name: 'Route' });
+      await user.click(await within(panel).findByRole('button', { name: 'Send waypoints to Ayla Vex' }));
+      await waitFor(() => expect(sent).toHaveLength(2));
+      expect(sent).toEqual([
+        { characterId: AYLA, solarSystemId: 30005196, mode: 'destination' },
+        { characterId: AYLA, solarSystemId: 30005035, mode: 'waypoint' },
+      ]);
+      expect(await screen.findByText('Waypoints set for Ayla Vex')).toBeTruthy();
+    });
+
+    it('offers all my characters first, then each by name, and sends at once', async () => {
+      const ALT = 3_900_000_002;
+      withPilots(pilot(AYLA, 'Ayla Vex'), pilot(ALT, 'Bram Holt'));
+      window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&ship=Ark');
+      const user = userEvent.setup();
+      renderPage();
+      const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+      await screen.findByRole('region', { name: 'Route' });
+      await user.click(await within(panel).findByRole('button', { name: 'Set in-game waypoints' }));
+      expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+        'All characters',
+        'Ayla Vex',
+        'Bram Holt',
+      ]);
+      await user.click(screen.getByRole('menuitem', { name: 'All characters' }));
+      await waitFor(() => expect(sent).toHaveLength(4));
+      // Each character's route in order; the characters side by side.
+      for (const characterId of [AYLA, ALT])
+        expect(sent.filter((w) => w.characterId === characterId)).toEqual([
+          { characterId, solarSystemId: 30005196, mode: 'destination' },
+          { characterId, solarSystemId: 30005035, mode: 'waypoint' },
+        ]);
+      expect(await screen.findByText('Waypoints set for 2 characters')).toBeTruthy();
+
+      await user.click(within(panel).getByRole('button', { name: 'Set in-game waypoints' }));
+      await user.click(await screen.findByRole('menuitem', { name: 'Bram Holt' }));
+      await waitFor(() => expect(sent).toHaveLength(6));
+      expect(sent.slice(4).every((w) => w.characterId === ALT)).toBe(true);
+    });
+  });
+
+  describe('gates and wormholes', () => {
+    const THERA = 31000005;
+    const J_SYSTEM = 31002531;
+    const step = (
+      solarSystemId: number,
+      name: string,
+      via: RouteStepDto['via'],
+      extra: Partial<RouteStepDto> = {},
+    ): RouteStepDto => ({
+      solarSystemId,
+      name,
+      security: 0.4,
+      whClass: null,
+      classLabel: null,
+      via,
+      connectionId: null,
+      regionName: 'Domain',
+      ...extra,
+    });
+    /** Ignoitton > Jita by gate > Thera > Ahbazon (EVE-Scout) > a C3 of the chain > Ami. */
+    const throughThera: RouteDto = {
+      from: 30002647,
+      to: 30005035,
+      mode: 'shortest',
+      jumps: 5,
+      steps: [
+        step(30002647, 'Ignoitton', 'start'),
+        step(30000142, 'Jita', 'gate'),
+        step(THERA, 'Thera', 'wormhole', {
+          edge: 'eve-scout',
+          whClass: 12,
+          classLabel: 'Thera',
+          security: -0.99,
+          regionName: 'G-R00031',
+        }),
+        step(30005196, 'Ahbazon', 'wormhole', { edge: 'eve-scout' }),
+        step(J_SYSTEM, 'J123456', 'wormhole', {
+          connectionId: 'c1',
+          whClass: 3,
+          classLabel: 'C3',
+          security: -0.99,
+          regionName: 'C-R00012',
+        }),
+        step(30005035, 'Ami', 'wormhole', { connectionId: 'c2' }),
+      ],
+      securityStatus: null,
+    };
+    const asked: URL[] = [];
+    const sent: WaypointRequest[] = [];
+    beforeEach(() => {
+      asked.length = 0;
+      sent.length = 0;
+      server.use(
+        http.get(routes.routing.preferences.path, () => HttpResponse.json(DEFAULT_ROUTE_PREFERENCES)),
+        http.get(routes.routing.route.path, ({ request, params }) => {
+          expect(params.mapId).toBe('m-home');
+          const url = new URL(request.url);
+          asked.push(url);
+          return HttpResponse.json(throughThera);
+        }),
+        http.get(routes.accounts.me.path, () =>
+          HttpResponse.json({
+            ...meFixture(),
+            characters: [{ ...meFixture().characters[0]!, canSetWaypoints: true }],
+          }),
+        ),
+        http.post(routes.routing.waypoint.path, async ({ request }) => {
+          sent.push((await request.json()) as WaypointRequest);
+          return new HttpResponse(null, { status: 204 });
+        }),
+      );
+    });
+
+    it("plans any ship over gates, the map's holes and Thera, without the jump planner", async () => {
+      window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&mode=travel');
+      renderPage(CHAIN);
+      const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+      await screen.findByRole('region', { name: 'Route' });
+      expect(asked).toHaveLength(1);
+      expect(asked[0]!.searchParams.get('from')).toBe('30002647');
+      expect(asked[0]!.searchParams.get('to')).toBe('30005035');
+      // The jump planner is not asked, and its ship, range, fuel and skills are not offered.
+      expect(requests).toHaveLength(0);
+      expect(within(panel).getAllByRole('combobox')[0]!.textContent).toBe('Gates & wormholes');
+      expect(within(panel).queryByRole('button', { name: 'Skills' })).toBeNull();
+      expect(within(panel).queryByRole('button', { name: 'Route options' })).toBeNull();
+      expect(within(panel).queryByRole('button', { name: 'Share' })).toBeNull();
+      expect(screen.queryByRole('button', { name: /Freight quote/ })).toBeNull();
+
+      // Every system the trip passes, tagged by how it is reached; wormhole space by its class.
+      const legs = [...panel.querySelectorAll('[data-kind]')];
+      expect(legs.map((l) => l.getAttribute('data-kind'))).toEqual(['gate', 'thera', 'thera', 'wormhole']);
+      expect(legs.map((l) => l.querySelector('em')?.textContent)).toEqual([
+        'gate',
+        'Thera',
+        'Thera',
+        'wormhole',
+      ]);
+      expect(legs[1]!.textContent).toMatch(/^TheraThera/);
+      expect(legs[3]!.textContent).toMatch(/^C3J123456/);
+      expect(
+        panel.querySelector('[data-picker="destination"]')!.closest('[data-point]')!.textContent,
+      ).toMatch(/Ami/);
+      const totals = screen.getByRole('region', { name: 'Route totals' });
+      expect(totals.textContent).toBe('5 jumpsGates1Wormholes2Thera2');
+      await waitFor(() => expect(window.location.search).toBe('?from=Ignoitton&to=Ami&mode=travel'));
+    });
+
+    it('sends where each hole is taken and the destination as waypoints, never wormhole space', async () => {
+      window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&mode=travel');
+      const user = userEvent.setup();
+      renderPage(CHAIN);
+      const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+      await screen.findByRole('region', { name: 'Route' });
+      await user.click(await within(panel).findByRole('button', { name: 'Send waypoints to Ayla Vex' }));
+      await waitFor(() => expect(sent).toHaveLength(3));
+      // Jita (into Thera), Ahbazon (into the chain), Ami; Thera and the C3 are flown by hand.
+      expect(sent).toEqual([
+        { solarSystemId: 30000142, mode: 'destination' },
+        { solarSystemId: 30005196, mode: 'waypoint' },
+        { solarSystemId: 30005035, mode: 'waypoint' },
+      ]);
+      expect(await screen.findByText(/the autopilot does not/)).toBeTruthy();
+    });
+
+    it('routes each stretch between stops and says which one has no route', async () => {
+      server.use(
+        http.get(routes.routing.route.path, ({ request }) => {
+          const url = new URL(request.url);
+          asked.push(url);
+          const from = Number(url.searchParams.get('from'));
+          const to = Number(url.searchParams.get('to'));
+          return HttpResponse.json(
+            from === 30002647
+              ? {
+                  ...throughThera,
+                  to,
+                  steps: [step(30002647, 'Ignoitton', 'start'), step(30000142, 'Jita', 'gate')],
+                  jumps: 1,
+                }
+              : { ...throughThera, from, to, steps: [], jumps: null },
+          );
+        }),
+      );
+      window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&via=Jita&mode=travel');
+      renderPage(CHAIN);
+      const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+      expect(await within(panel).findByText('No route')).toBeTruthy();
+      expect(asked.map((u) => [u.searchParams.get('from'), u.searchParams.get('to')])).toEqual([
+        ['30002647', '30000142'],
+        ['30000142', '30005035'],
+      ]);
+      // Jita arrives as the stop; nothing is offered for a trip without its whole way.
+      expect(panel.querySelector('[data-picker="stop"]')!.textContent).toMatch(/Jita/);
+      expect(within(panel).queryByRole('button', { name: /Send waypoints/ })).toBeNull();
+      expect(screen.queryByRole('region', { name: 'Route totals' })).toBeNull();
+      expect(requests).toHaveLength(0);
+    });
+
+    it('needs a map to route through, and remembers the mode', async () => {
+      window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&mode=travel');
+      renderPage(null);
+      const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+      expect(await within(panel).findByText('No map to route through')).toBeTruthy();
+      expect(asked).toHaveLength(0);
+      expect(requests).toHaveLength(0);
+      await waitFor(() =>
+        expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEY)!)).toMatchObject({
+          version: 4,
+          mode: 'travel',
+        }),
+      );
+    });
+
+    it('is the first choice of the Hull select, and a jump hull brings the jump planner back', async () => {
+      window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&ship=Ark');
+      const user = userEvent.setup();
+      renderPage(CHAIN);
+      const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+      await screen.findByRole('region', { name: 'Route' });
+      expect(requests).toHaveLength(1);
+      const hull = within(panel).getAllByRole('combobox')[0]!;
+      await user.click(hull);
+      expect(screen.getAllByRole('option')[0]!.textContent).toBe('Gates & wormholes');
+      await user.click(screen.getByRole('option', { name: 'Gates & wormholes' }));
+      await waitFor(() => expect(asked).toHaveLength(1));
+      await waitFor(() => expect(window.location.search).toBe('?from=Ignoitton&to=Ami&mode=travel'));
+      expect(requests).toHaveLength(1);
+
+      await user.click(within(panel).getAllByRole('combobox')[0]!);
+      await user.click(screen.getByRole('option', { name: 'Jump freighters' }));
+      await waitFor(() => expect(window.location.search).toBe('?from=Ignoitton&to=Ami&ship=Ark'));
+      expect(within(panel).getByRole('button', { name: 'Skills' })).toBeTruthy();
+    });
   });
 });
