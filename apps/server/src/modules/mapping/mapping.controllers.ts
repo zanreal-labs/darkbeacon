@@ -45,6 +45,7 @@ import {
   SetBookmarkTemplateRequest,
   SetLabelsRequest,
   SetSystemLabelsRequest,
+  SetMapMotdRequest,
   SetMapViewsRequest,
   UpdateConnectionRequest,
   UpdateMapPreferencesRequest,
@@ -137,6 +138,15 @@ export class MapsController {
     @Body(new ZodPipe(SetMapViewsRequest)) body: SetMapViewsRequest,
   ) {
     return this.maps.setViews(actor, mapId, body.views);
+  }
+
+  @Put(nestPath(routes.maps.setMotd.path))
+  async setMotd(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Body(new ZodPipe(SetMapMotdRequest)) body: SetMapMotdRequest,
+  ) {
+    return { motd: await this.maps.setMotd(actor, mapId, body.motd) };
   }
 
   @Put(nestPath(routes.maps.setBookmarkTemplate.path))

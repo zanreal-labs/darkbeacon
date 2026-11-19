@@ -127,6 +127,21 @@ describe('reading audit entries', () => {
     expect(readEntry(entry({ type: 'labels.changed', mapId: 'm' }), names).what).toBe(
       'changed the tags of Home chain',
     );
+    expect(
+      readEntry(
+        entry({ type: 'motd.changed', mapId: 'm', diff: { motd: { before: '', after: 'Fleet in Comms' } } }),
+        names,
+      ),
+    ).toMatchObject({
+      what: 'changed the message of the day of Home chain',
+      changes: [{ label: 'Message of the day', before: '—', after: 'Fleet in Comms' }],
+    });
+    expect(
+      readEntry(
+        entry({ type: 'motd.changed', mapId: 'm', diff: { motd: { before: 'x', after: '' } } }),
+        names,
+      ).what,
+    ).toBe('cleared the message of the day of Home chain');
   });
 
   it('says how a change came in and who signs in', () => {

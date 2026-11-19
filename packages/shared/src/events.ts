@@ -106,6 +106,8 @@ export interface EventPayloads {
   'system_labels.changed': { systemLabels: SystemLabelDto[] };
   /** The map's published views were replaced (manager+). */
   'views.changed': { views: MapViewDto[] };
+  /** The map's message of the day was set or cleared ('' for none, manager+). */
+  'motd.changed': { motd: string };
   /** On the source's and the target's stream: a source admin offered the map to another map. */
   'map.share.offered': MapShareDto;
   /** On both streams: the target's admin accepted; the target merges the source from now on. */
@@ -232,6 +234,7 @@ export const EVENT_TYPES = [
   'labels.changed',
   'system_labels.changed',
   'views.changed',
+  'motd.changed',
   'map.share.offered',
   'map.share.accepted',
   'map.share.changed',

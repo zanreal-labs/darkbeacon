@@ -3,6 +3,7 @@ import { ClientMessage, ServerMessage } from './protocol.js';
 import { buildPath, nestPath, routes } from './routes.js';
 import { CreateAccessRuleRequest } from './dto/access.js';
 import { fatigueMinutesLeft } from './dto/jumps.js';
+import { MAP_MOTD_MAX, MapDto, SetMapMotdRequest } from './dto/mapping.js';
 import { isMergedCopy, isMergeEvent } from './dto/sharing.js';
 import { shipSizeForJumpMass } from './dto/wormholes.js';
 
@@ -81,6 +82,36 @@ describe('routes', () => {
     const base = { subjectKind: 'discordRole', subjectId: '1', role: 'member' } as const;
     expect(CreateAccessRuleRequest.safeParse(base).success).toBe(false);
     expect(CreateAccessRuleRequest.safeParse({ ...base, guildId: '2' }).success).toBe(true);
+  });
+});
+
+describe('message of the day', () => {
+  it('is set by managers with PUT /api/maps/:mapId/motd, trimmed, empty to clear', () => {
+    expect(routes.maps.setMotd).toMatchObject({
+      method: 'PUT',
+      path: '/api/maps/:mapId/motd',
+      mapRole: 'manager',
+    });
+    expect(SetMapMotdRequest.parse({ motd: '  Comms: **Ops**\n' })).toEqual({ motd: 'Comms: **Ops**' });
+    expect(SetMapMotdRequest.parse({ motd: '' })).toEqual({ motd: '' });
+    expect(SetMapMotdRequest.safeParse({ motd: 'x'.repeat(MAP_MOTD_MAX + 1) }).success).toBe(false);
+    expect(SetMapMotdRequest.safeParse({}).success).toBe(false);
+  });
+
+  it('is part of the map only when it has one', () => {
+    const map = {
+      id: 'm',
+      slug: 'home',
+      name: 'Home',
+      ownerAccountId: 'a',
+      settings: { scopes: ['wormhole'] },
+      labels: [],
+      systemLabels: [],
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    expect(MapDto.parse(map).motd).toBeUndefined();
+    expect(MapDto.parse({ ...map, motd: 'Comms: Ops' }).motd).toBe('Comms: Ops');
   });
 });
 

@@ -80,6 +80,7 @@ const FIELD_LABELS: Record<string, string> = {
   systemLabelIds: 'Labels',
   systemLabels: 'Labels',
   views: 'Views',
+  motd: 'Message of the day',
   customLabel: 'Custom label',
   locked: 'Locked',
   position: 'Position',
@@ -558,6 +559,13 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
       return read(`changed the labels of ${mapName}`, 'map');
     case 'views.changed':
       return read(`changed the views of ${mapName}`, 'map');
+    case 'motd.changed':
+      return read(
+        entry.diff.motd?.after
+          ? `changed the message of the day of ${mapName}`
+          : `cleared the message of the day of ${mapName}`,
+        'map',
+      );
     case 'routes.exits_changed':
       return read("updated the chain's exits", 'map');
     case 'routes.hubs_changed':

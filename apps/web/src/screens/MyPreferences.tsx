@@ -13,7 +13,7 @@ import {
   writeBrowserOptions,
 } from '../lib/preferences';
 import { useLocalOptions } from '../map/widgets/LocalSection';
-import { CORE_WIDGETS } from '../map/widgets/layout';
+import { SYSTEM_WIDGETS } from '../map/widgets/layout';
 import { useWidgetsLayout } from '../map/widgets/useWidgetsLayout';
 import { Button, Card, CardBody, CardFooter, CardHeader, ConfirmDialog, Switch, useToast } from '../ui';
 import styles from './AccountPage.module.css';
@@ -99,7 +99,7 @@ export function MyPreferences() {
                 Reset layout
               </Button>
             </div>
-            {CORE_WIDGETS.map((w) => (
+            {SYSTEM_WIDGETS.map((w) => (
               <Switch
                 key={w.id}
                 checked={widgets.isVisible(w.id)}

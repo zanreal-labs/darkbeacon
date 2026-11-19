@@ -15,6 +15,7 @@ import {
   type AdminMapDto,
   DEFAULT_SYSTEM_LABELS,
   DEFAULT_TAGS,
+  MAP_MOTD_MAX,
   type BookmarkNumbering,
   type CreateMapRequest,
   type LabelDto,
@@ -214,6 +215,31 @@ export class MapUseCases extends MappingUseCases {
       await this.ports.maps.update({ ...rest, ...(next.length > 0 ? { views: next } : {}), updatedAt: now });
       events.add('views.changed', { views: next }, { views: before });
       return next;
+    });
+  }
+
+  /**
+   * The map's message of the day (manager+): Markdown everyone on the map sees when they open it,
+   * published as `motd.changed` so every open map shows the new one at once. An empty one clears
+   * it; the field is then left out of the map.
+   */
+  async setMotd(actor: Actor | null, mapId: string, motd: string): Promise<string> {
+    const who = await this.authorize(actor, mapId, 'manager');
+    const text = motd.trim();
+    if (text.length > MAP_MOTD_MAX)
+      throw new ValidationError(`The message of the day is longer than ${MAP_MOTD_MAX} characters`);
+    return this.write(who, mapId, async (events) => {
+      const current = await this.load(mapId);
+      const before = current.motd ?? '';
+      if (before === text) return before;
+      const { motd: _motd, ...rest } = current;
+      await this.ports.maps.update({
+        ...rest,
+        ...(text ? { motd: text } : {}),
+        updatedAt: this.ports.clock.now(),
+      });
+      events.add('motd.changed', { motd: text }, { motd: before });
+      return text;
     });
   }
 

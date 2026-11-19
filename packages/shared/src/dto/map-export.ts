@@ -5,6 +5,7 @@ import { EveId, Id, Timestamp } from './common.js';
 import {
   ConnectionDto,
   LabelDto,
+  MAP_MOTD_MAX,
   MapKind,
   MapSettings,
   MapSystemDto,
@@ -66,6 +67,8 @@ export const MapExportDocument = z.object({
     systemLabels: z.array(SystemLabelDto).max(32).default([]),
     /** The map's published views; absent in files written before maps had them. */
     views: z.array(MapViewDto).max(MAP_VIEWS_MAX).optional(),
+    /** The message of the day; absent when there is none and in files written before maps had one. */
+    motd: z.string().max(MAP_MOTD_MAX).optional(),
   }),
   systems: z.array(ExportedSystem).max(10_000),
   connections: z.array(ExportedConnection).max(20_000),

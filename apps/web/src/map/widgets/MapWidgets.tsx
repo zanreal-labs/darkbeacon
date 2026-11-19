@@ -16,6 +16,7 @@ import {
   Crosshair,
   History,
   Info,
+  Megaphone,
   MessagesSquare,
   Puzzle,
   Radar,
@@ -47,7 +48,7 @@ import { CommentsSection } from './CommentsSection';
 import { ConnectionsSection } from './ConnectionsSection';
 import { HistorySection } from './HistorySection';
 import { KillsSection, KillsSettingsMenu, useKillList, useKillsSettings } from './KillsSection';
-import { CORE_WIDGETS, pluginWidgetId, resolveBoxes, type Area } from './layout';
+import { CORE_WIDGETS, MAP_WIDGETS, pluginWidgetId, resolveBoxes, type Area } from './layout';
 import { LocalMenu, LocalSection, pilotStanding, usePresence } from './LocalSection';
 import {
   canReadClipboard,
@@ -57,6 +58,7 @@ import {
   SignaturesSection,
   useSignaturePaste,
 } from './SignaturesSection';
+import { MotdWidget, type MotdState } from './MotdWidget';
 import { usePhone } from './storage';
 import { StructuresSection } from './StructuresSection';
 import { SystemInfoWidget } from './SystemDetails';
@@ -66,6 +68,7 @@ import styles from './widgets.module.css';
 import win from './window.module.css';
 
 const ICONS: Record<string, ComponentType> = {
+  motd: Megaphone,
   info: Info,
   signatures: Radar,
   local: Users,
@@ -78,7 +81,7 @@ const ICONS: Record<string, ComponentType> = {
 };
 
 /** The dock's short word for a widget. */
-const SHORT: Record<string, string> = { info: 'System', signatures: 'Sigs' };
+const SHORT: Record<string, string> = { motd: 'MOTD', info: 'System', signatures: 'Sigs' };
 
 /** A window whose content got shorter waits this long before it shrinks (it may only be loading). */
 const SHRINK_DELAY = 400;
@@ -146,8 +149,10 @@ type Store = Pick<
 
 interface Props {
   mapId: string;
-  /** The selected system; nothing selected, no widget shows. */
+  /** The selected system; nothing selected, only the map's own widgets show. */
   system: MapSystemDto | undefined;
+  /** The map's message of the day (its window shows whether or not a system is selected). */
+  motd?: MotdState;
   info: UniverseSystemDto | undefined;
   universe: Map<number, UniverseSystemDto>;
   /** The map's Tags (`labels` in the data). */
@@ -177,13 +182,13 @@ interface Props {
 
 /**
  * The map widgets (Wanderer's): separate windows over the map, each with one job, all showing the
- * selected system, and nothing at all while none is. On wide screens they stand in a narrow
- * column against the right edge, each as tall as its content, or float where someone dragged
- * them; on phones a dock lists them and one opens at a time in a sheet above it, as in Wanderer's
- * mobile layout.
+ * selected system, and none of those while none is; the map's own (its message of the day) show
+ * either way, above them. On wide screens they stand in a narrow column against the right edge,
+ * each as tall as its content, or float where someone dragged them; on phones a dock lists them
+ * and one opens at a time in a sheet above it, as in Wanderer's mobile layout.
  */
 export function MapWidgets(props: Props) {
-  const { controller, plugins, shown, onCover, system } = props;
+  const { controller, plugins, shown, onCover, system, motd } = props;
   // Pilots on the map (Local, the nodes' counts) whether or not a system is selected.
   const presence = usePresence(props.mapId, props.store);
   const phone = usePhone();
@@ -205,7 +210,13 @@ export function MapWidgets(props: Props) {
       ]),
     [plugins],
   );
-  const visible = controller.visible.filter((id) => titles.has(id));
+  // The map's own widgets first (top of the column, first in the dock), then the system's, which
+  // only show while a system is selected.
+  const mapWidgets = motd?.shown ? ['motd'] : [];
+  const visible = [
+    ...mapWidgets,
+    ...(system ? controller.visible.filter((id) => titles.has(id) && !MAP_WIDGETS.has(id)) : []),
+  ];
 
   // The map's size: windows are placed and kept inside it.
   useLayoutEffect(() => {
@@ -246,7 +257,7 @@ export function MapWidgets(props: Props) {
   const resolved = area ? resolveBoxes(controller.layout, area, visible, heights) : null;
 
   // What the canvas keeps clear: the column of windows on the right, the dock on phones.
-  const active = shown && selected !== null;
+  const active = shown && visible.length > 0;
   const column = !phone && active ? resolved?.column : null;
   const right = column?.width ?? 0;
   const rightBottom = column ? column.bottom + layerTop : 0;
@@ -257,6 +268,15 @@ export function MapWidgets(props: Props) {
 
   // A widget hidden while open in the sheet closes it.
   if (open && !visible.includes(open)) setOpen(null);
+
+  // On phones a message of the day opens in the sheet the first time it shows (and once more
+  // whenever it changes), as the column shows it on wide screens.
+  const motdKey = motd?.shown && !motd.editing ? `${props.mapId}\n${motd.text}` : null;
+  const [motdOpened, setMotdOpened] = useState<string | null>(null);
+  if (phone && shown && motdKey && motdOpened !== motdKey) {
+    setMotdOpened(motdKey);
+    setOpen('motd');
+  }
 
   const reportBadge = useCallback((id: string, badge: WidgetBadge) => {
     setBadges((current) => {
@@ -283,20 +303,25 @@ export function MapWidgets(props: Props) {
 
   if (!shown) return null;
 
-  const content = system ? (
-    <SystemWidgets
-      {...props}
-      system={system}
-      visible={visible}
-      phone={phone}
-      refetchPresence={() => presence.refetch()}
-    />
-  ) : null;
+  const content = (
+    <>
+      {motd?.shown && <MotdWidget motd={motd} />}
+      {system && (
+        <SystemWidgets
+          {...props}
+          system={system}
+          visible={visible}
+          phone={phone}
+          refetchPresence={() => presence.refetch()}
+        />
+      )}
+    </>
+  );
 
   return (
     <WidgetHostContext.Provider value={host}>
       {phone ? (
-        system && (
+        visible.length > 0 && (
           <>
             {open && (
               <button

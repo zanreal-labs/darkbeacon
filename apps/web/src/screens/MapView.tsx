@@ -58,6 +58,7 @@ import { useMapPreferences } from '../map/useMapPreferences';
 import { MapWidgets, type WidgetCover } from '../map/widgets/MapWidgets';
 import { usePhone } from '../map/widgets/storage';
 import { useWidgetsLayout } from '../map/widgets/useWidgetsLayout';
+import { useMotd } from '../map/widgets/MotdWidget';
 import { WidgetsMenu } from '../map/widgets/WidgetsMenu';
 import { useViews } from '../map/views/useViews';
 import { ViewSwitcher } from '../map/views/ViewSwitcher';
@@ -217,6 +218,8 @@ export function MapView({
   );
   // The widgets: always over the map, showing the selected system (Wanderer's windows).
   const widgets = useWidgetsLayout();
+  // The map's message of the day: shown on entering the map, whatever is selected.
+  const motd = useMotd(map.id, (store.state.map ?? map).motd, can.manage);
   const [widgetsShown, setWidgetsShown] = useState(true);
   const showWidgets = useCallback(() => setWidgetsShown(true), []);
   const [widgetCover, setWidgetCover] = useState<WidgetCover>({ right: 0, rightBottom: 0, bottom: 0 });
@@ -773,6 +776,7 @@ export function MapView({
             shown={widgetsShown}
             onShownChange={setWidgetsShown}
             save={activeViewSave}
+            motd={motd}
             className={styles.toolButton}
           />
           {connection && !system && (
@@ -843,6 +847,7 @@ export function MapView({
         <MapWidgets
           mapId={map.id}
           system={system}
+          motd={motd}
           info={system ? universe.get(system.solarSystemId) : undefined}
           universe={universe}
           labels={labels}

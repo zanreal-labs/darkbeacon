@@ -612,6 +612,20 @@ export const routes = {
       body: dto.SetMapViewsRequest,
       response: z.array(dto.MapViewDto),
     }),
+    /**
+     * The map's message of the day (manager+), Markdown everyone on the map sees when they open
+     * it; an empty one clears it. Published as `motd.changed`.
+     */
+    setMotd: route({
+      method: 'PUT',
+      path: '/api/maps/:mapId/motd',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'write' },
+      mapRole: 'manager',
+      summary: "Set the map's message of the day",
+      body: dto.SetMapMotdRequest,
+      response: dto.MapMotdDto,
+    }),
     /** The map's default bookmark label template (manager+); published as `map.settings_changed`. */
     setBookmarkTemplate: route({
       method: 'PUT',

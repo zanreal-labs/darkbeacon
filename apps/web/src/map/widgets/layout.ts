@@ -8,6 +8,7 @@
 
 /** The core widgets, in the order of the widgets menu. Plugin widgets follow them. */
 export const CORE_WIDGETS = [
+  { id: 'motd', title: 'Message of the day' },
   { id: 'info', title: 'System info' },
   { id: 'signatures', title: 'Signatures' },
   { id: 'local', title: 'Local' },
@@ -20,6 +21,16 @@ export const CORE_WIDGETS = [
 ] as const;
 
 export type CoreWidgetId = (typeof CORE_WIDGETS)[number]['id'];
+
+/**
+ * Widgets about the map rather than the selected system: they show without a selection, and
+ * whether they show follows what the map has (a message of the day) and what the viewer chose for
+ * it, never the layout's switches, so layouts and views kept before them still show them.
+ */
+export const MAP_WIDGETS: ReadonlySet<string> = new Set(['motd']);
+
+/** The core widgets the layout's switches show and hide: the ones about the selected system. */
+export const SYSTEM_WIDGETS = CORE_WIDGETS.filter((w) => !MAP_WIDGETS.has(w.id));
 
 /** Shown until someone chooses otherwise: Wanderer's four, and Kills. */
 export const DEFAULT_VISIBLE: readonly string[] = ['info', 'signatures', 'local', 'routes', 'kills'];
@@ -41,6 +52,7 @@ export const MIN_SIZE = { w: 260, h: 140 };
  * three rows. A window sized by its content never goes below it, and neither does a resize.
  */
 const MIN_SIZES: Record<string, { w: number; h: number }> = {
+  motd: { w: 260, h: 64 },
   signatures: { w: 320, h: 180 },
   info: { w: 300, h: 110 },
   local: { w: 240, h: 130 },
@@ -53,14 +65,18 @@ export const minSize = (id: string): { w: number; h: number } => MIN_SIZES[id] ?
 /** Docked windows stand 8 px apart in their column. */
 export const DOCK_GAP = 8;
 
-/** The column's order, top to bottom: what a pilot reads first is on top. Others follow. */
-export const DOCK_ORDER: readonly string[] = ['info', 'signatures', 'local', 'routes', 'kills'];
+/**
+ * The column's order, top to bottom: what a pilot reads first is on top (the map's message of the
+ * day above everything). Others follow.
+ */
+export const DOCK_ORDER: readonly string[] = ['motd', 'info', 'signatures', 'local', 'routes', 'kills'];
 
 /**
  * How much of the map's height a window sized by its content may take before its content
  * scrolls: Signatures the most, Local a quarter, the rest compact.
  */
 const DOCK_SHARE: Record<string, number> = {
+  motd: 0.3,
   info: 0.4,
   signatures: 0.45,
   local: 0.25,
@@ -71,11 +87,12 @@ const OTHER_SHARE = 0.25;
 
 /**
  * Who gives way first when the column runs past the bottom: the extra widgets, Kills and Routes,
- * then Signatures (it scrolls anyway), then Local, then System info, each down to its minimum.
+ * then the message of the day, Signatures (it scrolls anyway), then Local, then System info, each
+ * down to its minimum.
  */
 function giveWayOrder(order: readonly string[]): number[] {
   const rank = (id: string) => {
-    const i = ['kills', 'routes', 'signatures', 'local', 'info'].indexOf(id);
+    const i = ['kills', 'routes', 'motd', 'signatures', 'local', 'info'].indexOf(id);
     return i === -1 ? -1 : i;
   };
   return order

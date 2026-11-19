@@ -299,6 +299,7 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
     },
     before: { views: [] },
   },
+  'motd.changed': { data: { motd: 'Fleet in **Comms**' }, before: { motd: '' } },
   'map.share.offered': { data: share },
   'map.share.accepted': { data: { ...share, status: 'active', acceptedAt: 2 }, before: share },
   'map.share.changed': { data: { ...share, level: 'read-write' }, before: share },

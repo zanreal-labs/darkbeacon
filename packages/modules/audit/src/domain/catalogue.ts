@@ -221,6 +221,11 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
     entity: () => ({ kind: 'views', id: 'map' }),
     state: (d) => ({ views: d.views }),
   },
+  'motd.changed': {
+    op: 'update',
+    entity: () => ({ kind: 'motd', id: 'map' }),
+    state: (d) => ({ motd: d.motd }),
+  },
   'map.share.offered': { ...SHARE, op: 'create' },
   'map.share.accepted': { ...SHARE, op: 'update' },
   'map.share.changed': { ...SHARE, op: 'update' },

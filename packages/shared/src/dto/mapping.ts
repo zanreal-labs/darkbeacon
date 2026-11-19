@@ -135,12 +135,20 @@ export type MapKind = z.infer<typeof MapKind>;
 export const MAP_DESCRIPTION_MAX = 1000;
 const MapDescription = z.string().trim().max(MAP_DESCRIPTION_MAX);
 
+/** Longest message of the day. */
+export const MAP_MOTD_MAX = 2000;
+
 export const MapDto = z.object({
   id: Id,
   slug: Slug,
   name: z.string(),
   /** What the map is for, shown in the list of maps; absent when empty. */
   description: z.string().optional(),
+  /**
+   * The message of the day: Markdown everyone on the map sees when they open it (the in-game
+   * channel, links); absent when empty.
+   */
+  motd: z.string().optional(),
   kind: MapKind.optional(),
   ownerAccountId: Id,
   settings: MapSettings,
@@ -187,6 +195,14 @@ export const UpdateMapRequest = z.object({
   settings: MapSettings.partial().optional(),
 });
 export type UpdateMapRequest = z.infer<typeof UpdateMapRequest>;
+
+/** PUT /api/maps/:mapId/motd sets the message of the day (manager+); an empty string clears it. */
+export const SetMapMotdRequest = z.object({ motd: z.string().trim().max(MAP_MOTD_MAX) });
+export type SetMapMotdRequest = z.infer<typeof SetMapMotdRequest>;
+
+/** The message of the day as it now is ('' for none). */
+export const MapMotdDto = z.object({ motd: z.string() });
+export type MapMotdDto = z.infer<typeof MapMotdDto>;
 
 /** PUT /api/maps/:mapId/labels replaces the whole list of Tags (manager+). */
 export const SetLabelsRequest = z.object({ labels: z.array(LabelDto).max(64) });
