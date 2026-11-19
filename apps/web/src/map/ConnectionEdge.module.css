@@ -2,25 +2,16 @@
   opacity: 0.6;
 }
 
-/* Every layer is drawn with crisp geometry: no glow, no transparency, no blur. */
+/* Every layer is drawn with crisp geometry: no glow, no blur. */
 .edge path {
   shape-rendering: geometricPrecision;
 }
 
-/* Dangerous: a solid red outline beyond the line, kept apart from it by the casing. */
+/* Dangerous: a red border 3 px wide on each side of the line, drawn under it, as in Wanderer. */
 .halo {
   fill: none;
   stroke: var(--dbk-edge-dangerous);
-  stroke-width: calc(var(--dbk-edge-width) + 8px);
-  stroke-linecap: butt;
-  pointer-events: none;
-}
-
-/* A thin canvas-coloured casing gives every line a sharp edge against the grid and other lines. */
-.casing {
-  fill: none;
-  stroke: var(--dbk-color-canvas);
-  stroke-width: calc(var(--dbk-edge-width) + 3px);
+  stroke-width: calc(var(--edge-outer, var(--dbk-edge-width)) + 6px);
   stroke-linecap: butt;
   pointer-events: none;
 }
@@ -29,7 +20,7 @@
 .highlight {
   fill: none;
   stroke: var(--dbk-edge-selected);
-  stroke-width: calc(var(--dbk-edge-width) + 8px);
+  stroke-width: calc(var(--edge-outer, var(--dbk-edge-width)) + 6px);
   stroke-linecap: butt;
   opacity: 0;
   pointer-events: none;
@@ -37,7 +28,12 @@
 }
 
 .edge[data-active] .highlight {
-  opacity: 0.45;
+  opacity: 0.6;
+}
+
+/* The outer layer (time). React Flow's own edge path colours give way to the inline style. */
+.line {
+  fill: none;
 }
 
 /* The inner core (mass), over the outer layer (time). */
@@ -47,9 +43,9 @@
 
 /* A bubble: a dashed amber ring with a light fill around the bubbled end, under the system card. */
 .bubble {
-  fill: color-mix(in oklab, var(--dbk-edge-bubble) 22%, transparent);
+  fill: color-mix(in oklab, var(--dbk-edge-bubble) 18%, transparent);
   stroke: var(--dbk-edge-bubble);
-  stroke-width: 3px;
+  stroke-width: 2px;
   stroke-dasharray: 6 4;
   pointer-events: none;
 }
@@ -61,20 +57,20 @@
   pointer-events: none;
 }
 
-/* The size letter: the only text on a connection. An inverted neutral chip with a canvas
+/* The size letter: the only text on a connection. A small inverted neutral chip with a canvas
    outline, so it stands out on any line without adding a colour. */
 .size {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 24px;
-  height: 22px;
-  padding: 0 5px;
-  border: 2px solid var(--dbk-color-canvas);
-  border-radius: 6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border: 1.5px solid var(--dbk-color-canvas);
+  border-radius: 4px;
   background: var(--dbk-node-text);
   color: var(--dbk-color-canvas);
-  font-size: var(--map-text-chip, 14px);
+  font-size: var(--map-text-edge, 12.5px);
   font-weight: 800;
   line-height: 1;
   white-space: nowrap;

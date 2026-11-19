@@ -4,7 +4,8 @@ import { memo, useEffect, useState, type CSSProperties, type ReactNode } from 'r
 import { useInternalNode, useStore, ViewportPortal, type InternalNode } from '@xyflow/react';
 import type { MapPoint, PresencePeerDto } from '@darkbeacon/shared';
 import { activityText } from '../../lib/presence-activity';
-import { floatingEnds, type Rect } from '../geometry';
+import { edgeCurve } from '../edgePath';
+import type { Rect } from '../geometry';
 import styles from './presence.module.css';
 
 /** How long a cursor takes to fade once its owner's action (and grace time) ended. */
@@ -146,7 +147,7 @@ function SystemMark({
   );
 }
 
-/** The connection someone changes: a soft band in their colour along it. */
+/** The connection someone changes: a soft band in their colour along its curve. */
 function ConnectionMark({
   id,
   ending,
@@ -162,7 +163,7 @@ function ConnectionMark({
   const source = useInternalNode(edge?.source ?? '');
   const target = useInternalNode(edge?.target ?? '');
   if (!edge || !source || !target) return tag(null);
-  const { from, to } = floatingEnds(rectOf(source), rectOf(target));
+  const { path, mid } = edgeCurve(rectOf(source), rectOf(target));
   return (
     <>
       <svg
@@ -174,9 +175,9 @@ function ConnectionMark({
         width={1}
         height={1}
       >
-        <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} />
+        <path d={path} />
       </svg>
-      {tag({ x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 })}
+      {tag(mid)}
     </>
   );
 }

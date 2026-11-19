@@ -113,24 +113,25 @@
 .sample {
   display: block;
   flex: none;
-  width: 64px;
-  height: 24px;
-  overflow: visible;
+  width: 104px;
+  height: 30px;
+  overflow: hidden;
 }
 
-.sampleBubble {
-  top: 50%;
-  left: 60px;
-  width: 22px;
-  height: 22px;
-  border-width: 2px;
-  transform: translate(-50%, -50%);
+/* The bubble at the map's size would fill the row: a smaller ring, the same drawing otherwise. */
+.sample [data-bubble] {
+  r: 12px;
+}
+
+/* The ends of two system cards the sample runs between. */
+.sampleCard {
+  fill: var(--dbk-node-bg);
+  stroke: var(--dbk-node-border);
+  stroke-width: 1px;
 }
 
 .sampleSize {
   position: absolute;
-  top: 50%;
-  left: 32px;
   transform: translate(-50%, -50%);
 }
 

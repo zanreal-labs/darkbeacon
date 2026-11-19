@@ -60,8 +60,8 @@ const HULL_ORDER = Object.keys(HULL_CLASS_LABEL) as HullClass[];
 /**
  * Each size as the game names it: the "Maximum Ship Size" line of a wormhole's Show Info, which has
  * four values, Small, Medium, Large and Extra large ("Very large" in older clients). The game calls
- * both the 1 000 000 t (freighter) and the 2 000 000 t (capital) holes Extra large; the map's
- * letters tell them apart (XL, C).
+ * both the 1 000 000 t (freighter) and the 2 000 000 t (capital) holes Extra large, and so does
+ * the map (XL); the note tells them apart.
  * Sources: EVE University, https://wiki.eveuniversity.org/Wormholes ("Wormhole text", "Maximum Ship
  * Size", with its Show Info screenshot "Maximum Ship Size: Large"), and Jambe's Wormhole Primer,
  * https://jambeeno.com/hole (the Maximum Ship Size table: Small 5 000 t, Medium 20 000 / 62 000 t,

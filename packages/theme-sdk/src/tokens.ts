@@ -110,11 +110,11 @@ export const TOKENS = {
 
   'edge-width': {
     group: 'edge',
-    description: 'Connection width (outer layer), the same for every connection',
+    description: 'Connection width (outer layer), the same for every connection; end of life adds 2 px',
   },
   'edge-color': { group: 'edge', description: 'Outer layer: lifetime normal' },
   'edge-mass-fresh': { group: 'edge', description: 'Inner core: mass fresh' },
-  'edge-gate': { group: 'edge', description: 'Stargate connection' },
+  'edge-gate': { group: 'edge', description: 'Stargate connection (outer layer, around a fresh core)' },
   'edge-bridge': { group: 'edge', description: 'Ansiblex jump bridge connection (dotted)' },
   'edge-time-eol': { group: 'edge', description: 'Outer layer: end of life (< 4 h)' },
   'edge-time-critical': { group: 'edge', description: 'Outer layer: under an hour left' },

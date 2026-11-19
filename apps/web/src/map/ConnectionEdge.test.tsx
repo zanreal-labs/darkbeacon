@@ -28,14 +28,18 @@ function Box() {
 const nodes: FlowNode[] = [
   { id: '1', type: 'box', position: { x: 0, y: 0 }, data: {} },
   { id: '2', type: 'box', position: { x: 400, y: 0 }, data: {} },
+  { id: '3', type: 'box', position: { x: 30, y: 200 }, data: {} },
 ];
+
+/** The curve between the cards 1 and 2: from (160, 30) to (400, 30), leaving each side square on. */
+const CURVE = 'M160,30 C280,30 280,30 400,30';
 
 async function renderEdge(connection: ConnectionDto, selected = false) {
   const edge: ConnectionEdgeType = {
     id: connection.id,
     type: 'connection',
-    source: '1',
-    target: '2',
+    source: String(connection.source),
+    target: String(connection.target),
     selected,
     data: { mapId: MAP_ID, connection, sourceName: 'J100001', targetName: 'Amamake' },
   };
@@ -61,16 +65,24 @@ const core = (container: HTMLElement) => container.querySelector<SVGPathElement>
 const label = (container: HTMLElement) => container.querySelector<HTMLElement>('[data-edge-label]')!;
 
 describe('ConnectionEdge', () => {
-  it('draws a healthy wormhole as a thick neutral two-layer line without any text', async () => {
+  it('draws a healthy wormhole as a thin two-layer curve between facing sides, without any text', async () => {
     const { container } = await renderEdge(connectionFixture('c1', 1, 2));
     expect(container.querySelector('[data-underlay="dangerous"]')).toBeNull();
     expect(container.querySelectorAll('[data-bubble]')).toHaveLength(0);
     expect(line(container).style.stroke).toBe('var(--dbk-edge-color)');
     expect(line(container).style.strokeWidth).toBe('var(--dbk-edge-width)');
     expect(core(container)?.style.stroke).toBe('var(--dbk-edge-mass-fresh)');
-    // The line runs between the node borders, not their centres.
-    expect(line(container).getAttribute('d')).toBe('M 80,30 L 480,30');
+    // A bezier from the middle of the source's right side to the middle of the target's left side.
+    expect(line(container).getAttribute('d')).toBe(CURVE);
+    // The pointer takes a wider invisible copy of the same curve.
+    expect(container.querySelector('.react-flow__edge-interaction')?.getAttribute('d')).toBe(CURVE);
     expect(label(container).textContent).toBe('');
+    expect(label(container).style.transform).toContain('translate(280px, 30px)');
+  });
+
+  it('runs from the bottom of one card to the top of another stacked below it', async () => {
+    const { container } = await renderEdge(connectionFixture('c4', 1, 3));
+    expect(line(container).getAttribute('d')).toMatch(/^M80,60 C80,[0-9.]+ 110,[0-9.]+ 110,200$/);
   });
 
   it('shows time outside, mass inside, a halo and bubbles outside both systems; only the size as text', async () => {
@@ -85,7 +97,7 @@ describe('ConnectionEdge', () => {
       }),
     );
     const halo = container.querySelector('[data-underlay="dangerous"]')!;
-    expect(halo.getAttribute('d')).toBe('M 80,30 L 480,30');
+    expect(halo.getAttribute('d')).toBe(CURVE);
     // The halo is drawn first, so it sits beneath the line.
     expect(halo.compareDocumentPosition(line(container))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
 
@@ -97,6 +109,8 @@ describe('ConnectionEdge', () => {
     ]);
 
     expect(line(container).style.stroke).toBe('var(--dbk-edge-time-eol)');
+    // End of life widens the outer layer so its colour shows beside the core.
+    expect(line(container).style.strokeWidth).toBe('calc(var(--dbk-edge-width) + 2px)');
     expect(core(container)?.style.stroke).toBe('var(--dbk-edge-mass-critical)');
     expect(label(container).textContent).toBe('S');
   });
@@ -121,17 +135,32 @@ describe('ConnectionEdge', () => {
     expect(tip.textContent).toContain('Mass saved');
   });
 
-  it('draws gates as one plain line and bridges dotted lime, without text', async () => {
+  it('draws gates as a green line around the fresh core and bridges dotted lime, without text', async () => {
     const gate = await renderEdge(connectionFixture('g', 1, 2, { type: 'gate', shipSize: 'capital' }));
     expect(line(gate.container).style.stroke).toBe('var(--dbk-edge-gate)');
     expect(line(gate.container).style.strokeDasharray).toBe('');
-    expect(core(gate.container)).toBeNull();
+    expect(core(gate.container)?.style.stroke).toBe('var(--dbk-edge-mass-fresh)');
     expect(label(gate.container).textContent).toBe('');
     gate.unmount();
 
     const bridge = await renderEdge(connectionFixture('b', 1, 2, { type: 'bridge', shipSize: 'capital' }));
     expect(line(bridge.container).style.stroke).toBe('var(--dbk-edge-bridge)');
     expect(line(bridge.container).style.strokeDasharray).toMatch(/^0\.01 /);
+    expect(core(bridge.container)).toBeNull();
+  });
+
+  it('writes the game sizes S, M and XL on the line, XL for capital holes too, and nothing for L', async () => {
+    for (const [shipSize, text] of [
+      ['small', 'S'],
+      ['medium', 'M'],
+      ['large', ''],
+      ['xlarge', 'XL'],
+      ['capital', 'XL'],
+    ] as const) {
+      const { container, unmount } = await renderEdge(connectionFixture(`s-${shipSize}`, 1, 2, { shipSize }));
+      expect(label(container).textContent).toBe(text);
+      unmount();
+    }
   });
 });
 

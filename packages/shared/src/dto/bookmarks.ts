@@ -281,7 +281,8 @@ const SIZE_TEXT: Record<ConnectionDto['shipSize'], string> = {
   medium: 'M',
   large: 'L',
   xlarge: 'XL',
-  capital: 'C',
+  // The game has no capital size: its 2 000 000 t holes are XL too.
+  capital: 'XL',
 };
 
 /** `0 -> a`, `25 -> z`, `26 -> aa`. */

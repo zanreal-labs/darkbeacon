@@ -66,7 +66,8 @@ describe('the wormhole types reference', () => {
     const small = d.querySelector('tr[data-code="E004"] [data-size-cell]') as HTMLElement;
     expect(small.textContent).toBe('SSmall');
     const capital = d.querySelector('tr[data-code="H296"] [data-size-cell]') as HTMLElement;
-    expect(capital.textContent).toBe('CExtra large');
+    // The game has no capital size: the 2 000 000 t holes are XL too.
+    expect(capital.textContent).toBe('XLExtra large');
     // The size legend is off until turned on.
     expect(d.querySelector('dl[aria-label="Ship sizes"]')).toBeNull();
   });

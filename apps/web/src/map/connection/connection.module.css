@@ -138,7 +138,7 @@
   bottom: 0;
   min-width: 3px;
   border-radius: 999px;
-  background: var(--dbk-edge-mass-fresh);
+  background: var(--dbk-edge-color);
 }
 
 .barBand[data-status='reduced'] {

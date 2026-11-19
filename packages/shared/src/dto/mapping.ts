@@ -403,14 +403,14 @@ export function gameLifetime(
   c: {
     timeStatus: z.infer<typeof TimeStatus>;
     eolAt: number | null;
-    updatedAt?: number;
     lifetime?: { mark: LifetimeMark; at: number } | null;
   },
   now: number,
 ): GameLifetime {
   if (c.lifetime?.mark === 'expired') return 'expired';
   const left: number[] = [];
-  if (c.timeStatus === 'eol') left.push((c.eolAt ?? c.updatedAt ?? now) + 4 * LIFE_HOUR - now);
+  // EOL with no known time (older records): under 4 hours, no telling how far under.
+  if (c.timeStatus === 'eol') left.push(c.eolAt === null ? 4 * LIFE_HOUR : c.eolAt + 4 * LIFE_HOUR - now);
   if (c.lifetime) left.push(c.lifetime.at + LIFETIME_MARK_HOURS[c.lifetime.mark] * LIFE_HOUR - now);
   if (left.length === 0) return 'day';
   const least = Math.min(...left);

@@ -18,7 +18,8 @@ export const MASS_MEANING: Record<MassStatus, string> = {
 
 /** The line's colours on the map, so the panel and the edge say the same. */
 export const MASS_TOKEN: Record<MassStatus, string> = {
-  fresh: cssVar('edge-mass-fresh'),
+  // The outer colour: a fresh core takes the canvas side of it, which would vanish on a panel.
+  fresh: cssVar('edge-color'),
   reduced: cssVar('edge-mass-reduced'),
   critical: cssVar('edge-mass-critical'),
 };

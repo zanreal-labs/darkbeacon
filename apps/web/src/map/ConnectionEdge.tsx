@@ -2,7 +2,6 @@
 
 import { memo, useEffect, useState } from 'react';
 import {
-  BaseEdge,
   EdgeLabelRenderer,
   useInternalNode,
   type Edge,
@@ -11,15 +10,10 @@ import {
 } from '@xyflow/react';
 import type { ConnectionDto } from '@darkbeacon/shared';
 import { PluginSlot } from '../plugins/PluginSlot';
-import {
-  edgeInnerStyle,
-  edgeOuterStyle,
-  edgeVisual,
-  SHIP_SIZE_LABEL,
-  SHIP_SIZE_TEXT,
-  type EdgeVisual,
-} from './edgeStyle';
-import { floatingEnds, type Point, type Rect } from './geometry';
+import { edgeCurve } from './edgePath';
+import { EdgeShape } from './EdgeShape';
+import { edgeVisual, SHIP_SIZE_LABEL, SHIP_SIZE_TEXT, type EdgeVisual } from './edgeStyle';
+import type { Point, Rect } from './geometry';
 import { lifetimeText } from './widgets/ConnectionsSection';
 import styles from './ConnectionEdge.module.css';
 
@@ -61,12 +55,7 @@ function rectOf(node: InternalNode): Rect {
   };
 }
 
-/**
- * Bubble ring radius. The ring is centred on the end of the line at the bubbled system and drawn
- * in the edge layer, so the system card covers its inner half: what shows is a wide dashed arc
- * hugging that side of the card, like a warp disruption bubble around the gate you land on.
- */
-export const BUBBLE_RADIUS = 26;
+export { BUBBLE_RADIUS } from './EdgeShape';
 
 /** Re-renders once a minute while `on`, so EOL estimates count down. */
 function useMinuteClock(on: boolean): number {
@@ -169,10 +158,14 @@ function EdgeDetails({ data, visual, at }: { data: ConnectionEdgeData; visual: E
   );
 }
 
+/** Width of the invisible path that takes the pointer, wider than the line so it is easy to hit. */
+const INTERACTION_WIDTH = 22;
+
 /**
- * The one connection edge: a straight two-layer line between node borders in the language of
- * `edgeStyle.ts`. Only a size letter sits at the midpoint; bubbles sit at the bubbled end, under
- * the system card; the whole line lights up while hovered or selected.
+ * The one connection edge: a smooth curve between the facing sides of two system cards, drawn as
+ * Wanderer draws it (`EdgeShape`) in the language of `edgeStyle.ts`. Only a size letter sits at
+ * the middle of the curve; bubbles sit at the bubbled end, under the system card; the whole line
+ * lights up while hovered or selected.
  */
 export const ConnectionEdge = memo(function ConnectionEdge({
   id,
@@ -190,22 +183,8 @@ export const ConnectionEdge = memo(function ConnectionEdge({
 
   const c = data.connection;
   const visual = edgeVisual(c, now);
-  const inner = edgeInnerStyle(visual);
-  const sourceRect = rectOf(sourceNode);
-  const targetRect = rectOf(targetNode);
-  const { from, to } = floatingEnds(sourceRect, targetRect);
-  // The line runs from centre to centre, under the opaque cards, so its layers of different
-  // widths never show a stepped cut where it meets a card; the label and bubbles still use the
-  // points on the borders.
-  const centre = (r: Rect) => ({ x: r.x + r.width / 2, y: r.y + r.height / 2 });
-  const a = centre(sourceRect);
-  const b = centre(targetRect);
-  const path = `M ${a.x},${a.y} L ${b.x},${b.y}`;
-  const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
-  const bubbles = visual.bubbles.map((end) => ({
-    end,
-    at: end === 'source' ? from : to,
-  }));
+  const curve = edgeCurve(rectOf(sourceNode), rectOf(targetNode));
+  const { mid } = curve;
 
   return (
     <g
@@ -219,16 +198,21 @@ export const ConnectionEdge = memo(function ConnectionEdge({
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      {visual.halo && <path d={path} className={styles.halo} data-underlay="dangerous" />}
-      <path d={path} className={styles.highlight} data-underlay="highlight" />
-      <path d={path} className={styles.casing} data-underlay="casing" />
-      <BaseEdge id={id} path={path} interactionWidth={22} style={edgeOuterStyle(visual)} />
-      {inner && <path d={path} fill="none" className={styles.core} style={inner} data-layer="mass" />}
-      {bubbles.map(({ end, at }) => (
-        <circle key={end} className={styles.bubble} data-bubble={end} cx={at.x} cy={at.y} r={BUBBLE_RADIUS}>
-          <title>{`Bubbled on the ${(end === 'source' ? data.sourceName : data.targetName) ?? end} side`}</title>
-        </circle>
-      ))}
+      <EdgeShape
+        curve={curve}
+        visual={visual}
+        lineClassName="react-flow__edge-path"
+        bubbleTitle={(end) =>
+          `Bubbled on the ${(end === 'source' ? data.sourceName : data.targetName) ?? end} side`
+        }
+      />
+      <path
+        d={curve.path}
+        fill="none"
+        strokeOpacity={0}
+        strokeWidth={INTERACTION_WIDTH}
+        className="react-flow__edge-interaction"
+      />
       <EdgeLabelRenderer>
         <div
           className={styles.label}

@@ -12,22 +12,48 @@ export interface Point {
 
 const center = (r: Rect): Point => ({ x: r.x + r.width / 2, y: r.y + r.height / 2 });
 
-/** Where the line from the centre of `rect` towards `to` leaves the rectangle. */
-export function borderPoint(rect: Rect, to: Point): Point {
-  const c = center(rect);
-  const dx = to.x - c.x;
-  const dy = to.y - c.y;
-  if (dx === 0 && dy === 0) return c;
-  const scale = Math.min(
-    dx === 0 ? Infinity : rect.width / 2 / Math.abs(dx),
-    dy === 0 ? Infinity : rect.height / 2 / Math.abs(dy),
-  );
-  return { x: c.x + dx * scale, y: c.y + dy * scale };
+/** A side of a system card, named as React Flow names its handle positions. */
+export type Side = 'top' | 'right' | 'bottom' | 'left';
+
+/** How far apart two cards may be sideways and still count as one above the other. */
+export const STACKED_SLACK = 10;
+
+/**
+ * The side of `rect` a connection to `other` leaves from, as Wanderer picks it: the top or bottom
+ * when the two cards overlap sideways (give or take `STACKED_SLACK`), else the left or right, so
+ * a tree laid out left to right joins parents and children side to side.
+ */
+export function sideTowards(rect: Rect, other: Rect): Side {
+  const stacked =
+    rect.x - STACKED_SLACK <= other.x + other.width && other.x <= rect.x + rect.width + STACKED_SLACK;
+  const a = center(rect);
+  const b = center(other);
+  if (stacked) return a.y > b.y ? 'top' : 'bottom';
+  return a.x > b.x ? 'left' : 'right';
 }
 
-/** End points of a straight connection drawn between the borders of two nodes. */
-export function floatingEnds(source: Rect, target: Rect): { from: Point; to: Point } {
-  return { from: borderPoint(source, center(target)), to: borderPoint(target, center(source)) };
+/** The middle of one side of a rectangle. */
+export function sideMiddle(rect: Rect, side: Side): Point {
+  switch (side) {
+    case 'top':
+      return { x: rect.x + rect.width / 2, y: rect.y };
+    case 'bottom':
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height };
+    case 'left':
+      return { x: rect.x, y: rect.y + rect.height / 2 };
+    case 'right':
+      return { x: rect.x + rect.width, y: rect.y + rect.height / 2 };
+  }
+}
+
+/** Where a connection between two cards starts and ends: the middles of the sides facing each other. */
+export function sideEnds(
+  source: Rect,
+  target: Rect,
+): { from: Point; to: Point; fromSide: Side; toSide: Side } {
+  const fromSide = sideTowards(source, target);
+  const toSide = sideTowards(target, source);
+  return { from: sideMiddle(source, fromSide), to: sideMiddle(target, toSide), fromSide, toSide };
 }
 
 /** A point `distance` along the segment from `a` to `b`. */
