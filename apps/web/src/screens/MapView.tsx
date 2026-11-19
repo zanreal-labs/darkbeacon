@@ -223,11 +223,17 @@ export function MapView({
   const motd = useMotd(map.id, (store.state.map ?? map).motd, can.manage);
   const [widgetsShown, setWidgetsShown] = useState(true);
   const showWidgets = useCallback(() => setWidgetsShown(true), []);
-  const [widgetCover, setWidgetCover] = useState<WidgetCover>({ right: 0, rightBottom: 0, bottom: 0 });
+  const [widgetCover, setWidgetCover] = useState<WidgetCover>({
+    left: 0,
+    right: 0,
+    rightBottom: 0,
+    bottom: 0,
+    measured: false,
+  });
   const onWidgetCover = useCallback(
     (next: WidgetCover) =>
       setWidgetCover((c) =>
-        c.right === next.right && c.rightBottom === next.rightBottom && c.bottom === next.bottom ? c : next,
+        (Object.keys(next) as Array<keyof WidgetCover>).every((k) => c[k] === next[k]) ? c : next,
       ),
     [],
   );
@@ -357,9 +363,12 @@ export function MapView({
     right: panelCover.right,
     bottom: Math.max(panelCover.bottom, widgetsOn ? widgetCover.bottom : 0),
   };
-  // The canvas also keeps the chain clear of the column of widget windows on the right.
+  // The canvas also keeps the chain clear of the widget windows, on the right and on the left.
   const canvasCover = {
+    left: widgetsOn ? widgetCover.left : 0,
     right: Math.max(covered.right, widgetsOn ? widgetCover.right : 0),
+    // Views wait for the windows to be measured, so the map opens centred on what they leave free.
+    ready: !widgetsOn || widgetCover.measured,
     // The column reaches this far down; a panel on the right covers the whole height.
     rightBottom: covered.right > 0 || !widgetsOn ? Infinity : widgetCover.rightBottom,
     bottom: covered.bottom,
@@ -741,8 +750,10 @@ export function MapView({
           }}
           rallies={pinged}
           presence={presence}
+          coveredLeft={canvasCover.left}
           coveredRight={canvasCover.right}
           coveredRightBottom={canvasCover.rightBottom}
+          coverReady={canvasCover.ready}
           onEditSystem={(id) => {
             const sys = state.systems.get(id);
             if (sys && permissionsFor(can, sys.provenance, map.kind === 'composite').edit) setEditing(id);

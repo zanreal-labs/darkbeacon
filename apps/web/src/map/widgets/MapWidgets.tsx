@@ -48,7 +48,7 @@ import { CommentsSection } from './CommentsSection';
 import { ConnectionsSection } from './ConnectionsSection';
 import { HistorySection } from './HistorySection';
 import { KillsSection, KillsSettingsMenu, useKillList, useKillsSettings } from './KillsSection';
-import { CORE_WIDGETS, MAP_WIDGETS, pluginWidgetId, resolveBoxes, type Area } from './layout';
+import { CORE_WIDGETS, MAP_WIDGETS, pluginWidgetId, resolveBoxes, sideCover, type Area } from './layout';
 import { LocalMenu, LocalSection, pilotStanding, usePresence } from './LocalSection';
 import {
   canReadClipboard,
@@ -132,14 +132,19 @@ export function connectionsSummary(connections: readonly ConnectionDto[]): strin
 }
 
 /**
- * What the widgets cover for good: the docked column on the right (its width, and how far down
- * from the top of the map view it reaches) or the dock at the bottom on phones.
+ * What the widgets cover for good: the windows on the right (the docked column and any dragged
+ * there: how far in, and how far down from the top of the map view they reach), those dragged
+ * to the left, or the dock at the bottom on phones.
  */
 export interface WidgetCover {
+  /** Windows standing in the left half of the map, from its left edge. */
+  left: number;
   right: number;
-  /** Where the column ends, from the top of the map view; 0 without one. */
+  /** Where the windows on the right end, from the top of the map view; 0 without any. */
   rightBottom: number;
   bottom: number;
+  /** The windows were measured on the map (or none are shown): the cover can be trusted. */
+  measured: boolean;
 }
 
 type Store = Pick<
@@ -257,15 +262,19 @@ export function MapWidgets(props: Props) {
 
   const resolved = area ? resolveBoxes(controller.layout, area, visible, heights) : null;
 
-  // What the canvas keeps clear: the column of windows on the right, the dock on phones.
+  // What the canvas keeps clear: the windows on either side (docked or dragged), the dock on phones.
   const active = shown && visible.length > 0;
-  const column = !phone && active ? resolved?.column : null;
-  const right = column?.width ?? 0;
-  const rightBottom = column ? column.bottom + layerTop : 0;
-  const bottom = phone && active && visible.length > 0 ? 54 : 0;
+  const sides =
+    !phone && active && resolved && area
+      ? sideCover(Object.values(resolved.boxes), area)
+      : { left: 0, right: 0, rightBottom: 0 };
+  const { left, right } = sides;
+  const rightBottom = sides.right > 0 ? sides.rightBottom + layerTop : 0;
+  const bottom = phone && active ? 54 : 0;
+  const measured = !active || phone || resolved !== null;
   useEffect(() => {
-    onCover({ right, rightBottom, bottom });
-  }, [right, rightBottom, bottom, onCover]);
+    onCover({ left, right, rightBottom, bottom, measured });
+  }, [left, right, rightBottom, bottom, measured, onCover]);
 
   // A widget hidden while open in the sheet closes it.
   if (open && !visible.includes(open)) setOpen(null);

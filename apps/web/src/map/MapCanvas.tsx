@@ -133,8 +133,12 @@ interface Props {
   traffic?: ReadonlyMap<string, ConnectionTraffic>;
   focus: FocusRequest | null;
   onMenu(target: MenuTarget, x: number, y: number): void;
+  /** Pixels on the left covered by widget windows; views centre on what is left. */
+  coveredLeft?: number;
   /** Pixels on the right covered by the widget panel; views keep systems out from under it. */
   coveredRight?: number;
+  /** The covers are measured: the first view waits for it (true when nothing covers the map). */
+  coverReady?: boolean;
   /** How far down from the top the right-hand cover reaches (the widgets' column); all the way by default. */
   coveredRightBottom?: number;
   /** A double-click on a system: Edit system. */
@@ -193,7 +197,9 @@ export function MapCanvas({
   traffic,
   focus,
   onMenu,
+  coveredLeft = 0,
   coveredRight = 0,
+  coverReady = true,
   coveredRightBottom = Infinity,
   onEditSystem,
   coveredBottom = 0,
@@ -383,12 +389,16 @@ export function MapCanvas({
     [rf],
   );
 
-  /** The part of the canvas no panel covers. */
+  /** The part of the canvas no panel or widget window covers, from the canvas's left edge. */
   const visibleBox = useCallback(() => {
     const box = canvasRef.current?.getBoundingClientRect();
     if (!box) return null;
-    return { width: Math.max(1, box.width - coveredRight), height: Math.max(1, box.height - coveredBottom) };
-  }, [coveredRight, coveredBottom]);
+    return {
+      x: coveredLeft,
+      width: Math.max(1, box.width - coveredLeft - coveredRight),
+      height: Math.max(1, box.height - coveredBottom),
+    };
+  }, [coveredLeft, coveredRight, coveredBottom]);
 
   /** Puts `point` (flow coordinates) in the middle of the visible canvas at `zoom`. */
   const centerOn = useCallback(
@@ -396,7 +406,7 @@ export function MapCanvas({
       const box = visibleBox();
       if (!box) return;
       void rf.setViewport(
-        { x: box.width / 2 - point.x * zoom, y: box.height / 2 - point.y * zoom, zoom },
+        { x: box.x + box.width / 2 - point.x * zoom, y: box.height / 2 - point.y * zoom, zoom },
         animate ? { duration: 250 } : undefined,
       );
     },
@@ -431,7 +441,7 @@ export function MapCanvas({
 
   // First view, once systems are measured and the saved view is known.
   useEffect(() => {
-    if (readOnly || opened.current || !loaded || !settled || nodes.length === 0) return;
+    if (readOnly || opened.current || !loaded || !settled || !coverReady || nodes.length === 0) return;
     if (!nodes.every((n) => n.measured?.width)) return; // runs again once React Flow measured them
     opened.current = true;
     if (reopen()) return;
@@ -489,6 +499,7 @@ export function MapCanvas({
   }, [
     loaded,
     settled,
+    coverReady,
     nodes,
     rf,
     preferences.viewport,
@@ -512,11 +523,11 @@ export function MapCanvas({
       box,
       phone
         ? { top: 72, right: 16, bottom: 140 + coveredBottom, left: 16 }
-        : { top: 80, right: coveredRight + 48, bottom: 56, left: 72 },
+        : { top: 80, right: coveredRight + 48, bottom: 56, left: Math.max(72, coveredLeft + 24) },
       { minZoom: FIT_MIN_ZOOM, maxZoom: FIT_MAX_ZOOM },
     );
     void rf.setViewport(viewport, { duration: 250 });
-  }, [rf, rectsOf, coveredRight, coveredBottom]);
+  }, [rf, rectsOf, coveredLeft, coveredRight, coveredBottom]);
 
   // A public view has no saved view and no "me": visitors see the whole shared chain first.
   useEffect(() => {
@@ -565,17 +576,20 @@ export function MapCanvas({
   useEffect(() => {
     const box = canvasRef.current?.getBoundingClientRect();
     const node = selectedId === null ? undefined : rf.getNode(selectedId);
-    if (!box || !node || node.dragging || (coveredRight === 0 && coveredBottom === 0)) return;
+    if (!box || !node || node.dragging || (coveredLeft === 0 && coveredRight === 0 && coveredBottom === 0))
+      return;
     const { x, y, zoom } = rf.getViewport();
+    const left = x + node.position.x * zoom;
     const right = x + (node.position.x + (node.measured?.width ?? 230)) * zoom;
     const top = y + node.position.y * zoom;
     const bottom = y + (node.position.y + (node.measured?.height ?? 90)) * zoom;
     // The column on the right covers the system only if the system is beside it, not below it.
     const beside = top < coveredRightBottom + 8;
-    const dx = beside ? Math.max(0, right - (box.width - coveredRight - 24)) : 0;
+    const underRight = beside ? Math.max(0, right - (box.width - coveredRight - 24)) : 0;
+    const dx = underRight > 0 ? underRight : Math.min(0, left - (coveredLeft + 24));
     const dy = Math.max(0, bottom - (box.height - coveredBottom - 24));
-    if (dx > 0 || dy > 0) void rf.setViewport({ x: x - dx, y: y - dy, zoom }, { duration: 250 });
-  }, [coveredRight, coveredRightBottom, coveredBottom, selectedId, rf]);
+    if (dx !== 0 || dy > 0) void rf.setViewport({ x: x - dx, y: y - dy, zoom }, { duration: 250 });
+  }, [coveredLeft, coveredRight, coveredRightBottom, coveredBottom, selectedId, rf]);
 
   // The same for a selected connection: its middle stays out from under the panel.
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
@@ -672,7 +686,7 @@ export function MapCanvas({
       const box = visibleBox();
       if (!box) return;
       const rounded = {
-        x: Math.round((box.width / 2 - viewport.x) / viewport.zoom),
+        x: Math.round((box.x + box.width / 2 - viewport.x) / viewport.zoom),
         y: Math.round((box.height / 2 - viewport.y) / viewport.zoom),
         zoom: Math.round(viewport.zoom * 1000) / 1000,
       };
@@ -697,13 +711,17 @@ export function MapCanvas({
     setNodes((ns) => ns.map((n) => (!!n.selected === (n.id === id) ? n : { ...n, selected: n.id === id })));
     setEdges((es) => es.map((e) => (e.selected ? { ...e, selected: false } : e)));
     if (focus.center) {
-      void rf.setCenter(
-        node.position.x + (node.measured?.width ?? 230) / 2,
-        node.position.y + (node.measured?.height ?? 90) / 2,
-        { duration: 300, zoom: rf.getZoom() },
+      // In the middle of what the widgets leave free, not of the whole canvas.
+      centerOn(
+        {
+          x: node.position.x + (node.measured?.width ?? 230) / 2,
+          y: node.position.y + (node.measured?.height ?? 90) / 2,
+        },
+        rf.getZoom(),
+        true,
       );
     }
-  }, [focus, nodes, rf, setNodes, setEdges]);
+  }, [focus, nodes, rf, setNodes, setEdges, centerOn]);
 
   const cancelPress = () => {
     if (press.current) clearTimeout(press.current.timer);

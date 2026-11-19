@@ -610,3 +610,31 @@ export function migrateSidebarLayout(old: unknown): string[] | null {
   const visible = DEFAULT_VISIBLE.filter((id) => !hidden.has(id));
   return visible.length === DEFAULT_VISIBLE.length ? null : visible;
 }
+
+/**
+ * What the shown windows cover of the map, as the map centres its views on the rest: the widest
+ * reach of the windows standing in its left half (from the left edge) and in its right half (to
+ * the right edge, the docked column included), and how far down those on the right reach. Never
+ * so much that less than `minFree` px stays between them: then only the larger side counts.
+ */
+export function sideCover(
+  boxes: readonly Box[],
+  area: Area,
+  minFree = 240,
+): { left: number; right: number; rightBottom: number } {
+  let left = 0;
+  let right = 0;
+  let rightBottom = 0;
+  for (const b of boxes) {
+    if (b.x + b.w / 2 < area.width / 2) left = Math.max(left, b.x + b.w + GUTTER);
+    else {
+      right = Math.max(right, area.width - b.x + GUTTER);
+      rightBottom = Math.max(rightBottom, Math.min(area.height, b.y + b.h + GUTTER));
+    }
+  }
+  if (area.width - left - right < minFree) {
+    if (left > right) return { left, right: 0, rightBottom: 0 };
+    left = 0;
+  }
+  return { left, right, rightBottom };
+}
