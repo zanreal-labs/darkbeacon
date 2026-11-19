@@ -77,7 +77,10 @@
 
 .result {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) auto auto;
+  grid-template-columns: 48px minmax(0, 1fr);
+  /* Whatever follows the name (region, "On map", a hint, a second way to add) in one row. */
+  grid-auto-columns: auto;
+  grid-auto-flow: column;
   align-items: center;
   gap: var(--dbk-space-2);
   min-height: 34px;
@@ -143,4 +146,22 @@
   .hint {
     display: none;
   }
+}
+
+/* A composite's second way to add: the system stays on this map alone. */
+.here {
+  padding: 1px var(--dbk-space-2);
+  border: 1px solid var(--dbk-color-border);
+  border-radius: var(--dbk-radius-small);
+  background: transparent;
+  color: var(--dbk-color-text-muted);
+  font: inherit;
+  font-size: var(--dbk-font-size-small);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.here:hover {
+  border-color: var(--dbk-color-accent);
+  color: var(--dbk-color-text);
 }

@@ -692,18 +692,19 @@ export function MapView({
     };
   })();
 
-  const addSystem = (picked: UniverseSystemDto) => {
+  /** `here`: on a composite, kept on this map alone instead of the map new systems go to. */
+  const addSystem = (picked: UniverseSystemDto, here = false) => {
     if (onMap.has(picked.id)) return select(picked.id, true);
     // The server places it by the map's rule: next to the selected system (the one it was found
     // from), else around the spot clicked or the middle of the screen.
     const point = addAt ?? (system ? null : viewCentre());
     setAddAt(null);
-    void store.addSystem(
-      picked.id,
-      point
+    void store.addSystem(picked.id, {
+      ...(point
         ? { around: { x: point.x - SYSTEM_NODE_CENTRE.x, y: point.y - SYSTEM_NODE_CENTRE.y } }
-        : { near: system!.solarSystemId },
-    );
+        : { near: system!.solarSystemId }),
+      ...(here ? { here: true } : {}),
+    });
     select(picked.id);
   };
 
@@ -712,7 +713,7 @@ export function MapView({
     const bounds = document.querySelector('.react-flow')?.getBoundingClientRect();
     if (!bounds) return { x: 0, y: 0 };
     return rf.screenToFlowPosition({
-      x: bounds.left + (bounds.width - canvasCover.right) / 2,
+      x: bounds.left + canvasCover.left + (bounds.width - canvasCover.left - canvasCover.right) / 2,
       y: bounds.top + (bounds.height - covered.bottom) / 2,
     });
   };
@@ -772,7 +773,11 @@ export function MapView({
         <div className={styles.topbar}>
           <AddSystemSearch
             onMap={onMap}
-            onPick={addSystem}
+            onPick={(picked) => addSystem(picked)}
+            onPickHere={
+              map.kind === 'composite' && can.edit ? (picked) => addSystem(picked, true) : undefined
+            }
+            hereLabel="Only on this map"
             entries={searchEntries}
             onFind={(id) => select(id, true)}
             chainHint={chainHint}

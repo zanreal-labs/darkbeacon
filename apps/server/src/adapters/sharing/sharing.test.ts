@@ -764,10 +764,31 @@ describeEachDialect('sharing and merged chains', (t) => {
     await expect(numbers.renumber(carol, alliance.id)).rejects.toMatchObject({ code: 'conflict' });
   });
 
-  it('refuses edits of the composite’s own rows through the plain map routes', async () => {
-    await expect(env.systems.add(carol, alliance.id, { solarSystemId: c2 })).rejects.toMatchObject({
-      code: 'conflict',
+  it('keeps a system added “only on this map” on the composite alone, changed and removed there', async () => {
+    await share(corpA, alice, 'read-write');
+    await env.writes.addSystem(dave, alliance.id, { solarSystemId: SYSTEMS.jita, here: true });
+    await env.settle();
+    // On the composite, as its own: no source got it.
+    expect((await view(alliance.id)).systems.map((s) => s.solarSystemId)).toContain(SYSTEMS.jita);
+    expect(await env.ports.systems.find(corpA.id, SYSTEMS.jita)).toBeNull();
+    expect((await env.ports.systems.find(alliance.id, SYSTEMS.jita))?.visible).toBe(true);
+    // Its fields are written on the composite too.
+    await env.writes.updateSystem(dave, alliance.id, SYSTEMS.jita, { status: 'home', customName: 'Others' });
+    await env.settle();
+    expect((await view(alliance.id)).systems.find((s) => s.solarSystemId === SYSTEMS.jita)).toMatchObject({
+      status: 'home',
+      customName: 'Others',
     });
+    expect(await env.ports.systems.find(corpA.id, SYSTEMS.jita)).toBeNull();
+    // Without `here` a new system still goes to the source.
+    await env.writes.addSystem(dave, alliance.id, { solarSystemId: SYSTEMS.perimeter });
+    await env.settle();
+    expect(await env.ports.systems.find(corpA.id, SYSTEMS.perimeter)).not.toBeNull();
+    expect(await env.ports.systems.find(alliance.id, SYSTEMS.perimeter)).toBeNull();
+    // Removed on the composite, it goes from the composite's own rows.
+    await env.writes.removeSystem(dave, alliance.id, SYSTEMS.jita);
+    await env.settle();
+    expect((await view(alliance.id)).systems.map((s) => s.solarSystemId)).not.toContain(SYSTEMS.jita);
   });
 
   describe('intel kept on hidden systems', () => {

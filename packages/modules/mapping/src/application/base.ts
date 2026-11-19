@@ -127,13 +127,11 @@ export abstract class MappingUseCases {
 
   /**
    * Throws unless the actor may change the map's own systems, connections and signatures:
-   * member+, on a map that has objects of its own (a composite only shows other maps').
+   * member+. A composite's own objects (ones kept on it alone) come here through its merge, as
+   * every change to a merged map goes through sharing's writes.
    */
   protected async authorizeEdit(actor: Actor | null, mapId: string): Promise<Actor> {
-    const who = await this.authorize(actor, mapId, 'member');
-    if ((await this.ports.maps.findById(mapId))?.kind === 'composite')
-      throw new ConflictError('This map merges other maps; change them through it');
-    return who;
+    return this.authorize(actor, mapId, 'member');
   }
 
   /**
@@ -158,6 +156,8 @@ export abstract class MappingUseCases {
    * keep their spots; what hangs off them follows them.
    */
   private async healLayout(events: EventBatch, mapId: string): Promise<void> {
+    // A composite's own systems are laid out with everything it merges, by its merge.
+    if ((await this.ports.maps.findById(mapId))?.kind === 'composite') return;
     const systems = (await this.ports.systems.list(mapId))
       .filter((s) => s.visible)
       .sort((a, b) => a.createdAt - b.createdAt || a.solarSystemId - b.solarSystemId);

@@ -85,10 +85,14 @@ function mapWithout<K, V>(map: Map<K, V>, keep: (v: V, k: K) => boolean): Map<K,
 }
 
 /** Where a new system goes: a spot the viewer chose, or what the server places it by. */
-export type SystemPlacement =
+export type SystemPlacement = (
   | { position: Position; near?: undefined; around?: undefined }
   | { position?: undefined; near: number; around?: undefined }
-  | { position?: undefined; near?: undefined; around: Position };
+  | { position?: undefined; near?: undefined; around: Position }
+) & {
+  /** On a composite: kept on this map alone, not added to the map new systems go to. */
+  here?: boolean;
+};
 
 /**
  * Live state of one map: the `map:<id>` stream plus optimistic local changes. Commands go

@@ -76,7 +76,11 @@ export class ChainWrites {
       };
     }
     if (map.merge.holders(ref).length === 0) {
-      const [target] = this.newObjectTargets(map, 'system');
+      // Kept on a composite alone (its own system), or on the map new systems go to.
+      const [target] =
+        request.here && map.info.kind === 'composite'
+          ? this.writable(map, 'system').filter((s) => s.id === SELF)
+          : this.newObjectTargets(map, 'system');
       if (!target) throw new ForbiddenError('No map this one merges takes new systems');
       await this.write(who, map, target, {
         op: 'system.add',
@@ -615,8 +619,9 @@ export class ChainWrites {
   }
 
   /**
-   * Where new objects go: the map's own objects, except on a composite (it has none): the source
-   * its admins picked, else its first read-write source.
+   * Where new objects go: the map's own objects, except on a composite: the source its admins
+   * picked, else its first read-write source (a composite keeps a system as its own only when
+   * asked to, `AddSystemRequest.here`).
    */
   private newObjectTargets(map: MergedMapState, kind: ChainObjectKind): SourceInfo[] {
     if (map.info.kind !== 'composite') return this.writable(map, kind).filter((s) => s.id === SELF);

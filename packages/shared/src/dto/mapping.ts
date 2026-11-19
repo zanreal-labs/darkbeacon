@@ -296,6 +296,11 @@ export const AddSystemRequest = z.object({
   position: Position.optional(),
   near: EveId.optional(),
   around: Position.optional(),
+  /**
+   * On a map that merges others (a composite): keep the system on this map only, as its own,
+   * instead of adding it to the map new systems go to. Ignored elsewhere.
+   */
+  here: z.boolean().optional(),
 });
 export type AddSystemRequest = z.infer<typeof AddSystemRequest>;
 

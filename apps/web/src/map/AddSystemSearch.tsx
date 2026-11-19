@@ -26,6 +26,13 @@ interface Props {
   /** Systems already on the map; picking one of them selects it instead of adding. */
   onMap: ReadonlySet<number>;
   onPick(system: UniverseSystemDto): void;
+  /**
+   * A second way to add (a composite's "only on this map"): a button on each system not on the
+   * map yet, and Shift+Enter. Absent, there is only the one.
+   */
+  onPickHere?(system: UniverseSystemDto): void;
+  /** The second way's button text. */
+  hereLabel?: string;
   /** The map's own systems, found by their other names, Labels and Tags. */
   entries?: readonly OnMapEntry[];
   /** Picking a system found on the map. */
@@ -82,6 +89,8 @@ export function findOnMap(entries: readonly OnMapEntry[], text: string, limit = 
 export function AddSystemSearch({
   onMap,
   onPick,
+  onPickHere,
+  hereLabel = 'Only here',
   entries = [],
   onFind,
   canAdd = true,
@@ -140,12 +149,13 @@ export function AddSystemSearch({
   }, [local, results.data, query, canAdd]);
   const showList = text.trim().length >= (canAdd ? 2 : 1) || local.length > 0;
 
-  const pick = (row: Row | undefined) => {
+  const pick = (row: Row | undefined, here = false) => {
     if (!row) return;
     if (row.kind === 'map') {
       if (onFind) onFind(row.entry.id);
       else if (row.entry.info) onPick(row.entry.info);
-    } else onPick(row.system);
+    } else if (here && onPickHere && !onMap.has(row.system.id)) onPickHere(row.system);
+    else onPick(row.system);
     setText('');
     setActive(0);
   };
@@ -157,7 +167,7 @@ export function AddSystemSearch({
       setActive((a) => (rows.length ? (a + step + rows.length) % rows.length : 0));
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      pick(rows[active]);
+      pick(rows[active], e.shiftKey);
     } else if (e.key === 'Escape') {
       setText('');
       inputRef.current?.blur();
@@ -222,6 +232,19 @@ export function AddSystemSearch({
                 </span>
                 {onMap.has(id) && <span className={styles.onMap}>On map</span>}
                 {hint && <span className={styles.chainHint}>{hint}</span>}
+                {onPickHere && row.kind === 'universe' && !onMap.has(id) && (
+                  <button
+                    type="button"
+                    className={styles.here}
+                    title={`${hereLabel} (Shift+Enter)`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      pick(row, true);
+                    }}
+                  >
+                    {hereLabel}
+                  </button>
+                )}
               </li>
             );
           })}
