@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Lock, LockOpen } from 'lucide-react';
 import {
   GAME_LIFETIME_LABEL,
@@ -32,6 +33,16 @@ export function lifetimeText(c: Pick<ConnectionDto, 'lifetime'>, now = Date.now(
     : `under ${c.lifetime.mark} left, until ~${at}`;
 }
 
+/** Re-renders every half minute, so lifetime marks stay current; reading the clock stays out of render. */
+function useNow(): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+  return now;
+}
+
 interface Props {
   solarSystemId: number;
   connections: Map<string, ConnectionDto>;
@@ -60,6 +71,7 @@ export function ConnectionsSection({
   store,
   onSelectSystem,
 }: Props) {
+  const now = useNow();
   const mine = [...connections.values()]
     .filter((c) => c.source === solarSystemId || c.target === solarSystemId)
     .sort((a, b) => a.createdAt - b.createdAt);
@@ -76,7 +88,7 @@ export function ConnectionsSection({
         const editable = can.edit && lock.canOverride;
         const toggles = (!locked || lock.here) && can.manage;
         const liftsThere = locked && !lock.here && lock.canUnlock && atLeast(can.role, 'member');
-        const lifetime = lifetimeText(c);
+        const lifetime = lifetimeText(c, now);
         const facts: { text: string; tone?: 'warning' | 'danger' }[] = [
           { text: TYPE_NAME[c.type] },
           ...(c.timeStatus === 'eol' ? [{ text: 'EOL', tone: 'danger' as const }] : []),
@@ -108,8 +120,8 @@ export function ConnectionsSection({
                 <select
                   className={`${styles.inlineSelect} ${styles.lifetimeSelect}`}
                   aria-label={`Reliable lifetime of the connection to ${name}`}
-                  title={lifetime ?? `Reliable lifetime: ${GAME_LIFETIME_LABEL[gameLifetime(c, Date.now())]}`}
-                  value={gameLifetime(c, Date.now())}
+                  title={lifetime ?? `Reliable lifetime: ${GAME_LIFETIME_LABEL[gameLifetime(c, now)]}`}
+                  value={gameLifetime(c, now)}
                   onChange={(e) =>
                     void store.updateConnection(c.id, gameLifetimePatch(e.target.value as GameLifetime))
                   }

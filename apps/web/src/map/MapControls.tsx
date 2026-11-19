@@ -182,10 +182,7 @@ export function MapControls({
 function useBeside(ref: RefObject<HTMLElement | null>, open: boolean): CSSProperties | null {
   const [at, setAt] = useState<CSSProperties | null>(null);
   useLayoutEffect(() => {
-    if (!open) {
-      setAt(null);
-      return;
-    }
+    if (!open) return;
     const place = () => {
       const bar = ref.current?.getBoundingClientRect();
       if (!bar) return;
@@ -200,7 +197,8 @@ function useBeside(ref: RefObject<HTMLElement | null>, open: boolean): CSSProper
       observer?.disconnect();
     };
   }, [ref, open]);
-  return at;
+  // Derived from `open`: a position measured earlier is not served once the legend is closed.
+  return open ? at : null;
 }
 
 /** Shows or hides the minimap (in its default corner; the corner is chosen in the canvas settings). */

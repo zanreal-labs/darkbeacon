@@ -12,7 +12,7 @@ import {
   gameLifetime,
   gameLifetimePatch,
   MassStatus,
-  ShipSize,
+  type ShipSize,
   SystemStatus,
   type CharacterDto,
   type ConnectionDto,
