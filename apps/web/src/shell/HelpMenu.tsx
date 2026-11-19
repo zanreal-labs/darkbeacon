@@ -16,7 +16,7 @@ import {
   ThumbsDown,
   ThumbsUp,
 } from 'lucide-react';
-import { routes, type SupportClientDto, type TelemetryClientDto } from '@darkbeacon/shared';
+import { routes, type SupportClientDto } from '@darkbeacon/shared';
 import { api } from '../lib/api';
 import {
   buildSupportContext,
@@ -44,7 +44,7 @@ import {
   Tooltip,
   useToast,
 } from '../ui';
-import { telemetryClientKey } from './Telemetry';
+import { telemetryClientQuery } from './Telemetry';
 import styles from './AppShell.module.css';
 
 const DOCS_URL = 'https://github.com/zanreal-labs/darkbeacon#readme';
@@ -164,7 +164,8 @@ export function HelpMenu({ placement = 'rail' }: { placement?: 'rail' | 'topbar'
   const client = useSupportClient().data;
   const unread = useSupportUnread(client);
   const open = useOpenSupport();
-  const telemetry = useQuery<TelemetryClientDto>({ queryKey: telemetryClientKey, enabled: false });
+  // Read what TelemetryRoot loads; the same query, so a refetch (after the settings change) works here too.
+  const telemetry = useQuery(telemetryClientQuery);
   const canRate = !!telemetry.data?.active && !browserOptedOut();
   const install = useInstallApp();
   const cookieSettings = useCookieSettings();

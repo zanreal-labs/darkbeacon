@@ -21,17 +21,20 @@ import styles from './Telemetry.module.css';
 
 export const telemetryClientKey = ['telemetry-client'] as const;
 
+/** The server's telemetry settings for the browser, one query everyone reads. */
+export const telemetryClientQuery = {
+  queryKey: telemetryClientKey,
+  queryFn: () => api<TelemetryClientDto>(routes.telemetry.client.path),
+  staleTime: Infinity,
+  retry: false,
+} as const;
+
 /**
  * Turns the browser's usage reporting on or off as the server says, reports how the app was
  * loaded and themed once per page load, and shows admins the one-time notice about it.
  */
 export function TelemetryRoot() {
-  const client = useQuery({
-    queryKey: telemetryClientKey,
-    queryFn: () => api<TelemetryClientDto>(routes.telemetry.client.path),
-    staleTime: Infinity,
-    retry: false,
-  });
+  const client = useQuery(telemetryClientQuery);
   const { preference, theme } = useTheme();
   const pathname = usePathname();
   const loaded = useRef(false);
