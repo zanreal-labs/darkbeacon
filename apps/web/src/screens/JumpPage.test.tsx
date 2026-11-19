@@ -848,15 +848,18 @@ describe('JumpPage', () => {
       const runs = await within(panel).findAllByRole('button', { name: /by gate/ });
       // Tanoo, Lashesih, Akpivem folded; Jita (where Thera is taken), Thera, Ahbazon shown; Jark folded.
       expect(runs.map((r) => r.textContent)).toEqual([
-        '3 jumps by gateDerelik → The Forge',
-        '1 jump by gateDomain',
+        '3 jumps by gate· Derelik → The Forge',
+        '1 jump by gate· Domain',
       ]);
       expect(
         [...panel.querySelectorAll('[data-kind]')].map((l) => l.textContent?.match(/[A-Z][a-z]+/)?.[0]),
       ).toEqual(['Jita', 'Thera', 'Ahbazon']);
       await user.click(runs[0]!);
       expect(runs[0]!.getAttribute('aria-expanded')).toBe('true');
-      expect(panel.querySelectorAll('[data-kind]')).toHaveLength(6);
+      // The systems it opens to are small rows, not cards that each say "gate".
+      const passed = panel.querySelectorAll('[data-passed]');
+      expect(passed).toHaveLength(3);
+      expect([...passed].map((l) => l.textContent)).not.toContainEqual(expect.stringContaining('gate'));
     });
 
     it('sends where each hole is taken and the destination as waypoints, never wormhole space', async () => {

@@ -642,11 +642,13 @@ function LegRow({
   held,
   docks,
   brief,
-}: { leg: PlannerLeg; n: number } & LegHover) {
+  passed = false,
+}: { leg: PlannerLeg; n: number; passed?: boolean } & LegHover) {
   return (
     <div
       className={styles.systemCard}
       data-kind={leg.kind}
+      data-passed={passed || undefined}
       data-leg={n}
       data-active={active === n || undefined}
       onMouseEnter={() => setActive(n)}
@@ -656,7 +658,7 @@ function LegRow({
         <SystemPill system={leg.to} />
         <strong>{leg.to.name}</strong>
         <span className={styles.systemRegion}>{leg.to.region}</span>
-        {leg.kind !== 'jump' && <em>{LEG_TAGS[leg.kind]}</em>}
+        {leg.kind !== 'jump' && !passed && <em>{LEG_TAGS[leg.kind]}</em>}
         {leg.kind === 'jump' && !leg.to.station && !leg.stop && !brief && <em>no station</em>}
         {leg.stop && <em>stop</em>}
       </div>
@@ -706,11 +708,23 @@ function GateRun({ legs, ...hover }: { legs: ReadonlyArray<{ leg: PlannerLeg; n:
   return (
     <>
       <button type="button" className={styles.gateRun} aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span>
+          <strong>{jumpsText(legs.length)}</strong> by gate
+        </span>
+        {regions.length > 0 && (
+          <span className={styles.gateRegions} title={regions.join(' → ')}>
+            · {regions.join(' → ')}
+          </span>
+        )}
         {open ? <ChevronUp aria-hidden /> : <ChevronDown aria-hidden />}
-        <span>{jumpsText(legs.length)} by gate</span>
-        {regions.length > 0 && <span className={styles.systemRegion}>{regions.join(' → ')}</span>}
       </button>
-      {open && legs.map(({ leg, n }) => <LegRow key={n} leg={leg} n={n} {...hover} />)}
+      {open && (
+        <div className={styles.gateRunLegs}>
+          {legs.map(({ leg, n }) => (
+            <LegRow key={n} leg={leg} n={n} passed {...hover} />
+          ))}
+        </div>
+      )}
     </>
   );
 }
