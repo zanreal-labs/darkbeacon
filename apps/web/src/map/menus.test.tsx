@@ -358,8 +358,25 @@ describe('connection menu', () => {
     const locked = { locked: true };
     expect(rows(menu('member', locked).items)).not.toContain('Remove connection');
     expect(rows(menu('manager', locked).items)).toContain('Unlock');
-    expect(rows(sub(items, 'Size'))).toEqual(['Frigate', 'Medium', 'Large', 'Freighter', 'Capital']);
     expect(rows(sub(items, 'Bubbled'))).toEqual(['None', 'Near J123456', 'Near Jita', 'Both ends']);
+  });
+
+  it('offers the game sizes S, M, L and XL; XL covers the freighter and the capital holes', () => {
+    const checked = (items: MenuItem[]) =>
+      items.filter((i) => i.kind === 'radio' && i.checked).map((i) => ('label' in i ? i.label : ''));
+    const size = sub(menu('member').items, 'Size');
+    expect(rows(size)).toEqual(['Small', 'Medium', 'Large', 'Extra large']);
+    expect(size.map((i) => ('hint' in i ? i.hint : null))).toEqual(['S', 'M', 'L', 'XL']);
+    expect(checked(size)).toEqual(['Large']);
+    for (const shipSize of ['xlarge', 'capital'] as const) {
+      const { items, commands } = menu('member', { shipSize });
+      expect(checked(sub(items, 'Size'))).toEqual(['Extra large']);
+      expect((items.find((i) => i.kind === 'submenu' && i.label === 'Size') as { hint?: string }).hint).toBe(
+        'XL',
+      );
+      pick(sub(items, 'Size'), 'Extra large');
+      expect(commands.updateConnection.mock.calls).toEqual([['c1', { shipSize: 'capital' }]]);
+    }
   });
 
   it('leaves a connection locked on a merged map to that map’s managers', () => {

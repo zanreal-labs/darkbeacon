@@ -47,7 +47,7 @@ function readPalette(element: HTMLElement): Palette {
   const canvas = v('color-canvas', '#0a0c10');
   return {
     canvas,
-    gate: v('edge-gate', '#6b7486'),
+    gate: v('color-text-muted', '#9aa3b2'),
     text: v('color-text', '#e8eaee'),
     textMuted: v('color-text-muted', '#9aa3b4'),
     accent: v('color-accent', '#38c6d6'),

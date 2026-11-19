@@ -132,6 +132,18 @@ describe('bookmarkChain', () => {
     expect(chain.get(4)).toMatchObject({ chainIndex: '2a', sig: 'XYZ-777', destClass: 'HS' });
   });
 
+  it('writes XL for both extra large sizes, as the game has no capital size', () => {
+    for (const shipSize of ['xlarge', 'capital'] as const) {
+      const sized = bookmarkChain({
+        systems: [system(1, { status: 'home' }), system(2)],
+        connections: [connection('a', 1, 2, { shipSize })],
+        signatures: [],
+        classOf: () => 'C5',
+      });
+      expect(sized.get(2)?.size).toBe('XL');
+    }
+  });
+
   it('knows direction, spawn, letters, same-class indexes, counting from 0 and value mappings', () => {
     const extra = bookmarkChain({
       systems: [system(1, { status: 'home' }), system(2), system(3), system(5)],

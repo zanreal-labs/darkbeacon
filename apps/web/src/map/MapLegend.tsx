@@ -1,7 +1,9 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { SystemStatus, type ConnectionDto, type StandingTone } from '@darkbeacon/shared';
 import { Kbd } from '../ui';
-import { edgeInnerStyle, edgeOuterStyle, edgeVisual, EOL_WINDOW_MS } from './edgeStyle';
+import { curveBetween } from './edgePath';
+import { EdgeShape } from './EdgeShape';
+import { edgeVisual, EOL_WINDOW_MS } from './edgeStyle';
 import { standingTint, STATUS_LABEL, statusTint } from './nodeFacts';
 import { StandingTag } from './NodeIntel';
 import edgeStyles from './ConnectionEdge.module.css';
@@ -53,16 +55,23 @@ export const LEGEND_EDGE_STATES: readonly { key: string; label: string; connecti
   { key: 'dangerous', label: 'Red halo: dangerous', connection: { ...BASE, dangerous: true } },
   { key: 'small', label: 'S: frigates and destroyers only', connection: { ...BASE, shipSize: 'small' } },
   { key: 'medium', label: 'M: up to battlecruisers', connection: { ...BASE, shipSize: 'medium' } },
-  { key: 'xlarge', label: 'XL: up to freighters', connection: { ...BASE, shipSize: 'xlarge' } },
-  { key: 'capital', label: 'C: capitals', connection: { ...BASE, shipSize: 'capital' } },
-  { key: 'bubbled', label: 'Circle: bubbled at that end', connection: { ...BASE, bubbled: 'target' } },
-  { key: 'gate', label: 'Stargate', connection: { ...BASE, type: 'gate', shipSize: 'capital' } },
+  { key: 'large', label: 'No letter: L, up to battleships', connection: BASE },
+  { key: 'xlarge', label: 'XL: freighters and capitals', connection: { ...BASE, shipSize: 'xlarge' } },
+  {
+    key: 'bubbled',
+    label: 'Dashed circle: bubbled at that end',
+    connection: { ...BASE, bubbled: 'target' },
+  },
+  { key: 'gate', label: 'Green: stargate', connection: { ...BASE, type: 'gate', shipSize: 'capital' } },
   {
     key: 'bridge',
-    label: 'Ansiblex jump bridge',
+    label: 'Dotted lime: Ansiblex jump bridge',
     connection: { ...BASE, type: 'bridge', shipSize: 'capital' },
   },
 ];
+
+/** Legend rows drawn exactly like another row: a large hole carries no letter, as a healthy one. */
+export const LEGEND_SAME_AS: Readonly<Record<string, string>> = { large: 'fresh' };
 
 /** The game's five standing levels, as an unmarked system's tint and the holder's tag. */
 export const LEGEND_STANDINGS: readonly { tone: StandingTone; label: string }[] = [
@@ -73,20 +82,28 @@ export const LEGEND_STANDINGS: readonly { tone: StandingTone; label: string }[] 
   { tone: 'terrible', label: 'Red −10: terrible' },
 ];
 
-/** A short piece of connection drawn exactly like the real edge. */
+/** The sample's curve, at the map's own scale: from the right side of one card stub up to the left of another. */
+const SAMPLE_CURVE = curveBetween({ x: 12, y: 20 }, 'right', { x: 92, y: 13 }, 'left');
+
+/**
+ * A short piece of connection between the ends of two system cards, drawn by the edge's own
+ * `EdgeShape`, so every state shows here exactly as on the map (a bubble half under its card).
+ */
 function EdgeSample({ connection }: { connection: ConnectionDto }) {
   const v = edgeVisual(connection, LEGEND_NOW);
-  const inner = edgeInnerStyle(v);
-  const d = 'M 4,12 L 60,12';
+  const { mid } = SAMPLE_CURVE;
   return (
     <span className={styles.edgeSample} data-legend-edge>
-      <svg viewBox="0 0 64 24" aria-hidden className={styles.sample}>
-        {v.halo && <path d={d} className={edgeStyles.halo} />}
-        <path d={d} fill="none" style={edgeOuterStyle(v)} data-line />
-        {inner && <path d={d} fill="none" style={inner} data-core />}
+      <svg viewBox="0 0 104 30" aria-hidden className={styles.sample}>
+        <EdgeShape curve={SAMPLE_CURVE} visual={v} />
+        <rect className={styles.sampleCard} x={-6} y={7} width={18} height={26} rx={3} />
+        <rect className={styles.sampleCard} x={92} y={0} width={18} height={26} rx={3} />
       </svg>
-      {v.bubbles.length > 0 && <span className={`${edgeStyles.bubble} ${styles.sampleBubble}`} />}
-      {v.size && <span className={`${edgeStyles.size} ${styles.sampleSize}`}>{v.size}</span>}
+      {v.size && (
+        <span className={`${edgeStyles.size} ${styles.sampleSize}`} style={{ left: mid.x, top: mid.y }}>
+          {v.size}
+        </span>
+      )}
     </span>
   );
 }

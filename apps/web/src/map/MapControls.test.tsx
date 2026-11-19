@@ -68,10 +68,22 @@ describe('MapControls', () => {
       expect(line.style.stroke).toBe(outer.stroke);
       expect(line.style.strokeWidth).toBe(outer.strokeWidth);
       expect(line.style.strokeDasharray).toBe(outer.strokeDasharray ?? '');
-      expect(samples[i]!.querySelector<SVGPathElement>('[data-core]')?.style.stroke).toBe(
+      expect(samples[i]!.querySelector<SVGPathElement>('[data-layer="mass"]')?.style.stroke).toBe(
         edgeInnerStyle(v)?.stroke,
       );
+      // The halo, the bubbles and the size letter: each sample shows what tells its row apart.
+      expect(!!samples[i]!.querySelector('[data-underlay="dangerous"]')).toBe(v.halo);
+      expect(
+        [...samples[i]!.querySelectorAll<SVGCircleElement>('[data-bubble]')].map((b) => b.dataset.bubble),
+      ).toEqual(v.bubbles);
+      expect(samples[i]!.textContent).toBe(v.size ?? '');
     });
+    // The bubble is a circle in the drawing, around the end at the card, not an empty box.
+    const bubbled = samples[LEGEND_EDGE_STATES.findIndex((s) => s.key === 'bubbled')]!;
+    expect(bubbled.querySelector('svg circle[data-bubble]')).toBeTruthy();
+    // The game's four sizes, L included.
+    expect(legend.textContent).toContain('L, up to battleships');
+    expect(legend.textContent).not.toContain('C: capitals');
     expect(legend.querySelectorAll('[data-legend-status]')).toHaveLength(8);
     // The holder's standing: five game levels, blue sov first; neutral draws no tint.
     const standings = [...legend.querySelectorAll<HTMLElement>('[data-legend-standing]')];

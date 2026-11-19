@@ -173,21 +173,22 @@ and danger, `status-warning` amber for pings and stars, `status-friendly` green 
 
 ### Connections
 
-Every connection is the same thick two-layer line (8 px at 100 %), so state reads from colour alone
-(`edgeStyle.ts`):
+Every connection is Wanderer's thin two-layer line (6 px at 100 %), a smooth curve from the middle
+of one card's side to the middle of the other's (left and right, or top and bottom when the cards
+are above each other), so state reads from colour alone (`edgeStyle.ts`):
 
-| Property | Channel                  | States                                                                    |
-| -------- | ------------------------ | ------------------------------------------------------------------------- |
-| Time     | outer layer colour       | normal neutral, EOL purple, under an hour left (critical time) pink       |
-| Mass     | inner core colour        | fresh neutral, reduced amber, critical red                                |
-| Danger   | red halo beyond the line | dangerous                                                                 |
-| Size     | a letter at the midpoint | `S`, `M`, `XL`, `C` (capital); large shows nothing. Never the line width. |
-| Bubble   | a circle on the line     | just outside the bubbled system (centre radius + 6 px past its border)    |
-| Type     | pattern                  | Ansiblex bridges dotted lime; gates plain neutral                         |
+| Property | Channel                  | States                                                                       |
+| -------- | ------------------------ | ---------------------------------------------------------------------------- |
+| Time     | outer layer colour       | normal blue-grey, EOL purple, under an hour left pink (both 2 px wider)      |
+| Mass     | inner core colour        | fresh dark, reduced amber, critical red                                      |
+| Danger   | red border beyond it     | dangerous                                                                    |
+| Size     | a letter at the midpoint | the game's sizes: `S`, `M`, `XL`; large (`L`) shows nothing. Never the width |
+| Bubble   | a dashed ring at the end | around the end at the bubbled system, half under its card                    |
+| Type     | colour and pattern       | gates green around the dark core; Ansiblex bridges dotted lime               |
 
 The size letter is the only text ever drawn on a connection. Everything else (type, time left, mass
 left, saved mass, who changed it) is in the hover card and the Connections panel. The legend draws
-its samples with the same functions as the edge, and a test checks that every state looks different.
+its samples with the edge's own `EdgeShape`, and a test checks that every state looks different.
 
 ### Bookmark labels
 

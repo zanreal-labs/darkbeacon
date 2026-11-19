@@ -86,7 +86,8 @@
   pointer-events: none;
 }
 
-.band line {
+.band path {
+  fill: none;
   stroke: var(--who);
   stroke-linecap: round;
   stroke-opacity: 0.35;

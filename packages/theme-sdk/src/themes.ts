@@ -74,7 +74,7 @@ const shared = {
   'node-border-width': '1px',
   'node-min-width': '240px',
   'node-padding': '8px 10px',
-  'edge-width': '12px',
+  'edge-width': '6px',
   // Standings exactly as the game client colours them, the same in every theme (like the
   // security colours): +10 dark blue, +5 light blue, neutral grey, -5 orange, -10 red. Sampled
   // from the client's standing tag backgrounds as the EVE University wiki keeps them
@@ -167,13 +167,14 @@ const paired: Record<PairedToken, readonly [light: string, dark: string]> = {
   'node-pill-text': ['#0a0c10', '#0a0c10'],
   'pill-wormhole': ['#7b93ff', '#7b93ff'],
   'pill-special': ['#c39cf7', '#c39cf7'],
-  // Connections: one thick two-layer line; the outer layer is time, the inner core is mass.
-  // Normal connections are one solid, high-contrast line: a fresh core matches the outer layer, so
-  // only a state that matters (EOL, reduced or critical mass) shows a second colour.
-  'edge-color': ['#6b7486', '#9aa3b4'],
-  'edge-gate': ['#6b7486', '#9aa3b4'],
+  // Connections: Wanderer's thin two-layer line; the outer layer is time, the inner core is mass.
+  // A fresh core is the canvas side of the outer colour (dark on dark, light on light), so a
+  // normal line reads as two fine rails and a core in a state that matters stands out. Gates are
+  // the same line in green, bridges dotted lime.
+  'edge-color': ['#56789a', '#80a5c5'],
+  'edge-gate': ['#1f8a5b', '#4cc38a'],
   'edge-bridge': ['#5b8a00', '#a3e635'],
-  'edge-mass-fresh': ['#6b7486', '#9aa3b4'],
+  'edge-mass-fresh': ['#e3e9f0', '#2c3844'],
   'edge-time-eol': ['#8f3fc2', '#b25ee0'],
   'edge-time-critical': ['#e0338a', '#ff5fae'],
   'edge-mass-reduced': ['#f2b01e', '#f5b83a'],
@@ -266,9 +267,9 @@ export const contrastTheme: Theme = {
     'node-border-width': '1px',
     'node-tint': '30%',
     'node-tint-standing': '40%',
-    'edge-width': '13px',
+    'edge-width': '8px',
     'edge-color': '#ffffff',
-    'edge-gate': '#d0d0d0',
+    'edge-gate': '#00ff6a',
     'edge-bridge': '#c6ff00',
     'edge-mass-fresh': '#000000',
     'edge-time-eol': '#c04dff',

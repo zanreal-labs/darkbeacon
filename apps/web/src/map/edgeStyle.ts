@@ -2,15 +2,16 @@ import type { ConnectionDto, ShipSize } from '@darkbeacon/shared';
 import { cssVar, type TokenName } from '@darkbeacon/theme-sdk';
 
 /**
- * The connection visual language, read from colour alone in combat. Every connection is the same
- * thick two-layer line:
- * - the OUTER layer is TIME: normal neutral, end of life purple, under an hour left pink;
- * - the INNER core is MASS: fresh neutral, reduced amber, critical red;
+ * The connection visual language, as Wanderer draws it: a thin two-layer line, read from colour
+ * alone in combat.
+ * - the OUTER layer is TIME: normal blue-grey, end of life purple, under an hour left pink; both
+ *   end-of-life states are a little wider, so the colour shows on both sides of the core;
+ * - the INNER core is MASS: fresh dark, reduced amber, critical red;
  * - a red HALO beyond the line is danger;
- * - a big circle on the line just outside a system is a bubble on that side;
- * - Ansiblex bridges are one dotted lime line, gates a plain neutral one.
+ * - a dashed circle around the end at a system is a bubble on that side;
+ * - gates are a green line with the dark core, Ansiblex bridges one dotted lime line.
  * Ship size is never the width: a size other than large carries only a small letter at the
- * midpoint (S, M, XL, C), the one text ever drawn on a connection. Everything else is in the
+ * midpoint (S, M, XL), the one text ever drawn on a connection. Everything else is in the
  * hover card and the Connections panel.
  */
 
@@ -25,7 +26,7 @@ export interface EdgeState {
 export interface EdgeVisual {
   /** Outer layer colour: the time state (or the gate/bridge colour). */
   outer: TokenName;
-  /** Inner core colour: the mass state; null for gates and bridges (one layer). */
+  /** Inner core colour: the mass state (always fresh on gates); null for bridges (one layer). */
   inner: TokenName | null;
   time: EdgeTime;
   /** Bridges are dotted. */
@@ -43,31 +44,38 @@ export const EOL_WINDOW_MS = 4 * 60 * 60_000;
 /** Under this much life left, the outer layer turns from EOL purple to critical pink. */
 export const TIME_CRITICAL_MS = 60 * 60_000;
 /** The core's share of the line's width. */
-export const INNER_SHARE = 0.34;
+export const INNER_SHARE = 0.4;
+/** How much wider the outer layer gets at end of life, so the time colour reads beside the core. */
+export const EOL_EXTRA_WIDTH = '2px';
 
+/**
+ * The letter on the line. The game has four sizes, S, M, L and XL; the 1 000 000 t and
+ * 2 000 000 t holes are both XL there, so both read XL here (the data keeps them apart for
+ * routing). Large holes, the common case, carry no letter, as in Wanderer.
+ */
 export const SHIP_SIZE_LETTER: Record<ShipSize, string | null> = {
   small: 'S',
   medium: 'M',
   large: null,
   xlarge: 'XL',
-  capital: 'C',
+  capital: 'XL',
 };
 
-/** Ship size as the menus, the panel and the wormhole types reference name it. */
+/** Ship size as the menus, the panel and the wormhole types reference name it: the game's four. */
 export const SHIP_SIZE_LABEL: Record<ShipSize, string> = {
   small: 'S',
   medium: 'M',
   large: 'L',
   xlarge: 'XL',
-  capital: 'C',
+  capital: 'XL',
 };
 
 export const SHIP_SIZE_TEXT: Record<ShipSize, string> = {
   small: 'Frigates and destroyers only',
   medium: 'Up to battlecruisers and industrials',
   large: 'Up to battleships',
-  xlarge: 'Up to freighters',
-  capital: 'Capitals',
+  xlarge: 'Up to freighters (1 000 000 t)',
+  capital: 'Capitals and freighters (2 000 000 t)',
 };
 
 /** Milliseconds of an EOL wormhole's life left, from when it was marked; null when not known. */
@@ -123,13 +131,16 @@ export function edgeVisual(c: ConnectionDto, now = Date.now()): EdgeVisual {
           : time === 'eol'
             ? 'edge-time-eol'
             : 'edge-color';
-  const inner: TokenName | null = !wormhole
-    ? null
-    : c.massStatus === 'critical'
-      ? 'edge-mass-critical'
-      : c.massStatus === 'reduced'
-        ? 'edge-mass-reduced'
-        : 'edge-mass-fresh';
+  const inner: TokenName | null =
+    c.type === 'bridge'
+      ? null
+      : !wormhole
+        ? 'edge-mass-fresh'
+        : c.massStatus === 'critical'
+          ? 'edge-mass-critical'
+          : c.massStatus === 'reduced'
+            ? 'edge-mass-reduced'
+            : 'edge-mass-fresh';
   return {
     outer,
     inner,
@@ -152,17 +163,22 @@ interface LineStyle {
   strokeLinecap: 'round' | 'butt';
 }
 
-/** The outer layer (the whole line for gates and bridges); the legend draws with it too. */
+/** Width of the outer layer, which the halo and the hover underlay are drawn around. */
+export function edgeOuterWidth(v: EdgeVisual): string {
+  return v.time === 'normal' ? 'var(--dbk-edge-width)' : `calc(var(--dbk-edge-width) + ${EOL_EXTRA_WIDTH})`;
+}
+
+/** The outer layer (the whole line for bridges); the legend draws with it too. */
 export function edgeOuterStyle(v: EdgeVisual): LineStyle {
   return {
     stroke: cssVar(v.outer),
-    strokeWidth: 'var(--dbk-edge-width)',
+    strokeWidth: edgeOuterWidth(v),
     ...(v.dotted ? { strokeDasharray: '0.01 calc(var(--dbk-edge-width) * 1.4)' } : {}),
     strokeLinecap: v.dotted ? 'round' : 'butt',
   };
 }
 
-/** The inner core; null for one-layer lines (gates, bridges). */
+/** The inner core; null for one-layer lines (bridges). */
 export function edgeInnerStyle(v: EdgeVisual): LineStyle | null {
   if (!v.inner) return null;
   return {

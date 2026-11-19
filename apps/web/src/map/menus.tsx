@@ -415,12 +415,13 @@ const MASS_COLOR: Record<MassStatus, string> = {
   critical: cssVar('edge-mass-critical'),
 };
 const TIME_LABEL: Record<TimeStatus, string> = { normal: 'Normal', eol: 'End of life' };
-const SIZE_NAME: Record<ShipSize, string> = {
-  small: 'Frigate',
+/** The game's four sizes; XL stands for both the freighter and the capital holes. */
+const SIZE_CHOICES = ['small', 'medium', 'large', 'capital'] as const satisfies readonly ShipSize[];
+const SIZE_NAME: Record<(typeof SIZE_CHOICES)[number], string> = {
+  small: 'Small',
   medium: 'Medium',
   large: 'Large',
-  xlarge: 'Freighter',
-  capital: 'Capital',
+  capital: 'Extra large',
 };
 const TYPE_LABEL: Record<ConnectionType, string> = {
   wormhole: 'Wormhole',
@@ -499,8 +500,8 @@ export function connectionMenu(ctx: ConnectionMenuContext): MenuItem[] {
           icon: <Ship />,
           hint: SHIP_SIZE_LABEL[c.shipSize],
           items: radios(
-            ShipSize.options,
-            c.shipSize,
+            SIZE_CHOICES,
+            c.shipSize === 'xlarge' ? 'capital' : c.shipSize,
             (v) => ({ label: SIZE_NAME[v], hint: SHIP_SIZE_LABEL[v] }),
             (shipSize) => update({ shipSize }),
           ),
