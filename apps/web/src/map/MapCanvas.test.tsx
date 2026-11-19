@@ -205,3 +205,63 @@ describe('MapCanvas after the jump planner', () => {
     await waitFor(() => expect(viewOf(container)).toBe(opened));
   });
 });
+
+describe('MapCanvas first view under widget windows', () => {
+  const opened = async (props: { coveredLeft?: number; coveredRight?: number; coverReady?: boolean }) => {
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 1200,
+      bottom: 800,
+      width: 1200,
+      height: 800,
+      toJSON: () => ({}),
+    } as DOMRect);
+    const map = (ready: boolean) => (
+      <Frame>
+        <ReactFlowProvider>
+          <div style={{ width: 1200, height: 800 }}>
+            <MapCanvas
+              mapId={MAP_ID}
+              state={chain()}
+              loaded
+              labels={[]}
+              systemLabels={[]}
+              universe={universe}
+              can={mapPermissions('member')}
+              store={{ moveSystems: vi.fn(), addConnection: vi.fn() }}
+              onSelect={() => {}}
+              focus={null}
+              onMenu={() => {}}
+              coveredLeft={props.coveredLeft}
+              coveredRight={props.coveredRight}
+              coverReady={ready}
+            />
+          </div>
+        </ReactFlowProvider>
+      </Frame>
+    );
+    const { container, rerender, unmount } = renderWithProviders(map(props.coverReady ?? true));
+    await waitFor(() => expect(container.querySelectorAll('.react-flow__node')).toHaveLength(2));
+    if (props.coverReady === false) {
+      // Not before the windows are measured: it would centre on the whole canvas.
+      await new Promise((r) => setTimeout(r, 50));
+      expect(viewOf(container)).toMatch(/^translate\(0px(, ?0px)?\)/);
+      rerender(map(true));
+    }
+    await waitFor(() => expect(viewOf(container)).not.toMatch(/^translate\(0px(, ?0px)?\)/));
+    const x = Number(/translate\((-?[\d.]+)px/.exec(viewOf(container)!)![1]);
+    unmount();
+    rect.mockRestore();
+    return x;
+  };
+
+  it('centres the chain on what the windows leave free, once they are measured', async () => {
+    const free = await opened({});
+    // Windows on the left move the middle right by half their width, on the right left by half.
+    expect(await opened({ coveredLeft: 400, coverReady: false })).toBeCloseTo(free + 200, 0);
+    expect(await opened({ coveredRight: 400 })).toBeCloseTo(free - 200, 0);
+  });
+});
