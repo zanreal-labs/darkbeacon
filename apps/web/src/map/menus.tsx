@@ -4,11 +4,16 @@ import {
   Bubbled,
   ConnectionType,
   CUSTOM_LABEL_MAX,
-  LifetimeMark,
+  GAME_LIFETIME_LABEL,
+  GAME_LIFETIME_SHORT,
+  GAME_MASS_LABEL,
+  GAME_MASS_SHORT,
+  GameLifetime,
+  gameLifetime,
+  gameLifetimePatch,
   MassStatus,
   ShipSize,
   SystemStatus,
-  TimeStatus,
   type CharacterDto,
   type ConnectionDto,
   type LabelDto,
@@ -22,7 +27,6 @@ import {
   CircleDashed,
   CircleDot,
   ClipboardPaste,
-  Clock,
   EyeOff,
   Hourglass,
   LocateFixed,
@@ -407,14 +411,19 @@ export interface ConnectionMenuContext {
   managesSource?(sourceId: string): boolean;
 }
 
-const MASS_LABEL: Record<MassStatus, string> = { fresh: 'Fresh', reduced: 'Reduced', critical: 'Critical' };
 /** The same colours as the line on the map (edgeStyle). */
 const MASS_COLOR: Record<MassStatus, string> = {
   fresh: cssVar('edge-color'),
   reduced: cssVar('edge-mass-reduced'),
   critical: cssVar('edge-mass-critical'),
 };
-const TIME_LABEL: Record<TimeStatus, string> = { normal: 'Normal', eol: 'End of life' };
+/** The same colours and dashes as the line's outside on the map (edgeStyle). */
+const LIFETIME_SWATCH: Record<GameLifetime, { color: string; shape: 'line'; dashed?: boolean }> = {
+  day: { color: cssVar('edge-color'), shape: 'line' },
+  '4h': { color: cssVar('edge-time-eol'), shape: 'line', dashed: true },
+  '1h': { color: cssVar('edge-time-critical'), shape: 'line', dashed: true },
+  expired: { color: cssVar('edge-time-critical'), shape: 'line', dashed: true },
+};
 const SIZE_NAME: Record<ShipSize, string> = {
   small: 'Frigate',
   medium: 'Medium',
@@ -432,6 +441,8 @@ export function connectionMenu(ctx: ConnectionMenuContext): MenuItem[] {
   const { connection: c, can, store } = ctx;
   const update = store.updateConnection.bind(null, c.id);
   const wormhole = c.type === 'wormhole';
+  // As the game's Show Info says it now.
+  const life = gameLifetime(c, Date.now());
   const names = ctx.names ?? { source: 'source', target: 'target' };
   const BUBBLED_LABEL: Record<Bubbled, string> = {
     none: 'None',
@@ -450,47 +461,28 @@ export function connectionMenu(ctx: ConnectionMenuContext): MenuItem[] {
       state.push(
         {
           kind: 'submenu',
-          label: 'Mass',
+          label: 'Mass stability',
           icon: <Weight />,
-          hint: MASS_LABEL[c.massStatus],
+          hint: GAME_MASS_SHORT[c.massStatus],
           hintSwatch: { color: MASS_COLOR[c.massStatus], shape: 'line' },
           items: radios(
             MassStatus.options,
             c.massStatus,
-            (v) => ({ label: MASS_LABEL[v], swatch: { color: MASS_COLOR[v], shape: 'line' } }),
+            (v) => ({ label: GAME_MASS_LABEL[v], swatch: { color: MASS_COLOR[v], shape: 'line' } }),
             (massStatus) => update({ massStatus }),
           ),
         },
         {
           kind: 'submenu',
-          label: 'Time',
-          icon: <Clock />,
-          hint: c.timeStatus === 'eol' ? 'EOL' : 'Normal',
-          items: radios(
-            TimeStatus.options,
-            c.timeStatus,
-            (v) => ({
-              label: TIME_LABEL[v],
-              hint: v === 'eol' ? 'under 4 h' : undefined,
-              swatch: {
-                color: cssVar(v === 'eol' ? 'edge-time-eol' : 'edge-color'),
-                shape: 'line',
-                dashed: v === 'eol',
-              },
-            }),
-            (timeStatus) => update({ timeStatus }),
-          ),
-        },
-        {
-          kind: 'submenu',
-          label: 'Lifetime left',
+          label: 'Reliable lifetime',
           icon: <Hourglass />,
-          hint: c.lifetime ? `< ${c.lifetime.mark}` : undefined,
+          hint: GAME_LIFETIME_SHORT[life],
+          hintSwatch: LIFETIME_SWATCH[life],
           items: radios(
-            ['none', ...LifetimeMark.options] as const,
-            c.lifetime?.mark ?? 'none',
-            (v) => ({ label: v === 'none' ? 'Not marked' : `Less than ${v}` }),
-            (v) => update({ lifetime: v === 'none' ? null : v }),
+            GameLifetime.options,
+            life,
+            (v) => ({ label: GAME_LIFETIME_LABEL[v], swatch: LIFETIME_SWATCH[v] }),
+            (v) => update(gameLifetimePatch(v)),
           ),
         },
         {

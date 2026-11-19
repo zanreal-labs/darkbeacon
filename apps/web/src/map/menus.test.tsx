@@ -323,9 +323,8 @@ describe('connection menu', () => {
   it('has submenus for the states, two toggles and remove last', () => {
     const { items } = menu('member');
     expect(rows(items)).toEqual([
-      'Mass',
-      'Time',
-      'Lifetime left',
+      'Mass stability',
+      'Reliable lifetime',
       'Size',
       'Bubbled',
       'Type',
@@ -336,15 +335,17 @@ describe('connection menu', () => {
       '—',
       'Remove connection',
     ]);
-    expect(rows(sub(items, 'Mass'))).toEqual(['Fresh', 'Reduced', 'Critical']);
-    expect(rows(sub(items, 'Lifetime left'))).toEqual([
-      'Not marked',
-      'Less than 1h',
-      'Less than 4h',
-      'Less than 4.5h',
-      'Less than 16h',
-      'Less than 24h',
-      'Less than 48h',
+    // In the game's words (Show Info).
+    expect(rows(sub(items, 'Mass stability'))).toEqual([
+      'More than 50% remaining',
+      'Less than 50% remaining',
+      'Less than 10% remaining',
+    ]);
+    expect(rows(sub(items, 'Reliable lifetime'))).toEqual([
+      'Less than 1 day remaining',
+      'Less than 4 hours remaining',
+      'Less than 1 hour remaining',
+      'Expired, closure imminent',
     ]);
   });
 
@@ -383,16 +384,18 @@ describe('connection menu', () => {
     };
     const outsider = rows(shared('manager', false).items);
     expect(outsider).toContain('Locked on Corp A');
-    for (const gone of ['Mass', 'Dangerous', 'Unlock', 'Remove connection'])
+    for (const gone of ['Mass stability', 'Dangerous', 'Unlock', 'Remove connection'])
       expect(outsider).not.toContain(gone);
     const { items, commands } = shared('member', true);
-    expect(rows(items)).toEqual(expect.arrayContaining(['Mass', 'Dangerous', 'Unlock', 'Remove connection']));
+    expect(rows(items)).toEqual(
+      expect.arrayContaining(['Mass stability', 'Dangerous', 'Unlock', 'Remove connection']),
+    );
     pick(items, 'Unlock');
     expect(commands.updateConnection).toHaveBeenCalledWith('c1', { locked: false });
   });
 
   it('colours the mass options like the line on the map', () => {
-    const mass = sub(menu('member').items, 'Mass');
+    const mass = sub(menu('member').items, 'Mass stability');
     expect(mass.map((i) => i.kind === 'radio' && i.swatch?.color)).toEqual([
       'var(--dbk-edge-color)',
       'var(--dbk-edge-mass-reduced)',
@@ -402,14 +405,18 @@ describe('connection menu', () => {
 
   it('updates the connection', () => {
     const { items, commands } = menu('member');
-    pick(sub(items, 'Mass'), 'Critical');
-    pick(sub(items, 'Time'), 'End of life');
+    pick(sub(items, 'Mass stability'), 'Less than 10% remaining');
+    pick(sub(items, 'Reliable lifetime'), 'Less than 4 hours remaining');
+    pick(sub(items, 'Reliable lifetime'), 'Less than 1 hour remaining');
+    pick(sub(items, 'Reliable lifetime'), 'Expired, closure imminent');
     pick(sub(items, 'Bubbled'), 'Near Jita');
     pick(items, 'Dangerous');
     pick(items, 'Remove connection');
     expect(commands.updateConnection.mock.calls).toEqual([
       ['c1', { massStatus: 'critical' }],
-      ['c1', { timeStatus: 'eol' }],
+      ['c1', { timeStatus: 'eol', lifetime: null }],
+      ['c1', { timeStatus: 'eol', lifetime: '1h' }],
+      ['c1', { timeStatus: 'eol', lifetime: 'expired' }],
       ['c1', { bubbled: 'target' }],
       ['c1', { dangerous: true }],
     ]);

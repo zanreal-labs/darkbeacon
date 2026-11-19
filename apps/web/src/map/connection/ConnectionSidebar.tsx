@@ -13,9 +13,14 @@ import {
   X,
 } from 'lucide-react';
 import {
+  GAME_LIFETIME_LABEL,
+  GAME_LIFETIME_SHORT,
+  GAME_MASS_LABEL,
+  GameLifetime,
+  gameLifetime,
+  gameLifetimePatch,
   HULL_CLASS_LABEL,
   MassStatus,
-  TimeStatus,
   type ConnectionDto,
   type ConnectionIntelDto,
   type PassageDto,
@@ -134,7 +139,8 @@ function ConnectionIdentity({
   handle: ReactNode;
 }) {
   const wormhole = c.type === 'wormhole';
-  const eol = wormhole && c.timeStatus === 'eol' ? eolRemaining(c.eolAt, now) : null;
+  const life = gameLifetime(c, now);
+  const eol = wormhole && c.timeStatus === 'eol' && life !== 'expired' ? eolRemaining(c.eolAt, now) : null;
   const end = (id: number, name: string) => (
     <button type="button" className={styles.end} onClick={() => onSelectSystem(id)} title={`Select ${name}`}>
       <DesignationPill info={universe.get(id)} />
@@ -172,12 +178,19 @@ function ConnectionIdentity({
           >
             {MASS_WORD[c.massStatus]}
           </Badge>
-          {c.timeStatus === 'eol' ? (
-            <Badge dot color={cssVar('edge-time-eol')} title="End of life: under 4 hours left">
-              EOL{eol ? ` ${eol}` : ''}
+          {life !== 'day' ? (
+            <Badge
+              dot
+              color={cssVar(life === '4h' ? 'edge-time-eol' : 'edge-time-critical')}
+              title={`Reliable lifetime: ${GAME_LIFETIME_LABEL[life]}`}
+            >
+              {GAME_LIFETIME_SHORT[life]}
+              {eol ? ` · ${eol}` : ''}
             </Badge>
           ) : (
-            <Badge variant="outline">Lifetime normal</Badge>
+            <Badge variant="outline" title={`Reliable lifetime: ${GAME_LIFETIME_LABEL.day}`}>
+              {GAME_LIFETIME_SHORT.day}
+            </Badge>
           )}
           {c.massSaved && (
             <Badge
@@ -209,13 +222,10 @@ function ConnectionIdentity({
 
 const MASS_OPTIONS = MassStatus.options.map((s) => ({
   value: s,
-  label: `${MASS_WORD[s]} (${MASS_MEANING[s]})`,
+  label: GAME_MASS_LABEL[s],
   icon: <span className={sidebarStyles.statusDot} style={{ background: MASS_TOKEN[s] }} />,
 }));
-const TIME_OPTIONS = TimeStatus.options.map((s) => ({
-  value: s,
-  label: s === 'eol' ? 'End of life (under 4 h)' : 'Normal',
-}));
+const LIFETIME_OPTIONS = GameLifetime.options.map((s) => ({ value: s, label: GAME_LIFETIME_LABEL[s] }));
 
 /** Type, lifetime and the states people set, edited in place like the system details. */
 function ConnectionDetails({
@@ -245,12 +255,12 @@ function ConnectionDetails({
   const fits = intel?.fits.length ? intel.fits.map((h) => HULL_CLASS_LABEL[h]).at(-1) : null;
   return (
     <dl className={sidebarStyles.props}>
-      <dt>Mass</dt>
+      <dt>Mass stability</dt>
       <dd>
         {can.edit ? (
           <Select
             size="sm"
-            aria-label="Mass status"
+            aria-label="Mass stability"
             className={styles.select}
             value={c.massStatus}
             options={MASS_OPTIONS}
@@ -260,30 +270,28 @@ function ConnectionDetails({
             }}
           />
         ) : (
-          `${MASS_WORD[c.massStatus]} (${MASS_MEANING[c.massStatus]})`
+          GAME_MASS_LABEL[c.massStatus]
         )}
       </dd>
-      <dt>Time</dt>
+      <dt>Reliable lifetime</dt>
       <dd>
         {can.edit ? (
           <Select
             size="sm"
-            aria-label="Time status"
+            aria-label="Reliable lifetime"
             className={styles.select}
-            value={c.timeStatus}
-            options={TIME_OPTIONS}
-            onValueChange={(timeStatus) => {
+            value={gameLifetime(c, now)}
+            options={LIFETIME_OPTIONS}
+            onValueChange={(life) => {
               activity.pulse({ verb: 'editing', target: { kind: 'connection', id: c.id } });
-              void store.updateConnection(c.id, { timeStatus: timeStatus as TimeStatus });
+              void store.updateConnection(c.id, gameLifetimePatch(life as GameLifetime));
             }}
           />
-        ) : c.timeStatus === 'eol' ? (
-          'End of life'
         ) : (
-          'Normal'
+          GAME_LIFETIME_LABEL[gameLifetime(c, now)]
         )}
       </dd>
-      <dt>Lifetime</dt>
+      <dt>Lifespan</dt>
       <dd className={styles.value}>
         {!intel ? (
           <Skeleton width={160} />

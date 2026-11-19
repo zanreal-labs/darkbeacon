@@ -11,9 +11,9 @@ export const MASS_WORD: Record<MassStatus, string> = {
 
 /** What the game says for each status. */
 export const MASS_MEANING: Record<MassStatus, string> = {
-  fresh: 'over 50 % left',
-  reduced: '10–50 % left',
-  critical: 'under 10 % left',
+  fresh: 'more than 50% remaining',
+  reduced: 'less than 50% remaining',
+  critical: 'less than 10% remaining',
 };
 
 /** The line's colours on the map, so the panel and the edge say the same. */

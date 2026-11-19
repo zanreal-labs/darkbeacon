@@ -2,8 +2,12 @@
 
 import { Lock, LockOpen } from 'lucide-react';
 import {
+  GAME_LIFETIME_LABEL,
+  GAME_LIFETIME_SHORT,
+  GameLifetime,
+  gameLifetime,
+  gameLifetimePatch,
   LIFETIME_MARK_HOURS,
-  LifetimeMark,
   type ConnectionDto,
   type UniverseSystemDto,
 } from '@darkbeacon/shared';
@@ -20,6 +24,7 @@ const HOUR = 3_600_000;
 /** "less than 16 h left, until ~21:40" (local time), or null without a mark. */
 export function lifetimeText(c: Pick<ConnectionDto, 'lifetime'>, now = Date.now()): string | null {
   if (!c.lifetime) return null;
+  if (c.lifetime.mark === 'expired') return 'expired, closure imminent';
   const until = c.lifetime.at + LIFETIME_MARK_HOURS[c.lifetime.mark] * HOUR;
   const at = new Date(until).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
   return until <= now
@@ -102,19 +107,16 @@ export function ConnectionsSection({
               {c.type === 'wormhole' && editable ? (
                 <select
                   className={`${styles.inlineSelect} ${styles.lifetimeSelect}`}
-                  aria-label={`Lifetime left of the connection to ${name}`}
-                  title={lifetime ?? 'Lifetime left: not marked'}
-                  value={c.lifetime?.mark ?? ''}
+                  aria-label={`Reliable lifetime of the connection to ${name}`}
+                  title={lifetime ?? `Reliable lifetime: ${GAME_LIFETIME_LABEL[gameLifetime(c, Date.now())]}`}
+                  value={gameLifetime(c, Date.now())}
                   onChange={(e) =>
-                    void store.updateConnection(c.id, {
-                      lifetime: e.target.value === '' ? null : (e.target.value as LifetimeMark),
-                    })
+                    void store.updateConnection(c.id, gameLifetimePatch(e.target.value as GameLifetime))
                   }
                 >
-                  <option value="">Life: –</option>
-                  {LifetimeMark.options.map((mark) => (
-                    <option key={mark} value={mark}>
-                      &lt;{mark} left
+                  {GameLifetime.options.map((life) => (
+                    <option key={life} value={life} title={GAME_LIFETIME_LABEL[life]}>
+                      {GAME_LIFETIME_SHORT[life]}
                     </option>
                   ))}
                 </select>

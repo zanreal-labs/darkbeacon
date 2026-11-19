@@ -762,7 +762,9 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
           bubbled: z.enum(['none', 'source', 'target', 'both']).optional(),
           lifetime: LifetimeMark.nullable()
             .optional()
-            .describe('Less than this much time left (1h to 48h), or null to clear'),
+            .describe(
+              'Less than this much time left (1h to 48h), "expired" for the game\'s "Expired, closure imminent" (with timeStatus eol), or null to clear. The game\'s Reliable Lifetime: less than 1 day = timeStatus normal and no mark; less than 4 hours = eol; less than 1 hour = eol + 1h',
+            ),
           note: z.string().max(CONNECTION_NOTE_MAX).optional(),
           locked: z.boolean().optional().describe('Only map managers lock and unlock'),
         }),

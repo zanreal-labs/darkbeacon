@@ -1,5 +1,8 @@
 import type { UniverseCatalog } from '@darkbeacon/mapping';
 import {
+  GAME_LIFETIME_LABEL,
+  GAME_MASS_LABEL,
+  gameLifetime,
   WORMHOLE_DESTINATION_LABEL,
   WORMHOLE_EFFECTS,
   classLabel,
@@ -68,9 +71,14 @@ export function connectionLine(catalog: UniverseCatalog, c: ConnectionDto, withS
   if (c.type !== 'wormhole') return [ends, c.type, ...connectionTail(c)].join(' | ');
   const parts = [ends, 'wh'];
   if (withStatus) {
-    parts.push(`mass ${c.massStatus}`, c.timeStatus === 'eol' ? 'EOL' : 'time ok', `size ${c.shipSize}`);
+    parts.push(
+      `mass ${c.massStatus} (${GAME_MASS_LABEL[c.massStatus]})`,
+      `lifetime ${GAME_LIFETIME_LABEL[gameLifetime(c, Date.now())]}`,
+      `size ${c.shipSize}`,
+    );
     if (c.massSaved) parts.push('mass saved');
-    if (c.lifetime) parts.push(`marked <${c.lifetime.mark} left at ${new Date(c.lifetime.at).toISOString()}`);
+    if (c.lifetime && c.lifetime.mark !== 'expired')
+      parts.push(`marked <${c.lifetime.mark} left at ${new Date(c.lifetime.at).toISOString()}`);
   }
   if (c.dangerous) parts.push('DANGER');
   if (c.bubbled !== 'none') parts.push(`bubbled ${c.bubbled}`);

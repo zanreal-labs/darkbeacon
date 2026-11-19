@@ -342,9 +342,10 @@ export type Bubbled = z.infer<typeof Bubbled>;
 /**
  * How much life a hole had left when someone looked: "less than N hours". `1h` and `4h` are end of
  * life; `4.5h` is the whole life of small holes; `16h`, `24h` and `48h` are the lifetimes of the
- * longer-lived holes (48 h only for a few C6 statics). The same marks Wanderer offers.
+ * longer-lived holes (48 h only for a few C6 statics). The same marks Wanderer offers, plus
+ * `expired`: the game's "Expired, closure imminent", no time left at all.
  */
-export const LifetimeMark = z.enum(['1h', '4h', '4.5h', '16h', '24h', '48h']);
+export const LifetimeMark = z.enum(['1h', '4h', '4.5h', '16h', '24h', '48h', 'expired']);
 export type LifetimeMark = z.infer<typeof LifetimeMark>;
 export const LIFETIME_MARK_HOURS: Record<LifetimeMark, number> = {
   '1h': 1,
@@ -353,7 +354,88 @@ export const LIFETIME_MARK_HOURS: Record<LifetimeMark, number> = {
   '16h': 16,
   '24h': 24,
   '48h': 48,
+  expired: 0,
 };
+
+/**
+ * A hole's life as the game's Show Info words it ("Reliable Lifetime"): less than a day, less
+ * than 4 hours, less than an hour, expired (closure imminent). The game says nothing else, so a
+ * hole nobody marked is `day`.
+ */
+export const GameLifetime = z.enum(['day', '4h', '1h', 'expired']);
+export type GameLifetime = z.infer<typeof GameLifetime>;
+
+export const GAME_LIFETIME_LABEL: Record<GameLifetime, string> = {
+  day: 'Less than 1 day remaining',
+  '4h': 'Less than 4 hours remaining',
+  '1h': 'Less than 1 hour remaining',
+  expired: 'Expired, closure imminent',
+};
+
+export const GAME_LIFETIME_SHORT: Record<GameLifetime, string> = {
+  day: '< 1 day',
+  '4h': '< 4 h',
+  '1h': '< 1 h',
+  expired: 'Expired',
+};
+
+/** The game's "Mass Stability" for each mass status. */
+export const GAME_MASS_LABEL: Record<z.infer<typeof MassStatus>, string> = {
+  fresh: 'More than 50% remaining',
+  reduced: 'Less than 50% remaining',
+  critical: 'Less than 10% remaining',
+};
+
+export const GAME_MASS_SHORT: Record<z.infer<typeof MassStatus>, string> = {
+  fresh: '> 50%',
+  reduced: '< 50%',
+  critical: '< 10%',
+};
+
+const LIFE_HOUR = 60 * 60 * 1000;
+
+/**
+ * What the game would say of a connection now: from its EOL mark (EOL lasts at most 4 hours from
+ * `eolAt`) and its lifetime mark (at most the mark's hours from when it was set), whichever leaves
+ * less.
+ */
+export function gameLifetime(
+  c: {
+    timeStatus: z.infer<typeof TimeStatus>;
+    eolAt: number | null;
+    updatedAt?: number;
+    lifetime?: { mark: LifetimeMark; at: number } | null;
+  },
+  now: number,
+): GameLifetime {
+  if (c.lifetime?.mark === 'expired') return 'expired';
+  const left: number[] = [];
+  if (c.timeStatus === 'eol') left.push((c.eolAt ?? c.updatedAt ?? now) + 4 * LIFE_HOUR - now);
+  if (c.lifetime) left.push(c.lifetime.at + LIFETIME_MARK_HOURS[c.lifetime.mark] * LIFE_HOUR - now);
+  if (left.length === 0) return 'day';
+  const least = Math.min(...left);
+  if (least <= 0) return 'expired';
+  if (least <= LIFE_HOUR) return '1h';
+  if (least <= 4 * LIFE_HOUR) return '4h';
+  return 'day';
+}
+
+/** The change that marks a connection with a game lifetime: EOL and a lifetime mark together. */
+export function gameLifetimePatch(state: GameLifetime): {
+  timeStatus: z.infer<typeof TimeStatus>;
+  lifetime: LifetimeMark | null;
+} {
+  switch (state) {
+    case 'day':
+      return { timeStatus: 'normal', lifetime: null };
+    case '4h':
+      return { timeStatus: 'eol', lifetime: null };
+    case '1h':
+      return { timeStatus: 'eol', lifetime: '1h' };
+    case 'expired':
+      return { timeStatus: 'eol', lifetime: 'expired' };
+  }
+}
 
 /** When a connection's lifetime was marked and with what: it expires before `at` + the mark's hours. */
 export const ConnectionLifetimeDto = z.object({ mark: LifetimeMark, at: Timestamp });
