@@ -1,6 +1,15 @@
 'use client';
 
-import { useEffect, useId, useState } from 'react';
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type RefObject,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { Panel, useReactFlow } from '@xyflow/react';
 import { useQuery } from '@tanstack/react-query';
 import { buildPath, routes, type MapDto } from '@darkbeacon/shared';
@@ -70,6 +79,8 @@ export function MapControls({
   const legendId = useId();
   const [labels, setLabels] = useState(false);
   const settings = useMapSettings();
+  const barRef = useRef<HTMLDivElement>(null);
+  const legendAt = useBeside(barRef, legend);
 
   useEffect(() => {
     if (!legend) return;
@@ -82,7 +93,13 @@ export function MapControls({
 
   return (
     <Panel position="bottom-left" className={styles.panel}>
-      <div className={styles.bar} role="toolbar" aria-label="Map view" aria-orientation="vertical">
+      <div
+        ref={barRef}
+        className={styles.bar}
+        role="toolbar"
+        aria-label="Map view"
+        aria-orientation="vertical"
+      >
         <IconButton
           tooltipSide="right"
           size="sm"
@@ -146,9 +163,44 @@ export function MapControls({
           onClick={() => onLegend(!legend)}
         />
       </div>
-      {legend && <MapLegend id={legendId} />}
+      {legend &&
+        legendAt &&
+        createPortal(
+          <div className={styles.legendHost} style={legendAt}>
+            <MapLegend id={legendId} />
+          </div>,
+          document.body,
+        )}
     </Panel>
   );
+}
+
+/**
+ * Where the legend stands: beside the toolbar, its bottom on the toolbar's. It is drawn outside
+ * the canvas, whose layer sits under the widget windows, so it is never hidden behind them.
+ */
+function useBeside(ref: RefObject<HTMLElement | null>, open: boolean): CSSProperties | null {
+  const [at, setAt] = useState<CSSProperties | null>(null);
+  useLayoutEffect(() => {
+    if (!open) {
+      setAt(null);
+      return;
+    }
+    const place = () => {
+      const bar = ref.current?.getBoundingClientRect();
+      if (!bar) return;
+      setAt({ left: bar.right + 8, bottom: window.innerHeight - bar.bottom });
+    };
+    place();
+    window.addEventListener('resize', place);
+    const observer = typeof ResizeObserver === 'undefined' || !ref.current ? null : new ResizeObserver(place);
+    if (ref.current) observer?.observe(ref.current);
+    return () => {
+      window.removeEventListener('resize', place);
+      observer?.disconnect();
+    };
+  }, [ref, open]);
+  return at;
 }
 
 /** Shows or hides the minimap (in its default corner; the corner is chosen in the canvas settings). */

@@ -32,6 +32,12 @@
 }
 
 /* ---- Legend ---- */
+/* Over the widget windows (their layer is 6), beside the toolbar; placed from script. */
+.legendHost {
+  position: fixed;
+  z-index: 7;
+}
+
 .legend {
   width: 316px;
   max-height: calc(100dvh - 220px);
