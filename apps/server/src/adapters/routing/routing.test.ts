@@ -16,6 +16,7 @@ import {
   RouteQueries,
   Router,
   type PilotDirectory,
+  type TheraFeed,
 } from '@darkbeacon/routing';
 import type { RouteMode } from '@darkbeacon/shared';
 import { account, mappingTestPorts } from '../mapping/testing.js';
@@ -262,6 +263,35 @@ describeEachDialect('routing over a map', (t) => {
     // Tama, Thera, the system next to Dodixie, Dodixie.
     expect(dodixie.jumps).toBe(3);
     expect(dodixie.steps.filter((s) => s.edge === 'eve-scout')).toHaveLength(2);
+
+    // A route through the holes says which hole each step takes: what to scan for, from where.
+    const listed = (a: number, b: number) => ({
+      id: `hole-${b === thera ? a : b}`,
+      hubSystemId: thera,
+      solarSystemId: b === thera ? a : b,
+      hubSignature: 'ABC-123',
+      signature: 'XYZ-987',
+      whType: 'Q063',
+      maxShipSize: 'large',
+      remainingHours: 10,
+      expiresAt: null,
+      updatedAt: null,
+    });
+    const withHoles = new RouteQueries({
+      router,
+      universe,
+      hubs: new KyselyHubRepository(t.db),
+      pilots,
+      access: env.access,
+      thera: { hole: listed } as unknown as TheraFeed,
+    });
+    const trip = await withHoles.route(bob, map.id, { from: S.tama, to: S.dodixie, mode: 'shortest' });
+    expect(trip.steps.map((s) => s.hole?.id ?? null)).toEqual([
+      null,
+      `hole-${S.tama}`,
+      `hole-${nextToDodixie}`,
+      null,
+    ]);
 
     // The map-wide exits (what every viewer's snapshot carries) route without the holes...
     const shared = (await queries.sharedExits(map.id)).find((e) => e.solarSystemId === S.tama)!;

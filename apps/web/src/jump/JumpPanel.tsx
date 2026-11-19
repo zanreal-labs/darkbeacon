@@ -45,6 +45,7 @@ import {
   type KnownStructureDto,
   type CharacterDto,
   type OptionalEveScope,
+  type TheraDto,
   type WaypointRequest,
 } from '@darkbeacon/shared';
 import { cssVar } from '@darkbeacon/theme-sdk';
@@ -91,12 +92,15 @@ import { searchSystems, securityColor, securityLabel, type StarModel } from './m
 import type { PilotFill } from './pilot';
 import type { PlannerSettings } from './settings';
 import {
+  handoverText,
   LEG_TAGS,
+  missingHoles,
   travelTotals,
-  travelWaypoints,
+  travelWaypointParts,
   type TravelLeg,
   type TravelPlan,
   type TravelSegment,
+  type WaypointPart,
 } from './travel';
 import { rankSystems, whyLabel, type End, type Suggestion, type SuggestionWhy } from './suggest';
 import { freightQuote, parseIsk, type FreightTerms } from './freight';
@@ -276,7 +280,7 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
     : route
       ? segmentsOf(route, points_, model)
       : null;
-  const tripTargets = travel && trip?.legs ? travelWaypoints(trip.legs) : null;
+  const tripTargets = travel && trip?.legs ? travelWaypointParts(trip.legs) : null;
   const legHover = {
     active: props.activeLeg,
     setActive: props.setActiveLeg,
@@ -662,6 +666,7 @@ function LegRow({
         {leg.kind === 'jump' && !leg.to.station && !leg.stop && !brief && <em>no station</em>}
         {leg.stop && <em>stop</em>}
       </div>
+      {'hole' in leg && leg.hole && !passed && <p className={styles.hint}>{handoverText(leg)}</p>}
       {leg.kind === 'jump' && (
         <LegStats
           leg={leg}
@@ -821,7 +826,7 @@ function SegmentState({ segment }: { segment: TravelSegment }) {
 }
 
 /** Travel mode under the trip: why nothing is planned without a map; on a phone, totals and actions. */
-function TripResult(props: PanelState & { targets: number[] | null }) {
+function TripResult(props: PanelState & { targets: WaypointPart[] | null }) {
   const { trip, origin, destination, targets } = props;
   if (origin === null || destination === null) return null;
   if (props.tripMap === null)
@@ -874,26 +879,39 @@ export function TravelTotalsBubble({ trip }: { trip: TravelPlan | null }) {
   );
 }
 
-/** What to do with a trip: send it to a character as in-game waypoints. */
+/**
+ * What to do with a trip: send it to a character as in-game waypoints, one part at a time. A part
+ * ends where the pilot takes a hole or bridge by hand; the autopilot stops there instead of flying
+ * on past it (and back the way it came when the hole is gone). The next part goes out from the
+ * other side.
+ */
 function TripActions({
   trip,
-  targets,
+  targets: parts,
   wide = false,
 }: {
   trip: TravelPlan;
-  targets: number[];
+  targets: WaypointPart[];
   wide?: boolean;
 }) {
-  const byHand = (trip.legs ?? []).some((leg) => leg.kind !== 'gate');
+  const legs = trip.legs ?? [];
   return (
     <div className={wide ? styles.actions : styles.headActions}>
-      <WaypointsControl
-        targets={targets}
-        description={`${targets.length} ${targets.length === 1 ? 'system' : 'systems'}, in order.${
-          byHand ? ' Take the wormholes, holes and bridges yourself: the autopilot does not.' : ''
-        }`}
-        wide={wide}
-      />
+      {parts.map((part, k) => {
+        const first = legs.indexOf(part.then ?? legs[legs.length - 1]!);
+        const ahead = first < 0 ? [] : legs.slice(first);
+        const count = `${part.targets.length} ${part.targets.length === 1 ? 'system' : 'systems'}, in order.`;
+        return (
+          <WaypointsControl
+            key={k}
+            targets={part.targets}
+            part={parts.length > 1 ? { n: k + 1, of: parts.length } : undefined}
+            description={part.then ? `${count} ${handoverText(part.then)}` : count}
+            check={ahead.some((leg) => leg.hole) ? ahead : undefined}
+            wide={wide}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -1813,10 +1831,16 @@ function WaypointsControl({
   targets,
   description,
   wide,
+  part,
+  check,
 }: {
   targets: readonly number[];
   description: string;
   wide: boolean;
+  /** One part of a trip cut at the holes: which, for the button's words. */
+  part?: { n: number; of: number } | undefined;
+  /** Legs through Thera or Turnur holes ahead: checked with EVE-Scout again before sending. */
+  check?: readonly TravelLeg[] | undefined;
 }) {
   const toast = useToast();
   const me = useMe();
@@ -1827,6 +1851,20 @@ function WaypointsControl({
   const send = async (to: readonly CharacterDto[]) => {
     setBusy(true);
     try {
+      if (check) {
+        // A hole that closed since the route was found would send the pilot to nothing.
+        const gone = missingHoles(check, await api<TheraDto>(routes.routing.eveScout.path));
+        if (gone.length > 0) {
+          toast({
+            tone: 'danger',
+            title: 'The route goes through a hole that is gone',
+            description: `EVE-Scout no longer lists the ${gone
+              .map((leg) => `${leg.kind === 'turnur' ? 'Turnur' : 'Thera'} hole of ${leg.from.name}`)
+              .join(', ')}. Plan the trip again.`,
+          });
+          return;
+        }
+      }
       // Each character's waypoints in order; the characters side by side.
       const results = await Promise.allSettled(to.map((c) => sendRoute(c.id, targets)));
       const failed = to.flatMap((c, k) => {
@@ -1861,17 +1899,18 @@ function WaypointsControl({
     }
   };
 
+  const partText = part ? ` (part ${part.n} of ${part.of})` : '';
   if (pilots.length === 1) {
     const pilot = pilots[0]!;
     return wide ? (
       <Button icon={<Navigation />} loading={busy} onClick={() => void send([pilot])}>
-        Send to {pilot.name}
+        Send{part ? ` part ${part.n}` : ''} to {pilot.name}
       </Button>
     ) : (
       <IconButton
         size="sm"
         variant="secondary"
-        label={`Send waypoints to ${pilot.name}`}
+        label={`Send waypoints${partText} to ${pilot.name}`}
         icon={<Navigation />}
         loading={busy}
         onClick={() => void send([pilot])}
@@ -1883,20 +1922,20 @@ function WaypointsControl({
       <MenuTrigger asChild>
         {wide ? (
           <Button icon={<Navigation />} loading={busy}>
-            Waypoints
+            Waypoints{part ? ` ${part.n}/${part.of}` : ''}
           </Button>
         ) : (
           <IconButton
             size="sm"
             variant="secondary"
-            label="Set in-game waypoints"
+            label={`Set in-game waypoints${partText}`}
             icon={<Navigation />}
             loading={busy}
           />
         )}
       </MenuTrigger>
       <MenuContent align="end">
-        <MenuLabel>In-game waypoints for</MenuLabel>
+        <MenuLabel>In-game waypoints{partText} for</MenuLabel>
         <MenuItem onSelect={() => void send(pilots)}>All characters</MenuItem>
         {pilots.map((c) => (
           <MenuItem key={c.id} onSelect={() => void send([c])}>

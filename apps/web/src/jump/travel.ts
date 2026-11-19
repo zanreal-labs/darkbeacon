@@ -1,4 +1,10 @@
-import { inWormholeSpace, type RouteDto, type RouteStepDto } from '@darkbeacon/shared';
+import {
+  inWormholeSpace,
+  type RouteDto,
+  type RouteHoleDto,
+  type RouteStepDto,
+  type TheraDto,
+} from '@darkbeacon/shared';
 import type { RouteLeg } from './draw';
 import type { StarModel } from './model';
 
@@ -27,6 +33,8 @@ export interface TravelLeg {
   to: TravelSystem;
   /** The leg ends at a stop the pilot asked for (not the end of the trip). */
   stop: boolean;
+  /** A Thera or Turnur leg: the hole as EVE-Scout listed it (signatures, type, age). */
+  hole?: RouteHoleDto;
 }
 
 /** What the panel and the map say about each kind of leg. */
@@ -70,34 +78,103 @@ export function travelLegs(steps: readonly RouteStepDto[], endsAtStop = false): 
   for (let k = 1; k < steps.length; k++) {
     const from = steps[k - 1]!;
     const to = steps[k]!;
-    legs.push({ kind: kindOf(from, to), from: systemOf(from), to: systemOf(to), stop: false });
+    legs.push({
+      kind: kindOf(from, to),
+      from: systemOf(from),
+      to: systemOf(to),
+      stop: false,
+      ...(to.hole ? { hole: to.hole } : {}),
+    });
   }
   if (endsAtStop && legs.length > 0) legs[legs.length - 1]!.stop = true;
   return legs;
 }
 
 /**
- * The systems to send as in-game waypoints, in order (the first as the destination, the rest as
- * waypoints). The autopilot flies stargates only: it cannot take a wormhole, a Thera or Turnur
- * hole or an Ansiblex bridge, and cannot route in wormhole space. So the trip goes out as: the
- * system right before each leg that is not a gate (where the pilot takes it over), every stop and
- * the destination; never a system in wormhole space, never the start the pilot sets off from, and
- * no system twice in a row.
+ * One part of a trip as the autopilot can fly it: the systems to send, in order (the first as the
+ * destination, the rest as waypoints), and the leg the pilot must take by hand where the part ends
+ * (a wormhole, a Thera or Turnur hole, an Ansiblex bridge), or null for the last part.
  */
-export function travelWaypoints(legs: readonly TravelLeg[]): number[] {
-  if (legs.length === 0) return [];
-  const start = legs[0]!.from.id;
-  const out: number[] = [];
+export interface WaypointPart {
+  targets: number[];
+  /** Where the part ends: the leg taken by hand from its last system; null at the end of the trip. */
+  then: TravelLeg | null;
+}
+
+/**
+ * The trip as in-game waypoints, cut at every leg the autopilot cannot take. The autopilot flies
+ * stargates only and does not stop at a waypoint: sent past a hole, it flies on from the system
+ * of the hole towards the next waypoint over gates, so when the hole is gone (it collapsed, or
+ * EVE-Scout's report was wrong) it turns the pilot round and back the way they came. So each part
+ * ends at the system where the pilot takes a hole or bridge (the autopilot stops there, as at a
+ * destination); the next part goes out once they are through. A part holds every stop and its
+ * end; never a system in wormhole space, never the system it sets off from, no system twice in a
+ * row. Parts with nothing to send (a run inside wormhole space) are left out.
+ */
+export function travelWaypointParts(legs: readonly TravelLeg[]): WaypointPart[] {
+  const parts: WaypointPart[] = [];
+  let start = legs[0]?.from.id ?? null;
+  let out: number[] = [];
   const add = (id: number) => {
     if (inWormholeSpace(id)) return;
     if (out.length === 0 ? id === start : out[out.length - 1] === id) return;
     out.push(id);
   };
   legs.forEach((leg, n) => {
-    if (leg.kind !== 'gate') add(leg.from.id);
+    if (leg.kind !== 'gate') {
+      add(leg.from.id);
+      if (out.length > 0) parts.push({ targets: out, then: leg });
+      out = [];
+      start = leg.to.id;
+      if (n === legs.length - 1) add(leg.to.id);
+      return;
+    }
     if (leg.stop || n === legs.length - 1) add(leg.to.id);
   });
-  return out;
+  if (out.length > 0) parts.push({ targets: out, then: null });
+  return parts;
+}
+
+/**
+ * What to look for where a part ends, in a line: the kind of leg and, for a Thera or Turnur hole,
+ * the signature on this side, its type and size, and how old EVE-Scout's report is.
+ */
+export function handoverText(leg: TravelLeg, now: number = Date.now()): string {
+  const where = leg.from.name;
+  if (leg.kind === 'ansiblex') return `Take the Ansiblex in ${where} to ${leg.to.name}.`;
+  if (leg.kind === 'wormhole') return `Take the wormhole in ${where} to ${leg.to.name}.`;
+  const hub = leg.kind === 'thera' ? 'Thera' : 'Turnur';
+  const hole = leg.hole;
+  if (!hole) return `Take the ${hub} hole in ${where}.`;
+  const farSide = hole.solarSystemId === leg.from.id;
+  const sig = farSide ? hole.signature : hole.hubSignature;
+  const what = farSide ? `the ${hub} hole in ${where}` : `the hole to ${leg.to.name} in ${where}`;
+  const kind = [hole.whType, hole.maxShipSize].filter(Boolean).join(', ');
+  const facts = [
+    hole.updatedAt !== null ? `reported ${hoursAgo(now - hole.updatedAt)}` : null,
+    hole.expiresAt !== null
+      ? `about ${Math.max(0, Math.round((hole.expiresAt - now) / 3_600_000))} h left`
+      : null,
+  ].filter(Boolean);
+  return (
+    `Take ${what}: signature ${sig ?? 'not given'}${kind ? ` (${kind})` : ''}` +
+    `${facts.length > 0 ? `, ${facts.join(', ')}` : ''}. ` +
+    `If it is not there, it has closed: plan again from ${where}.`
+  );
+}
+
+function hoursAgo(ms: number): string {
+  const minutes = Math.max(0, Math.round(ms / 60_000));
+  return minutes < 60 ? `${minutes} min ago` : `${Math.round(minutes / 60)} h ago`;
+}
+
+/**
+ * The Thera and Turnur holes of the trip that EVE-Scout no longer lists (collapsed, or taken off
+ * as wrong): sending a route through them would take the pilot to a hole that is not there.
+ */
+export function missingHoles(legs: readonly TravelLeg[], feed: TheraDto): TravelLeg[] {
+  const listed = new Set(feed.connections.map((c) => c.id));
+  return legs.filter((leg) => leg.hole !== undefined && !listed.has(leg.hole.id));
 }
 
 /** What the trip adds up to: every leg is one jump, and how many of them are not stargates. */
