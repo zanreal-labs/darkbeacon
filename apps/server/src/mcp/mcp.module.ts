@@ -16,6 +16,7 @@ import { InstanceSettingsService } from '@darkbeacon/access';
 import { AuditTrail } from '@darkbeacon/audit';
 import type { Actor } from '@darkbeacon/core';
 import {
+  ChainPresenceUseCases,
   ConnectionIntelQuery,
   ConnectionUseCases,
   MapUseCases,
@@ -64,6 +65,7 @@ export class McpController implements OnModuleDestroy {
     @Inject(SignatureUseCases) signatures: SignatureUseCases,
     @Inject(MergedWriteRouter) merged: MergedWriteRouter,
     @Inject(ConnectionIntelQuery) intel: ConnectionIntelQuery,
+    @Inject(ChainPresenceUseCases) presence: ChainPresenceUseCases,
     @Inject(RouteQueries) routes: RouteQueries,
     @Inject(AuditTrail) audit: AuditTrail,
     @Inject(RealtimeHub) hub: RealtimeHub,
@@ -86,6 +88,7 @@ export class McpController implements OnModuleDestroy {
       universe,
       publishing: publishing ?? null,
       systemIntel: systemIntel ?? null,
+      presence,
     };
     this.handler = createMcpHandler(
       (ctx) =>

@@ -33,6 +33,7 @@ import type {
   SystemLabelDto,
   UniverseSystemDto,
 } from '@darkbeacon/shared';
+import type { ChainPresenceLookup } from '../../lib/chain-presence';
 import { useStandings } from '../../lib/intel';
 import type { MapPermissions } from '../../lib/roles';
 import { SlotItem } from '../../plugins/PluginSlot';
@@ -173,6 +174,8 @@ interface Props {
   onCover(cover: WidgetCover): void;
   /** One quiet line in System info (where a merged system comes from). */
   note?: ReactNode;
+  /** When systems were last in the chain from home (System info says it for the selected one). */
+  chainPresence?: ChainPresenceLookup;
 }
 
 /**
@@ -366,6 +369,7 @@ function SystemWidgets({
   onSelectSystem,
   onEdit,
   note,
+  chainPresence,
   visible,
   phone,
   refetchPresence,
@@ -420,6 +424,7 @@ function SystemWidgets({
           canEdit={can.edit}
           onEdit={onEdit && (() => onEdit(id))}
           note={note}
+          chain={chainPresence?.(id)}
         />
       )}
       {show('signatures') && (

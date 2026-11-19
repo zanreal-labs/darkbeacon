@@ -1,5 +1,6 @@
 export * from './access.js';
 export * from './bookmarks.js';
+export * from './chain-presence.js';
 export * from './common.js';
 export * from './directory.js';
 export * from './discord-notify.js';

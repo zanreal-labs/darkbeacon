@@ -2760,6 +2760,18 @@ export const routes = {
     }),
   },
 
+  /** When each system was last in the map's chain from home ("we had a hole to it 4 days ago"). */
+  chainPresence: {
+    list: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/chain-presence',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'read' },
+      mapRole: 'viewer',
+      response: dto.ChainPresenceListDto,
+    }),
+  },
+
   characters: {
     /** My characters' whereabouts and every map they may be tracked on (the characters page). */
     myTracking: route({

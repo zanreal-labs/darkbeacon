@@ -32,6 +32,8 @@ interface Props {
   onFind?(solarSystemId: number): void;
   /** Off: the search only finds systems on the map (viewers). */
   canAdd?: boolean;
+  /** "In chain 4 d ago" for a system the chain from home held before; null for the others. */
+  chainHint?(solarSystemId: number): string | null;
   /** Bumped to focus the input (e.g. "Add system here" from the menu). */
   focusToken?: number;
   placeholder?: string;
@@ -83,6 +85,7 @@ export function AddSystemSearch({
   entries = [],
   onFind,
   canAdd = true,
+  chainHint,
   focusToken = 0,
   placeholder,
 }: Props) {
@@ -198,6 +201,7 @@ export function AddSystemSearch({
             const info = row.kind === 'map' ? row.entry.info : row.system;
             const cls = info ? systemClass(info) : null;
             const id = row.kind === 'map' ? row.entry.id : row.system.id;
+            const hint = onMap.has(id) ? null : (chainHint?.(id) ?? null);
             return (
               <li
                 key={row.key}
@@ -217,6 +221,7 @@ export function AddSystemSearch({
                   {row.kind === 'map' && row.match ? row.match : info?.regionName}
                 </span>
                 {onMap.has(id) && <span className={styles.onMap}>On map</span>}
+                {hint && <span className={styles.chainHint}>{hint}</span>}
               </li>
             );
           })}

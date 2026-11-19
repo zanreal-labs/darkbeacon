@@ -10,3 +10,4 @@ export * from './rules.js';
 export * from './signature-paste.js';
 export * from './stamps.js';
 export * from './structure-paste.js';
+export * from './chain-presence.js';

@@ -3,6 +3,7 @@ import {
   WORMHOLE_DESTINATION_LABEL,
   WORMHOLE_EFFECTS,
   classLabel,
+  type ChainPresenceListDto,
   type CharacterPresenceDto,
   type ConnectionDto,
   type ConnectionIntelDto,
@@ -147,6 +148,25 @@ export function signatureLine(s: SignatureDto): string {
 export function characterLine(catalog: UniverseCatalog, c: CharacterPresenceDto): string {
   const where = c.solarSystemId ? systemName(catalog, c.solarSystemId) : 'unknown';
   return `${c.name} in ${where}${c.online ? '' : ' (offline)'}${c.shipName ? ` ship "${c.shipName}"` : ''}`;
+}
+
+/** When a system was last in the map's chain from home, as one line. */
+export function chainPresenceLine(
+  presence: ChainPresenceListDto,
+  solarSystemId: number,
+  now: number,
+): string {
+  const row = presence.systems.find((s) => s.solarSystemId === solarSystemId);
+  const at = (ms: number) => `${new Date(ms).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+  if (row && row.leftAt === null) return `In the chain from home now (since ${at(row.joinedAt)}).`;
+  if (row?.leftAt != null) {
+    const days = Math.floor((now - row.leftAt) / 86_400_000);
+    const ago = days >= 1 ? `${days} d ago` : `${hours(now - row.leftAt)} ago`;
+    return `Last in the chain from home ${at(row.leftAt)} (${ago}).`;
+  }
+  return presence.recordedSince === null
+    ? 'Never in the chain from home (nothing recorded yet).'
+    : `Never in the chain from home since ${at(presence.recordedSince)}.`;
 }
 
 /**

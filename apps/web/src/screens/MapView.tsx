@@ -14,6 +14,7 @@ import {
 } from '@darkbeacon/shared';
 import { AlertTriangle, PanelRight, Plus, Radio, Waypoints, X } from 'lucide-react';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
+import { chainPresenceHint, useChainPresence } from '../lib/chain-presence';
 import { setMapPeople, useMapPresence } from '../lib/presence';
 import { useMaps } from '../lib/maps';
 import { mapPermissions } from '../lib/roles';
@@ -282,6 +283,13 @@ export function MapView({
   const systemLabels = useMemo(() => shownMap.systemLabels ?? [], [shownMap]);
   const ids = useMemo(() => [...state.systems.keys()], [state.systems]);
   const universe = useUniverseSystems(ids);
+  // When systems were last in the chain from home: System info and the search say it. The whole
+  // chain counts, also the parts of maps this viewer hides here.
+  const chainPresence = useChainPresence(map.id, store.state.systems, store.state.connections);
+  const chainHint = useCallback(
+    (solarSystemId: number) => chainPresenceHint(chainPresence(solarSystemId)),
+    [chainPresence],
+  );
   // While Edit system is open the others see "editing J014348" and the system outlined.
   const reportActivity = presence.publish.activity;
   const editedName = editing !== null ? (universe.get(editing)?.name ?? null) : null;
@@ -749,6 +757,7 @@ export function MapView({
             onPick={addSystem}
             entries={searchEntries}
             onFind={(id) => select(id, true)}
+            chainHint={chainHint}
             canAdd={can.edit}
             focusToken={focus.search}
             placeholder={addAt ? 'Add a system at the pointer…' : undefined}
@@ -860,6 +869,7 @@ export function MapView({
           onSelectSystem={(id) => select(id, true)}
           onCover={onWidgetCover}
           note={system && <ProvenanceLine provenance={system.provenance} sources={state.sources} />}
+          chainPresence={chainPresence}
         />
 
         <EditSystemDialog

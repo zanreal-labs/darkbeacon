@@ -10,6 +10,7 @@ import {
   type CredentialGrant,
 } from '@darkbeacon/core';
 import type {
+  ChainPresenceUseCases,
   ConnectionIntelQuery,
   ConnectionUseCases,
   MapUseCases,
@@ -44,6 +45,7 @@ import { z } from 'zod';
 import type { MergedWriteRouter } from '../modules/mapping/merged-writes.js';
 import type { RealtimeHub } from '../realtime/realtime.hub.js';
 import {
+  chainPresenceLine,
   characterLine,
   connectionLine,
   exitLine,
@@ -81,6 +83,8 @@ export interface McpDeps {
   publishing: MapPublishing | null;
   /** Sovereignty, hourly activity and killmails (public game data); absent without the intel module. */
   systemIntel?: IntelQueries | null;
+  /** When systems were last in a map's chain from home; absent: not told. */
+  presence?: ChainPresenceUseCases | null;
 }
 
 /** A map as a tool sees it: who reads it, and how much of it the caller may see. */
@@ -386,7 +390,7 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
     {
       title: 'System intel',
       description:
-        'Class, security, region, statics with destinations, wormhole effect, who holds it, kills, NPC kills and jumps of the last hour and the newest killmails (of systems on any map); on a map also status, notes, signatures and pilots where the caller may see them.',
+        'Class, security, region, statics with destinations, wormhole effect, who holds it, kills, NPC kills and jumps of the last hour and the newest killmails (of systems on any map); on a map also status, notes, signatures and pilots where the caller may see them, and when the system was last in the chain from home.',
       inputSchema: z.object({ system: SystemArg, map: MapArg.optional() }),
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
@@ -414,6 +418,9 @@ export function buildMcpServer(deps: McpDeps, caller: McpCaller): McpServer {
       if (map) {
         const view = await loadMap(map);
         const onMap = view.systems.find((s) => s.solarSystemId === id);
+        // The chain's past is the map's own record; public links show the map as it is now.
+        if (deps.presence && !view.share)
+          lines.push(chainPresenceLine(await deps.presence.list(actor, view.mapId), id, Date.now()));
         if (!onMap) lines.push('Not on this map.');
         else {
           lines.push(`On map: ${systemLine(deps.universe, onMap)}`);

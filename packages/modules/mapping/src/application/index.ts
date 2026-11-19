@@ -20,3 +20,4 @@ export * from './batch.js';
 export * from './copy-paste.js';
 export * from './pings.js';
 export * from './linked-maps.js';
+export * from './chain-presence.js';
