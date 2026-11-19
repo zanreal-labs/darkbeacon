@@ -36,6 +36,11 @@ import type {
 
 /** Everything the mapping use cases need, wired by the composition root. */
 export interface MappingPorts {
+  /**
+   * Set when a composite's merge writes the composite's own objects (its `self` source): only
+   * then may a composite's own rows change; every other route to them is refused.
+   */
+  compositeOwn?: boolean;
   maps: MapRepository;
   systems: SystemRepository;
   connections: ConnectionRepository;
@@ -127,11 +132,14 @@ export abstract class MappingUseCases {
 
   /**
    * Throws unless the actor may change the map's own systems, connections and signatures:
-   * member+. A composite's own objects (ones kept on it alone) come here through its merge, as
-   * every change to a merged map goes through sharing's writes.
+   * member+, on a map that has objects of its own. A composite's own objects (kept on it alone)
+   * change only through its merge (`compositeOwn`); elsewhere it only shows other maps'.
    */
   protected async authorizeEdit(actor: Actor | null, mapId: string): Promise<Actor> {
-    return this.authorize(actor, mapId, 'member');
+    const who = await this.authorize(actor, mapId, 'member');
+    if (!this.ports.compositeOwn && (await this.ports.maps.findById(mapId))?.kind === 'composite')
+      throw new ConflictError('This map merges other maps; change them through it');
+    return who;
   }
 
   /**

@@ -789,6 +789,10 @@ describeEachDialect('sharing and merged chains', (t) => {
     await env.writes.removeSystem(dave, alliance.id, SYSTEMS.jita);
     await env.settle();
     expect((await view(alliance.id)).systems.map((s) => s.solarSystemId)).not.toContain(SYSTEMS.jita);
+    // Only its merge writes them: the plain map routes still refuse.
+    await expect(env.systems.add(carol, alliance.id, { solarSystemId: c2 })).rejects.toMatchObject({
+      code: 'conflict',
+    });
   });
 
   describe('intel kept on hidden systems', () => {

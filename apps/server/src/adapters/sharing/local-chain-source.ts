@@ -260,9 +260,10 @@ export class LocalChainSource implements ChainSource {
 
   /** Mapping's use cases, acting as `actor`; a write through a share counts as a member of this map. */
   private useCases(delegated: boolean) {
+    // The map's own objects (a composite's included, which only its merge writes).
     const ports: MappingPorts = delegated
       ? { ...this.deps.ports, access: new DelegatedAccess(this.deps.ports.access, this.mapId) }
-      : this.deps.ports;
+      : { ...this.deps.ports, compositeOwn: true };
     return {
       systems: new SystemUseCases(ports),
       connections: new ConnectionUseCases(ports),
