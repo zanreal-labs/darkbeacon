@@ -2,7 +2,18 @@ import { describe, expect, it } from 'vitest';
 import type { RouteDto, RouteStepDto } from '@darkbeacon/shared';
 import { buildStarModel } from './model';
 import { UNIVERSE } from './fixtures.test-support';
-import { mapLegs, THERA, travelLegs, travelPlan, travelTotals, travelWaypoints, TURNUR } from './travel';
+import type { RouteHoleDto, TheraDto } from '@darkbeacon/shared';
+import {
+  handoverText,
+  mapLegs,
+  missingHoles,
+  THERA,
+  travelLegs,
+  travelPlan,
+  travelTotals,
+  travelWaypointParts,
+  TURNUR,
+} from './travel';
 
 const JITA = 30000142;
 const IGNOITTON = 30002647;
@@ -66,8 +77,11 @@ describe('travelLegs', () => {
   });
 });
 
-describe('travelWaypoints', () => {
-  it('sends where each hole or bridge is taken, then the destination, never wormhole space', () => {
+describe('travelWaypointParts', () => {
+  const targets = (legs: Parameters<typeof travelWaypointParts>[0]) =>
+    travelWaypointParts(legs).map((p) => p.targets);
+
+  it('cuts the trip where each hole or bridge is taken; never wormhole space', () => {
     const legs = travelLegs([
       step(IGNOITTON, 'start'),
       step(JITA, 'gate'),
@@ -78,12 +92,14 @@ describe('travelWaypoints', () => {
       step(30004760, 'bridge', { edge: 'ansiblex' }),
       step(AMI, 'gate'),
     ]);
-    // Jita (into Thera), Thera itself left out, Ahbazon (into the chain), the J-space system left
-    // out, Delve's bridge end, Ami.
-    expect(travelWaypoints(legs)).toEqual([JITA, AHBAZON, DELVE, AMI]);
+    // To Jita (into Thera); out in Ahbazon the next hole is right there, nothing to fly; out of
+    // J-space in Delve the bridge is right there too; from its far end, by gate to Ami.
+    const parts = travelWaypointParts(legs);
+    expect(parts.map((p) => p.targets)).toEqual([[JITA], [AMI]]);
+    expect(parts.map((p) => p.then?.kind ?? null)).toEqual(['thera', null]);
   });
 
-  it('keeps every stop in order, skips the start and the same system twice in a row', () => {
+  it('keeps the stops of a part in order, skips where it sets off and the same system twice', () => {
     const plan = travelPlan([
       // Ignoitton > (hole right at the start) > J-space > Ahbazon, a stop where the next hole is taken.
       {
@@ -100,16 +116,108 @@ describe('travelWaypoints', () => {
           step(JITA, 'wormhole', { edge: 'eve-scout' }),
         ]),
       },
-      // Back where the trip started, by gates.
-      { same: false, error: null, data: route([step(JITA, 'start'), step(IGNOITTON, 'gate')]) },
+      // Back where the trip started, by gates, through a stop.
+      { same: false, error: null, data: route([step(JITA, 'start'), step(AMI, 'gate')]) },
+      { same: false, error: null, data: route([step(AMI, 'start'), step(IGNOITTON, 'gate')]) },
     ]);
-    expect(travelWaypoints(plan.legs!)).toEqual([AHBAZON, JITA, IGNOITTON]);
+    expect(targets(plan.legs!)).toEqual([[AMI, IGNOITTON]]);
   });
 
   it('is only the destination for a trip on stargates', () => {
     const legs = travelLegs([step(IGNOITTON, 'start'), step(JITA, 'gate'), step(AMI, 'gate')]);
-    expect(travelWaypoints(legs)).toEqual([AMI]);
-    expect(travelWaypoints([])).toEqual([]);
+    expect(travelWaypointParts(legs)).toEqual([{ targets: [AMI], then: null }]);
+    expect(travelWaypointParts([])).toEqual([]);
+  });
+
+  it('stops the autopilot at the Thera hole of C-J6MT > Amarr instead of flying on to Amarr', () => {
+    // 2026-11-19: C-J6MT > 15 gates > 8-KZXQ > Thera > Domain > Amarr. Sent as one list
+    // ([8-KZXQ, Amarr]) the autopilot did not stop in 8-KZXQ; with the hole gone it flew on to
+    // Amarr over gates, back through UD-AOK and N-RAEL the way the pilot came.
+    const C_J6MT = 30000772;
+    const D_I9HJ = 30002481;
+    const KZXQ = 30002484;
+    const ARBAZ = 30003487;
+    const AMARR = 30002187;
+    const hole: RouteHoleDto = {
+      id: '78659',
+      hubSystemId: THERA,
+      solarSystemId: KZXQ,
+      hubSignature: 'QHM-106',
+      signature: 'KSE-870',
+      whType: 'E587',
+      maxShipSize: 'xlarge',
+      remainingHours: 14,
+      expiresAt: Date.parse('2026-11-20T10:10:37Z'),
+      updatedAt: Date.parse('2026-11-19T17:39:27Z'),
+    };
+    const legs = travelLegs([
+      step(C_J6MT, 'start', { name: 'C-J6MT' }),
+      step(D_I9HJ, 'gate', { name: 'D-I9HJ' }),
+      step(KZXQ, 'gate', { name: '8-KZXQ' }),
+      step(THERA, 'wormhole', { name: 'Thera', edge: 'eve-scout', hole }),
+      step(ARBAZ, 'wormhole', { name: 'Arbaz', edge: 'eve-scout', hole: { ...hole, id: '78655' } }),
+      step(30003489, 'gate', { name: 'Chaven' }),
+      step(30003491, 'gate', { name: 'Ashab' }),
+      step(AMARR, 'gate', { name: 'Amarr' }),
+    ]);
+    const parts = travelWaypointParts(legs);
+    expect(parts.map((p) => p.targets)).toEqual([[KZXQ], [AMARR]]);
+    expect(parts[0]!.then).toMatchObject({
+      kind: 'thera',
+      from: { id: KZXQ },
+      hole: { signature: 'KSE-870' },
+    });
+    expect(handoverText(parts[0]!.then!, Date.parse('2026-11-19T20:39:27Z'))).toBe(
+      'Take the Thera hole in 8-KZXQ: signature KSE-870 (E587, xlarge), reported 3 h ago, about 14 h left. ' +
+        'If it is not there, it has closed: plan again from 8-KZXQ.',
+    );
+    // The way out of Thera is named by Thera's own signature.
+    expect(handoverText(legs[3]!, Date.parse('2026-11-19T17:49:27Z'))).toContain(
+      'Take the hole to Arbaz in Thera: signature QHM-106 (E587, xlarge), reported 10 min ago',
+    );
+  });
+});
+
+describe('missingHoles', () => {
+  it('names the holes of the trip EVE-Scout no longer lists', () => {
+    const hole = (id: string): RouteHoleDto => ({
+      id,
+      hubSystemId: THERA,
+      solarSystemId: JITA,
+      hubSignature: null,
+      signature: null,
+      whType: null,
+      maxShipSize: null,
+      remainingHours: null,
+      expiresAt: null,
+      updatedAt: null,
+    });
+    const legs = travelLegs([
+      step(IGNOITTON, 'start'),
+      step(JITA, 'gate'),
+      step(THERA, 'wormhole', { edge: 'eve-scout', hole: hole('a') }),
+      step(AHBAZON, 'wormhole', { edge: 'eve-scout', hole: hole('b') }),
+    ]);
+    const feed = (ids: string[]): TheraDto => ({
+      fetchedAt: 0,
+      connections: ids.map((id) => ({
+        id,
+        hub: 'thera',
+        hubSystemId: THERA,
+        solarSystemId: JITA,
+        name: 'Jita',
+        security: 0.9,
+        regionName: 'The Forge',
+        whType: null,
+        maxShipSize: null,
+        hubSignature: null,
+        signature: null,
+        remainingHours: null,
+        expiresAt: null,
+      })),
+    });
+    expect(missingHoles(legs, feed(['a', 'b']))).toEqual([]);
+    expect(missingHoles(legs, feed(['a'])).map((l) => l.to.id)).toEqual([AHBAZON]);
   });
 });
 

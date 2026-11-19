@@ -120,6 +120,28 @@ export const RouteQuery = z.object({
 });
 export type RouteQuery = z.infer<typeof RouteQuery>;
 
+/**
+ * The Thera or Turnur hole a step comes through, as EVE-Scout listed it when the route was found:
+ * what to look for on scan (signature ids, type) and how old and how near its end the report is.
+ */
+export const RouteHoleDto = z.object({
+  /** EVE-Scout's id of the hole. */
+  id: z.string(),
+  hubSystemId: EveId,
+  /** The known-space (or J-space) side. */
+  solarSystemId: EveId,
+  /** Signature ids on the hub side and on the other side. */
+  hubSignature: z.string().nullable(),
+  signature: z.string().nullable(),
+  whType: z.string().nullable(),
+  maxShipSize: z.string().nullable(),
+  remainingHours: z.number().nullable(),
+  expiresAt: Timestamp.nullable(),
+  /** When a scout last reported on it (EVE-Scout's `updated_at`); null when not given. */
+  updatedAt: Timestamp.nullable(),
+});
+export type RouteHoleDto = z.infer<typeof RouteHoleDto>;
+
 export const RouteStepDto = z.object({
   solarSystemId: EveId,
   name: z.string(),
@@ -135,6 +157,8 @@ export const RouteStepDto = z.object({
    * bridge of the map, or a Thera or Turnur hole EVE-Scout lists.
    */
   edge: z.enum(['ansiblex', 'eve-scout']).optional(),
+  /** For an `eve-scout` step: the hole it comes through. */
+  hole: RouteHoleDto.optional(),
   regionName: z.string().optional(),
   /** Triglavian invasion outcome of a known-space system (see `InvasionStatus`). */
   invasion: z.enum(['edencom', 'triglavian', 'final']).optional(),

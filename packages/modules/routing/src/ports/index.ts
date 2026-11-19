@@ -169,6 +169,10 @@ export interface EveScoutSignature {
   maxShipSize: string | null;
   remainingHours: number | null;
   expiresAt: number | null;
+  /** When a scout last reported on the hole (`updated_at`). */
+  updatedAt?: number | null;
+  /** EVE-Scout's `completed`: false while the report is still being written (not checked). */
+  completed?: boolean;
 }
 
 /** EVE-Scout's public API (`GET /v2/public/signatures`). Throws when it does not answer. */

@@ -260,6 +260,7 @@ export class HttpEveScoutClient implements EveScoutClient {
       if (row.signature_type !== 'wormhole' || !Number.isInteger(hub) || !Number.isInteger(far)) return [];
       const text = (v: unknown) => (typeof v === 'string' && v !== '' ? v : null);
       const expires = text(row.expires_at);
+      const updated = text(row.updated_at) ?? text(row.created_at);
       return [
         {
           id: String(row.id),
@@ -271,6 +272,8 @@ export class HttpEveScoutClient implements EveScoutClient {
           maxShipSize: text(row.max_ship_size),
           remainingHours: typeof row.remaining_hours === 'number' ? row.remaining_hours : null,
           expiresAt: expires ? Date.parse(expires) || null : null,
+          updatedAt: updated ? Date.parse(updated) || null : null,
+          completed: row.completed !== false,
         },
       ];
     });

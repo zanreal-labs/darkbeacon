@@ -19,6 +19,7 @@ import {
   type RouteStepDto,
   type StandingsDto,
   type SystemIntelDto,
+  type RouteHoleDto,
   type WaypointRequest,
 } from '@darkbeacon/shared';
 import { ARK, META, UNIVERSE } from '../jump/fixtures.test-support';
@@ -733,6 +734,22 @@ describe('JumpPage', () => {
       regionName: 'Domain',
       ...extra,
     });
+    const hole = (id: string, solarSystemId: number, signature: string): RouteHoleDto => ({
+      id,
+      hubSystemId: THERA,
+      solarSystemId,
+      hubSignature: 'QHM-106',
+      signature,
+      whType: 'E587',
+      maxShipSize: 'xlarge',
+      remainingHours: 14,
+      expiresAt: null,
+      updatedAt: null,
+    });
+    const JITA_HOLE = hole('78659', 30000142, 'KSE-870');
+    const AHBAZON_HOLE = hole('78660', 30005196, 'ABC-123');
+    /** What EVE-Scout lists when the waypoints go out. */
+    let listed: string[] = [];
     /** Ignoitton > Jita by gate > Thera > Ahbazon (EVE-Scout) > a C3 of the chain > Ami. */
     const throughThera: RouteDto = {
       from: 30002647,
@@ -748,8 +765,9 @@ describe('JumpPage', () => {
           classLabel: 'Thera',
           security: -0.99,
           regionName: 'G-R00031',
+          hole: JITA_HOLE,
         }),
-        step(30005196, 'Ahbazon', 'wormhole', { edge: 'eve-scout' }),
+        step(30005196, 'Ahbazon', 'wormhole', { edge: 'eve-scout', hole: AHBAZON_HOLE }),
         step(J_SYSTEM, 'J123456', 'wormhole', {
           connectionId: 'c1',
           whClass: 3,
@@ -766,7 +784,28 @@ describe('JumpPage', () => {
     beforeEach(() => {
       asked.length = 0;
       sent.length = 0;
+      listed = [JITA_HOLE.id, AHBAZON_HOLE.id];
       server.use(
+        http.get(routes.routing.eveScout.path, () =>
+          HttpResponse.json({
+            fetchedAt: 0,
+            connections: listed.map((id) => ({
+              id,
+              hub: 'thera',
+              hubSystemId: THERA,
+              solarSystemId: 30000142,
+              name: 'Jita',
+              security: 0.9,
+              regionName: 'The Forge',
+              whType: null,
+              maxShipSize: null,
+              hubSignature: null,
+              signature: null,
+              remainingHours: null,
+              expiresAt: null,
+            })),
+          }),
+        ),
         http.get(routes.routing.preferences.path, () => HttpResponse.json(DEFAULT_ROUTE_PREFERENCES)),
         http.get(routes.routing.route.path, ({ request, params }) => {
           expect(params.mapId).toBe('m-home');
@@ -862,21 +901,34 @@ describe('JumpPage', () => {
       expect([...passed].map((l) => l.textContent)).not.toContainEqual(expect.stringContaining('gate'));
     });
 
-    it('sends where each hole is taken and the destination as waypoints, never wormhole space', async () => {
+    it('sends the waypoints only as far as the first hole, where the autopilot stops', async () => {
       window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&mode=travel');
       const user = userEvent.setup();
       renderPage(CHAIN);
       const panel = await screen.findByRole('complementary', { name: 'Planner' });
       await screen.findByRole('region', { name: 'Route' });
       await user.click(await within(panel).findByRole('button', { name: 'Send waypoints to Ayla Vex' }));
-      await waitFor(() => expect(sent).toHaveLength(3));
-      // Jita (into Thera), Ahbazon (into the chain), Ami; Thera and the C3 are flown by hand.
-      expect(sent).toEqual([
-        { solarSystemId: 30000142, mode: 'destination' },
-        { solarSystemId: 30005196, mode: 'waypoint' },
-        { solarSystemId: 30005035, mode: 'waypoint' },
-      ]);
-      expect(await screen.findByText(/the autopilot does not/)).toBeTruthy();
+      await waitFor(() => expect(sent).toHaveLength(1));
+      // Only Jita: past it the autopilot would fly on over gates, and back if the hole is gone.
+      // From Thera on every leg is a hole, so there is nothing more to send.
+      expect(sent).toEqual([{ solarSystemId: 30000142, mode: 'destination' }]);
+      // What to scan for, on the hole's card and in the toast that confirms the waypoints.
+      expect(
+        await screen.findAllByText(/Take the Thera hole in Jita: signature KSE-870 \(E587, xlarge\)/),
+      ).toHaveLength(2);
+    });
+
+    it('sends nothing when a hole of the route has closed since', async () => {
+      listed = [AHBAZON_HOLE.id];
+      window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&mode=travel');
+      const user = userEvent.setup();
+      renderPage(CHAIN);
+      const panel = await screen.findByRole('complementary', { name: 'Planner' });
+      await screen.findByRole('region', { name: 'Route' });
+      await user.click(await within(panel).findByRole('button', { name: 'Send waypoints to Ayla Vex' }));
+      expect(await screen.findByText('The route goes through a hole that is gone')).toBeTruthy();
+      expect(screen.getByText(/no longer lists the Thera hole of Jita/)).toBeTruthy();
+      expect(sent).toEqual([]);
     });
 
     it('routes each stretch between stops and says which one has no route', async () => {

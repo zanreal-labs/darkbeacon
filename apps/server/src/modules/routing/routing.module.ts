@@ -227,6 +227,12 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
         for (const mapId of maps) this.schedule(mapId);
       } catch (error) {
         this.logger.warn(`EVE-Scout: ${error instanceof Error ? error.message : String(error)}`);
+        // Too long without an answer: stop routing through holes nobody can vouch for.
+        if (this.thera.dropStale()) {
+          const maps = this.router.activeMaps();
+          this.router.invalidateAll();
+          for (const mapId of maps) this.schedule(mapId);
+        }
       }
     };
     const readSovereignty = async () => {
