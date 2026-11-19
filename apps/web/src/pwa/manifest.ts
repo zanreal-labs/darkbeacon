@@ -42,9 +42,9 @@ export function buildManifest(): MetadataRoute.Manifest {
         icons: [{ src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
       },
       {
-        name: 'Jump planner',
-        short_name: 'Jumps',
-        description: 'Plan a capital jump route',
+        name: 'Planner',
+        short_name: 'Planner',
+        description: 'Plan a route, or cyno jumps for a capital',
         url: '/jump',
         icons: [{ src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
       },

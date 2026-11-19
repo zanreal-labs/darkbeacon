@@ -7,7 +7,7 @@ import { JumpLoading } from '../../../screens/JumpLoading';
 import { JumpPlannerClient, type PlannerMap } from '../../../screens/JumpPlannerClient';
 import { SignInRedirect } from '../../../shell/Session';
 
-export const metadata = { title: 'Jump planner · Darkbeacon' };
+export const metadata = { title: 'Planner · Darkbeacon' };
 
 /**
  * `/jump`: the jump planner, a map of all known space for capital jump routes. The shell and a

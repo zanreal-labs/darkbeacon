@@ -237,6 +237,29 @@
   padding-top: var(--dbk-space-4);
 }
 
+/* What the planner plans: a route any ship flies, or cyno jumps. */
+.modeSwitch {
+  display: grid;
+  gap: var(--dbk-space-1);
+  margin-bottom: var(--dbk-space-3);
+}
+
+.modeSegmented {
+  display: flex;
+  width: 100%;
+}
+
+.modeSegmented > * {
+  flex: 1;
+  justify-content: center;
+}
+
+.modeHint {
+  margin: 0;
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-small);
+}
+
 .row2 {
   display: grid;
   grid-template-columns: 1fr 1fr;

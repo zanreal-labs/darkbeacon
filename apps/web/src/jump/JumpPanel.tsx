@@ -68,6 +68,7 @@ import {
   MenuLabel,
   MenuTrigger,
   SearchPicker,
+  Segmented,
   Select,
   Spinner,
   Switch,
@@ -120,8 +121,15 @@ const LEVELS = [0, 1, 2, 3, 4, 5].map((n) => ({
 }));
 
 /** The Hull select's first choice: any ship without a jump drive, over gates and wormholes. */
-const TRAVEL = 'travel';
-const TRAVEL_LABEL = 'Gates & wormholes';
+/** What the planner plans: a route any ship flies, or jumps of a ship with a jump drive. */
+const MODES = [
+  { value: 'travel', label: 'Route' },
+  { value: 'jump', label: 'Cyno jumps' },
+] as const;
+const MODE_HINTS = {
+  travel: 'Any ship: stargates, your map’s wormholes, Thera and Turnur.',
+  jump: 'A ship with a jump drive, from cyno to cyno.',
+} as const;
 
 /** A leg of either mode: a jump-drive route's, or a trip's over gates and wormholes. */
 export type PlannerLeg = JumpLegDto | TravelLeg;
@@ -334,7 +342,7 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
       className={styles.panel}
       data-open={open || undefined}
       data-phone={phone || undefined}
-      aria-label="Jump planner"
+      aria-label="Planner"
     >
       {phone ? (
         <button
@@ -345,7 +353,7 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
         >
           <span className={styles.grabber} aria-hidden />
           <span className={styles.sheetTitle}>
-            <strong>{travel ? TRAVEL_LABEL : ship.name}</strong>
+            <strong>{travel ? 'Route' : ship.name}</strong>
             <span>
               {route
                 ? `${route.jumps} ${route.jumps === 1 ? 'jump' : 'jumps'} · ${formatLy(route.ly)} · ${formatNumber(route.fuel)} fuel`
@@ -358,7 +366,7 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
         </button>
       ) : (
         <div className={styles.panelHead}>
-          <h1 className={styles.title}>Jump planner</h1>
+          <h1 className={styles.title}>Planner</h1>
           {plan && route && (
             <RouteActions plan={plan} onShare={props.onShare} freight={freightDefaults(props)} />
           )}
@@ -368,24 +376,30 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
 
       {open && (
         <div className={styles.panelBody}>
-          <div className={travel ? undefined : styles.row2}>
-            <Field label="Hull">
-              <Select
-                value={travel ? TRAVEL : ship.hull}
-                onValueChange={(hull) => {
-                  if (hull === TRAVEL) return update({ mode: 'travel' });
-                  // The ship flown before comes back with its hull.
-                  const first =
-                    ship.hull === hull ? ship : props.meta.ships.find((s) => s.hull === (hull as JumpHull));
-                  if (first) update({ mode: 'jump', ship: first.name });
-                }}
-                options={[
-                  { value: TRAVEL, label: TRAVEL_LABEL },
-                  ...hulls.map((h) => ({ value: h, label: HULL_LABELS[h] })),
-                ]}
-              />
-            </Field>
-            {!travel && (
+          <div className={styles.modeSwitch}>
+            <Segmented
+              aria-label="What to plan"
+              className={styles.modeSegmented}
+              value={settings.mode}
+              onValueChange={(mode) => update({ mode: mode as PlannerSettings['mode'] })}
+              options={MODES}
+            />
+            <p className={styles.modeHint}>{MODE_HINTS[settings.mode]}</p>
+          </div>
+          {!travel && (
+            <div className={styles.row2}>
+              <Field label="Hull">
+                <Select
+                  value={ship.hull}
+                  onValueChange={(hull) => {
+                    // The ship flown before comes back with its hull.
+                    const first =
+                      ship.hull === hull ? ship : props.meta.ships.find((s) => s.hull === (hull as JumpHull));
+                    if (first) update({ ship: first.name });
+                  }}
+                  options={hulls.map((h) => ({ value: h, label: HULL_LABELS[h] }))}
+                />
+              </Field>
               <Field label="Ship">
                 <Select
                   value={ship.name}
@@ -393,8 +407,8 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
                   options={shipsOfHull.map((s) => ({ value: s.name, label: s.name }))}
                 />
               </Field>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* The trip as a maps app shows it: the points set here, the systems between them. */}
           <FieldGroup label="Route" className={styles.routeGroup}>

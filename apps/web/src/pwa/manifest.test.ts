@@ -61,10 +61,10 @@ describe('the web app manifest', () => {
     expect(pngSize(publicPath('/icons/apple-touch-icon.png'))).toBe('180x180');
   });
 
-  it('has shortcuts to the map and the jump planner, inside its scope', () => {
+  it('has shortcuts to the map and the planner, inside its scope', () => {
     expect(manifest.shortcuts?.map((s) => [s.name, s.url])).toEqual([
       ['Map', '/'],
-      ['Jump planner', '/jump'],
+      ['Planner', '/jump'],
     ]);
     for (const icon of manifest.shortcuts!.flatMap((s) => s.icons ?? []))
       expect(existsSync(publicPath(icon.src)), icon.src).toBe(true);

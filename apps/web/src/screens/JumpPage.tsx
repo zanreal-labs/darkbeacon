@@ -56,7 +56,7 @@ import type { PlannerMap } from './JumpPlannerClient';
  * routing (`GET /api/maps/:mapId/route`, one request per two points of the trip).
  */
 export function JumpPage({ meta, chain = null }: { meta: JumpMetaDto; chain?: PlannerMap | null }) {
-  useBreadcrumbs([{ label: 'Jump planner' }]);
+  useBreadcrumbs([{ label: 'Planner' }]);
   usePageView('jump');
   const universe = useQuery({
     queryKey: ['jumps', 'universe', meta.version],

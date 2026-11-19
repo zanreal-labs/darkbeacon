@@ -190,7 +190,7 @@ describe('JumpPage', () => {
     const user = userEvent.setup();
     renderPage();
     expect(await screen.findByRole('img', { name: /Star map of known space/ })).toBeTruthy();
-    const panel = screen.getByRole('complementary', { name: 'Jump planner' });
+    const panel = screen.getByRole('complementary', { name: 'Planner' });
     expect(within(panel).getByRole('button', { name: 'Skills' })).toBeTruthy();
     expect(within(panel).queryByRole('region', { name: 'Route' })).toBeNull();
 
@@ -223,7 +223,7 @@ describe('JumpPage', () => {
   it('suggests where my characters are and the chain as search results, on focus', async () => {
     const user = userEvent.setup();
     renderPage(CHAIN);
-    const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+    const panel = await screen.findByRole('complementary', { name: 'Planner' });
     const [start, destination] = within(panel).getAllByRole('combobox').slice(2);
 
     await user.click(start!);
@@ -285,7 +285,7 @@ describe('JumpPage', () => {
     );
     window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&ship=Ark');
     renderPage();
-    const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+    const panel = await screen.findByRole('complementary', { name: 'Planner' });
     const red = await within(panel).findByText('RED');
     expect(red.getAttribute('data-tone')).toBe('terrible');
     expect(within(panel).queryByText('BLUE')).toBeNull();
@@ -349,7 +349,7 @@ describe('JumpPage', () => {
     window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&ship=Ark');
     const user = userEvent.setup();
     renderPage();
-    const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+    const panel = await screen.findByRole('complementary', { name: 'Planner' });
     await screen.findByRole('region', { name: 'Route' });
     // Ami becomes the stop; an empty destination waits under it.
     await user.click(within(panel).getByRole('button', { name: 'Add stop' }));
@@ -369,7 +369,7 @@ describe('JumpPage', () => {
     window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&ship=Ark');
     const user = userEvent.setup();
     renderPage();
-    const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+    const panel = await screen.findByRole('complementary', { name: 'Planner' });
     await screen.findByRole('region', { name: 'Route' });
     expect(within(panel).queryByRole('button', { name: /Swap/ })).toBeNull();
     // "Add stop" sits under the trip (its stop goes before the destination).
@@ -407,7 +407,7 @@ describe('JumpPage', () => {
     window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&ship=Ark');
     const user = userEvent.setup();
     renderPage();
-    const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+    const panel = await screen.findByRole('complementary', { name: 'Planner' });
     // Folded away under its name; open, the range and where the levels come from.
     const skills = await within(panel).findByRole('button', { name: 'Skills' });
     await user.click(skills);
@@ -439,7 +439,7 @@ describe('JumpPage', () => {
   it('offers linking the pilot again for skills when the grant lacks them', async () => {
     const user = userEvent.setup();
     renderPage();
-    const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+    const panel = await screen.findByRole('complementary', { name: 'Planner' });
     // The folded card warns that the levels are only assumed.
     const skills = await within(panel).findByRole('button', { name: 'Skills' });
     expect(skills.hasAttribute('data-warn')).toBe(true);
@@ -471,7 +471,7 @@ describe('JumpPage', () => {
     window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&ship=Ark');
     const user = userEvent.setup();
     renderPage();
-    const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+    const panel = await screen.findByRole('complementary', { name: 'Planner' });
     // No warning: the levels come from EVE.
     const skills = await within(panel).findByRole('button', { name: 'Skills' });
     await waitFor(() => expect(skills.hasAttribute('data-warn')).toBe(false));
@@ -488,7 +488,7 @@ describe('JumpPage', () => {
       JSON.stringify({ skills: { jdc: 4, jfc: 3, jf: 2 }, skillsByHand: true }),
     );
     renderPage();
-    const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+    const panel = await screen.findByRole('complementary', { name: 'Planner' });
     const skills = await within(panel).findByRole('button', { name: 'Skills' });
     expect(skills.hasAttribute('data-warn')).toBe(false);
     await userEvent.setup().click(skills);
@@ -517,7 +517,7 @@ describe('JumpPage', () => {
     window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&ship=Ark');
     const user = userEvent.setup();
     renderPage();
-    const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+    const panel = await screen.findByRole('complementary', { name: 'Planner' });
     const skills = await within(panel).findByRole('button', { name: 'Skills' });
     await waitFor(() => expect(requests.at(-1)).toMatchObject({ skills: { jdc: 5, jfc: 3, jf: 3 } }));
 
@@ -541,7 +541,7 @@ describe('JumpPage', () => {
     window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&via=Jita&ship=Ark');
     const user = userEvent.setup();
     renderPage();
-    const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+    const panel = await screen.findByRole('complementary', { name: 'Planner' });
     await screen.findByRole('region', { name: 'Route' });
     expect(requests.at(-1)).toMatchObject({ via: [30000142] });
     expect(within(panel).getByText('Stop 1')).toBeTruthy();
@@ -569,7 +569,7 @@ describe('JumpPage', () => {
     window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&via=Jita&ship=Ark');
     const user = userEvent.setup();
     renderPage();
-    const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+    const panel = await screen.findByRole('complementary', { name: 'Planner' });
     await screen.findByRole('region', { name: 'Route' });
     expect(requests.at(-1)).toMatchObject({ origin: 30002647, via: [30000142], destination: 30005035 });
     // The stop moves up past the start with the arrow key on its grip: Jita becomes the start.
@@ -602,7 +602,7 @@ describe('JumpPage', () => {
     const writeText = vi.fn(async () => {});
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     renderPage();
-    const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+    const panel = await screen.findByRole('complementary', { name: 'Planner' });
     await screen.findByRole('region', { name: 'Route' });
     // A jump freighter's route goes to pilots, or to a client as a freight quote.
     await user.click(within(panel).getByRole('button', { name: 'Share' }));
@@ -635,7 +635,7 @@ describe('JumpPage', () => {
     window.history.replaceState(null, '', '/jump?from=Jita&to=Ami&ship=Avatar');
     const user = userEvent.setup();
     renderPage();
-    const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+    const panel = await screen.findByRole('complementary', { name: 'Planner' });
     await user.click(within(panel).getByRole('button', { name: 'Skills' }));
     expect(within(panel).getByText(/^6 ly range/)).toBeTruthy();
     await screen.findByRole('region', { name: 'Route' });
@@ -672,7 +672,7 @@ describe('JumpPage', () => {
       window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&ship=Ark');
       const user = userEvent.setup();
       renderPage();
-      const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+      const panel = await screen.findByRole('complementary', { name: 'Planner' });
       await screen.findByRole('region', { name: 'Route' });
       await user.click(await within(panel).findByRole('button', { name: 'Send waypoints to Ayla Vex' }));
       await waitFor(() => expect(sent).toHaveLength(2));
@@ -689,7 +689,7 @@ describe('JumpPage', () => {
       window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&ship=Ark');
       const user = userEvent.setup();
       renderPage();
-      const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+      const panel = await screen.findByRole('complementary', { name: 'Planner' });
       await screen.findByRole('region', { name: 'Route' });
       await user.click(await within(panel).findByRole('button', { name: 'Set in-game waypoints' }));
       expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
@@ -790,14 +790,15 @@ describe('JumpPage', () => {
     it("plans any ship over gates, the map's holes and Thera, without the jump planner", async () => {
       window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&mode=travel');
       renderPage(CHAIN);
-      const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+      const panel = await screen.findByRole('complementary', { name: 'Planner' });
       await screen.findByRole('region', { name: 'Route' });
       expect(asked).toHaveLength(1);
       expect(asked[0]!.searchParams.get('from')).toBe('30002647');
       expect(asked[0]!.searchParams.get('to')).toBe('30005035');
       // The jump planner is not asked, and its ship, range, fuel and skills are not offered.
       expect(requests).toHaveLength(0);
-      expect(within(panel).getAllByRole('combobox')[0]!.textContent).toBe('Gates & wormholes');
+      expect(within(panel).getByRole('radio', { name: 'Route' }).getAttribute('aria-checked')).toBe('true');
+      expect(within(panel).queryByText('Hull')).toBeNull();
       expect(within(panel).queryByRole('button', { name: 'Skills' })).toBeNull();
       expect(within(panel).queryByRole('button', { name: 'Route options' })).toBeNull();
       expect(within(panel).queryByRole('button', { name: 'Share' })).toBeNull();
@@ -826,7 +827,7 @@ describe('JumpPage', () => {
       window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&mode=travel');
       const user = userEvent.setup();
       renderPage(CHAIN);
-      const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+      const panel = await screen.findByRole('complementary', { name: 'Planner' });
       await screen.findByRole('region', { name: 'Route' });
       await user.click(await within(panel).findByRole('button', { name: 'Send waypoints to Ayla Vex' }));
       await waitFor(() => expect(sent).toHaveLength(3));
@@ -860,7 +861,7 @@ describe('JumpPage', () => {
       );
       window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&via=Jita&mode=travel');
       renderPage(CHAIN);
-      const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+      const panel = await screen.findByRole('complementary', { name: 'Planner' });
       expect(await within(panel).findByText('No route')).toBeTruthy();
       expect(asked.map((u) => [u.searchParams.get('from'), u.searchParams.get('to')])).toEqual([
         ['30002647', '30000142'],
@@ -876,7 +877,7 @@ describe('JumpPage', () => {
     it('needs a map to route through, and remembers the mode', async () => {
       window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&mode=travel');
       renderPage(null);
-      const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+      const panel = await screen.findByRole('complementary', { name: 'Planner' });
       expect(await within(panel).findByText('No map to route through')).toBeTruthy();
       expect(asked).toHaveLength(0);
       expect(requests).toHaveLength(0);
@@ -888,23 +889,24 @@ describe('JumpPage', () => {
       );
     });
 
-    it('is the first choice of the Hull select, and a jump hull brings the jump planner back', async () => {
+    it('switches between a route and cyno jumps at the top of the planner', async () => {
       window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&ship=Ark');
       const user = userEvent.setup();
       renderPage(CHAIN);
-      const panel = await screen.findByRole('complementary', { name: 'Jump planner' });
+      const panel = await screen.findByRole('complementary', { name: 'Planner' });
       await screen.findByRole('region', { name: 'Route' });
       expect(requests).toHaveLength(1);
-      const hull = within(panel).getAllByRole('combobox')[0]!;
-      await user.click(hull);
-      expect(screen.getAllByRole('option')[0]!.textContent).toBe('Gates & wormholes');
-      await user.click(screen.getByRole('option', { name: 'Gates & wormholes' }));
+      expect(within(panel).getByRole('radio', { name: 'Cyno jumps' }).getAttribute('aria-checked')).toBe(
+        'true',
+      );
+      expect(within(panel).getByText('Hull')).toBeTruthy();
+      await user.click(within(panel).getByRole('radio', { name: 'Route' }));
       await waitFor(() => expect(asked).toHaveLength(1));
       await waitFor(() => expect(window.location.search).toBe('?from=Ignoitton&to=Ami&mode=travel'));
       expect(requests).toHaveLength(1);
+      expect(within(panel).queryByText('Hull')).toBeNull();
 
-      await user.click(within(panel).getAllByRole('combobox')[0]!);
-      await user.click(screen.getByRole('option', { name: 'Jump freighters' }));
+      await user.click(within(panel).getByRole('radio', { name: 'Cyno jumps' }));
       await waitFor(() => expect(window.location.search).toBe('?from=Ignoitton&to=Ami&ship=Ark'));
       expect(within(panel).getByRole('button', { name: 'Skills' })).toBeTruthy();
     });
