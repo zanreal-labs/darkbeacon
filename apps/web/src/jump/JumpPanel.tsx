@@ -416,9 +416,13 @@ export function JumpPanel({ ref, ...props }: JumpPanelProps) {
               {pointRow(0)}
               {stopsInPlan.map((_, k) => (
                 <Fragment key={k}>
-                  {(segments?.[k] ?? []).slice(0, -1).map(({ leg, n }) => (
-                    <LegRow key={n} leg={leg} n={n} {...legHover} />
-                  ))}
+                  {travel ? (
+                    <TravelLegs legs={segments?.[k] ?? []} {...legHover} />
+                  ) : (
+                    (segments?.[k] ?? [])
+                      .slice(0, -1)
+                      .map(({ leg, n }) => <LegRow key={n} leg={leg} n={n} {...legHover} />)
+                  )}
                   {tripSegments && <SegmentState segment={tripSegments[k]!} />}
                   {pointRow(k + 1, segments?.[k]?.at(-1))}
                 </Fragment>
@@ -666,6 +670,48 @@ function LegRow({
         />
       )}
     </div>
+  );
+}
+
+/**
+ * The systems between two points of a route any ship flies, as a maps app lists them: the ones
+ * where something happens (the system before a wormhole, a Thera or Turnur hole or an Ansiblex
+ * bridge, and where it comes out) as cards, every run of stargates between them folded into one
+ * row that opens to its systems. The last leg arrives at the point itself and is not listed.
+ */
+function TravelLegs({ legs, ...hover }: { legs: ReadonlyArray<{ leg: PlannerLeg; n: number }> } & LegHover) {
+  const groups: Array<{ leg: PlannerLeg; n: number } | Array<{ leg: PlannerLeg; n: number }>> = [];
+  legs.slice(0, -1).forEach((item, i) => {
+    const key = item.leg.kind !== 'gate' || legs[i + 1]!.leg.kind !== 'gate';
+    if (key) groups.push(item);
+    else {
+      const last = groups.at(-1);
+      if (Array.isArray(last)) last.push(item);
+      else groups.push([item]);
+    }
+  });
+  return groups.map((group) =>
+    Array.isArray(group) ? (
+      <GateRun key={`g${group[0]!.n}`} legs={group} {...hover} />
+    ) : (
+      <LegRow key={group.n} leg={group.leg} n={group.n} {...hover} />
+    ),
+  );
+}
+
+/** A run of stargates folded into one row: how many and through which regions; it opens to them. */
+function GateRun({ legs, ...hover }: { legs: ReadonlyArray<{ leg: PlannerLeg; n: number }> } & LegHover) {
+  const [open, setOpen] = useState(false);
+  const regions = legs.map(({ leg }) => leg.to.region).filter((r, i, all) => r && r !== all[i - 1]);
+  return (
+    <>
+      <button type="button" className={styles.gateRun} aria-expanded={open} onClick={() => setOpen(!open)}>
+        {open ? <ChevronUp aria-hidden /> : <ChevronDown aria-hidden />}
+        <span>{jumpsText(legs.length)} by gate</span>
+        {regions.length > 0 && <span className={styles.systemRegion}>{regions.join(' → ')}</span>}
+      </button>
+      {open && legs.map(({ leg, n }) => <LegRow key={n} leg={leg} n={n} {...hover} />)}
+    </>
   );
 }
 

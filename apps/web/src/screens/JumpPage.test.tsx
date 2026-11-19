@@ -823,6 +823,42 @@ describe('JumpPage', () => {
       await waitFor(() => expect(window.location.search).toBe('?from=Ignoitton&to=Ami&mode=travel'));
     });
 
+    it('folds every run of stargates into one row that opens to its systems', async () => {
+      // Ignoitton > three gates > Jita > Thera > Ahbazon > two gates > Ami.
+      const long: RouteDto = {
+        ...throughThera,
+        jumps: 8,
+        steps: [
+          step(30002647, 'Ignoitton', 'start'),
+          step(30000001, 'Tanoo', 'gate', { regionName: 'Derelik' }),
+          step(30000002, 'Lashesih', 'gate', { regionName: 'Derelik' }),
+          step(30000003, 'Akpivem', 'gate', { regionName: 'The Forge' }),
+          step(30000142, 'Jita', 'gate', { regionName: 'The Forge' }),
+          throughThera.steps[2]!,
+          throughThera.steps[3]!,
+          step(30000004, 'Jark', 'gate'),
+          step(30005035, 'Ami', 'gate'),
+        ],
+      };
+      server.use(http.get(routes.routing.route.path, () => HttpResponse.json(long)));
+      window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&mode=travel');
+      const user = userEvent.setup();
+      renderPage(CHAIN);
+      const panel = await screen.findByRole('complementary', { name: 'Planner' });
+      const runs = await within(panel).findAllByRole('button', { name: /by gate/ });
+      // Tanoo, Lashesih, Akpivem folded; Jita (where Thera is taken), Thera, Ahbazon shown; Jark folded.
+      expect(runs.map((r) => r.textContent)).toEqual([
+        '3 jumps by gateDerelik → The Forge',
+        '1 jump by gateDomain',
+      ]);
+      expect(
+        [...panel.querySelectorAll('[data-kind]')].map((l) => l.textContent?.match(/[A-Z][a-z]+/)?.[0]),
+      ).toEqual(['Jita', 'Thera', 'Ahbazon']);
+      await user.click(runs[0]!);
+      expect(runs[0]!.getAttribute('aria-expanded')).toBe('true');
+      expect(panel.querySelectorAll('[data-kind]')).toHaveLength(6);
+    });
+
     it('sends where each hole is taken and the destination as waypoints, never wormhole space', async () => {
       window.history.replaceState(null, '', '/jump?from=Ignoitton&to=Ami&mode=travel');
       const user = userEvent.setup();

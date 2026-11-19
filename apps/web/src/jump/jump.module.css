@@ -282,6 +282,38 @@
   margin-top: var(--dbk-space-3);
 }
 
+/* A run of stargates of a route, folded: how many and through which regions. */
+.gateRun {
+  display: flex;
+  align-items: center;
+  gap: var(--dbk-space-2);
+  width: 100%;
+  padding: var(--dbk-space-1) var(--dbk-space-2);
+  border: 1px dashed var(--dbk-color-border);
+  border-radius: var(--dbk-radius-md);
+  background: transparent;
+  color: var(--dbk-color-text-muted);
+  font: inherit;
+  font-size: var(--dbk-font-size-small);
+  text-align: left;
+  cursor: pointer;
+}
+
+.gateRun:hover {
+  color: var(--dbk-color-text);
+  border-color: var(--dbk-color-border-strong, var(--dbk-color-border));
+}
+
+.gateRun > span:first-of-type {
+  white-space: nowrap;
+}
+
+.gateRun svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
 /* A system of the trip as a card: the picker (or its name) and how the route gets there. */
 .systemCard {
   display: grid;
