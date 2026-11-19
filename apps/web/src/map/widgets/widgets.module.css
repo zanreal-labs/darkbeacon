@@ -281,6 +281,34 @@
   min-width: 0;
 }
 
+/* ---- Message of the day ---- */
+
+.motd {
+  min-width: 0;
+}
+
+.motdEditor {
+  display: grid;
+  gap: 6px;
+}
+
+.motdEditor .notes {
+  resize: vertical;
+}
+
+.motdButtons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.motdHint {
+  flex: 1;
+  min-width: 0;
+  color: var(--dbk-color-text-subtle);
+  font-size: var(--dbk-font-size-small);
+}
+
 /* ---- System details ---- */
 
 .details {

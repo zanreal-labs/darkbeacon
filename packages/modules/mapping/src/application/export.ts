@@ -76,6 +76,7 @@ export class MapTransfer extends MappingUseCases {
       labels: document.map.labels,
       systemLabels: document.map.systemLabels,
       ...(document.map.views?.length ? { views: document.map.views } : {}),
+      ...(document.map.motd?.trim() ? { motd: document.map.motd.trim() } : {}),
       createdAt: now,
       updatedAt: now,
     };
@@ -252,6 +253,7 @@ export class MapTransfer extends MappingUseCases {
         labels: map.labels,
         systemLabels: map.systemLabels,
         ...(map.views?.length ? { views: map.views } : {}),
+        ...(map.motd ? { motd: map.motd } : {}),
       },
       systems: systems.map(strip),
       connections: connections.map(strip),

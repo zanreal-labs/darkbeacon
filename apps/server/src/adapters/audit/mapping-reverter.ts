@@ -89,6 +89,7 @@ export class MappingReverter implements ChangeReverter {
     'labels.changed',
     'system_labels.changed',
     'views.changed',
+    'motd.changed',
     'map.settings_changed',
   ] as const;
 
@@ -254,6 +255,14 @@ export class MappingReverter implements ChangeReverter {
         if (!current || !change) throw new ConflictError('Nothing to revert');
         if (!sameValue(current.views ?? [], change.after ?? [])) throw new ConflictError(CHANGED_SINCE);
         await this.uc.maps.setViews(actor, mapId, (change.before ?? []) as MapViewDto[]);
+        return;
+      }
+      case 'motd.changed': {
+        const current = await this.ports.maps.findById(mapId);
+        const change = diff.motd;
+        if (!current || !change) throw new ConflictError('Nothing to revert');
+        if ((current.motd ?? '') !== (change.after ?? '')) throw new ConflictError(CHANGED_SINCE);
+        await this.uc.maps.setMotd(actor, mapId, String(change.before ?? ''));
         return;
       }
       case 'map.settings_changed': {

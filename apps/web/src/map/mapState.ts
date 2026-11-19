@@ -162,6 +162,11 @@ export function applyMapEvent(state: MapState, event: TypedEvent): MapState {
       return state.map ? { ...state, map: { ...state.map, systemLabels: event.data.systemLabels } } : state;
     case 'views.changed':
       return state.map ? { ...state, map: { ...state.map, views: event.data.views } } : state;
+    case 'motd.changed': {
+      if (!state.map) return state;
+      const { motd: _motd, ...map } = state.map;
+      return { ...state, map: event.data.motd ? { ...map, motd: event.data.motd } : map };
+    }
     default:
       return state;
   }

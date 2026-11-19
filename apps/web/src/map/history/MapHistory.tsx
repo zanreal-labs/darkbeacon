@@ -60,7 +60,11 @@ export const MAP_HISTORY_KINDS = [
   { value: 'labels', label: 'Labels and tags', types: ['labels.*', 'system_labels.*'] },
   { value: 'pings', label: 'Rally pings', types: ['ping.*'] },
   { value: 'characters', label: 'Characters', types: ['character.*'] },
-  { value: 'settings', label: 'Settings, hubs and access', types: ['map.*', 'routes.*', 'access.*'] },
+  {
+    value: 'settings',
+    label: 'Settings, hubs and access',
+    types: ['map.*', 'motd.*', 'routes.*', 'access.*'],
+  },
 ] as const;
 
 /** `since` of a period, fixed when it is picked (a moving `since` would refetch forever). */

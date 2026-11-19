@@ -79,6 +79,7 @@ export const EVENT_DATA_SCHEMAS: Record<EventType, z.ZodType> = {
   'labels.changed': z.object({ labels: z.array(LabelDto) }),
   'system_labels.changed': z.object({ systemLabels: z.array(SystemLabelDto) }),
   'views.changed': z.object({ views: z.array(MapViewDto) }),
+  'motd.changed': z.object({ motd: z.string() }),
   'map.share.offered': MapShareDto,
   'map.share.accepted': MapShareDto,
   'map.share.changed': MapShareDto,

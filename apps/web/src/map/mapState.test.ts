@@ -56,6 +56,30 @@ describe('applyMapMessage', () => {
     expect(state.systems.size).toBe(0);
     expect(state.has).toEqual({ signatures: true, characters: true });
   });
+
+  it('takes the map’s message of the day as it changes, and leaves it out once cleared', () => {
+    const map = {
+      id: 'map-1',
+      slug: 'home',
+      name: 'Home',
+      ownerAccountId: 'a',
+      settings: { scopes: ['wormhole'] },
+      labels: [],
+      systemLabels: [],
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    let state = apply(emptyMapState(), {
+      op: 'snapshot',
+      stream: STREAM,
+      seq: 0,
+      data: { map, systems: [], connections: [] },
+    });
+    state = apply(state, eventMessage(STREAM, 'motd.changed', { motd: 'Comms: **Ops**' }));
+    expect(state.map?.motd).toBe('Comms: **Ops**');
+    state = apply(state, eventMessage(STREAM, 'motd.changed', { motd: '' }));
+    expect(state.map).toEqual(map);
+  });
 });
 
 describe('pending changes', () => {

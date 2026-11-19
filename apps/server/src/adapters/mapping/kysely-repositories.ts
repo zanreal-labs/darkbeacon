@@ -27,6 +27,8 @@ export interface MappingTables {
     slug: string;
     name: string;
     description: string;
+    /** The message of the day; '' for none. */
+    motd: string;
     owner_account_id: string;
     /** `standard` or `composite`. */
     kind: string;
@@ -731,6 +733,7 @@ function mapToRow(map: ChainMap): MapRow {
     slug: map.slug,
     name: map.name,
     description: map.description ?? '',
+    motd: map.motd ?? '',
     kind: map.kind ?? 'standard',
     owner_account_id: map.ownerAccountId,
     settings: json.encode(map.settings),
@@ -754,6 +757,7 @@ function mapFromRow(row: MapRow): ChainMap {
     slug: row.slug,
     name: row.name,
     ...(row.description ? { description: row.description } : {}),
+    ...(row.motd ? { motd: row.motd } : {}),
     ...(row.kind === 'composite' ? { kind: 'composite' as const } : {}),
     ownerAccountId: row.owner_account_id,
     settings: json.decode<ChainMap['settings']>(row.settings)!,
