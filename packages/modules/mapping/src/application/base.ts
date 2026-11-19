@@ -18,6 +18,7 @@ import type { MapSystem } from '../domain/map.js';
 import type {
   AuthorDirectory,
   ChainOverlay,
+  ChainPresenceRepository,
   ChangeStamps,
   CommentRepository,
   ConnectionRepository,
@@ -46,6 +47,8 @@ export interface MappingPorts {
   stamps: ChangeStamps;
   /** Merged chains of maps that merge others (sharing); absent: every map shows its own rows. */
   overlay?: ChainOverlay;
+  /** When systems were last in each map's chain from home; absent: nothing is recorded. */
+  presence?: ChainPresenceRepository;
   universe: UniverseCatalog;
   /** Names written on signatures, comments and structures; absent: nobody is named. */
   authors?: AuthorDirectory;

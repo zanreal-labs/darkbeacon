@@ -65,6 +65,10 @@ export function setupMockServer(...handlers: Parameters<typeof setupServer>) {
       HttpResponse.json(path === routes.audit.systemHistory.path ? { entries: [], nextCursor: null } : []),
     ),
   );
+  // Nothing recorded yet about when systems were in the chain.
+  const chain = http.get(routes.chainPresence.list.path, () =>
+    HttpResponse.json({ recordedSince: null, systems: [] }),
+  );
   const wormholes = http.get(routes.universe.wormholes.path, () =>
     HttpResponse.json({ types: [], hullClasses: [] }),
   );
@@ -89,7 +93,7 @@ export function setupMockServer(...handlers: Parameters<typeof setupServer>) {
       HttpResponse.json({ mainCharacterId: null, followCharacterId: null }),
     ),
   ];
-  const server = setupServer(...handlers, themes, ...empty, wormholes, ...routing, ...characters);
+  const server = setupServer(...handlers, themes, ...empty, chain, wormholes, ...routing, ...characters);
   beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
   afterEach(() => server.resetHandlers());
   afterAll(() => server.close());

@@ -19,6 +19,7 @@ import {
   KyselySignatureRepository,
   KyselySystemRepository,
 } from './kysely-repositories.js';
+import { KyselyChainPresenceRepository } from './kysely-chain-presence.js';
 import { loadWormholeData } from '@darkbeacon/sde';
 import { StaticUniverseCatalog } from '../universe/static-universe-catalog.js';
 import { MappingMapOwnership } from './map-ownership.js';
@@ -155,6 +156,7 @@ export function mappingTestPorts(database: Database) {
     signatures: new KyselySignatureRepository(database),
     passages: new KyselyPassageRepository(database),
     stamps: new KyselyChangeStamps(database),
+    presence: new KyselyChainPresenceRepository(database),
     universe: fixtureUniverse(),
     access,
     events: new KyselyEventLog(database, bus),

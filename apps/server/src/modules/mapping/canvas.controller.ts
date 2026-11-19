@@ -1,13 +1,19 @@
 import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Post, Put } from '@nestjs/common';
 import type { Actor } from '@darkbeacon/core';
 import { z } from 'zod';
-import { ClipboardUseCases, LinkedMapQueries, PingUseCases } from '@darkbeacon/mapping';
+import {
+  ChainPresenceUseCases,
+  ClipboardUseCases,
+  LinkedMapQueries,
+  PingUseCases,
+} from '@darkbeacon/mapping';
 import {
   ClipboardRolesRequest,
   CreatePingRequest,
   nestPath,
   PasteSystemsRequest,
   routes,
+  type ChainPresenceListDto,
   type LinkedMapDto,
   type MapDto,
   type MapPingDto,
@@ -18,14 +24,26 @@ import { ZodPipe } from '../../platform/http.js';
 
 const SolarSystemId = z.coerce.number().int().positive();
 
-/** What the canvas does beyond single changes: rally pings, and pasting copied systems. */
+/**
+ * What the canvas does beyond single changes: rally pings, pasting copied systems, the other maps
+ * a system is on and when systems were last in the chain.
+ */
 @Controller()
 export class CanvasController {
   constructor(
     @Inject(PingUseCases) private readonly pings: PingUseCases,
     @Inject(ClipboardUseCases) private readonly clipboard: ClipboardUseCases,
     @Inject(LinkedMapQueries) private readonly linked: LinkedMapQueries,
+    @Inject(ChainPresenceUseCases) private readonly presence: ChainPresenceUseCases,
   ) {}
+
+  @Get(nestPath(routes.chainPresence.list.path))
+  chainPresence(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+  ): Promise<ChainPresenceListDto> {
+    return this.presence.list(actor, mapId);
+  }
 
   @Get(nestPath(routes.linkedMaps.elsewhere.path))
   elsewhere(

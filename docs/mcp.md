@@ -98,22 +98,22 @@ only the public maps opened to agents.
 Output is compact text for language models: one line per system or connection, names instead of ids,
 short ids (the last 8 characters) where a tool needs one back, `next <cursor>` for the next page.
 
-| Tool                 | What it does                                                                  | Scope (keys)          |
-| -------------------- | ----------------------------------------------------------------------------- | --------------------- |
-| `list_maps`          | maps the key can read (anonymous: public maps opened to agents)               | `maps:read`           |
-| `get_map`            | the chain: systems (class, statics, effect, status), connections, exits       | `maps:read` (+ reads) |
-| `find_system`        | search systems by name, optionally whether they are on a map                  | `universe:read`       |
-| `get_system_intel`   | class, region, statics with sizes, effect; on a map notes, signatures, pilots | as `get_map`          |
-| `list_connections`   | connections most urgent first, mass and time left, which hulls fit            | `connections:read`    |
-| `find_route`         | shortest, safer, high-sec, outlaw or pilot route over gates and the chain     | `routes:read`         |
-| `nearest_hub`        | exits with jumps to the trade hubs; from a system, jumps to every hub         | `routes:read`         |
-| `list_signatures`    | signatures of a system                                                        | `signatures:read`     |
-| `get_recent_history` | latest changes, who and how (keys only)                                       | `audit:read`          |
-| `add_signature`      | record a signature                                                            | `signatures:write`    |
-| `update_signature`   | group, type, name, notes, link to a connection                                | `signatures:write`    |
-| `add_connection`     | connect two systems (adds them when missing)                                  | `connections:write`   |
-| `update_connection`  | mass, EOL, size, mass saved, danger, bubbles                                  | `connections:write`   |
-| `add_note`           | append to (or replace) a system's notes                                       | `systems:write`       |
+| Tool                 | What it does                                                                                                              | Scope (keys)          |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| `list_maps`          | maps the key can read (anonymous: public maps opened to agents)                                                           | `maps:read`           |
+| `get_map`            | the chain: systems (class, statics, effect, status), connections, exits                                                   | `maps:read` (+ reads) |
+| `find_system`        | search systems by name, optionally whether they are on a map                                                              | `universe:read`       |
+| `get_system_intel`   | class, region, statics with sizes, effect; on a map notes, signatures, pilots and when it was last in the chain from home | as `get_map`          |
+| `list_connections`   | connections most urgent first, mass and time left, which hulls fit                                                        | `connections:read`    |
+| `find_route`         | shortest, safer, high-sec, outlaw or pilot route over gates and the chain                                                 | `routes:read`         |
+| `nearest_hub`        | exits with jumps to the trade hubs; from a system, jumps to every hub                                                     | `routes:read`         |
+| `list_signatures`    | signatures of a system                                                                                                    | `signatures:read`     |
+| `get_recent_history` | latest changes, who and how (keys only)                                                                                   | `audit:read`          |
+| `add_signature`      | record a signature                                                                                                        | `signatures:write`    |
+| `update_signature`   | group, type, name, notes, link to a connection                                                                            | `signatures:write`    |
+| `add_connection`     | connect two systems (adds them when missing)                                                                              | `connections:write`   |
+| `update_connection`  | mass, EOL, size, mass saved, danger, bubbles                                                                              | `connections:write`   |
+| `add_note`           | append to (or replace) a system's notes                                                                                   | `systems:write`       |
 
 Write tools are listed only for keys that hold a write scope and are not read-only; anonymous clients get
 read tools only. What `get_map` shows follows the scopes: notes and status need `systems:read`,

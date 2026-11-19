@@ -14,7 +14,9 @@ import { AccessRules, InstanceSettingsService } from '@darkbeacon/access';
 import { AccountService } from '@darkbeacon/identity';
 import { InstanceMapDirectory } from '../../adapters/mapping/map-directory.js';
 import {
+  CHAIN_EVENT_TYPES,
   ChainOverlaySlot,
+  ChainPresenceUseCases,
   BookmarkNumberUseCases,
   CommentUseCases,
   ConnectionIntelQuery,
@@ -45,6 +47,7 @@ import {
   KyselySystemRepository,
 } from '../../adapters/mapping/kysely-repositories.js';
 import { KyselyMapPreferenceRepository } from '../../adapters/mapping/kysely-preferences.js';
+import { KyselyChainPresenceRepository } from '../../adapters/mapping/kysely-chain-presence.js';
 import { DirectoryAuthors } from '../../adapters/mapping/author-directory.js';
 import { KyselyCommentRepository, KyselyStructureRepository } from '../../adapters/mapping/kysely-intel.js';
 import { KyselyPilotDirectory } from '../../adapters/mapping/pilot-directory.js';
@@ -136,6 +139,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
         pilots: new KyselyPilotDirectory(database),
         stamps: new KyselyChangeStamps(database),
         overlay,
+        presence: new KyselyChainPresenceRepository(database),
         universe,
         authors: new DirectoryAuthors(directory),
         structures: new KyselyStructureRepository(database),
@@ -171,6 +175,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
     useCase(ClipboardUseCases),
     useCase(PingUseCases),
     useCase(LinkedMapQueries),
+    useCase(ChainPresenceUseCases),
     useCase(SystemUseCases),
     useCase(ConnectionUseCases),
     useCase(SignatureUseCases),
@@ -213,6 +218,7 @@ const useCase = <T>(type: new (ports: MappingPorts) => T) => ({
     ConnectionUseCases,
     SignatureUseCases,
     BookmarkNumberUseCases,
+    ChainPresenceUseCases,
     CommentUseCases,
     StructureUseCases,
     PassageUseCases,
@@ -234,6 +240,7 @@ export class MappingModule implements OnModuleInit, OnApplicationBootstrap {
     @Inject(PassageRecorder) private readonly passages: PassageRecorder,
     @Inject(EVENT_LOG) private readonly log: EventLog,
     @Inject(BookmarkNumberUseCases) private readonly numbers: BookmarkNumberUseCases,
+    @Inject(ChainPresenceUseCases) private readonly presence: ChainPresenceUseCases,
     @Inject(AsyncAuditScope) private readonly audit: AsyncAuditScope,
     @Inject(HttpAdapterHost) private readonly http: HttpAdapterHost,
   ) {}
@@ -245,6 +252,9 @@ export class MappingModule implements OnModuleInit, OnApplicationBootstrap {
       () => this.numbers.backfill(),
     );
     if (maps.length > 0) this.logger.log(`numbered the wormholes of ${maps.length} map(s)`);
+    // Maps without a chain record get one from their history, the others are brought up to date.
+    const replayed = await this.presence.backfillAll();
+    if (replayed.length > 0) this.logger.log(`recorded the chain history of ${replayed.length} map(s)`);
   }
 
   onModuleInit(): void {
@@ -285,6 +295,18 @@ export class MappingModule implements OnModuleInit, OnApplicationBootstrap {
             if (pair.has(source) && pair.has(target)) await this.recordJump(jump);
           }
         }
+      },
+    });
+    // When systems were last in the chain from home: recorded after every change that may move it,
+    // the map's own and (on maps that merge others) the merge's.
+    this.consumers.register({
+      name: 'mapping.chain-presence',
+      streams: ['map'],
+      types: CHAIN_EVENT_TYPES,
+      handle: async (event) => {
+        const stream = parseStream(event.stream);
+        if (stream?.kind !== 'map' || !this.presence.moves(stream.id, event.type, event.data)) return;
+        await this.presence.record(stream.id);
       },
     });
     // Access answers map roles from map ownership; it cannot inject mapping directly (DI cycle).

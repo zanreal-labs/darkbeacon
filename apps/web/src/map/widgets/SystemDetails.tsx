@@ -1,6 +1,6 @@
 'use client';
 
-import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Lock, Map as MapIcon, Orbit, Pencil, Skull, Telescope } from 'lucide-react';
 import {
   WORMHOLE_DESTINATION_LABEL,
@@ -15,6 +15,7 @@ import {
 } from '@darkbeacon/shared';
 import { cssVar } from '@darkbeacon/theme-sdk';
 import { Markdown } from '../../components/Markdown';
+import { chainPresenceText, type ChainPresence } from '../../lib/chain-presence';
 import { IconButton, Tooltip } from '../../ui';
 import { classPill, shownSecurity, STATUS_LABEL } from '../nodeFacts';
 import node from '../SystemNode.module.css';
@@ -232,11 +233,31 @@ function NotesExcerpt({ text }: { text: string }) {
 }
 
 /**
+ * "Last in our chain 3 d ago" (the moment itself on hover), "In the chain now" or "Never in our
+ * chain": whether the map had a way to the system from home, and when.
+ */
+export function ChainPresenceLine({ presence }: { presence: ChainPresence }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  const { text, title } = chainPresenceText(presence, now);
+  return (
+    <p className={styles.chainPresence} title={title} data-testid="chain-presence">
+      {text}
+    </p>
+  );
+}
+
+/**
  * The System info widget: what a pilot reads at a glance, nothing to edit. The title bar is the
  * system (pill, name, the real name under a custom one) with its status and the links out; under
  * it where it is with the effect and the statics, the system's Labels and Tags as the map draws
- * them, two lines of notes, and its kill intel in numbers. Editing is the Edit system dialog (the
- * pencil, the context menu, a double-click on the system).
+ * them, two lines of notes, and its kill intel in numbers. Under where it is, one line says
+ * when the system was last in the chain from home (not on a home system, which is the chain's
+ * start). Editing is the Edit system dialog (the pencil, the context menu, a double-click on the
+ * system).
  */
 export function SystemInfoWidget({
   mapId,
@@ -247,6 +268,7 @@ export function SystemInfoWidget({
   canEdit,
   onEdit,
   note,
+  chain,
 }: {
   mapId: string;
   system: MapSystemDto;
@@ -257,6 +279,8 @@ export function SystemInfoWidget({
   onEdit?(): void;
   /** One quiet line (where a merged system comes from). */
   note?: ReactNode;
+  /** Where the system stands in the chain from home; absent: not shown. */
+  chain?: ChainPresence;
 }) {
   const realName = info?.name ?? 'Unknown system';
   const custom = system.customName;
@@ -296,6 +320,7 @@ export function SystemInfoWidget({
           <StaticsLine statics={info.statics} />
         </div>
       )}
+      {chain && system.status !== 'home' && <ChainPresenceLine presence={chain} />}
       <SystemChips system={system} labels={labels} systemLabels={systemLabels} />
       {system.description && <NotesExcerpt key={system.solarSystemId} text={system.description} />}
       <SystemIntel mapId={mapId} solarSystemId={system.solarSystemId} />

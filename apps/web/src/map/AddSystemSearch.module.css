@@ -119,6 +119,14 @@
   line-height: 18px;
 }
 
+/* A system the chain from home held before: when it last did. */
+.chainHint {
+  color: var(--dbk-color-text-muted);
+  font-size: var(--dbk-font-size-xs);
+  line-height: 18px;
+  white-space: nowrap;
+}
+
 .empty {
   padding: var(--dbk-space-2);
 }
