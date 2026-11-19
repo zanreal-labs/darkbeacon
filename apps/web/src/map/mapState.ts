@@ -29,6 +29,21 @@ export interface MapState {
   has: { signatures: boolean; characters: boolean };
 }
 
+/**
+ * The system the widgets show while none is selected: home (the oldest of them), else the oldest
+ * system on the map, the root its layout grows from. Hidden systems never; none on the map, none.
+ */
+export function homeSystem(systems: ReadonlyMap<number, MapSystemDto>): MapSystemDto | undefined {
+  let home: MapSystemDto | undefined;
+  let oldest: MapSystemDto | undefined;
+  for (const s of systems.values()) {
+    if (!s.visible) continue;
+    if (s.status === 'home' && (!home || s.createdAt < home.createdAt)) home = s;
+    if (!oldest || s.createdAt < oldest.createdAt) oldest = s;
+  }
+  return home ?? oldest;
+}
+
 export const emptyMapState = (): MapState => ({
   map: null,
   systems: new Map(),

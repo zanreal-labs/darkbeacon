@@ -146,7 +146,7 @@ type Store = Pick<
 
 interface Props {
   mapId: string;
-  /** The selected system; nothing selected, no widget shows. */
+  /** The system the widgets show: the selected one, else home; none (an empty map), no widget shows. */
   system: MapSystemDto | undefined;
   info: UniverseSystemDto | undefined;
   universe: Map<number, UniverseSystemDto>;
@@ -177,7 +177,7 @@ interface Props {
 
 /**
  * The map widgets (Wanderer's): separate windows over the map, each with one job, all showing the
- * selected system, and nothing at all while none is. On wide screens they stand in a narrow
+ * selected system (home while none is), and nothing at all on an empty map. On wide screens they stand in a narrow
  * column against the right edge, each as tall as its content, or float where someone dragged
  * them; on phones a dock lists them and one opens at a time in a sheet above it, as in Wanderer's
  * mobile layout.

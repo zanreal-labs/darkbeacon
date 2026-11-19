@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { StreamMessage } from '../lib/realtime';
 import { connectionFixture, eventMessage, signatureFixture, systemFixture } from '../test/fixtures';
-import { applyMapMessage, emptyMapState, seedCharacters, type MapState } from './mapState';
+import { applyMapMessage, emptyMapState, homeSystem, seedCharacters, type MapState } from './mapState';
 import { confirmPending, settlePending, withPending, type PendingChange } from './optimistic';
 
 const STREAM = 'map:map-1';
@@ -81,5 +81,33 @@ describe('pending changes', () => {
   it('apply on top of the confirmed state in order', () => {
     const state = withPending(emptyMapState(), [change(1, 'hostile'), change(2, 'home')]);
     expect(state.systems.get(1)?.status).toBe('home');
+  });
+});
+
+describe('homeSystem', () => {
+  const systems = (...list: ReturnType<typeof systemFixture>[]) =>
+    new Map(list.map((s) => [s.solarSystemId, s]));
+
+  it('is the oldest home system', () => {
+    const found = homeSystem(
+      systems(
+        systemFixture(1, { createdAt: 1 }),
+        systemFixture(2, { status: 'home', createdAt: 5 }),
+        systemFixture(3, { status: 'home', createdAt: 3 }),
+      ),
+    );
+    expect(found?.solarSystemId).toBe(3);
+  });
+
+  it('is the oldest visible system on a map without home, and nothing on an empty one', () => {
+    const found = homeSystem(
+      systems(
+        systemFixture(1, { createdAt: 1, visible: false }),
+        systemFixture(2, { createdAt: 4 }),
+        systemFixture(3, { createdAt: 2 }),
+      ),
+    );
+    expect(found?.solarSystemId).toBe(3);
+    expect(homeSystem(new Map())).toBeUndefined();
   });
 });

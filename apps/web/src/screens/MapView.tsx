@@ -40,6 +40,7 @@ import { LogJumpDialog } from '../map/connection/LogJumpDialog';
 import { RollingCalculator } from '../map/connection/RollingCalculator';
 import type { ConnectionTraffic } from '../map/ConnectionEdge';
 import { systemDisplayName } from '../map/SystemNode';
+import { homeSystem } from '../map/mapState';
 import { useMapStore } from '../map/useMapStore';
 import { useUndoShortcut } from '../map/undo/useUndoShortcut';
 import { useSignatureUndoBridge } from '../map/undo/signatureBridge';
@@ -305,6 +306,9 @@ export function MapView({
   });
   const onMap = useMemo(() => new Set(ids), [ids]);
   const system = selected !== null ? state.systems.get(selected) : undefined;
+  // The widgets never go away: with nothing selected they show home.
+  const home = useMemo(() => homeSystem(state.systems), [state.systems]);
+  const widgetSystem = system ?? home;
   const connection = selectedConnection !== null ? state.connections.get(selectedConnection) : undefined;
   const endName = (id: number) => {
     const sys = state.systems.get(id);
@@ -842,13 +846,13 @@ export function MapView({
 
         <MapWidgets
           mapId={map.id}
-          system={system}
-          info={system ? universe.get(system.solarSystemId) : undefined}
+          system={widgetSystem}
+          info={widgetSystem ? universe.get(widgetSystem.solarSystemId) : undefined}
           universe={universe}
           labels={labels}
           systemLabels={systemLabels}
           state={state}
-          can={system ? permissionsFor(can, system.provenance, map.kind === 'composite') : can}
+          can={widgetSystem ? permissionsFor(can, widgetSystem.provenance, map.kind === 'composite') : can}
           connectionCan={(c) => permissionsFor(can, c.provenance)}
           managesSource={managesSource}
           store={store}
@@ -859,7 +863,9 @@ export function MapView({
           onEdit={setEditing}
           onSelectSystem={(id) => select(id, true)}
           onCover={onWidgetCover}
-          note={system && <ProvenanceLine provenance={system.provenance} sources={state.sources} />}
+          note={
+            widgetSystem && <ProvenanceLine provenance={widgetSystem.provenance} sources={state.sources} />
+          }
         />
 
         <EditSystemDialog

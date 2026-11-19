@@ -328,18 +328,19 @@ describe('the map view', () => {
     return document.querySelector<HTMLElement>(`.react-flow__node[data-id="${id}"]`)!;
   };
 
-  it('shows no widget while nothing is selected, and the selected system’s once one is', async () => {
+  it('shows home while nothing is selected (the oldest system on a map without one), the selected system once one is', async () => {
     view();
     await node(WH);
-    // The map has the whole canvas: no windows, no empty boxes.
-    for (const name of ['System info', 'Signatures', 'Local', 'Routes', 'Kills'])
-      expect(screen.queryByRole('region', { name })).toBeNull();
+    // Never an empty map of windows: no home here, so the oldest system.
+    expect(await within(region('System info')).findByRole('heading', { name: 'J100001' })).toBeTruthy();
+    expect(within(region('Signatures')).getByText('ABC-123')).toBeTruthy();
     expect(screen.queryByText('No system selected')).toBeNull();
 
     // A plain click: d3-drag reads `event.view` on mousedown, which jsdom leaves empty.
+    fireEvent.click(await node(JITA));
+    expect(await within(region('System info')).findByRole('heading', { name: /Jita/ })).toBeTruthy();
     fireEvent.click(await node(WH));
     expect(await within(region('System info')).findByRole('heading', { name: 'J100001' })).toBeTruthy();
-    expect(within(region('Signatures')).getByText('ABC-123')).toBeTruthy();
     expect(await within(region('Local')).findByText('Hostile Guy')).toBeTruthy();
     expect(screen.queryByRole('tablist')).toBeNull();
   });
