@@ -40,7 +40,9 @@ describeEachDialect('chain presence', (t) => {
 
   it('keeps when each system joined and left the chain from home', async () => {
     await presence.record(map.id);
-    expect(await rows()).toEqual({ [HOME]: { solarSystemId: HOME, joinedAt: start, leftAt: null } });
+    expect(await rows()).toEqual({
+      [HOME]: { solarSystemId: HOME, joinedAt: start, leftAt: null, previousLeftAt: null },
+    });
 
     env.clock.set(start + HOUR);
     const hole = await connections.add(alice, map.id, { source: HOME, target: HOLE });
@@ -53,9 +55,9 @@ describeEachDialect('chain presence', (t) => {
     await connections.remove(alice, map.id, hole.id);
     await presence.record(map.id);
     expect(await rows()).toEqual({
-      [HOME]: { solarSystemId: HOME, joinedAt: start, leftAt: null },
-      [HOLE]: { solarSystemId: HOLE, joinedAt: start + HOUR, leftAt: start + 3 * HOUR },
-      [NEXT]: { solarSystemId: NEXT, joinedAt: start + HOUR, leftAt: start + 3 * HOUR },
+      [HOME]: { solarSystemId: HOME, joinedAt: start, leftAt: null, previousLeftAt: null },
+      [HOLE]: { solarSystemId: HOLE, joinedAt: start + HOUR, leftAt: start + 3 * HOUR, previousLeftAt: null },
+      [NEXT]: { solarSystemId: NEXT, joinedAt: start + HOUR, leftAt: start + 3 * HOUR, previousLeftAt: null },
     });
     expect((await presence.list(alice, map.id)).recordedSince).toBe(start);
 
@@ -63,8 +65,19 @@ describeEachDialect('chain presence', (t) => {
     env.clock.set(start + 50 * HOUR);
     await connections.add(alice, map.id, { source: HOME, target: NEXT });
     await presence.record(map.id);
-    expect((await rows())[NEXT]).toEqual({ solarSystemId: NEXT, joinedAt: start + 50 * HOUR, leftAt: null });
-    expect((await rows())[HOLE]).toEqual({ solarSystemId: HOLE, joinedAt: start + 50 * HOUR, leftAt: null });
+    expect((await rows())[NEXT]).toEqual({
+      solarSystemId: NEXT,
+      joinedAt: start + 50 * HOUR,
+      leftAt: null,
+      // When it was in the chain before this time.
+      previousLeftAt: start + 3 * HOUR,
+    });
+    expect((await rows())[HOLE]).toEqual({
+      solarSystemId: HOLE,
+      joinedAt: start + 50 * HOUR,
+      leftAt: null,
+      previousLeftAt: start + 3 * HOUR,
+    });
   });
 
   it('counts the moment a system is taken off the map as its last in the chain', async () => {
@@ -73,7 +86,11 @@ describeEachDialect('chain presence', (t) => {
     env.clock.set(start + 2 * HOUR);
     await systems.remove(alice, map.id, HOLE);
     await presence.record(map.id);
-    expect((await rows())[HOLE]).toMatchObject({ joinedAt: start, leftAt: start + 2 * HOUR });
+    expect((await rows())[HOLE]).toMatchObject({
+      joinedAt: start,
+      leftAt: start + 2 * HOUR,
+      previousLeftAt: null,
+    });
   });
 
   it('walks the chain again only after changes that may move it', async () => {
@@ -99,9 +116,9 @@ describeEachDialect('chain presence', (t) => {
     env.clock.set(start + 10 * HOUR);
     expect(await presence.backfillAll()).toEqual([map.id]);
     expect(await rows()).toEqual({
-      [HOME]: { solarSystemId: HOME, joinedAt: start, leftAt: null },
-      [HOLE]: { solarSystemId: HOLE, joinedAt: start + HOUR, leftAt: start + 5 * HOUR },
-      [NEXT]: { solarSystemId: NEXT, joinedAt: start + 6 * HOUR, leftAt: null },
+      [HOME]: { solarSystemId: HOME, joinedAt: start, leftAt: null, previousLeftAt: null },
+      [HOLE]: { solarSystemId: HOLE, joinedAt: start + HOUR, leftAt: start + 5 * HOUR, previousLeftAt: null },
+      [NEXT]: { solarSystemId: NEXT, joinedAt: start + 6 * HOUR, leftAt: null, previousLeftAt: null },
     });
 
     // The next start only brings it up to date.

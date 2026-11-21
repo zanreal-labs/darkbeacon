@@ -7,6 +7,7 @@ export interface ChainPresenceTables {
     solar_system_id: number;
     joined_at: number;
     left_at: number | null;
+    previous_left_at: number | null;
   };
 }
 
@@ -17,6 +18,7 @@ const fromRow = (row: Row): ChainPresence => ({
   solarSystemId: Number(row.solar_system_id),
   joinedAt: Number(row.joined_at),
   leftAt: row.left_at === null ? null : Number(row.left_at),
+  previousLeftAt: row.previous_left_at === null ? null : Number(row.previous_left_at),
 });
 
 /** Rows of `map_chain_presence`, one per map and system its chain ever held (deleted with the map). */
@@ -47,12 +49,14 @@ export class KyselyChainPresenceRepository implements ChainPresenceRepository {
             solar_system_id: r.solarSystemId,
             joined_at: r.joinedAt,
             left_at: r.leftAt,
+            previous_left_at: r.previousLeftAt,
           })),
         )
         .onConflict((oc) =>
           oc.columns(['map_id', 'solar_system_id']).doUpdateSet((eb) => ({
             joined_at: eb.ref('excluded.joined_at'),
             left_at: eb.ref('excluded.left_at'),
+            previous_left_at: eb.ref('excluded.previous_left_at'),
           })),
         )
         .execute();

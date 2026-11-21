@@ -37,7 +37,12 @@ export class ChainPresenceUseCases extends MappingUseCases {
     return {
       recordedSince: rows.length > 0 ? Math.min(...rows.map((r) => r.joinedAt)) : null,
       systems: rows
-        .map(({ solarSystemId, joinedAt, leftAt }) => ({ solarSystemId, joinedAt, leftAt }))
+        .map(({ solarSystemId, joinedAt, leftAt, previousLeftAt }) => ({
+          solarSystemId,
+          joinedAt,
+          leftAt,
+          previousLeftAt,
+        }))
         .sort((a, b) => a.solarSystemId - b.solarSystemId),
     };
   }

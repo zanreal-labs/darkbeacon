@@ -233,8 +233,9 @@ function NotesExcerpt({ text }: { text: string }) {
 }
 
 /**
- * "Last in our chain 3 d ago" (the moment itself on hover), "In the chain now" or "Never in our
- * chain": whether the map had a way to the system from home, and when.
+ * "Last in our chain 3 d ago" (the moment itself on hover) or "Never in our chain": whether the
+ * map had a way to the system from home, and when. A system in the chain now says when it was
+ * there before this time ("Never in our chain before" when this is its first).
  */
 export function ChainPresenceLine({ presence }: { presence: ChainPresence }) {
   const [now, setNow] = useState(() => Date.now());

@@ -20,6 +20,7 @@ import { SystemInfoWidget } from './SystemDetails';
 const HOME = 31000001;
 const HOLE = 31000002;
 const OLD = 31000003;
+const BACK = 31000005;
 const DAY = 24 * 60 * 60 * 1000;
 const now = Date.now();
 
@@ -37,9 +38,10 @@ const info = (id: number): UniverseSystemDto => ({
 const record: ChainPresenceListDto = {
   recordedSince: now - 30 * DAY,
   systems: [
-    { solarSystemId: HOME, joinedAt: now - 30 * DAY, leftAt: null },
-    { solarSystemId: HOLE, joinedAt: now - 2 * 60 * 60 * 1000, leftAt: null },
-    { solarSystemId: OLD, joinedAt: now - 6 * DAY, leftAt: now - 3 * DAY },
+    { solarSystemId: HOME, joinedAt: now - 30 * DAY, leftAt: null, previousLeftAt: null },
+    { solarSystemId: HOLE, joinedAt: now - 2 * 60 * 60 * 1000, leftAt: null, previousLeftAt: null },
+    { solarSystemId: OLD, joinedAt: now - 6 * DAY, leftAt: now - 3 * DAY, previousLeftAt: null },
+    { solarSystemId: BACK, joinedAt: now - 60 * 60 * 1000, leftAt: null, previousLeftAt: now - 5 * DAY },
   ],
 };
 
@@ -59,9 +61,13 @@ function Info({ solarSystemId }: { solarSystemId: number }) {
       systemFixture(HOLE),
       systemFixture(OLD),
       systemFixture(31000004),
+      systemFixture(BACK),
     ].map((s) => [s.solarSystemId, s]),
   );
-  const connections = new Map<string, ConnectionDto>([['c1', connectionFixture('c1', HOME, HOLE)]]);
+  const connections = new Map<string, ConnectionDto>([
+    ['c1', connectionFixture('c1', HOME, HOLE)],
+    ['c2', connectionFixture('c2', HOLE, BACK)],
+  ]);
   const chain = useChainPresence(MAP_ID, systems, connections);
   return (
     <SystemInfoWidget
@@ -94,13 +100,24 @@ describe('when a system was last in the chain from home', () => {
     );
   });
 
-  it('says a system the chain reaches now is in it, and nothing on the home itself', async () => {
+  it('leaves the stint going on now out: when it was in the chain before, or never', async () => {
     const { unmount } = show(HOLE);
-    expect(screen.getByTestId('chain-presence').textContent).toBe('In the chain now');
     await waitFor(() =>
-      expect(screen.getByTestId('chain-presence').title).toMatch(/^In the chain from home since /),
+      expect(screen.getByTestId('chain-presence').title).toMatch(
+        /^In the chain from home since .*; recorded since /,
+      ),
     );
+    expect(screen.getByTestId('chain-presence').textContent).toBe('Never in our chain before');
     unmount();
+    const back = show(BACK);
+    await waitFor(() =>
+      expect(screen.getByTestId('chain-presence').textContent).toBe('Last in our chain 5 d ago'),
+    );
+    expect(screen.getByTestId('chain-presence').title).toMatch(/\(in the chain from home since /);
+    back.unmount();
+  });
+
+  it('says nothing on the home itself', () => {
     show(HOME);
     expect(screen.queryByTestId('chain-presence')).toBeNull();
   });

@@ -10,12 +10,15 @@ import {
  * A system's record in a map's chain from home: `joinedAt` when it last became reachable from
  * home, `leftAt` when it stopped being (hidden, its last connection home gone, home moved); null
  * while it still is. The moment a system leaves counts as the last moment it was in the chain.
+ * `previousLeftAt` is when it left the time before `joinedAt` (null: its first time in the chain),
+ * so a system in the chain now still knows when it was there before.
  */
 export interface ChainPresence {
   mapId: string;
   solarSystemId: number;
   joinedAt: number;
   leftAt: number | null;
+  previousLeftAt: number | null;
 }
 
 /**
@@ -35,7 +38,13 @@ export function chainPresenceChanges(
   for (const solarSystemId of members) {
     const row = known.get(solarSystemId);
     if (row && row.leftAt === null) continue;
-    changes.push({ mapId, solarSystemId, joinedAt: now, leftAt: null });
+    changes.push({
+      mapId,
+      solarSystemId,
+      joinedAt: now,
+      leftAt: null,
+      previousLeftAt: row?.leftAt ?? null,
+    });
   }
   for (const row of known.values()) {
     if (row.leftAt === null && !members.has(row.solarSystemId)) changes.push({ ...row, leftAt: now });

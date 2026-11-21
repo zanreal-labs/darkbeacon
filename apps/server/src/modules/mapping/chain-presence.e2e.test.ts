@@ -66,8 +66,8 @@ describeEachDialect('chain presence over HTTP', (t) => {
     };
     await vi.waitFor(async () =>
       expect((await presence()).systems).toEqual([
-        { solarSystemId: HOLE, joinedAt: expect.any(Number), leftAt: null },
-        { solarSystemId: HOME, joinedAt: expect.any(Number), leftAt: null },
+        { solarSystemId: HOLE, joinedAt: expect.any(Number), leftAt: null, previousLeftAt: null },
+        { solarSystemId: HOME, joinedAt: expect.any(Number), leftAt: null, previousLeftAt: null },
       ]),
     );
 

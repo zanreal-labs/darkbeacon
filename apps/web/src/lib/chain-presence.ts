@@ -15,11 +15,12 @@ import { relativeTime } from './time';
 
 /**
  * Where a system stands in the map's chain from home: in it now (since when, when the record
- * knows), out of it since `at` (null: it left a moment ago and the record is catching up), or
- * never in it since the map began recording (`recordedSince`).
+ * knows, and when it was last in it before: `before`, null when this is its first time since
+ * `recordedSince`), out of it since `at` (null: it left a moment ago and the record is catching
+ * up), or never in it since the map began recording (`recordedSince`).
  */
 export type ChainPresence =
-  | { kind: 'now'; since: number | null }
+  | { kind: 'now'; since: number | null; before: number | null; recordedSince: number | null }
   | { kind: 'past'; at: number | null }
   | { kind: 'never'; recordedSince: number | null };
 
@@ -64,8 +65,13 @@ export function useChainPresence(
   return useCallback(
     (solarSystemId: number): ChainPresence => {
       const row = rows.get(solarSystemId);
-      if (live.has(solarSystemId))
-        return { kind: 'now', since: row && row.leftAt === null ? row.joinedAt : null };
+      if (live.has(solarSystemId)) {
+        // The record holds this stint already (left null), or not yet: then its last stint ended
+        // at `leftAt`, which is the one before this.
+        if (row && row.leftAt === null)
+          return { kind: 'now', since: row.joinedAt, before: row.previousLeftAt, recordedSince };
+        return { kind: 'now', since: null, before: row?.leftAt ?? null, recordedSince };
+      }
       if (row) return { kind: 'past', at: row.leftAt };
       return { kind: 'never', recordedSince };
     },
@@ -82,17 +88,34 @@ const date = (ms: number) =>
     minute: '2-digit',
   });
 
-/** "Last in our chain 3 d ago", with the moment itself for a tooltip. */
+/**
+ * "Last in our chain 3 d ago", with the moment itself for a tooltip. A system in the chain now
+ * says when it was there before this time, not "now".
+ */
 export function chainPresenceText(
   presence: ChainPresence,
   now = Date.now(),
 ): { text: string; title: string | undefined } {
   switch (presence.kind) {
-    case 'now':
-      return {
-        text: 'In the chain now',
-        title: presence.since === null ? undefined : `In the chain from home since ${date(presence.since)}`,
-      };
+    case 'now': {
+      // The stint going on now does not count: say when it was in the chain before.
+      const since =
+        presence.since === null
+          ? 'In the chain from home now'
+          : `In the chain from home since ${date(presence.since)}`;
+      return presence.before === null
+        ? {
+            text: 'Never in our chain before',
+            title:
+              presence.recordedSince === null
+                ? since
+                : `${since}; recorded since ${date(presence.recordedSince)}`,
+          }
+        : {
+            text: `Last in our chain ${relativeTime(presence.before, now)}`,
+            title: `${date(presence.before)} (${since.charAt(0).toLowerCase()}${since.slice(1)})`,
+          };
+    }
     case 'past':
       return presence.at === null
         ? { text: 'Last in our chain just now', title: undefined }

@@ -166,12 +166,17 @@ export function chainPresenceLine(
 ): string {
   const row = presence.systems.find((s) => s.solarSystemId === solarSystemId);
   const at = (ms: number) => `${new Date(ms).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
-  if (row && row.leftAt === null) return `In the chain from home now (since ${at(row.joinedAt)}).`;
-  if (row?.leftAt != null) {
-    const days = Math.floor((now - row.leftAt) / 86_400_000);
-    const ago = days >= 1 ? `${days} d ago` : `${hours(now - row.leftAt)} ago`;
-    return `Last in the chain from home ${at(row.leftAt)} (${ago}).`;
+  const ago = (ms: number) => {
+    const days = Math.floor((now - ms) / 86_400_000);
+    return days >= 1 ? `${days} d ago` : `${hours(now - ms)} ago`;
+  };
+  if (row && row.leftAt === null) {
+    const since = `In the chain from home now (since ${at(row.joinedAt)})`;
+    return row.previousLeftAt === null
+      ? `${since}, never in it before.`
+      : `${since}; before that last in it ${at(row.previousLeftAt)} (${ago(row.previousLeftAt)}).`;
   }
+  if (row?.leftAt != null) return `Last in the chain from home ${at(row.leftAt)} (${ago(row.leftAt)}).`;
   return presence.recordedSince === null
     ? 'Never in the chain from home (nothing recorded yet).'
     : `Never in the chain from home since ${at(presence.recordedSince)}.`;

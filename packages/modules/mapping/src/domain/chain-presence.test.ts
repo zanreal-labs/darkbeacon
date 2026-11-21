@@ -3,11 +3,17 @@ import type { ConnectionDto, MapSystemDto } from '@darkbeacon/shared';
 import { chainPresenceChanges, replayChainPresence, type ReplayedEvent } from './chain-presence.js';
 
 const MAP = 'm1';
-const row = (solarSystemId: number, joinedAt: number, leftAt: number | null = null) => ({
+const row = (
+  solarSystemId: number,
+  joinedAt: number,
+  leftAt: number | null = null,
+  previousLeftAt: number | null = null,
+) => ({
   mapId: MAP,
   solarSystemId,
   joinedAt,
   leftAt,
+  previousLeftAt,
 });
 
 describe('recording the chain', () => {
@@ -15,7 +21,8 @@ describe('recording the chain', () => {
     const current = [row(1, 10), row(2, 10), row(3, 10, 20)];
     // 2 left, 3 came back, 4 is new; 1 stays.
     expect(chainPresenceChanges(MAP, current, new Set([1, 3, 4]), 30)).toEqual(
-      expect.arrayContaining([row(3, 30), row(4, 30), row(2, 10, 30)]),
+      // 3 keeps when it left before (20), so it can say so while it is back in.
+      expect.arrayContaining([row(3, 30, null, 20), row(4, 30), row(2, 10, 30)]),
     );
     expect(chainPresenceChanges(MAP, current, new Set([1, 3, 4]), 30)).toHaveLength(3);
     // A chain that did not change writes nothing; systems out stay as they left.
@@ -53,7 +60,8 @@ describe('playing a map’s history back', () => {
     expect(rows.sort((a, b) => a.solarSystemId - b.solarSystemId)).toEqual([
       row(100, 1),
       row(200, 3, 9),
-      row(300, 11),
+      // Back in at 11; it left before at 7 (its connection home gone).
+      row(300, 11, null, 7),
     ]);
   });
 

@@ -5,12 +5,15 @@ import type { ConnectionDto, MapSystemDto } from './mapping.js';
 /**
  * When a system was last part of the map's chain from home: reachable from a home system
  * through the map's connections. `leftAt` is null while it still is; then `joinedAt` is when it
- * joined this time.
+ * joined this time. `previousLeftAt` is when it left the chain the time before it last joined
+ * (null: that was its first time since the record began), so a system in the chain now can still
+ * say when it was last there before.
  */
 export const ChainPresenceDto = z.object({
   solarSystemId: EveId,
   joinedAt: Timestamp,
   leftAt: Timestamp.nullable(),
+  previousLeftAt: Timestamp.nullable(),
 });
 export type ChainPresenceDto = z.infer<typeof ChainPresenceDto>;
 
