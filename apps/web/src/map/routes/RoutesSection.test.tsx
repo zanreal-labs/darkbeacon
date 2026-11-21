@@ -9,10 +9,12 @@ import {
   type HubRouteDto,
   type HubRoutesDto,
   type RouteStepDto,
+  type RouteWatchDto,
+  type RouteWatchListDto,
 } from '@darkbeacon/shared';
 import { mapPermissions } from '../../lib/roles';
 import { MAP_ID, meFixture } from '../../test/fixtures';
-import { renderWithProviders, setupMockServer } from '../../test/setup';
+import { installFlowMocks, renderWithProviders, setupMockServer } from '../../test/setup';
 import { ToastProvider, TooltipProvider } from '../../ui';
 import { SECURITY_COLORS } from '../nodeFacts';
 import { RoutesWidget, unreachableText } from './RoutesSection';
@@ -52,7 +54,26 @@ const jita: HubRouteDto = {
 };
 const far: HubRouteDto = { ...jita, solarSystemId: 30002187, name: 'Amarr', jumps: null, steps: [] };
 
+// Radix measures controls with ResizeObserver, which jsdom lacks.
+installFlowMocks();
+
 const queries: URLSearchParams[] = [];
+/** The map's way-home watches as the server keeps them, and what was asked of it. */
+let watchList: RouteWatchListDto = { watches: [], home: null };
+const watchRequests: Array<{ method: string; body: unknown }> = [];
+const watch = (extra: Partial<RouteWatchDto> = {}): RouteWatchDto => ({
+  id: 'w1',
+  mapId: MAP_ID,
+  accountId: 'acc-demo',
+  ownerName: 'Demo pilot',
+  target: { solarSystemId: 30000142, name: 'Jita', security: 0.946 },
+  maxJumps: 10,
+  mode: 'highsec',
+  expiresAt: Date.now() + 24 * 3_600_000,
+  createdAt: 0,
+  route: null,
+  ...extra,
+});
 /** What the next hub routes request answers for the map's hubs. */
 let mapHubRoutes: Pick<HubRoutesDto, 'routes' | 'unreachable'> = { routes: [jita, far] };
 setupMockServer(
@@ -70,6 +91,20 @@ setupMockServer(
     return HttpResponse.json(body);
   }),
   http.get(routes.routing.preferences.path, () => HttpResponse.json(DEFAULT_ROUTE_PREFERENCES)),
+  http.get(routes.routeWatches.list.path, () => HttpResponse.json(watchList)),
+  http.post(routes.routeWatches.create.path, async ({ request }) => {
+    const body = (await request.json()) as { maxJumps: number };
+    watchRequests.push({ method: 'POST', body });
+    watchList = { ...watchList, watches: [watch({ maxJumps: body.maxJumps })] };
+    return HttpResponse.json(watchList.watches[0], { status: 201 });
+  }),
+  http.delete(routes.routeWatches.remove.path, ({ params }) => {
+    watchRequests.push({ method: 'DELETE', body: params.watchId });
+    watchList = { ...watchList, watches: [] };
+    return new HttpResponse(null, { status: 204 });
+  }),
+  http.get(routes.discordNotify.routeWatches.path, () => HttpResponse.json({ posting: false })),
+  http.get(routes.routing.stations.path, () => HttpResponse.json([])),
   http.put(routes.routing.updatePreferences.path, async ({ request }) =>
     HttpResponse.json({ ...DEFAULT_ROUTE_PREFERENCES, ...((await request.json()) as object) }),
   ),
@@ -79,6 +114,8 @@ beforeEach(() => {
   window.localStorage.clear();
   queries.length = 0;
   mapHubRoutes = { routes: [jita, far] };
+  watchList = { watches: [], home: null };
+  watchRequests.length = 0;
 });
 
 const section = (onSelectSystem = vi.fn()) => {
@@ -210,6 +247,71 @@ describe('routes section', () => {
     expect(unreachableText('no-exit', true)).toBe(
       'No route out of this chain to k-space with these route options.',
     );
+  });
+
+  it('sets a way-home watch from a route, says what keeps the ping away, and lists it as a chip', async () => {
+    section();
+    const list = await screen.findByRole('list', { name: 'Routes to map hubs' });
+    expect(screen.queryByRole('list', { name: 'Way-home watches' })).toBeNull();
+    await userEvent.click(within(list).getAllByRole('button', { name: 'Route actions' })[0]!);
+    await userEvent.click(
+      await screen.findByRole('menuitem', { name: 'Notify me of a way home from here…' }),
+    );
+
+    const form = await screen.findByRole('form', { name: 'Notify me when a way home opens' });
+    expect(within(form).getByText('Jita')).toBeTruthy();
+    // No Home, no Discord channel for watches, no Discord on the account: each said once.
+    await waitFor(() => expect(within(form).getByText(/no Home yet/)).toBeTruthy());
+    expect(await within(form).findByText(/posts nothing about watches to Discord/)).toBeTruthy();
+    expect(within(form).getByText(/no Discord linked/)).toBeTruthy();
+
+    const jumps = within(form).getByRole('spinbutton', { name: 'Most jumps, the whole trip home' });
+    await userEvent.clear(jumps);
+    await userEvent.type(jumps, '12');
+    await userEvent.click(within(form).getByRole('button', { name: 'Notify me' }));
+    await waitFor(() =>
+      expect(watchRequests).toEqual([
+        { method: 'POST', body: { solarSystemId: 30000142, maxJumps: 12, mode: 'highsec', hours: 24 } },
+      ]),
+    );
+    const chips = await screen.findByRole('list', { name: 'Way-home watches' });
+    expect(within(chips).getByRole('listitem').textContent).toBe('Jita ≤12 HS');
+    expect(screen.queryByRole('form', { name: 'Notify me when a way home opens' })).toBeNull();
+
+    await userEvent.click(
+      within(chips).getByRole('button', { name: 'Stop watching the way home from Jita' }),
+    );
+    await waitFor(() => expect(screen.queryByRole('list', { name: 'Way-home watches' })).toBeNull());
+    expect(watchRequests.at(-1)).toEqual({ method: 'DELETE', body: 'w1' });
+  });
+
+  it('shows an open way on its chip and opens an empty form from the title bar', async () => {
+    watchList = {
+      home: { solarSystemId: 31000001, name: 'J100001' },
+      watches: [
+        watch({
+          route: {
+            jumps: 9,
+            gates: 6,
+            wormholeJumps: 3,
+            mouth: { solarSystemId: 30002813, name: 'Tama', security: 0.3 },
+          },
+        }),
+      ],
+    };
+    section();
+    const chips = await screen.findByRole('list', { name: 'Way-home watches' });
+    const chip = within(chips).getByRole('listitem');
+    expect(chip.textContent).toBe('Jita ≤10 HS · open via Tama, 9');
+    expect(chip.getAttribute('title')).toMatch(/6 gates to Tama, then 3 wormhole jumps/);
+    await userEvent.click(
+      within(document.querySelector('header')!).getByRole('button', {
+        name: 'Notify me when a way home opens…',
+      }),
+    );
+    const form = await screen.findByRole('form', { name: 'Notify me when a way home opens' });
+    expect(within(form).getByRole('button', { name: 'Notify me' }).hasAttribute('disabled')).toBe(true);
+    expect(within(form).queryByText(/no Home yet/)).toBeNull();
   });
 
   it('adds a hub from the title bar', async () => {

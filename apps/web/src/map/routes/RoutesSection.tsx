@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type MouseEvent } from 'react';
-import { Menu as MenuIcon, Plus, X } from 'lucide-react';
+import { Bell, Menu as MenuIcon, Plus, X } from 'lucide-react';
 import {
   routes,
   type CharacterDto,
@@ -15,6 +15,7 @@ import {
 import { ContextMenu, type MenuItem } from '../../components/ContextMenu';
 import { api } from '../../lib/api';
 import type { MapPermissions } from '../../lib/roles';
+import { useMe } from '../../lib/session';
 import { track } from '../../lib/telemetry';
 import {
   Button,
@@ -36,10 +37,12 @@ import {
   useRoutePreferences,
   useRouteRefresh,
   useRoutesBy,
+  useRouteWatches,
   useStations,
 } from './api';
 import { optionsSummary, RouteSettingsMenu } from './RouteSettingsMenu';
 import { RouteStrip } from './RouteStrip';
+import { WatchChips, WatchForm, type WatchTarget } from './RouteWatches';
 import styles from './routes.module.css';
 
 type Tab = 'map' | 'personal' | 'by';
@@ -62,6 +65,8 @@ interface MenuTarget {
   y: number;
   /** Stations already known (Routes By); otherwise they are loaded. */
   stations?: RoutesByEntryDto['stations'];
+  /** A known-space system: a way-home watch can wait there. */
+  known: boolean;
 }
 
 interface Props {
@@ -89,6 +94,8 @@ export function RoutesWidget(props: Props) {
     typeof window === 'undefined' ? 'map' : (readStored(TAB_KEY, isTab) ?? 'map'),
   );
   const [adding, setAdding] = useState(false);
+  /** The way-home watch form is open, for this system when one was picked from a row. */
+  const [watching, setWatching] = useState<{ target: WatchTarget | null } | null>(null);
   const setTab = (next: Tab) => {
     setTabState(next);
     setAdding(false);
@@ -119,6 +126,16 @@ export function RoutesWidget(props: Props) {
       }
       actions={
         <>
+          {can.edit && (
+            <IconButton
+              size="sm"
+              label="Notify me when a way home opens…"
+              tooltipSide="left"
+              icon={<Bell />}
+              aria-pressed={watching !== null}
+              onClick={() => setWatching((open) => (open ? null : { target: null }))}
+            />
+          )}
           {canAdd && (
             <IconButton
               size="sm"
@@ -143,6 +160,9 @@ export function RoutesWidget(props: Props) {
         tab={tab}
         adding={adding && canAdd}
         onAddDone={() => setAdding(false)}
+        watching={can.edit ? watching : null}
+        onWatch={(target) => setWatching({ target })}
+        onWatchDone={() => setWatching(null)}
         preferences={prefs.preferences}
       />
     </WidgetWindow>
@@ -170,14 +190,23 @@ function RoutesBody({
   tab,
   adding,
   onAddDone,
+  watching,
+  onWatch,
+  onWatchDone,
 }: Props & {
   preferences: ReturnType<typeof useRoutePreferences>['preferences'];
   tab: Tab;
   /** The hub search is open (the title bar's + button). */
   adding: boolean;
   onAddDone(): void;
+  /** The way-home watch form is open (the title bar's bell, or a row's menu). */
+  watching: { target: WatchTarget | null } | null;
+  onWatch(target: WatchTarget): void;
+  onWatchDone(): void;
 }) {
   const toast = useToast();
+  const me = useMe();
+  const watches = useRouteWatches(mapId, can.edit);
   const [kind, setKind] = useState<RoutesByKind>('blueLoot');
   const [highsec, setHighsec] = useState(false);
   const [menu, setMenu] = useState<MenuTarget | null>(null);
@@ -198,10 +227,27 @@ function RoutesBody({
     setMenu({ ...target, x: e.clientX, y: e.clientY });
   };
   const stepMenu = (step: RouteStepDto, at: { x: number; y: number }) =>
-    setMenu({ solarSystemId: step.solarSystemId, name: step.name, ...at });
+    setMenu({
+      solarSystemId: step.solarSystemId,
+      name: step.name,
+      known: !isWormholeClass(step.whClass),
+      ...at,
+    });
 
   return (
     <div className={styles.routes}>
+      {watching && (
+        <WatchForm
+          key={watching.target?.solarSystemId ?? 'any'}
+          mapId={mapId}
+          initial={watching.target}
+          home={watches.data?.home}
+          onDone={onWatchDone}
+        />
+      )}
+      {watches.data && (
+        <WatchChips mapId={mapId} list={watches.data} myAccountId={me.data?.account.id ?? null} />
+      )}
       {tab === 'by' ? (
         <>
           <div className={styles.bar}>
@@ -227,7 +273,8 @@ function RoutesBody({
           ) : (
             <ul className={styles.list} aria-label="Nearest places">
               {by.data!.entries.map((entry) => {
-                const onMenu = (e: MouseEvent) => openMenu({ ...entry, stations: entry.stations }, e);
+                const onMenu = (e: MouseEvent) =>
+                  openMenu({ ...entry, stations: entry.stations, known: true }, e);
                 return (
                   <li key={entry.solarSystemId} className={styles.row} onContextMenu={onMenu}>
                     <NameButton id={entry.solarSystemId} name={entry.name} onMap={onMap} onSelect={select} />
@@ -287,7 +334,7 @@ function RoutesBody({
                   route={route}
                   onMap={onMap}
                   onSelect={select}
-                  onMenu={(e) => openMenu(route, e)}
+                  onMenu={(e) => openMenu({ ...route, known: true }, e)}
                   onStepMenu={stepMenu}
                   why={unreachableText(hubRoutes.data!.unreachable, optionsSet)}
                 />
@@ -306,12 +353,16 @@ function RoutesBody({
           onMap={onMap.has(menu.solarSystemId)}
           onShow={() => select(menu.solarSystemId)}
           onToggleHub={(list, on) => void toggleHub(list, menu, on)}
+          onWatch={() => onWatch({ solarSystemId: menu.solarSystemId, name: menu.name })}
           onClose={() => setMenu(null)}
         />
       )}
     </div>
   );
 }
+
+/** Wormhole space (C1-C6, Thera, shattered, Drifter): no way-home watch waits there. */
+const isWormholeClass = (c: number | null) => c !== null && ((c >= 1 && c <= 6) || (c >= 12 && c <= 18));
 
 /** Why no hub can be reached from the selected system, as one line. */
 export function unreachableText(reason: HubRoutesDto['unreachable'], optionsSet: boolean): string {
@@ -477,6 +528,7 @@ function SystemRouteMenu({
   onMap,
   onShow,
   onToggleHub,
+  onWatch,
   onClose,
 }: {
   target: MenuTarget;
@@ -486,6 +538,8 @@ function SystemRouteMenu({
   onMap: boolean;
   onShow(): void;
   onToggleHub(list: 'map' | 'personal', on: boolean): void;
+  /** Opens the way-home watch form for this system. */
+  onWatch(): void;
   onClose(): void;
 }) {
   const toast = useToast();
@@ -498,6 +552,11 @@ function SystemRouteMenu({
   ];
   const hubItems = hubMenu({ hubs, canEdit, toggle: (list, _hub, on) => onToggleHub(list, on) }, system);
   if (hubItems.length > 0) items.push({ kind: 'separator' }, ...hubItems);
+  if (canEdit && target.known)
+    items.push(
+      { kind: 'separator' },
+      { kind: 'action', label: 'Notify me of a way home from here…', icon: <Bell />, onSelect: onWatch },
+    );
   if (onMap)
     items.push({ kind: 'separator' }, { kind: 'action', label: 'Show on the map', onSelect: onShow });
   if (items.length === 0) items.push({ kind: 'label', label: 'Nothing to do here' });

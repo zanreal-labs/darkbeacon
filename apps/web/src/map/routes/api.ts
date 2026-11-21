@@ -8,6 +8,8 @@ import {
   routeOptionsParams,
   routes,
   type CharacterDto,
+  type CreateRouteWatchRequest,
+  type DiscordRouteWatchesDto,
   type HubDto,
   type HubRoutesDto,
   type HubsDto,
@@ -17,6 +19,8 @@ import {
   type RoutePreferencesDto,
   type RoutesByDto,
   type RoutesByKind,
+  type RouteWatchDto,
+  type RouteWatchListDto,
   type StationDto,
   type TypedEvent,
   type UpdateRoutePreferencesRequest,
@@ -37,6 +41,9 @@ export const routeKeys = {
     ['routes', mapId, 'by', from, kind, highsec, params] as const,
   exits: (mapId: string) => ['routes', mapId, 'exits'] as const,
   settings: (mapId: string) => ['routes', mapId, 'settings'] as const,
+  watches: (mapId: string) => ['routes', mapId, 'watches'] as const,
+  /** Whether the map's Discord posts way-home watches (the discord-notify plugin). */
+  watchPosting: (mapId: string) => ['discord-notify', mapId, 'route-watches'] as const,
   preferences: ['route-preferences'] as const,
   stations: (solarSystemId: number) => ['stations', solarSystemId] as const,
 };
@@ -344,4 +351,86 @@ export function useHubMenu(mapId: string, canEdit: boolean, notify?: (toast: Toa
   const hubs = useHubs(mapId);
   const toggle = useHubToggle(mapId, notify);
   return { hubs: hubs.data, canEdit, toggle };
+}
+
+const WATCH_EVENTS = new Set([
+  'routes.watch_added',
+  'routes.watch_removed',
+  'routes.watch_opened',
+  'routes.watch_closed',
+]);
+
+/** The viewer's way-home watches on the map (a map admin's: everyone's), with the map's Home. */
+export function useRouteWatches(mapId: string, enabled = true) {
+  const client = useQueryClient();
+  useStream(enabled ? `map:${mapId}` : null, (message) => {
+    if (message.op !== 'event' || !WATCH_EVENTS.has((message.event as TypedEvent).type)) return;
+    void client.invalidateQueries({ queryKey: routeKeys.watches(mapId) });
+  });
+  return useQuery({
+    queryKey: routeKeys.watches(mapId),
+    queryFn: () => api<RouteWatchListDto>(buildPath(routes.routeWatches.list.path, { mapId })),
+    staleTime: 60_000,
+    enabled,
+  });
+}
+
+/**
+ * Whether way-home watches of the map reach Discord: false when no channel is connected, the
+ * kind is off, or the Discord plugin is not installed.
+ */
+export function useWatchPosting(mapId: string, enabled = true) {
+  return useQuery({
+    queryKey: routeKeys.watchPosting(mapId),
+    queryFn: async () => {
+      try {
+        return (
+          await api<DiscordRouteWatchesDto>(buildPath(routes.discordNotify.routeWatches.path, { mapId }))
+        ).posting;
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) return false;
+        throw error;
+      }
+    },
+    staleTime: 5 * 60_000,
+    retry: false,
+    enabled,
+  });
+}
+
+/** Sets and removes way-home watches, with a toast for each. */
+export function useRouteWatchActions(mapId: string, notify?: (toast: ToastInput) => void) {
+  const client = useQueryClient();
+  const refresh = () => client.invalidateQueries({ queryKey: routeKeys.watches(mapId) });
+  const create = useMutation({
+    mutationFn: (request: CreateRouteWatchRequest & { name: string }) => {
+      const { name: _, ...body } = request;
+      return api<RouteWatchDto>(buildPath(routes.routeWatches.create.path, { mapId }), {
+        method: 'POST',
+        json: body,
+      });
+    },
+    onSuccess: (watch) => {
+      void refresh();
+      notify?.({ title: `Watching the way home from ${watch.target.name}`, tone: 'success', duration: 2500 });
+    },
+    onError: (error) =>
+      notify?.({
+        title: 'The watch was not set',
+        description: error instanceof ApiError ? error.message : 'Network error',
+        tone: 'danger',
+      }),
+  });
+  const remove = useMutation({
+    mutationFn: (watch: RouteWatchDto) =>
+      api(buildPath(routes.routeWatches.remove.path, { mapId, watchId: watch.id }), { method: 'DELETE' }),
+    onSuccess: () => void refresh(),
+    onError: (error) =>
+      notify?.({
+        title: 'The watch is still there',
+        description: error instanceof ApiError ? error.message : 'Network error',
+        tone: 'danger',
+      }),
+  });
+  return { create, remove };
 }
