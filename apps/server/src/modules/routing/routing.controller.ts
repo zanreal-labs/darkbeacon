@@ -18,11 +18,13 @@ import {
   KnownStructures,
   RouteQueries,
   RoutingSettings,
+  RouteWatches,
   TheraFeed,
   Waypoints,
   type StationCatalog,
 } from '@darkbeacon/routing';
 import {
+  CreateRouteWatchRequest,
   EveId,
   ExitsQuery,
   HubDistancesQuery,
@@ -57,7 +59,32 @@ export class RoutingController {
     @Inject(TheraFeed) private readonly thera: TheraFeed,
     @Inject(ROUTING_STATIONS) private readonly stations: StationCatalog,
     @Inject(KnownStructures) private readonly structures: KnownStructures,
+    @Inject(RouteWatches) private readonly watches: RouteWatches,
   ) {}
+
+  @Get(nestPath(routes.routeWatches.list.path))
+  listWatches(@CurrentActor() actor: Actor | null, @Param('mapId') mapId: string) {
+    return this.watches.list(actor, mapId);
+  }
+
+  @Post(nestPath(routes.routeWatches.create.path))
+  createWatch(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Body(new ZodPipe(CreateRouteWatchRequest)) body: CreateRouteWatchRequest,
+  ) {
+    return this.watches.create(actor, mapId, body);
+  }
+
+  @Delete(nestPath(routes.routeWatches.remove.path))
+  @HttpCode(204)
+  async removeWatch(
+    @CurrentActor() actor: Actor | null,
+    @Param('mapId') mapId: string,
+    @Param('watchId') watchId: string,
+  ): Promise<void> {
+    await this.watches.remove(actor, mapId, watchId);
+  }
 
   @Get(nestPath(routes.routing.route.path))
   route(

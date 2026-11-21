@@ -6,7 +6,10 @@ import {
   COLORS,
   connectionAdded,
   connectionChanged,
+  securityLabel,
   systemLabel,
+  watchClosedNote,
+  watchOpenedNote,
   wayHomeNote,
   type MapView,
 } from './describe.js';
@@ -134,6 +137,45 @@ describe('what notifications say', () => {
     ).toBe('No hub of the map has a way into the chain right now.');
   });
 
+  it('says a watched way home with the gates to the mouth and the holes after it', () => {
+    const v = view([system(31000001)]);
+    const watch = {
+      id: 'w',
+      mapId: 'm1',
+      accountId: 'a',
+      ownerName: 'Ayla',
+      target: { solarSystemId: 30002187, name: 'Amarr', security: 1 },
+      maxJumps: 10,
+      mode: 'shortest' as const,
+      expiresAt: Date.UTC(2026, 10, 22, 18, 30),
+      createdAt: 0,
+      route: null,
+    };
+    const home = { solarSystemId: 31000001, name: 'J100001' };
+    const mouth = { solarSystemId: 30002537, name: 'Amamake', security: 0.04 };
+    const opened = watchOpenedNote(
+      v,
+      { watch, home, change: 'moved', route: { jumps: 4, gates: 1, wormholeJumps: 3, mouth } },
+      0,
+    );
+    expect(opened).toMatchObject({ kind: 'routeWatches', ping: { accountId: 'a' } });
+    expect(opened.embed.title).toBe('New way home: Amarr → J100001');
+    expect(opened.embed.description).toMatch(
+      /^\*\*4 jumps\*\* \(1 gate to \[Amamake\]\(.+\) \(0\.1\), 3 WH jumps\)\nWatch of Ayla, until 18:30 EVE\.$/,
+    );
+    const here = watchOpenedNote(
+      v,
+      { watch, home, change: 'again', route: { jumps: 1, gates: 0, wormholeJumps: 1, mouth } },
+      0,
+    );
+    expect(here.ping).toBeUndefined();
+    expect(here.embed.description).toMatch(/^\*\*1 jump\*\* \(the hole is in \[Amamake\]/);
+    const closed = watchClosedNote(v, { watch, mouth, home }, 0);
+    expect(closed.ping).toBeUndefined();
+    expect(closed.embed.title).toBe('Way home closed: Amarr → J100001');
+    expect([securityLabel(0.66), securityLabel(-0.2), securityLabel(0)]).toEqual(['0.7', '-0.2', '0.0']);
+  });
+
   it('uses the map state colours of the built-in dark theme', () => {
     const dark = builtInThemes.find((t) => t.id === 'dark')!.tokens;
     const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
@@ -155,6 +197,13 @@ describe('what notifications say', () => {
       content: '<@&42>',
       allowed_mentions: { parse: [], roles: ['42'] },
     });
+    // A member by name, once, and only real Discord ids.
+    expect(
+      messageBody({ embeds: [], mention: null, users: ['777', '777', '@everyone'] }, null),
+    ).toMatchObject({ content: '<@777>', allowed_mentions: { parse: [], users: ['777'] } });
+    expect(
+      messageBody({ embeds: [], mention: { kind: 'here', roleId: null }, users: ['777'] }, null),
+    ).toMatchObject({ content: '@here <@777>', allowed_mentions: { parse: ['everyone'], users: ['777'] } });
   });
 });
 

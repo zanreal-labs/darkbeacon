@@ -55,6 +55,10 @@ const KINDS: Record<DiscordNotifyKind, { label: string; hint: string }> = {
     hint: 'From each map hub: jumps and the mouth into the chain, after 10 quiet minutes',
   },
   arrivals: { label: 'Characters entering the chain', hint: 'Tracked pilots jumping in from outside' },
+  routeWatches: {
+    label: 'Way-home watches',
+    hint: 'A way home a member asked to be told about opened; only that member is mentioned',
+  },
 };
 
 const URGENT: readonly DiscordNotifyKind[] = DISCORD_URGENT_KINDS;
@@ -339,7 +343,7 @@ function DiscordSettings({ map, state }: { map: MapDto; state: DiscordNotifyStat
                   checked={settings.quietHours.enabled}
                   onCheckedChange={(enabled) => change({ quietHours: { ...settings.quietHours, enabled } })}
                   label="Keep quiet at night"
-                  description="Only urgent kinds are posted then, and without mentions."
+                  description="Only urgent kinds and way-home watches are posted then, and without mentions."
                 />
                 {settings.quietHours.enabled && (
                   <div className={styles.grid}>

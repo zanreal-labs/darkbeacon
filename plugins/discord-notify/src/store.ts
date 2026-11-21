@@ -15,6 +15,8 @@ interface Tables {
     map_id: string;
     kind: string;
     mention: number;
+    /** A Discord user to mention (way-home watches); null for the rest. */
+    mention_user: string | null;
     embed: string;
     status: string;
     attempts: number;
@@ -46,6 +48,8 @@ export interface OutboxRow {
   mapId: string;
   kind: DiscordNotifyKind;
   mention: boolean;
+  /** The one Discord user this message mentions (way-home watches), or null. */
+  mentionUser: string | null;
   embed: Embed;
   attempts: number;
   createdAt: number;
@@ -129,6 +133,7 @@ export class Store {
           map_id: r.mapId,
           kind: r.kind,
           mention: r.mention ? 1 : 0,
+          mention_user: r.mentionUser,
           embed: JSON.stringify(r.embed),
           status: 'pending',
           attempts: 0,
@@ -155,6 +160,7 @@ export class Store {
       mapId: r.map_id,
       kind: r.kind as DiscordNotifyKind,
       mention: Number(r.mention) === 1,
+      mentionUser: r.mention_user ?? null,
       embed: JSON.parse(r.embed) as Embed,
       attempts: Number(r.attempts),
       createdAt: Number(r.created_at),

@@ -7,3 +7,4 @@ export * from './bridges.js';
 export * from './eve-scout.js';
 export * from './settings.js';
 export * from './known-structures.js';
+export * from './watches.js';

@@ -14,6 +14,7 @@ import type {
   UniverseSystemDto,
 } from '@darkbeacon/plugin-sdk';
 import { up } from './migrations/0001_init.js';
+import { up as upMentions } from './migrations/0002_user_mentions.js';
 import { DiscordNotify } from './server.js';
 
 const HOOK = 'https://discord.com/api/webhooks/123/abcdefghijklmnopqrstuvwxyz';
@@ -25,6 +26,7 @@ const ALL = {
   pings: true,
   wayHome: true,
   arrivals: true,
+  routeWatches: true,
 };
 
 const UNIVERSE: Record<number, Partial<UniverseSystemDto>> = {
@@ -70,6 +72,7 @@ describeEachDialect('discord-notify plugin', (t) => {
 
   async function setup() {
     await up(t.db.db());
+    await upMentions(t.db.db());
     let now = Date.UTC(2026, 9, 12, 12, 0);
     const posts: Array<Record<string, unknown>> = [];
     const botPosts: Array<{ channelId: string; body: Record<string, unknown> }> = [];
@@ -114,6 +117,7 @@ describeEachDialect('discord-notify plugin', (t) => {
             guildId === '500' && channelId === '601' ? '#alerts on Hard Knocks' : null,
           send: async (channelId: string, body: Record<string, unknown>) =>
             void botPosts.push({ channelId, body }),
+          userOf: async (accountId: string) => (accountId === 'pilot' ? '777000111' : null),
         },
         clock: { now: () => now },
       },
@@ -314,6 +318,85 @@ describeEachDialect('discord-notify plugin', (t) => {
     expect(s.posts).toHaveLength(1);
     expect(s.posts[0]).not.toHaveProperty('content');
     expect((s.posts[0]!.embeds as unknown[]).length).toBe(1);
+  });
+
+  it('pings only the pilot whose way-home watch opened, and says quietly when it closes', async () => {
+    const s = await setup();
+    // Members ask whether their watches reach Discord; viewers set none.
+    expect((await s.call('GET', '/route-watches', undefined, 'member')).body).toEqual({ posting: false });
+    expect((await s.call('GET', '/route-watches', undefined, 'viewer')).status).toBe(403);
+    await s.call('PUT', '', {
+      target: { kind: 'webhook', url: HOOK },
+      kinds: ALL,
+      mention: { kind: 'here', roleId: null, kinds: ['pings'] },
+    });
+    expect((await s.call('GET', '/route-watches', undefined, 'member')).body).toEqual({ posting: true });
+
+    const watch = (accountId: string, ownerName: string) => ({
+      id: `w-${accountId}`,
+      mapId: 'm1',
+      accountId,
+      ownerName,
+      target: { solarSystemId: 30002187, name: 'Amarr', security: 1 },
+      maxJumps: 10,
+      mode: 'highsec',
+      expiresAt: Date.UTC(2026, 9, 13, 12, 0),
+      createdAt: 0,
+      route: null,
+    });
+    const route = {
+      jumps: 9,
+      gates: 6,
+      wormholeJumps: 3,
+      mouth: { solarSystemId: 30002537, name: 'Amamake', security: 0.66 },
+    };
+    const home = { solarSystemId: 31000001, name: 'J100001' };
+    await s.emit('routes.watch_opened', { watch: watch('pilot', 'Pilot'), route, home, change: 'opened' });
+    s.advance(10_000);
+    await s.app.flush();
+    expect(s.posts).toHaveLength(1);
+    expect(s.posts[0]).toMatchObject({
+      content: '<@777000111>',
+      allowed_mentions: { parse: [], users: ['777000111'] },
+    });
+    expect(
+      (s.posts[0]!.embeds as Array<{ title: string; description: string; url: string }>)[0],
+    ).toMatchObject({
+      title: 'Way home open: Amarr → J100001',
+      description: expect.stringMatching(
+        /^\*\*9 jumps\*\* \(6 HS gates to \[Amamake\]\(.+\) \(0\.7\), 3 WH jumps\)\nWatch of Pilot, until 12:00 EVE\.$/,
+      ),
+      url: 'https://beacon.example/m/home-chain?system=30002537',
+    });
+
+    // Back through the same mouth soon after closing, a closed way, a pilot without Discord: no pings.
+    await s.emit('routes.watch_closed', { watch: watch('pilot', 'Pilot'), mouth: route.mouth, home });
+    await s.emit('routes.watch_opened', { watch: watch('pilot', 'Pilot'), route, home, change: 'again' });
+    await s.emit('routes.watch_opened', { watch: watch('alt', 'Alt'), route, home, change: 'opened' });
+    s.advance(10_000);
+    await s.app.flush();
+    expect(s.posts[1]).not.toHaveProperty('content');
+    expect(s.posts[1]!.allowed_mentions).toEqual({ parse: [] });
+    expect((s.posts[1]!.embeds as Array<{ title: string }>).map((e) => e.title)).toEqual([
+      'Way home closed: Amarr → J100001',
+      'Way home open again: Amarr → J100001',
+      'Way home open: Amarr → J100001',
+    ]);
+
+    // Quiet hours: still posted, without the mention.
+    await s.call('PUT', '', { quietHours: { enabled: true, start: '11:00', end: '13:00', timeZone: 'UTC' } });
+    await s.emit('routes.watch_opened', { watch: watch('pilot', 'Pilot'), route, home, change: 'moved' });
+    s.advance(10_000);
+    await s.app.flush();
+    expect(s.posts).toHaveLength(3);
+    expect(s.posts[2]).not.toHaveProperty('content');
+    expect((s.posts[2]!.embeds as Array<{ title: string }>)[0]!.title).toBe('New way home: Amarr → J100001');
+
+    // Switched off by the map's admins: nothing.
+    await s.call('PUT', '', { kinds: { ...ALL, routeWatches: false } });
+    expect((await s.call('GET', '/route-watches', undefined, 'member')).body).toEqual({ posting: false });
+    await s.emit('routes.watch_opened', { watch: watch('pilot', 'Pilot'), route, home, change: 'opened' });
+    expect((await s.state()).status.pending).toBe(0);
   });
 
   it('posts the way home after ten quiet minutes, once per change, and forgets a deleted map', async () => {

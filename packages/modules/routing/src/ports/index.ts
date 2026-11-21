@@ -3,6 +3,8 @@ import type {
   MapRoutingSettingsDto,
   MapSystemDto,
   RoutePreferencesDto,
+  RouteWatchMode,
+  RouteWatchRouteDto,
   StationDto,
   UniverseSystemDto,
 } from '@darkbeacon/shared';
@@ -10,6 +12,7 @@ import type { BridgePilot } from '../domain/bridges.js';
 import type { Invasion } from '../domain/modes.js';
 import type { RoutedEdge } from '../domain/options.js';
 import type { CorporationBook, UpwellStructure } from '../domain/structures.js';
+import type { WatchState } from '../domain/watches.js';
 
 export type { Clock, EventLog, MapAccess, UnitOfWork } from '@darkbeacon/core';
 
@@ -262,4 +265,36 @@ export interface ScopedCharacters {
 /** Names and tickers of corporations (cached); unknown or unreadable ones are left out. */
 export interface CorporationNames {
   corporations(corporationIds: readonly number[]): Promise<CorporationBook>;
+}
+
+/** A way-home watch as a map keeps it, with what it remembers between looks. */
+export interface RouteWatchRecord {
+  id: string;
+  mapId: string;
+  accountId: string;
+  targetSystemId: number;
+  maxJumps: number;
+  mode: RouteWatchMode;
+  expiresAt: number;
+  createdAt: number;
+  state: WatchState;
+  /** The way announced and still standing (what the list shows); null while waiting. */
+  route: RouteWatchRouteDto | null;
+}
+
+export interface RouteWatchRepository {
+  list(mapId: string): Promise<RouteWatchRecord[]>;
+  find(mapId: string, id: string): Promise<RouteWatchRecord | null>;
+  insert(watch: RouteWatchRecord): Promise<void>;
+  /** Stores what the watch remembers (`state`, `route`). */
+  save(watch: RouteWatchRecord): Promise<void>;
+  remove(mapId: string, id: string): Promise<void>;
+  /** Maps with at least one watch. */
+  mapsWithWatches(): Promise<string[]>;
+  forgetMap(mapId: string): Promise<void>;
+}
+
+/** Account names as identity keeps them; unknown accounts are left out. */
+export interface AccountNames {
+  names(accountIds: readonly string[]): Promise<Map<string, string>>;
 }

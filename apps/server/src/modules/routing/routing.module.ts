@@ -25,6 +25,7 @@ import {
   RouteQueries,
   Router,
   RoutingSettings,
+  RouteWatches,
   TheraFeed,
   TRADE_HUBS,
   WayHomePublisher,
@@ -38,6 +39,7 @@ import {
   type HubRepository,
   type PilotDirectory,
   type PublicStructureRepository,
+  type RouteWatchRepository,
   type RoutingSettingsRepository,
   type RoutingUniverse,
   type StationCatalog,
@@ -67,6 +69,7 @@ import {
   StaticStationCatalog,
 } from '../../adapters/routing/external-adapters.js';
 import { KyselyHubRepository } from '../../adapters/routing/kysely-hub-repository.js';
+import { KyselyRouteWatchRepository } from '../../adapters/routing/kysely-route-watch-repository.js';
 import {
   KyselyBridgeRepository,
   KyselyPublicStructureRepository,
@@ -95,6 +98,7 @@ import { ROUTING_STATIONS } from './routing.tokens.js';
 const HUB_REPOSITORY = 'HubRepository';
 const BRIDGE_REPOSITORY = 'BridgeRepository';
 const ROUTING_SETTINGS_REPOSITORY = 'RoutingSettingsRepository';
+const ROUTE_WATCH_REPOSITORY = 'RouteWatchRepository';
 const PILOT_DIRECTORY = 'PilotDirectory';
 const WAYPOINT_GATEWAY = 'WaypointGateway';
 const CORPORATION_STRUCTURES = 'CorporationStructures';
@@ -118,12 +122,15 @@ const PRECOMPUTED: readonly RouteMode[] = ['safer', 'highsec', 'outlaw'];
 const SOVEREIGNTY_CHECK_MS = 10 * 60_000;
 /** Whether the public structures are due is looked at this often (they are read about daily). */
 const PUBLIC_STRUCTURES_CHECK_MS = 60 * 60_000;
+/** Way-home watches are looked at this often without a change (expiry, a way gone for 5 minutes). */
+const WATCH_CHECK_MS = 60_000;
 
 const userAgent = (config: AppConfig) => `Darkbeacon/${version} (+${config.publicUrl})`;
 
 /**
  * Keeps routing current: drops a map's routing state when its chain, bridges or settings change,
- * recomputes and publishes its exits and way home (debounced), fills the hub tables of the other
+ * recomputes and publishes its exits and way home and looks at its way-home watches (debounced;
+ * the watches also every minute and when one is set), fills the hub tables of the other
  * modes in the background, adds `exits` to map snapshots, reads EVE-Scout's Thera and Turnur
  * holes and the sovereignty map on timers (not in tests), refreshes the public structures about
  * daily on the leader, and forgets deleted maps.
@@ -140,6 +147,7 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
     @Inject(RouteQueries) private readonly queries: RouteQueries,
     @Inject(ExitsPublisher) private readonly publisher: ExitsPublisher,
     @Inject(WayHomePublisher) private readonly wayHome: WayHomePublisher,
+    @Inject(RouteWatches) private readonly watches: RouteWatches,
     @Inject(HubAdmin) private readonly hubs: HubAdmin,
     @Inject(BridgeAdmin) private readonly bridges: BridgeAdmin,
     @Inject(RoutingSettings) private readonly settings: RoutingSettings,
@@ -178,6 +186,7 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
         await this.hubs.forgetMap(event.data.id);
         await this.bridges.forgetMap(event.data.id);
         await this.settings.forgetMap(event.data.id);
+        await this.watches.forgetMap(event.data.id);
         this.router.invalidate(event.data.id);
         this.publisher.forget(event.data.id);
         this.wayHome.forget(event.data.id);
@@ -187,6 +196,11 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
       async (event) => {
         const stream = parseStream(event.stream);
         if (stream?.kind !== 'map') return;
+        if (event.type === 'routes.watch_added') {
+          // A new watch is looked at now: the way home may be open already.
+          if (this.leadership.isLeader()) void this.lookAtWatches(stream.id);
+          return;
+        }
         if (isEventOfType(event, 'system.updated')) {
           // Moves and notes do not change routes; showing or hiding a system and its status
           // (home) do.
@@ -214,6 +228,7 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
           'routes.hubs_changed',
           'routes.bridges_changed',
           'routes.settings_changed',
+          'routes.watch_added',
         ],
       },
     );
@@ -254,7 +269,16 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
     setTimeout(() => void readEveScout(), 2_000).unref();
     setTimeout(() => void readSovereignty(), 5_000).unref();
     setTimeout(() => void readPublicStructures(), 30_000).unref();
+    const lookAtAllWatches = async () => {
+      if (!this.leadership.isLeader()) return;
+      try {
+        await this.watches.tick();
+      } catch (error) {
+        this.logger.warn(`way-home watches: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    };
     this.pollers.push(
+      setInterval(() => void lookAtAllWatches(), WATCH_CHECK_MS).unref(),
       setInterval(() => void readEveScout(), EVE_SCOUT_POLL_MS).unref(),
       setInterval(() => void readSovereignty(), SOVEREIGNTY_CHECK_MS).unref(),
       setInterval(() => void readPublicStructures(), PUBLIC_STRUCTURES_CHECK_MS).unref(),
@@ -281,11 +305,20 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
     );
   }
 
+  private async lookAtWatches(mapId: string): Promise<void> {
+    try {
+      await this.watches.evaluate(mapId);
+    } catch (error) {
+      this.logger.error(`watches of map ${mapId}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
   private async refresh(mapId: string): Promise<void> {
     try {
       const exits = await this.publisher.refresh(mapId);
       if (exits === null && !(await this.router.chain(mapId))) return;
       await this.wayHome.refresh(mapId);
+      await this.watches.evaluate(mapId);
       const hubIds = [
         ...TRADE_HUBS.map((h) => h.solarSystemId),
         ...(await this.queries.mapHubs(mapId)).map((h) => h.solarSystemId),
@@ -315,6 +348,11 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
     {
       provide: ROUTING_SETTINGS_REPOSITORY,
       useFactory: (database: Database) => new KyselyRoutingSettingsRepository(database),
+      inject: [Database],
+    },
+    {
+      provide: ROUTE_WATCH_REPOSITORY,
+      useFactory: (database: Database) => new KyselyRouteWatchRepository(database),
       inject: [Database],
     },
     {
@@ -635,6 +673,46 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
       inject: [RouteQueries, EVENT_LOG, CLOCK],
     },
     {
+      provide: RouteWatches,
+      useFactory: (
+        watches: RouteWatchRepository,
+        router: Router,
+        universe: RoutingUniverse,
+        settings: RoutingSettingsRepository,
+        accounts: AccountService,
+        access: MapAccess,
+        events: EventLog,
+        uow: UnitOfWork,
+        clock: Clock,
+      ) =>
+        new RouteWatches({
+          watches,
+          router,
+          universe,
+          settings,
+          accounts: {
+            names: async (ids) =>
+              new Map([...(await accounts.names(ids))].map(([id, account]) => [id, account.name])),
+          },
+          access,
+          events,
+          uow,
+          clock,
+          newId,
+        }),
+      inject: [
+        ROUTE_WATCH_REPOSITORY,
+        Router,
+        UNIVERSE_CATALOG,
+        ROUTING_SETTINGS_REPOSITORY,
+        AccountService,
+        MAP_ACCESS,
+        EVENT_LOG,
+        UNIT_OF_WORK,
+        CLOCK,
+      ],
+    },
+    {
       provide: Waypoints,
       useFactory: (
         pilots: PilotDirectory,
@@ -646,6 +724,6 @@ export class RoutingRuntime implements OnModuleInit, OnModuleDestroy {
     },
     RoutingRuntime,
   ],
-  exports: [Router, HubAdmin, RouteQueries, KnownStructures],
+  exports: [Router, HubAdmin, RouteQueries, KnownStructures, RouteWatches],
 })
 export class RoutingModule {}

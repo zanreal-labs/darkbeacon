@@ -102,6 +102,18 @@ const rule = {
   role: 'member',
   createdAt: 1,
 };
+const watch = {
+  id: 'w1',
+  mapId: 'm',
+  accountId: 'a',
+  ownerName: 'Alice',
+  target: { solarSystemId: 30002187, name: 'Amarr', security: 1 },
+  maxJumps: 10,
+  mode: 'highsec',
+  expiresAt: 86_400_001,
+  createdAt: 1,
+  route: null,
+};
 const plugin = {
   id: 'p',
   name: 'P',
@@ -370,6 +382,19 @@ const SAMPLES: Record<AuditedEventType, { data: unknown; before?: unknown }> = {
       routes: [{ hub: { name: 'Jita' }, jumps: 7, mouth: { name: 'Tama' } }],
     },
     before: { home: null, routes: [] },
+  },
+  'routes.watch_added': { data: watch },
+  'routes.watch_removed': { data: { id: 'w1', accountId: 'a', reason: 'removed' }, before: watch },
+  'routes.watch_opened': {
+    data: {
+      watch,
+      route: { jumps: 9, gates: 6, wormholeJumps: 3, mouth: { solarSystemId: 30002813, name: 'Tama' } },
+      home: { solarSystemId: 31002531, name: 'J014348' },
+      change: 'opened',
+    },
+  },
+  'routes.watch_closed': {
+    data: { watch, mouth: { solarSystemId: 30002813, name: 'Tama' }, home: null },
   },
   'character.unlinked': { data: { characterId: 9 } },
   'plugin.updated': { data: { ...plugin, enabled: true }, before: plugin },

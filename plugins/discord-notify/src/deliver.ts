@@ -10,23 +10,30 @@ export type SendResult =
 export interface Message {
   embeds: Embed[];
   mention: Pick<DiscordMention, 'kind' | 'roleId'> | null;
+  /** Discord users to mention by name (the members whose way-home watch opened). */
+  users?: readonly string[];
 }
 
-/** Discord's Create Message / Execute Webhook body: embeds, an optional mention, nothing else pings. */
+const SNOWFLAKE = /^\d{1,20}$/;
+
+/**
+ * Discord's Create Message / Execute Webhook body: embeds and the mentions asked for, with
+ * `allowed_mentions` naming exactly those, so nothing else in the message pings.
+ */
 export function messageBody(message: Message, username: string | null): Record<string, unknown> {
   const mention = message.mention;
-  const content =
-    mention?.kind === 'here'
-      ? '@here'
-      : mention?.kind === 'role' && mention.roleId
-        ? `<@&${mention.roleId}>`
-        : undefined;
-  const allowed =
-    mention?.kind === 'here'
-      ? { parse: ['everyone'] }
-      : mention?.kind === 'role' && mention.roleId
-        ? { parse: [], roles: [mention.roleId] }
-        : { parse: [] };
+  const users = [...new Set(message.users ?? [])].filter((id) => SNOWFLAKE.test(id)).slice(0, 100);
+  const parts = [
+    mention?.kind === 'here' ? '@here' : null,
+    mention?.kind === 'role' && mention.roleId ? `<@&${mention.roleId}>` : null,
+    ...users.map((id) => `<@${id}>`),
+  ].filter((part): part is string => part !== null);
+  const content = parts.length > 0 ? parts.join(' ') : undefined;
+  const allowed = {
+    parse: mention?.kind === 'here' ? ['everyone'] : [],
+    ...(mention?.kind === 'role' && mention.roleId ? { roles: [mention.roleId] } : {}),
+    ...(users.length > 0 ? { users } : {}),
+  };
   return {
     ...(username ? { username } : {}),
     ...(content ? { content } : {}),

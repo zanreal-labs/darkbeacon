@@ -27,7 +27,7 @@ import { isEventOfType, type MapSnapshot } from '@darkbeacon/shared';
 import { builtInThemes, SYSTEM_THEME_ID } from '@darkbeacon/theme-sdk';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { DiscordBotService } from '@darkbeacon/identity';
+import { AccountService, DiscordBotService } from '@darkbeacon/identity';
 import { SecretBox } from '../../adapters/identity/secret-box.js';
 import {
   KyselyBundledPluginMarks,
@@ -93,6 +93,7 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
     @Inject(SignInCookies) private readonly signInCookies: SignInCookies,
     @Inject(PresenceRooms) private readonly presence: PresenceRooms,
     @Inject(DiscordBotService) private readonly bot: DiscordBotService,
+    @Inject(AccountService) private readonly accounts: AccountService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(LEADERSHIP) private readonly leadership: Leadership,
     @Inject(EVENT_BUS) private readonly bus: EventBus,
@@ -158,6 +159,7 @@ export class PluginsLifecycle implements OnModuleInit, OnApplicationBootstrap, O
         return channel ? `#${channel.name}${guild ? ` on ${guild.name}` : ''}` : null;
       },
       send: (channelId, message) => this.bot.send(channelId, message),
+      userOf: async (accountId) => (await this.accounts.find(accountId))?.discordId ?? null,
     };
   }
 

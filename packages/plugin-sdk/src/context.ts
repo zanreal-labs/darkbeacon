@@ -88,6 +88,11 @@ export interface DiscordBotPort {
   channelLabel(guildId: string, channelId: string): Promise<string | null>;
   /** Posts as the bot; rejects with Discord's reason. */
   send(channelId: string, message: Record<string, unknown>): Promise<void>;
+  /**
+   * The Discord user an account signed in with, to mention that one person; null when the account
+   * has no Discord linked. Hosts before SDK 1.2 do not have it.
+   */
+  userOf?(accountId: string): Promise<string | null>;
 }
 
 export interface PluginPorts {

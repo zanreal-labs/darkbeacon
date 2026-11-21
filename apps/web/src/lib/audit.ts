@@ -365,6 +365,12 @@ const PROVIDERS: Record<string, string> = {
   dev: 'a local account',
 };
 
+/** The system a way-home watch waits in, by name. */
+const targetName = (target: unknown): string =>
+  target && typeof target === 'object' && typeof (target as { name?: unknown }).name === 'string'
+    ? (target as { name: string }).name
+    : 'a system';
+
 /** A sentence-ready reading of one entry. */
 export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditReading {
   const d = (entry.op === 'delete' ? (entry.removed ?? {}) : {}) as Record<string, unknown>;
@@ -576,6 +582,19 @@ export function readEntry(entry: AuditEntryDto, names: AuditNames = {}): AuditRe
       return read(`changed the route settings of ${mapName}`, 'map');
     case 'routes.way_home_changed':
       return read('updated the way home', 'map');
+    case 'routes.watch_added':
+      return read(`set a way-home watch from ${targetName(data.target)}`, 'map');
+    case 'routes.watch_removed':
+      return read(
+        data.reason === 'expired'
+          ? `ended a way-home watch from ${targetName(data.target)}`
+          : `removed a way-home watch from ${targetName(data.target)}`,
+        'map',
+      );
+    case 'routes.watch_opened':
+      return read(`found a way home: ${String(entry.diff.wayHome?.after ?? '')}`.trim(), 'map');
+    case 'routes.watch_closed':
+      return read(`saw a way home close at ${String(entry.diff.wayHome?.before ?? 'its mouth')}`, 'map');
     case 'system.added':
       return read(entry.diff.visible ? `put ${system} back on the map` : `added ${system}`, 'map');
     case 'system.updated':

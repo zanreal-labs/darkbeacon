@@ -19,6 +19,12 @@ import { PluginDto } from './dto/plugins.js';
 import { HubDto, MapExitDto } from './dto/routing.js';
 import { BridgeDto } from './dto/bridges.js';
 import { MapRoutingSettingsDto, WayHomeDto } from './dto/route-panel.js';
+import {
+  RouteWatchClosedEvent,
+  RouteWatchDto,
+  RouteWatchOpenedEvent,
+  RouteWatchRemovedEvent,
+} from './dto/route-watches.js';
 import { McpMode } from './dto/publishing.js';
 import { MapShareDto, MapSourceDto } from './dto/sharing.js';
 import { CharacterPresenceDto } from './dto/tracking.js';
@@ -122,6 +128,10 @@ export const EVENT_DATA_SCHEMAS: Record<EventType, z.ZodType> = {
   }),
   'routes.settings_changed': MapRoutingSettingsDto,
   'routes.way_home_changed': WayHomeDto,
+  'routes.watch_added': RouteWatchDto,
+  'routes.watch_removed': RouteWatchRemovedEvent,
+  'routes.watch_opened': RouteWatchOpenedEvent,
+  'routes.watch_closed': RouteWatchClosedEvent,
   'import.started': z.object({ jobId: Id, source: ImportSourceDto, mode: z.enum(['new', 'merge']) }),
   'import.finished': z.object({
     jobId: Id,

@@ -5,3 +5,4 @@ export * from './security.js';
 export * from './bridges.js';
 export * from './options.js';
 export * from './structures.js';
+export * from './watches.js';

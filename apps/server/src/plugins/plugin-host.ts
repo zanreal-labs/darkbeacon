@@ -427,6 +427,7 @@ export class PluginHost {
           if (!providers.discord) throw new Error('No Discord bot on this server');
           return providers.discord.send(channelId, message);
         },
+        userOf: async (accountId) => (await providers.discord?.userOf?.(accountId)) ?? null,
       }),
       presence: () => this.presenceReader(loaded),
     };

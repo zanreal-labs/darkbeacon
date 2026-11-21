@@ -16,6 +16,9 @@ import type {
   RouteDto,
   RoutePreferencesDto,
   RoutesByDto,
+  RouteWatchDto,
+  RouteWatchListDto,
+  RouteWatchOpenedEvent,
   StationDto,
   StreamSnapshotDto,
   UniverseSystemDto,
@@ -364,6 +367,58 @@ describeEachDialect('routing and connections over HTTP', (t) => {
 
     expect((await request('DELETE', `/api/maps/${mapId}/bridges`, 'alice')).status).toBe(204);
     expect((await request<unknown[]>('GET', `/api/maps/${mapId}/bridges`, 'alice')).body).toEqual([]);
+  });
+
+  it('watches for a way home and announces it when the chain opens one', async () => {
+    const AMARR = 30002187;
+    const IRNIN = 30002192; // 0.7, one gate from Amarr
+    const watches = `/api/maps/${mapId}/route-watches`;
+    expect((await request('GET', watches, 'bob')).status).toBe(404);
+    expect((await request('POST', watches, 'alice', { solarSystemId: AMARR, maxJumps: 0 })).status).toBe(400);
+    expect((await request('POST', watches, 'alice', { solarSystemId: HOME, maxJumps: 10 })).status).toBe(400);
+    const created = await request<RouteWatchDto>('POST', watches, 'alice', {
+      solarSystemId: AMARR,
+      maxJumps: 10,
+    });
+    expect(created.status).toBe(201);
+    expect(created.body).toMatchObject({
+      target: { name: 'Amarr' },
+      mode: 'highsec',
+      maxJumps: 10,
+      route: null,
+      ownerName: 'alice',
+    });
+    expect(created.body.expiresAt - created.body.createdAt).toBe(24 * 60 * 60_000);
+    expect((await request<RouteWatchListDto>('GET', watches, 'alice')).body.home).toBeNull();
+
+    // Home and a hole from it to a high-sec system next to Amarr: the way is open.
+    for (const id of [HOME, IRNIN]) {
+      await request('POST', `/api/maps/${mapId}/systems`, 'alice', { solarSystemId: id });
+    }
+    await request('POST', `/api/maps/${mapId}/connections`, 'alice', { source: HOME, target: IRNIN });
+    await request('PATCH', `/api/maps/${mapId}/systems/${HOME}`, 'alice', { status: 'home' });
+    await vi.waitFor(async () => {
+      const opened = (await events('routes.watch_opened')).map((e) => e.data as RouteWatchOpenedEvent);
+      expect(opened).toMatchObject([
+        {
+          change: 'opened',
+          home: { name: 'J014348' },
+          route: { jumps: 2, gates: 1, wormholeJumps: 1, mouth: { name: 'Irnin' } },
+          watch: { id: created.body.id },
+        },
+      ]);
+    });
+    const list = await request<RouteWatchListDto>('GET', watches, 'alice');
+    expect(list.body).toMatchObject({
+      home: { name: 'J014348' },
+      watches: [{ id: created.body.id, route: { mouth: { name: 'Irnin' } } }],
+    });
+
+    expect((await request('DELETE', `${watches}/${created.body.id}`, 'alice')).status).toBe(204);
+    expect((await request<RouteWatchListDto>('GET', watches, 'alice')).body.watches).toEqual([]);
+    expect((await events('routes.watch_removed')).map((e) => e.data)).toMatchObject([
+      { id: created.body.id, reason: 'removed' },
+    ]);
   });
 
   it('sets waypoints only for own characters whose grant allows it', async () => {

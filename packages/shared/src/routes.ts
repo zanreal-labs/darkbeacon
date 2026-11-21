@@ -328,6 +328,15 @@ export const routes = {
       mapRole: 'admin',
       response: dto.DiscordNotifyTestDto,
     }),
+    /** Whether way-home watches of the map are posted to Discord (members, who set them). */
+    routeWatches: route({
+      method: 'GET',
+      path: '/api/plugins/discord-notify/maps/:mapId/route-watches',
+      auth: 'account',
+      scope: 'session',
+      mapRole: 'member',
+      response: dto.DiscordRouteWatchesDto,
+    }),
   },
 
   admin: {
@@ -1001,6 +1010,36 @@ export const routes = {
       scope: { resource: 'universe', action: 'read' },
       query: dto.KnownStructuresQuery,
       response: dto.KnownStructuresDto,
+    }),
+  },
+
+  /** Way-home watches: Discord tells the pilot who set one when a way home opens. */
+  routeWatches: {
+    /** The caller's watches on the map (map admins: everyone's) and the map's Home. */
+    list: route({
+      method: 'GET',
+      path: '/api/maps/:mapId/route-watches',
+      auth: 'account',
+      scope: { resource: 'routes', action: 'read' },
+      mapRole: 'member',
+      response: dto.RouteWatchListDto,
+    }),
+    create: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/route-watches',
+      auth: 'account',
+      scope: { resource: 'routes', action: 'write' },
+      mapRole: 'member',
+      body: dto.CreateRouteWatchRequest,
+      response: dto.RouteWatchDto,
+    }),
+    /** One's own watch; map admins may remove anyone's. */
+    remove: route({
+      method: 'DELETE',
+      path: '/api/maps/:mapId/route-watches/:watchId',
+      auth: 'account',
+      scope: { resource: 'routes', action: 'write' },
+      mapRole: 'member',
     }),
   },
 

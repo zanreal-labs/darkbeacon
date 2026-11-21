@@ -16,6 +16,12 @@ import type { MassMode, PassageSource } from './dto/passages.js';
 import type { HubDto, MapExitDto } from './dto/routing.js';
 import type { BridgeDto } from './dto/bridges.js';
 import type { MapRoutingSettingsDto, WayHomeDto } from './dto/route-panel.js';
+import type {
+  RouteWatchClosedEvent,
+  RouteWatchDto,
+  RouteWatchOpenedEvent,
+  RouteWatchRemovedEvent,
+} from './dto/route-watches.js';
 import type { CharacterPresenceDto } from './dto/tracking.js';
 import type { MapShareDto, MapSourceDto } from './dto/sharing.js';
 import type { CommentDto } from './dto/comments.js';
@@ -183,6 +189,14 @@ export interface EventPayloads {
   'routes.settings_changed': MapRoutingSettingsDto;
   /** The way home from each hub to the map's home system changed. */
   'routes.way_home_changed': WayHomeDto;
+  /** A member set a way-home watch (told when a way home from a known-space system opens). */
+  'routes.watch_added': RouteWatchDto;
+  /** A way-home watch was removed or ran out (`before` holds it). */
+  'routes.watch_removed': RouteWatchRemovedEvent;
+  /** A watched way home opened, moved to another mouth or came back (from the system actor `routing`). */
+  'routes.watch_opened': RouteWatchOpenedEvent;
+  /** A watched way home announced before has been gone for five minutes. */
+  'routes.watch_closed': RouteWatchClosedEvent;
   /** Map stream: an import from Wanderer started writing into this map. */
   'import.started': { jobId: string; source: ImportSourceDto; mode: 'new' | 'merge' };
   /** Map stream: an import finished (`done`), failed or was cancelled, with what it did per kind. */
@@ -265,6 +279,10 @@ export const EVENT_TYPES = [
   'routes.bridges_changed',
   'routes.settings_changed',
   'routes.way_home_changed',
+  'routes.watch_added',
+  'routes.watch_removed',
+  'routes.watch_opened',
+  'routes.watch_closed',
   'import.started',
   'import.finished',
   'import.sync_changed',

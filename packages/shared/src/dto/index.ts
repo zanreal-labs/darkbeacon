@@ -29,6 +29,7 @@ export * from './structures.js';
 export * from './known-structures.js';
 export * from './route-options.js';
 export * from './route-panel.js';
+export * from './route-watches.js';
 export * from './bridges.js';
 export * from './importing.js';
 export * from './jumps.js';

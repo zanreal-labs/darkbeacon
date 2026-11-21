@@ -323,6 +323,40 @@ export const AUDIT_CATALOGUE: Record<AuditedEventType, AuditDescriptor> = {
         : [],
     }),
   },
+  // A watch is someone's own; what it announced is activity of the watch.
+  'routes.watch_added': {
+    op: 'create',
+    entity: byId('routeWatch'),
+    refs: (d) => ref('system', asFields(d.target)?.solarSystemId),
+    ignore: ['createdAt', 'mapId', 'route', 'ownerName'],
+  },
+  'routes.watch_removed': {
+    op: 'delete',
+    entity: byId('routeWatch'),
+    refs: (_d, b) => ref('system', asFields(b?.target)?.solarSystemId),
+    ignore: ['createdAt', 'mapId', 'route', 'ownerName'],
+  },
+  'routes.watch_opened': {
+    op: 'activity',
+    entity: (d) => ({ kind: 'routeWatch', id: str(asFields(d.watch)?.id) }),
+    refs: (d) => ref('system', asFields(asFields(d.route)?.mouth)?.solarSystemId),
+    activity: (d) => {
+      const route = asFields(d.route);
+      const target = asFields(asFields(d.watch)?.target);
+      return {
+        wayHome: change(
+          null,
+          `${str(target?.name)} ${str(route?.jumps)}j via ${str(asFields(route?.mouth)?.name)}`,
+        ),
+      };
+    },
+  },
+  'routes.watch_closed': {
+    op: 'activity',
+    entity: (d) => ({ kind: 'routeWatch', id: str(asFields(d.watch)?.id) }),
+    refs: (d) => ref('system', asFields(d.mouth)?.solarSystemId),
+    activity: (d) => ({ wayHome: change(str(asFields(d.mouth)?.name), null) }),
+  },
   'import.started': {
     op: 'activity',
     entity: byId('import', 'jobId'),

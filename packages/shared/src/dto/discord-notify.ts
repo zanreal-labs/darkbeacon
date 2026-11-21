@@ -22,6 +22,11 @@ export const DiscordNotifyKind = z.enum([
   'wayHome',
   /** Tracked characters entering the chain from outside it. */
   'arrivals',
+  /**
+   * Way-home watches: a way home opened for the member who set the watch (who alone is
+   * mentioned), or closed again. Posted in quiet hours too, without the mention.
+   */
+  'routeWatches',
 ]);
 export type DiscordNotifyKind = z.infer<typeof DiscordNotifyKind>;
 
@@ -114,3 +119,10 @@ export const DiscordNotifyTestDto = z.object({
   error: z.string().nullable(),
 });
 export type DiscordNotifyTestDto = z.infer<typeof DiscordNotifyTestDto>;
+
+/**
+ * GET /api/plugins/discord-notify/maps/:mapId/route-watches (members): whether way-home watches
+ * of this map are posted to Discord (a channel is connected and the kind is on).
+ */
+export const DiscordRouteWatchesDto = z.object({ posting: z.boolean() });
+export type DiscordRouteWatchesDto = z.infer<typeof DiscordRouteWatchesDto>;

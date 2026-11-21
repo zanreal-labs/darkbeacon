@@ -4,6 +4,7 @@ import type {
   DiscordNotifyKind,
   DiscordNotifySettings,
   DiscordNotifyStateDto,
+  DiscordRouteWatchesDto,
   DomainEvent,
   KillmailDto,
   MapSystemDto,
@@ -11,6 +12,8 @@ import type {
   PluginContext,
   PluginHttpRequest,
   PluginHttpResponse,
+  RouteWatchClosedEvent,
+  RouteWatchOpenedEvent,
   ServerPlugin,
   UpdateDiscordNotifyRequest,
   WayHomeDto,
@@ -24,6 +27,8 @@ import {
   rallyPing,
   systemMarkedHostile,
   testNote,
+  watchClosedNote,
+  watchOpenedNote,
   wayHomeNote,
   type Embed,
   type MapView,
@@ -33,8 +38,8 @@ import {
   DEFAULT_SETTINGS,
   inQuietHours,
   parseUpdate,
+  QUIET_HOURS_KINDS,
   RequestError,
-  URGENT_KINDS,
   withDefaults,
 } from './settings.js';
 import { Store, type MapConfig, type OutboxRow, type Target } from './store.js';
@@ -79,6 +84,8 @@ const EVENTS = [
   'kill.reported',
   'map.removed',
   'routes.way_home_changed',
+  'routes.watch_opened',
+  'routes.watch_closed',
 ];
 
 interface MapData {
@@ -152,6 +159,17 @@ export class DiscordNotify {
       path: '/maps/:mapId/test',
       handler: (r) => this.guard(r, () => this.test(r.params.mapId!)),
     });
+    // Members setting a way-home watch see whether it will reach Discord.
+    ctx.http.route({
+      method: 'GET',
+      path: '/maps/:mapId/route-watches',
+      handler: async (r): Promise<PluginHttpResponse> => {
+        if (!r.accountId) return error(401, 'unauthenticated', 'Sign in first');
+        if (r.mapRole === null || r.mapRole === 'blocked') return error(404, 'not_found', 'Map not found');
+        if (r.mapRole === 'viewer') return error(403, 'forbidden', 'Only members set way-home watches');
+        return { status: 200, body: await this.routeWatches(r.params.mapId!) };
+      },
+    });
     ctx.http.route({
       method: 'POST',
       path: '/maps/:mapId/test-way-home',
@@ -170,6 +188,7 @@ export class DiscordNotify {
             mapId: n.mapId,
             kind: 'pings',
             mention: false,
+            mentionUser: null,
             embed: {
               title: n.title.slice(0, 256),
               description: n.body.slice(0, 4000),
@@ -299,13 +318,21 @@ export class DiscordNotify {
     return this.state(mapId);
   }
 
+  /** Whether way-home watches of the map reach Discord: a channel, switched on, the kind on. */
+  async routeWatches(mapId: string): Promise<DiscordRouteWatchesDto> {
+    const config = await this.store.config(mapId);
+    return {
+      posting: Boolean(config?.target && config.settings.enabled && config.settings.kinds.routeWatches),
+    };
+  }
+
   /** Posts one message now (no batching) and records how it went. */
   async test(mapId: string): Promise<{ ok: boolean; error: string | null }> {
     const config = await this.store.config(mapId);
     if (!config?.target) throw new RequestError('Connect a channel first');
     const data = await this.mapData(mapId);
     if (!data) throw new RequestError('Map not found');
-    const result = await this.send(config.target, [testNote(data.view, this.now()).embed], null);
+    const result = await this.send(config.target, [testNote(data.view, this.now()).embed], null, []);
     if (result.ok) await this.store.saveStatus(mapId, { last_sent_at: this.now() });
     else await this.store.saveStatus(mapId, { last_error: result.error, last_error_at: this.now() });
     return { ok: result.ok, error: result.ok ? null : result.error };
@@ -320,7 +347,7 @@ export class DiscordNotify {
     const latest = await this.store.remember<WayHomeDto>(mapId, 'wayhome:latest');
     if (!latest?.home) throw new RequestError('Mark a system of the map as Home first');
     const note = wayHomeNote(data.view, latest, this.now())!;
-    const result = await this.send(config.target, [note.embed], null);
+    const result = await this.send(config.target, [note.embed], null, []);
     if (result.ok) await this.store.saveStatus(mapId, { last_sent_at: this.now() });
     else await this.store.saveStatus(mapId, { last_error: result.error, last_error_at: this.now() });
     return { ok: result.ok, error: result.ok ? null : result.error };
@@ -392,6 +419,10 @@ export class DiscordNotify {
         return [];
       case 'ping.created':
         return [rallyPing(view, event.data as PingDto, at)];
+      case 'routes.watch_opened':
+        return [watchOpenedNote(view, event.data as RouteWatchOpenedEvent, at)];
+      case 'routes.watch_closed':
+        return [watchClosedNote(view, event.data as RouteWatchClosedEvent, at)];
       case 'kill.reported': {
         // The core reports a kill on every map showing the system; the kind is opt-in per map.
         const kill = event.data as KillmailDto;
@@ -420,15 +451,19 @@ export class DiscordNotify {
     }
   }
 
-  /** Stores the notes the map wants; quiet hours let only urgent ones through, without mentions. */
+  /**
+   * Stores the notes the map wants; quiet hours let only urgent ones and way-home watches
+   * through, without mentions. A way-home watch mentions the Discord user of the one who set it.
+   */
   private async enqueue(config: MapConfig, notes: readonly Note[], at: number): Promise<void> {
     const { settings } = config;
     const quiet = inQuietHours(settings.quietHours, at);
     const wanted = notes.filter(
-      (n) => settings.kinds[n.kind] && (!quiet || (URGENT_KINDS as readonly string[]).includes(n.kind)),
+      (n) => settings.kinds[n.kind] && (!quiet || QUIET_HOURS_KINDS.includes(n.kind)),
     );
-    await this.store.enqueue(
-      wanted.map((n) => ({
+    const rows = [];
+    for (const n of wanted) {
+      rows.push({
         id: this.nextId(),
         mapId: config.mapId,
         kind: n.kind,
@@ -436,10 +471,21 @@ export class DiscordNotify {
           !quiet &&
           settings.mention.kind !== 'none' &&
           (settings.mention.kinds as readonly DiscordNotifyKind[]).includes(n.kind),
+        mentionUser: n.ping && !quiet ? await this.discordUserOf(n.ping.accountId) : null,
         embed: n.embed,
         createdAt: this.now(),
-      })),
-    );
+      });
+    }
+    await this.store.enqueue(rows);
+  }
+
+  /** The Discord user an account signed in with; null without one (or on hosts before SDK 1.2). */
+  private async discordUserOf(accountId: string): Promise<string | null> {
+    try {
+      return (await this.ctx.ports.discord.userOf?.(accountId)) ?? null;
+    } catch {
+      return null;
+    }
   }
 
   /** A change of the chain restarts the quiet period of a way home waiting to be posted. */
@@ -477,11 +523,14 @@ export class DiscordNotify {
   }
 
   private async post(config: MapConfig, rows: OutboxRow[]): Promise<void> {
-    const mention = rows.some((r) => r.mention) && !inQuietHours(config.settings.quietHours, this.now());
+    const quiet = inQuietHours(config.settings.quietHours, this.now());
+    const mention = rows.some((r) => r.mention) && !quiet;
+    const users = quiet ? [] : rows.flatMap((r) => (r.mentionUser ? [r.mentionUser] : []));
     const result = await this.send(
       config.target!,
       rows.map((r) => r.embed),
       mention ? config.settings.mention : null,
+      users,
     );
     const ids = rows.map((r) => r.id);
     this.ctx.metrics.delivery('discord', result.ok ? 'ok' : 'failed');
@@ -500,13 +549,14 @@ export class DiscordNotify {
     target: Target,
     embeds: Embed[],
     mention: DiscordNotifySettings['mention'] | null,
+    users: readonly string[],
   ): Promise<Awaited<ReturnType<typeof deliver>>> {
     const settings = await this.ctx.settings
       .get<{ username?: string }>()
       .catch(() => ({}) as { username?: string });
     return deliver(
       target,
-      { embeds, mention },
+      { embeds, mention, users },
       { fetch: this.fetch, bot: this.ctx.ports.discord, username: settings.username ?? 'Darkbeacon' },
     );
   }

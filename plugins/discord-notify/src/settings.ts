@@ -17,8 +17,14 @@ export const KINDS: readonly DiscordNotifyKind[] = [
   'pings',
   'wayHome',
   'arrivals',
+  'routeWatches',
 ];
 export const URGENT_KINDS: readonly DiscordNotifyKind[] = ['eol', 'danger', 'kills', 'pings'];
+/**
+ * Kinds posted in quiet hours too (without mentions): the urgent ones, and way-home watches,
+ * which someone set for themselves and is waiting on.
+ */
+export const QUIET_HOURS_KINDS: readonly DiscordNotifyKind[] = [...URGENT_KINDS, 'routeWatches'];
 
 /** What a map starts with: the things a fleet acts on, quiet about the chatty ones. */
 export const DEFAULT_SETTINGS: DiscordNotifySettings = {
@@ -32,6 +38,8 @@ export const DEFAULT_SETTINGS: DiscordNotifySettings = {
     pings: true,
     wayHome: false,
     arrivals: false,
+    // A member asked for it; the one who set the watch alone is mentioned.
+    routeWatches: true,
   },
   mention: { kind: 'none', roleId: null, kinds: ['pings'] },
   quietHours: { enabled: false, start: '23:00', end: '07:00', timeZone: 'UTC' },

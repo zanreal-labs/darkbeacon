@@ -6,6 +6,8 @@ import type {
   MapDto,
   MapSystemDto,
   PingDto,
+  RouteWatchClosedEvent,
+  RouteWatchOpenedEvent,
   UniverseSystemDto,
   WayHomeDto,
 } from '@darkbeacon/plugin-sdk';
@@ -47,6 +49,8 @@ export interface Embed {
 export interface Note {
   kind: DiscordNotifyKind;
   embed: Embed;
+  /** Mention this account's Discord user (a way-home watch opening for the one who set it). */
+  ping?: { accountId: string };
 }
 
 /** What describing a map's events needs to know about the map. */
@@ -316,6 +320,64 @@ export function testNote(view: MapView, at: number): Note {
       description: `Notifications of ${view.map.name} will show up here.`,
       url: mapLink(view),
       color: COLORS.connection,
+      footer: footer(view),
+      timestamp: when(at),
+    },
+  };
+}
+
+/** Security as the game shows it: one decimal, 0.0-0.05 shown as 0.1. */
+export function securityLabel(security: number): string {
+  return (security > 0 && security < 0.05 ? 0.1 : Math.round(security * 10) / 10).toFixed(1);
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+/** "18:30 EVE": EVE runs on UTC. */
+const eveTime = (at: number) => `${new Date(at).toISOString().slice(11, 16)} EVE`;
+
+const OPENED_TITLE: Record<RouteWatchOpenedEvent['change'], string> = {
+  opened: 'Way home open',
+  moved: 'New way home',
+  again: 'Way home open again',
+};
+
+/**
+ * A way-home watch found its way: "Way home open: Amarr → J014348", the whole trip in jumps, the
+ * gates to the mouth (high-sec ones for a high-sec watch) and the wormhole jumps after it. It
+ * mentions the one who set the watch, except when the same mouth came back within 15 minutes.
+ */
+export function watchOpenedNote(view: MapView, event: RouteWatchOpenedEvent, at: number): Note {
+  const { watch, route, home } = event;
+  const mouth = `[${route.mouth.name}](${mapLink(view, route.mouth.solarSystemId)}) (${securityLabel(route.mouth.security)})`;
+  const gates =
+    route.gates === 0
+      ? `the hole is in ${mouth}`
+      : `${plural(route.gates, watch.mode === 'highsec' ? 'HS gate' : 'gate')} to ${mouth}`;
+  const trip = route.wormholeJumps > 0 ? `${gates}, ${plural(route.wormholeJumps, 'WH jump')}` : gates;
+  return {
+    kind: 'routeWatches',
+    embed: {
+      title: `${OPENED_TITLE[event.change]}: ${watch.target.name} → ${home.name}`,
+      description: `**${plural(route.jumps, 'jump')}** (${trip})\nWatch of ${watch.ownerName}, until ${eveTime(watch.expiresAt)}.`,
+      url: mapLink(view, route.mouth.solarSystemId),
+      color: COLORS.exit,
+      footer: footer(view),
+      timestamp: when(at),
+    },
+    ...(event.change === 'again' ? {} : { ping: { accountId: watch.accountId } }),
+  };
+}
+
+/** The way announced has been gone for five minutes; said quietly, the watch goes on. */
+export function watchClosedNote(view: MapView, event: RouteWatchClosedEvent, at: number): Note {
+  const { watch, mouth, home } = event;
+  return {
+    kind: 'routeWatches',
+    embed: {
+      title: `Way home closed: ${watch.target.name} → ${home?.name ?? 'Home'}`,
+      description: `The way through [${mouth.name}](${mapLink(view, mouth.solarSystemId)}) is gone. Watch of ${watch.ownerName} goes on until ${eveTime(watch.expiresAt)}.`,
+      url: mapLink(view, home?.solarSystemId),
+      color: COLORS.eol,
       footer: footer(view),
       timestamp: when(at),
     },
