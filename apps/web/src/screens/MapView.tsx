@@ -12,7 +12,8 @@ import {
   type StreamSnapshotDto,
   type UniverseSystemDto,
 } from '@darkbeacon/shared';
-import { AlertTriangle, PanelRight, Plus, Radio, Waypoints, X } from 'lucide-react';
+import { AlertTriangle, Import, PanelRight, Plus, Radio, Waypoints, X } from 'lucide-react';
+import Link from 'next/link';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
 import { chainPresenceHint, useChainPresence } from '../lib/chain-presence';
 import { setMapPeople, useMapPresence } from '../lib/presence';
@@ -324,7 +325,10 @@ export function MapView({
   const onMap = useMemo(() => new Set(ids), [ids]);
   const system = selected !== null ? state.systems.get(selected) : undefined;
   // The widgets never go away: with nothing selected they show home.
-  const home = useMemo(() => homeSystem(state.systems), [state.systems]);
+  const home = useMemo(
+    () => homeSystem(state.systems, state.connections),
+    [state.systems, state.connections],
+  );
   const widgetSystem = system ?? home;
   const connection = selectedConnection !== null ? state.connections.get(selectedConnection) : undefined;
   const endName = (id: number) => {
@@ -851,6 +855,13 @@ export function MapView({
                         <Button icon={<Radio />} onClick={() => settings.show('tracking')}>
                           Track a character
                         </Button>
+                        {can.manage && (
+                          <Button asChild icon={<Import />}>
+                            <Link href={`/import?into=${encodeURIComponent(map.slug)}`}>
+                              Import from Wanderer
+                            </Link>
+                          </Button>
+                        )}
                       </>
                     )
               }

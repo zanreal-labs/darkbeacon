@@ -434,6 +434,10 @@ function CreateMapForm({ autoFocus, onCancel }: { autoFocus?: boolean; onCancel?
         label="Composite (merge other maps)"
         description="No systems of its own: it shows the maps shared with it as one chain, e.g. an alliance chain."
       />
+      <p className="muted">
+        Bringing a map over from Wanderer? <Link href="/import">Import it from Wanderer</Link> instead: it
+        creates the map with its systems, connections and signatures, and can keep syncing.
+      </p>
       <div className={styles.formActions}>
         {onCancel && (
           <Button variant="ghost" onClick={onCancel}>

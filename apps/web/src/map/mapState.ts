@@ -30,15 +30,31 @@ export interface MapState {
 }
 
 /**
- * The system the widgets show while none is selected: home (the oldest of them), else the oldest
+ * The system the widgets show while none is selected, and the map opens on: home, else the oldest
  * system on the map, the root its layout grows from. Hidden systems never; none on the map, none.
+ *
+ * A map may mark several systems home (an import brings Wanderer's marks over as they are, a
+ * forgotten one included); the one the chain hangs off - most connections - wins, then the oldest.
  */
-export function homeSystem(systems: ReadonlyMap<number, MapSystemDto>): MapSystemDto | undefined {
+export function homeSystem(
+  systems: ReadonlyMap<number, MapSystemDto>,
+  connections?: ReadonlyMap<string, Pick<ConnectionDto, 'source' | 'target'>>,
+): MapSystemDto | undefined {
+  const links = new Map<number, number>();
+  for (const c of connections?.values() ?? []) {
+    links.set(c.source, (links.get(c.source) ?? 0) + 1);
+    links.set(c.target, (links.get(c.target) ?? 0) + 1);
+  }
+  const better = (a: MapSystemDto, b: MapSystemDto) => {
+    const la = links.get(a.solarSystemId) ?? 0;
+    const lb = links.get(b.solarSystemId) ?? 0;
+    return la !== lb ? la > lb : a.createdAt < b.createdAt;
+  };
   let home: MapSystemDto | undefined;
   let oldest: MapSystemDto | undefined;
   for (const s of systems.values()) {
     if (!s.visible) continue;
-    if (s.status === 'home' && (!home || s.createdAt < home.createdAt)) home = s;
+    if (s.status === 'home' && (!home || better(s, home))) home = s;
     if (!oldest || s.createdAt < oldest.createdAt) oldest = s;
   }
   return home ?? oldest;

@@ -112,6 +112,18 @@ describe('homeSystem', () => {
   const systems = (...list: ReturnType<typeof systemFixture>[]) =>
     new Map(list.map((s) => [s.solarSystemId, s]));
 
+  it('is the home system the chain hangs off when several are marked home', () => {
+    const found = homeSystem(
+      systems(
+        systemFixture(1, { status: 'home', createdAt: 1 }),
+        systemFixture(2, { status: 'home', createdAt: 5 }),
+        systemFixture(3, { createdAt: 6 }),
+      ),
+      new Map([['c', connectionFixture('c', 2, 3)]]),
+    );
+    expect(found?.solarSystemId).toBe(2);
+  });
+
   it('is the oldest home system', () => {
     const found = homeSystem(
       systems(

@@ -41,7 +41,7 @@ import { SNAP_GRID, useCanvasPrefs } from './canvas/prefs';
 import { boundsOf, fitViewport, type Point, type Rect } from './geometry';
 import { MapControls } from './MapControls';
 import { DEFAULT_ZOOM, FIT_MIN_ZOOM, mapTypeVars } from './mapType';
-import type { MapState } from './mapState';
+import { homeSystem, type MapState } from './mapState';
 import { exitChips } from './nodeFacts';
 import { useViewerExits } from './routes/api';
 import { SystemNode, systemDisplayName, type SystemNodeType } from './SystemNode';
@@ -487,7 +487,7 @@ export function MapCanvas({
     const systems = [...state.systems.values()];
     const id = openingFocus({
       mine: myLocation?.solarSystemId ?? null,
-      home: systems.find((s) => s.status === 'home')?.solarSystemId ?? null,
+      home: homeSystem(state.systems, state.connections)?.solarSystemId ?? null,
       latest:
         systems.reduce<(typeof systems)[number] | null>(
           (best, s) => (!best || s.updatedAt > best.updatedAt ? s : best),
@@ -504,6 +504,7 @@ export function MapCanvas({
     rf,
     preferences.viewport,
     state.systems,
+    state.connections,
     myLocation,
     centerOfSystem,
     centerOn,
