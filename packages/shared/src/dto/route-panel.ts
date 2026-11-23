@@ -185,6 +185,8 @@ export const TheraConnectionDto = z.object({
   signature: z.string().nullable(),
   remainingHours: z.number().nullable(),
   expiresAt: Timestamp.nullable(),
+  /** When a scout last reported on the hole (EVE-Scout's `updated_at`). */
+  updatedAt: Timestamp.nullable().optional(),
 });
 export type TheraConnectionDto = z.infer<typeof TheraConnectionDto>;
 

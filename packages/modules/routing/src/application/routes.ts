@@ -102,7 +102,7 @@ export class RouteQueries {
       to: query.to,
       mode: query.mode,
       jumps: steps ? steps.length - 1 : null,
-      steps: (steps ?? []).map((step) => this.step(step)),
+      steps: this.steps(steps ?? []),
       securityStatus,
     };
   }
@@ -129,7 +129,7 @@ export class RouteQueries {
       return {
         ...hub,
         jumps: steps ? steps.length - 1 : null,
-        steps: (steps ?? []).map((s) => this.step(s)),
+        steps: this.steps(steps ?? []),
       };
     });
     // A rally ping heads the list (the fleet goes there now), then the hubs nearest first.
@@ -188,7 +188,7 @@ export class RouteQueries {
         name: system.name,
         security: system.security,
         jumps: steps.length - 1,
-        steps: steps.map((s) => this.step(s)),
+        steps: this.steps(steps),
         stations,
       });
     }
@@ -513,6 +513,19 @@ export class RouteQueries {
       places.set(station.solarSystemId, [...(places.get(station.solarSystemId) ?? []), station]);
     }
     return places;
+  }
+
+  /**
+   * The systems of a route as the API shows them; a step through a Thera or Turnur hole carries
+   * the hole (signatures, type, age) so the pilot knows what to look for, and can tell it is gone.
+   */
+  private steps(steps: readonly RouteStep[]): RouteStepDto[] {
+    return steps.map((step, k) => {
+      const dto = this.step(step);
+      if (step.origin !== 'eve-scout' || k === 0) return dto;
+      const hole = this.deps.thera?.hole(steps[k - 1]!.id, step.id);
+      return hole ? { ...dto, hole } : dto;
+    });
   }
 
   /** One system of a route as the API shows it. */

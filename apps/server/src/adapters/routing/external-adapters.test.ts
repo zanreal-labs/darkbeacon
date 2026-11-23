@@ -70,6 +70,76 @@ describe('EVE-Scout', () => {
     clock.advance(4 * 60 * 60_000);
     expect(feed.connections()).toEqual([]);
   });
+
+  it('leaves out reports still being written and holes about to close', async () => {
+    const rows = [
+      {
+        ...SIGNATURE,
+        id: 'open',
+        expires_at: '2026-10-13T12:00:00.000Z',
+        updated_at: '2026-10-12T22:30:00.000Z',
+      },
+      { ...SIGNATURE, id: 'unchecked', completed: false, expires_at: '2026-10-13T12:00:00.000Z' },
+      // 40 minutes left: no pilot gets there in time to trust it.
+      { ...SIGNATURE, id: 'closing', expires_at: '2026-10-12T23:40:00.000Z' },
+    ];
+    const client = new HttpEveScoutClient({
+      userAgent: 'test',
+      fetch: (async () => json(rows)) as typeof fetch,
+    });
+    const clock = new ManualClock(Date.parse('2026-10-12T23:00:00Z'));
+    const feed = new TheraFeed({ client, universe, clock });
+    await feed.refresh();
+    expect(feed.connections().map((c) => c.id)).toEqual(['open']);
+    // Each step through the hole tells what to scan for, from either side.
+    expect(feed.hole(30000144, 31000005)).toEqual({
+      id: 'open',
+      hubSystemId: 31000005,
+      solarSystemId: 30000144,
+      hubSignature: 'ABC-123',
+      signature: 'XYZ-987',
+      whType: 'Q063',
+      maxShipSize: 'medium',
+      remainingHours: 3,
+      expiresAt: Date.parse('2026-10-13T12:00:00.000Z'),
+      updatedAt: Date.parse('2026-10-12T22:30:00.000Z'),
+    });
+    expect(feed.hole(31000005, 30000144)?.id).toBe('open');
+    expect(feed.hole(31000005, 30000142)).toBeNull();
+    // A quarter of an hour on (before the next answer), the open one still stands.
+    clock.advance(15 * 60_000);
+    expect(feed.connections().map((c) => c.id)).toEqual(['open']);
+  });
+
+  it('stops routing through the holes when EVE-Scout has not answered for too long', async () => {
+    let up = true;
+    const client = new HttpEveScoutClient({
+      userAgent: 'test',
+      fetch: (async () =>
+        up
+          ? json([{ ...SIGNATURE, expires_at: '2026-10-13T12:00:00.000Z' }])
+          : json({}, { status: 503 })) as typeof fetch,
+    });
+    const clock = new ManualClock(Date.parse('2026-10-12T23:00:00Z'));
+    const feed = new TheraFeed({ client, universe, clock });
+    await feed.refresh();
+    up = false;
+    clock.advance(10 * 60_000);
+    await expect(feed.refresh()).rejects.toThrow('503');
+    // Ten minutes without an answer: the copy still stands.
+    expect(feed.dropStale()).toBe(false);
+    expect(feed.connections()).toHaveLength(1);
+    clock.advance(15 * 60_000);
+    await expect(feed.refresh()).rejects.toThrow('503');
+    expect(feed.connections()).toEqual([]);
+    expect(await feed.edges()).toEqual([]);
+    expect(feed.dropStale()).toBe(true);
+    expect(feed.dropStale()).toBe(false);
+    // EVE-Scout back: the holes are back, and routes must be found again.
+    up = true;
+    expect(await feed.refresh()).toBe(true);
+    expect(feed.connections()).toHaveLength(1);
+  });
 });
 
 describe('ESI', () => {
