@@ -210,6 +210,28 @@ export class ChainMerger {
     );
   }
 
+  /**
+   * Lays a merged map out again from scratch by its placement rule, as `actor`: every chain a group
+   * of its own, one under another, and systems the chains share once, with the connections of each
+   * chain drawn to them. Forgets where the merge put systems and where viewers dragged them;
+   * returns how many systems it placed.
+   */
+  async arrange(actor: Actor, mapId: string): Promise<number> {
+    return this.serial(mapId, async () => {
+      const map = await this.ensure(mapId);
+      if (!map) return 0;
+      await this.ports.layout.clear(mapId);
+      map.layout = new Map();
+      map.hand = new Set();
+      map.offsets = new Map();
+      map.lone = undefined;
+      const refs = new Set([...map.merge.refs()].filter((ref) => parseRefId(ref).kind === 'system'));
+      const placing = this.placing(map);
+      await this.publish(map, refs, actor, {}, { placing });
+      return placing.placed.length;
+    });
+  }
+
   /** Shares of the map changed (or the map itself): merges it again from scratch. */
   async rebuild(mapId: string): Promise<void> {
     this.shares = null;

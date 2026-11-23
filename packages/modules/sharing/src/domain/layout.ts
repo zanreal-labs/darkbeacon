@@ -90,15 +90,15 @@ const onGridUp = (v: number) => Math.ceil(v / MAP_GRID) * MAP_GRID;
 
 /**
  * Where a source's cluster goes on a merged map: sources lay themselves out in coordinate spaces
- * of their own, so a cluster is shifted to sit right of what the map already shows (`taken`),
- * one empty column between them and its top on theirs, by a shift on the map grid. The first
- * cluster (nothing taken yet) keeps its own coordinates.
+ * of their own, so a cluster is shifted to sit under what the map already shows (`taken`), one
+ * empty row between them and its left edge on theirs, by a shift on the map grid: chains read one
+ * under another. The first cluster (nothing taken yet) keeps its own coordinates.
  */
 export function clusterOffset(cluster: Extent | null, taken: Extent | null): Position {
   if (!cluster || !taken) return { x: 0, y: 0 };
   return {
-    x: onGridUp(taken.maxX + 2 * SYSTEM_PLACEMENT.x - cluster.minX),
-    y: onGridUp(taken.minY - cluster.minY),
+    x: onGridUp(taken.minX - cluster.minX),
+    y: onGridUp(taken.maxY + 2 * SYSTEM_PLACEMENT.y - cluster.minY),
   };
 }
 

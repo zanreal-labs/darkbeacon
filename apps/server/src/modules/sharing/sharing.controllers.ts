@@ -6,6 +6,7 @@ import {
   OfferShareRequest,
   routes,
   UpdateShareRequest,
+  type ArrangeChainsDto,
 } from '@darkbeacon/shared';
 import { SharingUseCases } from '@darkbeacon/sharing';
 import { CurrentActor } from '../../platform/actor.js';
@@ -58,5 +59,11 @@ export class SharesController {
     @Param('shareId') shareId: string,
   ): Promise<void> {
     await this.sharing.revoke(actor, mapId, shareId);
+  }
+
+  @Post(nestPath(routes.sharing.arrange.path))
+  @HttpCode(200)
+  arrange(@CurrentActor() actor: Actor | null, @Param('mapId') mapId: string): Promise<ArrangeChainsDto> {
+    return this.sharing.arrange(actor, mapId);
   }
 }

@@ -90,14 +90,17 @@ export function layOutChain(
   );
 }
 
-/** Where a new group of systems starts: two columns right of everything placed, at its top. */
+/**
+ * Where a new group of systems starts on a merged map: under everything placed, one empty row
+ * between, at its left edge, so chains read one under another.
+ */
 export function groupStart(placed: ReadonlyMap<number, Position>): Position {
   if (placed.size === 0) return { x: 0, y: 0 };
-  let maxX = -Infinity;
-  let minY = Infinity;
+  let minX = Infinity;
+  let maxY = -Infinity;
   for (const p of placed.values()) {
-    maxX = Math.max(maxX, p.x);
-    minY = Math.min(minY, p.y);
+    minX = Math.min(minX, p.x);
+    maxY = Math.max(maxY, p.y);
   }
-  return { x: maxX + 2 * SYSTEM_PLACEMENT.x, y: minY };
+  return { x: minX, y: maxY + 2 * SYSTEM_PLACEMENT.y };
 }

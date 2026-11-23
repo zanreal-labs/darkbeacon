@@ -61,6 +61,10 @@ export const MapSharesDto = z.object({
 });
 export type MapSharesDto = z.infer<typeof MapSharesDto>;
 
+/** POST /api/maps/:mapId/arrange: how many systems were laid out again. */
+export const ArrangeChainsDto = z.object({ placed: z.number().int() });
+export type ArrangeChainsDto = z.infer<typeof ArrangeChainsDto>;
+
 /** POST /api/maps/:mapId/shares: the source's admin offers the map to another map. */
 export const OfferShareRequest = z
   .object({

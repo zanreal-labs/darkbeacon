@@ -1270,6 +1270,15 @@ export const routes = {
       scope: { resource: 'maps', action: 'manage' },
       mapRole: 'admin',
     }),
+    /** Lays the chains a merging map shows out again, one under another (its admins). */
+    arrange: route({
+      method: 'POST',
+      path: '/api/maps/:mapId/arrange',
+      auth: 'account',
+      scope: { resource: 'maps', action: 'manage' },
+      mapRole: 'admin',
+      response: dto.ArrangeChainsDto,
+    }),
   },
 
   access: {

@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Network, Trash2, X } from 'lucide-react';
+import { Check, Network, Rows3, Trash2, X } from 'lucide-react';
 import {
   buildPath,
   DEFAULT_SHARE_SCOPES,
@@ -12,6 +12,7 @@ import {
   type MapDto,
   type MapShareDto,
   type MapSharesDto,
+  type ArrangeChainsDto,
   type MapSummaryDto,
   type OfferShareRequest,
   type ShareLevel,
@@ -171,8 +172,20 @@ export function MapSharing({ map }: { map: MapDto }) {
     }
   };
 
+  const arrange = useMutation({
+    mutationFn: () =>
+      api<ArrangeChainsDto>(buildPath(routes.sharing.arrange.path, { mapId: map.id }), {
+        method: 'POST',
+        json: {},
+      }),
+    onSuccess: ({ placed }) =>
+      toast({ title: `Chains arranged again: ${placed} systems laid out`, tone: 'success' }),
+    onError: failed('Could not arrange the chains'),
+  });
+
   const incoming = shares.data?.incoming ?? [];
   const outgoing = shares.data?.outgoing ?? [];
+  const merging = incoming.some((share) => share.status === 'active');
 
   return (
     <Stack>
@@ -183,6 +196,19 @@ export function MapSharing({ map }: { map: MapDto }) {
             map.kind === 'composite'
               ? 'This map shows only what other maps share with it, merged into one chain.'
               : 'Maps shared with this one show here merged with its own systems.'
+          }
+          actions={
+            merging && (
+              <Button
+                size="sm"
+                icon={<Rows3 />}
+                loading={arrange.isPending}
+                onClick={() => arrange.mutate()}
+                title="Lay every chain out again, one under another; systems they share show once. Systems someone dragged move too."
+              >
+                Arrange chains again
+              </Button>
+            )
           }
         />
         <CardBody flush>

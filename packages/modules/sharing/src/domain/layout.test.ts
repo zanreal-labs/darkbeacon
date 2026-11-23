@@ -59,7 +59,7 @@ describe('merged map layout', () => {
       expect(extentOf([])).toBeNull();
     });
 
-    it('puts the next cluster right of what is shown, top on top, on the grid, never overlapping', () => {
+    it('puts the next cluster under what is shown, left edges in line, on the grid, never overlapping', () => {
       // Production: a Wanderer intel map far left of the live chain.
       const chain = extentOf([
         { x: 2640, y: 0 },
@@ -74,10 +74,10 @@ describe('merged map layout', () => {
       expect(offset.y % 24).toBe(0);
       const placed = move(intel, offset);
       expect(overlaps(placed, chain)).toBe(false);
-      expect(placed.minX).toBeGreaterThanOrEqual(chain.maxX + 2 * 360);
-      expect(placed.minX - chain.maxX).toBeLessThan(2 * 360 + 24);
-      expect(Math.abs(placed.minY - chain.minY)).toBeLessThan(24);
-      // A third cluster goes right of both.
+      expect(placed.minY).toBeGreaterThanOrEqual(chain.maxY + 2 * 144);
+      expect(placed.minY - chain.maxY).toBeLessThan(2 * 144 + 24);
+      expect(Math.abs(placed.minX - chain.minX)).toBeLessThan(24);
+      // A third cluster goes under both.
       const both = extentOf([
         { x: chain.minX, y: chain.minY },
         { x: placed.maxX, y: placed.maxY },

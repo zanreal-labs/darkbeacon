@@ -6,6 +6,7 @@ import {
   newId,
   NotFoundError,
   requireAccount,
+  ValidationError,
   requireMapRole,
   type Actor,
   type NewEvent,
@@ -175,6 +176,19 @@ export class SharingUseCases {
       await this.ports.events.append(this.events(account, 'map.share.revoked', current, dto, dto));
     });
     if (current.status === 'active') await this.merger.rebuild(current.target.mapId);
+  }
+
+  /**
+   * Lays the chains a map merges out again, one under another (its admins): systems the chains
+   * share show once, with each chain's connections to them. Where systems were dragged is
+   * forgotten. Returns how many systems were placed.
+   */
+  async arrange(actor: Actor | null, mapId: string): Promise<{ placed: number }> {
+    const account = requireAccount(actor);
+    await requireMapRole(this.ports.access, account, mapId, 'admin');
+    if (!(await this.merger.isMerged(mapId)))
+      throw new ValidationError('Only a map that merges other maps can arrange their chains');
+    return { placed: await this.merger.arrange(account, mapId) };
   }
 
   /** A share the map is part of. Others read as not found. */

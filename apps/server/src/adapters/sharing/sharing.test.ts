@@ -1050,16 +1050,16 @@ describeEachDialect('sharing and merged chains', (t) => {
       await share(corpC, bob, 'read');
     });
 
-    it('lays each chain out by the placement rule, a group of its own right of the others', async () => {
+    it('lays each chain out by the placement rule, a group of its own under the others', async () => {
       const merged = await view(alliance.id);
       const ofA = await Promise.all([c2, c5, c1].map(at));
-      const right = Math.max(...ofA.map((p) => p.x));
-      const top = Math.min(...merged.systems.map((s) => s.position.y));
+      const bottom = Math.max(...ofA.map((p) => p.y));
+      const left = Math.min(...ofA.map((p) => p.x));
       const j = await at(jita);
       const p = await at(perimeter);
-      // Not where the sources drew them: Corp C's chain is a group right of Corp A's, at the top.
-      expect(j.x).toBeGreaterThanOrEqual(right + 2 * 360);
-      expect(j.y).toBe(top);
+      // Not where the sources drew them: Corp C's chain is a group under Corp A's, left edges in line.
+      expect(j.y).toBeGreaterThanOrEqual(bottom + 2 * 144);
+      expect(j.x).toBe(left);
       expect(j.x % 24).toBe(0);
       expect(j.y % 24).toBe(0);
       // Perimeter beside Jita, a column further out, in its row.
@@ -1162,6 +1162,36 @@ describeEachDialect('sharing and merged chains', (t) => {
       expect((await env.writes.tidy(carol, alliance.id, false)).moved).toBe(0);
     });
 
+    it('arranges the chains again, one under another, for its admins only, dragged systems too', async () => {
+      // Scattered by hand: Jita dragged onto Corp A's chain, Perimeter far off.
+      const c2At = await at(c2);
+      await env.writes.moveSystems(carol, alliance.id, {
+        positions: [
+          { solarSystemId: jita, x: c2At.x, y: c2At.y + 48 },
+          { solarSystemId: perimeter, x: -4800, y: 3600 },
+        ],
+      });
+      await env.settle();
+      await expect(env.sharing.arrange(dave, alliance.id)).rejects.toThrow();
+      const { placed } = await env.sharing.arrange(carol, alliance.id);
+      await env.settle();
+      const merged = await view(alliance.id);
+      expect(placed).toBe(merged.systems.filter((s) => s.visible).length);
+      const ofA = await Promise.all([c2, c5, c1].map(at));
+      const j = await at(jita);
+      expect(j.y).toBeGreaterThanOrEqual(Math.max(...ofA.map((p) => p.y)) + 2 * 144);
+      expect(await at(perimeter)).toEqual({ x: j.x + 360, y: j.y });
+      const shown = merged.systems.map((s) => s.position);
+      for (let i = 0; i < shown.length; i++)
+        for (let k = i + 1; k < shown.length; k++)
+          expect(
+            Math.abs(shown[i]!.x - shown[k]!.x) >= 240 || Math.abs(shown[i]!.y - shown[k]!.y) >= 130,
+          ).toBe(true);
+      // The same layout after a rebuild: nothing is moved back.
+      await sharingTestEnv(t.db).merger.rebuildAll();
+      expect(await at(jita)).toEqual(j);
+    });
+
     it('moves the clusters of a map laid out before offsets apart once, leaving moved systems', async () => {
       const ownOf = async (mapId: string, id: number) => (await env.ports.systems.find(mapId, id))!.position;
       // As the old rule placed them: every system where its source has it; Corp A's C1 was moved.
@@ -1183,7 +1213,7 @@ describeEachDialect('sharing and merged chains', (t) => {
       expect(await at(c2)).toEqual(await ownOf(corpA.id, c2));
       expect(await at(c1)).toEqual({ x: 1200, y: 1200 });
       const j = await at(jita);
-      expect(j.x).toBeGreaterThanOrEqual(1200 + 2 * 360);
+      expect(j.y).toBeGreaterThanOrEqual(1200 + 2 * 144);
       // Laid out as a tree: beside Jita, in its row.
       expect(await at(perimeter)).toEqual({ x: j.x + 360, y: j.y });
       // Once: the next rebuild changes nothing.
