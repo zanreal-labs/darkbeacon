@@ -85,7 +85,13 @@ export function featureEvents(event: ObservedEvent, context: AuditContext): Feat
       if (!accountId || typeof data?.status !== 'string') return [];
       return one('import_completed', {
         source:
-          source?.kind === 'wanderer-file' ? 'file' : source?.kind === 'wanderer-db' ? 'database' : 'api',
+          source?.kind === 'wanderer-file'
+            ? 'file'
+            : source?.kind === 'wanderer-db'
+              ? 'database'
+              : source?.kind === 'wanderer-session'
+                ? 'session'
+                : 'api',
         status: data.status,
         systems: written('systems'),
         connections: written('connections'),

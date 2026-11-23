@@ -1357,6 +1357,18 @@ export const routes = {
       response: dto.ImportJobDto,
     }),
     /**
+     * Reads the whole map as a signed-in pilot (Wanderer's session cookie, no API key) and stages
+     * it as a preview: only what the map shows.
+     */
+    previewSession: route({
+      method: 'POST',
+      path: '/api/imports/wanderer-session',
+      auth: 'account',
+      scope: 'session',
+      body: dto.WandererSessionSourceRequest,
+      response: dto.ImportJobDto,
+    }),
+    /**
      * Stages a Wanderer export file: the raw JSON as the body with content type
      * `WANDERER_EXPORT_CONTENT_TYPE` (streamed, 25 MB at most); `?name=` the file's name.
      */

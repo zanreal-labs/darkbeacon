@@ -55,6 +55,7 @@ import {
 } from '../../adapters/importing/targets.js';
 import { WandererDatabaseSource } from '../../adapters/importing/wanderer-db.js';
 import { WandererFileSource, WandererHttpSource } from '../../adapters/importing/wanderer-http.js';
+import { WandererSessionSource } from '../../adapters/importing/wanderer-session.js';
 import { SecretBox } from '../../adapters/notifications/secret-box.js';
 import type { AppConfig } from '../../config/config.js';
 import { AsyncAuditScope } from '../../platform/audit.js';
@@ -227,6 +228,7 @@ export class ImportingRuntime implements OnModuleInit, OnApplicationBootstrap, O
           sources: {
             api: new WandererHttpSource(),
             db: new WandererDatabaseSource(),
+            session: new WandererSessionSource(),
             file: new WandererFileSource((document, fileName) =>
               readExportFile(document, fileName, clock.now()),
             ),

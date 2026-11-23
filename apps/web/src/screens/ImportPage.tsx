@@ -10,6 +10,7 @@ import {
   Download,
   FileJson,
   Globe,
+  LogIn,
   Map as MapIcon,
   Merge,
   Plus,
@@ -23,6 +24,7 @@ import type {
   ImportReportLineDto,
   MapRole,
   WandererApiSourceRequest,
+  WandererSessionSourceRequest,
   WandererTestResultDto,
 } from '@darkbeacon/shared';
 import { ApiError } from '../lib/api';
@@ -33,6 +35,7 @@ import {
   useImportPlan,
   useReadWanderer,
   useReadWandererDb,
+  useReadWandererSession,
   useStartImport,
   useTestWanderer,
   useUploadExport,
@@ -109,7 +112,7 @@ export function ImportPage({ into }: { into: string | null }) {
 
 // ---- 1. Source ----------------------------------------------------------------------------------
 
-type SourceKind = 'api' | 'file' | 'db';
+type SourceKind = 'api' | 'session' | 'file' | 'db';
 
 function SourceCard({ onRead, reading }: { onRead(jobId: string): void; reading: boolean }) {
   const me = useMe();
@@ -119,7 +122,7 @@ function SourceCard({ onRead, reading }: { onRead(jobId: string): void; reading:
     <Card aria-label="Source">
       <CardHeader
         title="Where is the map?"
-        description="Wanderer's API and its database can keep syncing; an export file is read once."
+        description="Wanderer's API, a signed-in session and its database can keep syncing; an export file is read once."
       />
       <CardBody>
         <ChoiceGroup
@@ -132,6 +135,12 @@ function SourceCard({ onRead, reading }: { onRead(jobId: string): void; reading:
               label: "Wanderer's API",
               description: 'wanderer.ltd or your own Wanderer, with the map API key',
               icon: <Globe />,
+            },
+            {
+              value: 'session',
+              label: 'Signed in, no API key',
+              description: 'A map you can open in Wanderer, read with your session cookie',
+              icon: <LogIn />,
             },
             {
               value: 'file',
@@ -154,6 +163,8 @@ function SourceCard({ onRead, reading }: { onRead(jobId: string): void; reading:
       </CardBody>
       {kind === 'api' ? (
         <ApiSourceForm onRead={onRead} />
+      ) : kind === 'session' ? (
+        <SessionSourceForm onRead={onRead} />
       ) : kind === 'db' && admin ? (
         <DbSourceForm onRead={onRead} />
       ) : (
@@ -259,6 +270,66 @@ function ApiSourceForm({ onRead }: { onRead(jobId: string): void }) {
         >
           Test connection
         </Button>
+        <Button type="submit" variant="primary" disabled={!ready} loading={read.isPending}>
+          Read map
+        </Button>
+      </CardFooter>
+    </form>
+  );
+}
+
+/**
+ * A map whose owner hands out no API key, read the way its page reads it: signed in as the person
+ * importing (their Wanderer session cookie). Only what the map shows comes over.
+ */
+function SessionSourceForm({ onRead }: { onRead(jobId: string): void }) {
+  const [address, setAddress] = useState('');
+  const [cookie, setCookie] = useState('');
+  const read = useReadWandererSession();
+  const mapAddress = address.trim();
+  const source: WandererSessionSourceRequest = {
+    baseUrl: mapAddress,
+    slug: mapAddress,
+    cookie: cookie.trim(),
+  };
+  const ready = /^https?:\/\/[^/]+\/[^/?#]+/i.test(mapAddress) && source.cookie.length >= 20;
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    read.mutate(source, { onSuccess: (job) => onRead(job.id) });
+  };
+  return (
+    <form onSubmit={submit} aria-label="Wanderer session">
+      <CardBody>
+        <div className={styles.fields}>
+          <Field label="Map address" hint="Copy it from the address bar while the map is open in Wanderer.">
+            <Input
+              mono
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="https://wanderer.example.org/home-chain"
+            />
+          </Field>
+          <Field
+            label="Session cookie"
+            hint="In Wanderer, signed in: DevTools, Application, Cookies, the value of _wanderer_app_key. It signs in as you, so it is kept encrypted here and never shown again; signing out of Wanderer ends it."
+            error={read.error ? message(read.error) : undefined}
+          >
+            <Input
+              type="password"
+              autoComplete="off"
+              mono
+              value={cookie}
+              onChange={(e) => setCookie(e.target.value)}
+              placeholder="_wanderer_app_key"
+            />
+          </Field>
+        </div>
+        <p className="muted">
+          Brings over what the map shows: systems, connections and signatures. Hidden systems, structures,
+          comments and access lists stay in Wanderer.
+        </p>
+      </CardBody>
+      <CardFooter>
         <Button type="submit" variant="primary" disabled={!ready} loading={read.isPending}>
           Read map
         </Button>

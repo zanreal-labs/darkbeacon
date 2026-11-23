@@ -39,7 +39,23 @@ export interface WandererDbRequest {
   host: string;
 }
 
-export type SourceRequest = WandererApiRequest | WandererFileRequest | WandererDbRequest;
+/**
+ * A Wanderer map read the way its own page reads it: over the map's live connection, signed in as
+ * somebody who may open the map (their session cookie). For maps whose owner hands out no API
+ * key: everything the map shows (systems, connections, signatures), nothing it hides.
+ */
+export interface WandererSessionRequest {
+  kind: 'wanderer-session';
+  base: WandererBase;
+  slug: string;
+  /** The value of Wanderer's `_wanderer_app_key` session cookie. */
+  cookie: string;
+  insecureTls: boolean;
+  allowPrivate: boolean;
+}
+
+export type SourceRequest =
+  WandererApiRequest | WandererFileRequest | WandererDbRequest | WandererSessionRequest;
 
 /** A map of a Wanderer database, for choosing which one to import. */
 export interface WandererDbMap {

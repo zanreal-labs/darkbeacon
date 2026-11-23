@@ -24,6 +24,7 @@ import {
   type WandererDbConnectRequest,
   type WandererDbMapsDto,
   type WandererDbSourceRequest,
+  type WandererSessionSourceRequest,
   type WandererTestResultDto,
 } from '@darkbeacon/shared';
 import { SourceError } from '../domain/errors.js';
@@ -31,7 +32,7 @@ import { parseWandererBase, parseWandererSlug } from '../domain/source-url.js';
 import { translate } from '../domain/translate.js';
 import type { WandererMapDump } from '../domain/wanderer.js';
 import type { ImportJobRecord } from '../ports/repositories.js';
-import type { WandererApiRequest, WandererDbRequest } from '../ports/source.js';
+import type { WandererApiRequest, WandererDbRequest, WandererSessionRequest } from '../ports/source.js';
 import type { ImportingDeps } from './deps.js';
 import { assess, characterNames, emptyOutcomes, LinkIndex, type TargetState } from './planner.js';
 import type { ImportRunner } from './runner.js';
@@ -110,6 +111,24 @@ export class ImportService {
     const source = dbRequest(request);
     const dump = await this.limited(account, () => this.deps.sources.db.read(source));
     const sealed = this.deps.secrets.seal(JSON.stringify({ ...request, slug: source.slug }));
+    return this.stage(account, dump, sealed);
+  }
+
+  /**
+   * Reads the whole map as a signed-in pilot (Wanderer's session cookie, for maps whose owner
+   * hands out no API key) and stages it as a preview: only what the map shows.
+   */
+  async previewSession(actor: Actor | null, request: WandererSessionSourceRequest): Promise<ImportJobDto> {
+    const account = requireAccount(actor);
+    const source = await this.sessionRequest(account, request);
+    const dump = await this.limited(account, () => this.deps.sources.session.read(source));
+    const sealed = this.deps.secrets.seal(
+      JSON.stringify({
+        ...request,
+        baseUrl: source.base.url,
+        slug: source.slug,
+      } satisfies WandererSessionSourceRequest),
+    );
     return this.stage(account, dump, sealed);
   }
 
@@ -205,7 +224,7 @@ export class ImportService {
       throw new ConflictError('This import has started already; read the map again to import it again');
     if (request.keepSyncing && !job.sealedSource)
       throw new ValidationError(
-        'Only an import over the API or from the database can keep syncing; a file is read once',
+        'Only an import over the API, a signed-in session or the database can keep syncing; a file is read once',
       );
     if (request.mode === 'merge') {
       await this.requireMergeRole(job.actor, request.mapId!);
@@ -364,6 +383,15 @@ export class ImportService {
     return role;
   }
 
+  private async sessionRequest(
+    account: AccountActor,
+    request: WandererSessionSourceRequest,
+  ): Promise<WandererSessionRequest> {
+    if (request.insecureTls && !isInstanceAdmin(account))
+      throw new ForbiddenError('Only an instance admin may accept a self-signed certificate');
+    return sessionRequest(request, await this.deps.policy.allowPrivateNetworks());
+  }
+
   private async apiRequest(
     account: AccountActor,
     request: WandererApiSourceRequest,
@@ -419,6 +447,21 @@ export function databaseHost(connectionString: string): string {
       'The connection string is not one Darkbeacon can read: postgres://user:password@host:5432/database',
     );
   }
+}
+
+/** The session source of a request: the instance (a map's address works), the map, the cookie. */
+export function sessionRequest(
+  request: WandererSessionSourceRequest,
+  allowPrivate: boolean,
+): WandererSessionRequest {
+  return {
+    kind: 'wanderer-session',
+    base: parseWandererBase(request.baseUrl, { allowPlainHttp: allowPrivate }),
+    slug: parseWandererSlug(request.slug),
+    cookie: request.cookie,
+    insecureTls: request.insecureTls ?? false,
+    allowPrivate,
+  };
 }
 
 /** The database source of a request: the map's slug and where its imports are filed. */

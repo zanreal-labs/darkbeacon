@@ -9,6 +9,7 @@ import {
   WandererApiSourceRequest,
   WandererDbConnectRequest,
   WandererDbSourceRequest,
+  WandererSessionSourceRequest,
   type WandererDbMapsDto,
   type ImportJobDto,
   type ImportPlanDto,
@@ -50,6 +51,14 @@ export class ImportsController {
     @Body(new ZodPipe(WandererDbConnectRequest)) body: WandererDbConnectRequest,
   ): Promise<WandererDbMapsDto> {
     return this.imports.dbMaps(actor, body);
+  }
+
+  @Post(nestPath(r.previewSession.path))
+  previewSession(
+    @CurrentActor() actor: Actor | null,
+    @Body(new ZodPipe(WandererSessionSourceRequest)) body: WandererSessionSourceRequest,
+  ): Promise<ImportJobDto> {
+    return this.imports.previewSession(actor, body);
   }
 
   @Post(nestPath(r.previewDb.path))

@@ -1,12 +1,16 @@
 import { actorRef, hasMapRole, mapStream, newEvent, newId } from '@darkbeacon/core';
-import { WandererApiSourceRequest, WandererDbSourceRequest } from '@darkbeacon/shared';
+import {
+  WandererApiSourceRequest,
+  WandererDbSourceRequest,
+  WandererSessionSourceRequest,
+} from '@darkbeacon/shared';
 import { SourceError } from '../domain/errors.js';
 import { parseWandererBase, parseWandererSlug } from '../domain/source-url.js';
 import { translate } from '../domain/translate.js';
 import type { ImportJobRecord, ImportSyncRecord } from '../ports/repositories.js';
 import type { ImportingDeps } from './deps.js';
 import { emptyOutcomes } from './planner.js';
-import { dbRequest } from './service.js';
+import { dbRequest, sessionRequest } from './service.js';
 
 /** A sync stops after this many failed pulls in a row (and on a refused key at once). */
 const MAX_FAILURES = 5;
@@ -58,9 +62,14 @@ export class SyncScheduler {
     try {
       const sealed: unknown = JSON.parse(deps.secrets.open(sync.sealedSource));
       const fromDatabase = WandererDbSourceRequest.safeParse(sealed);
+      const fromSession = WandererSessionSourceRequest.safeParse(sealed);
       const dump = fromDatabase.success
         ? await deps.sources.db.read(dbRequest(fromDatabase.data))
-        : await this.readApi(WandererApiSourceRequest.parse(sealed));
+        : fromSession.success
+          ? await deps.sources.session.read(
+              sessionRequest(fromSession.data, await deps.policy.allowPrivateNetworks()),
+            )
+          : await this.readApi(WandererApiSourceRequest.parse(sealed));
       const { report, counts, plan } = translate(dump, { systemName: (id) => deps.universe.systemName(id) });
       const job: ImportJobRecord = {
         id: newId(),
@@ -102,7 +111,7 @@ export class SyncScheduler {
         await this.stop(
           sync,
           refused
-            ? `Wanderer refused the API key: ${sync.lastError}`
+            ? `Wanderer refused the sign-in: ${sync.lastError}`
             : `Stopped after ${sync.failures} failed pulls: ${sync.lastError}`,
         );
       else await deps.syncs.update(sync);

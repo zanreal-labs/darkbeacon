@@ -825,7 +825,7 @@ function invalid(api: WandererApiRequest, what: string): SourceError {
   return new SourceError('invalid', `${api.base.host} did not answer like Wanderer's API for the ${what}`);
 }
 
-const publicOnlyLookup: LookupFunction = (hostname, options, callback) => {
+export const publicOnlyLookup: LookupFunction = (hostname, options, callback) => {
   dnsLookup(
     hostname,
     options,
@@ -840,7 +840,7 @@ const publicOnlyLookup: LookupFunction = (hostname, options, callback) => {
   );
 };
 
-function privateTarget(what: string): SourceError {
+export function privateTarget(what: string): SourceError {
   return new SourceError(
     'refused',
     `${what} is a private or local address; an instance admin can allow imports from private networks`,

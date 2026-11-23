@@ -59,6 +59,23 @@ export const WandererDbSourceRequest = WandererDbConnectRequest.extend({
 });
 export type WandererDbSourceRequest = z.infer<typeof WandererDbSourceRequest>;
 
+/**
+ * A Wanderer map read as a signed-in pilot, for maps whose owner hands out no API key: the
+ * instance, the map, and the value of Wanderer's `_wanderer_app_key` session cookie of an account
+ * that may open the map. Only what the map shows comes over.
+ */
+export const WandererSessionSourceRequest = z.object({
+  /** The instance address, e.g. `https://wanderer.example.org` (a map's address works too). */
+  baseUrl: z.string().trim().min(1).max(300),
+  /** The map's slug or its address. */
+  slug: z.string().trim().min(1).max(300),
+  /** The `_wanderer_app_key` cookie (its value, or `name=value`). */
+  cookie: z.string().trim().min(20).max(8000),
+  /** Accept a self-signed TLS certificate (instance admins only). */
+  insecureTls: z.boolean().optional(),
+});
+export type WandererSessionSourceRequest = z.infer<typeof WandererSessionSourceRequest>;
+
 /** POST /api/imports/wanderer-db/maps: the maps a Wanderer database holds. */
 export const WandererDbMapsDto = z.object({
   /** The database's host, as imports from it are filed when no Wanderer address is given. */
@@ -74,7 +91,7 @@ export const WandererDbMapsDto = z.object({
 });
 export type WandererDbMapsDto = z.infer<typeof WandererDbMapsDto>;
 
-export const ImportSourceKind = z.enum(['wanderer-api', 'wanderer-file', 'wanderer-db']);
+export const ImportSourceKind = z.enum(['wanderer-api', 'wanderer-file', 'wanderer-db', 'wanderer-session']);
 export type ImportSourceKind = z.infer<typeof ImportSourceKind>;
 
 /** Where an import came from, as shown to people (never the key). */

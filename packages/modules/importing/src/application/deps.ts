@@ -12,7 +12,7 @@ import type { AccessTarget, ChainTarget, EveNames, SystemNames, WebhookTarget } 
 /** Everything the import use cases need, wired by the composition root. */
 export interface ImportingDeps {
   /** Wanderer's API, Wanderer's export files and Wanderer's database. */
-  sources: { api: MapImportSource; file: MapImportSource; db: WandererDbSource };
+  sources: { api: MapImportSource; file: MapImportSource; db: WandererDbSource; session: MapImportSource };
   target: ChainTarget;
   access: AccessTarget;
   webhooks: WebhookTarget;
